@@ -1396,6 +1396,17 @@ function keepPipeRowLiteral(line: string): string {
   return line.replace(/^(\s*)\|/, '$1\\|')
 }
 
+/** `text` with each pipe row in it kept as paragraph text, inside quote markers too. */
+function keepPipeRowsLiteral(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const body = peelQuoteMarkers(line.trimStart()).body.replace(/^(?:(?:[-*+]|\d{1,9}[.)]) +)*/, '')
+      return isStandardTableRow(body) ? line.slice(0, line.length - body.length) + keepPipeRowLiteral(body) : line
+    })
+    .join('\n')
+}
+
 function isParagraphRunLine(
   lines: readonly string[],
   index: number,
@@ -1423,9 +1434,15 @@ function isParagraphRunLine(
 type PrefixedInlineLine = {
   prefix: string
   text: string
+  // Continues the paragraph above lazily or from four columns past its
+  // container, so it cannot be the delimiter row of a table.
+  continued?: boolean | undefined
 }
 
 const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
+
+/** A line opening with a list marker, padded with spaces or tabs. */
+const RE_ITEM_LINE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
 
 /**
  * `content` is the item's content column in the source and `shift` how far the
@@ -1515,7 +1532,7 @@ class ListMarkers {
    * `outer` is how far the marker line itself moves, `shift` how far the lines
    * the item holds do.
    */
-  write(line: string): { line: string; separate: boolean; outer: number; shift: number } {
+  write(line: string, onePad = false): { line: string; separate: boolean; outer: number; shift: number } {
     const m = /^([ \t]*)(?:([-*+])|(\d+)([.)]))(?=[ \t])/.exec(line)
     if (!m) return { line, separate: false, outer: 0, shift: 0 }
     const col = columnWidth(m[1]!)
@@ -1547,7 +1564,10 @@ class ListMarkers {
       marker = String(number) + m[4]!
       next = number + 1
     }
-    const shift = outer + marker.length - (m[0].length - m[1]!.length)
+    // Two to four spaces of padding are written as one when asked, as fmt
+    // writes them.
+    const pad = onePad ? (/^ {2,4}(?=\S)/.exec(line.slice(m[0].length))?.[0].length ?? 1) : 1
+    const shift = outer + marker.length - (m[0].length - m[1]!.length) - (pad - 1)
     const content = columnWidth(RE_LIST_MARKER.exec(line)?.[0] ?? m[0])
     this.open.push({ col, content, shift, outer, kind, bullet, next })
     // Items the first line nests (`- - a`) are written as they are, and move
@@ -1564,7 +1584,12 @@ class ListMarkers {
         next: inner.number === undefined ? 0 : Number(inner.number) + 1,
       })
     }
-    return { line: m[1]! + marker + line.slice(m[0].length), separate: prev !== undefined && !same, outer, shift }
+    return {
+      line: m[1]! + marker + line.slice(m[0].length + pad - 1),
+      separate: prev !== undefined && !same,
+      outer,
+      shift,
+    }
   }
 }
 
@@ -1600,6 +1625,74 @@ function nestedItemsOnLine(
       end: at + m[0].length,
     })
     at += m[0].length
+  }
+}
+
+/**
+ * `line` with its indent and the padding after each marker it opens with
+ * written as the spaces they span. CommonMark counts a tab there to the next
+ * tab stop, and Carve reads no tab after a marker.
+ */
+function spaceMarkerPadding(line: string): string {
+  const indent = /^[ \t]*/.exec(line)![0]
+  let out = ' '.repeat(columnWidth(indent)) + line.slice(indent.length)
+  let at = 0
+  for (;;) {
+    const m = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])([ \t]+)(?=\S)/.exec(out.slice(at))
+    if (!m) return out
+    const padAt = at + m[0].length - m[2]!.length
+    const width = columnWidth(out.slice(0, at + m[0].length)) - columnWidth(out.slice(0, padAt))
+    out = out.slice(0, padAt) + ' '.repeat(width) + out.slice(at + m[0].length)
+    // Past four columns the rest is indented code, which nests no marker.
+    if (width > 4) return out
+    at = padAt + width
+  }
+}
+
+/**
+ * The content column of the item a marker match (`- `, `1.  `) opens. Five or
+ * more columns of padding put it one column past the marker, the rest being
+ * indented code (CommonMark 5.2).
+ */
+function itemContentColumn(prefix: string): number {
+  const marker = columnWidth(prefix.replace(/[ \t]+$/, ''))
+  const content = columnWidth(prefix)
+  return content - marker > 4 ? marker + 1 : content
+}
+
+/**
+ * An item whose first line is indented code, written as a fence in the item:
+ * the code on the marker line and the lines four columns past the item's
+ * content under it, blank lines between them included.
+ */
+function collectItemIndentedCode(
+  lines: readonly string[],
+  start: number,
+  markerEnd: number,
+): { lines: string[]; end: number; verbatimFrom: number } {
+  const first = lines[start]!
+  const prefix = first.slice(0, markerEnd) + ' '
+  const contentCol = columnWidth(prefix)
+  const code = [first.slice(markerEnd + 5)]
+  let end = start + 1
+  let blanks = 0
+  for (let at = end; at < lines.length; at++) {
+    const line = lines[at]!
+    if (line.trim() === '') {
+      blanks++
+      continue
+    }
+    if (indentColumns(line) < contentCol + 4) break
+    code.push(...new Array<string>(blanks).fill(''), stripColumns(line, contentCol + 4))
+    blanks = 0
+    end = at + 1
+  }
+  const pad = ' '.repeat(contentCol)
+  const fence = canonicalFence(code)
+  return {
+    lines: [prefix + fence, ...code.map((text) => (text === '' ? '' : pad + text)), pad + fence],
+    end,
+    verbatimFrom: 1,
   }
 }
 
@@ -1712,7 +1805,7 @@ function restorePrefixedInlineRun(
   const inTable = new Array<boolean>(run.length).fill(false)
   for (let start = 0; start < run.length; ) {
     let end = start + 1
-    while (end < run.length && container[end] === container[start]) end++
+    while (end < run.length && container[end] === container[start] && !run[end]!.continued) end++
     const flags = gfmTableRowLines(held.slice(start, end).map((part) => part.body))
     for (let offset = 0; offset < flags.length; offset++) inTable[start + offset] = flags[offset]!
     start = end
@@ -1958,7 +2051,7 @@ function collectBlockquoteInlineRun(
       const over = RE_LIST_MARKER.test(lines[end]!)
       const text = over ? escapeBlockOpener(strip(lines[end]!).trimStart()) : strip(lines[end]!)
       lazyPrefix ??= lazyQuotePrefix(run)
-      run.push({ prefix: lazyPrefix, text })
+      run.push({ prefix: lazyPrefix, text, continued: true })
       end++
       continue
     }
@@ -2091,7 +2184,7 @@ function respellQuotedBlocks(
   // A line the quote's open item holds moves with the item.
   const moved = (part: PrefixedInlineLine): PrefixedInlineLine => {
     const item = markers.get(part.prefix)?.itemAt(indentColumns(part.text))
-    return item ? { prefix: part.prefix, text: moveIndent(part.text, item.content, item.content + item.shift) } : part
+    return item ? { ...part, text: moveIndent(part.text, item.content, item.content + item.shift) } : part
   }
   for (const part of run) {
     const prev = out.at(-1)
@@ -2122,7 +2215,7 @@ function respellQuotedBlocks(
         opensParagraph(held) &&
         (over || (!trimmed.startsWith('>') && !RE_LIST_MARKER.test(trimmed) && isParagraphRunLine([trimmed], 0, 'text')))
       if (lazy) {
-        out.push({ prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed) })
+        out.push({ prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true })
         continue
       }
       // A marker there opens a list that ends the paragraph, which Carve would
@@ -2215,7 +2308,7 @@ function respellQuotedBlocks(
     if ((written.separate && prev !== undefined) || (deeper && prev.text.trim() !== '')) {
       out.push({ prefix: deeper ? prev.prefix : part.prefix, text: '' })
     }
-    out.push({ prefix: part.prefix, text })
+    out.push({ prefix: part.prefix, text, continued: part.continued })
   }
   return out
 }
@@ -2251,7 +2344,7 @@ function collectIndentedCode(lines: readonly string[], start: number, contentCol
     }
     // The same test the caller's branch uses, deliberately: a different
     // measure here could take a line the caller would not have called code.
-    if (!RE_MD_INDENTED_CODE.test(stripColumns(line, contentCol))) break
+    if (indentColumns(stripColumns(line, contentCol)) < 4) break
     run.push(line)
     end = i + 1
   }
@@ -2259,7 +2352,7 @@ function collectIndentedCode(lines: readonly string[], start: number, contentCol
   const body = run
     .slice(0, end - start)
     .map((line) =>
-      line.trim() === '' ? '' : stripColumns(line, contentCol).replace(/^(?: {4}|\t)/, ''),
+      line.trim() === '' ? '' : stripColumns(line, contentCol + 4),
     )
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(body.join('\n')) + 1))
   const pad = ' '.repeat(contentCol)
@@ -2306,7 +2399,7 @@ function collectItemFence(
   run: string,
   info: string,
 ): { lines: string[]; end: number; verbatimFrom: number } {
-  const contentCol = prefix.length
+  const contentCol = columnWidth(prefix)
   const pad = ' '.repeat(contentCol)
   const out = [prefix + run + info]
   const closer = new RegExp(`^ {0,3}${run[0] === '`' ? '`' : '~'}{${run.length},}[ \t]*$`)
@@ -2358,16 +2451,23 @@ function collectListInlineRun(
   const first = lines[start]!
   const marker = first.match(RE_LIST_MARKER)
   if (!marker) return { lines: [convertInline(first, dialect)], end: start + 1 }
-  const fence = RE_MD_FENCE_LINE.exec(first.slice(marker[0].length))
-  if (fence && fenceRunIsAFence(fence[2]!, fence[3]!)) {
-    return collectItemFence(lines, start, marker[0], fence[2]!, fenceInfo(fence[3]!))
+  if (itemContentColumn(marker[0]) < columnWidth(marker[0]) && first.trim() !== marker[0].trim()) {
+    return collectItemIndentedCode(lines, start, marker[0].trimEnd().length)
   }
-
   const contentCol = marker[0].length
-  const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
   // The content columns of the items the first line nests (`- - a`), and the
   // text past their markers.
   const nestedItems = nestedItemsOnLine(first, contentCol)
+  const nestedEnd = nestedItems.at(-1)?.end ?? contentCol
+  // The innermost of them may hold indented code.
+  const codeItem = /^(?:[-*+]|\d{1,9}[.)])(?= {5,}\S)/.exec(first.slice(nestedEnd))
+  if (codeItem) return collectItemIndentedCode(lines, start, nestedEnd + codeItem[0].length)
+  const fence = RE_MD_FENCE_LINE.exec(first.slice(nestedEnd))
+  if (fence && fenceRunIsAFence(fence[2]!, fence[3]!)) {
+    return collectItemFence(lines, start, first.slice(0, nestedEnd), fence[2]!, fenceInfo(fence[3]!))
+  }
+
+  const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
   const itemCols = [contentCol, ...nestedItems.map((item) => item.content)]
   const firstText = first.slice(nestedItems.at(-1)?.end ?? contentCol)
   let end = start + 1
@@ -2394,7 +2494,7 @@ function collectListInlineRun(
     const quote = openQuoteParagraph(above)
     const continues = indent >= base + 4 && (opensParagraph(above) || quote !== null)
 
-    if (!continues && RE_LIST_MARKER.test(line)) break
+    if (!continues && RE_ITEM_LINE.test(line)) break
     if (indent < contentCol) break
 
     // Leave fenced code blocks inside list items to the main fence handler.
@@ -2406,13 +2506,13 @@ function collectListInlineRun(
     const pad = ' '.repeat(Math.max(0, base - contentCol))
     const over = indent - base
     const trimmed = text.trimStart()
-    if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed) })
+    if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true })
     else if (quote !== null && (over >= 4 || (!trimmed.startsWith('>') && isParagraphRunLine([trimmed], 0, 'text')))) {
       // A lazy line of the quote the item holds, written with its marker.
-      run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed) })
+      run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true })
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
-      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed })
+      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true })
     } else if (over > 0 && over < 4) run.push({ prefix, text: pad + trimmed })
     else run.push({ prefix, text })
     end++
@@ -2725,9 +2825,10 @@ export function markdownToCarveWithLosses(
 function writeItemRun(
   run: { lines: string[] },
   markers: ListMarkers,
+  onePad = false,
 ): { lines: string[]; separate: boolean } {
   const first = run.lines[0]!
-  const written = markers.write(first)
+  const written = markers.write(first, onePad)
   const markerCol = indentColumns(first)
   const content = columnWidth(RE_LIST_MARKER.exec(first)?.[0] ?? '')
   return {
@@ -2739,15 +2840,41 @@ function writeItemRun(
   }
 }
 
+/**
+ * Whether the item opening at `start`, collected up to `end`, can drop the
+ * slack in its marker padding: only when nothing but the next item of this
+ * list or an outer one follows it. A line the item holds past what it
+ * collected, or one left of its content, could land in the wrong item once
+ * the content column moves.
+ */
+function paddingIsFree(lines: readonly string[], start: number, end: number): boolean {
+  const markerCol = indentColumns(lines[start]!)
+  for (let at = end; at < lines.length; at++) {
+    const line = lines[at]!
+    if (line.trim() === '') continue
+    return RE_ITEM_LINE.test(line) && indentColumns(line) <= markerCol + 3
+  }
+  return true
+}
+
 /** Whether a line of item content leaves a paragraph a lazy line can continue. */
 function opensParagraph(text: string): boolean {
   const trimmed = text.trimStart()
   return quoteParagraphIsOpen(trimmed) && !trimmed.startsWith('>') && !RE_LIST_MARKER.test(trimmed)
 }
 
+/**
+ * Whether a collected list item ends in a table. The run writes every pipe row
+ * that is text with its pipe escaped, so a line opening with one is a row.
+ */
+function endsInTable(run: { lines: string[] }): boolean {
+  const last = run.lines.at(-1)!.replace(RE_LIST_MARKER, '')
+  return last.trimStart().startsWith('|')
+}
+
 /** Whether a collected list item ends in paragraph text. */
 function leavesItemParagraph(run: { lines: string[]; verbatimFrom?: number }): boolean {
-  if (run.verbatimFrom !== undefined) return false
+  if (run.verbatimFrom !== undefined || endsInTable(run)) return false
   let last = run.lines.at(-1)!
   const own = RE_LIST_MARKER.exec(last)
   if (run.lines.length === 1 && own) last = last.slice(nestedItemsOnLine(last, own[0].length).at(-1)?.end ?? own[0].length)
@@ -2849,6 +2976,38 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // contained one is answered again by `restorePrefixedInlineRun` against what
   // its container holds, marker peeled.
   const inGfmTable = gfmTableRowLines(lines)
+  // A table starts only where its delimiter row sits in the container whose
+  // paragraph the header line ends, lazily continued or not: a lazy delimiter,
+  // or one four columns in, continues the paragraph instead.
+  const headsTable = (at: number, col: number): boolean => {
+    if (!startsTableHeader(lines, at)) return false
+    const over = indentColumns(lines[at + 1]!) - col
+    return over >= 0 && over < 4
+  }
+  // A pipe line no table takes is paragraph text, so an item paragraph takes it
+  // as a lazy line.
+  const lazyPipeLine = (at: number, col: number): boolean => {
+    const text = lines[at]!.trim()
+    if (/^(?:>|#{1,6}(?:[ \t]|$))/.test(text) || RE_LIST_MARKER.test(lines[at]!) || isMarkdownFenceLine(text)) return false
+    return (isStandardTableRow(lines[at]!) || startsTableHeader(lines, at)) && !headsTable(at, col)
+  }
+  // Whether the line at `at` continues the paragraph of an item whose content
+  // starts at `col`. What a line opens is measured from the innermost item
+  // that holds it, and a setext underline cannot be lazy, so only one in the
+  // item makes a heading.
+  const continuesItemParagraph = (at: number, col: number): boolean => {
+    const line = lines[at]!
+    const held = (text: string): string => {
+      let holder = 0
+      for (const open of listCols) if (open <= Math.min(col, indentColumns(text))) holder = open
+      return stripColumns(text, holder)
+    }
+    const next = lines[at + 1]
+    const pair = next !== undefined && indentColumns(next) >= col ? [held(line), held(next)] : [held(line)]
+    // Four columns past its holder a line opens nothing, so it continues.
+    if (line.trim() !== '' && indentColumns(pair[0]!) >= 4) return true
+    return isParagraphRunLine(pair, 0, 'text') || lazyPipeLine(at, col)
+  }
   let inTableBody = false
   let tableWidth = 0
   const listMarkers = new ListMarkers()
@@ -2867,7 +3026,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   let itemQuote: { prefix: string; col: number } | null = null
   // The content column of the item the last line lazily continued, or -1.
   let lazyCol = -1
-  // Whether the last line ended a fence opened on an item's own line.
+  // Whether the last line ended a fence opened on an item's own line, or a
+  // table the item holds: neither takes a lazy line.
   let fenceItem = false
   // The container column of the last quote written.
   let quoteCol = 0
@@ -2901,6 +3061,17 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
 
   for (let i = 0; i < lines.length; i++) {
     applyShift()
+    // A tab after the marker of an item this line opens pads it to the next
+    // tab stop. Not on a line four columns past the item holding it, which is
+    // code or text, nor on an ordered marker other than 1 under a paragraph.
+    if (!inCode && /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]/.test(lines[i]!) && lines[i]!.includes('\t')) {
+      const at = indentColumns(lines[i]!)
+      let holder = 0
+      for (const col of listCols) if (col <= at) holder = col
+      const ordered = /^[ \t]*(\d+)[.)]/.exec(lines[i]!)
+      const prose = prevType === 'text' && ordered !== null && Number(ordered[1]) !== 1 && !listMarkers.hasListAt(at)
+      if (at - holder < 4 && !prose) lines[i] = spaceMarkerPadding(lines[i]!)
+    }
     const line = lines[i]!
     const trimmed = line.trim()
     const wasPrevBlank = prevBlank
@@ -2910,6 +3081,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     itemQuote = null
     const afterLazy = lazyCol
     lazyCol = -1
+    const closedItem = fenceItem
+    const afterTable = inTableBody
+    // Whether this line left items no paragraph was open in.
+    let leftItems = false
     const afterFence = prevType === 'code_fence' || fenceItem
     fenceItem = false
     prevBlank = trimmed === ''
@@ -2944,6 +3119,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
           overMarker = true
         }
       }
+      // Anywhere else, four columns past the item holding it a marker line is
+      // indented code, never an item.
+      if (anyMarker && !overMarker) {
+        const markerIndent = columnWidth(anyMarker[1]!)
+        let parentContent = 0
+        for (const col of listCols) if (col <= markerIndent) parentContent = col
+        if (markerIndent >= parentContent + 4) marker = null
+      }
       // Columns, not characters: the stack is compared against a line's indent
       // and a tab is worth four of them.
       const indent = indentColumns(line)
@@ -2960,14 +3143,32 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         isMarkdownFenceLine(trimmed) ||
         htmlBlockAt(lines, i) !== null ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed))
+      // A block a fence or table ended every item for is set apart from the
+      // list, as fmt writes it.
+      if (closedItem && trimmed !== '' && !marker && listCols.length && listCols[0]! > indent && out.at(-1)?.trim() !== '') {
+        out.push('')
+      }
+      // Only a paragraph takes a lazy line, so after any other block a line
+      // left of the item's content leaves it.
+      const noLazy = !lazyAllowed && lazyQuote === null && (prevType === 'list' || prevType === 'heading')
       if (marker && /\S/.test(line.slice(marker[0].length))) {
         const markerIndent = columnWidth(marker[1]!)
         while (listCols.length && listCols[listCols.length - 1]! > markerIndent) listCols.pop()
-        listCols.push(columnWidth(marker[0]!))
-        // And the items the line nests (`- - a`).
-        for (const inner of nestedItemsOnLine(line, marker[0].length)) listCols.push(inner.content)
-      } else if (trimmed !== '' && (wasPrevBlank || startsBlock || afterFence)) {
-        while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
+        listCols.push(itemContentColumn(marker[0]!))
+        // And the items the line nests (`- - a`), the innermost perhaps holding
+        // indented code.
+        const nested = nestedItemsOnLine(line, marker[0].length)
+        for (const inner of nested) listCols.push(inner.content)
+        const nestedEnd = nested.at(-1)?.end ?? marker[0].length
+        const codeItem = /^(?:[-*+]|\d{1,9}[.)])(?= {5,}\S)/.exec(line.slice(nestedEnd))
+        if (codeItem && itemContentColumn(marker[0]!) === columnWidth(marker[0]!)) {
+          listCols.push(columnWidth(line.slice(0, nestedEnd + codeItem[0].length)) + 1)
+        }
+      } else if (trimmed !== '' && (wasPrevBlank || startsBlock || afterFence || noLazy)) {
+        while (listCols.length && listCols[listCols.length - 1]! > indent) {
+          listCols.pop()
+          leftItems = noLazy
+        }
       }
       if (trimmed !== '' && !marker) listMarkers.end(listCols.length ? listCols[listCols.length - 1]! : 0)
       // A line left of an item whose last block was a fence ends the item's
@@ -3015,7 +3216,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       !marker &&
       listCols.length > 0 &&
       indentColumns(line) < contentCol &&
-      isParagraphRunLine(lines, i, 'text')
+      continuesItemParagraph(i, contentCol)
     ) {
       const run: string[] = []
       let end = i
@@ -3025,7 +3226,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         shiftCol = lazyQuote.col
         shiftBy = listMarkers.shiftAt(lazyQuote.col)
       }
-      while (end < lines.length && !RE_LIST_MARKER.test(lines[end]!) && isParagraphRunLine(lines, end, 'text')) {
+      while (
+        end < lines.length &&
+        !RE_LIST_MARKER.test(lines[end]!) &&
+        continuesItemParagraph(end, contentCol)
+      ) {
         const next = lines[end]!
         let holder = 0
         for (const col of listCols) if (col <= indentColumns(next)) holder = col
@@ -3034,7 +3239,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         else run.push(indentColumns(next) < contentCol ? containerPad + lazyText : next)
         end++
       }
-      out.push(convertInline(run.join('\n'), dialect))
+      out.push(keepPipeRowsLiteral(convertInline(run.join('\n'), dialect)))
       i = end - 1
       itemParagraph = true
       itemQuote = lazyQuote
@@ -3177,8 +3382,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // own content, and reading it as code both lost the paragraph and moved it
     // out of the item.
     if (
-      (wasPrevBlank || prevType === 'blank' || prevType === 'code') &&
-      RE_MD_INDENTED_CODE.test(held)
+      (wasPrevBlank || prevType === 'blank' || prevType === 'code' || afterFence || afterTable || leftItems) &&
+      trimmed !== '' &&
+      indentColumns(held) >= 4
     ) {
       const block = collectIndentedCode(lines, i, contentCol)
       if (prevType !== 'blank' && out.length > 0) out.push('')
@@ -3198,13 +3404,33 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       continue
     }
 
+    // An ordered marker other than `1` cannot interrupt a paragraph
+    // (CommonMark), so after a paragraph it stays prose; bullets and `1.`
+    // always start/continue a list. Mid-list, any number continues.
+    const ordered = trimmed.match(/^(\d+)[.)]\s/)
+    const isList =
+      (/^[-*+]\s/.test(trimmed) || ordered !== null) &&
+      !(
+        prevType === 'text' &&
+        !startsOwnList &&
+        ordered !== null &&
+        Number(ordered[1]) !== 1 &&
+        // The next item of an open list is one, whatever its number.
+        !listMarkers.hasListAt(indentColumns(line))
+      )
+    // A header GFM would not take here leaves its rows as text.
+    if (inGfmTable[i] && startsTableHeader(lines, i) && !headsTable(i, contentCol)) {
+      for (let at = i; at < lines.length && inGfmTable[at]; at++) inGfmTable[at] = false
+    }
     // GFM table header: a `| ... |` row immediately followed by a delimiter
     // row (`| --- | :--: |`). Carve marks header cells with `|=` (alignment
     // glued as `<`/`>`/`~`) and needs no delimiter row, so rewrite the header
     // and drop the delimiter. Body rows are already valid Carve and fall
     // through as plain text below, so only the header is special-cased here.
-    if (trimmed.includes('|')) {
-      const next = i + 1 < lines.length ? lines[i + 1]!.trim() : ''
+    // An item or quote line is left to its collector, which finds a table the
+    // item or quote holds.
+    if (!isList && !trimmed.startsWith('>') && !/^#{1,6}([ \t]|$)/.test(trimmed) && headsTable(i, contentCol)) {
+      const next = lines[i + 1]!.trim()
       if (next.includes('-') && RE_TABLE_DELIMITER.test(next)) {
         const headerCells = splitTableRow(trimmed)
         const aligns = splitTableRow(next).map(alignMarker)
@@ -3249,20 +3475,6 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // document level.
     const relIndent = indentColumns(held)
     const isBlockquote = trimmed.startsWith('>')
-    // An ordered marker other than `1` cannot interrupt a paragraph
-    // (CommonMark), so after a paragraph it stays prose; bullets and `1.`
-    // always start/continue a list. Mid-list, any number continues.
-    const ordered = trimmed.match(/^(\d+)[.)]\s/)
-    const isList =
-      (/^[-*+]\s/.test(trimmed) || ordered !== null) &&
-      !(
-        prevType === 'text' &&
-        !startsOwnList &&
-        ordered !== null &&
-        Number(ordered[1]) !== 1 &&
-        // The next item of an open list is one, whatever its number.
-        !listMarkers.hasListAt(indentColumns(line))
-      )
 
     if (isBlank) {
       out.push(line)
@@ -3284,19 +3496,43 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (isList) {
         const run = collectListInlineRun(lines, i, dialect)
         if (lazyQuote !== null && indentColumns(line) >= lazyQuote.col) out.push('')
-        out.push(...writeItemRun(run, listMarkers).lines)
+        out.push(...writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end)).lines)
         shiftBy = 0
         itemParagraph = leavesItemParagraph(run)
         itemQuote = leavesItemQuote(run)
-        fenceItem = run.verbatimFrom !== undefined
+        fenceItem = run.verbatimFrom !== undefined || endsInTable(run)
         i = run.end - 1
         prevType = 'list'
         continue
       }
       // One to three columns past the item's content read as none.
       const slack = indentColumns(held)
-      out.push(convertInline(slack >= 1 && slack <= 3 ? containerPad + held.trimStart() : line, dialect))
-      itemParagraph = indentColumns(line) >= contentCol && opensParagraph(held)
+      // A fence a quote opens here is the quote collector's to write and close.
+      const quoted = blockquotePrefix(held.trimStart())
+      const prevInItem = i > 0 && lines[i - 1]!.trim() !== '' && indentColumns(lines[i - 1]!) >= contentCol
+      if (
+        (afterLazy >= 0 || prevInItem) &&
+        indentColumns(line) >= contentCol &&
+        slack < 4 &&
+        quoted !== null &&
+        isMarkdownFenceLine(quoted.text)
+      ) {
+        const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
+        quoteCol = contentCol
+        out.push(...run.lines)
+        i = run.end - 1
+        prevType = 'block_quote'
+        continue
+      }
+      const written = convertInline(slack >= 1 && slack <= 3 ? containerPad + held.trimStart() : line, dialect)
+      // No table starts here, so a pipe row is paragraph text, in a quote too
+      // unless a delimiter row makes it a quoted table.
+      const pipeText = isStandardTableRow(written)
+      const quotedBody = (text: string | undefined): string =>
+        peelQuoteMarkers(stripColumns(text ?? '', contentCol).trimStart()).body.trim()
+      const quotedTable = [quotedBody(line), quotedBody(lines[i + 1])].some((body) => RE_TABLE_DELIMITER.test(body) && body.includes('-'))
+      out.push(pipeText ? keepPipeRowLiteral(written) : quotedTable ? written : keepPipeRowsLiteral(written))
+      itemParagraph = indentColumns(line) >= contentCol && (pipeText || opensParagraph(held))
       const quote = indentColumns(line) >= contentCol ? openQuoteParagraph(held) : null
       if (quote !== null) itemQuote = { prefix: quote, col: contentCol }
       prevType = 'list'
@@ -3323,7 +3559,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // thematic breaks, not an h2 titled `***`; guard so the rule falls
       // through to the thematic-break normalization below.
       !RE_MD_THEMATIC.test(held) &&
-      (/^=+$/.test(underline) || /^-+$/.test(underline))
+      (/^=+$/.test(underline) || /^-+$/.test(underline)) &&
+      // Four columns past its container an underline is paragraph text.
+      indentColumns(stripColumns(lines[i + 1]!, contentCol)) < 4
     ) {
       if (prevType !== 'blank' && prevType !== 'heading') out.push('')
       out.push(
@@ -3402,7 +3640,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (isList) {
       const run = collectListInlineRun(lines, i, dialect)
-      const written = writeItemRun(run, listMarkers)
+      const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
       // A list under a quote an item holds is set apart from it, or Carve reads
       // the marker line as the quote's lazy continuation.
       if ((written.separate && prevType === 'list') || (lazyQuote !== null && indentColumns(line) >= lazyQuote.col)) out.push('')
@@ -3410,32 +3648,40 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       shiftBy = 0
       itemParagraph = leavesItemParagraph(run)
       itemQuote = leavesItemQuote(run)
-      fenceItem = run.verbatimFrom !== undefined
+      fenceItem = run.verbatimFrom !== undefined || endsInTable(run)
       i = run.end - 1
       prevType = 'list'
       continue
     }
-    if (!isHeading && !isList && !isBlockquote && !isStandardTableRow(body)) {
+    if (!isHeading && !isList && !isBlockquote && (!isStandardTableRow(body) || !inGfmTable[i])) {
       const run = [body]
       let end = i + 1
-      while (end < lines.length && isParagraphRunLine(lines, end, 'text')) {
-        // The next item of an open list, whatever its number, ends the paragraph.
+      while (end < lines.length) {
         const next = lines[end]!
+        // Four columns past its container a line opens nothing, so it continues.
+        const inside = (text: string): string => (indentColumns(text) >= contentCol ? stripColumns(text, contentCol) : text)
+        const after = lines[end + 1]
+        const opens = !isParagraphRunLine(after === undefined ? [inside(next)] : [inside(next), inside(after)], 0, 'text')
+        if (opens && (next.trim() === '' || indentColumns(stripColumns(next, contentCol)) < 4)) break
+        // The next item of an open list, whatever its number, ends the paragraph.
         if (listCols.length > 0 && RE_LIST_MARKER.test(next) && indentColumns(next) < contentCol && listMarkers.hasListAt(indentColumns(next))) break
-        run.push(next)
+        const trimmedNext = next.trimStart()
+        run.push(opens ? next.slice(0, next.length - trimmedNext.length) + escapeBlockOpener(trimmedNext) : next)
         end++
       }
       if (run.length > 1) {
         // A line of the run left of the item's content column is lazy.
         const inItem = listCols.length > 0 && indentColumns(line) >= contentCol
         out.push(
-          convertInline(
-            run
-              .map((text) =>
-                inItem && indentColumns(text) < contentCol && !RE_LIST_MARKER.test(text) ? containerPad + text.trimStart() : text,
-              )
-              .join('\n'),
-            dialect,
+          keepPipeRowsLiteral(
+            convertInline(
+              run
+                .map((text) =>
+                  inItem && indentColumns(text) < contentCol && !RE_LIST_MARKER.test(text) ? containerPad + text.trimStart() : text,
+                )
+                .join('\n'),
+              dialect,
+            ),
           ),
         )
         itemParagraph = inItem

@@ -191,13 +191,11 @@ describe('a container is answered by what it holds', () => {
     )
   })
 
-  // An indented line ends the table for marked too, and the row after it is a
-  // paragraph. carve-js does not read that line as code without a blank before
-  // it, which is a separate and older difference - the point pinned here is
-  // only that the row below is no longer swept into the table.
+  // An indented line ends the table for marked too: it is indented code, and
+  // the row after it is a paragraph.
   it('ends the table at an indented line, so the row after it is stray', () => {
     expect(migrated('| a | b |\n|---|---|\n| c | d |\n    code\n| e | f |\n')).toBe(
-      '|= a |= b |\n| c | d |\n    code\n\\| e | f |\n',
+      '|= a |= b |\n| c | d |\n\n```\ncode\n```\n\n\\| e | f |\n',
     )
     expect(tableCount('| a | b |\n|---|---|\n| c | d |\n    code\n| e | f |\n')).toBe(1)
   })

@@ -32,7 +32,7 @@ describe('a Markdown fence on a list item first line', () => {
 
   it('closes an unclosed fence before a line left of the content column', () => {
     expect(markdownToCarve('- a\n  - ```\n    code\n\nz')).toBe('- a\n  - ```\n    code\n\n    ```\n\nz')
-    expect(markdownToCarve('- ```\n  code\n*after*')).toBe('- ```\n  code\n  ```\n/after/')
+    expect(markdownToCarve('- ```\n  code\n*after*')).toBe('- ```\n  code\n  ```\n\n/after/')
   })
 
   it('takes a tilde closer only for a tilde fence', () => {
