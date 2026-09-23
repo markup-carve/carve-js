@@ -294,7 +294,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
   })
 
   it('keeps a lazy line out of a fence the item line opened', () => {
-    expect(markdownToCarve(md('- ~~~', '  x', 'after'))).toBe(md('- ```', '  x', '  ```', 'after'))
+    expect(markdownToCarve(md('- ~~~', '  x', 'after'))).toBe(md('- ```', '  x', '  ```', '', 'after'))
   })
 
   // Not fmt's spelling yet: fmt drops the blank line the importer writes
@@ -308,7 +308,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
       md('- a', '', '  ~~~', '  x', '', '  y'),
       md('- a', '', '  ```', '  x', '', '  y'),
     ],
-    ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', 'more', '', '9. b')],
+    ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', '', 'more', '', '9. b')],
     ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('- a', '', '  > iq', '', '> q')],
     [
       'writes a quoted fence at the quote column once a block left the item',
@@ -430,5 +430,66 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
 
   it('reads an over-indented marker as the text GFM reads', () => {
     expect(carveToHtml(markdownToCarve(md('- a', '      - b')))).toMatch(/<li>a\s+- b<\/li>/)
+  })
+})
+
+// markup-carve/carve-js#1935. Each expectation is the reading cmark-gfm,
+// marked 18 and commonmark.js agree on (tables: cmark-gfm and marked).
+describe('a Markdown item line imports as the block CommonMark reads', () => {
+  it.each([
+    // A table needs its header and delimiter rows in the same container.
+    ['makes a table of an item line over a delimiter at its content column', '- a | b\n  --- | ---\n', '- |= a |= b |\n'],
+    ['keeps an item line over a delimiter four columns in as text', '- a | b\n      --- | ---\n', '- a | b\n  --- | ---\n'],
+    ['keeps an item line over a lazy delimiter as text', '- a | b\n--- | ---\n', '- a | b\n  --- | ---\n'],
+    ['keeps a quote line over a lazy delimiter as text', '> a | b\n--- | ---\n', '> a | b\n> --- | ---\n'],
+    ['keeps an item paragraph line over a lazy delimiter as text', '- x\n  a | b\n--- | ---\n', '- x\n  a | b\n  --- | ---\n'],
+    // A tab after a marker pads it to the next tab stop.
+    ['reads a tab after a marker and a space as padding', '- \t- a\n', '- - a\n'],
+    ['reads a tab straight after a marker as padding', '-\t- a\n', '- - a\n'],
+    ['reads a tab after an ordered marker as padding', '1.\tb\n2.\tc\n', '1. b\n2. c\n'],
+    // Five or more columns after a marker open indented code in the item.
+    ['writes indented code on an item line as a fence', '-     - a\n', '- ```\n  - a\n  ```\n'],
+    [
+      'keeps the code lines under it and the paragraph after it in the item',
+      '-     code\n      more\n\n      x\n  para\n',
+      '- ```\n  code\n  more\n\n  x\n  ```\n  para\n',
+    ],
+    ['keeps what a tab leaves past the code indent', '-\t\tfoo\n', '- ```\n    foo\n  ```\n'],
+    ['makes a table of an item line over a delimiter one to three columns in', '- a | b\n    --- | ---\n', '- |= a |= b |\n'],
+    ['writes indented code on a nested item line as a fence', '- - \ta\n', '- - ```\n    a\n    ```\n'],
+    ['keeps the outer item open past a nested code item', '- -     a\n  b\n', '- - ```\n    a\n    ```\n  b\n'],
+  ] as Array<[string, string, string]>)('%s', (_label, source, expected) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    expect(carveToCarve(out)).toBe(out)
+  })
+
+  it('reads indented code on an item line as the code CommonMark reads', () => {
+    expect(carveToHtml(markdownToCarve('-     - a\n'))).toMatch(/<li>\s*<pre><code>- a\n<\/code><\/pre>\s*<\/li>/)
+  })
+
+  // Readings that are not fmt's spelling yet, checked on the rendered HTML.
+  it('keeps a pipe line over a lazy delimiter in the item paragraph', () => {
+    const html = carveToHtml(markdownToCarve('-  - x\n\n   | a | b |\n--- | ---\n'))
+    expect(html).not.toContain('<table')
+    expect(html).toMatch(/<p>\| a \| b \|\n[^<]*<\/p>\s*<\/li>/)
+  })
+
+  it('reads a marker line four columns past a closed item as indented code', () => {
+    expect(carveToHtml(markdownToCarve('   * 1. ~~~\n    1.         code\n'))).toMatch(/<\/ul>\s*<pre><code>1\. {9}code\n<\/code><\/pre>/)
+  })
+
+  it('continues a paragraph with a line four columns in', () => {
+    expect(carveToHtml(markdownToCarve('a\n    > b\n'))).toBe('<p>a\n&gt; b</p>')
+  })
+
+  it('does not read an underline four columns in as a setext heading', () => {
+    const html = carveToHtml(markdownToCarve('- \t~~~\n\tx\n   y\n  \t---\n'))
+    expect(html).not.toContain('<h2')
+    expect(html).toMatch(/<pre><code>x\n<\/code><\/pre>/)
+  })
+
+  it('does not put an item marker in a table header cell', () => {
+    expect(markdownToCarve('- a | b\n      --- | ---\n')).not.toMatch(/\|= -/)
   })
 })
