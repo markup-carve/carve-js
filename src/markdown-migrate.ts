@@ -1954,7 +1954,14 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
     const open = RE_MD_FENCE_LINE.exec(part.text)
     if (!open || !fenceRunIsAFence(open[2]!, open[3]!)) {
       const marker = RE_LIST_MARKER.exec(part.text)
+      const item = lastItem.get(part.prefix)
       if (marker) lastItem.set(part.prefix, columnWidth(marker[0]))
+      else if (item !== undefined && indentColumns(part.text) < item) {
+        // Left of the item, only a lazy paragraph line keeps it open.
+        const above = out[idx - 1]
+        const lazy = above?.prefix === part.prefix && quoteParagraphIsOpen(above.text) && quoteParagraphIsOpen(part.text)
+        if (!lazy) lastItem.delete(part.prefix)
+      }
       continue
     }
     opener = idx

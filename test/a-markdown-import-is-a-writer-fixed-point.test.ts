@@ -293,6 +293,11 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', 'more', '', '9. b')],
     ['keeps a marker left of the lazy line item out of it', md('1. a', 'lazy', '  - n'), md('1. a', '   lazy', '', '  - n')],
     ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('- a', '', '  > iq', '', '> q')],
+    [
+      'writes a quoted fence at the quote column once a block left the item',
+      md('> - a', '> # h', '>   ~~~', '>   x', '>   ~~~'),
+      md('> - a', '> # h', '>', '> ```', '> x', '> ```'),
+    ],
   ])('%s', (_label, source, expected) => {
     expect(markdownToCarve(source)).toBe(expected)
   })
