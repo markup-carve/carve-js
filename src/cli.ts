@@ -12,7 +12,7 @@
  * filesystem, stdin, or process exit code. The bottom of the file wires the
  * real process I/O and invokes it only when executed as the binary.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve as resolvePath } from 'node:path'
@@ -1502,8 +1502,41 @@ const realIO: CliIO = {
   writeFile: (p, c) => writeFileSync(p, c, 'utf8'),
 }
 
+/**
+ * Whether this module is the process entry point.
+ *
+ * `argv[1]` is the path the shell invoked, which through `npx`, a
+ * `node_modules/.bin` shim or a global install is a SYMLINK to the file, and
+ * under pnpm or a linked workspace it is a real file under a symlinked parent.
+ * `import.meta.url` names the resolved file either way, so comparing the two
+ * raw strings answered "not the entry" and the CLI exited 0 having rendered
+ * nothing (#1909). Resolving both sides makes the two spellings of one file
+ * agree.
+ *
+ * Node 24's `import.meta.main` answers this directly, but `engines` allows 20.
+ */
+export function isEntryModule(moduleUrl: string, entryPath: string | undefined): boolean {
+  if (!entryPath) return false
+  // A path that does not resolve is not this module, and must not throw: the
+  // old guard merely declined to run in that case.
+  const real = (p: string): string => {
+    try {
+      return realpathSync(p)
+    } catch {
+      return p
+    }
+  }
+  // The drive letter is the one part of a Windows path `realpathSync` leaves
+  // spelled either way. Only that is folded: an NTFS directory can be
+  // case-sensitive, where lowercasing the whole path would merge two files
+  // that differ by case and run the CLI on an import.
+  const normalize = (p: string): string =>
+    process.platform === 'win32' ? p.replace(/^[a-z](?=:)/, (d) => d.toUpperCase()) : p
+  return normalize(real(fileURLToPath(moduleUrl))) === normalize(real(resolvePath(entryPath)))
+}
+
 // Run only when executed as the binary, not when imported by a test.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isEntryModule(import.meta.url, process.argv[1])) {
   const args = process.argv.slice(2)
   // With no args and an interactive terminal there is nothing to render, so
   // show help instead of silently blocking on stdin. Piped/redirected input
