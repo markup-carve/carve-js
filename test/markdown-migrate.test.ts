@@ -830,7 +830,7 @@ describe('markdownToCarve — block spacing', () => {
   })
 
   it('treats a leading-zero `01.` marker as start 1 (interrupts paragraph)', () => {
-    expect(conv('Intro\n01. item')).toBe('Intro\n\n01. item')
+    expect(conv('Intro\n01. item')).toBe('Intro\n\n1. item')
   })
 
   it('inserts a blank line before a blockquote following text', () => {

@@ -126,6 +126,7 @@ describe('a Markdown import writes the spelling carve fmt writes (#1921)', () =>
     ],
     ['numbers ordered items the way fmt does', md('1. x', '1. y'), md('1. x', '2. y')],
     ['counts on from the start number', md('3. x', '3. y'), md('3. x', '4. y')],
+    ['counts past a digit boundary', md('9. a', '9. b', '9. c'), md('9. a', '10. b', '11. c')],
     [
       'numbers a nested list on its own',
       md('1. a', '   1. b', '   1. c', '1. d'),

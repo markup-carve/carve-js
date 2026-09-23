@@ -1403,7 +1403,11 @@ class ListMarkers {
     while (this.open.length > 0 && this.open.at(-1)!.col >= col) this.open.pop()
   }
 
-  write(line: string): { line: string; separate: boolean } {
+  /**
+   * `movable` says nothing is indented under the item, so its number may change
+   * width without leaving a line behind the content column it moves.
+   */
+  write(line: string, movable = false): { line: string; separate: boolean } {
     const m = /^([ \t]*)(?:([-*+])|(\d+)([.)]))(?=[ \t])/.exec(line)
     if (!m) return { line, separate: false }
     const col = columnWidth(m[1]!)
@@ -1420,14 +1424,24 @@ class ListMarkers {
       marker = bullet
     } else {
       const number = same ? prev.next : Number(m[3])
-      // A number of another width moves the item's content column, and the
+      // A number of another width moves the item's content column, and any
       // lines under it were indented for the old one.
-      marker = (String(number).length === m[3]!.length ? String(number) : m[3]!) + m[4]!
+      marker = (movable || String(number).length === m[3]!.length ? String(number) : m[3]!) + m[4]!
       next = number + 1
     }
     this.open.push({ col, kind, bullet, next })
     return { line: m[1]! + marker + line.slice(m[0].length), separate: prev !== undefined && !same }
   }
+}
+
+/** Whether a one-line list item has no line indented to its content column below it. */
+function holdsNothingBelow(lines: readonly string[], run: { lines: string[]; end: number }): boolean {
+  if (run.lines.length !== 1) return false
+  const marker = RE_LIST_MARKER.exec(run.lines[0]!)
+  if (!marker) return false
+  let next = run.end
+  while (next < lines.length && lines[next]!.trim() === '') next++
+  return next === lines.length || indentColumns(lines[next]!) < columnWidth(marker[0])
 }
 
 function leadingIndentWidth(line: string): number {
@@ -2596,7 +2610,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (prevType === 'list' && indent >= 1) {
       if (isList) {
         const run = collectListInlineRun(lines, i, dialect)
-        out.push(listMarkers.write(run.lines[0]!).line, ...run.lines.slice(1))
+        out.push(listMarkers.write(run.lines[0]!, holdsNothingBelow(lines, run)).line, ...run.lines.slice(1))
         i = run.end - 1
         prevType = 'list'
         continue
@@ -2702,7 +2716,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (isList) {
       const run = collectListInlineRun(lines, i, dialect)
-      const first = listMarkers.write(run.lines[0]!)
+      const first = listMarkers.write(run.lines[0]!, holdsNothingBelow(lines, run))
       if (first.separate && prevType === 'list') out.push('')
       out.push(first.line, ...run.lines.slice(1))
       i = run.end - 1
