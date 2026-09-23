@@ -1780,17 +1780,22 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
   let opener = -1
   let closer: RegExp | null = null
   let info = ''
-  const close = (at: number): void => {
-    const fence = canonicalFence(out.slice(opener + 1, at).map((part) => part.text))
+  // The opener's own indent, which CommonMark strips from each body line too.
+  let indent = 0
+  const respell = (end: number): string => {
+    for (let idx = opener + 1; idx < end; idx++) {
+      out[idx] = { prefix: out[idx]!.prefix, text: stripColumns(out[idx]!.text, indent) }
+    }
+    const fence = canonicalFence(out.slice(opener + 1, end).map((part) => part.text))
     out[opener] = { prefix: out[opener]!.prefix, text: fence + info }
-    out[at] = { prefix: out[opener]!.prefix, text: fence }
+    return fence
   }
   for (let idx = 0; idx < out.length; idx++) {
     const part = out[idx]!
     if (opener >= 0) {
       if (part.prefix !== out[opener]!.prefix) return [...run]
       if (closer!.test(part.text)) {
-        close(idx)
+        out[idx] = { prefix: part.prefix, text: respell(idx) }
         opener = -1
       }
       continue
@@ -1799,12 +1804,10 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
     if (!open || !fenceRunIsAFence(open[2]!, open[3]!)) continue
     opener = idx
     info = fenceInfo(open[3]!)
+    indent = columnWidth(open[1]!)
     closer = new RegExp(`^ {0,3}${open[2]![0] === '`' ? '`' : '~'}{${open[2]!.length},}[ \t]*$`)
   }
-  if (opener >= 0) {
-    const fence = canonicalFence(out.slice(opener + 1).map((part) => part.text))
-    out[opener] = { prefix: out[opener]!.prefix, text: fence + info }
-  }
+  if (opener >= 0) respell(out.length)
   return out
 }
 

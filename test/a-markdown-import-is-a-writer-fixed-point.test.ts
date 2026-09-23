@@ -115,6 +115,11 @@ describe('a Markdown import writes the spelling carve fmt writes (#1921)', () =>
     ['writes a fence on an item line with backticks', md('- ~~~', '  x', '  ~~~'), md('- ```', '  x', '  ```')],
     ['keeps a quoted tilde fence a fence', md('> ~~~', '> *x*', '> ~~~'), md('> ```', '> *x*', '> ```')],
     [
+      'strips a quoted fence opener indent from its body',
+      md('>   ~~~', '>   x', '>    y', '>   ~~~'),
+      md('> ```', '> x', '>  y', '> ```'),
+    ],
+    [
       'separates a quoted fence from the paragraphs around it',
       md('> para', '> ~~~', '> x', '> ~~~', '> after'),
       md('> para', '>', '> ```', '> x', '> ```', '>', '> after'),
