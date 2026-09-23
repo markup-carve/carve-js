@@ -24,6 +24,15 @@ Version 2 renames version 1's `carried` fidelity to `preserved`, adds
 every import until those paths expose construct-level loss information. The
 report does not infer exact outcomes by rescanning source independently of the
 importer.
+
+Markdown adds the construct-level losses it can prove beside that row. A table
+row whose every cell is blank has no Carve spelling, so it is dropped and
+reported as `structure-unspellable`, dropped/exact - the same code and the same
+fidelity the HTML importer spends on that row. The row carries no `path` or
+`line`: the Markdown importer folds and re-spells a container's lines before it
+writes a row, so it has no position it could stand behind, and one drop is one
+diagnostic. The `fidelity-unverified` row stays: it still stands for the
+constructs the Markdown importer has no answer for.
 `Normalized` remains reserved for a future importer that can prove a
 semantics-preserving rewrite from its own applied-operation record.
 

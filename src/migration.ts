@@ -6,7 +6,7 @@ import {
   type HtmlImportMode,
   type HtmlImportOptions,
 } from './html-import.js'
-import { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
+import { markdownToCarveWithLosses, type MarkdownDialect } from './markdown-migrate.js'
 
 export type SourceFormat = 'html' | 'markdown' | 'djot' | 'bbcode'
 export type MigrationFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
@@ -54,14 +54,18 @@ export function migrateHtml(source: string, options: HtmlImportOptions = {}): Mi
   }
 }
 
-function unverified(value: string, sourceFormat: Exclude<SourceFormat, 'html'>): MigrationResult {
+function unverified(
+  value: string,
+  sourceFormat: Exclude<SourceFormat, 'html'>,
+  known: readonly MigrationDiagnostic[] = [],
+): MigrationResult {
   const diagnostics: MigrationDiagnostic[] = [{
     code: 'fidelity-unverified',
     message: `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
     severity: 'warning',
     fidelity: 'dropped',
     confidence: 'fallback',
-  }]
+  }, ...known]
   return { value, report: { schemaVersion: 2, sourceFormat, diagnostics } }
 }
 
@@ -69,7 +73,18 @@ export function migrateMarkdown(
   source: string,
   options: { dialect?: MarkdownDialect } = {},
 ): MigrationResult {
-  return unverified(markdownToCarve(source, options.dialect), 'markdown')
+  const result = markdownToCarveWithLosses(source, options.dialect)
+  // The construct-level losses the Markdown importer DOES know about. They sit
+  // beside `fidelity-unverified` rather than replacing it: the importer still
+  // reports nothing about the constructs it has no answer for, so the
+  // conservative worst case still stands for the rest of the document.
+  return unverified(result.value, 'markdown', result.losses.map((loss) => ({
+    code: loss.code,
+    message: loss.message,
+    severity: 'warning',
+    fidelity: 'dropped',
+    confidence: 'exact',
+  })))
 }
 
 export function migrateDjot(source: string): MigrationResult {
