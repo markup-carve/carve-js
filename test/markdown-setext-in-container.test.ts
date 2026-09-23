@@ -188,8 +188,8 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
   it('leaves a list marker a quote holds', () => {
     // CommonMark reads: <blockquote>\n<ul>\n<li>a\n===</li>\n</ul>\n</blockquote>
     // An underline cannot reach the item's paragraph from outside the item.
-    expect(markdownToCarve('> - a\n> ===\n')).toBe('> - a\n> ===\n')
-    expect(markdownToCarve('> 2. a\n> ===\n')).toBe('> 2. a\n> ===\n')
+    expect(markdownToCarve('> - a\n> ===\n')).toBe('> - a\n>   ===\n')
+    expect(markdownToCarve('> 2. a\n> ===\n')).toBe('> 2. a\n>    ===\n')
   })
 
   it('leaves a link reference definition a quote holds', () => {

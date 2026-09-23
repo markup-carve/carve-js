@@ -887,7 +887,7 @@ describe('markdownToCarve — code protection edge cases', () => {
 
 describe('markdownToCarve — more block spacing', () => {
   it('keeps a lazy continuation line in the blockquote (CommonMark 5.1)', () => {
-    expect(conv('> quote\ntext')).toBe('> quote\ntext')
+    expect(conv('> quote\ntext')).toBe('> quote\n> text')
   })
 
   it('inserts a blank line between a blockquote and a following block', () => {

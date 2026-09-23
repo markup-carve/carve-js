@@ -165,20 +165,135 @@ describe('a Markdown import writes the spelling carve fmt writes (#1921)', () =>
     expect(out).toBe(expected)
     expect(carveToCarve(out)).toBe(out)
   })
+})
 
-  // The lazy line itself is not re-indented, so this is not a fixed point yet;
-  // the numbering on the far side of it is what is pinned.
-  it('keeps numbering a quoted list across a lazy line', () => {
-    expect(markdownToCarve(md('> 1. a', '> continuation', '> 1. b'))).toBe(md('> 1. a', '> continuation', '> 2. b'))
+describe('a Markdown import closes, renumbers and re-indents the way carve fmt does (#1929)', () => {
+  const md = (...lines: string[]): string => [...lines, ''].join('\n')
+  const cases: Array<[string, string, string]> = [
+    // An unclosed fence runs to the end of its container, blank lines included.
+    ['closes a fence the document never closed', md('~~~', 'x'), md('```', 'x', '```')],
+    ['closes it after its trailing blank line', md('~~~ js', 'x', ''), md('```js', 'x', '', '```')],
+    ['closes an unclosed fence on an item line', md('- ~~~', '  x', '- b'), md('- ```', '  x', '  ```', '- b')],
+    [
+      'keeps the blank lines an unclosed item fence ran through',
+      md('- ~~~', '  x', '', '- b'),
+      md('- ```', '  x', '', '  ```', '', '- b'),
+    ],
+    ['closes a quoted fence the quote ended', md('> ~~~', '> x'), md('> ```', '> x', '> ```')],
+    ['closes a quoted fence before the paragraph after the quote', md('> ~~~', '> x', '', 'para'), md('> ```', '> x', '> ```', '', 'para')],
+    [
+      'keeps a quoted fence open across an empty quote line',
+      md('> ~~~', '> a', '>', '> *y* 1. x', '> ~~~'),
+      md('> ```', '> a', '>', '> *y* 1. x', '> ```'),
+    ],
+    [
+      'closes a quoted fence that ran across an empty quote line',
+      md('> ~~~', '> a', '>', '> b'),
+      md('> ```', '> a', '>', '> b', '> ```'),
+    ],
+
+    // A number of another width moves the content column, and the lines under
+    // the item move with it.
+    ['moves an item paragraph with its wider number', md('9. a', '   x', '9. b', '   y'), md('9. a', '   x', '10. b', '    y')],
+    [
+      'moves a loose item paragraph with its wider number',
+      md('9. a', '', '   x', '', '9. b', '', '   y'),
+      md('9. a', '', '   x', '', '10. b', '', '    y'),
+    ],
+    [
+      'moves a nested list with its wider number',
+      md('9. a', '9. b', '   - n', '   - m', '9. c'),
+      md('9. a', '10. b', '    - n', '    - m', '11. c'),
+    ],
+    [
+      'adds up the moves of nested wider numbers',
+      md('9. a', '9. b', '   9. i', '   9. j', '      deep', '9. c'),
+      md('9. a', '10. b', '    9. i', '    10. j', '        deep', '11. c'),
+    ],
+    [
+      'moves a quote in the item with its wider number',
+      md('9. a', '9. b', '   > q', '   > r', '9. c'),
+      md('9. a', '10. b', '    > q', '    > r', '11. c'),
+    ],
+    [
+      'moves a fence in the item and keeps its body verbatim',
+      md('9. a', '', '9. b', '', '   ~~~', '     code', '   ~~~', '', '9. c'),
+      md('9. a', '', '10. b', '', '    ```', '      code', '    ```', '', '11. c'),
+    ],
+    ['moves an item fence with its wider number', md('9. a', '9. ~~~', '   x', '   ~~~'), md('9. a', '10. ```', '    x', '    ```')],
+    [
+      'moves a nested list inside an outer item',
+      md('- l', '  9. a', '  9. b', '     x', '  9. c'),
+      md('- l', '  9. a', '  10. b', '      x', '  11. c'),
+    ],
+    ['moves the lines under a narrower number back', md('9. a', '100. b', '     x'), md('9. a', '10. b', '    x')],
+    ['moves a quoted item paragraph with its wider number', md('> 9. a', '>    x', '> 9. b', '>    y'), md('> 9. a', '>    x', '> 10. b', '>     y')],
+    [
+      'moves a quoted item across its empty quote line',
+      md('> 9. a', '>', '> 9. b', '>', '>    y'),
+      md('> 9. a', '>', '> 10. b', '>', '>     y'),
+    ],
+
+    // A lazy line continues the paragraph of the item above it.
+    ['re-indents a lazy line to its item', md('- a', 'lazy'), md('- a', '  lazy')],
+    ['keeps a list tight across a lazy line', md('- a', 'lazy', '- b'), md('- a', '  lazy', '- b')],
+    ['re-indents a lazy line under an ordered item', md('1. a', 'lazy', '1. b'), md('1. a', '   lazy', '2. b')],
+    ['re-indents a lazy line to the nested item it continues', md('- a', '  - b', 'lazy'), md('- a', '  - b', '    lazy')],
+    ['re-indents a partly indented lazy line', md('- a', '  - b', '  lazy'), md('- a', '  - b', '    lazy')],
+    ['re-indents a lazy line under a task item', md('- [ ] task', 'lazy'), md('- [ ] task', '  lazy')],
+    ['converts the inlines of a lazy line', md('- a', 'lazy *em*'), md('- a', '  lazy /em/')],
+    ['re-indents a lazy line in a loose item', md('- a', '', '  b', 'lazy', '- c'), md('- a', '', '  b', '  lazy', '', '- c')],
+    ['re-indents a lazy line under a wider number', md('9. a', '9. b', 'lazy'), md('9. a', '10. b', '    lazy')],
+    ['re-indents a quoted lazy line to its item', md('> 1. a', '> continuation', '> 1. b'), md('> 1. a', '>    continuation', '> 2. b')],
+    ['re-indents a quoted lazy line after an item line', md('> 1. a', '>    b', '> c'), md('> 1. a', '>    b', '>    c')],
+    ['writes the quote marker on a lazy line', md('> a', 'lazy'), md('> a', '> lazy')],
+    ['writes every quote marker on a lazy line', md('> > a', 'lazy'), md('> > a', '> > lazy')],
+    ['writes the quote marker and item indent on a lazy line', md('> - a', 'lazy'), md('> - a', '>   lazy')],
+    ['continues the list after a lazy line', md('1. a', 'lazy', '2. b'), md('1. a', '   lazy', '2. b')],
+    ['separates another list after a lazy line', md('- a', 'lazy', '1. b'), md('- a', '  lazy', '', '1. b')],
+
+    // Quoted fences read the way CommonMark reads them.
+    ['keeps a nested quote marker inside a quoted fence as code', md('> ~~~', '> > x', '> ~~~'), md('> ```', '> > x', '> ```')],
+    [
+      'keeps a fence under a quoted item in the item',
+      md('> - a', '>   ~~~', '>   x', '>   ~~~', '> - b'),
+      md('> - a', '>   ```', '>   x', '>   ```', '> - b'),
+    ],
+  ]
+
+  it.each(cases)('%s', (_label, source, expected) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    expect(carveToCarve(out)).toBe(out)
   })
 
-  // fmt closes these, but a closer inside a list item changes how loose the
-  // item reads, so the import leaves them open and only respells the opener.
+  it('reads a list tight across a lazy line, as GFM does', () => {
+    expect(carveToHtml(markdownToCarve(md('- a', 'lazy', '- b')))).not.toContain('<p>')
+  })
+
+  it('does not read a line under a heading item as lazy', () => {
+    expect(markdownToCarve(md('- # h', 'lazy'))).toBe(md('- # h', 'lazy'))
+  })
+
+  it('keeps a lazy line out of a fence the item line opened', () => {
+    expect(markdownToCarve(md('- ~~~', '  x', 'after'))).toBe(md('- ```', '  x', '  ```', 'after'))
+  })
+
+  // Not fmt's spelling yet: fmt drops the blank line the importer writes
+  // before a block under item text, and puts one between a list and the text
+  // after it. That spacing is the part #1925 left open.
   it.each([
-    [md('~~~', 'x'), md('```', 'x')],
-    [md('- ~~~', '  x', '- b'), md('- ```', '  x', '- b')],
-    [md('> ~~~', '> x'), md('> ```', '> x')],
-  ])('respells an unclosed fence %j without closing it', (source, expected) => {
+    ['closes an unclosed fence under item text', md('- a', '  ~~~', '  x'), md('- a', '', '  ```', '  x', '  ```')],
+    // Closed, the item would read tight where GFM and the open fence read it loose.
+    [
+      'leaves open a fence set apart from its item text with a blank line inside',
+      md('- a', '', '  ~~~', '  x', '', '  y'),
+      md('- a', '', '  ```', '  x', '', '  y'),
+    ],
+    ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', 'more', '', '9. b')],
+    ['keeps a marker left of the lazy line item out of it', md('1. a', 'lazy', '  - n'), md('1. a', '   lazy', '', '  - n')],
+    ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('- a', '', '  > iq', '', '> q')],
+  ])('%s', (_label, source, expected) => {
     expect(markdownToCarve(source)).toBe(expected)
   })
 })

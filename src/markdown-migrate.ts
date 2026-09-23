@@ -1427,7 +1427,19 @@ type PrefixedInlineLine = {
 
 const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
 
-type OpenList = { col: number; kind: string; bullet: string; next: number }
+/**
+ * `content` is the item's content column in the source and `shift` how far the
+ * import moves it: the sum of every enclosing item's change of marker width.
+ */
+type OpenList = {
+  col: number
+  content: number
+  shift: number
+  kind: string
+  bullet: string
+  next: number
+  restart?: boolean
+}
 
 /**
  * Writes list item markers the way `carve fmt` does, one container at a time.
@@ -1437,6 +1449,9 @@ type OpenList = { col: number; kind: string; bullet: string; next: number }
  * for the blank line fmt puts between the two; and since `+` is written as `-`,
  * a new list whose bullet would come out the same as the list above flips to
  * `*`, or the two would merge.
+ *
+ * A number of another width moves the item's content column. The caller moves
+ * the lines the item holds with it, by what `shiftAt` answers for them.
  */
 class ListMarkers {
   private open: OpenList[] = []
@@ -1447,15 +1462,47 @@ class ListMarkers {
   }
 
   /**
-   * `movable` says nothing is indented under the item, so its number may change
-   * width without leaving a line behind the content column it moves.
+   * A line at `col` outside the open items ends the lists holding them. They
+   * stay open for spacing, but an item after them numbers from its own marker.
    */
-  write(line: string, movable = false): { line: string; separate: boolean } {
+  leave(col: number): void {
+    for (const list of this.open) if (list.content > col) list.restart = true
+  }
+
+  /** The innermost open item holding a line indented `col` columns in the source. */
+  itemAt(col: number): OpenList | undefined {
+    for (let at = this.open.length - 1; at >= 0; at--) if (this.open[at]!.content <= col) return this.open[at]
+    return undefined
+  }
+
+  /** Whether a list is open with its markers at `col`. */
+  hasListAt(col: number): boolean {
+    return this.open.some((list) => list.col === col)
+  }
+
+  /** How far a line indented `col` columns in the source moves. */
+  shiftAt(col: number): number {
+    return this.itemAt(col)?.shift ?? 0
+  }
+
+  /**
+   * `outer` is how far the marker line itself moves, `shift` how far the lines
+   * the item holds do.
+   */
+  write(line: string): { line: string; separate: boolean; outer: number; shift: number } {
     const m = /^([ \t]*)(?:([-*+])|(\d+)([.)]))(?=[ \t])/.exec(line)
-    if (!m) return { line, separate: false }
+    if (!m) return { line, separate: false, outer: 0, shift: 0 }
     const col = columnWidth(m[1]!)
     while (this.open.length > 0 && this.open.at(-1)!.col > col) this.open.pop()
+    // A marker left of an open item's content is not inside that item, and
+    // starts a list apart from the one it ends.
+    let outside = false
+    while (this.open.length > 0 && this.open.at(-1)!.col < col && this.open.at(-1)!.content > col) {
+      this.open.pop()
+      outside = true
+    }
     const prev = this.open.at(-1)?.col === col ? this.open.pop() : undefined
+    const outer = this.shiftAt(col)
     const kind = m[2] ?? m[4]!
     const same = prev !== undefined && prev.kind === kind
     let marker: string
@@ -1466,25 +1513,25 @@ class ListMarkers {
       if (!same && prev?.bullet === bullet) bullet = bullet === '-' ? '*' : '-'
       marker = bullet
     } else {
-      const number = same ? prev.next : Number(m[3])
-      // A number of another width moves the item's content column, and any
-      // lines under it were indented for the old one.
-      marker = (movable || String(number).length === m[3]!.length ? String(number) : m[3]!) + m[4]!
+      const number = same && !prev.restart ? prev.next : Number(m[3])
+      marker = String(number) + m[4]!
       next = number + 1
     }
-    this.open.push({ col, kind, bullet, next })
-    return { line: m[1]! + marker + line.slice(m[0].length), separate: prev !== undefined && !same }
+    const shift = outer + marker.length - (m[0].length - m[1]!.length)
+    const content = columnWidth(RE_LIST_MARKER.exec(line)?.[0] ?? m[0])
+    this.open.push({ col, content, shift, kind, bullet, next })
+    return { line: m[1]! + marker + line.slice(m[0].length), separate: outside || (prev !== undefined && !same), outer, shift }
   }
 }
 
-/** Whether a one-line list item has no line indented to its content column below it. */
-function holdsNothingBelow(lines: readonly string[], run: { lines: string[]; end: number }): boolean {
-  if (run.lines.length !== 1) return false
-  const marker = RE_LIST_MARKER.exec(run.lines[0]!)
-  if (!marker) return false
-  let next = run.end
-  while (next < lines.length && lines[next]!.trim() === '') next++
-  return next === lines.length || indentColumns(lines[next]!) < columnWidth(marker[0])
+/**
+ * `line` with its first `from` columns of indent written as `to` spaces, so a
+ * line an item holds follows the item's moved content column. What sits past
+ * `from` is kept byte for byte; a blank line stays as it is.
+ */
+function moveIndent(line: string, from: number, to: number): string {
+  if (from === to || line.trim() === '' || indentColumns(line) < from) return line
+  return ' '.repeat(Math.max(0, to)) + stripColumns(line, from)
 }
 
 function leadingIndentWidth(line: string): number {
@@ -1744,6 +1791,16 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
   return out
 }
 
+/** What `line` holds inside its first `levels` quote markers. */
+function peelQuoteLevels(line: string, levels: number): string {
+  let rest = line
+  for (let level = 0; level < levels && rest.startsWith('>'); level++) {
+    rest = rest.slice(1)
+    if (rest.startsWith(' ') || rest.startsWith('\t')) rest = rest.slice(1)
+  }
+  return rest
+}
+
 function blockquotePrefix(line: string): { prefix: string; text: string } | null {
   let rest = line
   let prefix = ''
@@ -1754,6 +1811,19 @@ function blockquotePrefix(line: string): { prefix: string; text: string } | null
   }
   if (prefix === '') return null
   return { prefix, text: rest }
+}
+
+/**
+ * The quote prefix a lazy line takes: that of the paragraph it continues, or
+ * none when the paragraph's lines sit at different quote depths, because one of
+ * them is itself lazy and the depth the paragraph opened at is not known here.
+ */
+function lazyQuotePrefix(run: readonly PrefixedInlineLine[]): string {
+  const prefix = run.at(-1)!.prefix
+  for (let at = run.length - 1; at >= 0 && quoteParagraphIsOpen(run[at]!.text); at--) {
+    if (run[at]!.prefix !== prefix) return ''
+  }
+  return prefix
 }
 
 /** Whether a quote line leaves a paragraph open for a lazy line to continue. */
@@ -1786,22 +1856,47 @@ function collectBlockquoteInlineRun(
     stripColumns(line, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')
   const run: PrefixedInlineLine[] = []
   let end = start
-  let inFence = false
+  // The open fence's quote prefix and closer. An empty quote line inside it is
+  // a blank line of the code, not the end of the run.
+  let fence: { prefix: string; closer: RegExp } | null = null
+  // The prefix the lazy lines of the current paragraph take, once found.
+  let lazyPrefix: string | null = null
   while (end < lines.length) {
-    const parsed = blockquotePrefix(strip(lines[end]!))
+    let parsed = blockquotePrefix(strip(lines[end]!))
     // A line with no marker lazily continues the quote's open paragraph
-    // (CommonMark 5.1), unless it would start a block of its own.
-    if (!parsed && run.length > 0 && !inFence && quoteParagraphIsOpen(run.at(-1)!.text) && isParagraphRunLine(lines, end, 'text')) {
-      run.push({ prefix: '', text: strip(lines[end]!) })
+    // (CommonMark 5.1), unless it would start a block of its own. fmt writes it
+    // with the quote's marker; an ordered marker keeps its bare line, where it
+    // cannot interrupt the paragraph.
+    if (!parsed && run.length > 0 && fence === null && quoteParagraphIsOpen(run.at(-1)!.text) && isParagraphRunLine(lines, end, 'text')) {
+      const text = strip(lines[end]!)
+      lazyPrefix ??= lazyQuotePrefix(run)
+      run.push({ prefix: /^\s*\d+[.)]/.test(text) ? '' : lazyPrefix, text })
       end++
       continue
     }
-    if (!parsed || parsed.text.trim() === '') break
-    if (isMarkdownFenceLine(parsed.text)) inFence = !inFence
-    // What the quote holds is measured with the marker stripped, so an HTML
-    // block opening mid-quote ends the inline run and the caller re-enters on
-    // that line as a block.
-    if (end > start && interruptingHtmlBlock(parsed.text)) break
+    lazyPrefix = null
+    if (!parsed) break
+    // A quote line left of the container's content column is not in it.
+    if (end > start && contentCol > 0 && indentColumns(lines[end]!) < contentCol) break
+    // Inside a fence, markers past its quote's depth are code.
+    if (fence !== null && parsed.prefix.length > fence.prefix.length && parsed.prefix.startsWith(fence.prefix)) {
+      parsed = { prefix: fence.prefix, text: peelQuoteLevels(strip(lines[end]!), quoteDepth(fence.prefix)) }
+    }
+    if (fence !== null && parsed.prefix !== fence.prefix) fence = null
+    if (parsed.text.trim() === '' && fence === null) break
+    if (fence !== null) {
+      if (fence.closer.test(parsed.text)) fence = null
+    } else {
+      const open = RE_MD_FENCE_LINE.exec(parsed.text)
+      if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
+        fence = { prefix: parsed.prefix, closer: new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`) }
+      } else if (end > start && interruptingHtmlBlock(parsed.text)) {
+        // What the quote holds is measured with the marker stripped, so an
+        // HTML block opening mid-quote ends the inline run and the caller
+        // re-enters on that line as a block.
+        break
+      }
+    }
     run.push(parsed)
     end++
   }
@@ -1815,7 +1910,7 @@ function collectBlockquoteInlineRun(
 
 /**
  * Respell each fence a quote run holds as the backtick fence `carve fmt`
- * writes. One the quote ended stays unclosed, as at the top level.
+ * writes, and close one the quote ended.
  *
  * Besides the spelling, a backtick fence is what keeps the body verbatim here:
  * the run goes through `convertInline`, which protects a backtick fence as a
@@ -1828,18 +1923,28 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
   let info = ''
   // The opener's own indent, which CommonMark strips from each body line too.
   let indent = 0
+  let lead = ''
+  // The content column of the last item line at each quote prefix, outside
+  // fences, whose lines are code rather than items.
+  const lastItem = new Map<string, number>()
   const respell = (end: number): string => {
     for (let idx = opener + 1; idx < end; idx++) {
       out[idx] = { prefix: out[idx]!.prefix, text: stripColumns(out[idx]!.text, indent) }
     }
     const fence = canonicalFence(out.slice(opener + 1, end).map((part) => part.text))
-    out[opener] = { prefix: out[opener]!.prefix, text: fence + info }
-    return fence
+    out[opener] = { prefix: out[opener]!.prefix, text: lead + fence + info }
+    return lead + fence
   }
   for (let idx = 0; idx < out.length; idx++) {
     const part = out[idx]!
     if (opener >= 0) {
-      if (part.prefix !== out[opener]!.prefix) return [...run]
+      // A shallower quote line ends the quote the fence is in, and the fence;
+      // a line left of the item a fence is under ends the item and the fence.
+      if (part.prefix !== out[opener]!.prefix || (lead !== '' && part.text.trim() !== '' && indentColumns(part.text) < columnWidth(lead))) {
+        out.splice(idx, 0, { prefix: out[opener]!.prefix, text: respell(idx) })
+        opener = -1
+        continue
+      }
       if (closer!.test(part.text)) {
         out[idx] = { prefix: part.prefix, text: respell(idx) }
         opener = -1
@@ -1847,13 +1952,22 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
       continue
     }
     const open = RE_MD_FENCE_LINE.exec(part.text)
-    if (!open || !fenceRunIsAFence(open[2]!, open[3]!)) continue
+    if (!open || !fenceRunIsAFence(open[2]!, open[3]!)) {
+      const marker = RE_LIST_MARKER.exec(part.text)
+      if (marker) lastItem.set(part.prefix, columnWidth(marker[0]))
+      continue
+    }
     opener = idx
     info = fenceInfo(open[3]!)
-    indent = columnWidth(open[1]!)
+    // An indented fence under a quoted list item is the item's: it keeps the
+    // item's column, and its body keeps its indent.
+    const item = lastItem.get(part.prefix)
+    const underItem = item !== undefined && columnWidth(open[1]!) >= item
+    lead = underItem ? open[1]! : ''
+    indent = underItem ? 0 : columnWidth(open[1]!)
     closer = new RegExp(`^ {0,3}${open[2]![0] === '`' ? '`' : '~'}{${open[2]!.length},}[ \t]*$`)
   }
-  if (opener >= 0) respell(out.length)
+  if (opener >= 0) out.push({ prefix: out[opener]!.prefix, text: respell(out.length) })
   return out
 }
 
@@ -1871,11 +1985,20 @@ function respellQuotedBlocks(
   // The open fence's closer, or null outside one.
   let closer: RegExp | null = null
   let afterFence = false
+  // The content column of the item the open or last fence sat under, or -1. A
+  // quote run holds no blank line, so that item is tight, and only a line
+  // leaving it is set apart from the fence.
+  let fenceItem = -1
   const separate = (prefix: string): void => {
     const prev = out.at(-1)
     if (prev !== undefined && prev.prefix === prefix && prev.text.trim() !== '') out.push({ prefix, text: '' })
   }
-  for (const [idx, part] of run.entries()) {
+  // A line the quote's open item holds moves with the item.
+  const moved = (part: PrefixedInlineLine): PrefixedInlineLine => {
+    const item = markers.get(part.prefix)?.itemAt(indentColumns(part.text))
+    return item ? { prefix: part.prefix, text: moveIndent(part.text, item.content, item.content + item.shift) } : part
+  }
+  for (const part of run) {
     const prev = out.at(-1)
     if (part.prefix === '') {
       out.push(part)
@@ -1883,7 +2006,7 @@ function respellQuotedBlocks(
       continue
     }
     if (closer !== null) {
-      out.push(part)
+      out.push(moved(part))
       if (closer.test(part.text)) {
         closer = null
         afterFence = true
@@ -1892,13 +2015,16 @@ function respellQuotedBlocks(
     }
     const open = RE_MD_FENCE_LINE.exec(part.text)
     if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
+      fenceItem = markers.get(part.prefix)?.itemAt(indentColumns(part.text))?.content ?? -1
       markers.get(part.prefix)?.end(indentColumns(part.text))
       closer = new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`)
-      separate(part.prefix)
-      out.push(part)
+      if (fenceItem < 0) separate(part.prefix)
+      out.push(moved(part))
       continue
     }
-    if (afterFence) separate(part.prefix)
+    if (afterFence && (fenceItem < 0 || (!RE_LIST_MARKER.test(part.text) && indentColumns(part.text) < fenceItem))) {
+      separate(part.prefix)
+    }
     afterFence = false
     // A quote opened at the column of an outer one ends the lists it holds.
     for (const [prefix, outer] of markers) {
@@ -1906,16 +2032,25 @@ function respellQuotedBlocks(
     }
     let list = markers.get(part.prefix)
     if (list === undefined) markers.set(part.prefix, (list = new ListMarkers()))
-    const item = RE_LIST_MARKER.exec(part.text)
-    const below = run[idx + 1]
-    const movable =
-      item !== null &&
-      (below === undefined || below.prefix !== part.prefix || indentColumns(below.text) < columnWidth(item[0]))
-    const written = list.write(part.text, movable)
-    // A quote run holds no blank line, so an unmarked paragraph line under an
-    // item is its lazy continuation; only a line opening another block ends it.
-    if (!RE_LIST_MARKER.test(part.text) && !quoteParagraphIsOpen(part.text)) {
-      list.end(indentColumns(part.text))
+    const written = list.write(part.text)
+    const markerCol = indentColumns(part.text)
+    let text = moveIndent(written.line, markerCol, markerCol + written.outer)
+    if (!RE_LIST_MARKER.test(part.text)) {
+      // A quote run holds no blank line, so an unmarked paragraph line under an
+      // item is its lazy continuation, written at the item's content column;
+      // only a line opening another block ends the item.
+      const open = list.itemAt(Infinity)
+      const lazy =
+        open !== undefined &&
+        markerCol < open.content &&
+        prev?.prefix === part.prefix &&
+        opensParagraph(prev.text.replace(RE_LIST_MARKER, '')) &&
+        opensParagraph(part.text)
+      if (lazy) text = ' '.repeat(open.content + open.shift) + part.text.trimStart()
+      else {
+        if (!quoteParagraphIsOpen(part.text)) list.end(markerCol)
+        text = moved(part).text
+      }
     }
     // Not after a lazy line: an empty line there would be a blank one, and
     // would end the quote the lazy line continues.
@@ -1929,7 +2064,7 @@ function respellQuotedBlocks(
     if ((written.separate && prev !== undefined) || (deeper && prev.text.trim() !== '')) {
       out.push({ prefix: deeper ? prev.prefix : part.prefix, text: '' })
     }
-    out.push({ prefix: part.prefix, text: written.line })
+    out.push({ prefix: part.prefix, text })
   }
   return out
 }
@@ -2008,8 +2143,10 @@ function fenceInfo(rest: string): string {
  * A fence on a list item's own first line, with its body and its closer.
  *
  * The body is code, so it is written byte for byte at the item's content
- * column. The fence ends at its closer, or before the first non-blank line
- * left of that column, which ends the item.
+ * column. The fence ends at its closer, or at the first non-blank line left of
+ * that column, which ends the item; there it is closed after the blank lines it
+ * ran through, and those are handed back to the caller too, so the item keeps
+ * the looseness they gave it.
  */
 function collectItemFence(
   lines: readonly string[],
@@ -2024,6 +2161,7 @@ function collectItemFence(
   const closer = new RegExp(`^ {0,3}${run[0] === '`' ? '`' : '~'}{${run.length},}[ \t]*$`)
   let end = start + 1
   let blanks: string[] = []
+  let trailing = 0
   while (end < lines.length) {
     const line = lines[end]!
     if (line.trim() === '') {
@@ -2032,6 +2170,7 @@ function collectItemFence(
       continue
     }
     if (indentColumns(line) < contentCol) {
+      trailing = blanks.length
       end -= blanks.length
       blanks = []
       break
@@ -2043,11 +2182,15 @@ function collectItemFence(
     end++
     if (closer.test(body)) break
   }
+  // The line the document's final newline leaves is not a blank of the code.
+  if (blanks.length > 0) trailing = blanks.length - (end === lines.length && lines.at(-1) === '' ? 1 : 0)
   end -= blanks.length
   const closed = out.length > 1 && closer.test(stripColumns(out.at(-1)!, contentCol))
+  if (!closed) out.push(...new Array<string>(trailing).fill(''))
   const fence = canonicalFence(out.slice(1, closed ? -1 : undefined).map((line) => stripColumns(line, contentCol)))
   out[0] = prefix + fence + info
   if (closed) out[out.length - 1] = pad + fence
+  else out.push(pad + fence)
 
   return { lines: out, end, verbatimFrom: 1 }
 }
@@ -2366,6 +2509,41 @@ export function markdownToCarveWithLosses(
   }
 }
 
+/**
+ * A list item's collected lines with the marker `carve fmt` writes, the marker
+ * line moved with the items around it and the lines under it with the item.
+ */
+function writeItemRun(
+  run: { lines: string[] },
+  markers: ListMarkers,
+): { lines: string[]; separate: boolean } {
+  const first = run.lines[0]!
+  const written = markers.write(first)
+  const markerCol = indentColumns(first)
+  const content = columnWidth(RE_LIST_MARKER.exec(first)?.[0] ?? '')
+  return {
+    lines: [
+      moveIndent(written.line, markerCol, markerCol + written.outer),
+      ...run.lines.slice(1).map((line) => moveIndent(line, content, content + written.shift)),
+    ],
+    separate: written.separate,
+  }
+}
+
+/** Whether a line of item content leaves a paragraph a lazy line can continue. */
+function opensParagraph(text: string): boolean {
+  const trimmed = text.trimStart()
+  return quoteParagraphIsOpen(trimmed) && !trimmed.startsWith('>') && !RE_LIST_MARKER.test(trimmed)
+}
+
+/** Whether a collected list item ends in paragraph text. */
+function leavesItemParagraph(run: { lines: string[]; verbatimFrom?: number }): boolean {
+  if (run.verbatimFrom !== undefined) return false
+  const last = run.lines.at(-1)!
+  const marker = RE_LIST_MARKER.exec(last)
+  return opensParagraph(run.lines.length === 1 && marker ? last.slice(marker[0].length) : last)
+}
+
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
@@ -2390,6 +2568,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // backtick fence `carve fmt` writes has to be.
   let fenceOut = -1
   let fenceInfoText = ''
+  // How far the open fence's item moved (see `ListMarkers`), and whether a
+  // blank line put the fence apart from the item content above it.
+  let fenceShift = 0
+  let fenceAfterBlank = false
   // Stack of enclosing list items' content columns (outermost first), so a
   // fence is re-based to the DEEPEST item that still contains it. A Markdown
   // fence indented to a list item's content stays in the item (strip nothing);
@@ -2413,6 +2595,33 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // blank precedes it; without a blank it is lazy paragraph continuation and
   // the item stays open (CommonMark).
   let prevBlank = true
+  // Whether the last line left a paragraph open inside a list item, which a
+  // lazy line can continue.
+  let itemParagraph = false
+  // The content column of the item the last line lazily continued, or -1.
+  let lazyCol = -1
+  // Whether the last line ended a fence opened on an item's own line.
+  let fenceItem = false
+  // The container column of the last quote written.
+  let quoteCol = 0
+  // The lines the current iteration wrote move with the items holding them:
+  // those at or past `shiftCol` by `shiftBy` columns. Branches that place their
+  // lines themselves set `shiftBy` to 0.
+  let shiftFrom = 0
+  let shiftCol = 0
+  let shiftBy = 0
+  const applyShift = (): void => {
+    if (shiftBy !== 0) {
+      for (let at = shiftFrom; at < out.length; at++) {
+        out[at] = out[at]!
+          .split('\n')
+          .map((text) => moveIndent(text, shiftCol, shiftCol + shiftBy))
+          .join('\n')
+      }
+    }
+    shiftFrom = out.length
+    shiftBy = 0
+  }
   let prevType:
     | 'blank'
     | 'heading'
@@ -2424,9 +2633,16 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     | 'text' = 'blank'
 
   for (let i = 0; i < lines.length; i++) {
+    applyShift()
     const line = lines[i]!
     const trimmed = line.trim()
     const wasPrevBlank = prevBlank
+    const lazyAllowed = itemParagraph
+    itemParagraph = false
+    const afterLazy = lazyCol
+    lazyCol = -1
+    const afterFence = prevType === 'code_fence' || fenceItem
+    fenceItem = false
     prevBlank = trimmed === ''
     if (!trimmed.startsWith('>')) quoteMarkers.clear()
 
@@ -2435,13 +2651,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // width is NOT part of the column); a blank line is transparent (a loose
     // item continues); a non-blank line pops items whose content starts to its
     // right. Code content never changes list tracking.
+    let marker: RegExpMatchArray | null = null
     if (!inCode) {
       // A thematic break wins over a list item on a line that could be read as
       // either (CommonMark: `* * *` is a rule, not a bullet holding `* *`).
       // Counted as a marker its columns became a content column, and the rule
       // itself - and every block after it - was padded out to them.
       const openCol = listCols.length ? listCols[listCols.length - 1]! : 0
-      const marker = RE_MD_THEMATIC.test(stripColumns(line, openCol))
+      marker = RE_MD_THEMATIC.test(stripColumns(line, openCol))
         ? null
         : line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
       // Columns, not characters: the stack is compared against a line's indent
@@ -2460,10 +2677,16 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         const markerIndent = columnWidth(marker[1]!)
         while (listCols.length && listCols[listCols.length - 1]! > markerIndent) listCols.pop()
         listCols.push(columnWidth(marker[0]!))
-      } else if (trimmed !== '' && (wasPrevBlank || startsBlock)) {
+      } else if (trimmed !== '' && (wasPrevBlank || startsBlock || afterFence)) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
       if (trimmed !== '' && !marker) listMarkers.end(listCols.length ? listCols[listCols.length - 1]! : 0)
+      // A line left of an item whose last block was a fence ends the item's
+      // list, a fence taking no lazy line; an item after it numbers from its
+      // own marker.
+      if (trimmed !== '' && !marker && afterFence && listCols.length && indent < listCols[listCols.length - 1]!) {
+        listMarkers.leave(indent)
+      }
     }
 
     // The column at which the innermost open container holds its content, and
@@ -2477,6 +2700,45 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // What that container holds on this line, its content column removed. The
     // block tests run against this rather than the raw line.
     const held = stripColumns(line, contentCol)
+    shiftCol = inCode ? fenceCol : contentCol
+    shiftBy = inCode ? fenceShift : listMarkers.shiftAt(contentCol)
+
+    // A lazy line continues the paragraph of the item above it (CommonMark
+    // 5.2), and is written at that item's content column, as fmt writes it.
+    if (
+      lazyAllowed &&
+      !inCode &&
+      !marker &&
+      listCols.length > 0 &&
+      indentColumns(line) < contentCol &&
+      isParagraphRunLine(lines, i, 'text')
+    ) {
+      const run: string[] = []
+      let end = i
+      while (end < lines.length && !RE_LIST_MARKER.test(lines[end]!) && isParagraphRunLine(lines, end, 'text')) {
+        const next = lines[end]!
+        run.push(indentColumns(next) < contentCol ? containerPad + next.trimStart() : next)
+        end++
+      }
+      out.push(convertInline(run.join('\n'), dialect))
+      i = end - 1
+      itemParagraph = true
+      lazyCol = contentCol
+      prevType = 'list'
+      continue
+    }
+    // Past a lazy line, what the item holds reads as after the item line. A
+    // block left of the item follows a paragraph instead, except an item of a
+    // list open at its column; any other marker there starts a list of its
+    // own, whatever its number, since it is outside the paragraph's item.
+    let startsOwnList = false
+    if (afterLazy >= 0 && trimmed !== '' && indentColumns(line) < afterLazy) {
+      const isMarker = RE_LIST_MARKER.test(line)
+      if (!isMarker || !listMarkers.hasListAt(indentColumns(line))) {
+        prevType = 'text'
+        startsOwnList = isMarker
+      }
+    }
 
     // Opening fence — a >=3 run of ` or ~, indented at most 3 spaces (the
     // Markdown rule). Carve accepts a single language token over a real-world
@@ -2506,6 +2768,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       const openerIndent = contentCol + columnWidth(open[1]!)
       fenceStrip = Math.max(0, openerIndent - contentCol)
       fenceCol = contentCol
+      fenceShift = shiftBy
+      fenceAfterBlank = wasPrevBlank && contentCol > 0
       // Whatever the opener's own indent was, what survives the strip is
       // exactly the content column, so the fence goes back there.
       fenceOut = out.length
@@ -2521,7 +2785,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // A fence cannot continue lazily, so a line left of its item's content
       // ends the item and the fence with it (CommonMark 5.2).
       if (trimmed !== '' && indentColumns(line) < fenceCol) {
-        out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol), fenceInfoText))
+        shiftBy = 0
+        out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol + fenceShift), fenceInfoText))
         inCode = false
         fenceChar = ''
         fenceLen = 0
@@ -2537,7 +2802,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         fenceChar = ''
         fenceLen = 0
         fenceStrip = 0
-        out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol), fenceInfoText))
+        shiftBy = 0
+        out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol + fenceShift), fenceInfoText))
         // A blank line before a line that returns to an enclosing item would
         // make that item loose.
         const next = lines[i + 1]
@@ -2674,7 +2940,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const ordered = trimmed.match(/^(\d+)[.)]\s/)
     const isList =
       (/^[-*+]\s/.test(trimmed) || ordered !== null) &&
-      !(prevType === 'text' && ordered !== null && Number(ordered[1]) !== 1)
+      !(prevType === 'text' && !startsOwnList && ordered !== null && Number(ordered[1]) !== 1)
 
     if (isBlank) {
       out.push(line)
@@ -2692,15 +2958,19 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // indented blockquote/heading, or a lazy continuation) belongs to that
     // item. Carve keeps it there by indentation, so pass it through with
     // inline conversion only — no top-level block spacing or dedent.
-    if (prevType === 'list' && indent >= 1) {
+    if (prevType === 'list' && indent >= 1 && listCols.length > (isList ? 1 : 0)) {
       if (isList) {
         const run = collectListInlineRun(lines, i, dialect)
-        out.push(listMarkers.write(run.lines[0]!, holdsNothingBelow(lines, run)).line, ...run.lines.slice(1))
+        out.push(...writeItemRun(run, listMarkers).lines)
+        shiftBy = 0
+        itemParagraph = leavesItemParagraph(run)
+        fenceItem = run.verbatimFrom !== undefined
         i = run.end - 1
         prevType = 'list'
         continue
       }
       out.push(convertInline(line, dialect))
+      itemParagraph = indentColumns(line) >= contentCol && opensParagraph(held)
       prevType = 'list'
       continue
     }
@@ -2767,7 +3037,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
 
     if (isHeading && prevType !== 'blank' && prevType !== 'heading') out.push('')
-    if (isBlockquote && prevType !== 'blank' && prevType !== 'block_quote') out.push('')
+    // A quote at another container column than the one above is another quote.
+    if (isBlockquote && prevType !== 'blank' && (prevType !== 'block_quote' || quoteCol !== contentCol)) out.push('')
     // A blockquote ends at the first non-`>` line; Carve needs a blank line
     // between it and the following paragraph to keep them separate blocks.
     if (!isBlockquote && !isHeading && !isList && prevType === 'block_quote') out.push('')
@@ -2794,6 +3065,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
     if (isBlockquote) {
       const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
+      quoteCol = contentCol
       out.push(...run.lines)
       i = run.end - 1
       prevType = 'block_quote'
@@ -2801,9 +3073,12 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (isList) {
       const run = collectListInlineRun(lines, i, dialect)
-      const first = listMarkers.write(run.lines[0]!, holdsNothingBelow(lines, run))
-      if (first.separate && prevType === 'list') out.push('')
-      out.push(first.line, ...run.lines.slice(1))
+      const written = writeItemRun(run, listMarkers)
+      if (written.separate && prevType === 'list') out.push('')
+      out.push(...written.lines)
+      shiftBy = 0
+      itemParagraph = leavesItemParagraph(run)
+      fenceItem = run.verbatimFrom !== undefined
       i = run.end - 1
       prevType = 'list'
       continue
@@ -2816,7 +3091,19 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         end++
       }
       if (run.length > 1) {
-        out.push(convertInline(run.join('\n'), dialect))
+        // A line of the run left of the item's content column is lazy.
+        const inItem = listCols.length > 0 && indentColumns(line) >= contentCol
+        out.push(
+          convertInline(
+            run
+              .map((text) =>
+                inItem && indentColumns(text) < contentCol && !RE_LIST_MARKER.test(text) ? containerPad + text.trimStart() : text,
+              )
+              .join('\n'),
+            dialect,
+          ),
+        )
+        itemParagraph = inItem
         i = end - 1
         prevType = 'text'
         continue
@@ -2832,6 +3119,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     out.push(
       !inGfmTable[i] && isStandardTableRow(converted) ? keepPipeRowLiteral(converted) : converted,
     )
+    itemParagraph = listCols.length > 0 && indentColumns(line) >= contentCol && !isHeading && opensParagraph(held)
 
     if (isHeading && i + 1 < lines.length) {
       const next = lines[i + 1]!.trim()
@@ -2844,9 +3132,24 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     else prevType = 'text'
   }
 
-  // A fence the document never closed is left open, as the source wrote it:
-  // closing one inside a list item changes how loose the item reads.
-  if (inCode) closeFence(out, fenceOut, ' '.repeat(fenceCol), fenceInfoText)
+  applyShift()
+  // A fence the document never closed runs to its end, blank lines included,
+  // and is closed there; the line the final newline leaves stays last.
+  //
+  // Not one set apart from its item's content by a blank line with a blank
+  // line of its own before more code: GFM reads that item loose, and so does
+  // Carve while the fence is open, but closed it reads tight (a fence attaches
+  // to the content above it), and only `{loose}` could say otherwise.
+  let lastCode = out.length - 1
+  while (lastCode > fenceOut && out[lastCode]!.trim() === '') lastCode--
+  const blankInside = out.slice(fenceOut + 1, lastCode).some((text) => text.trim() === '')
+  if (inCode) {
+    const finalNewline = lines.at(-1) === '' && out.at(-1) === ''
+    if (finalNewline) out.pop()
+    const closer = closeFence(out, fenceOut, ' '.repeat(fenceCol + fenceShift), fenceInfoText)
+    if (!(fenceAfterBlank && blankInside)) out.push(closer)
+    if (finalNewline) out.push('')
+  }
 
   // Frontmatter-collision guard: Carve reads a line-0 `---` as a frontmatter
   // OPEN fence (frontmatter is recognized only on the first line) and, with a

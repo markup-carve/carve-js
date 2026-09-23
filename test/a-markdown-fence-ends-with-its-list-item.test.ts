@@ -25,11 +25,12 @@ describe('a Markdown fence in a list item', () => {
     expect(markdownToCarve('- x\n\n  ```\n  code\n# *h*')).toBe('- x\n\n  ```\n  code\n  ```\n\n# /h/')
   })
 
+  // Left open: closed, the item would read tight where GFM reads it loose.
   it('stays open across a blank line to a line at the content column', () => {
     expect(markdownToCarve('- x\n\n  ```\n  code\n\n  *still*')).toBe('- x\n\n  ```\n  code\n\n  *still*')
   })
 
-  it('stays open at document level', () => {
-    expect(markdownToCarve('```\ncode\n*x*')).toBe('```\ncode\n*x*')
+  it('runs to the end of the document', () => {
+    expect(markdownToCarve('```\ncode\n*x*')).toBe('```\ncode\n*x*\n```')
   })
 })
