@@ -202,30 +202,27 @@ describe('a container is answered by what it holds', () => {
     expect(tableCount('| a | b |\n|---|---|\n| c | d |\n    code\n| e | f |\n')).toBe(1)
   })
 
-  // REGRESSION GUARD. The outer item of a nested list is peeled into the
-  // prefix and the inner one is left on the text, so the run carries a
-  // container this function does not model. It escaped the rows of a table
-  // that converted correctly before. A run like that is now left exactly as it
-  // was, which is what this pins.
-  it('leaves a table a NESTED list item holds converting', () => {
+  // The outer item of a nested list is peeled into the prefix and the inner
+  // one is left on the text. The inner item is peeled too now, so the table it
+  // holds is found at its column and written with a native header.
+  it('converts a table a NESTED list item holds', () => {
     expect(migrated('- - | a | b |\n    |---|---|\n    | c | d |\n')).toBe(
-      '- - | a | b |\n    |---|---|\n    | c | d |\n',
+      '- - |= a |= b |\n    | c | d |\n',
     )
     expect(hasTable('- - | a | b |\n    |---|---|\n    | c | d |\n')).toBe(true)
   })
 
-  // The other side of that guard, and a known remaining shape: a
-  // delimiter-less row a NESTED list item holds still becomes a table, exactly
-  // as at `8d38a03c`. Escaping it needs the nested container modelled, and
-  // guessing at it is what broke the case above. Left as it was rather than
-  // half-modelled.
-  it('still makes a table of a delimiter-less row a nested list item holds', () => {
-    expect(migrated('- - | a | b |\n    | c | d |\n')).toBe('- - | a | b |\n    | c | d |\n')
+  // marked 18 gfm: a paragraph `| a | b |` / `| c | d |` inside the inner item.
+  it('keeps delimiter-less rows a nested list item holds as text', () => {
+    expect(migrated('- - | a | b |\n    | c | d |\n')).toBe('- - \\| a | b |\n    \\| c | d |\n')
+    expect(hasTable('- - | a | b |\n    | c | d |\n')).toBe(false)
   })
 
+  // The `> >` line opens a nested quote under the paragraph, which fmt
+  // separates with an empty quote line.
   it('escapes only the row, keeping the quote markers it was written with', () => {
     expect(migrated('> | a | b |\n> > |---|---|\n> | x | y |\n')).toBe(
-      '> \\| a | b |\n> > \\|---|---|\n> \\| x | y |\n',
+      '> \\| a | b |\n>\n> > \\|---|---|\n> \\| x | y |\n',
     )
   })
 })

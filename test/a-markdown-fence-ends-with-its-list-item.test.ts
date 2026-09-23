@@ -14,7 +14,7 @@ describe('a Markdown fence in a list item', () => {
   })
 
   it('closes at the column of its item', () => {
-    expect(markdownToCarve('- x\n\n  ~~~~\n  code\n*after*')).toBe('- x\n\n  ~~~~\n  code\n  ~~~~\n/after/')
+    expect(markdownToCarve('- x\n\n  ~~~~\n  code\n*after*')).toBe('- x\n\n  ```\n  code\n  ```\n/after/')
   })
 
   it('closes before a new list', () => {

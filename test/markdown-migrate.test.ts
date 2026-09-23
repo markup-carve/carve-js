@@ -314,7 +314,7 @@ describe('markdownToCarve — prefixed multiline inline mapping', () => {
 
   it('normalizes tight Markdown blockquote markers to Carve spacing', () => {
     const carve = conv(['>quote', '>>nested'].join('\n'))
-    expect(carve).toBe(['> quote', '> > nested'].join('\n'))
+    expect(carve).toBe(['> quote', '>', '> > nested'].join('\n'))
     expect(carveToHtml(carve)).toBe(
       '<blockquote>\n  <p>quote</p>\n  <blockquote><p>nested</p></blockquote>\n</blockquote>',
     )
@@ -830,7 +830,7 @@ describe('markdownToCarve — block spacing', () => {
   })
 
   it('treats a leading-zero `01.` marker as start 1 (interrupts paragraph)', () => {
-    expect(conv('Intro\n01. item')).toBe('Intro\n\n01. item')
+    expect(conv('Intro\n01. item')).toBe('Intro\n\n1. item')
   })
 
   it('inserts a blank line before a blockquote following text', () => {

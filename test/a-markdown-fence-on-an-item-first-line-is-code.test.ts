@@ -36,7 +36,7 @@ describe('a Markdown fence on a list item first line', () => {
   })
 
   it('takes a tilde closer only for a tilde fence', () => {
-    expect(markdownToCarve('- ~~~\n  ```\n  ~~~\n\nz')).toBe('- ~~~\n  ```\n  ~~~\n\nz')
+    expect(markdownToCarve('- ~~~\n  ```\n  ~~~\n\nz')).toBe('- ````\n  ```\n  ````\n\nz')
   })
 
   it('does not close on a shorter run', () => {
