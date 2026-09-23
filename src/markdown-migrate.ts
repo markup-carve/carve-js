@@ -1827,7 +1827,7 @@ function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInline
     const prev = out.at(-1)
     if (prev !== undefined && prev.prefix === prefix && prev.text.trim() !== '') out.push({ prefix, text: '' })
   }
-  for (const part of run) {
+  for (const [idx, part] of run.entries()) {
     const prev = out.at(-1)
     if (part.prefix === '') {
       out.push(part)
@@ -1858,7 +1858,12 @@ function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInline
     }
     let list = markers.get(part.prefix)
     if (list === undefined) markers.set(part.prefix, (list = new ListMarkers()))
-    const written = list.write(part.text)
+    const item = RE_LIST_MARKER.exec(part.text)
+    const below = run[idx + 1]
+    const movable =
+      item !== null &&
+      (below === undefined || below.prefix !== part.prefix || indentColumns(below.text) < columnWidth(item[0]))
+    const written = list.write(part.text, movable)
     // A quote run holds no blank line, so an unmarked paragraph line under an
     // item is its lazy continuation; only a line opening another block ends it.
     if (!RE_LIST_MARKER.test(part.text) && !quoteParagraphIsOpen(part.text)) {

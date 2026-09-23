@@ -140,6 +140,7 @@ describe('a Markdown import writes the spelling carve fmt writes (#1921)', () =>
     ['numbers a loose list across the blank', md('1. a', '', '1. b'), md('1. a', '', '2. b')],
     ['restarts after a paragraph', md('1. a', '', 'para', '', '1. b'), md('1. a', '', 'para', '', '1. b')],
     ['numbers a quoted list', md('> 1. x', '> 1. y'), md('> 1. x', '> 2. y')],
+    ['numbers a quoted list past a digit boundary', md('> 9. a', '> 9. b'), md('> 9. a', '> 10. b')],
     ['separates a list whose bullet changes', md('* x', '- y'), md('* x', '', '- y')],
     ['separates a list whose delimiter changes', md('1. x', '2) y'), md('1. x', '', '2) y')],
     ['keeps a `+` list apart from a `-` list above it', md('- x', '+ y'), md('- x', '', '* y')],
