@@ -1585,6 +1585,8 @@ function nestedItemsOnLine(
   if (own && padded(own[0].length, from)) return items
   let at = from
   for (;;) {
+    // A thematic break wins over a list item (`- * * *`).
+    if (RE_MD_THEMATIC.test(line.slice(at))) return items
     const m = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))([ \t]+)(?=\S)/.exec(line.slice(at))
     if (!m) return items
     const markerEnd = at + m[0].length - m[5]!.length
@@ -2747,9 +2749,8 @@ function opensParagraph(text: string): boolean {
 function leavesItemParagraph(run: { lines: string[]; verbatimFrom?: number }): boolean {
   if (run.verbatimFrom !== undefined) return false
   let last = run.lines.at(-1)!
-  if (run.lines.length === 1) {
-    for (let marker = RE_LIST_MARKER.exec(last); marker; marker = RE_LIST_MARKER.exec(last)) last = last.slice(marker[0].length)
-  }
+  const own = RE_LIST_MARKER.exec(last)
+  if (run.lines.length === 1 && own) last = last.slice(nestedItemsOnLine(last, own[0].length).at(-1)?.end ?? own[0].length)
   return opensParagraph(last)
 }
 
@@ -2761,11 +2762,11 @@ function leavesItemQuote(run: { lines: string[]; verbatimFrom?: number }): { pre
   if (run.verbatimFrom !== undefined) return null
   let last = run.lines.at(-1)!
   let col = indentColumns(last)
-  if (run.lines.length === 1) {
-    for (let marker = RE_LIST_MARKER.exec(last); marker; marker = RE_LIST_MARKER.exec(last)) {
-      col += columnWidth(marker[0]) - indentColumns(marker[0])
-      last = last.slice(marker[0].length)
-    }
+  const own = RE_LIST_MARKER.exec(last)
+  if (run.lines.length === 1 && own) {
+    const end = nestedItemsOnLine(last, own[0].length).at(-1)?.end ?? own[0].length
+    col = columnWidth(last.slice(0, end))
+    last = last.slice(end)
   }
   const prefix = openQuoteParagraph(last)
   return prefix === null ? null : { prefix, col }
