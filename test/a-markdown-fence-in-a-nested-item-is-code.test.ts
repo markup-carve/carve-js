@@ -6,11 +6,11 @@ import { markdownToCarve } from '../src/index.js'
 
 describe('a Markdown fence measured from its item', () => {
   it('keeps an unclosed fence in a nested item', () => {
-    expect(markdownToCarve('- a\n  - b\n\n    ```\n    code')).toBe('- a\n  - b\n\n    ```\n    code')
+    expect(markdownToCarve('- a\n  - b\n\n    ```\n    code')).toBe('- a\n  - b\n\n    ```\n    code\n    ```')
   })
 
   it('moves a fence indented past its item back to the content column', () => {
-    expect(markdownToCarve('- b\n\n     ```\n     code')).toBe('- b\n\n  ```\n  code')
+    expect(markdownToCarve('- b\n\n     ```\n     code')).toBe('- b\n\n  ```\n  code\n  ```')
   })
 
   it('reads four columns past the content column as indented code', () => {

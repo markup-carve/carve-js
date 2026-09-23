@@ -10,9 +10,9 @@ const imported = (markdown: string) => markdownToCarve(markdown).replace(/\n+$/,
 
 describe('a lazy line after a quoted paragraph', () => {
   it.each([
-    ['plain text', '> a\nb', '> a\nb', '<blockquote><p>a\nb</p></blockquote>'],
-    ['a nested quote', '> > a\nb', '> > a\nb', '<blockquote>\n  <blockquote><p>a\nb</p></blockquote>\n</blockquote>'],
-    ['a definition-shaped line', '> a\n[p]: /x', '> a\n\\[p]: /x', '<blockquote><p>a\n[p]: /x</p></blockquote>'],
+    ['plain text', '> a\nb', '> a\n> b', '<blockquote><p>a\nb</p></blockquote>'],
+    ['a nested quote', '> > a\nb', '> > a\n> > b', '<blockquote>\n  <blockquote><p>a\nb</p></blockquote>\n</blockquote>'],
+    ['a definition-shaped line', '> a\n[p]: /x', '> a\n> \\[p]: /x', '<blockquote><p>a\n[p]: /x</p></blockquote>'],
   ])('stays in the quote for %s', (_, markdown, carve, html) => {
     expect(imported(markdown)).toBe(carve)
     expect(carveToHtml(imported(markdown)).trim()).toBe(html)
@@ -23,7 +23,7 @@ describe('a lazy line after a quoted paragraph', () => {
     ['a list item', '> a\n- l', '> a\n\n- l'],
     ['a thematic break', '> a\n---', '> a\n\n---'],
     ['a fence', '> a\n```\nx\n```', '> a\n\n```\nx\n```'],
-    ['a line after a quoted fence', '> ```\n> code\nb', '> ```\n> code\n\nb'],
+    ['a line after a quoted fence', '> ```\n> code\nb', '> ```\n> code\n> ```\n\nb'],
     ['a line after a quoted heading', '> # h\nb', '> # h\n\nb'],
   ])('ends the quote before %s', (_, markdown, carve) => {
     expect(imported(markdown)).toBe(carve)
