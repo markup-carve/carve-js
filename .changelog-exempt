@@ -1,0 +1,16 @@
+# Pull requests that moved shipped source and deliberately carry no changelog
+# entry. Read by scripts/changelog-completeness.mjs.
+#
+# One per line, `<number>: <reason>`. The reason is required: an exemption
+# nobody can audit is how this gate would quietly stop meaning anything, so a
+# bare number is an error rather than a skip. Every exemption that applies is
+# printed on a passing run too, so what was left out stays visible.
+#
+# The entries below are the leftovers of the released 0.1.7, kept so that
+# `node scripts/changelog-completeness.mjs 0.1.7` passes. That makes a real
+# 90-merge release a fixture this gate is known to accept, beside the known-bad
+# revisions it is known to reject.
+
+1675: a comment in render-carve.ts explaining why the separator is load-bearing; the pull request is tests
+1723: a stale claim corrected in the cli.ts header comment; no behavior moved
+1838: written up in the 0.1.7 section under the issue it addresses part of, #1827
