@@ -8735,9 +8735,11 @@ function parseList(lexer: Lexer): List {
       // sub-list's, a line BELOW it (an above-content-column line, §24 C3, or a
       // dedented column-0 paragraph) is the item's OWN block and still loosens.
       // Matches carve-php / carve-rs, and the sibling-blank invariant where the
-      // outer item stays tight.
-      if (firstBlockIdx !== -1) {
-        const subCol = markerContentColumn(nested[firstBlockIdx]!)
+      // outer item stays tight. A marker LEAD (`- 1. x`) is that sub-list's
+      // first item, so its column is the threshold for every line (carve-js#1938).
+      const subListLead = leadIsMarker ? content : firstBlockIdx !== -1 ? nested[firstBlockIdx]! : null
+      if (subListLead !== null) {
+        const subCol = markerContentColumn(subListLead)
         if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
       }
       // `j` can no longer be an invisible line (skipped above), so this is the
