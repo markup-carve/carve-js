@@ -9,9 +9,31 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.8] - 2026-09-21
 
+### Changed
+
+- `renderCarve` throws `SourceUnspellableError` for an empty emphasis-family mark (#1879; markup-carve/carve-php#2207) instead of writing an empty brace pair, which reads back as literal text or, for `{--}`, as the braced en dash. A mark whose content starts or ends in a space, tab, CR or LF takes the braced form, and the HTML importer drops an empty mark without a report row.
+
 ### Fixed
 
 - A node pulled in by a sliced include (`{{ child.crv @lines:N-M }}`) reports positions in its own file's coordinates (#1862), as `docs/includes.md` requires, instead of coordinates measured inside the slice under the whole file's id. Warnings raised inside the child move with it.
+- A reference definition reads its destination through the same `link_destination` production as an inline tail (#1868), so a still-open parenthesis leaves the line a paragraph and an escaped one reaches the href. The trailing attribute block is matched by the definition's own pattern, so a brace or an apostrophe inside the destination is no longer taken for the block.
+- A tab does not satisfy a list or task marker separator (#1870). The definition prepass stripped container prefixes on `[ \t]+`, so a line the block parser reads as a paragraph still handed a reference definition to the collector, and that line both printed and defined.
+- A parenthesis still open at whitespace is no destination (#1872). The inline tail, the reference definition and the bare image line refuse the run instead of publishing an unbalanced `href`, and a bare image line now resolves its escapes the way the same image in a sentence does.
+- An attribute block after an editorial substitution or comment stays literal text (#1876; markup-carve/carve#2138). Neither node has an attribute slot, so the block used to vanish into a renderer with nowhere to put it.
+- A tab guards a bare delimiter (#1887): a bare run neither opens before a tab nor closes after one, as CARVE-P3-013's `ws = space | tab | newline` requires.
+- A fence's closer is searched for only inside the container that opened it (#1880, #1883, #1890; markup-carve/carve#2145). A fence in a list item or a description body no longer finds a closer belonging to a later entry, nor counts a flush-left line as one, so the container ends where the reference ends it.
+- A `:::` on a list item's marker line whose body arrives by lazy folding stays text, and a closer at the item's content column does not rescue it (#1889; markup-carve/carve#2147).
+- An empty term marker followed by a space folds into a description body like the bare marker (#1891), instead of closing the list. This reverses #742, which had made carve-js publish what the other two engines published rather than what the reference reads.
+- An escaped delimiter closes no braced pair (#1897). All nine braced kinds used to close on a delimiter a backslash hides and turn the leftover backslash into a hard break. An insertion or deletion holding an unclosed verbatim run no longer closes on an escaped closer either (#1902).
+- A `%%` comment inside a bare emphasis run consumes the rest of the line (#1899), as CARVE-P9-041 requires, instead of ending at the run's closing delimiter and publishing what follows it.
+- A caption's `#` glued to the word before it is numbered where no tag name follows (#1900), which is what CARVE-P2-022 calls a bare `#`; the character before it was never part of that test.
+- A `boldItalic` strong is written `/*...*/` only when its content can sit against those delimiters (#1877). Empty content, or content starting or ending in a space, tab, CR or LF, gets the nested spelling instead, where the combined form read back as an emphasis holding literal stars.
+- The Carve writer keeps a forced span's braces around content holding a `%%` comment (#1906; markup-carve/carve#2167). The bare form leaves the comment unbounded, so it ran to the line break and took the closer with it.
+- The BBCode importer writes the four formatting tags the way the Carve writer would spell them (#1884): an empty tag is dropped, a tag inside its own kind adds nothing, and a bare pair the CARVE-P3-013 guards would not read back takes the braced form.
+- The BBCode importer escapes what the post's own text forms beside a converted tag (#1885). The formatting pass reparses its output and escapes the first character of every inline construct it did not write, repeating until none is left, so a hashtag, a highlight or an attributed span the author never typed no longer appears.
+- The BBCode importer marks the links and images it writes and escapes the opening bracket of every other link (#1896), so a post's own brackets beside a literal tag no longer read as a link.
+- The BBCode importer escapes a brace run that would attribute a converted tag (#1898), where `[b]x[/b]{a}` used to set an attribute the post never carried.
+- The BBCode importer escapes a line-initial block opener in ordinary text (#1893, #1904): headings, bullets, quotes, numeric, alphabetic and roman ordered markers, the bare-dot continuation, a `:::` fence and the `::` description opener. BBCode has no block syntax, so none of them is structure the author asked for.
 
 ## [0.1.7] - 2026-09-18
 
