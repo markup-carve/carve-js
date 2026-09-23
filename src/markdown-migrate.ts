@@ -1577,10 +1577,18 @@ function nestedItemsOnLine(
   from: number,
 ): Array<{ col: number; content: number; kind: string; bullet?: string; number?: string; end: number }> {
   const items: Array<{ col: number; content: number; kind: string; bullet?: string; number?: string; end: number }> = []
+  // Past four columns of padding a marker's content is indented code, which
+  // nests nothing (CommonMark 5.2).
+  const padded = (start: number, end: number): boolean =>
+    columnWidth(line.slice(0, end)) - columnWidth(line.slice(0, start)) > 4
+  const own = /^[ \t]*(?:[-*+]|\d{1,9}[.)])/.exec(line)
+  if (own && padded(own[0].length, from)) return items
   let at = from
   for (;;) {
-    const m = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))[ \t]+(?=\S)/.exec(line.slice(at))
+    const m = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))([ \t]+)(?=\S)/.exec(line.slice(at))
     if (!m) return items
+    const markerEnd = at + m[0].length - m[5]!.length
+    if (padded(markerEnd, at + m[0].length)) return items
     items.push({
       col: columnWidth(line.slice(0, at + m[1]!.length)),
       content: columnWidth(line.slice(0, at + m[0].length)),
