@@ -14,3 +14,4 @@
 1675: a comment in render-carve.ts explaining why the separator is load-bearing; the pull request is tests
 1723: a stale claim corrected in the cli.ts header comment; no behavior moved
 1838: written up in the 0.1.7 section under the issue it addresses part of, #1827
+1945: an unreleased regression in #1942, corrected before the 0.1.8 cut; the section's #1941 entry describes the behavior that ships
