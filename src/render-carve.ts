@@ -2023,7 +2023,7 @@ function renderTable(node: Table, ctx: CarveContext): string {
  * An EMPTY cell takes a single space, not two, so a column does not grow a
  * space each time the document is formatted.
  */
-function padCell(prefix: string, content: string): string {
+export function padCell(prefix: string, content: string): string {
   return content === '' ? `${prefix} ` : `${prefix} ${content} `
 }
 
@@ -2071,7 +2071,7 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
  * rendered. That spends one idle backslash on a rare cell and renders
  * identically; the other direction deletes the cell.
  */
-function escapeSpanMarkerPayload(payload: string, attrs: Attrs | undefined): string {
+export function escapeSpanMarkerPayload(payload: string, attrs?: Attrs): string {
   if (attrs !== undefined || !cellPayloadIsSpanMarker(payload)) return payload
   return '\\' + payload
 }

@@ -103,13 +103,11 @@ describe('a table GFM does read is untouched', () => {
   })
 
   // marked 18 gfm keeps `plain line` as a one-cell body row rather than ending
-  // the table. Carve has no such rule, so the row leaves the table - the
-  // under-converting direction the carve#1130 ruling calls recoverable, and not
-  // something this change touches. Pinned so a later change to the run's end is
-  // a deliberate one.
-  it('ends the table where Carve ends it, at the first non-row line', () => {
+  // the table, and the importer writes every body row as a Carve row, so the
+  // line stays in the table (markup-carve/carve-js#1918).
+  it('keeps a plain line under a table as the one-cell row GFM reads', () => {
     expect(migrated('| a | b |\n|---|---|\n| c | d |\nplain line\n')).toBe(
-      '|= a |= b |\n| c | d |\nplain line\n',
+      '|= a |= b |\n| c | d |\n| plain line |\n',
     )
   })
 
@@ -142,10 +140,8 @@ describe('a container is answered by what it holds', () => {
     expect(hasTable('> | a | b |\n> | c | d |\n')).toBe(false)
   })
 
-  it('leaves a real table inside a block quote alone', () => {
-    expect(migrated('> | a | b |\n> |---|---|\n> | c | d |\n')).toBe(
-      '> | a | b |\n> |---|---|\n> | c | d |\n',
-    )
+  it('keeps a real table inside a block quote a table', () => {
+    expect(migrated('> | a | b |\n> |---|---|\n> | c | d |\n')).toBe('> |= a |= b |\n> | c | d |\n')
     expect(hasTable('> | a | b |\n> |---|---|\n> | c | d |\n')).toBe(true)
   })
 
@@ -187,12 +183,11 @@ describe('a container is answered by what it holds', () => {
   })
 
   // `<span>` is not one of the HTML block types that interrupt, so marked keeps
-  // it as a body row and the table does not end. Carve splits the table there
-  // instead - a difference in where a table ENDS, not an invented one, and the
-  // same at `8d38a03c` as here. Pinned so the guard above cannot widen to it.
+  // it as a body row and the table does not end. Pinned so the guard above
+  // cannot widen to it.
   it('does not end the table at inline HTML, which GFM keeps as a body row', () => {
     expect(migrated('| a | b |\n|---|---|\n| c | d |\n<span>x</span>\n| e | f |\n')).toBe(
-      '|= a |= b |\n| c | d |\n`<span>x</span>`{=html}\n| e | f |\n',
+      '|= a |= b |\n| c | d |\n| `<span>x</span>`{=html} |\n| e | f |\n',
     )
   })
 
