@@ -67,7 +67,22 @@ describe('a Markdown table imports as canonical rows', () => {
     [
       'keeps a plain line under a table as the one-cell row GFM reads',
       ['| a | b |', '|---|---|', '| 1 | 2 |', 'lazy', ''].join('\n'),
-      ['|= a |= b |', '| 1 | 2 |', '| lazy |', ''].join('\n'),
+      ['|= a |= b |', '| 1 | 2 |', '| lazy | |', ''].join('\n'),
+    ],
+    [
+      'drops body cells past the header width, as GFM does',
+      ['| a | b |', '|---|---|', '| 1 | 2 | 3 |', ''].join('\n'),
+      ['|= a |= b |', '| 1 | 2 |', ''].join('\n'),
+    ],
+    [
+      'pads a short body row with empty cells, as GFM does',
+      ['| a | b | c |', '|---|---|---|', '| 1 |', ''].join('\n'),
+      ['|= a |= b |= c |', '| 1 | | |', ''].join('\n'),
+    ],
+    [
+      'fits a quoted table row to the header width',
+      ['> | a | b |', '> |---|---|', '> | 1 | 2 | 3 |', '> | x |', ''].join('\n'),
+      ['> |= a |= b |', '> | 1 | 2 |', '> | x | |', ''].join('\n'),
     ],
     [
       'keeps a pipeless body row in its table',
