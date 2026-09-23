@@ -129,10 +129,10 @@ describe('markdownToCarve — a setext heading a container holds', () => {
  * place of the old one.
  */
 describe('markdownToCarve — what is not a setext heading in a container', () => {
-  it('leaves an underline four columns past the quote’s content', () => {
+  it('keeps an underline four columns past the quote’s content as text', () => {
     // CommonMark reads: <blockquote>\n<p>Title\n=====</p>\n</blockquote>
     // Four columns in is code, not an underline.
-    expect(markdownToCarve('> Title\n>     =====\n')).toBe('> Title\n>     =====\n')
+    expect(markdownToCarve('> Title\n>     =====\n')).toBe('> Title\n> \\=====\n')
   })
 
   it('accepts one to three columns of slack inside a quote', () => {
@@ -140,9 +140,9 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
     expect(markdownToCarve('> Title\n>    =====\n')).toBe('> # Title\n')
   })
 
-  it('leaves an underline four columns past the item’s content', () => {
+  it('keeps an underline four columns past the item’s content as text', () => {
     // CommonMark reads: <ul>\n<li>Title\n=====</li>\n</ul>
-    expect(markdownToCarve('- Title\n      =====\n')).toBe('- Title\n      =====\n')
+    expect(markdownToCarve('- Title\n      =====\n')).toBe('- Title\n  \\=====\n')
   })
 
   it('leaves two thematic breaks in a quote as two rules', () => {
@@ -208,8 +208,8 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
 
   it('does not pair two lines at different quote depths', () => {
     // CommonMark reads the underline as a lazy continuation of the inner
-    // paragraph, not as a heading for it.
-    expect(markdownToCarve('> > T\n> ===\n')).toBe('> > T\n> ===\n')
+    // paragraph, not as a heading for it, and fmt writes it inside that quote.
+    expect(markdownToCarve('> > T\n> ===\n')).toBe('> > T\n> > ===\n')
   })
 })
 

@@ -268,6 +268,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     ['writes the quote marker and item indent on a lazy line', md('> - a', 'lazy'), md('> - a', '>   lazy')],
     ['continues the list after a lazy line', md('1. a', 'lazy', '2. b'), md('1. a', '   lazy', '2. b')],
     ['separates another list after a lazy line', md('- a', 'lazy', '1. b'), md('- a', '  lazy', '', '1. b')],
+    ['keeps a marker left of the lazy line item out of it', md('1. a', 'lazy', '  - n'), md('1. a', '   lazy', '', '- n')],
 
     // Quoted fences read the way CommonMark reads them.
     ['keeps a nested quote marker inside a quoted fence as code', md('> ~~~', '> > x', '> ~~~'), md('> ```', '> > x', '> ```')],
@@ -308,7 +309,6 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
       md('- a', '', '  ```', '  x', '', '  y'),
     ],
     ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', 'more', '', '9. b')],
-    ['keeps a marker left of the lazy line item out of it', md('1. a', 'lazy', '  - n'), md('1. a', '   lazy', '', '  - n')],
     ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('- a', '', '  > iq', '', '> q')],
     [
       'writes a quoted fence at the quote column once a block left the item',
@@ -317,5 +317,118 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     ],
   ])('%s', (_label, source, expected) => {
     expect(markdownToCarve(source)).toBe(expected)
+  })
+})
+
+describe('a Markdown import writes continuation lines where carve fmt does (#1932)', () => {
+  const md = (...lines: string[]): string => [...lines, ''].join('\n')
+  const cases: Array<[string, string, string]> = [
+    // A continuation line indented past its item's content column continues the
+    // paragraph. Four or more columns past it is still text, never code, since
+    // indented code cannot interrupt a paragraph (CommonMark 4.4).
+    ['pulls an over-indented continuation line back to its item', md('- a', '      b'), md('- a', '  b')],
+    ['pulls back a continuation line one column past its item', md('- a', '   b'), md('- a', '  b')],
+    ['pulls back a continuation line under an ordered item', md('1. a', '       b'), md('1. a', '   b')],
+    ['pulls back a later continuation line', md('- a', '  b', '      c'), md('- a', '  b', '  c')],
+    ['pulls back a continuation line under a nested item', md('- a', '  - b', '        c'), md('- a', '  - b', '    c')],
+    ['keeps an over-indented quote marker as text', md('- a', '      > q'), md('- a', '  \\> q')],
+    ['keeps an over-indented bullet as text', md('- a', '      - b'), md('- a', '  \\- b')],
+    ['keeps an over-indented ordered marker as text', md('- a', '       1. b'), md('- a', '  1\\. b')],
+    ['pulls back a quoted over-indented continuation line', md('> - a', '>       b'), md('> - a', '>   b')],
+
+    // A marker left of an item's content column but within three columns of
+    // the list's level is the next item of that list (CommonMark 5.2).
+    ['writes a sibling one column in at its list column', md('* x', ' * b'), md('* x', '* b')],
+    ['writes a sibling left of an indented first item at the list column', md('  - z', '- b'), md('- z', '- b')],
+    ['drops the slack of an indented list', md('   - a', ' - z'), md('- a', '- z')],
+    ['writes a sibling of the outer item between two levels', md('- a', '  - b', ' - c'), md('- a', '  - b', '- c')],
+    ['writes a sibling of a nested item at its list column', md('- a', '   - b', '  - c'), md('- a', '  - b', '  - c')],
+    ['numbers an ordered sibling left of the content column', md('1. a', '  1. b'), md('1. a', '2. b')],
+    ['moves the lines under a sibling with its marker', md('9. a', ' 9. b', '    x'), md('9. a', '10. b', '    x')],
+    ['writes a quoted sibling at its list column', md('> - a', '>  - b'), md('> - a', '> - b')],
+    ['finds the list level of an item the first line nests', md('- - c', '     - x'), md('- - c', '    - x')],
+    ['keeps a paragraph out of a sibling moved left', md('* x', ' * b', '', '  c'), md('* x', '* b', '', 'c')],
+    ['keeps a quote out of a nested list moved left', md('9. c', '      - c', '     > c'), md('9. c', '   - c', '   > c')],
+    ['re-indents a lazy line under an item the first line nests', md('- - b', 'z'), md('- - b', '    z')],
+
+    // A lazy line after a quote in an item continues the quote's paragraph.
+    ['writes the quote marker on a lazy line under a quoted item', md('- > a', 'lazy'), md('- > a', '  > lazy')],
+    ['writes the quote marker on a lazy line at the item column', md('- > a', '  lazy'), md('- > a', '  > lazy')],
+    ['writes the quote marker on an over-indented lazy line', md('- > a', '      lazy'), md('- > a', '  > lazy')],
+    ['keeps the list tight across a quoted lazy line', md('- > a', 'lazy', '- b'), md('- > a', '  > lazy', '- b')],
+    ['writes the quote marker under an ordered item', md('1. > a', 'lazy'), md('1. > a', '   > lazy')],
+    ['writes every quote marker on a lazy line in an item', md('- > > a', 'lazy'), md('- > > a', '  > > lazy')],
+    ['writes the quote marker on a lazy line after item text', md('- x', '  > a', 'lazy'), md('- x', '  > a', '  > lazy')],
+    ['writes the quote marker on a lazy line under a nested item', md('- a', '  - > b', 'lazy'), md('- a', '  - > b', '    > lazy')],
+    ['writes the quote marker on a lazy line in a quoted item', md('> - > a', '> lazy'), md('> - > a', '>   > lazy')],
+    ['writes a lazy line at the quote column under a nesting item', md('- - bar', '  > z', 'y'), md('- - bar', '  > z', '  > y')],
+    ['continues the quote with an over-indented marker as text', md('- > a', '      - x'), md('- > a', '  > \\- x')],
+    // A list under the quote is set apart from it, or Carve reads its marker
+    // line as the quote's lazy continuation.
+    ['separates a list from the quote above it in an item', md('- > a', '  - b'), md('- > a', '', '  - b')],
+    ['separates a list from a quote after a lazy line', md('1. > y', 'b', '   1. > y'), md('1. > y', '   > b', '', '   1. > y')],
+  ]
+
+  it.each(cases)('%s', (_label, source, expected) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    expect(carveToCarve(out)).toBe(out)
+  })
+
+  // Documents a first cut of this change moved away from both marked and
+  // commonmark.js; each is the GFM reading again.
+  it.each([
+    // A marker four columns past the item holding it continues the open paragraph.
+    ["keeps an over-indented marker under a nested item as text", "- c\n     - z\n      - > c\n", "- c\n  - z\n    \\- > c\n"],
+    ["keeps an over-indented marker under a quote paragraph as text", "> y\n>     - > x\n> z\n", "> y\n> \\- > x\n> z\n"],
+    ["keeps an over-indented marker as text of a quote an item holds", "- - c\n  > c\n      - x\n", "- - c\n  > c\n  > \\- x\n"],
+    ["keeps an over-indented marker under an ordered item as text", "- bar\n    2. bar\n      - > z\n", "- bar\n  2. bar\n     \\- > z\n"],
+    // Slack in an item reads as none, so it goes once the item moves.
+    ["drops the slack of a quote line after a lazy one", "1. > b\n  y\n      > y\n", "1. > b\n   > y\n   > y\n"],
+    ["drops the slack of a paragraph after a blank line", "* y\n\n     z\n     * bar\n", "* y\n\n  z\n\n  * bar\n"],
+    // A block left of an item the first line nests ends that item.
+    ["continues the quote of the outer item", "- - c\n  > c\n      x\n", "- - c\n  > c\n  > x\n"],
+    ["writes a lazy line at the innermost item", "- - c\n  y\n    z\n", "- - c\n    y\n    z\n"],
+    ["ends the nested list with a lazy line and opens another", "- - y\nz\n2. y\n", "- - y\n    z\n\n2. y\n"],
+    ["continues the list at its level after a lazy line", " * y\n      > x\n      - - y\n c\n   - foo\n", "* y\n  > x\n\n  - - y\n      c\n  - foo\n"],
+    // The next item of an open list is one, whatever its number.
+    ["writes a sibling after an item paragraph at its list column", "   1. x\n\n      a\n   2. z\n", "1. x\n\n   a\n\n2. z\n"],
+    // A shallower quote line lazily continues the deeper paragraph.
+    ["writes a lazy line inside the deeper quote", "> >  - - foo\n>       - > foo\n> bar\n", "> > - - foo\n> >     \\- > foo\n> >     bar\n"],
+    ["sets a list at the shallower depth apart", "> > > z\n>   x\n> >  1) foo\n", "> > > z\n> > > x\n> >\n> > 1) foo\n"],
+    // A fence four columns past its container opens nothing.
+    ["keeps it lazy text of the quote in the item", "   1. > z\n     ~~~\n\n   c\n", "1. > z\n   > \\~\\~\\~\n\nc\n"],
+    ["keeps the item open past it", "   - - y\n    ```\n     * z\n", "- - y\n    \\`\\`\\`\n  * z\n"],
+    // Measured in columns: a tab and two spaces are six of them.
+    ["keeps a tab-indented fence line lazy text", "* z\n     - y\n\t  ```\n", "* z\n  - y\n    \\`\\`\\`\n"],
+    ["keeps a tab-indented marker lazy text of the quote", "- > bar\n    foo\ny\n\t  -\t- y\n", "- > bar\n  > foo\n  > y\n  > \\-\t- y\n"],
+  ] as Array<[string, string, string]>)('%s', (_label, source, expected) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    expect(carveToCarve(out)).toBe(out)
+  })
+
+  // A rule wins over a list item, so `* * *` nests no items a line could
+  // move into. Not fmt's spelling: Carve reads the rule as nested items.
+  it('does not read a rule on an item line as nested items', () => {
+    expect(markdownToCarve(md('- * * *', 'x'))).toBe(md('- * * *', 'x'))
+  })
+
+  it('reads a sibling after an item paragraph as GFM does', () => {
+    expect(carveToHtml(markdownToCarve(md('   1. x', '', '      a', '   2. z')))).toMatch(/<li>\s*<p>z<\/p>\s*<\/li>\s*<\/ol>/)
+  })
+
+  it('reads a marker between two levels as the sibling GFM reads', () => {
+    expect(carveToHtml(markdownToCarve(md('* x', ' * b')))).toMatch(/<ul>\s*<li>x<\/li>\s*<li>b<\/li>\s*<\/ul>/)
+  })
+
+  it('reads a list under a quote in an item as the list GFM reads', () => {
+    const html = carveToHtml(markdownToCarve(md('- > a', '  - b', '- c')))
+    expect(html).toMatch(/<blockquote><p>a<\/p><\/blockquote>\s*<ul>\s*<li>b<\/li>/)
+    expect(html).toMatch(/<li>c<\/li>/)
+  })
+
+  it('reads an over-indented marker as the text GFM reads', () => {
+    expect(carveToHtml(markdownToCarve(md('- a', '      - b')))).toMatch(/<li>a\s+- b<\/li>/)
   })
 })

@@ -60,7 +60,7 @@ describe('a block at its container content column', () => {
       // commonmark: item `b` holds a second paragraph.
       const md = lines('- a', '', '- b', '', sp(4) + 'still a paragraph')
       expect(markdownToCarve(md)).toBe(
-        lines('- a', '', '- b', '', sp(4) + 'still a paragraph'),
+        lines('- a', '', '- b', '', sp(2) + 'still a paragraph'),
       )
       expect(carveToHtml(markdownToCarve(md))).not.toContain('<pre>')
     })
@@ -71,7 +71,7 @@ describe('a block at its container content column', () => {
       // commonmark: <li><p>a</p><p>continuation</p></li>.
       const md = lines('- a', '', '\tcontinuation')
       const carve = markdownToCarve(md)
-      expect(carve).toBe(lines('- a', '', '\tcontinuation'))
+      expect(carve).toBe(lines('- a', '', sp(2) + 'continuation'))
       expect(carveToHtml(carve)).not.toContain('<pre>')
     })
 
@@ -180,8 +180,8 @@ describe('a block at its container content column', () => {
       )
     })
 
-    it('leaves lazy continuation, which has no blank line before it, alone', () => {
-      expect(markdownToCarve(lines('- a', sp(4) + 'lazy'))).toBe(lines('- a', sp(4) + 'lazy'))
+    it('pulls a continuation line with no blank line before it back to the item column', () => {
+      expect(markdownToCarve(lines('- a', sp(4) + 'lazy'))).toBe(lines('- a', sp(2) + 'lazy'))
     })
 
     it('still reads column-4 code after the list has closed', () => {

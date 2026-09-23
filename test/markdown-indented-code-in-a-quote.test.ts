@@ -61,7 +61,7 @@ describe('indented code inside a block quote', () => {
     // No blank quote line, so commonmark reads one paragraph: an indented code
     // block cannot interrupt a paragraph. Both readers agree.
     const carve = markdownToCarve(lines('> para', quotedCode('not code')))
-    expect(carve).toBe(lines('> para', '>' + sp(5) + 'not code'))
+    expect(carve).toBe(lines('> para', '> not code'))
     expect(carveToHtml(carve)).not.toContain('<pre>')
   })
 

@@ -812,12 +812,12 @@ describe('markdownToCarve — block spacing', () => {
     expect(conv('text\n1) item')).toBe('text\n\n1) item')
   })
 
-  it('separates a 1-3 space indented top-level list after text (Carve handles the indent)', () => {
-    expect(conv('text\n  - item')).toBe('text\n\n  - item')
+  it('separates a 1-3 space indented top-level list after text and drops the slack', () => {
+    expect(conv('text\n  - item')).toBe('text\n\n- item')
   })
 
-  it('preserves indented sibling list items', () => {
-    expect(conv('  - one\n  - two')).toBe('  - one\n  - two')
+  it('writes indented sibling list items at the list column', () => {
+    expect(conv('  - one\n  - two')).toBe('- one\n- two')
   })
 
   it('keeps an indented blockquote inside a list item (no dedent/blank)', () => {
