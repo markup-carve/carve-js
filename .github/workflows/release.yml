@@ -48,6 +48,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive # spec corpus submodule; npm test needs it
+          # The completeness gate below walks every merge back to the previous
+          # tag, so it needs the tags and the history behind them.
+          fetch-depth: 0
 
       # Guard: package.json version AND the CHANGELOG must match the release
       # tag, so a mistyped tag, a forgotten version bump, or an un-cut changelog
@@ -64,6 +67,15 @@ jobs:
             echo "::error::CHANGELOG.md has no '## [$TAG]' section; cut it from [Unreleased] before tagging."
             exit 1
           fi
+
+      # ...and the section describes ALL of it. The step above passes on a
+      # section covering 3 of 24 merges, which is how three engines came to
+      # carry a changelog written on cut day and never reopened. Runs before
+      # anything publishes, and names every missing pull request at once.
+      - name: The changelog section accounts for every merge in this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/changelog-completeness.mjs "${GITHUB_REF_NAME}"
 
       - uses: actions/setup-node@v4
         with:
