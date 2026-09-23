@@ -82,7 +82,7 @@ export function headingRefKeyFromLabel(label: string): string {
  * The DERIVED label of a collapsed reference: the label's own inline content
  * rendered to plain text (PART 12 §3a, markup-carve/carve#962).
  */
-export function derivedRefLabel(label: string): string {
+function derivedRefLabel(label: string): string {
   return inlineText(parseRefLabelInlines(label))
 }
 
@@ -117,7 +117,7 @@ export function deepCloneInlines(nodes: InlineNode[]): InlineNode[] {
  * `insideLink` is the CALLER's context rather than a fact about `nodes`: a
  * derived label rendered inside an `<a>` passes `true`.
  */
-export function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): InlineNode[] {
+function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): InlineNode[] {
   const out: InlineNode[] = []
   for (const n of nodes) {
     switch (n.type) {

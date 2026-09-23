@@ -113,7 +113,7 @@ export interface HtmlImportDiagnostic {
  * answer is FINAL: a binding must not reclassify it, and it must never be
  * inferred from the message text.
  */
-export function diagnosticFidelity(code: HtmlImportDiagnosticCode): HtmlImportFidelity {
+function diagnosticFidelity(code: HtmlImportDiagnosticCode): HtmlImportFidelity {
   switch (code) {
     // Nothing of the attribute was lost: it reached the output inside the bytes
     // of an element kept whole.
@@ -137,7 +137,7 @@ export function diagnosticFidelity(code: HtmlImportDiagnosticCode): HtmlImportFi
 }
 
 /** The confidence of a diagnostic code, from the v2 contract. */
-export function diagnosticConfidence(code: HtmlImportDiagnosticCode): HtmlImportConfidence {
+function diagnosticConfidence(code: HtmlImportDiagnosticCode): HtmlImportConfidence {
   switch (code) {
     // The importer assumed an encoding the source never declared.
     case 'encoding-assumed':

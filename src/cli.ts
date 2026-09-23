@@ -1515,7 +1515,7 @@ const realIO: CliIO = {
  *
  * Node 24's `import.meta.main` answers this directly, but `engines` allows 20.
  */
-export function isEntryModule(moduleUrl: string, entryPath: string | undefined): boolean {
+function isEntryModule(moduleUrl: string, entryPath: string | undefined): boolean {
   if (!entryPath) return false
   // A path that does not resolve is not this module, and must not throw: the
   // old guard merely declined to run in that case.

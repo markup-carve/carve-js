@@ -54,7 +54,7 @@ const QUOTE_AWARE_BODY = body(QUOTE_AWARE_OPTIONS)
 const FIRST_PAIR_BODY = body(String.raw`.*?`)
 
 export const DIRECTIVE_SCAN_RE = new RegExp(`(?:${QUOTE_AWARE_BODY})|(?:${FIRST_PAIR_BODY})`, 'g')
-export const DIRECTIVE_FULL_RE = new RegExp(`^(?:${QUOTE_AWARE_BODY})$`)
+const DIRECTIVE_FULL_RE = new RegExp(`^(?:${QUOTE_AWARE_BODY})$`)
 const OPTION_RE = /^@([A-Za-z_][\w-]*):([^#@}\s]+)$/
 /** Loose directive shape: one whole-paragraph token, valid options or not. */
 export const DIRECTIVE_SHAPE_RE = /^\{\{[^{}]*\}\}$/
