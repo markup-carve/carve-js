@@ -234,6 +234,21 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
       md('> 9. a', '>', '> 10. b', '>', '>     y'),
     ],
 
+    // A loose list is written with a blank line between every two items.
+    [
+      'separates every item of a list a blank line in an item loosens',
+      md('8. a', '9. b', '9. c', '', '   more c'),
+      md('8. a', '', '9. b', '', '10. c', '', '    more c'),
+    ],
+    ['separates every item of a list loose between two items', md('- a', '', '- b', '- c'), md('- a', '', '- b', '', '- c')],
+    ['separates the items of a loose quoted list', md('> - a', '> - b', '>', '>   x'), md('> - a', '>', '> - b', '>', '>   x')],
+    ['decides looseness per nested list', md('- a', '  - x', '', '  - y', '- b'), md('- a', '  - x', '', '  - y', '- b')],
+    [
+      'separates the blocks of a loose item and keeps its tight nested list',
+      md('- a', '  - x', '  - y', '', '- b', '- c'),
+      md('- a', '', '  - x', '  - y', '', '- b', '', '- c'),
+    ],
+
     // A lazy line continues the paragraph of the item above it.
     ['re-indents a lazy line to its item', md('- a', 'lazy'), md('- a', '  lazy')],
     ['keeps a list tight across a lazy line', md('- a', 'lazy', '- b'), md('- a', '  lazy', '- b')],

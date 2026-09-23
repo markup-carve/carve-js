@@ -13,7 +13,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
-import { isTableRow } from './parse.js'
+import { isTableRow, parse } from './parse.js'
 import { escapeSpanMarkerPayload, padCell } from './render-carve.js'
 
 /**
@@ -2551,6 +2551,42 @@ function leavesItemParagraph(run: { lines: string[]; verbatimFrom?: number }): b
   return opensParagraph(run.lines.length === 1 && marker ? last.slice(marker[0].length) : last)
 }
 
+/**
+ * A blank line between every two items of each list the written source reads
+ * loose, and between the blocks of each of its items, which is how `carve fmt`
+ * spells a loose list. Those blank lines only confirm what the list already
+ * is, so the reading stays the same.
+ */
+function separateLooseItems(source: string): string {
+  if (!/\n[ \t>]*\n/.test(source)) return source
+  const before: number[] = []
+  const visit = (node: unknown): void => {
+    if (node === null || typeof node !== 'object') return
+    type Located = { pos?: { startLine: number } }
+    const block = node as { type?: string; tight?: boolean; items?: Array<Located & { children?: Located[] }>; children?: unknown[] }
+    if (block.type === 'paragraph' || block.type === 'heading') return
+    if (block.type === 'list' && block.tight === false) {
+      for (const [idx, item] of block.items!.entries()) {
+        const starts = [...(idx > 0 ? [item] : []), ...(item.children ?? []).slice(1)]
+        for (const start of starts) if (start.pos) before.push(start.pos.startLine - 1)
+      }
+    }
+    for (const child of [...(block.items ?? []), ...(block.children ?? [])]) visit(child)
+  }
+  visit(parse(source))
+  if (before.length === 0) return source
+  const lines = source.split('\n')
+  const starts = new Set(before)
+  const written: string[] = []
+  for (const [at, line] of lines.entries()) {
+    if (starts.has(at) && at > 0 && !/^[ \t>]*$/.test(lines[at - 1]!)) {
+      written.push(/^[ \t]*(?:>[ \t]?)*/.exec(line)![0].trimEnd().replace(/^[ \t]+$/, ''))
+    }
+    written.push(line)
+  }
+  return written.join('\n')
+}
+
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
@@ -3180,7 +3216,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   }
 
   // Collapse 3+ consecutive blank lines to 2.
-  const body = out.join('\n').replace(/\n{3,}/g, '\n\n')
+  const body = separateLooseItems(out.join('\n').replace(/\n{3,}/g, '\n\n'))
   if (frontmatter.length === 0) return body
   return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
 }
