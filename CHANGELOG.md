@@ -9,9 +9,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.8] - 2026-09-21
 
+### Added
+
+- `carve lint` reports a fence opener that fell back to inline text, as rule `fence-opener-fallback` (#1914). A fence line whose info string the parser rejects does not open a fence: the backtick run becomes an inline code span, the block a paragraph, and the closer can then open a fence that swallows the rest of the document. The rule tests validity with the parser's own `RE_FENCE` / `RE_RAW_FENCE`, exported as `opensCodeFence`, and hints the respaced or `{.diff}` spelling where one applies.
+
 ### Changed
 
 - `renderCarve` throws `SourceUnspellableError` for an empty emphasis-family mark (#1879; markup-carve/carve-php#2207) instead of writing an empty brace pair, which reads back as literal text or, for `{--}`, as the braced en dash. A mark whose content starts or ends in a space, tab, CR or LF takes the braced form, and the HTML importer drops an empty mark without a report row.
+- Twelve runtime symbols that never left their declaring module lost their `export` (#1916). `package.json` has no wildcard in its exports map, so `.`, `./node` and `./prettier` are the whole reachable surface and none of the twelve appeared in any of them. The keyword also switched off `noUnusedLocals` for each, so a symbol that lost its last caller would have sat there looking deliberate.
 
 ### Fixed
 
@@ -35,6 +40,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The BBCode importer marks the links and images it writes and escapes the opening bracket of every other link (#1896), so a post's own brackets beside a literal tag no longer read as a link.
 - The BBCode importer escapes a brace run that would attribute a converted tag (#1898), where `[b]x[/b]{a}` used to set an attribute the post never carried.
 - The BBCode importer escapes a line-initial block opener in ordinary text (#1893, #1904): headings, bullets, quotes, numeric, alphabetic and roman ordered markers, the bare-dot continuation, a `:::` fence and the `::` description opener. BBCode has no block syntax, so none of them is structure the author asked for.
+- The Markdown importer writes a table's body rows through the same row writer as its header (#1918), using the formatter's own cell helpers, so an imported padded GFM table passes `carve fmt --check`. This also fixes an empty header cell written with two spaces, a lone `<` or `^` cell becoming a colspan or rowspan, a pipeless body row falling out of the table, a plain line under a table staying a paragraph, and a table inside a quote or list item keeping its delimiter row and padding.
 
 ## [0.1.7] - 2026-09-18
 
