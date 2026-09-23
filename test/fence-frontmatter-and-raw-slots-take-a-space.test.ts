@@ -247,16 +247,16 @@ describe('markdownToCarve mirrors the parser on the frontmatter format slot', ()
     // parser reads as a paragraph.
     const carve = markdownToCarve(`---  yaml\n${body}`)
 
-    expect(carve).toContain('## a: 1')
+    expect(carve).toContain('## \\-\\-\\-  yaml a: 1')
     expect(carve).not.toContain('a: 1\n---')
   })
 
   it('sends a tab-separated opener through the body converter instead', () => {
     const carve = markdownToCarve(`---\tyaml\n${body}`)
-    // `a: 1` underlined by `---` is a Markdown setext heading. Seeing it
-    // converted is the proof the lines took the body path rather than being
-    // handed through as an opaque metadata block.
-    expect(carve).toContain('## a: 1')
+    // The opener and `a: 1`, underlined by `---`, are a Markdown setext
+    // heading. Seeing it converted is the proof the lines took the body path
+    // rather than being handed through as an opaque metadata block.
+    expect(carve).toContain('## \\-\\-\\-\tyaml a: 1')
     expect(carve).not.toContain('a: 1\n---')
   })
 })

@@ -237,21 +237,19 @@ describe('markdownToCarve — setext controls that already held', () => {
 })
 
 /**
- * A setext heading whose text runs over more than one line has no target in
- * Carve, whose heading is a single line. The top level already approximates it
- * by making the line ABOVE the underline the heading and leaving the earlier
- * lines a paragraph, and a container now does exactly the same rather than
- * inventing a second behavior for the same input.
+ * A setext heading whose text runs over more than one line is one heading. A
+ * Carve heading is a single line, so its lines are joined by a space, the
+ * text the multi-line heading renders.
  */
-describe('markdownToCarve — a multi-line setext heading is approximated', () => {
-  it('approximates the same way at the top level and in a quote', () => {
+describe('markdownToCarve — a multi-line setext heading is one heading', () => {
+  it('joins the lines at the top level and in a quote', () => {
     // CommonMark reads a single <h1> carrying `One\nTwo` in both cases.
-    expect(markdownToCarve('One\nTwo\n=====\n')).toBe('One\n\n# Two\n')
-    expect(markdownToCarve('> One\n> Two\n> =====\n')).toBe('> One\n> # Two\n')
+    expect(markdownToCarve('One\nTwo\n=====\n')).toBe('# One Two\n')
+    expect(markdownToCarve('> One\n> Two\n> =====\n')).toBe('> # One Two\n')
   })
 
-  it('approximates the same way in a list item', () => {
+  it('joins the lines in a list item', () => {
     // CommonMark reads: <ul>\n<li>\n<h1>a\nb</h1>\n</li>\n</ul>
-    expect(markdownToCarve('- a\n  b\n  ===\n')).toBe('- a\n  # b\n')
+    expect(markdownToCarve('- a\n  b\n  ===\n')).toBe('- # a b\n')
   })
 })
