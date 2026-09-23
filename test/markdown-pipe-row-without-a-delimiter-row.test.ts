@@ -65,7 +65,7 @@ describe('a pipe row GFM does not read as a table stays text', () => {
 
   // marked 18 gfm: <p>text\n|---|---|</p>
   it('keeps a delimiter row under a paragraph line in that paragraph', () => {
-    expect(html('text\n|---|---|\n')).toBe('<p>text\n|—|—|</p>')
+    expect(html('text\n|---|---|\n')).toBe('<p>text\n|---|---|</p>')
   })
 
   // marked 18 gfm: <p>text\n| a | b |</p>
@@ -73,12 +73,10 @@ describe('a pipe row GFM does not read as a table stays text', () => {
     expect(html('text\n| a | b |\n')).toBe('<p>text\n| a | b |</p>')
   })
 
-  // A `---` kept as text renders as an em dash, because Carve applies smart
-  // typography to all migrated prose - not something this change introduced and
-  // not specific to a pipe row. Pinned so the em dash above reads as measured
-  // rather than as a typo.
-  it('renders a triple hyphen in ordinary migrated prose as an em dash too', () => {
-    expect(html('a text --- more\n')).toBe('<p>a text — more</p>')
+  // Markdown keeps `---` in prose as typed, so the import escapes it past
+  // Carve's smart typography (markup-carve/carve-js#1937).
+  it('keeps a triple hyphen in ordinary migrated prose as typed', () => {
+    expect(html('a text --- more\n')).toBe('<p>a text --- more</p>')
   })
 })
 
@@ -220,7 +218,7 @@ describe('a container is answered by what it holds', () => {
   // separates with an empty quote line.
   it('escapes only the row, keeping the quote markers it was written with', () => {
     expect(migrated('> | a | b |\n> > |---|---|\n> | x | y |\n')).toBe(
-      '> \\| a | b |\n>\n> > \\|---|---|\n> \\| x | y |\n',
+      '> \\| a | b |\n>\n> > \\|\\-\\-\\-|\\-\\-\\-|\n> \\| x | y |\n',
     )
   })
 })

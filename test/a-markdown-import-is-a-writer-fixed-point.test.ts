@@ -207,8 +207,8 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     ],
     [
       'adds up the moves of nested wider numbers',
-      md('9. a', '9. b', '   9. i', '   9. j', '      deep', '9. c'),
-      md('9. a', '10. b', '    9. i', '    10. j', '        deep', '11. c'),
+      md('9. a', '9. # b', '   9. i', '   9. j', '      deep', '9. c'),
+      md('9. a', '10. # b', '    9. i', '    10. j', '        deep', '11. c'),
     ],
     [
       'moves a quote in the item with its wider number',
@@ -223,8 +223,8 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     ['moves an item fence with its wider number', md('9. a', '9. ~~~', '   x', '   ~~~'), md('9. a', '10. ```', '    x', '    ```')],
     [
       'moves a nested list inside an outer item',
-      md('- l', '  9. a', '  9. b', '     x', '  9. c'),
-      md('- l', '  9. a', '  10. b', '      x', '  11. c'),
+      md('- # l', '  9. a', '  9. b', '     x', '  9. c'),
+      md('- # l', '  9. a', '  10. b', '      x', '  11. c'),
     ],
     ['moves the lines under a narrower number back', md('9. a', '100. b', '     x'), md('9. a', '10. b', '    x')],
     ['moves a quoted item paragraph with its wider number', md('> 9. a', '>    x', '> 9. b', '>    y'), md('> 9. a', '>    x', '> 10. b', '>     y')],
@@ -263,7 +263,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     ['re-indents a quoted lazy line after an item line', md('> 1. a', '>    b', '> c'), md('> 1. a', '>    b', '>    c')],
     ['writes the quote marker on a lazy line', md('> a', 'lazy'), md('> a', '> lazy')],
     ['writes every quote marker on a lazy line', md('> > a', 'lazy'), md('> > a', '> > lazy')],
-    ['keeps a quoted ordered marker that cannot interrupt as text', md('> a', '> 2. a', '> a'), md('> a', '> 2. a', '> a')],
+    ['keeps a quoted ordered marker that cannot interrupt as text', md('> a', '> 2. a', '> a'), md('> a', '> 2\\. a', '> a')],
     ['opens a list after a quote on an unquoted marker', md('> a', '9. b', 'x'), md('> a', '', '9. b', '   x')],
     ['writes the quote marker and item indent on a lazy line', md('> - a', 'lazy'), md('> - a', '>   lazy')],
     ['continues the list after a lazy line', md('1. a', 'lazy', '2. b'), md('1. a', '   lazy', '2. b')],
@@ -382,7 +382,7 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
     ["keeps an over-indented marker under a nested item as text", "- c\n     - z\n      - > c\n", "- c\n  - z\n    \\- > c\n"],
     ["keeps an over-indented marker under a quote paragraph as text", "> y\n>     - > x\n> z\n", "> y\n> \\- > x\n> z\n"],
     ["keeps an over-indented marker as text of a quote an item holds", "- - c\n  > c\n      - x\n", "- - c\n  > c\n  > \\- x\n"],
-    ["keeps an over-indented marker under an ordered item as text", "- bar\n    2. bar\n      - > z\n", "- bar\n  2. bar\n     \\- > z\n"],
+    ["keeps an over-indented marker under an ordered item as text", "- bar\n    1. bar\n      - > z\n", "- bar\n  1. bar\n     \\- > z\n"],
     // Slack in an item reads as none, so it goes once the item moves.
     ["drops the slack of a quote line after a lazy one", "1. > b\n  y\n      > y\n", "1. > b\n   > y\n   > y\n"],
     ["drops the slack of a paragraph after a blank line", "* y\n\n     z\n     * bar\n", "* y\n\n  z\n\n  * bar\n"],
@@ -439,10 +439,10 @@ describe('a Markdown item line imports as the block CommonMark reads', () => {
   it.each([
     // A table needs its header and delimiter rows in the same container.
     ['makes a table of an item line over a delimiter at its content column', '- a | b\n  --- | ---\n', '- |= a |= b |\n'],
-    ['keeps an item line over a delimiter four columns in as text', '- a | b\n      --- | ---\n', '- a | b\n  --- | ---\n'],
-    ['keeps an item line over a lazy delimiter as text', '- a | b\n--- | ---\n', '- a | b\n  --- | ---\n'],
-    ['keeps a quote line over a lazy delimiter as text', '> a | b\n--- | ---\n', '> a | b\n> --- | ---\n'],
-    ['keeps an item paragraph line over a lazy delimiter as text', '- x\n  a | b\n--- | ---\n', '- x\n  a | b\n  --- | ---\n'],
+    ['keeps an item line over a delimiter four columns in as text', '- a | b\n      --- | ---\n', '- a | b\n  \\-\\-\\- | \\-\\-\\-\n'],
+    ['keeps an item line over a lazy delimiter as text', '- a | b\n--- | ---\n', '- a | b\n  \\-\\-\\- | \\-\\-\\-\n'],
+    ['keeps a quote line over a lazy delimiter as text', '> a | b\n--- | ---\n', '> a | b\n> \\-\\-\\- | \\-\\-\\-\n'],
+    ['keeps an item paragraph line over a lazy delimiter as text', '- x\n  a | b\n--- | ---\n', '- x\n  a | b\n  \\-\\-\\- | \\-\\-\\-\n'],
     // A tab after a marker pads it to the next tab stop.
     ['reads a tab after a marker and a space as padding', '- \t- a\n', '- - a\n'],
     ['reads a tab straight after a marker as padding', '-\t- a\n', '- - a\n'],
@@ -491,5 +491,44 @@ describe('a Markdown item line imports as the block CommonMark reads', () => {
 
   it('does not put an item marker in a table header cell', () => {
     expect(markdownToCarve('- a | b\n      --- | ---\n')).not.toMatch(/\|= -/)
+  })
+})
+
+// markup-carve/carve-js#1937. Each expectation is the reading cmark-gfm,
+// marked 18 and commonmark.js agree on, cmark-gfm deciding where they differ.
+describe('a Markdown import keeps the text and items CommonMark reads', () => {
+  it.each([
+    // Carve renders `--` and `---` in text as dashes; Markdown keeps them.
+    ['escapes hyphen runs in text', 'a -- b --- c x--y\n', 'a \\-\\- b \\-\\-\\- c x\\-\\-y\n', '<p>a -- b --- c x--y</p>'],
+    ['escapes hyphen runs in a heading', '# a -- b\n', '# a \\-\\- b\n', null],
+    ['escapes the unescaped rest of a run', 'a \\--- b\n', 'a \\-\\-\\- b\n', '<p>a --- b</p>'],
+    ['escapes a hyphen-only item', '* --\n', '* \\-\\-\n', '<ul>\n  <li>--</li>\n</ul>'],
+    ['keeps hyphens in code, destinations and autolinks', '`a--b` [x](/a--b) <http://e.com/a--b>\n', '`a--b` [x](/a--b) <http://e.com/a--b>\n', null],
+    ['keeps a thematic break', 'a\n\n---\n\n1. ---\n', null, '<p>a</p>\n<hr>\n<ol>\n  <li>\n    <hr>\n  </li>\n</ol>'],
+    ['keeps hyphens in a fence', '```\na -- b\n```\n', '```\na -- b\n```\n', null],
+    // Only `1.` starts a list that interrupts an item paragraph.
+    ['keeps a later number under an item paragraph as text', '- a\n  2. b\n', '- a\n  2\\. b\n', '<ul>\n  <li>a\n2. b</li>\n</ul>'],
+    ['keeps a same-numbered nested marker under an item paragraph as text', '9. b\n   9. i\n', '9. b\n   9\\. i\n', null],
+    ['keeps a later number with a paren delimiter as text', '1. a\n   3) b\n', '1. a\n   3\\) b\n', null],
+    ['keeps a later number under a nested item paragraph as text', '- - a\n    2. b\n', '- - a\n    2\\. b\n', null],
+    ['keeps a later number under an item paragraph in a quote as text', '> - a\n>   2. b\n', '> - a\n>   2\\. b\n', null],
+    ['still continues a nested ordered list', '- 1. a\n  2. b\n', '- 1. a\n  2. b\n', null],
+    ['still opens a list outside the paragraph item', '- - a\n  2. b\n', null, '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n    <ol start="2">\n      <li>b</li>\n    </ol>\n  </li>\n</ul>'],
+    ['still nests a list starting at 1', '- a\n  1. b\n', '- a\n  1. b\n', null],
+    // An item continuation line is measured in columns, a tab to the next stop.
+    ['reads a tab-indented quote four columns past the item as text', '- a\n  \t  > q\n', '- a\n  \\> q\n', '<ul>\n  <li>a\n&gt; q</li>\n</ul>'],
+    ['reads a tab-indented heading four columns past the item as text', '- a\n \t  # h\n', '- a\n  \\# h\n', null],
+    ['reads a tab-indented table under a nested item', '- - x\n  \tc | d\n  \t| --- | --- |\n', '- - x\n    |= c |= d |\n', null],
+    ['reads a tab-indented quote four columns past a nested item as text', '- - a\n    \t> q\n', '- - a\n    \\> q\n', null],
+  ] as Array<[string, string, string | null, string | null]>)('%s', (_label, source, expected, html) => {
+    const out = markdownToCarve(source)
+    if (expected !== null) expect(out).toBe(expected)
+    if (html !== null) expect(carveToHtml(out)).toBe(html)
+    expect(carveToCarve(out)).toBe(out)
+  })
+
+  // Not fmt's spelling yet (the lazy `~~~` line), so checked on the HTML only.
+  it('still opens a list after a line four columns past the nested item', () => {
+    expect(carveToHtml(markdownToCarve('* -    *e*\n      ~~~\n   2. c | d\n'))).toMatch(/<\/ul>\n {4}<ol start="2">\n {6}<li>c \| d<\/li>/)
   })
 })

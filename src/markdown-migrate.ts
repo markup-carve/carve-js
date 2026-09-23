@@ -862,6 +862,30 @@ function escapeCarveConstructsSpelledLikeText(
 }
 
 /**
+ * Escape every hyphen of a `--` or `---` run, which Carve's smart typography
+ * renders as an en or em dash and Markdown keeps as typed. The form is the one
+ * the Carve writer uses for literal hyphens. A line that is only a thematic
+ * break or a setext underline, alone or under its containers' markers, is
+ * structure rather than text and keeps its hyphens.
+ */
+function escapeTypographicDashes(input: string): string {
+  if (!input.includes('--')) return input
+  return input
+    .split('\n')
+    .map((line, idx) => {
+      let rest = line.replace(/^[ \t]*(?:>[ \t]?)*/, '')
+      // An underline needs a paragraph line above it, so never on the first line.
+      if (RE_MD_THEMATIC.test(rest) || (idx > 0 && /^ {0,3}-+[ \t]*$/.test(rest))) return line
+      for (let m = RE_LIST_MARKER.exec(rest); m; m = RE_LIST_MARKER.exec(rest)) {
+        rest = rest.slice(m[0].length)
+        if (RE_MD_THEMATIC.test(rest)) return line
+      }
+      return line.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))
+    })
+    .join('\n')
+}
+
+/**
  * Escape a `{…}` attribute list that would ATTACH to the construct before it.
  *
  * Runs after the delimiter rewrites, not with the rest of the escaping, because
@@ -1072,6 +1096,7 @@ function convertInline(
   if (!dialect.attributes) line = escapeAttributeBlockOpener(line)
   line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
+  if (!holdsFenceBody) line = escapeTypographicDashes(line)
 
   // Converted strong / bold-italic are stashed behind placeholders so their
   // single `*` / `/` are not re-matched by the emphasis passes below.
@@ -1706,10 +1731,6 @@ function moveIndent(line: string, from: number, to: number): string {
   return ' '.repeat(Math.max(0, to)) + stripColumns(line, from)
 }
 
-function leadingIndentWidth(line: string): number {
-  return line.length - line.replace(/^[ \t]+/, '').length
-}
-
 /**
  * The width in COLUMNS of a string, a tab advancing to the next four-column
  * stop.
@@ -2274,7 +2295,8 @@ function respellQuotedBlocks(
         prev?.prefix === part.prefix &&
         opensParagraph(prev.text.replace(RE_LIST_MARKER, '')) &&
         (asText || opensParagraph(part.text))
-      const trimmed = part.text.trimStart()
+      // As text, the marker is escaped wherever the line lands.
+      const trimmed = asText ? escapeBlockOpener(part.text.trimStart()) : part.text.trimStart()
       // A quote the open item holds takes the line as a lazy one, with its marker.
       const quote = above === null ? null : openQuoteParagraph(above)
       const quoteLazy =
@@ -2293,7 +2315,7 @@ function respellQuotedBlocks(
         // One to three columns past the item's content read as none.
         if (kept !== undefined && markerCol > kept.content && markerCol < kept.content + 4) {
           text = ' '.repeat(kept.content + kept.shift) + trimmed
-        } else text = moved(part).text
+        } else text = moved(asText ? { ...part, text: ' '.repeat(markerCol) + trimmed } : part).text
       }
     }
     // Not after a lazy line: an empty line there would be a blank one, and
@@ -2454,11 +2476,13 @@ function collectListInlineRun(
   if (itemContentColumn(marker[0]) < columnWidth(marker[0]) && first.trim() !== marker[0].trim()) {
     return collectItemIndentedCode(lines, start, marker[0].trimEnd().length)
   }
-  const contentCol = marker[0].length
+  // Continuation lines are measured in columns, a tab advancing to the next
+  // stop; the first line is sliced by characters.
+  const contentCol = columnWidth(marker[0])
   // The content columns of the items the first line nests (`- - a`), and the
   // text past their markers.
-  const nestedItems = nestedItemsOnLine(first, contentCol)
-  const nestedEnd = nestedItems.at(-1)?.end ?? contentCol
+  const nestedItems = nestedItemsOnLine(first, marker[0].length)
+  const nestedEnd = nestedItems.at(-1)?.end ?? marker[0].length
   // The innermost of them may hold indented code.
   const codeItem = /^(?:[-*+]|\d{1,9}[.)])(?= {5,}\S)/.exec(first.slice(nestedEnd))
   if (codeItem) return collectItemIndentedCode(lines, start, nestedEnd + codeItem[0].length)
@@ -2469,23 +2493,34 @@ function collectListInlineRun(
 
   const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
   const itemCols = [contentCol, ...nestedItems.map((item) => item.content)]
-  const firstText = first.slice(nestedItems.at(-1)?.end ?? contentCol)
+  const firstText = first.slice(nestedEnd)
   let end = start + 1
 
   while (end < lines.length) {
     const line = lines[end]!
     if (line.trim() === '') break
 
-    const indent = leadingIndentWidth(line)
-    const text = line.slice(contentCol)
+    const indent = indentColumns(line)
+    // The indent past the content column is written as the spaces it covers.
+    const text = ' '.repeat(Math.max(0, indent - contentCol)) + line.replace(/^[ \t]+/, '')
     const above = run.length === 1 ? firstText : run.at(-1)!.text
+    // An ordered marker other than 1 cannot interrupt the paragraph of the
+    // innermost item holding it (CommonMark 5.2), unless it continues an
+    // ordered list the first line nests at its column.
+    const ordered = /^(\d{1,9})([.)])[ \t]/.exec(text.trimStart())
+    const orderedText =
+      ordered !== null &&
+      Number(ordered[1]) !== 1 &&
+      opensParagraph(above) &&
+      indent >= itemCols.at(-1)! &&
+      !nestedItems.some((item) => item.col === indent && item.number !== undefined && item.kind === ordered[2])
     // A block left of an item the first line nests ends that item; a lazy
     // paragraph line does not.
     const lazyText =
-      (opensParagraph(above) || openQuoteParagraph(above) !== null) &&
-      !text.trimStart().startsWith('>') &&
-      isParagraphRunLine([text.trimStart()], 0, 'text')
-    if (!lazyText) while (itemCols.length > 1 && itemCols.at(-1)! > indent) itemCols.pop()
+      orderedText ||
+      ((opensParagraph(above) || openQuoteParagraph(above) !== null) &&
+        !text.trimStart().startsWith('>') &&
+        isParagraphRunLine([text.trimStart()], 0, 'text'))
     // The innermost item on the first line that holds this line.
     let base = contentCol
     for (const col of itemCols) if (col <= indent) base = col
@@ -2493,8 +2528,10 @@ function collectListInlineRun(
     // continues it: indented code cannot interrupt a paragraph.
     const quote = openQuoteParagraph(above)
     const continues = indent >= base + 4 && (opensParagraph(above) || quote !== null)
+    // A continuation line keeps the paragraph, and so the items, it continues.
+    if (!lazyText && !continues) while (itemCols.length > 1 && itemCols.at(-1)! > indent) itemCols.pop()
 
-    if (!continues && RE_ITEM_LINE.test(line)) break
+    if (!continues && !orderedText && RE_ITEM_LINE.test(line)) break
     if (indent < contentCol) break
 
     // Leave fenced code blocks inside list items to the main fence handler.
@@ -2502,10 +2539,10 @@ function collectListInlineRun(
     // Same for an HTML block opening at the item's content column.
     if (interruptingHtmlBlock(text)) break
 
-    const prefix = line.slice(0, contentCol)
+    const prefix = ' '.repeat(contentCol)
     const pad = ' '.repeat(Math.max(0, base - contentCol))
     const over = indent - base
-    const trimmed = text.trimStart()
+    const trimmed = orderedText ? escapeBlockOpener(text.trimStart()) : text.trimStart()
     if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true })
     else if (quote !== null && (over >= 4 || (!trimmed.startsWith('>') && isParagraphRunLine([trimmed], 0, 'text')))) {
       // A lazy line of the quote the item holds, written with its marker.
@@ -2514,7 +2551,7 @@ function collectListInlineRun(
       // A lazy line of the innermost item's paragraph, at that item's column.
       run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true })
     } else if (over > 0 && over < 4) run.push({ prefix, text: pad + trimmed })
-    else run.push({ prefix, text })
+    else run.push({ prefix, text: orderedText ? pad + trimmed : text })
     end++
   }
 
