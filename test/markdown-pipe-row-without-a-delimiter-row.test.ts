@@ -102,12 +102,12 @@ describe('a table GFM does read is untouched', () => {
     )
   })
 
-  // marked 18 gfm keeps `plain line` as a one-cell body row rather than ending
-  // the table, and the importer writes every body row as a Carve row, so the
-  // line stays in the table (markup-carve/carve-js#1918).
+  // marked 18 gfm keeps `plain line` as a body row rather than ending the
+  // table, padded to the header's two cells, and the importer writes every body
+  // row as a Carve row of the header's width (markup-carve/carve-js#1918, #1920).
   it('keeps a plain line under a table as the one-cell row GFM reads', () => {
     expect(migrated('| a | b |\n|---|---|\n| c | d |\nplain line\n')).toBe(
-      '|= a |= b |\n| c | d |\n| plain line |\n',
+      '|= a |= b |\n| c | d |\n| plain line | |\n',
     )
   })
 
@@ -187,7 +187,7 @@ describe('a container is answered by what it holds', () => {
   // cannot widen to it.
   it('does not end the table at inline HTML, which GFM keeps as a body row', () => {
     expect(migrated('| a | b |\n|---|---|\n| c | d |\n<span>x</span>\n| e | f |\n')).toBe(
-      '|= a |= b |\n| c | d |\n| `<span>x</span>`{=html} |\n| e | f |\n',
+      '|= a |= b |\n| c | d |\n| `<span>x</span>`{=html} | |\n| e | f |\n',
     )
   })
 
