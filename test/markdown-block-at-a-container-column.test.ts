@@ -60,7 +60,7 @@ describe('a block at its container content column', () => {
       // commonmark: item `b` holds a second paragraph.
       const md = lines('- a', '', '- b', '', sp(4) + 'still a paragraph')
       expect(markdownToCarve(md)).toBe(
-        lines('- a', '', '- b', '', sp(4) + 'still a paragraph'),
+        lines('- a', '', '- b', '', sp(2) + 'still a paragraph'),
       )
       expect(carveToHtml(markdownToCarve(md))).not.toContain('<pre>')
     })
@@ -71,7 +71,7 @@ describe('a block at its container content column', () => {
       // commonmark: <li><p>a</p><p>continuation</p></li>.
       const md = lines('- a', '', '\tcontinuation')
       const carve = markdownToCarve(md)
-      expect(carve).toBe(lines('- a', '', '\tcontinuation'))
+      expect(carve).toBe(lines('- a', '', sp(2) + 'continuation'))
       expect(carveToHtml(carve)).not.toContain('<pre>')
     })
 

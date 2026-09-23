@@ -375,6 +375,40 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
     expect(carveToCarve(out)).toBe(out)
   })
 
+  // Documents a first cut of this change moved away from both marked and
+  // commonmark.js; each is the GFM reading again.
+  it.each([
+    // A marker four columns past the item holding it continues the open paragraph.
+    ["keeps an over-indented marker under a nested item as text", "- c\n     - z\n      - > c\n", "- c\n  - z\n    \\- > c\n"],
+    ["keeps an over-indented marker under a quote paragraph as text", "> y\n>     - > x\n> z\n", "> y\n> \\- > x\n> z\n"],
+    ["keeps an over-indented marker as text of a quote an item holds", "- - c\n  > c\n      - x\n", "- - c\n  > c\n  > \\- x\n"],
+    ["keeps an over-indented marker under an ordered item as text", "- bar\n    2. bar\n      - > z\n", "- bar\n  2. bar\n     \\- > z\n"],
+    // Slack in an item reads as none, so it goes once the item moves.
+    ["drops the slack of a quote line after a lazy one", "1. > b\n  y\n      > y\n", "1. > b\n   > y\n   > y\n"],
+    ["drops the slack of a paragraph after a blank line", "* y\n\n     z\n     * bar\n", "* y\n\n  z\n\n  * bar\n"],
+    // A block left of an item the first line nests ends that item.
+    ["continues the quote of the outer item", "- - c\n  > c\n      x\n", "- - c\n  > c\n  > x\n"],
+    ["writes a lazy line at the innermost item", "- - c\n  y\n    z\n", "- - c\n    y\n    z\n"],
+    ["ends the nested list with a lazy line and opens another", "- - y\nz\n2. y\n", "- - y\n    z\n\n2. y\n"],
+    ["continues the list at its level after a lazy line", " * y\n      > x\n      - - y\n c\n   - foo\n", "* y\n  > x\n\n  - - y\n      c\n  - foo\n"],
+    // The next item of an open list is one, whatever its number.
+    ["writes a sibling after an item paragraph at its list column", "   1. x\n\n      a\n   2. z\n", "1. x\n\n   a\n\n2. z\n"],
+    // A shallower quote line lazily continues the deeper paragraph.
+    ["writes a lazy line inside the deeper quote", "> >  - - foo\n>       - > foo\n> bar\n", "> > - - foo\n> >     \\- > foo\n> >     bar\n"],
+    ["sets a list at the shallower depth apart", "> > > z\n>   x\n> >  1) foo\n", "> > > z\n> > > x\n> >\n> > 1) foo\n"],
+    // A fence four columns past its container opens nothing.
+    ["keeps it lazy text of the quote in the item", "   1. > z\n     ~~~\n\n   c\n", "1. > z\n   > \\~\\~\\~\n\nc\n"],
+    ["keeps the item open past it", "   - - y\n    ```\n     * z\n", "- - y\n    \\`\\`\\`\n  * z\n"],
+  ] as Array<[string, string, string]>)('%s', (_label, source, expected) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    expect(carveToCarve(out)).toBe(out)
+  })
+
+  it('reads a sibling after an item paragraph as GFM does', () => {
+    expect(carveToHtml(markdownToCarve(md('   1. x', '', '      a', '   2. z')))).toMatch(/<li>\s*<p>z<\/p>\s*<\/li>\s*<\/ol>/)
+  })
+
   it('reads a marker between two levels as the sibling GFM reads', () => {
     expect(carveToHtml(markdownToCarve(md('* x', ' * b')))).toMatch(/<ul>\s*<li>x<\/li>\s*<li>b<\/li>\s*<\/ul>/)
   })
