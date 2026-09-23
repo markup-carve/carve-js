@@ -65,8 +65,8 @@ describe('a fence info string holding a backtick', () => {
     // source never named.
     const migrated = markdownToCarve('~~~foo`bar\nx\n~~~\n')
 
-    expect(migrated).not.toContain('~~~foo')
-    expect(migrated).toContain('~~~\nx\n~~~')
+    expect(migrated).not.toContain('foo')
+    expect(migrated).toContain('```\nx\n```')
   })
 
   it('still carries a language that does fit', () => {

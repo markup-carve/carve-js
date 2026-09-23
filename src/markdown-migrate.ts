@@ -596,6 +596,14 @@ function longestBacktickRun(s: string): number {
   return longest
 }
 
+/**
+ * The fence `carve fmt` writes around a code body: backticks, one longer than
+ * the longest backtick run anywhere in the body, three at least.
+ */
+function canonicalFence(body: readonly string[]): string {
+  return '`'.repeat(Math.max(3, longestBacktickRun(body.join('\n')) + 1))
+}
+
 function rawInlineHtml(content: string): string {
   const tickLen = Math.max(1, longestBacktickRun(content) + 1)
   return `${'`'.repeat(tickLen)}${content}${'`'.repeat(tickLen)}{=html}`
@@ -1376,6 +1384,52 @@ type PrefixedInlineLine = {
 
 const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
 
+type OpenList = { col: number; kind: string; bullet: string; next: number }
+
+/**
+ * Writes list item markers the way `carve fmt` does, one container at a time.
+ *
+ * Ordered items are numbered on from the list's first number. A bullet or
+ * delimiter change starts a new list in GFM as in Carve, so `separate` asks
+ * for the blank line fmt puts between the two; and since `+` is written as `-`,
+ * a new list whose bullet would come out the same as the list above flips to
+ * `*`, or the two would merge.
+ */
+class ListMarkers {
+  private open: OpenList[] = []
+
+  /** A block at `col` ends every list whose items sit at or past it. */
+  end(col: number): void {
+    while (this.open.length > 0 && this.open.at(-1)!.col >= col) this.open.pop()
+  }
+
+  write(line: string): { line: string; separate: boolean } {
+    const m = /^([ \t]*)(?:([-*+])|(\d+)([.)]))(?=[ \t])/.exec(line)
+    if (!m) return { line, separate: false }
+    const col = columnWidth(m[1]!)
+    while (this.open.length > 0 && this.open.at(-1)!.col > col) this.open.pop()
+    const prev = this.open.at(-1)?.col === col ? this.open.pop() : undefined
+    const kind = m[2] ?? m[4]!
+    const same = prev !== undefined && prev.kind === kind
+    let marker: string
+    let bullet = ''
+    let next = 0
+    if (m[2] !== undefined) {
+      bullet = m[2] === '+' ? '-' : m[2]
+      if (!same && prev?.bullet === bullet) bullet = bullet === '-' ? '*' : '-'
+      marker = bullet
+    } else {
+      const number = same ? prev.next : Number(m[3])
+      // A number of another width moves the item's content column, and the
+      // lines under it were indented for the old one.
+      marker = (String(number).length === m[3]!.length ? String(number) : m[3]!) + m[4]!
+      next = number + 1
+    }
+    this.open.push({ col, kind, bullet, next })
+    return { line: m[1]! + marker + line.slice(m[0].length), separate: prev !== undefined && !same }
+  }
+}
+
 function leadingIndentWidth(line: string): number {
   return line.length - line.replace(/^[ \t]+/, '').length
 }
@@ -1455,7 +1509,7 @@ function restorePrefixedInlineRun(
     dialect,
     opensFence,
   ).split('\n')
-  const held = run.map((part) => peelQuoteMarkers(part.text))
+  const held = heldByItem(run)
   // Only a run whose lines this function can place in a container gets the
   // escape at all. What `prefix` holds is up to the collector, and a run can
   // still carry a container it does not model: the OUTER item of `- - | a |` is
@@ -1469,7 +1523,9 @@ function restorePrefixedInlineRun(
   )
   if (!modellable) return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
 
-  const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}`)
+  const container = run.map(
+    (part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`,
+  )
   const inTable = new Array<boolean>(run.length).fill(false)
   for (let start = 0; start < run.length; ) {
     let end = start + 1
@@ -1499,14 +1555,43 @@ function restorePrefixedInlineRun(
       out.push(part.prefix + marker + writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth))
       continue
     }
-    const quoted = peelQuoteMarkers(line)
+    // The same containers `held` peeled, so a row a quoted item holds is
+    // escaped at the item's column as well.
+    const { marker } = held[idx]!
+    const body = line.startsWith(marker) ? line.slice(marker.length) : peelQuoteMarkers(line).body
+    const kept = line.slice(0, line.length - body.length)
 
-    out.push(
-      part.prefix +
-        (isStandardTableRow(quoted.body) ? quoted.marker + keepPipeRowLiteral(quoted.body) : line),
-    )
+    out.push(part.prefix + (isStandardTableRow(body) ? kept + keepPipeRowLiteral(body) : line))
   }
   return out
+}
+
+/**
+ * `peelQuoteMarkers` for each line of a run, with one level of list item a
+ * quote holds peeled too: the item's marker, and the same columns under it, go
+ * to `marker`, so a table inside a quoted item is found at the item's column.
+ */
+function heldByItem(run: readonly PrefixedInlineLine[]): Array<{ marker: string; body: string }> {
+  let itemCol = 0
+  let itemKey = ''
+  return run.map((part) => {
+    const held = peelQuoteMarkers(part.text)
+    const key = `${part.prefix.length}:${held.marker}`
+    if (key !== itemKey) {
+      itemCol = 0
+      itemKey = key
+    }
+    const item = /^(?:[-*+]|\d+[.)]) {1,4}(?=\S)/.exec(held.body)
+    if (item) {
+      itemCol = item[0].length
+      return { marker: held.marker + item[0], body: held.body.slice(itemCol) }
+    }
+    if (itemCol > 0 && indentColumns(held.body) >= itemCol) {
+      return { marker: held.marker + ' '.repeat(itemCol), body: stripColumns(held.body, itemCol) }
+    }
+    itemCol = 0
+    return held
+  })
 }
 
 /**
@@ -1662,9 +1747,91 @@ function collectBlockquoteInlineRun(
   }
   if (run.length === 0) return { lines: [pad + strip(lines[start]!)], end: start + 1 }
   return {
-    lines: restorePrefixedInlineRun(foldContainerSetext(run), dialect).map((l) => pad + l),
+    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run))), dialect)
+      .map((l) => pad + (/^(?:> )+$/.test(l) ? l.trimEnd() : l)),
     end,
   }
+}
+
+/**
+ * Respell each fence a quote run holds as the backtick fence `carve fmt`
+ * writes. One the quote ended stays unclosed, as at the top level.
+ *
+ * Besides the spelling, a backtick fence is what keeps the body verbatim here:
+ * the run goes through `convertInline`, which protects a backtick fence as a
+ * code span but read a tilde fence's `~~` as strikethrough.
+ */
+function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInlineLine[] {
+  const out = [...run]
+  let opener = -1
+  let closer: RegExp | null = null
+  let info = ''
+  const close = (at: number): void => {
+    const fence = canonicalFence(out.slice(opener + 1, at).map((part) => part.text))
+    out[opener] = { prefix: out[opener]!.prefix, text: fence + info }
+    out[at] = { prefix: out[opener]!.prefix, text: fence }
+  }
+  for (let idx = 0; idx < out.length; idx++) {
+    const part = out[idx]!
+    if (opener >= 0) {
+      if (part.prefix !== out[opener]!.prefix) return [...run]
+      if (closer!.test(part.text)) {
+        close(idx)
+        opener = -1
+      }
+      continue
+    }
+    const open = RE_MD_FENCE_LINE.exec(part.text)
+    if (!open || !fenceRunIsAFence(open[2]!, open[3]!)) continue
+    opener = idx
+    info = fenceInfo(open[3]!)
+    closer = new RegExp(`^ {0,3}${open[2]![0] === '`' ? '`' : '~'}{${open[2]!.length},}[ \t]*$`)
+  }
+  if (opener >= 0) {
+    const fence = canonicalFence(out.slice(opener + 1).map((part) => part.text))
+    out[opener] = { prefix: out[opener]!.prefix, text: fence + info }
+  }
+  return out
+}
+
+/**
+ * What the top-level loop does for list markers and block spacing, for the
+ * blocks a quote run holds: list markers through `ListMarkers`, one per quote
+ * depth, and an empty quote line wherever fmt separates two blocks the source
+ * wrote adjacent - two lists, or a nested quote under the paragraph above it.
+ */
+function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInlineLine[] {
+  const out: PrefixedInlineLine[] = []
+  const markers = new Map<string, ListMarkers>()
+  let inFence = false
+  for (const part of run) {
+    const prev = out.at(-1)
+    if (part.prefix === '') {
+      out.push(part)
+      continue
+    }
+    if (isMarkdownFenceLine(part.text)) inFence = !inFence
+    if (inFence || isMarkdownFenceLine(part.text)) {
+      out.push(part)
+      continue
+    }
+    let list = markers.get(part.prefix)
+    if (list === undefined) markers.set(part.prefix, (list = new ListMarkers()))
+    const written = list.write(part.text)
+    if (!RE_LIST_MARKER.test(part.text)) list.end(indentColumns(part.text))
+    // Not after a lazy line: an empty line there would be a blank one, and
+    // would end the quote the lazy line continues.
+    const deeper =
+      prev !== undefined &&
+      prev.prefix !== '' &&
+      part.prefix.length > prev.prefix.length &&
+      part.prefix.startsWith(prev.prefix)
+    if (written.separate || (deeper && prev.text.trim() !== '')) {
+      out.push({ prefix: deeper ? prev.prefix : part.prefix, text: '' })
+    }
+    out.push({ prefix: part.prefix, text: written.line })
+  }
+  return out
 }
 
 /**
@@ -1719,6 +1886,16 @@ function collectIndentedCode(lines: readonly string[], start: number, contentCol
 }
 
 /**
+ * Rewrite the opener at `openerAt` to the canonical backtick fence for the body
+ * written after it, and return the matching closer at `pad`.
+ */
+function closeFence(out: string[], openerAt: number, pad: string, info: string): string {
+  const fence = canonicalFence(out.slice(openerAt + 1).map((line) => stripColumns(line, pad.length)))
+  out[openerAt] = pad + fence + info
+  return pad + fence
+}
+
+/**
  * A Markdown info string reduced to the one token a Carve fence takes, or
  * nothing when a backtick in its first word stops it being an info string.
  */
@@ -1767,6 +1944,10 @@ function collectItemFence(
     if (closer.test(body)) break
   }
   end -= blanks.length
+  const closed = out.length > 1 && closer.test(stripColumns(out.at(-1)!, contentCol))
+  const fence = canonicalFence(out.slice(1, closed ? -1 : undefined).map((line) => stripColumns(line, contentCol)))
+  out[0] = prefix + fence + info
+  if (closed) out[out.length - 1] = pad + fence
 
   return { lines: out, end, verbatimFrom: 1 }
 }
@@ -2091,6 +2272,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   let fenceStrip = 0
   // The content column of the list item holding the open fence, 0 outside one.
   let fenceCol = 0
+  // Where the open fence's opener sits in `out`, and its info string. The
+  // opener is rewritten at the closer, once the body says how long the
+  // backtick fence `carve fmt` writes has to be.
+  let fenceOut = -1
+  let fenceInfoText = ''
   // Stack of enclosing list items' content columns (outermost first), so a
   // fence is re-based to the DEEPEST item that still contains it. A Markdown
   // fence indented to a list item's content stays in the item (strip nothing);
@@ -2106,6 +2292,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const inGfmTable = gfmTableRowLines(lines)
   let inTableBody = false
   let tableWidth = 0
+  const listMarkers = new ListMarkers()
   // was the previous line blank? A dedented line only leaves a list item when a
   // blank precedes it; without a blank it is lazy paragraph continuation and
   // the item stays open (CommonMark).
@@ -2159,6 +2346,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       } else if (trimmed !== '' && (wasPrevBlank || startsBlock)) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
+      if (trimmed !== '' && !marker) listMarkers.end(listCols.length ? listCols[listCols.length - 1]! : 0)
     }
 
     // The column at which the innermost open container holds its content, and
@@ -2203,6 +2391,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       fenceCol = contentCol
       // Whatever the opener's own indent was, what survives the strip is
       // exactly the content column, so the fence goes back there.
+      fenceOut = out.length
+      fenceInfoText = info
       out.push(containerPad + open[2]! + info)
       prevType = 'code_fence'
       continue
@@ -2214,7 +2404,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // A fence cannot continue lazily, so a line left of its item's content
       // ends the item and the fence with it (CommonMark 5.2).
       if (trimmed !== '' && indentColumns(line) < fenceCol) {
-        out.push(' '.repeat(fenceCol) + fenceChar.repeat(fenceLen))
+        out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol), fenceInfoText))
         inCode = false
         fenceChar = ''
         fenceLen = 0
@@ -2230,7 +2420,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         fenceChar = ''
         fenceLen = 0
         fenceStrip = 0
-        out.push(dedented)
+        out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol), fenceInfoText))
         // A blank line before a line that returns to an enclosing item would
         // make that item loose.
         const next = lines[i + 1]
@@ -2387,7 +2577,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (prevType === 'list' && indent >= 1) {
       if (isList) {
         const run = collectListInlineRun(lines, i, dialect)
-        out.push(...run.lines.map((l, k) => (k >= (run.verbatimFrom ?? Infinity) ? l : l.replace(/^(\s*)\+(\s)/, '$1-$2'))))
+        out.push(listMarkers.write(run.lines[0]!).line, ...run.lines.slice(1))
         i = run.end - 1
         prevType = 'list'
         continue
@@ -2493,7 +2683,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (isList) {
       const run = collectListInlineRun(lines, i, dialect)
-      out.push(...run.lines.map((l, k) => (k >= (run.verbatimFrom ?? Infinity) ? l : l.replace(/^(\s*)\+(\s)/, '$1-$2'))))
+      const first = listMarkers.write(run.lines[0]!)
+      if (first.separate && prevType === 'list') out.push('')
+      out.push(first.line, ...run.lines.slice(1))
       i = run.end - 1
       prevType = 'list'
       continue
@@ -2533,6 +2725,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     else if (isBlockquote) prevType = 'block_quote'
     else prevType = 'text'
   }
+
+  // A fence the document never closed is left open, as the source wrote it:
+  // closing one inside a list item changes how loose the item reads.
+  if (inCode) closeFence(out, fenceOut, ' '.repeat(fenceCol), fenceInfoText)
 
   // Frontmatter-collision guard: Carve reads a line-0 `---` as a frontmatter
   // OPEN fence (frontmatter is recognized only on the first line) and, with a
