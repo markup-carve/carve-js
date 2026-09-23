@@ -1731,6 +1731,7 @@ function collectBlockquoteInlineRun(
   start: number,
   dialect: MarkdownDialect,
   contentCol = 0,
+  markers = new Map<string, ListMarkers>(),
 ): {
   lines: string[]
   end: number
@@ -1761,7 +1762,7 @@ function collectBlockquoteInlineRun(
   }
   if (run.length === 0) return { lines: [pad + strip(lines[start]!)], end: start + 1 }
   return {
-    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run))), dialect)
+    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run)), markers), dialect)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? l.trimEnd() : l)),
     end,
   }
@@ -1817,9 +1818,11 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
  * depth, and an empty quote line wherever fmt separates two blocks the source
  * wrote adjacent - two lists, or a nested quote under the paragraph above it.
  */
-function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInlineLine[] {
+function respellQuotedBlocks(
+  run: readonly PrefixedInlineLine[],
+  markers: Map<string, ListMarkers>,
+): PrefixedInlineLine[] {
   const out: PrefixedInlineLine[] = []
-  const markers = new Map<string, ListMarkers>()
   // The open fence's closer, or null outside one.
   let closer: RegExp | null = null
   let afterFence = false
@@ -1876,7 +1879,9 @@ function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInline
       prev.prefix !== '' &&
       part.prefix.length > prev.prefix.length &&
       part.prefix.startsWith(prev.prefix)
-    if (written.separate || (deeper && prev.text.trim() !== '')) {
+    // After an empty quote line the run starts fresh, and that line already
+    // separates the lists.
+    if ((written.separate && prev !== undefined) || (deeper && prev.text.trim() !== '')) {
       out.push({ prefix: deeper ? prev.prefix : part.prefix, text: '' })
     }
     out.push({ prefix: part.prefix, text: written.line })
@@ -2343,6 +2348,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   let inTableBody = false
   let tableWidth = 0
   const listMarkers = new ListMarkers()
+  // The same for the lists a quote holds, kept across the empty quote lines
+  // that split a quote into several runs, and dropped when the quote ends.
+  const quoteMarkers = new Map<string, ListMarkers>()
   // was the previous line blank? A dedented line only leaves a list item when a
   // blank precedes it; without a blank it is lazy paragraph continuation and
   // the item stays open (CommonMark).
@@ -2362,6 +2370,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const trimmed = line.trim()
     const wasPrevBlank = prevBlank
     prevBlank = trimmed === ''
+    if (!trimmed.startsWith('>')) quoteMarkers.clear()
 
     // Maintain the list-item content-column stack. A marker opens an item whose
     // content starts after the marker (the task checkbox is content, so its
@@ -2725,7 +2734,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // Markdown `+` bullet to `-` so the converted list survives.
     if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
     if (isBlockquote) {
-      const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol)
+      const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
       out.push(...run.lines)
       i = run.end - 1
       prevType = 'block_quote'
