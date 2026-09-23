@@ -2610,7 +2610,15 @@ function collectListInlineRun(
     if (interruptingHtmlBlock(text)) break
     // And for a quote opening with indented code, which the quote collector
     // would read as paragraph text.
-    if (!continues && quotedIndentedCodeAt(lines, end, base) !== null) break
+    //
+    // Only where the quote has no paragraph open: indented code cannot
+    // interrupt one, so under `- > alpha` the line `  >     code` continues
+    // `alpha`. `quotedIndentedCodeAt` cannot see that quote, because the line
+    // above it is the item's MARKER line and carries no `>` of its own once
+    // the item's columns come off, so it answers that the code opens the
+    // quote. Read that way, a paragraph became a code block
+    // (markup-carve/carve-js#1941).
+    if (!continues && quote === null && quotedIndentedCodeAt(lines, end, base) !== null) break
 
     const prefix = ' '.repeat(contentCol)
     const pad = ' '.repeat(Math.max(0, base - contentCol))
