@@ -399,6 +399,9 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
     // A fence four columns past its container opens nothing.
     ["keeps it lazy text of the quote in the item", "   1. > z\n     ~~~\n\n   c\n", "1. > z\n   > \\~\\~\\~\n\nc\n"],
     ["keeps the item open past it", "   - - y\n    ```\n     * z\n", "- - y\n    \\`\\`\\`\n  * z\n"],
+    // Measured in columns: a tab and two spaces are six of them.
+    ["keeps a tab-indented fence line lazy text", "* z\n     - y\n\t  ```\n", "* z\n  - y\n    \\`\\`\\`\n"],
+    ["keeps a tab-indented marker lazy text of the quote", "- > bar\n    foo\ny\n\t  -\t- y\n", "- > bar\n  > foo\n  > y\n  > \\-\t- y\n"],
   ] as Array<[string, string, string]>)('%s', (_label, source, expected) => {
     const out = markdownToCarve(source)
     expect(out).toBe(expected)

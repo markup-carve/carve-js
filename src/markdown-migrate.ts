@@ -31,7 +31,7 @@ const fenceRunIsAFence = (run: string, info: string): boolean =>
 /** Whether LINE is a Markdown code-fence opener or closer. */
 const isMarkdownFenceLine = (line: string): boolean => {
   const m = RE_MD_FENCE_LINE.exec(line)
-  return m !== null && fenceRunIsAFence(m[2]!, m[3]!)
+  return m !== null && columnWidth(m[1]!) <= 3 && fenceRunIsAFence(m[2]!, m[3]!)
 }
 
 type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
@@ -1548,25 +1548,48 @@ class ListMarkers {
       next = number + 1
     }
     const shift = outer + marker.length - (m[0].length - m[1]!.length)
-    let content = columnWidth(RE_LIST_MARKER.exec(line)?.[0] ?? m[0])
+    const content = columnWidth(RE_LIST_MARKER.exec(line)?.[0] ?? m[0])
     this.open.push({ col, content, shift, outer, kind, bullet, next })
     // Items the first line nests (`- - a`) are written as they are, and move
     // with this one.
-    let rest = line.slice(RE_LIST_MARKER.exec(line)?.[0].length ?? m[0].length)
-    for (let inner = /^(?:([-*+])|(\d+)([.)])) +/.exec(rest); inner; inner = /^(?:([-*+])|(\d+)([.)])) +/.exec(rest)) {
+    const own = RE_LIST_MARKER.exec(line)?.[0].length ?? m[0].length
+    for (const inner of nestedItemsOnLine(line, own)) {
       this.open.push({
-        col: content,
-        content: content + inner[0].length,
+        col: inner.col,
+        content: inner.content,
         shift,
         outer: shift,
-        kind: inner[1] ?? inner[3]!,
-        bullet: inner[1] === '+' ? '-' : (inner[1] ?? ''),
-        next: inner[2] === undefined ? 0 : Number(inner[2]) + 1,
+        kind: inner.kind,
+        bullet: inner.bullet === '+' ? '-' : (inner.bullet ?? ''),
+        next: inner.number === undefined ? 0 : Number(inner.number) + 1,
       })
-      content += inner[0].length
-      rest = rest.slice(inner[0].length)
     }
     return { line: m[1]! + marker + line.slice(m[0].length), separate: prev !== undefined && !same, outer, shift }
+  }
+}
+
+/**
+ * The items a list line nests past the character `from` on its first line
+ * (`- - a`), with their marker and content columns and where each ends.
+ */
+function nestedItemsOnLine(
+  line: string,
+  from: number,
+): Array<{ col: number; content: number; kind: string; bullet?: string; number?: string; end: number }> {
+  const items: Array<{ col: number; content: number; kind: string; bullet?: string; number?: string; end: number }> = []
+  let at = from
+  for (;;) {
+    const m = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))[ \t]+(?=\S)/.exec(line.slice(at))
+    if (!m) return items
+    items.push({
+      col: columnWidth(line.slice(0, at + m[1]!.length)),
+      content: columnWidth(line.slice(0, at + m[0].length)),
+      kind: m[2] ?? m[4]!,
+      bullet: m[2],
+      number: m[3],
+      end: at + m[0].length,
+    })
+    at += m[0].length
   }
 }
 
@@ -2334,12 +2357,9 @@ function collectListInlineRun(
   const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
   // The content columns of the items the first line nests (`- - a`), and the
   // text past their markers.
-  const itemCols = [contentCol]
-  let firstText = run[0]!.text
-  for (let nested = RE_LIST_MARKER.exec(firstText); nested; nested = RE_LIST_MARKER.exec(firstText)) {
-    itemCols.push(itemCols.at(-1)! + nested[0].length)
-    firstText = firstText.slice(nested[0].length)
-  }
+  const nestedItems = nestedItemsOnLine(first, contentCol)
+  const itemCols = [contentCol, ...nestedItems.map((item) => item.content)]
+  const firstText = first.slice(nestedItems.at(-1)?.end ?? contentCol)
   let end = start + 1
 
   while (end < lines.length) {
@@ -2905,8 +2925,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         : line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
       // Four columns past the item holding it, a marker under an open
       // paragraph is text of that paragraph (indented code cannot interrupt).
-      if (marker && (lazyAllowed || lazyQuote !== null)) {
-        const markerIndent = columnWidth(marker[1]!)
+      const anyMarker = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)/.exec(line)
+      if (anyMarker && (lazyAllowed || lazyQuote !== null)) {
+        const markerIndent = columnWidth(anyMarker[1]!)
         let parentContent = 0
         for (const col of listCols) if (col <= markerIndent) parentContent = col
         if (markerIndent >= parentContent + 4) {
@@ -2935,11 +2956,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         while (listCols.length && listCols[listCols.length - 1]! > markerIndent) listCols.pop()
         listCols.push(columnWidth(marker[0]!))
         // And the items the line nests (`- - a`).
-        let rest = line.slice(marker[0].length)
-        for (let inner = /^(?:[-*+]|\d+[.)]) +(?=\S)/.exec(rest); inner; inner = /^(?:[-*+]|\d+[.)]) +(?=\S)/.exec(rest)) {
-          listCols.push(listCols.at(-1)! + inner[0].length)
-          rest = rest.slice(inner[0].length)
-        }
+        for (const inner of nestedItemsOnLine(line, marker[0].length)) listCols.push(inner.content)
       } else if (trimmed !== '' && (wasPrevBlank || startsBlock || afterFence)) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
