@@ -24,6 +24,11 @@ export interface AutolinkOptions {
 //
 // Real-world addresses stay within these RFC limits, so valid emails still
 // autolink identically.
+// ASCII punctuation, which a backslash escapes in Carve text.
+const PUNCT = '[!-/:-@\\[-`{-~]'
+const ESCAPE = '\\\\' + PUNCT
+const RE_ESCAPE = new RegExp('\\\\(' + PUNCT + ')', 'g')
+
 const EMAIL = '[a-zA-Z0-9._%+-]{1,64}@(?:[a-zA-Z0-9-]{1,63}\\.)+[a-zA-Z]{2,63}'
 
 /**
@@ -45,15 +50,25 @@ export function autolink(opts: AutolinkOptions = {}): CarveExtension {
   const urlSchemes = schemes.filter((s) => s !== 'mailto').map(escapeRe)
   const mailto = schemes.includes('mailto')
 
+  // A backslash escape is one unit of the URL, so the match never ends
+  // inside one, and an escaped sentence mark is not the URL's last character.
   const urlRe = urlSchemes.length
     ? new RegExp(
         '(?:' +
           urlSchemes.join('|') +
-          ')://[^' +
+          ')://(?:' +
+          ESCAPE +
+          '|\\\\(?!' +
+          PUNCT +
+          ')|[^\\\\' +
           AUTOLINK_BODY_EXCLUDED +
-          '<>\\[\\](){}]*[^' +
+          '<>\\[\\](){}])*(?:\\\\(?![.,;:!?\'"])' +
+          PUNCT +
+          '|\\\\(?!' +
+          PUNCT +
+          ')|[^\\\\' +
           AUTOLINK_BODY_EXCLUDED +
-          '<>\\[\\](){}.,;:!?\'"]',
+          '<>\\[\\](){}.,;:!?\'"])',
         'yu',
       )
     : null
@@ -71,7 +86,8 @@ export function autolink(opts: AutolinkOptions = {}): CarveExtension {
     matchInline(text, pos) {
       const url = urlRe && at(urlRe, text, pos)
       if (url) {
-        return { node: linkNode(url, url), end: pos + url.length }
+        const decoded = url.replace(RE_ESCAPE, '$1')
+        return { node: linkNode(decoded, decoded), end: pos + url.length }
       }
       const mt = mailtoRe && at(mailtoRe, text, pos)
       if (mt) {
