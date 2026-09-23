@@ -301,7 +301,6 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
   // before a block under item text, and puts one between a list and the text
   // after it. That spacing is the part #1925 left open.
   it.each([
-    ['closes an unclosed fence under item text', md('- a', '  ~~~', '  x'), md('- a', '', '  ```', '  x', '  ```')],
     // Closed, the item would read tight where GFM and the open fence read it loose.
     [
       'leaves open a fence set apart from its item text with a blank line inside',
@@ -530,5 +529,49 @@ describe('a Markdown import keeps the text and items CommonMark reads', () => {
   // Not fmt's spelling yet (the lazy `~~~` line), so checked on the HTML only.
   it('still opens a list after a line four columns past the nested item', () => {
     expect(carveToHtml(markdownToCarve('* -    *e*\n      ~~~\n   2. c | d\n'))).toMatch(/<\/ul>\n {4}<ol start="2">\n {6}<li>c \| d<\/li>/)
+  })
+})
+
+// markup-carve/carve-js#1941. Each expectation is the reading cmark-gfm,
+// marked 18 and commonmark.js agree on, cmark-gfm deciding where they differ.
+describe('a Markdown import keeps the blocks containers hold', () => {
+  it.each([
+    // A setext heading takes every line of its paragraph.
+    ['folds every line of an item paragraph into the heading', '- c | d\n  e\n   ---\n', '- ## c | d e\n', '<ul>\n  <li>\n    <h2 id="c-d-e">c | d e</h2>\n  </li>\n</ul>'],
+    ['folds every line of a paragraph into the heading', 'a\nb\n---\n', '## a b\n', null],
+    ['folds a line four columns in into the heading', 'a\n    b\n---\n', '## a b\n', null],
+    ['folds every line of a quoted paragraph into the heading', '> a\n> b\n> ---\n', '> ## a b\n', null],
+    ['drops a hard break inside the heading', 'a\\\nb\n===\n', '# a b\n', null],
+    ['folds a nested item paragraph into its heading', '1. - x\n     y\n     ---\n', '1. - ## x y\n', null],
+    ['folds a quoted item paragraph into its heading', '> - a\n> b\n>   ---\n', '> - ## a b\n', null],
+    // An underline left of the item holding the paragraph is a thematic break.
+    ['does not reach across a nested item', '1. - x\n     y\n   ---\n', '1. - x\n     y\n   ---\n', '<ol>\n  <li>\n    <ul>\n      <li>x\ny</li>\n    </ul>\n    <hr>\n  </li>\n</ol>'],
+    ['does not fold a quoted fence body', '> ```\n> a\n> ---\n> ```\n', '> ```\n> a\n> ---\n> ```\n', null],
+    // A quote opening with indented code is code, under item text too.
+    ['writes quoted indented code after an item line as code', '- x\n  y\n  >     code\n', '- x\n  y\n  > ```\n  > code\n  > ```\n', '<ul>\n  <li>x\ny\n    <blockquote>\n      <pre><code>code\n</code></pre>\n    </blockquote>\n  </li>\n</ul>'],
+    ['writes quoted indented code under an item marker line as code', '- x\n  >     code\n', '- x\n  > ```\n  > code\n  > ```\n', null],
+    ['keeps the quote going after its indented code', '- x\n  y\n  >     code\n  > z\n', '- x\n  y\n  > ```\n  > code\n  > ```\n  >\n  > z\n', null],
+    // A fence body keeps the item's content column.
+    ['keeps the body of a tab-indented fence in its item', '- a\n  \t~~~\n  b\n  ~~~\n', '- a\n  ```\n  b\n  ```\n', '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>'],
+    ['keeps the body of an indented fence in its item', '- a\n    ~~~\n  b\n      c\n  ~~~\n', '- a\n  ```\n  b\n    c\n  ```\n', null],
+    ['closes an unclosed fence under item text', '- a\n  ~~~\n  x\n', '- a\n  ```\n  x\n  ```\n', null],
+    // Carve does not link a bare URL, so it is text.
+    ['escapes hyphen runs in a bare URL', 'see http://e.com/a--b\n', 'see http://e.com/a\\-\\-b\n', '<p>see http://e.com/a--b</p>'],
+    // A pipe row in a nested quote is paragraph text there.
+    ['writes a lazy row in the nested quote', '> | a | b |\n> > |---|---|\n> | x | y |\n', '> \\| a | b |\n>\n> > \\|\\-\\-\\-|\\-\\-\\-|\n> > \\| x | y |\n', '<blockquote>\n  <p>| a | b |</p>\n  <blockquote><p>|---|---|\n| x | y |</p></blockquote>\n</blockquote>'],
+    ['writes a lazy table header in the nested quote', '> > a\n> | x | y |\n> |---|---|\n', '> > a\n> > \\| x | y |\n> > \\|\\-\\-\\-|\\-\\-\\-|\n', null],
+    ['sets a row apart from a nested table', '> > | a | b |\n> > |---|---|\n> | x | y |\n', '> > |= a |= b |\n>\n> \\| x | y |\n', null],
+    ['sets a block apart from a nested quote', '> > # h\n> b\n', '> > # h\n>\n> b\n', null],
+    // Found by fuzzing the fixes above.
+    ['reads indented code under a heading as code', '# a\n    code\n', '# a\n\n```\ncode\n```\n', null],
+    ['reads a lazy line as text, not an underline', '> a\n===\n', '> a\n> ===\n', '<blockquote><p>a\n===</p></blockquote>'],
+    ['reads a lazy line under a quoted item as text, not an underline', '> - a\n    ===\n', '> - a\n>   ===\n', null],
+    ['measures a tab after the item content column from where it stands', '* c | d\n\n\t# h\n  \t*e*\n', '* c | d\n\n  # h\n\n  /e/\n', null],
+    ['dedents a tab-indented line into the item holding it', '- a\n\n  \t`x`\n', '- a\n\n  `x`\n', null],
+  ] as Array<[string, string, string, string | null]>)('%s', (_label, source, expected, html) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    if (html !== null) expect(carveToHtml(out)).toBe(html)
+    expect(carveToCarve(out)).toBe(out)
   })
 })

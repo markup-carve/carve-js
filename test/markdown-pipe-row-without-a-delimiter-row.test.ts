@@ -215,10 +215,11 @@ describe('a container is answered by what it holds', () => {
   })
 
   // The `> >` line opens a nested quote under the paragraph, which fmt
-  // separates with an empty quote line.
+  // separates with an empty quote line, and the last row is a lazy line of
+  // the nested quote's paragraph, which fmt writes inside it.
   it('escapes only the row, keeping the quote markers it was written with', () => {
     expect(migrated('> | a | b |\n> > |---|---|\n> | x | y |\n')).toBe(
-      '> \\| a | b |\n>\n> > \\|\\-\\-\\-|\\-\\-\\-|\n> \\| x | y |\n',
+      '> \\| a | b |\n>\n> > \\|\\-\\-\\-|\\-\\-\\-|\n> > \\| x | y |\n',
     )
   })
 })

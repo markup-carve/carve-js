@@ -1023,8 +1023,12 @@ function convertInline(
   line = convertInlineHtml(line, protect)
 
   // Bare/GFM autolink URLs in prose (https://example.com/api/_v1_/x): the
-  // path is literal, so protect it before the emphasis passes.
-  line = line.replace(/\bhttps?:\/\/[^\s<>`]+/g, protect)
+  // path is literal, so protect it before the emphasis passes. Carve does not
+  // link a bare URL, so it is text, and a hyphen run in it is escaped like
+  // any other.
+  line = line.replace(/\bhttps?:\/\/[^\s<>`]+/g, (url) =>
+    protect(url.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))),
+  )
 
   // Reference-link definition `[label]: dest "title"` (optional space after
   // the colon). The whole line is consumed literally by Carve's ref-link
@@ -1334,6 +1338,23 @@ function isStandardTableRow(line: string): boolean {
 function hasFollowingSetextUnderline(lines: readonly string[], index: number): boolean {
   const underline = index + 1 < lines.length ? lines[index + 1]!.trim() : ''
   return /^=+$/.test(underline) || /^-+$/.test(underline)
+}
+
+/**
+ * The ATX marker for the setext heading whose paragraph ends on `lines[index]`
+ * in the container holding its content at `contentCol`, or null when the line
+ * under it is no underline there. `held` says the line is already known to be
+ * paragraph text.
+ */
+function setextParagraphEnd(lines: readonly string[], index: number, contentCol: number, held = false): string | null {
+  const line = stripColumns(lines[index]!, contentCol)
+  const below = lines[index + 1]!
+  const underline = below.trim()
+  if (!/^(?:=+|-+)$/.test(underline) || indentColumns(below) < contentCol) return null
+  if (indentColumns(stripColumns(below, contentCol)) >= 4) return null
+  if (held) return underline[0] === '=' ? '#' : '##'
+  if (RE_MD_THEMATIC.test(line) || !isParagraphRunLine([line.trim()], 0, 'text') || RE_MD_LINK_REFERENCE.test(line.trim())) return null
+  return underline[0] === '=' ? '#' : '##'
 }
 
 function startsTableHeader(lines: readonly string[], index: number): boolean {
@@ -1894,92 +1915,123 @@ function heldByItem(run: readonly PrefixedInlineLine[]): Array<{ marker: string;
 }
 
 /**
- * Fold a setext heading a CONTAINER holds into the ATX line Carve spells it
- * with, given the paragraph line and the line under it as the container holds
- * them - marker stripped, indent measured from the container's own content.
- *
- * Returns the replacement text for the paragraph line, or null when the two
- * lines are not a setext heading.
- *
- * BOTH lines have to sit in the same container, and the container shows up in
- * two places. The collector has already put what it consumed in `prefix`, and
- * two lines it consumed the same width of are two lines it holds - `- ` and
- * the `  ` under it are one item, while the quote collector's `> > ` and `> `
- * are two different quotes, so `> > T` over `> ===` is not a heading (the
- * underline is a lazy continuation of the inner paragraph there). What the
- * collector did NOT consume is peeled here: the LIST collector holds
- * `- > T` / `  > ===` as the texts `> T` and `> ===`, still quote-marked, and
- * that marker has to match too. Peeling both is what lets one helper serve a
- * quote, a list item, and a quote inside a list item alike.
- *
- * Four columns past the container's content is code rather than an underline
- * (CommonMark), so `>     =====` under a quoted paragraph stays paragraph
- * continuation; one to three columns of slack is still an underline.
- *
- * The line above the underline has to be paragraph TEXT, which is what
- * `isParagraphRunLine` already decides for the top level. A container holds
- * blocks other than paragraphs and the collectors hand those over here too,
- * where a `=` or `-` line under one is not an underline at all: under a fence
- * opener it is the code's first line, under a list marker it is a lazy
- * continuation of the item's own paragraph that an underline cannot reach, and
- * under a link reference definition it is a paragraph of its own. Folding any
- * of those destroyed the block. The test runs on the text with the quote
- * marker already peeled, so a quoted paragraph a list item holds still counts
- * as one. It also covers the rule case - `***` over `---` is two thematic
- * breaks, not an h2 titled `***` - while the separate heading guard stops a
- * second underline from re-folding a heading this pass just wrote.
+ * An entry of a container run as the container holds it: `key` names the
+ * container (what the collector consumed, and the quote markers still on the
+ * text), `text` is what is left inside it.
  */
-function containerSetextHeading(
-  paragraph: PrefixedInlineLine,
-  underline: PrefixedInlineLine,
-): string | null {
-  if (paragraph.prefix.length !== underline.prefix.length) return null
-  const above = blockquotePrefix(paragraph.text)
-  const below = blockquotePrefix(underline.text)
-  if ((above === null) !== (below === null)) return null
-  if (above && below && above.prefix !== below.prefix) return null
-  const quote = above?.prefix ?? ''
-  const text = above ? above.text : paragraph.text
-  const rule = below ? below.text : underline.text
-  if (indentColumns(text) >= 4 || indentColumns(rule) >= 4) return null
-  const run = /^[ \t]*(=+|-+)[ \t]*$/.exec(rule)
-  if (!run) return null
-  const body = text.trim()
-  if (body === '') return null
-  if (/^#{1,6}([ \t]|$)/.test(body)) return null
-  // `blank`, not `text`: after a blank an ordered marker of any number opens a
-  // list, which is the reading that rejects the fold, and rejecting is the
-  // safe side of a line this helper cannot classify.
-  if (!isParagraphRunLine([text], 0, 'blank')) return null
-  if (RE_MD_LINK_REFERENCE.test(text)) return null
-  return `${quote}${run[1]![0] === '=' ? '#' : '##'} ${body}`
+function heldInContainer(part: PrefixedInlineLine): { key: string; text: string } {
+  const quoted = blockquotePrefix(part.text)
+  return { key: `${part.prefix.length}:${quoted?.prefix ?? ''}`, text: quoted ? quoted.text : part.text }
 }
 
 /**
- * Rewrite every setext heading a collected container run holds.
+ * The paragraph text an entry holds: the item markers it opens with, if any,
+ * and the text past them. Null when the entry is not paragraph text - a
+ * heading, a link reference definition, or anything else that opens a block.
+ */
+function paragraphLine(part: PrefixedInlineLine, text: string): { lead: string; body: string } | null {
+  const marker = RE_ITEM_LEAD.exec(text)![0]
+  const opens = RE_ITEM_LINE.test(text)
+  const body = (opens ? text.slice(marker.length) : text).trim()
+  if (body === '' || /^#{1,6}([ \t]|$)/.test(body) || RE_MD_LINK_REFERENCE.test(body)) return null
+  // `blank`, not `text`: after a blank an ordered marker of any number opens a
+  // list, which is the reading that rejects the fold.
+  if (!part.continued && !isParagraphRunLine([body], 0, 'blank')) return null
+  return { lead: opens ? marker : '', body }
+}
+
+/**
+ * A line of a setext heading's paragraph as a piece of the one-line heading:
+ * trimmed, and without the hard break it may end in.
+ */
+function headingLine(line: string): string {
+  return line.trim().replace(/(?<!\\)((?:\\\\)*)\\$/, '$1').trimEnd()
+}
+
+/** The indent and item markers a line opens with (`- - `, `  1. `). */
+const RE_ITEM_LEAD = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*/
+
+/**
+ * Rewrite every setext heading a collected container run holds into the ATX
+ * line Carve spells it with.
  *
  * The run is already the container's content with its marker held separately,
- * so a setext heading is just two adjacent entries in it. Folding the pair
- * needs no blank line after it: a heading interrupts a paragraph inside a
- * quote and inside a list item alike, so `> One` / `> # Two` keeps the
- * paragraph and the heading apart on its own.
+ * so a setext heading is the paragraph's entries and the underline under them.
+ * Every line of the paragraph has to sit in the underline's container, and the
+ * container shows up in two places. The collector has already put what it
+ * consumed in `prefix`, and two lines it consumed the same width of are two
+ * lines it holds - `- ` and the `  ` under it are one item, while the quote
+ * collector's `> > ` and `> ` are two different quotes, so `> > T` over `> ===`
+ * is not a heading (the underline is a lazy continuation of the inner
+ * paragraph there). What the collector did NOT consume is peeled here: quote
+ * markers still on the text have to match, and item markers on the
+ * paragraph's first line (`- - T`, or `- T` in a quote) put the paragraph in
+ * that item, so the underline has to reach the item's content column. Left of
+ * it the underline is outside the item and a thematic break.
  *
- * Where the paragraph is more than one line, the line ABOVE the underline
- * becomes the heading and the earlier lines stay a paragraph. That is the
- * approximation the top-level branch already makes, and it is forced: a Carve
- * heading is one line, so the multi-line heading CommonMark reads here has
- * nothing to convert into.
+ * A Carve heading is one line, so a paragraph of several lines becomes one
+ * heading with its lines joined by a space, the text CommonMark's multi-line
+ * heading renders. Four columns past the paragraph's column is code rather
+ * than an underline, and a lazy line or a line in a fence body is none either.
+ * Folding needs no blank line after it: a heading interrupts a paragraph
+ * inside a quote and inside a list item alike.
  */
 function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInlineLine[] {
   const out: PrefixedInlineLine[] = []
+  // Where the paragraph each entry of `out` is a line of starts, or -1.
+  const starts: number[] = []
+  // Per container, the content columns of the items opened in it, innermost
+  // last; an item hides every earlier one at or right of its column.
+  const items = new Map<string, number[]>()
+  let closer: { prefix: string; test: RegExp } | null = null
   for (const part of run) {
-    const above = out[out.length - 1]
-    const folded = above ? containerSetextHeading(above, part) : null
-    if (above && folded !== null) {
-      out[out.length - 1] = { prefix: above.prefix, text: folded }
+    const { key, text } = heldInContainer(part)
+    const inner = text.replace(RE_ITEM_LEAD, '')
+    if (closer !== null) {
+      if (part.prefix !== closer.prefix || closer.test.test(inner)) closer = null
+      out.push(part)
+      starts.push(-1)
       continue
     }
+    const open = RE_MD_FENCE_LINE.exec(inner)
+    if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
+      closer = { prefix: part.prefix, test: new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`) }
+      out.push(part)
+      starts.push(-1)
+      continue
+    }
+    const rule = /^[ \t]*(=+|-+)[ \t]*$/.exec(text)
+    const start = starts.at(-1) ?? -1
+    if (rule && !part.continued && start >= 0 && heldInContainer(out.at(-1)!).key === key) {
+      const first = heldInContainer(out[start]!).text
+      const lead = paragraphLine(out[start]!, first)!.lead
+      // The paragraph's column: past its own item markers, or the content
+      // column of the innermost item holding its first line.
+      let col = columnWidth(lead)
+      if (lead === '') for (const content of items.get(key) ?? []) if (content <= indentColumns(first)) col = content
+      const at = indentColumns(text)
+      if ((lead !== '' || indentColumns(first) - col < 4) && at >= col && at - col < 4) {
+        const quote = blockquotePrefix(part.text)?.prefix ?? ''
+        const indent = lead !== '' ? lead : /^[ \t]*/.exec(first)![0]
+        const body = out
+          .slice(start)
+          .map((entry) => headingLine(paragraphLine(entry, heldInContainer(entry).text)!.body))
+          .join(' ')
+        const heading = `${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} ${body}`
+        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: heading })
+        starts.splice(start, starts.length - start, -1)
+        continue
+      }
+    }
+    const line = paragraphLine(part, text)
+    const continues = line !== null && line.lead === '' && start >= 0 && heldInContainer(out.at(-1)!).key === key
+    if (RE_ITEM_LINE.test(text)) {
+      const content = columnWidth(RE_ITEM_LEAD.exec(text)![0])
+      const open = (items.get(key) ?? []).filter((c) => c < content)
+      items.set(key, [...open, content])
+    }
     out.push(part)
+    starts.push(line === null ? -1 : continues ? start : out.length - 1)
   }
   return out
 }
@@ -2207,8 +2259,21 @@ function respellQuotedBlocks(
     const item = markers.get(part.prefix)?.itemAt(indentColumns(part.text))
     return item ? { ...part, text: moveIndent(part.text, item.content, item.content + item.shift) } : part
   }
-  for (const part of run) {
+  // The rows of the tables each stretch of one quote depth holds. Any other
+  // pipe row is paragraph text.
+  const tableRow = new Array<boolean>(run.length).fill(false)
+  const bodies = heldByItem(run).map((held) => held.body)
+  for (let start = 0; start < run.length; ) {
+    let end = start + 1
+    while (end < run.length && run[end]!.prefix === run[start]!.prefix && !run[end]!.continued) end++
+    gfmTableRowLines(bodies.slice(start, end)).forEach((row, offset) => (tableRow[start + offset] = row))
+    start = end
+  }
+  let prevTable = false
+  for (const [idx, part] of run.entries()) {
     const prev = out.at(-1)
+    const inTable = prevTable
+    prevTable = tableRow[idx]!
     if (part.prefix === '') {
       out.push(part)
       afterFence = false
@@ -2232,16 +2297,21 @@ function respellQuotedBlocks(
       }
       const over = indentColumns(part.text) >= 4
       const trimmed = part.text.trimStart()
+      const paragraph = opensParagraph(held) || (!inTable && isStandardTableRow(held))
       const lazy =
-        opensParagraph(held) &&
-        (over || (!trimmed.startsWith('>') && !RE_LIST_MARKER.test(trimmed) && isParagraphRunLine([trimmed], 0, 'text')))
+        paragraph &&
+        (over ||
+          (!trimmed.startsWith('>') &&
+            !RE_LIST_MARKER.test(trimmed) &&
+            (isParagraphRunLine([trimmed], 0, 'text') || isStandardTableRow(trimmed))))
       if (lazy) {
         out.push({ prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true })
+        prevTable = false
         continue
       }
-      // A marker there opens a list that ends the paragraph, which Carve would
-      // otherwise read as lazy continuation.
-      if (opensParagraph(held) && RE_LIST_MARKER.test(trimmed) && !over) out.push({ prefix: part.prefix, text: '' })
+      // Any other line leaves the deeper quote, and fmt sets it apart; after a
+      // paragraph Carve would otherwise read it as lazy continuation.
+      if (prev.text.trim() !== '') out.push({ prefix: part.prefix, text: '' })
     }
     const open = RE_MD_FENCE_LINE.exec(part.text)
     if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
@@ -2327,7 +2397,7 @@ function respellQuotedBlocks(
       part.prefix.startsWith(prev.prefix)
     // After an empty quote line the run starts fresh, and that line already
     // separates the lists.
-    if ((written.separate && prev !== undefined) || (deeper && prev.text.trim() !== '')) {
+    if (((written.separate && prev !== undefined) || (deeper && prev.text.trim() !== '')) && out.at(-1)!.text !== '') {
       out.push({ prefix: deeper ? prev.prefix : part.prefix, text: '' })
     }
     out.push({ prefix: part.prefix, text, continued: part.continued })
@@ -2538,6 +2608,9 @@ function collectListInlineRun(
     if (isMarkdownFenceLine(text)) break
     // Same for an HTML block opening at the item's content column.
     if (interruptingHtmlBlock(text)) break
+    // And for a quote opening with indented code, which the quote collector
+    // would read as paragraph text.
+    if (!continues && quotedIndentedCodeAt(lines, end, base) !== null) break
 
     const prefix = ' '.repeat(contentCol)
     const pad = ' '.repeat(Math.max(0, base - contentCol))
@@ -3305,7 +3378,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // code block). The charset matches RE_FENCE in parse.ts, including `/`.
     const open = !inCode ? RE_MD_FENCE_LINE.exec(held) : null
     if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
-      if (prevType !== 'blank' && out.length > 0) out.push('')
+      // A fence interrupts the paragraph of the item holding it.
+      if (prevType !== 'blank' && !(prevType === 'list' && contentCol > 0) && out.length > 0) out.push('')
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
@@ -3322,8 +3396,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // column, less than the item's own two, so nothing was stripped and the
       // tab went through to Carve, which does not read a tab-indented fence
       // inside an item as a fence at all.
-      const openerIndent = contentCol + columnWidth(open[1]!)
-      fenceStrip = Math.max(0, openerIndent - contentCol)
+      // A tab there is as wide as the stop it reaches from where it stands.
+      fenceStrip = Math.max(0, indentColumns(line) - contentCol)
       fenceCol = contentCol
       fenceShift = shiftBy
       fenceAfterBlank = wasPrevBlank && contentCol > 0
@@ -3353,7 +3427,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         i--
         continue
       }
-      const dedented = stripColumns(line, fenceStrip)
+      // The strip comes off past the content column, which the body keeps.
+      const dedented =
+        line.trim() === ''
+          ? stripColumns(line, fenceStrip)
+          : ' '.repeat(fenceCol) + stripColumns(line, Math.min(indentColumns(line), fenceCol + fenceStrip))
       if (new RegExp(`^\\s{0,3}(${fenceChar}{${fenceLen},})\\s*$`).test(stripColumns(line, fenceCol))) {
         inCode = false
         fenceChar = ''
@@ -3397,11 +3475,21 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const quotedCode = quotedIndentedCodeAt(lines, i, contentCol)
     if (quotedCode) {
       const fence = '`'.repeat(Math.max(3, longestBacktickRun(quotedCode.lines.join('\n')) + 1))
-      if (prevType !== 'blank' && prevType !== 'block_quote' && out.length > 0) out.push('')
+      // A quote interrupts the paragraph of the item holding it.
+      const inItem = prevType === 'list' && contentCol > 0
+      if (prevType !== 'blank' && prevType !== 'block_quote' && !inItem && out.length > 0) out.push('')
       for (const emitted of [fence, ...quotedCode.lines, fence]) {
         out.push(emitted === '' ? quotedCode.prefix.trimEnd() : quotedCode.prefix + emitted)
       }
+      // A block after the code in the same quote, or in one nested or around
+      // it, is set apart from it by an empty line of the outer quote.
+      const after = quotedCode.end < lines.length ? blockquotePrefix(stripColumns(lines[quotedCode.end]!, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')) : null
+      if (after !== null && after.text.trim() !== '') {
+        const outer = ' '.repeat(contentCol) + (after.prefix.length < quotedCode.prefix.length - contentCol ? after.prefix : quotedCode.prefix.slice(contentCol))
+        out.push(outer.trimEnd())
+      }
       i = quotedCode.end - 1
+      quoteCol = contentCol
       prevType = 'block_quote'
       continue
     }
@@ -3412,16 +3500,18 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // `_` were then read as emphasis: `    let x = *not bold*` rendered as
     // `<p>let x = <strong>not bold</strong></p>`.
     //
-    // The previous line must be blank, so an indented line under a list item -
-    // which is item continuation, not code - never reaches here. The four
+    // The previous line must be blank or a block that takes no continuation
+    // line, like a heading, so an indented line under a list item - which is
+    // item continuation, not code - never reaches here. The four
     // columns are counted from the container's content column, not from column
     // 0: a paragraph sitting AT a nested item's content column is the item's
     // own content, and reading it as code both lost the paragraph and moved it
     // out of the item.
     if (
-      (wasPrevBlank || prevType === 'blank' || prevType === 'code' || afterFence || afterTable || leftItems) &&
+      (wasPrevBlank || prevType === 'blank' || prevType === 'code' || prevType === 'heading' || afterFence || afterTable || leftItems) &&
       trimmed !== '' &&
-      indentColumns(held) >= 4
+      // Measured on the line, as `relIndent` below is.
+      indentColumns(line) - contentCol >= 4
     ) {
       const block = collectIndentedCode(lines, i, contentCol)
       if (prevType !== 'blank' && out.length > 0) out.push('')
@@ -3510,7 +3600,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // Markdown's 0-3 space slack and its four-column code rule are both stated
     // in. `indent` is the absolute one, which is the same number only at the
     // document level.
-    const relIndent = indentColumns(held)
+    // Measured on the line: a tab `held` starts with is narrower than four
+    // columns when the content column is not on a tab stop.
+    const relIndent = Math.max(0, indentColumns(line) - contentCol)
     const isBlockquote = trimmed.startsWith('>')
 
     if (isBlank) {
@@ -3543,7 +3635,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         continue
       }
       // One to three columns past the item's content read as none.
-      const slack = indentColumns(held)
+      const slack = relIndent
       // A fence a quote opens here is the quote collector's to write and close.
       const quoted = blockquotePrefix(held.trimStart())
       const prevInItem = i > 0 && lines[i - 1]!.trim() !== '' && indentColumns(lines[i - 1]!) >= contentCol
@@ -3705,6 +3797,21 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         const trimmedNext = next.trimStart()
         run.push(opens ? next.slice(0, next.length - trimmedNext.length) + escapeBlockOpener(trimmedNext) : next)
         end++
+      }
+      // A setext underline under the paragraph, after the run or after the
+      // line the run stopped at, makes the whole paragraph the heading.
+      let heading = run.length > 1 && end < lines.length ? setextParagraphEnd(lines, end - 1, contentCol, true) : null
+      if (heading === null && end + 1 < lines.length) {
+        heading = setextParagraphEnd(lines, end, contentCol)
+        if (heading !== null) run.push(lines[end++]!)
+      }
+      if (heading !== null) {
+        if (prevType !== 'blank' && prevType !== 'heading') out.push('')
+        out.push(containerPad + convertInline(`${heading} ${run.map(headingLine).join(' ')}`, dialect))
+        i = end
+        if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
+        prevType = 'heading'
+        continue
       }
       if (run.length > 1) {
         // A line of the run left of the item's content column is lazy.

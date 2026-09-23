@@ -323,7 +323,7 @@ describe('markdownToCarve — prefixed multiline inline mapping', () => {
   it('leaves a fenced code block inside a list item untouched', () => {
     const md = ['- item', '  ```', '  **no**', '  ```'].join('\n')
     const carve = conv(md)
-    expect(carve).toBe(['- item', '', '  ```', '  **no**', '  ```'].join('\n'))
+    expect(carve).toBe(['- item', '  ```', '  **no**', '  ```'].join('\n'))
     expect(carveToHtml(carve)).toContain('<pre><code>**no**\n</code></pre>')
   })
 
