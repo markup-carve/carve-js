@@ -1803,18 +1803,37 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
 function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInlineLine[] {
   const out: PrefixedInlineLine[] = []
   const markers = new Map<string, ListMarkers>()
-  let inFence = false
+  // The open fence's closer, or null outside one.
+  let closer: RegExp | null = null
+  let afterFence = false
+  const separate = (prefix: string): void => {
+    const prev = out.at(-1)
+    if (prev !== undefined && prev.prefix === prefix && prev.text.trim() !== '') out.push({ prefix, text: '' })
+  }
   for (const part of run) {
     const prev = out.at(-1)
     if (part.prefix === '') {
       out.push(part)
+      afterFence = false
       continue
     }
-    if (isMarkdownFenceLine(part.text)) inFence = !inFence
-    if (inFence || isMarkdownFenceLine(part.text)) {
+    if (closer !== null) {
+      out.push(part)
+      if (closer.test(part.text)) {
+        closer = null
+        afterFence = true
+      }
+      continue
+    }
+    const open = RE_MD_FENCE_LINE.exec(part.text)
+    if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
+      closer = new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`)
+      separate(part.prefix)
       out.push(part)
       continue
     }
+    if (afterFence) separate(part.prefix)
+    afterFence = false
     let list = markers.get(part.prefix)
     if (list === undefined) markers.set(part.prefix, (list = new ListMarkers()))
     const written = list.write(part.text)
