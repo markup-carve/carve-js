@@ -33,6 +33,7 @@ import {
   splitTableRowSpans,
   stripContainerPrefixesKeepIndent,
   isBlankLine,
+  opensCodeFence,
   RE_AFTER_TERM,
   TABLE_ALIGNMENT_MARKERS,
   type UnclosedContainer,
@@ -756,6 +757,7 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 // fence is column-exact, so an indented delimiter the parser did not fold into
 // a verbatim region is a silent degradation.
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
+const FENCE_RUN = /^(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
 const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|!\[[^\]]*\]\([^)\s]+(?: "[^"]*"| '[^']*')?\)(?:\{[^{}\n]+\})?[ \t]*$|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
@@ -1377,6 +1379,64 @@ function collectSilentFailures(
     })
   }
 
+  // 4b. A fence-shaped line the parser read as paragraph text: its info string
+  //     fails code_fence_info, so the INVALID-FENCE FALLBACK (CARVE-P2-005)
+  //     turned the would-be block into an inline code span or plain text.
+  const fallbackLines = new Set<number>()
+  for (const p of paragraphs) {
+    const first = p.pos?.startLine
+    if (!first) continue
+    const last = p.pos?.endLine ?? first
+    for (let ln = first; ln <= last; ln++) {
+      if (verbatimLines.has(ln) || fallbackLines.has(ln)) continue
+      const line = (lines[ln - 1] ?? '').replace(/\r$/, '')
+      const stripped = stripContainerPrefixesKeepIndent(line)
+      const view = stripped.trimStart()
+      const m = FENCE_RUN.exec(view)
+      if (!m) continue
+      const fence = m[1]!
+      const info = view.slice(fence.length).trim()
+      // A closer-shaped or otherwise valid line did not fail on its info string.
+      if (opensCodeFence(view)) continue
+      if (LEGACY_RAW_FENCE.test(view)) continue
+      // A run closed again on the same line is deliberate inline code.
+      if (view.slice(fence.length).includes(fence)) continue
+      const effect =
+        `The fence does not open: the ${fence[0] === '`' ? 'backtick run becomes an inline code span' : 'line stays plain text'}, ` +
+        `the block renders as a paragraph, and its closing fence can open a new block that swallows what follows.`
+      const respaced = `${fence}${info.replace(/[ \t]+/g, ' ')}`
+      const attr = /^(.*?)[ \t]*(\{[^{}\n]*\})$/.exec(info)
+      const opener = attr ? `${fence}${attr[1]!}` : undefined
+      let message: string
+      let data: Record<string, string> | undefined
+      if (attr && opensCodeFence(opener!)) {
+        message =
+          `A code fence carries no inline attributes, so "${attr[2]}" after the info string ` +
+          `is not valid. ${effect} (use: "${attr[2]}" on its own line directly above the fence, then "${opener}").`
+        data = { attributes: attr[2]!, opener: opener! }
+      } else if (opensCodeFence(respaced)) {
+        message =
+          `The whitespace in this fence opener is not valid: at most one space follows the ` +
+          `fence, and the parts of the info string are separated by spaces, never tabs. ` +
+          `${effect} (use: "${respaced}").`
+      } else {
+        message =
+          `This line starts like a fenced code block, but "${info}" is not a valid info ` +
+          `string (a language, then an optional "title", then an optional [label]). ${effect}`
+      }
+      fallbackLines.add(ln)
+      out.push({
+        line: ln,
+        column: line.length - view.length + 1,
+        rule: 'fence-opener-fallback',
+        message,
+        start: (lineStart[ln - 1] ?? 0) + line.length - view.length,
+        end: (lineStart[ln - 1] ?? 0) + line.length,
+        ...(data ? { data } : {}),
+      })
+    }
+  }
+
   // 5. An indented fenced-code OPENER. A Carve fence is column-exact - it sits
   //    at its container's content column (column 0 at the top level), like every
   //    other block opener. An indented run of backticks/tildes therefore does
@@ -1400,6 +1460,8 @@ function collectSilentFailures(
     // a legacy `raw FORMAT` fence is already reported by rule 2; do not
     // double-flag the same line for its indentation.
     if (LEGACY_RAW_FENCE.test(lines[i]!)) continue
+    // Rule 4b owns an opener whose info string fails: de-indenting would not open it.
+    if (fallbackLines.has(i + 1)) continue
     const fence = m[2]!
     // Skip an inline code span: a same-line closing run of the fence char (>=
     // the opening length) makes `  ```x```` verbatim text, not a mis-indented

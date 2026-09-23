@@ -181,6 +181,11 @@ const RE_FENCE = new RegExp(
     '|("[^"]*")(?: +(\\[[^\\]]*\\]))?|(\\[[^\\]]*\\]))?' +
     FENCE_TRAILING_WS,
 )
+/** True when `line`, already at its container's content column, opens a code or raw fence. */
+export function opensCodeFence(line: string): boolean {
+  return RE_FENCE.test(line) || RE_RAW_FENCE.test(line)
+}
+
 const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
