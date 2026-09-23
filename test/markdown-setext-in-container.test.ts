@@ -140,9 +140,9 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
     expect(markdownToCarve('> Title\n>    =====\n')).toBe('> # Title\n')
   })
 
-  it('leaves an underline four columns past the item’s content', () => {
+  it('keeps an underline four columns past the item’s content as text', () => {
     // CommonMark reads: <ul>\n<li>Title\n=====</li>\n</ul>
-    expect(markdownToCarve('- Title\n      =====\n')).toBe('- Title\n      =====\n')
+    expect(markdownToCarve('- Title\n      =====\n')).toBe('- Title\n  \\=====\n')
   })
 
   it('leaves two thematic breaks in a quote as two rules', () => {
