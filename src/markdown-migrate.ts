@@ -1841,6 +1841,7 @@ function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInline
     }
     const open = RE_MD_FENCE_LINE.exec(part.text)
     if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
+      markers.get(part.prefix)?.end(indentColumns(part.text))
       closer = new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`)
       separate(part.prefix)
       out.push(part)
@@ -1848,10 +1849,18 @@ function respellQuotedBlocks(run: readonly PrefixedInlineLine[]): PrefixedInline
     }
     if (afterFence) separate(part.prefix)
     afterFence = false
+    // A quote opened at the column of an outer one ends the lists it holds.
+    for (const [prefix, outer] of markers) {
+      if (part.prefix.length > prefix.length && part.prefix.startsWith(prefix)) outer.end(0)
+    }
     let list = markers.get(part.prefix)
     if (list === undefined) markers.set(part.prefix, (list = new ListMarkers()))
     const written = list.write(part.text)
-    if (!RE_LIST_MARKER.test(part.text)) list.end(indentColumns(part.text))
+    // A quote run holds no blank line, so an unmarked paragraph line under an
+    // item is its lazy continuation; only a line opening another block ends it.
+    if (!RE_LIST_MARKER.test(part.text) && !quoteParagraphIsOpen(part.text)) {
+      list.end(indentColumns(part.text))
+    }
     // Not after a lazy line: an empty line there would be a blank one, and
     // would end the quote the lazy line continues.
     const deeper =

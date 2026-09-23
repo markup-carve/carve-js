@@ -157,6 +157,12 @@ describe('a Markdown import writes the spelling carve fmt writes (#1921)', () =>
     expect(carveToCarve(out)).toBe(out)
   })
 
+  // The lazy line itself is not re-indented, so this is not a fixed point yet;
+  // the numbering on the far side of it is what is pinned.
+  it('keeps numbering a quoted list across a lazy line', () => {
+    expect(markdownToCarve(md('> 1. a', '> continuation', '> 1. b'))).toBe(md('> 1. a', '> continuation', '> 2. b'))
+  })
+
   // fmt closes these, but a closer inside a list item changes how loose the
   // item reads, so the import leaves them open and only respells the opener.
   it.each([
