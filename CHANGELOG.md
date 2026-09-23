@@ -41,6 +41,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The BBCode importer escapes a brace run that would attribute a converted tag (#1898), where `[b]x[/b]{a}` used to set an attribute the post never carried.
 - The BBCode importer escapes a line-initial block opener in ordinary text (#1893, #1904): headings, bullets, quotes, numeric, alphabetic and roman ordered markers, the bare-dot continuation, a `:::` fence and the `::` description opener. BBCode has no block syntax, so none of them is structure the author asked for.
 - The Markdown importer writes a table's body rows through the same row writer as its header (#1918), using the formatter's own cell helpers, so an imported padded GFM table passes `carve fmt --check`. This also fixes an empty header cell written with two spaces, a lone `<` or `^` cell becoming a colspan or rowspan, a pipeless body row falling out of the table, a plain line under a table staying a paragraph, and a table inside a quote or list item keeping its delimiter row and padding.
+- The Markdown importer drops a GFM table row whose every cell is blank instead of splitting the table in two (#1919). Carve spells no such row (markup-carve/carve#1954), so the `| | |` it used to write read back as a paragraph between two tables. `migrateMarkdown` reports each dropped row as `structure-unspellable`, dropped/exact - the first construct-level loss the Markdown path reports - rather than inventing a cell the author never typed.
 
 ## [0.1.7] - 2026-09-18
 

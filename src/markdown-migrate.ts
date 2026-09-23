@@ -13,6 +13,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
+import { isTableRow } from './parse.js'
 import { escapeSpanMarkerPayload, padCell } from './render-carve.js'
 
 /**
@@ -1252,6 +1253,48 @@ function writeTableRow(
   return row + '|'
 }
 
+/**
+ * What the importer could not represent, in the shared migration report's
+ * vocabulary (docs/migration-results.md). `migrateMarkdown` carries these out
+ * as diagnostics; `markdownToCarve` returns the source alone.
+ */
+export interface MarkdownImportLoss {
+  code: 'structure-unspellable'
+  message: string
+}
+
+let importLosses: MarkdownImportLoss[] = []
+
+/**
+ * Whether `row` is a row the parser reads back as a table row - the same
+ * predicate `parseTable` gates on, so the importer cannot drop a row Carve
+ * would have accepted or keep one it refuses.
+ *
+ * A row whose every cell is blank is not a table row (markup-carve/carve#1954).
+ * GFM reads one as an empty row, and written out as `| | |` Carve reads a
+ * paragraph, which splits the table in two (carve-js#1919). The row is dropped
+ * and reported rather than filled with a cell the author never wrote: an
+ * invented value round-trips back out as if it were theirs, and an honest
+ * omission with a report beats a wrong value.
+ *
+ * The row is reported WITHOUT a position. A document-order table index would
+ * be wrong wherever the converter leaves a table alone - a table two container
+ * levels down reaches `restorePrefixedInlineRun`'s unmodellable return, stays
+ * a table in the output, and is never counted - and a source line cannot be
+ * had either, since the container runs are folded and re-spelled before a row
+ * is written. Only the drop itself is exact, so only the drop is reported.
+ */
+function keepTableRow(row: string): boolean {
+  if (isTableRow(row)) return true
+  // No cell of a blank row can hold an escaped pipe, so splitting counts them.
+  const cells = row.split('|').length - 2
+  importLosses.push({
+    code: 'structure-unspellable',
+    message: `Dropped a table row of ${cells} blank cells; Carve spells no row whose every cell is blank`,
+  })
+  return false
+}
+
 function unescapePipesInCodeSpans(row: string): string {
   return protectCodeSpans(row, (span) => span.replace(/\\\|/g, '|'))
 }
@@ -1562,11 +1605,13 @@ function restorePrefixedInlineRun(
       if (idx === 0 || !inTable[idx - 1] || container[idx - 1] !== container[idx]) {
         const headers = splitTableRow(held[idx + 1]!.body.trim()).map((cell) => `=${alignMarker(cell)}`)
         tableWidth = headers.length
-        out.push(part.prefix + marker + writeTableRow(splitTableRow(body.trim()), headers, dialect))
+        const header = writeTableRow(splitTableRow(body.trim()), headers, dialect)
+        if (keepTableRow(header)) out.push(part.prefix + marker + header)
         idx++ // consume the delimiter row
         continue
       }
-      out.push(part.prefix + marker + writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth))
+      const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth)
+      if (keepTableRow(row)) out.push(part.prefix + marker + row)
       continue
     }
     // The same containers `held` peeled, so a row a quoted item holds is
@@ -2301,10 +2346,23 @@ export function markdownToCarve(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
 ): string {
+  return markdownToCarveWithLosses(markdown, dialect).value
+}
+
+/**
+ * {@link markdownToCarve} with what the conversion could not represent.
+ */
+export function markdownToCarveWithLosses(
+  markdown: string,
+  dialect: MarkdownDialect = COMMONMARK_GFM,
+): { value: string; losses: MarkdownImportLoss[] } {
+  const losses: MarkdownImportLoss[] = []
+  importLosses = losses
   try {
-    return convertMarkdown(markdown, dialect)
+    return { value: convertMarkdown(markdown, dialect), losses }
   } finally {
     useEmptyDestinationReferences(null)
+    importLosses = []
   }
 }
 
@@ -2582,7 +2640,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
           // At the container's content column, so the converted header keeps
           // the item that holds it. Written at column 0 it left the item while
           // the body rows stayed behind, splitting one table into two blocks.
-          out.push(containerPad + header)
+          if (keepTableRow(header)) out.push(containerPad + header)
           i++ // consume the delimiter row
           prevType = 'text'
           inTableBody = true
@@ -2595,7 +2653,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // A body row of the table above. Rebuilt rather than passed through, so its
     // padding matches the formatter's and a pipeless row stays in the table.
     if (inTableBody && inGfmTable[i] && trimmed !== '') {
-      out.push(containerPad + writeTableRow(splitTableRow(trimmed), [], dialect, tableWidth))
+      const row = writeTableRow(splitTableRow(trimmed), [], dialect, tableWidth)
+      if (keepTableRow(row)) out.push(containerPad + row)
       continue
     }
     inTableBody = false
