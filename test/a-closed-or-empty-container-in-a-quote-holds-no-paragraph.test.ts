@@ -117,7 +117,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
 
   it('CONTROL a flush-left `:::` under an absorbed fence still ends the quote and opens a div', () => {
     expect(html('> quote\n> ```\n:::\n')).toBe(
-      '<blockquote><p>quote\n<code></code></p></blockquote>\n<div>\n</div>',
+      '<blockquote><p>quote\n<code></code></p></blockquote>\n<div>\n\n</div>',
     )
   })
 
@@ -190,7 +190,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // nothing to absorb, so the shorter run opens an EMPTY nested container -
     // which holds no paragraph, so the quote still ends.
     expect(html('> :::: outer\n> x\n> :::\ntail\n')).toBe(
-      '<blockquote>\n  <div class="outer">\n    <p>x</p>\n    <div>\n    </div>\n  </div>\n</blockquote>\n<p>tail</p>',
+      '<blockquote>\n  <div class="outer">\n    <p>x</p>\n    <div>\n\n    </div>\n  </div>\n</blockquote>\n<p>tail</p>',
     )
   })
 

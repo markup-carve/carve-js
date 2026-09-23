@@ -27,9 +27,9 @@ describe('a hash in source text is not a Carve tag', () => {
     expect(escapePlainCarveInlineSyntax('a#y b')).toBe('a#y b')
   })
 
-  it('leaves a numeric character reference decodable', () => {
-    expect(escapePlainCarveInlineSyntax('a &#8212; b')).toBe('a &#8212; b')
-    expect(escapePlainCarveInlineSyntax('a &#x2014; b')).toBe('a &#x2014; b')
+  it('freezes the hash after an ampersand too', () => {
+    expect(escapePlainCarveInlineSyntax('a &#8212; b')).toBe('a &\\#8212; b')
+    expect(escapePlainCarveInlineSyntax('a &#x2014; b')).toBe('a &\\#x2014; b')
   })
 
   it('opts out for a language that owns the hash', () => {

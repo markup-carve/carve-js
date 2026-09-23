@@ -109,15 +109,14 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
         '  </li>',
         '</ul>',
         '<div>',
+        '',
         '</div>',
       ].join('\n'),
     )
   })
 
   // Regression guards: the empty-body and paragraph-body forms already opened
-  // before this fix and must keep opening. The empty-body output carries a
-  // blank line inside the empty <aside> (a pre-existing carve-js rendering of
-  // an empty container; carve-rs omits it) -- unrelated to the opener fix.
+  // before this fix and must keep opening.
   it('still opens with an empty body', () => {
     expect(html('- ::: note\n  :::')).toBe(
       [

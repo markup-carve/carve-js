@@ -309,7 +309,7 @@ export function escapePlainCarveInlineSyntax(
   }
 
   if (!bareHandled.includes('#')) {
-    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9&])(?<!(?<!\\)\{)#(?=[A-Za-z0-9-])/g, out)
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9])(?<!(?<!\\)\{)#(?=[A-Za-z0-9-])/g, out)
   }
 
   if (!bareHandled.includes('@')) {

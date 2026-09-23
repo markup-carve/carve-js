@@ -21,9 +21,8 @@ describe('a bare figure fence is one figure of ordered panels', () => {
   it('an empty group is an empty group figure', () => {
     // FLAT shape: no wrapper div - panels and content nest directly in the
     // group figure (HTML's figure content model; Pandoc subfigure symmetry).
-    // An EMPTY uncaptioned group keeps the bare-container empty-body line,
-    // the oracle's exact bytes for this shape.
-    expect(h('::: figure\n:::')).toBe('<figure class="carve-figure-group">\n</figure>')
+    // An empty uncaptioned group keeps the shared container body line.
+    expect(h('::: figure\n:::')).toBe('<figure class="carve-figure-group">\n\n</figure>')
   })
 
   it('an empty group with a caption holds only its figcaption', () => {

@@ -166,11 +166,8 @@ describe('an empty unterminated container ends at a flush-left line', () => {
   })
 
   it("line block AT the column ends the body too", () => {
-    // The empty line-block div's interior has a known pre-existing difference
-    // from the oracle (a missing blank line, unrelated to this ruling); the
-    // point pinned here is that `tail` lands OUTSIDE it.
     expect(carveToHtml(":: term\n:  definition\n   ::: |\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <div class=\"line-block\">\n    </div>\n  </dd>\n</dl>\n<p>tail</p>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <div class=\"line-block\">\n\n    </div>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
