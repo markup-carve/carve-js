@@ -1072,7 +1072,7 @@ export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 3 + 32
  * honest payload does, so twice the node cap clears anything the encoder emits,
  * and the constant keeps this off the boundary.
  */
-export const MAX_AST_JSON_WALK = MAX_AST_JSON_DEPTH * 2 + 32
+const MAX_AST_JSON_WALK = MAX_AST_JSON_DEPTH * 2 + 32
 
 /** The child-bearing fields, `target` included, each named exactly once. */
 const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, 'target'])]

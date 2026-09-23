@@ -1050,7 +1050,7 @@ function renderAttrs(raw?: Attrs, tag?: string): string {
  * `var`, `cite` and `dfn` are the SemanticSpan extension's (PART 9 §10) and
  * reach this renderer through {@link RenderOptions.semanticSpanNames}.
  */
-export const CORE_SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'kbd'] as const
+const CORE_SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'kbd'] as const
 
 /** The extension's full order, for the four names it adds. */
 export const EXTENDED_SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
@@ -1063,7 +1063,7 @@ const SEMANTIC_VALUE_ATTRIBUTE: Record<string, string | undefined> = {
 }
 
 /** Render PART 9 §9 semantic attributes on an ordinary span. */
-export function renderSemanticSpanWith(
+function renderSemanticSpanWith(
   node: Span,
   opts: RenderOptions,
   order: readonly string[],

@@ -4027,7 +4027,7 @@ export function isContainerKind(text: string): boolean {
  * `_` is legal in an id, a class and a key, and refused here, because `{_x_}`
  * is a forced underline (markup-carve/carve#1450).
  */
-export function isBooleanAttrName(text: string): boolean {
+function isBooleanAttrName(text: string): boolean {
   return /^[A-Za-z][\w-]*$/.test(text)
 }
 

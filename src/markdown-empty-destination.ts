@@ -32,12 +32,12 @@ const LABEL = String.raw`((?:${BRACKET_0}|${BRACKET_3})*)`
 
 const TITLE = String.raw`("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\((?:[^()\\\n]|\\.)*\))`
 
-export function normalizeReferenceLabel(label: string): string {
+function normalizeReferenceLabel(label: string): string {
   return label.trim().replace(/\s+/gu, ' ').toUpperCase().toLowerCase()
 }
 
 /** A title's text: backslash escapes and character references decoded, placeholders read back. */
-export function decodeLinkTitle(title: string, decodeEntity: (entity: string) => string, placeholders: readonly string[] = []): string {
+function decodeLinkTitle(title: string, decodeEntity: (entity: string) => string, placeholders: readonly string[] = []): string {
   return title.replace(
     new RegExp(String.raw`\x00P(\d+)\x00|\\([!-\/:-@\[-\x60{-~])|${RE_ENTITY.source}`, 'g'),
     (match, index: string | undefined, escaped: string | undefined) => {
