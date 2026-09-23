@@ -144,6 +144,7 @@ describe('a Markdown import writes the spelling carve fmt writes (#1921)', () =>
     ['separates a list whose delimiter changes', md('1. x', '2) y'), md('1. x', '', '2) y')],
     ['keeps a `+` list apart from a `-` list above it', md('- x', '+ y'), md('- x', '', '* y')],
     ['keeps a `-` list apart from a `+` list above it', md('+ x', '- y'), md('- x', '', '* y')],
+    ['keeps the flipped bullet for the rest of its list', md('- x', '+ y', '+ z'), md('- x', '', '* y', '* z')],
     ['keeps nested lists apart by bullet', md('- a', '  - x', '  + y'), md('- a', '  - x', '  * y')],
     ['separates quoted lists whose bullet changes', md('> * x', '> - y'), md('> * x', '>', '> - y')],
     ['writes a quoted `+` bullet as a bullet', md('> - x', '> + y'), md('> - x', '>', '> * y')],

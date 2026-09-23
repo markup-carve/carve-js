@@ -1419,7 +1419,7 @@ class ListMarkers {
     let bullet = ''
     let next = 0
     if (m[2] !== undefined) {
-      bullet = m[2] === '+' ? '-' : m[2]
+      bullet = same ? prev.bullet : m[2] === '+' ? '-' : m[2]
       if (!same && prev?.bullet === bullet) bullet = bullet === '-' ? '*' : '-'
       marker = bullet
     } else {
