@@ -263,6 +263,8 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     ['re-indents a quoted lazy line after an item line', md('> 1. a', '>    b', '> c'), md('> 1. a', '>    b', '>    c')],
     ['writes the quote marker on a lazy line', md('> a', 'lazy'), md('> a', '> lazy')],
     ['writes every quote marker on a lazy line', md('> > a', 'lazy'), md('> > a', '> > lazy')],
+    ['keeps a quoted ordered marker that cannot interrupt as text', md('> a', '> 2. a', '> a'), md('> a', '> 2. a', '> a')],
+    ['opens a list after a quote on an unquoted marker', md('> a', '9. b', 'x'), md('> a', '', '9. b', '   x')],
     ['writes the quote marker and item indent on a lazy line', md('> - a', 'lazy'), md('> - a', '>   lazy')],
     ['continues the list after a lazy line', md('1. a', 'lazy', '2. b'), md('1. a', '   lazy', '2. b')],
     ['separates another list after a lazy line', md('- a', 'lazy', '1. b'), md('- a', '  lazy', '', '1. b')],

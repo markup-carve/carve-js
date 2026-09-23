@@ -1475,6 +1475,11 @@ class ListMarkers {
     return undefined
   }
 
+  /** Whether a list of `kind` (bullet or delimiter) is open with its markers at `col`. */
+  continues(col: number, kind: string): boolean {
+    return this.open.some((list) => list.col === col && list.kind === kind)
+  }
+
   /** Whether a list is open with its markers at `col`. */
   hasListAt(col: number): boolean {
     return this.open.some((list) => list.col === col)
@@ -1865,12 +1870,19 @@ function collectBlockquoteInlineRun(
     let parsed = blockquotePrefix(strip(lines[end]!))
     // A line with no marker lazily continues the quote's open paragraph
     // (CommonMark 5.1), unless it would start a block of its own. fmt writes it
-    // with the quote's marker; an ordered marker keeps its bare line, where it
-    // cannot interrupt the paragraph.
-    if (!parsed && run.length > 0 && fence === null && quoteParagraphIsOpen(run.at(-1)!.text) && isParagraphRunLine(lines, end, 'text')) {
+    // with the quote's marker.
+    // A list marker there opens a list outside the quote, whatever its number.
+    if (
+      !parsed &&
+      run.length > 0 &&
+      fence === null &&
+      quoteParagraphIsOpen(run.at(-1)!.text) &&
+      !RE_LIST_MARKER.test(lines[end]!) &&
+      isParagraphRunLine(lines, end, 'text')
+    ) {
       const text = strip(lines[end]!)
       lazyPrefix ??= lazyQuotePrefix(run)
-      run.push({ prefix: /^\s*\d+[.)]/.test(text) ? '' : lazyPrefix, text })
+      run.push({ prefix: lazyPrefix, text })
       end++
       continue
     }
@@ -2039,10 +2051,22 @@ function respellQuotedBlocks(
     }
     let list = markers.get(part.prefix)
     if (list === undefined) markers.set(part.prefix, (list = new ListMarkers()))
-    const written = list.write(part.text)
     const markerCol = indentColumns(part.text)
+    // An ordered marker other than 1 cannot interrupt a paragraph, so under
+    // one it is paragraph text, unless it continues a list open at its column
+    // or sits left of the item holding the paragraph, where it opens a list.
+    const ordered = /^[ \t]*(\d+)([.)])[ \t]/.exec(part.text)
+    const holder = list.itemAt(Infinity)
+    const asText =
+      ordered !== null &&
+      (holder === undefined || markerCol >= holder.content) &&
+      Number(ordered[1]) !== 1 &&
+      prev?.prefix === part.prefix &&
+      opensParagraph(prev.text.replace(RE_LIST_MARKER, '')) &&
+      !list.continues(markerCol, ordered[2]!)
+    const written = asText ? { line: part.text, separate: false, outer: 0 } : list.write(part.text)
     let text = moveIndent(written.line, markerCol, markerCol + written.outer)
-    if (!RE_LIST_MARKER.test(part.text)) {
+    if (asText || !RE_LIST_MARKER.test(part.text)) {
       // A quote run holds no blank line, so an unmarked paragraph line under an
       // item is its lazy continuation, written at the item's content column;
       // only a line opening another block ends the item.
@@ -2052,7 +2076,7 @@ function respellQuotedBlocks(
         markerCol < open.content &&
         prev?.prefix === part.prefix &&
         opensParagraph(prev.text.replace(RE_LIST_MARKER, '')) &&
-        opensParagraph(part.text)
+        (asText || opensParagraph(part.text))
       if (lazy) text = ' '.repeat(open.content + open.shift) + part.text.trimStart()
       else {
         if (!quoteParagraphIsOpen(part.text)) list.end(markerCol)
