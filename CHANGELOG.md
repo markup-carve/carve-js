@@ -16,6 +16,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **AST ingest refuses two shapes it used to accept, and accepts one it used to refuse** (#1960). A bare `table_row` at the document root is refused, where the schema admits only the block kinds a document holds; a `footnote_ref` with no target is refused, since `id` is required; and a `citation` with no `pos` is accepted, positions being optional there. The schema is regenerated from the spec rather than hand-written, so all three follow from the pin moving past markup-carve/carve#2197. `NODE_POSITION_KIND` is byte-identical, so `figure.target` remains the only singular node position.
 - `renderCarve` throws `SourceUnspellableError` for an empty emphasis-family mark (#1879; markup-carve/carve-php#2207) instead of writing an empty brace pair, which reads back as literal text or, for `{--}`, as the braced en dash. A mark whose content starts or ends in a space, tab, CR or LF takes the braced form, and the HTML importer drops an empty mark without a report row.
 - Twelve runtime symbols that never left their declaring module lost their `export` (#1916). `package.json` has no wildcard in its exports map, so `.`, `./node` and `./prettier` are the whole reachable surface and none of the twelve appeared in any of them. The keyword also switched off `noUnusedLocals` for each, so a symbol that lost its last caller would have sat there looking deliberate.
 
