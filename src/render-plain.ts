@@ -253,7 +253,7 @@ function renderTable(node: Table, ctx: PlainContext): string {
     for (let i = 0; i < cols; i++) {
       cells.push(i < row.cells.length ? trimNonNbsp(row.cells[i]!.blocks === undefined
         ? renderInlines(row.cells[i]!.children ?? [], ctx)
-        : renderBlocks(row.cells[i]!.blocks!, ctx)).replace(/\s*\n\s*/g, ' ') : '')
+        : renderBlocks(row.cells[i]!.blocks!, ctx)).replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ') : '')
     }
     // Drop only SYNTHETIC trailing padding (columns this row does not have, so
     // a short/rowspan row stays ragged: `A`, not `A | `), but KEEP a genuine

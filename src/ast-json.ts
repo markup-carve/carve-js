@@ -432,8 +432,17 @@ function pushIngestChildBlocks(block: BlockNode, worklist: BlockNode[][]): void 
     case 'block_quote':
     case 'admonition':
     case 'div':
+    case 'section':
     case 'figure_group':
       worklist.push(block.children)
+      break
+    case 'table':
+      for (const row of block.rows) for (const cell of row.cells) {
+        if (cell.blocks !== undefined) worklist.push(cell.blocks)
+      }
+      break
+    case 'figure':
+      pushIngestChildBlocks(block.target, worklist)
       break
     case 'list':
       for (const item of block.items) worklist.push(item.children)
@@ -1371,6 +1380,36 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   const footnoteDefPos: Record<string, Position> = {}
   let frontmatter: Document['frontmatter']
 
+  // Walk nested block lists in document order. The first footnote definition
+  // for a label wins, whether it appears at the root or in a container.
+  const liftNested = (startLists: BlockNode[][]): void => {
+    const frames = startLists.slice().reverse().map((blocks) => ({ blocks, index: 0 }))
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1]!
+      if (frame.index >= frame.blocks.length) {
+        frames.pop()
+        continue
+      }
+      const block = frame.blocks[frame.index]!
+      if ((block as { type: string }).type === 'footnote') {
+        const node = block as unknown as FootnoteDefNode & { id?: string }
+        const label = typeof node.label === 'string' ? node.label : node.id
+        frame.blocks.splice(frame.index, 1)
+        if (typeof label === 'string' && Array.isArray(node.children) && ownValue(footnoteDefs, label) === undefined) {
+          const body = definitionListsFromWire(node.children)
+          setOwn(footnoteDefs, label, body)
+          if (node.pos !== undefined) setOwn(footnoteDefPos, label, node.pos)
+          frames.push({ blocks: body, index: 0 })
+        }
+        continue
+      }
+      frame.index++
+      const nested: BlockNode[][] = []
+      pushIngestChildBlocks(block, nested)
+      for (let index = nested.length - 1; index >= 0; index--) frames.push({ blocks: nested[index]!, index: 0 })
+    }
+  }
+
   // The guard stays, and it can no longer fire: §12(d) refuses a root whose
   // `children` is not an array before the walk reaches here (carve#881). It
   // used to read an empty document out of one, which is §12's own objection -
@@ -1406,8 +1445,10 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
         // because plain assignment there runs the prototype setter
         // (markup-carve/carve-js#886).
         if (ownValue(footnoteDefs, label) === undefined) {
-          setOwn(footnoteDefs, label, definitionListsFromWire(node.children))
+          const body = definitionListsFromWire(node.children)
+          setOwn(footnoteDefs, label, body)
           if (node.pos !== undefined) setOwn(footnoteDefPos, label, node.pos)
+          liftNested([body])
         }
         continue
       }
@@ -1418,7 +1459,11 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
       // a missing definition already means.
       continue
     }
-    children.push(definitionListsFromWire(child) as BlockNode)
+    const block = definitionListsFromWire(child) as BlockNode
+    children.push(block)
+    const nested: BlockNode[][] = []
+    pushIngestChildBlocks(block, nested)
+    liftNested(nested)
   }
 
   const doc: Document = { type: 'document', children }
