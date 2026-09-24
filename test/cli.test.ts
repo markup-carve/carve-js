@@ -207,6 +207,16 @@ describe('carve migrate — HTML import', () => {
     expect(JSON.parse(t.files['report.json']!)).toMatchObject({ mode: 'safe', diagnostics: [{ code: 'attribute-dropped' }] })
   })
 
+  it('fails the loss check for a destination with a denied scheme', async () => {
+    const t = makeIO({ stdin: '<p><a href="javascript:alert(1)">t</a></p>' })
+    const code = await run(['migrate', '--from', 'html', '--report', 'report.json', '--check-loss'], t.io)
+    expect(code).toBe(1)
+    expect(t.out).toBe('t\n')
+    expect(JSON.parse(t.files['report.json']!).diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped href with a denied URL scheme on <a>' }),
+    ])
+  })
+
   it('fails the loss check and reports an unspellable table figure wrapper', async () => {
     const html = '<figure><table><tr><td>1</td></tr></table><figcaption>Cap</figcaption></figure>'
     const t = makeIO({ stdin: html })
