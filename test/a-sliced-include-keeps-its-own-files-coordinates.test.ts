@@ -68,7 +68,16 @@ describe('a @lines slice reports the coordinates of the file it was cut from', (
     expect(control).toEqual([
       expect.objectContaining({ rule: 'include-unresolved', line: 9, column: 1, start: 20, end: 37, file: 'padded.crv' }),
     ])
-    expect(expand('{{ padded.crv @lines:9-9 }}\n', files).warnings).toEqual(control)
+    // `includedBy` is the one field that legitimately differs between the two:
+    // it bounds the directive the ROOT wrote, and the sliced root wrote a
+    // longer one. Everything measured in the child has to agree.
+    const sliced = expand('{{ padded.crv @lines:9-9 }}\n', files).warnings
+    const withoutReach = (warnings: typeof control) =>
+      warnings.map(({ includedBy: _reach, ...rest }) => rest)
+    expect(withoutReach(sliced)).toEqual(withoutReach(control))
+    expect(sliced[0]!.includedBy).toEqual([
+      { line: 1, column: 1, start: 0, end: 27, file: 'root.crv' },
+    ])
   })
 
   it('a sliced grandchild carries its own base and not the one above it', () => {
