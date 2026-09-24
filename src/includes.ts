@@ -25,6 +25,33 @@ import {
   type Directive,
 } from './include-directive.js'
 
+/**
+ * One include directive, located in the file that wrote it.
+ *
+ * Deliberately the same four locating fields {@link IncludeWarning} carries,
+ * plus the file they are measured in, so a host maps a site with the code it
+ * already has for a warning. Nothing about the directive's TEXT is stored:
+ * `start`/`end` bound the token itself in codepoints, so
+ * `[...source].slice(start, end).join('')` is the token as written, and a host
+ * that wants it parsed has {@link findDirectiveSites} for that file.
+ */
+export interface IncludeSite {
+  /** 1-based line number when source positions are available. */
+  line: number
+  /** 1-based column number when source positions are available. */
+  column: number
+  /** 0-based start offset of the directive token, inclusive. */
+  start: number
+  /** 0-based end offset of the directive token, exclusive. */
+  end: number
+  /**
+   * Identity of the file the directive is written in, on the same terms as
+   * {@link IncludeWarning.file}. Absent for a directive in the top-level
+   * document when the caller supplied no `sourcePath`.
+   */
+  file?: string
+}
+
 /** Warning emitted by {@link expandIncludes}. */
 export interface IncludeWarning {
   /** 1-based line number when source positions are available. */
@@ -60,6 +87,27 @@ export interface IncludeWarning {
    * `sourcePath` - there is no identity to report, and none is invented.
    */
   file?: string
+  /**
+   * How {@link file} was REACHED: the directives that pulled the chain in,
+   * root first, each located in the file that wrote it. The first entry is
+   * therefore always a directive in the top-level document, and the last one
+   * is the directive that pulled in `file` itself.
+   *
+   * Absent - never empty - for a warning raised in the top-level document,
+   * including one about a directive there that failed to resolve: such a
+   * warning is attributed to the document that wrote the directive, and
+   * `line` / `column` / `start` / `end` already name a position in it. Present
+   * on every warning attributed to a child, so `includedBy === undefined` and
+   * "the warning is in the root" are the same question.
+   *
+   * This is what `file` alone cannot answer, and what an editor needs: a
+   * warning raised in a child names offsets in the CHILD, and the only range
+   * valid in the document a client has open is `includedBy[0]`. Reconstructing
+   * it from resolver calls is exact only while every target is written once
+   * and reached once - the engine expands a repeated target once per
+   * occurrence, and the occurrences are distinguishable here and nowhere else.
+   */
+  includedBy?: IncludeSite[]
 }
 
 export interface IncludeContext {
@@ -236,6 +284,14 @@ interface State {
    * a key so `exactOptionalPropertyTypes` keeps the "unknown" case explicit.
    */
   file: string | undefined
+  /**
+   * Directives entered but not yet left, root first - the value
+   * {@link IncludeWarning.includedBy} reports. Parallel to `file` rather than
+   * to `stack`: it moves when the file being expanded moves, so a warning
+   * raised before a child is entered describes the reach of the file that
+   * wrote the directive, not of the target it names.
+   */
+  sites: IncludeSite[]
   docs: Document[]
   usedHeadingIds: Set<string>
   /** Include targets in first-encounter order; value is the resolved flag. */
@@ -278,6 +334,8 @@ function warn(
   file: string | undefined = state.file,
   /** Raw underlying error text; never folded into `message` (spec I7). */
   detail?: string,
+  /** Overrides the reported reach, for the same reason `file` is overridden. */
+  sites: IncludeSite[] = state.sites,
 ): void {
   // A rule not yet represented is always kept, so a capped report still shows
   // every distinct failure class; only repeats of a class already shown are
@@ -289,6 +347,9 @@ function warn(
   const warning: IncludeWarning = { ...locate(node ?? {}), rule, message }
   if (file !== undefined) warning.file = file
   if (detail !== undefined) warning.detail = detail
+  // Snapshotted: `state.sites` is mutated as the walk enters and leaves
+  // children, and a warning holds the reach it was raised under.
+  if (sites.length > 0) warning.includedBy = [...sites]
   state.seenRules.add(rule)
   state.warnings.push(warning)
 }
@@ -367,6 +428,12 @@ function runAnchor(run: RunNode[], offset: number): Text {
     cursor = end
   }
   return run.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: '' } as Text)
+}
+
+/** Locate a directive in the file currently being expanded. */
+function siteOf(run: RunNode[], from: number, to: number, state: State): IncludeSite {
+  const span = siteSpan(run, from, to)
+  return state.file === undefined ? span : { ...span, file: state.file }
 }
 
 function childContext(state: State): IncludeContext {
@@ -630,11 +697,12 @@ function includeChild<T>(
   d: Directive,
   state: State,
   node: Text,
-  merge: (child: Document, file: string) => T | null,
+  site: IncludeSite,
+  merge: (child: Document, file: string, reach: IncludeSite[]) => T | null,
 ): T | null {
   const snap = beginReservations(state)
-  const expanded = expandChild(d, state, node)
-  const merged = expanded === null ? null : merge(expanded.doc, expanded.file)
+  const expanded = expandChild(d, state, node, site)
+  const merged = expanded === null ? null : merge(expanded.doc, expanded.file, expanded.reach)
   if (merged === null) rollbackReservations(state, snap)
   return merged
 }
@@ -663,7 +731,8 @@ function expandChild(
   d: Directive,
   state: State,
   node: Text,
-): { doc: Document; file: string } | null {
+  site: IncludeSite,
+): { doc: Document; file: string; reach: IncludeSite[] } | null {
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
   const child = parseChild(resolved.source, state)
@@ -689,6 +758,10 @@ function expandChild(
   // it raises name the child rather than the document that included it.
   const outerFile = state.file
   state.file = resolved.id
+  // Entered together with `file`, so every warning from here on reports the
+  // child as its file and this directive as the last hop that reached it.
+  state.sites.push(site)
+  const reach = [...state.sites]
   renameChildHeadingIds(child, state)
   const auto = d.shift === 'auto'
   const stated = auto ? 0 : (d.shift as number)
@@ -723,7 +796,8 @@ function expandChild(
   shiftBlocks(child.children, auto ? autoShift(child, state) : stated, state)
   stampSourceFile(child, resolved.id)
   state.file = outerFile
-  return { doc: child, file: resolved.id }
+  state.sites.pop()
+  return { doc: child, file: resolved.id, reach }
 }
 
 /**
@@ -917,13 +991,14 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
     )
     if (!d) continue
     let blockInInline = false
-    const replacement = includeChild(d, state, anchor, (child, file) => {
+    const site = siteOf(run, m.index, m.index + raw.length, state)
+    const replacement = includeChild(d, state, anchor, site, (child, file, reach) => {
       if (child.children.length > 1 || (child.children.length === 1 && child.children[0]!.type !== 'paragraph')) {
         blockInInline = true
         return null
       }
       const inlines = child.children.length === 1 ? (child.children[0] as Paragraph).children : []
-      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file)
+      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
       return inlines
     })
     if (blockInInline) {
@@ -1066,11 +1141,18 @@ function renameInBlocks(blocks: BlockNode[], footnotes: Map<string, string>, hea
 }
 
 /**
- * `childFile` is the child's identity: the renamed label is the child's own,
- * and the merge runs after expansion has already restored the parent as the
- * current file, so attribution is passed in explicitly.
+ * `childFile` and `reach` are the child's: the renamed label is the child's
+ * own, and the merge runs after expansion has already restored the parent as
+ * the current file and left the child's directive, so both are passed in
+ * explicitly rather than read off the walk.
  */
-function mergeFootnotes(target: Document, child: Document, state: State, childFile: string): void {
+function mergeFootnotes(
+  target: Document,
+  child: Document,
+  state: State,
+  childFile: string,
+  reach: IncludeSite[],
+): void {
   if (!child.footnoteDefs) return
   target.footnoteDefs = target.footnoteDefs ?? {}
   const rename = new Map<string, string>()
@@ -1081,7 +1163,15 @@ function mergeFootnotes(target: Document, child: Document, state: State, childFi
     const finalLabel = taken ? nextFree(label, new Set(Object.keys(target.footnoteDefs))) : label
     if (finalLabel !== label) {
       rename.set(label, finalLabel)
-      warn(state, 'include-footnote-rename', `Footnote label "${label}" was renamed to "${finalLabel}".`, undefined, childFile)
+      warn(
+        state,
+        'include-footnote-rename',
+        `Footnote label "${label}" was renamed to "${finalLabel}".`,
+        undefined,
+        childFile,
+        undefined,
+        reach,
+      )
     }
     target.footnoteDefs[finalLabel] = child.footnoteDefs[label]!
   }
@@ -1096,8 +1186,9 @@ function expandParagraph(block: Paragraph, state: State): BlockNode[] {
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, text),
     )
     if (d) {
-      const merged = includeChild(d, state, text, (child, file) => {
-        mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file)
+      const site = siteOf(block.children as RunNode[], 0, source.length, state)
+      const merged = includeChild(d, state, text, site, (child, file, reach) => {
+        mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
         return child.children
       })
       // Degrade to literal: the original inline nodes render exactly as the
@@ -1229,6 +1320,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     stack: options.sourcePath ? [options.sourcePath] : [],
     depth: 0,
     file: options.sourcePath,
+    sites: [],
     docs: [doc],
     usedHeadingIds: new Set(),
     dependencies: new Map(),

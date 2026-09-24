@@ -259,6 +259,7 @@ export {
   type IncludeDependency,
   type IncludeOptions,
   type IncludeResult,
+  type IncludeSite,
   type IncludeWarning,
   type IncludeResolver,
   type IncludeResolved,
