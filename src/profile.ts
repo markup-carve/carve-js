@@ -99,7 +99,6 @@ export const CANONICAL_INLINE_TYPES = [
   'inline_footnote',
   'span',
   'ruby',
-  'small_caps',
   'superscript',
   'subscript',
   'highlight',
