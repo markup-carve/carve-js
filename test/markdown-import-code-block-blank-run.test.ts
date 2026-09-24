@@ -26,4 +26,10 @@ describe('Markdown import keeps a code block\'s blank lines', () => {
     expect(markdownToCarve('a\n\n\n\nb\n')).toBe('a\n\nb\n')
     expect(markdownToCarve('```\na\n```\n\n\n\nb\n')).toBe('```\na\n```\n\nb\n')
   })
+
+  it('does not treat a leading inline code span as a fence opener', () => {
+    const imported = markdownToCarve('```a``` x\n\n```\na\n\n\nb\n```\n\n\n\nc\n')
+    expect(carveToHtml(imported)).toContain('<code>a\n\n\nb\n</code>')
+    expect(imported).not.toContain('```\n\n\n\nc')
+  })
 })
