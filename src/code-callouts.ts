@@ -51,6 +51,7 @@ function descend(b: BlockNode, calloutLists: WeakSet<BlockNode>): void {
   const anyB = b as {
     children?: BlockNode[]
     items?: { children?: BlockNode[]; definitions?: BlockNode[][] }[]
+    rows?: { cells?: { blocks?: BlockNode[] }[] }[]
   }
   if (Array.isArray(anyB.children)) bindBlocks(anyB.children, calloutLists)
   if (Array.isArray(anyB.items))
@@ -59,6 +60,11 @@ function descend(b: BlockNode, calloutLists: WeakSet<BlockNode>): void {
       if (Array.isArray(it.definitions))
         for (const def of it.definitions) bindBlocks(def, calloutLists) // definition-list
     }
+  if (Array.isArray(anyB.rows))
+    for (const row of anyB.rows) for (const cell of row.cells ?? []) {
+      if (Array.isArray(cell.blocks)) bindBlocks(cell.blocks, calloutLists)
+    }
+  if (b.type === 'figure') descend(b.target, calloutLists)
 }
 
 function hasMarkers(content: string): boolean {

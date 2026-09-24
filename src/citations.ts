@@ -191,6 +191,7 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
       citeIds.clear()
       refIds.clear()
       idsReserved = false
+      for (const body of Object.values(doc.footnoteDefs ?? {})) collectDefs(body, defs)
       collectDefs(doc.children, defs)
       // Seed the CSL-JSON pool: in-document defs win on collision (§6.2).
       for (const e of pool) {
@@ -489,14 +490,45 @@ function repositionParagraph(paragraph: Paragraph): void {
 
 /** Populate `defs` from the definition nodes the parse-stage pass built. */
 function collectDefs(blocks: readonly BlockNode[], defs: Map<string, Def>): void {
-  for (const block of blocks) {
-    if (block.type !== 'citation_definition') continue
-    const value: Def = { entry: block.children }
-    const kv = block.attrs?.keyValues
-    if (kv?.author !== undefined) value.author = kv.author
-    if (kv?.year !== undefined) value.year = kv.year
-    // Last definition of a duplicate key wins, as it always has.
-    defs.set(block.key, value)
+  const pending = [...blocks].reverse()
+  while (pending.length > 0) {
+    const block = pending.pop()!
+    if (block.type === 'citation_definition') {
+      const value: Def = { entry: block.children }
+      const kv = block.attrs?.keyValues
+      if (kv?.author !== undefined) value.author = kv.author
+      if (kv?.year !== undefined) value.year = kv.year
+      // Last definition of a duplicate key wins, as it always has.
+      defs.set(block.key, value)
+    }
+    const nested: (readonly BlockNode[])[] = []
+    switch (block.type) {
+      case 'block_quote':
+      case 'admonition':
+      case 'div':
+      case 'section':
+      case 'figure_group':
+        nested.push(block.children)
+        break
+      case 'table':
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks !== undefined) nested.push(cell.blocks)
+        }
+        break
+      case 'figure':
+        nested.push([block.target])
+        break
+      case 'list':
+        for (const item of block.items) nested.push(item.children)
+        break
+      case 'definition_list':
+        for (const item of block.items) for (const body of item.definitions) nested.push(body)
+        break
+    }
+    for (let index = nested.length - 1; index >= 0; index--) {
+      const children = nested[index]!
+      for (let child = children.length - 1; child >= 0; child--) pending.push(children[child]!)
+    }
   }
 }
 
@@ -777,6 +809,7 @@ function hasClass(b: BlockNode, cls: string): boolean {
  *  citation-groups, so this yields correct first-citation order. */
 function walkCitationGroups(node: unknown, fn: (g: CitationGroup) => void): void {
   if (!node || typeof node !== 'object') return
+  if ((node as { type?: string }).type === 'citation_definition') return
   if ((node as { type?: string }).type === 'citation_group') {
     fn(node as CitationGroup)
     return
