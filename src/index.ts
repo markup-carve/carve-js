@@ -125,6 +125,20 @@ export {
   type FrontmatterNode,
   type FootnoteDefNode,
 } from './ast-json.js'
+export {
+  toAstEnvelope,
+  fromAstEnvelope,
+  AST_CONTRACT_VERSION,
+  CORE_AST_VOCABULARY,
+  AstEnvelopeShapeError,
+  AstEnvelopeVersionError,
+  AstEnvelopeExtensionError,
+  AstEnvelopeVocabularyError,
+  type AstEnvelope,
+  type AstEnvelopeExtension,
+  type ToAstEnvelopeOptions,
+  type FromAstEnvelopeOptions,
+} from './ast-envelope.js'
 export { RenderDepthError, MAX_RENDER_DEPTH } from './render-depth.js'
 export {
   RenderLossError,
