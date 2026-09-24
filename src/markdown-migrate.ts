@@ -15,7 +15,7 @@ import {
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
 import { isTableRow, parse } from './parse.js'
-import { escapeSpanMarkerPayload, padCell } from './render-carve.js'
+import { escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -3052,6 +3052,9 @@ function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | nu
     const block: string[] = []
     for (let i = start; i < lines.length; i++) {
       const line = lines[i]!
+      // `split('\n')` leaves one empty sentinel after a final newline. It is
+      // not an additional blank line inside an unclosed HTML block.
+      if (i === lines.length - 1 && line === '') break
       if (i > start && fallbackBlank && line.trim() === '') {
         return { lines: block, end: i - 1, interrupts }
       }
@@ -3495,10 +3498,21 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
 function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { text: string; sourceBlanks: Set<number> } {
   const lines: string[] = []
   const flags: boolean[] = []
+  const raw: boolean[] = []
+  let fence: { marker: string; length: number; raw: boolean } | null = null
   for (const [idx, entry] of out.entries()) {
     for (const line of entry.split('\n')) {
+      const body = line.replace(/^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+))*[ \t]*/, '')
+      const run = /^(`{3,}|~{3,})(.*)$/.exec(body)
+      const closer = fence !== null && run !== null && run[1]![0] === fence.marker &&
+        run[1]!.length >= fence.length && run[2]!.trim() === ''
       lines.push(line)
       flags.push(fromSource[idx]! && /^[ \t>]*$/.test(line))
+      raw.push(fence?.raw === true && !closer)
+      if (closer) fence = null
+      else if (fence === null && run !== null) {
+        fence = { marker: run[1]![0]!, length: run[1]!.length, raw: run[2]!.trim() === '=html' }
+      }
     }
   }
   const text: string[] = []
@@ -3515,7 +3529,9 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
     // A run of empty lines is that many newlines, one more between two lines,
     // and a run of 3+ newlines keeps 2.
     const newlines = end - at + (at > 0 && end < lines.length ? 1 : 0)
-    const keep = newlines < 3 ? end - at : at > 0 && end < lines.length ? 1 : 2
+    const keep = raw.slice(at, end).some(Boolean)
+      ? end - at
+      : newlines < 3 ? end - at : at > 0 && end < lines.length ? 1 : 2
     for (let k = 0; k < keep; k++) {
       if (flagged) sourceBlanks.add(text.length)
       text.push('')
@@ -3652,6 +3668,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
   const out: string[] = []
+  let terminalHtmlBlock = false
   // Where `out` holds a blank line of the source, as opposed to one the
   // conversion put in to separate two blocks.
   const sourceBlanks = new Set<number>()
@@ -4077,6 +4094,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         out.push(emitted === '' ? contained.prefix.trimEnd() : contained.prefix + emitted)
       }
       i = contained.end
+      if (markdown.endsWith('\n') && i >= lines.length - 2) terminalHtmlBlock = true
       prevType = contained.prefix.trimStart().startsWith('>') ? 'block_quote' : 'list'
       continue
     }
@@ -4140,7 +4158,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (prevType !== 'blank' && out.length > 0) out.push('')
       out.push(...rawBlockHtml(htmlBlock.lines))
       i = htmlBlock.end
-      if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
+      if (markdown.endsWith('\n') && i >= lines.length - 2) terminalHtmlBlock = true
+      if (i + 1 === lines.length - 1 && lines[i + 1] === '') {
+        out.push('')
+        i++
+      } else if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
       prevType = 'raw_block'
       continue
     }
@@ -4529,9 +4551,21 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (markdown.endsWith('\n')) out.push('')
   }
   const written = joinOutput(out, fromSource)
-  const body = dropTrailingEmptyQuoteLines(
+  let body = dropTrailingEmptyQuoteLines(
     blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
   ).replace(/\x00REFITEM\x00/g, '%%')
-  if (frontmatter.length === 0) return body
-  return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
+  if (terminalHtmlBlock && !body.endsWith('\n')) body += '\n'
+  const output = frontmatter.length === 0
+    ? body
+    : body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
+  // The writer collects footnote definitions at document end. Apply that
+  // ordering only when the parsed import actually defines a footnote.
+  if (/(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
+    const doc = parse(output)
+    if (Object.keys(doc.footnoteDefs ?? {}).length > 0) {
+      const ordered = renderCarve(doc)
+      return markdown.endsWith('\n') ? ordered : ordered.replace(/\n$/, '')
+    }
+  }
+  return output
 }
