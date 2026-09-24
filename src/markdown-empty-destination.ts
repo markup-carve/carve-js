@@ -261,8 +261,10 @@ export function extractReferenceDefinitions(
       if (!defined.has(key)) empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity))
       defined.add(key)
       canStart = true
-      // A quote keeps its line; an emptied list item is dropped, as Carve cannot spell one.
-      if (quotePrefix !== '') kept.push(quotePrefix)
+      // Keep the item as an empty comment line; the output pass restores the
+      // marker after inline conversion.
+      if (opensItem) kept.push(prefix.trimEnd() + ' \x00REFITEM\x00')
+      else if (quotePrefix !== '') kept.push(quotePrefix)
       else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && i + 1 < lines.length && lines[i + 1]!.trim() === '') i++
       continue
     }
