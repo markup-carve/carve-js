@@ -312,7 +312,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     [
       'writes a quoted fence at the quote column once a block left the item',
       md('> - a', '> # h', '>   ~~~', '>   x', '>   ~~~'),
-      md('> - a', '> # h', '>', '> ```', '> x', '> ```'),
+      md('> - a', '>', '> # h', '>', '> ```', '> x', '> ```'),
     ],
   ])('%s', (_label, source, expected) => {
     expect(markdownToCarve(source)).toBe(expected)

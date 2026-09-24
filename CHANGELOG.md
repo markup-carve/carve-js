@@ -7,15 +7,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
-
-- Empty divs, line blocks and figure groups use the same blank HTML body line as
-  admonitions and block quotes (CARVE-P10-001).
-
-### Fixed
-
-- The plain-text escaper freezes a hash after an ampersand, so numeric-reference text cannot become a Carve tag.
-
 ## [0.1.8] - 2026-09-25
 
 ### Added
@@ -27,6 +18,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `renderCarve` throws `SourceUnspellableError` for an empty emphasis-family mark (#1879; markup-carve/carve-php#2207) instead of writing an empty brace pair, which reads back as literal text or, for `{--}`, as the braced en dash. A mark whose content starts or ends in a space, tab, CR or LF takes the braced form, and the HTML importer drops an empty mark without a report row.
 - Twelve runtime symbols that never left their declaring module lost their `export` (#1916). `package.json` has no wildcard in its exports map, so `.`, `./node` and `./prettier` are the whole reachable surface and none of the twelve appeared in any of them. The keyword also switched off `noUnusedLocals` for each, so a symbol that lost its last caller would have sat there looking deliberate.
+- Empty divs, line blocks and figure groups use the same blank HTML body line as admonitions and block quotes (#1934), as CARVE-P10-001 requires.
 
 ### Fixed
 
@@ -61,7 +53,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A blank line inside a fenced code block in a nested list no longer loosens the outer list (#1938).
 - The Markdown importer escapes every hyphen of a `--` or `---` run in text so smart typography leaves it alone, treats only `1.` as an ordered marker that interrupts its item's paragraph, and measures continuation lines in columns so a tab-indented line four columns past its item continues the paragraph (#1937).
 - Every empty block container renders one blank HTML body line (#1934): empty divs, line blocks, local hard-break blocks and figure groups, matching the spec ruling in markup-carve/carve#2184. Div, line-block and figure-group framing is centralized, and the decision about whether a body is empty now counts rendered output.
+- The plain-text escaper freezes a hash after an ampersand (#1934), so numeric-reference text cannot become a Carve tag.
 - The Markdown importer keeps quoted item fences, lazy lines and item looseness (#1943). A list CommonMark reads loose is spelled loose the way `carve fmt` spells it, quoted marker padding collapses, a quoted lazy line four columns in continues the quote's paragraph and is escaped where it looks like an opener, and a fence in a quoted item closes where GFM closes it.
+- The Markdown importer measures a quoted line from the item that holds it (#1946, #1947). A quote an item opens drops its own slack instead of carrying it through as the sample's indentation; a block leaving a quoted item is set apart from it by fmt's empty `>` line; and indented code an item inside a quote holds is fenced at the item's column rather than beside the list, where the item's columns used to become the sample's own indentation.
 
 ## [0.1.7] - 2026-09-18
 
