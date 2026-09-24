@@ -2822,6 +2822,16 @@ function collectListInlineRun(
     const prefix = ' '.repeat(contentCol)
     const pad = ' '.repeat(Math.max(0, base - contentCol))
     const over = indent - base
+    // Indented code the item holds, four columns past the content column of
+    // the item that holds it, under a block leaving no paragraph for it to
+    // continue. Carve has no indented code block, so it is written as the
+    // item's fence; carried through, the code and its own delimiters read as
+    // prose (markup-carve/carve-js#1947, markup-carve/carve-js#1952).
+    if (end > start && over >= 4 && !continues && quote === null && !lazyText && !opensParagraph(above)) {
+      const code = collectIndentedCode(lines, end, base)
+      const written = restorePrefixedInlineRun(foldContainerSetext(run), dialect)
+      return { lines: [...written, ...code.lines], end: code.end, verbatimFrom: written.length }
+    }
     const trimmed = orderedText ? escapeBlockOpener(text.trimStart()) : text.trimStart()
     // A line of the quote the item holds sits at the QUOTE's content column
     // too, and Markdown's slack above it is the quote's, not the sample's. The
@@ -3240,10 +3250,15 @@ function writeItemRun(
  */
 function paddingIsFree(lines: readonly string[], start: number, end: number): boolean {
   const markerCol = indentColumns(lines[start]!)
+  const content = columnWidth(RE_LIST_MARKER.exec(lines[start]!)?.[0] ?? '')
   for (let at = end; at < lines.length; at++) {
     const line = lines[at]!
     if (line.trim() === '') continue
-    return RE_ITEM_LINE.test(line) && indentColumns(line) <= markerCol + 3
+    if (RE_ITEM_LINE.test(line)) return indentColumns(line) <= markerCol + 3
+    // A line AT the item's content column is the item's own next block, and
+    // `ListMarkers` moves it with the item, so the padding is free there too
+    // (markup-carve/carve-js#1952).
+    return content > 0 && indentColumns(line) === content
   }
   return true
 }
