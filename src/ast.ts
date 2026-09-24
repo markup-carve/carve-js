@@ -716,6 +716,8 @@ export interface Math extends BaseNode {
   type: 'math'
   display: boolean
   content: string
+  label?: string
+  number?: number
 }
 
 /**

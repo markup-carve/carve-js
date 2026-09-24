@@ -425,7 +425,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'image':
       return renderImageText(node)
     case 'math':
-      return stripControls(node.content)
+      return stripControls(node.content) + (node.number === undefined ? '' : ` ${stripControls(node.label!)} ${node.number}`)
     case 'raw_inline':
       rawFormatDropped(ctx.options, node, 'plain')
       return ''

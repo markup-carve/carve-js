@@ -1,7 +1,7 @@
 import type { Position } from './ast.js'
 
 export type RenderTarget = 'html' | 'markdown' | 'plain' | 'ansi' | 'carve'
-export type RenderLossCode = 'raw-format-dropped'
+export type RenderLossCode = 'raw-format-dropped' | 'math-label-number-dropped'
 
 export interface RenderLoss {
   code: RenderLossCode
@@ -35,7 +35,7 @@ export class RenderLossError extends Error {
   readonly truncated: boolean
 
   constructor(result: Pick<RenderResult, 'losses' | 'totalLosses' | 'truncated'>) {
-    super(`render would drop ${result.totalLosses} raw format node${result.totalLosses === 1 ? '' : 's'}`)
+    super(`render would drop ${result.totalLosses} node${result.totalLosses === 1 ? '' : 's'}`)
     this.name = 'RenderLossError'
     this.losses = result.losses
     this.totalLosses = result.totalLosses

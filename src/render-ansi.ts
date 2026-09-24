@@ -545,7 +545,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return renderInlines(node.children, ctx)
     }
     case 'math':
-      return style(stripControls(node.content), FG_BRIGHT_MAGENTA)
+      return style(stripControls(node.content), FG_BRIGHT_MAGENTA) + (node.number === undefined ? '' : ` ${stripControls(node.label!)} ${node.number}`)
     case 'raw_inline':
       rawFormatDropped(ctx.options, node, 'ansi')
       return ''

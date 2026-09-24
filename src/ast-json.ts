@@ -1255,6 +1255,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // unknown type or an unnamed property is still reported as that, which is
   // the more specific answer and the one those clauses name.
   refuseSchemaViolations(json, '')
+  refuseMathNumberConstraints(json)
 
   // PART 12 §21, and BEFORE every read of a VALUE below - before a label
   // becomes a key, before an abbreviation half is joined into a pair key,
@@ -1370,11 +1371,45 @@ function measurePayload(json: AstJsonDocument): number {
  */
 function renumberCaptionsIfPublished(doc: Document): void {
   const bodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []
-  if (!hasPublishedCaptionNumber(doc.children) && !bodies.some(hasPublishedCaptionNumber)) return
+  if (!hasPublishedCaptionNumber(doc.children) && !bodies.some(hasPublishedCaptionNumber) &&
+      !hasPublishedMathNumber(doc.children) && !bodies.some(hasPublishedMathNumber)) return
 
   const counters = new Map<string, number>()
   numberCaptionsIn(doc.children, counters)
   for (const body of bodies) numberCaptionsIn(body, counters)
+}
+
+function hasPublishedMathNumber(blocks: unknown): boolean {
+  const stack: unknown[] = [blocks]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (!value || typeof value !== 'object') continue
+    if (Array.isArray(value)) { stack.push(...value); continue }
+    const node = value as Record<string, unknown>
+    if (node.type === 'math' && node.number !== undefined) return true
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'attrs' && key !== 'pos' && child && typeof child === 'object') stack.push(child)
+    }
+  }
+  return false
+}
+
+function refuseMathNumberConstraints(root: unknown): void {
+  const walk = (value: unknown, path: string): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach((child, i) => walk(child, `${path}[${i}]`)); return }
+    const node = value as Record<string, unknown>
+    if (node.type === 'math') {
+      if (typeof node.label === 'string' && (node.label.length === 0 || node.label.trim() !== node.label))
+        throw new AstJsonSchemaError('math.label must be non-empty and have no surrounding whitespace', path)
+      if (node.number !== undefined && (node.display !== true || node.label === undefined))
+        throw new AstJsonSchemaError('math.number requires display: true and label', path)
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'attrs' && key !== 'pos') walk(child, path ? `${path}.${key}` : key)
+    }
+  }
+  walk(root, '')
 }
 
 /** Whether any `caption_number` in `blocks` arrived carrying a number. */
