@@ -139,12 +139,15 @@ export const NODE_FIELDS: readonly string[] = [
  *   belongs is the unruled wrong-TYPE class, not this clause's business.
  * - `"node"` - a single node, e.g. `figure.target`; the object itself carries
  *   one.
+ * - `"node-matrix"` - an array of ARRAYS of nodes; the `type` requirement
+ *   lands one level deeper. Reading it as `nodes` refuses the schema's own
+ *   shape, because an array is not a node anywhere.
  * - `"records"` - an array of plain records the schema gives no `type` at all.
  *
  * The owning type is part of the key because one field name means different
  * things in different places.
  */
-export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'records'>> = {
+export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'node-matrix' | 'records'>> = {
   "admonition.children": "nodes",
   "admonition.title": "nodes",
   "block_extension.fallback": "node",
@@ -174,7 +177,7 @@ export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'rec
   "inline_footnote.inline": "nodes",
   "insert.children": "nodes",
   "line_block.children": "nodes",
-  "line_block.lines": "nodes",
+  "line_block.lines": "node-matrix",
   "link.children": "nodes",
   "list.items": "nodes",
   "list_item.children": "nodes",

@@ -807,14 +807,45 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       const positionKind =
         typeof type === 'string' ? NODE_POSITION_KIND[`${type}.${key}`] : undefined
       const at = path === '' ? key : `${path}.${key}`
-      if (positionKind === 'node') {
-        refuseNodeAt(value, admitted, at)
-      } else if (Array.isArray(value)) {
-        value.forEach((item, index) => refuseNodeAt(item, admitted, `${at}[${index}]`))
-      }
+      refuseNodePosition(value, positionKind, admitted, at)
     }
     refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
   }
+}
+
+/**
+ * One node position, dispatched on the shape the schema gives it.
+ *
+ * `node-matrix` is why this is a function rather than two lines at each call
+ * site: `line_block.lines` is an array of ARRAYS of nodes, so the `type`
+ * requirement lands one level deeper. Reading it as `nodes` refuses the
+ * schema's own shape - every element is an array, and an array is not a node
+ * anywhere - which is §9(a)'s "never refuses a tree this engine produced"
+ * failing on a field this engine was about to start producing.
+ */
+function refuseNodePosition(
+  value: unknown,
+  kind: 'nodes' | 'node' | 'node-matrix' | 'records' | undefined,
+  admitted: readonly string[] | undefined,
+  at: string,
+): void {
+  if (kind === 'node') {
+    refuseNodeAt(value, admitted, at)
+    return
+  }
+  if (!Array.isArray(value)) return
+  if (kind === 'node-matrix') {
+    value.forEach((line, index) => {
+      // A non-array here is the unruled wrong-TYPE class the `nodes` case
+      // leaves alone for the container, applied one level in.
+      if (!Array.isArray(line)) return
+      line.forEach((item, inner) =>
+        refuseNodeAt(item, admitted, `${at}[${index}][${inner}]`),
+      )
+    })
+    return
+  }
+  value.forEach((item, index) => refuseNodeAt(item, admitted, `${at}[${index}]`))
 }
 
 /**
@@ -953,10 +984,7 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
     const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
     const kind = NODE_POSITION_KIND[`${name}.${field}`]
     const at = `${path}.${field}`
-    if (kind === 'node') refuseNodeAt(value, admitted, at)
-    else if (Array.isArray(value)) {
-      value.forEach((node, index) => refuseNodeAt(node, admitted, `${at}[${index}]`))
-    }
+    refuseNodePosition(value, kind, admitted, at)
   }
   refuseNestedRecordShapes(name, item, path)
 }
@@ -1200,6 +1228,8 @@ function refuseUnknownNodeTypes(
       // `nodes` is about the ELEMENTS: a non-array where the array belongs is
       // the unruled wrong-type class, and `children: {}` still degrades to an
       // empty document rather than being decided here.
+      // `node-matrix` falls to false with `records`: the container's ELEMENTS
+      // are arrays, not nodes, and the walk below descends them on its own.
       kind === 'node' ? true : kind === 'nodes' ? Array.isArray(value) : false,
       legacy,
       position,
