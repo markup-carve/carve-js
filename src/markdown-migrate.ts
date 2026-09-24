@@ -2510,7 +2510,7 @@ function respellQuotedBlocks(
     // take in follows the lines it holds, which move with it: the quote ends,
     // or the next line is another item of this list or an outer one.
     let onePad = false
-    if (!asText && RE_LIST_MARKER.test(part.text)) {
+    if (!asText && /^[ \t]*(?:[-*+]|\d+[.)]) {2}/.test(part.text)) {
       const content = columnWidth(RE_LIST_MARKER.exec(part.text)![0])
       let at = idx + 1
       const holds = (entry: PrefixedInlineLine): boolean =>
