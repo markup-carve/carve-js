@@ -233,6 +233,14 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
+  // A footnote reference's target is `label` on the wire, the name its
+  // definition already uses (PART 12 §25, carve#2193). The runtime field stays
+  // `id`, which is what the parser and the renderers carry.
+  if ((out ?? record)['type'] === 'footnote_ref' && (out ?? record)['id'] !== undefined) {
+    const { id: label, ...rest } = out ?? record
+    out = { ...rest, label }
+  }
+
   if ((out ?? record)['type'] === 'list' && (out ?? record)['start'] === 1) {
     const { start: _start, ...rest } = out ?? record
     out = rest
@@ -280,6 +288,17 @@ function definitionListsFromWire<T>(node: T): T {
     if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
   }
   if (record['target'] !== undefined) record['target'] = definitionListsFromWire(record['target'])
+
+  // The wire spells a footnote reference's target `label`; the runtime carries
+  // it as `id` (PART 12 §25). `id` on the wire is REFUSED rather than accepted
+  // as an alias - §11's narrow exception is a MAY, and this engine already
+  // refuses `footnote.id` on the definition half of the same pair (carve#743).
+  // Tolerating the old spelling on one half and not the other is the two-ways-
+  // to-say-it that §3 exists to stop.
+  if (record['type'] === 'footnote_ref' && record['label'] !== undefined) {
+    const { label, ...rest } = record
+    return definitionListsFromWire({ ...rest, id: label } as unknown as T)
+  }
 
   // Not read either, so an ingested reference does not arrive already carrying a
   // backlink anchor from whoever wrote the payload. `renderHtml` assigns

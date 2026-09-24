@@ -89,7 +89,7 @@ describe('a footnote number on an ingested tree', () => {
     const republished = JSON.stringify(toAstJson(fromAstJson(withDefinitionRemoved() as never)))
 
     expect(republished).toContain('"footnote_ref"')
-    expect(republished).toContain('"id":"a"')
+    expect(republished).toContain('"label":"a"')
   })
 
   it('does not INVENT a number on an unresolved tree', () => {

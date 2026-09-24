@@ -121,7 +121,7 @@ describe('an AST-JSON payload whose node type names a prototype key', () => {
               label: key,
               children: [{ type: 'paragraph', children: [{ type: 'text', value: 'the body' }] }],
             },
-            { type: 'paragraph', children: [{ type: 'footnote_ref', id: key }] },
+            { type: 'paragraph', children: [{ type: 'footnote_ref', label: key }] },
           ],
         }),
       )
@@ -136,7 +136,7 @@ describe('an AST-JSON payload whose node type names a prototype key', () => {
         JSON.stringify({
           type: 'document',
           srcByteLength: 1,
-          children: [{ type: 'paragraph', children: [{ type: 'footnote_ref', id: key }] }],
+          children: [{ type: 'paragraph', children: [{ type: 'footnote_ref', label: key }] }],
         }),
       )
 
