@@ -237,6 +237,8 @@ function withMarker(marker: string, content: string): string {
 
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
+    case 'section':
+      return renderBlocks(node.children, ctx)
     case 'heading': {
       // A folded heading's line join takes PART 7's four characters. The class
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
@@ -443,13 +445,71 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
   return trailingBlank ? `${out}\n` : out
 }
 
+function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0): string {
+  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
+  const parts: string[] = []
+  const descend = (children: BlockNode[]) => {
+    const content = renderCellBlocks(children, ctx, depth + 1)
+    if (content) parts.push(content)
+  }
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'heading':
+      case 'paragraph':
+        parts.push(renderInlines(block.children, ctx))
+        break
+      case 'block_quote':
+      case 'div':
+      case 'section':
+      case 'line_block':
+      case 'admonition':
+      case 'figure_group':
+        descend(block.children)
+        break
+      case 'list':
+        for (const item of block.items) descend(item.children)
+        break
+      case 'definition_list':
+        for (const item of block.items) {
+          for (const term of item.terms) parts.push(renderInlines(term, ctx))
+          for (const definition of item.definitions) descend(definition)
+        }
+        break
+      case 'table':
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) descend(cell.blocks)
+          else parts.push(renderInlines(cell.children ?? [], ctx))
+        }
+        break
+      case 'figure':
+        parts.push(renderInlines(block.caption, ctx))
+        if (block.target.type === 'block_quote') descend(block.target.children)
+        else if (block.target.type === 'table') descend([block.target])
+        else descend([block.target])
+        break
+      default:
+        parts.push(renderInlines([{ type: 'text', value: renderBlock(block, ctx).trim() }], ctx))
+        break
+    }
+  }
+  return parts.filter(Boolean).map((part) => part.replace(/\\*\r?\n/g, '<br>')).join('<br>')
+}
+
 function renderTable(node: Table, ctx: MarkdownContext): string {
   let header: string | undefined
   let headerColumns = 0
   const rows: string[] = []
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
-    const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
+    const cells = row.cells.map((cell) => {
+      if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
+      ctx.options.onRenderLoss?.({
+        code: 'table-cell-blocks-flattened', target: 'markdown', nodeType: 'block',
+        message: 'Flattened block content inside a table cell for Markdown',
+        ...(cell.pos ? { pos: cell.pos } : {}),
+      })
+      return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
+    })
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) {
       if (header === undefined) aligns.length = 0
@@ -1673,6 +1733,7 @@ function walkBlocks(
       case 'block_quote':
       case 'admonition':
       case 'div':
+      case 'section':
       case 'line_block':
         walkBlocks(block.children, visit, depth + 1)
         break
@@ -1687,7 +1748,10 @@ function walkBlocks(
         break
       case 'table':
         if (block.caption) visit(block, block.caption)
-        for (const row of block.rows) for (const cell of row.cells) visit(block, cell.children)
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) walkBlocks(cell.blocks, visit, depth + 1)
+          else visit(block, cell.children)
+        }
         break
       case 'figure':
         visit(block, block.caption)

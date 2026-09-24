@@ -148,6 +148,7 @@ function walkHeadings(
         break
       }
       case 'div':
+      case 'section':
       case 'admonition':
       case 'figure_group':
         descend((b as { children?: unknown }).children, inBlockquote)
@@ -158,11 +159,15 @@ function walkHeadings(
         break
       }
       case 'figure': {
-        // The only figure target that can hold a heading is a blockquote; the
-        // resolver assigns its heading an id (as a quoted heading), so mirror
-        // that descent for first-id-wins. Other targets have no headings.
+        // A figure target can contain headings in a blockquote or in table
+        // cells with block content.
         const target = (b as { target?: { type?: string; children?: unknown } }).target
         if (target?.type === 'block_quote') descend(target.children, true)
+        else if (target?.type === 'table') walkHeadings([target as BlockNode], inBlockquote, fn)
+        break
+      }
+      case 'table': {
+        for (const row of b.rows) for (const cell of row.cells) descend(cell.blocks, inBlockquote)
         break
       }
     }

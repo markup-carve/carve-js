@@ -1335,6 +1335,14 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     }
   }
   switch (node.type) {
+    case 'section': {
+      const body = renderBlocks(node.children, opts, level + 1)
+      return frameBlockContainer(
+        `${pad}<section${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`,
+        body,
+        `${pad}</section>`,
+      )
+    }
     case 'heading': {
       const inner = renderInlines(node.children, opts)
       return `${pad}<h${node.level}${renderAttrs(node.attrs, `h${node.level}`)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
@@ -1782,7 +1790,10 @@ function renderTableRowFlat(
       cellScopeAttr(entry.cell, tag === 'th', inHeaderRun) +
       renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
       (attrs.length ? ' ' + attrs.join(' ') : '')
-    parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
+    const content = entry.cell.blocks === undefined
+      ? renderInlines(entry.cell.children ?? [], opts)
+      : renderBlocks(entry.cell.blocks, opts, 0)
+    parts.push(`<${tag}${attrStr}>${content}</${tag}>`)
   }
   parts.push('</tr>')
   return parts.join('')

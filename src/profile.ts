@@ -188,6 +188,8 @@ export function canonicalType(type: string): string {
       return 'thematic_break'
     case 'div':
       return 'div'
+    case 'section':
+      return 'section'
     case 'admonition':
       return 'admonition'
     case 'raw_block':

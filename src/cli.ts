@@ -66,6 +66,7 @@ import {
   type HtmlImportAdapter,
   type HtmlImportMode,
   type RenderResult,
+  type RenderLossCode,
 } from './index.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
@@ -146,7 +147,8 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                                 (use - for stderr)
     --allow-loss CODE           allow a loss code intentionally (repeatable;
                                 raw-format-dropped, ruby-flattened,
-                                math-label-number-dropped)
+                                math-label-number-dropped, section-flattened,
+                                table-cell-blocks-flattened)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
 
@@ -739,22 +741,15 @@ function renderFromJson(
 interface RenderCliLossOptions {
   strictLosses: boolean
   reportLosses?: string
-  allowRawFormatDropped: boolean
-  allowRubyFlattened: boolean
-  allowMathLabelNumberDropped: boolean
+  allowedLosses: ReadonlySet<RenderLossCode>
   maxRenderLosses: number
 }
 
 function finishRender(result: RenderResult, file: string, opts: RenderCliLossOptions, io: CliIO): number {
-  const effectiveLosses = result.losses.filter((loss) =>
-    !((loss.code === 'raw-format-dropped' && opts.allowRawFormatDropped) ||
-      (loss.code === 'ruby-flattened' && opts.allowRubyFlattened) ||
-      (loss.code === 'math-label-number-dropped' && opts.allowMathLabelNumberDropped)),
+  const effectiveLosses = result.losses.filter((loss) => !opts.allowedLosses.has(loss.code))
+  const allowedTotal = [...opts.allowedLosses].reduce(
+    (total, code) => total + (result.lossCounts?.[code] ?? 0), 0,
   )
-  const allowedTotal =
-    (opts.allowRawFormatDropped ? (result.lossCounts?.['raw-format-dropped'] ?? 0) : 0) +
-    (opts.allowRubyFlattened ? (result.lossCounts?.['ruby-flattened'] ?? 0) : 0) +
-    (opts.allowMathLabelNumberDropped ? (result.lossCounts?.['math-label-number-dropped'] ?? 0) : 0)
   const effectiveTotal = result.totalLosses - allowedTotal
   if (effectiveTotal > 0) {
     for (const loss of effectiveLosses) {
@@ -934,10 +929,13 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const knownLosses = ['raw-format-dropped', 'ruby-flattened', 'math-label-number-dropped']
-  const unknownLoss = allowedLosses.find((code) => !knownLosses.includes(code))
+  const knownLosses: RenderLossCode[] = [
+    'raw-format-dropped', 'ruby-flattened', 'math-label-number-dropped',
+    'section-flattened', 'table-cell-blocks-flattened',
+  ]
+  const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
-    io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected raw-format-dropped, ruby-flattened or math-label-number-dropped)\n`)
+    io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected ${knownLosses.join(', ')})\n`)
     return 2
   }
   const maxRenderLosses = values['max-render-losses'] === undefined
@@ -949,9 +947,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   }
   const lossOptions: RenderCliLossOptions = {
     strictLosses: values['strict-losses'] ?? false,
-    allowRawFormatDropped: allowedLosses.includes('raw-format-dropped'),
-    allowRubyFlattened: allowedLosses.includes('ruby-flattened'),
-    allowMathLabelNumberDropped: allowedLosses.includes('math-label-number-dropped'),
+    allowedLosses: new Set(allowedLosses as RenderLossCode[]),
     maxRenderLosses,
     ...(values['report-losses'] !== undefined ? { reportLosses: values['report-losses'] } : {}),
   }

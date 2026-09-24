@@ -526,6 +526,7 @@ export function lintCarve(
           break
         case 'admonition':
         case 'div':
+        case 'section':
         case 'figure_group':
           indexHeadings(block.children, inBlockquote)
           break
@@ -539,6 +540,11 @@ export function lintCarve(
         case 'figure':
           if (block.target.type === 'block_quote')
             indexHeadings(block.target.children, true)
+          else if (block.target.type === 'table') indexHeadings([block.target], inBlockquote)
+          break
+        case 'table':
+          for (const row of block.rows) for (const cell of row.cells)
+            if (cell.blocks) indexHeadings(cell.blocks, inBlockquote)
           break
         default:
           break
@@ -623,6 +629,7 @@ export function lintCarve(
         }
         case 'block_quote':
         case 'div':
+        case 'section':
           checkFigureGroups(b.children)
           break
         case 'list':
@@ -633,6 +640,11 @@ export function lintCarve(
           break
         case 'figure':
           if (b.target.type === 'block_quote') checkFigureGroups(b.target.children)
+          else if (b.target.type === 'table') checkFigureGroups([b.target])
+          break
+        case 'table':
+          for (const row of b.rows) for (const cell of row.cells)
+            if (cell.blocks) checkFigureGroups(cell.blocks)
           break
         default:
           break

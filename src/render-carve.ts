@@ -31,6 +31,7 @@ import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
+import { renderPlainText } from './render-plain.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
@@ -126,6 +127,7 @@ interface CarveContext {
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
   reportRubyLosses(ast, opts)
   reportMathLosses(ast, opts)
+  reportSectionCellLosses(ast, opts)
   ast = withCellHardBreaksFlattened(ast)
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it
@@ -213,6 +215,32 @@ function reportMathLosses(ast: Document, opts: CarveRenderOptions): void {
         target: 'carve',
         nodeType: 'inline',
         message: 'Carve source cannot spell a math label or number',
+        ...(record['pos'] ? { pos: record['pos'] as import('./ast.js').Position } : {}),
+      })
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== 'attrs' && key !== 'pos') stack.push(child)
+    }
+  }
+}
+
+function reportSectionCellLosses(ast: Document, opts: CarveRenderOptions): void {
+  if (opts.onRenderLoss === undefined) return
+  const stack: unknown[] = [ast.children, ast.footnoteDefs]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (let index = value.length - 1; index >= 0; index--) stack.push(value[index])
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const record = value as Record<string, unknown>
+    if (record['type'] === 'section' || (record['type'] === 'table_cell' && record['blocks'] !== undefined)) {
+      opts.onRenderLoss({
+        code: record['type'] === 'section' ? 'section-flattened' : 'table-cell-blocks-flattened',
+        target: 'carve',
+        nodeType: 'block',
+        message: record['type'] === 'section' ? 'Carve source cannot spell an explicit section' : 'Carve source cannot spell block content inside a table cell',
         ...(record['pos'] ? { pos: record['pos'] as import('./ast.js').Position } : {}),
       })
     }
@@ -926,6 +954,8 @@ function renderBlockBody(
   const attrs = renderBlockAttrs(node.attrs)
   const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
   switch (node.type) {
+    case 'section':
+      return renderHostedBlocks(node.children, ctx)
     case 'heading': {
       // A heading is SINGLE-LINE (PART 2), so its text must not contain a
       // newline: emitting one would end the heading and silently re-parse the
@@ -2096,6 +2126,61 @@ function renderTableRow(cells: string[], attrs: string): string {
   return `|${cells.join('|')}|${attrs}`
 }
 
+function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[] {
+  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+  const chunks: InlineNode[][] = []
+  const add = (nodes: InlineNode[]) => { if (nodes.length) chunks.push(nodes) }
+  const descend = (children: BlockNode[]) => add(inlineContentOfCellBlocks(children, depth + 1))
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'heading':
+      case 'paragraph':
+        add(block.children)
+        break
+      case 'block_quote':
+      case 'div':
+      case 'section':
+      case 'line_block':
+      case 'admonition':
+      case 'figure_group':
+        descend(block.children)
+        break
+      case 'list':
+        for (const item of block.items) descend(item.children)
+        break
+      case 'definition_list':
+        for (const item of block.items) {
+          for (const term of item.terms) add(term)
+          for (const definition of item.definitions) descend(definition)
+        }
+        break
+      case 'table':
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) descend(cell.blocks)
+          else add(cell.children ?? [])
+        }
+        break
+      case 'figure':
+        add(block.caption)
+        if (block.target.type === 'block_quote') descend(block.target.children)
+        else if (block.target.type === 'table') descend([block.target])
+        else if (block.target.type === 'image') add([block.target])
+        else descend([block.target])
+        break
+      case 'image':
+        add([block])
+        break
+      case 'code_block':
+        add([{ type: 'code', value: block.content }])
+        break
+      default:
+        add([{ type: 'text', value: renderPlainText({ type: 'document', children: [block] }).trim() }])
+        break
+    }
+  }
+  return chunks.flatMap((chunk, index) => index === 0 ? chunk : [{ type: 'text', value: ' ' } as InlineNode, ...chunk])
+}
+
 function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): string {
   const attrs = renderAttrs(cell.attrs)
   // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
@@ -2124,7 +2209,10 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // attributed header cell round-tripped into `<td class="x">=h</td>` and
   // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
   const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
-  return padCell(prefix, escapeSpanMarkerPayload(renderInlines(cell.children, ctx), cell.attrs))
+  const content = cell.blocks === undefined
+    ? renderInlines(cell.children ?? [], ctx)
+    : renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
+  return padCell(prefix, escapeSpanMarkerPayload(content, cell.attrs))
 }
 
 /**
@@ -4155,7 +4243,7 @@ function withCellHardBreaksFlattened(ast: Document): Document {
     const node = stack.pop()
     if (node === null || typeof node !== 'object') continue
     if ((node as { type?: unknown }).type === 'table_cell') {
-      if (holdsHardBreak((node as TableCell).children)) cells.push(node as TableCell)
+      if (holdsHardBreak((node as TableCell).children ?? [])) cells.push(node as TableCell)
       continue
     }
     for (const value of Object.values(node)) stack.push(value)
@@ -4167,7 +4255,7 @@ function withCellHardBreaksFlattened(ast: Document): Document {
     const node = stack.pop()
     if (node === null || typeof node !== 'object') continue
     if ((node as { type?: unknown }).type === 'table_cell') {
-      flattenHardBreaks((node as TableCell).children)
+      flattenHardBreaks((node as TableCell).children ?? [])
       continue
     }
     for (const value of Object.values(node)) stack.push(value)

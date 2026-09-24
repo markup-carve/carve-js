@@ -590,6 +590,7 @@ function resolveHeadingIdsImpl(
           break
         case 'admonition':
         case 'div':
+        case 'section':
           assignIds(b.children, inBlockquote)
           break
         case 'list':
@@ -601,9 +602,15 @@ function resolveHeadingIdsImpl(
           break
         case 'figure':
           if (b.target.type === 'block_quote') assignIds(b.target.children, true)
+          else if (b.target.type === 'table') assignIds([b.target], inBlockquote)
           break
         case 'figure_group':
           assignIds(b.children, inBlockquote)
+          break
+        case 'table':
+          for (const row of b.rows) for (const cell of row.cells) {
+            if (cell.blocks) assignIds(cell.blocks, inBlockquote)
+          }
           break
         default:
           break
@@ -951,6 +958,7 @@ function resolveHeadingIdsImpl(
         b.children.forEach((c) => walkBlock(c, fn))
         break
       case 'div':
+      case 'section':
         b.children.forEach((c) => walkBlock(c, fn))
         break
       case 'line_block':
@@ -968,7 +976,10 @@ function resolveHeadingIdsImpl(
       case 'table':
         if (b.caption) fn(b.caption)
         for (const row of b.rows)
-          for (const cell of row.cells) fn(cell.children)
+          for (const cell of row.cells) {
+            if (cell.blocks) cell.blocks.forEach((block) => walkBlock(block, fn))
+            else fn(cell.children ?? [])
+          }
         break
       case 'figure':
         fn(b.caption)
@@ -1207,6 +1218,7 @@ function pushChildBlockLists(b: BlockNode, out: BlockNode[][]): void {
     case 'admonition':
     case 'div':
     case 'figure_group':
+    case 'section':
       out.push(b.children)
       break
     case 'list':
@@ -1214,6 +1226,15 @@ function pushChildBlockLists(b: BlockNode, out: BlockNode[][]): void {
       break
     case 'definition_list':
       for (const it of b.items) for (const d of it.definitions) out.push(d)
+      break
+    case 'table':
+      for (const row of b.rows) for (const cell of row.cells) {
+        if (cell.blocks) out.push(cell.blocks)
+      }
+      break
+    case 'figure':
+      if (b.target.type === 'block_quote') out.push(b.target.children)
+      else if (b.target.type === 'table') pushChildBlockLists(b.target, out)
       break
     default:
       break
@@ -1231,6 +1252,7 @@ function withClonedChildBlockLists(b: BlockNode): BlockNode {
     case 'admonition':
     case 'div':
     case 'figure_group':
+    case 'section':
       return { ...b, children: b.children.slice() }
     case 'list':
       return { ...b, items: b.items.map((item) => ({ ...item, children: item.children.slice() })) }
@@ -1239,6 +1261,19 @@ function withClonedChildBlockLists(b: BlockNode): BlockNode {
         ...b,
         items: b.items.map((it) => ({ ...it, definitions: it.definitions.map((d) => d.slice()) })),
       }
+    case 'table':
+      return {
+        ...b,
+        rows: b.rows.map((row) => ({
+          ...row,
+          cells: row.cells.map((cell) => cell.blocks ? { ...cell, blocks: cell.blocks.slice() } : cell),
+        })),
+      }
+    case 'figure':
+      if (b.target.type === 'block_quote' || b.target.type === 'table') {
+        return { ...b, target: withClonedChildBlockLists(b.target) as typeof b.target }
+      }
+      return b
     default:
       return b
   }
@@ -1357,6 +1392,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       case 'admonition':
       case 'div':
       case 'figure_group':
+      case 'section':
         promoteBlockImages(b.children, figuresOnly)
         break
       case 'list':
@@ -1364,6 +1400,15 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
         break
       case 'definition_list':
         for (const it of b.items) for (const d of it.definitions) promoteBlockImages(d, figuresOnly)
+        break
+      case 'table':
+        for (const row of b.rows) for (const cell of row.cells) {
+          if (cell.blocks) promoteBlockImages(cell.blocks, figuresOnly)
+        }
+        break
+      case 'figure':
+        if (b.target.type === 'block_quote') promoteBlockImages(b.target.children, figuresOnly)
+        else if (b.target.type === 'table') promoteBlockImages([b.target], figuresOnly)
         break
       default:
         break
@@ -1471,6 +1516,7 @@ export function numberCaptionsIn(
       switch (b.type) {
         case 'block_quote':
         case 'div':
+        case 'section':
           walk(b.children, inPanel, suppressed)
           break
         case 'admonition':
@@ -1519,7 +1565,10 @@ export function numberCaptionsIn(
         }
         case 'table':
           if (b.caption && !inPanel) numberCaption(b.caption, b.attrs)
-          numberMath(b.rows, suppressed)
+          for (const row of b.rows) for (const cell of row.cells) {
+            if (cell.blocks) walk(cell.blocks, inPanel, suppressed)
+            else numberMath(cell.children, suppressed)
+          }
           if (b.caption) numberMath(b.caption, suppressed)
           break
         default:

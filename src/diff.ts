@@ -77,7 +77,7 @@ const IGNORED = new Set(['pos', 'srcByteLength'])
  * because a definition list's `items` is an array of records without `type`,
  * while a citation group's `items` is an array of citation nodes.
  */
-const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title', 'pairs', 'base', 'annotation']
+const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title', 'pairs', 'base', 'annotation']
 
 function isNode(value: unknown): value is Node {
   return (

@@ -94,6 +94,9 @@ function visit(node: AnyNode, byType: Map<string, Record<string, string>>): void
   if (Array.isArray((node as { children?: AnyNode[] }).children)) {
     for (const c of (node as { children: AnyNode[] }).children) visit(c, byType)
   }
+  if (Array.isArray((node as { blocks?: AnyNode[] }).blocks)) {
+    for (const c of (node as unknown as { blocks: AnyNode[] }).blocks) visit(c, byType)
+  }
   if (Array.isArray((inline as { content?: InlineNode[] }).content)) {
     for (const c of (inline as { content: InlineNode[] }).content) visit(c, byType)
   }

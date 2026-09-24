@@ -142,6 +142,30 @@ describe('carve render — loss reporting', () => {
     expect(allowed.err).toBe('')
   })
 
+  it('can allow flattened sections and block-content cells from an encoded AST', async () => {
+    const ast = JSON.stringify({
+      type: 'document', srcByteLength: 0, children: [{
+        type: 'section', children: [{ type: 'table', rows: [{ type: 'table_row', cells: [{
+          type: 'table_cell', header: false, blocks: [
+            { type: 'paragraph', children: [{ type: 'text', value: 'Cell' }] },
+          ],
+        }] }] }],
+      }],
+    })
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], denied.io)).toBe(1)
+    expect(denied.err).toContain('section-flattened')
+    expect(denied.err).toContain('table-cell-blocks-flattened')
+
+    const allowed = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--carve', '--strict-losses',
+      '--allow-loss', 'section-flattened', '--allow-loss', 'table-cell-blocks-flattened',
+    ], allowed.io)).toBe(0)
+    expect(allowed.out).toContain('Cell')
+    expect(allowed.err).toBe('')
+  })
+
   it('does not let an allowed truncated loss hide a different code', async () => {
     const ruby = {
       type: 'ruby',

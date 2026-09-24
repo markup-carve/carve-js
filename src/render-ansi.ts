@@ -144,6 +144,8 @@ function renderBlocks(blocks: BlockNode[], ctx: AnsiContext): string {
 
 function renderBlock(node: BlockNode, ctx: AnsiContext): string {
   switch (node.type) {
+    case 'section':
+      return renderBlocks(node.children, ctx)
     case 'heading':
       return renderHeading(node.level, renderInlines(node.children, ctx))
     case 'paragraph':
@@ -345,7 +347,9 @@ function renderTable(node: Table, ctx: AnsiContext): string {
     const isHeader = row.cells.length > 0 && row.cells.every((c) => c.header)
     return Array.from({ length: cols }, (_, i) => {
       const cell = row.cells[i]
-      const content = cell ? trimNonNbsp(renderInlines(cell.children, ctx)) : ''
+      const content = cell ? trimNonNbsp(cell.blocks === undefined
+        ? renderInlines(cell.children ?? [], ctx)
+        : renderBlocks(cell.blocks, ctx)).replace(/\s*\n\s*/g, ' ') : ''
       return { content, plain: stripAnsi(content), isHeader }
     })
   })

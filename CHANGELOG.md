@@ -10,6 +10,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Labeled display equations receive numbers in caption order and render those numbers in HTML, Markdown, plain text, and ANSI (#1969). AST JSON preserves `label` and `number`; canonical Carve output reports their loss.
+- AST JSON accepts explicit `section` blocks and block content in table cells. HTML preserves both structures; Markdown, plain text, ANSI, and canonical Carve retain their text. Markdown and canonical Carve report block-cell flattening, and canonical Carve reports section flattening (#1971).
 - Citation items carry `mode` through parsing and AST JSON. HTML rendering uses each item's mode (#1973).
 - The interchange AST supports `ruby` nodes with ordered base and annotation pairs (markup-carve/carve#2208). HTML import preserves ruby structure, HTML and Markdown emit native `<ruby>` markup, and plain, ANSI, and Carve output use the readable `base(annotation)` fallback. Checked rendering reports that fallback as `ruby-flattened`.
 - The interchange AST accepts `small_caps` as a structural inline node and renders it as native HTML and Markdown-compatible HTML.
@@ -18,7 +19,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - The serialized `footnote_ref` target field is named `label` instead of `id`, matching the field on its definition (#1965). AST ingest refuses the old wire spelling.
-- AST ingest returns a typed error for `section` and block content in table cells until those interchange shapes are implemented.
 - `RenderLoss` is discriminated by `code`. The `format` field exists only on `raw-format-dropped` losses, and `RenderLossError` now describes structural losses.
 
 ## [0.1.8] - 2026-09-25

@@ -1136,12 +1136,13 @@ function renameInBlocks(blocks: BlockNode[], footnotes: Map<string, string>, hea
         break
       case 'table':
         if (block.caption) renameInlines(block.caption, footnotes, headings)
-        for (const row of block.rows) for (const cell of row.cells) renameInlines(cell.children, footnotes, headings)
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (!cell.blocks) renameInlines(cell.children ?? [], footnotes, headings)
+        }
         break
       case 'figure':
         renameInlines(block.caption, footnotes, headings)
         if (block.target.type === 'paragraph') renameInlines(block.target.children, footnotes, headings)
-        if (block.target.type === 'table' && block.target.caption) renameInlines(block.target.caption, footnotes, headings)
         break
     }
   })
@@ -1225,6 +1226,7 @@ function expandBlocks(blocks: BlockNode[], state: State): void {
       case 'block_quote':
       case 'div':
       case 'admonition':
+      case 'section':
         expandBlocks(block.children, state)
         break
       case 'list':
@@ -1244,7 +1246,10 @@ function expandBlocks(blocks: BlockNode[], state: State): void {
         break
       case 'table':
         if (block.caption) block.caption = expandInlines(block.caption, state)
-        for (const row of block.rows) for (const cell of row.cells) cell.children = expandInlines(cell.children, state)
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) expandBlocks(cell.blocks, state)
+          else cell.children = expandInlines(cell.children ?? [], state)
+        }
         break
     }
     if (replacement) {
@@ -1268,6 +1273,7 @@ function walkBlocks(blocks: BlockNode[], fn: (block: BlockNode) => void): void {
       case 'block_quote':
       case 'div':
       case 'admonition':
+      case 'section':
         walkBlocks(block.children, fn)
         break
       case 'list':
@@ -1278,6 +1284,12 @@ function walkBlocks(blocks: BlockNode[], fn: (block: BlockNode) => void): void {
         break
       case 'figure':
         if (block.target.type === 'block_quote') walkBlocks(block.target.children, fn)
+        else if (block.target.type === 'table') walkBlocks([block.target], fn)
+        break
+      case 'table':
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) walkBlocks(cell.blocks, fn)
+        }
         break
     }
   }
@@ -1514,6 +1526,7 @@ function collectBlocks(blocks: BlockNode[], sites: DirectiveSite[]): void {
       case 'block_quote':
       case 'div':
       case 'admonition':
+      case 'section':
         collectBlocks(block.children, sites)
         break
       case 'list':
@@ -1532,7 +1545,10 @@ function collectBlocks(blocks: BlockNode[], sites: DirectiveSite[]): void {
         break
       case 'table':
         if (block.caption) collectInlines(block.caption, sites)
-        for (const row of block.rows) for (const cell of row.cells) collectInlines(cell.children, sites)
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) collectBlocks(cell.blocks, sites)
+          else collectInlines(cell.children ?? [], sites)
+        }
         break
     }
   }
