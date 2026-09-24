@@ -79,7 +79,7 @@ describe('a block-level HTML element inside a container', () => {
     it('sits at the item content column, not at column 0', () => {
       // marked: <ul><li><p>item</p><footer>x</footer></li></ul>
       const carve = markdownToCarve('- item\n\n  <footer>x</footer>\n')
-      expect(carve).toBe('- item\n\n  ```=html\n  <footer>x</footer>\n  ```\n')
+      expect(carve).toBe('{loose}\n- item\n\n  ```=html\n  <footer>x</footer>\n  ```\n')
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<footer>x<\/footer>[\s\S]*<\/li>/)
     })
 
@@ -91,7 +91,7 @@ describe('a block-level HTML element inside a container', () => {
 
     it('follows an ordered marker to its wider content column', () => {
       const carve = markdownToCarve('1. item\n\n   <footer>x</footer>\n')
-      expect(carve).toBe('1. item\n\n   ```=html\n   <footer>x</footer>\n   ```\n')
+      expect(carve).toBe('{loose}\n1. item\n\n   ```=html\n   <footer>x</footer>\n   ```\n')
       expect(carveToHtml(carve)).toMatch(/<ol>[\s\S]*<footer>x<\/footer>[\s\S]*<\/ol>/)
     })
 
@@ -100,7 +100,7 @@ describe('a block-level HTML element inside a container', () => {
       // column 4, so the block carries no indent of its own. Read as an
       // indented code block, this lost the `=html` marker as well as the item.
       const carve = markdownToCarve('- a\n  - b\n\n    <footer>x</footer>\n')
-      expect(carve).toBe('- a\n  - b\n\n    ```=html\n    <footer>x</footer>\n    ```\n')
+      expect(carve).toBe('- a\n  {loose}\n  - b\n\n    ```=html\n    <footer>x</footer>\n    ```\n')
       const html = carveToHtml(carve)
       expect(html).toContain('<footer>x</footer>')
       expect(html).not.toContain('&lt;footer&gt;')
@@ -108,7 +108,7 @@ describe('a block-level HTML element inside a container', () => {
 
     it('reads an HTML comment as a block', () => {
       const carve = markdownToCarve('- a\n\n  <!-- c -->\n')
-      expect(carve).toBe('- a\n\n  ```=html\n  <!-- c -->\n  ```\n')
+      expect(carve).toBe('{loose}\n- a\n\n  ```=html\n  <!-- c -->\n  ```\n')
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<!-- c -->[\s\S]*<\/li>/)
     })
 
@@ -124,7 +124,7 @@ describe('a block-level HTML element inside a container', () => {
     it('keeps the block in a list item that a quote holds', () => {
       // The quote marker AND the item's content column, in that order.
       const carve = markdownToCarve('> - item\n>\n>   <footer>x</footer>\n')
-      expect(carve).toBe('> - item\n>\n>   ```=html\n>   <footer>x</footer>\n>   ```\n')
+      expect(carve).toBe('> {loose}\n> - item\n>\n>   ```=html\n>   <footer>x</footer>\n>   ```\n')
       expect(carveToHtml(carve)).toMatch(/<blockquote>[\s\S]*<li>[\s\S]*<footer>x<\/footer>/)
     })
 

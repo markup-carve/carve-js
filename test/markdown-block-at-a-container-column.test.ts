@@ -79,11 +79,11 @@ describe('a block at its container content column', () => {
       // commonmark: a <blockquote> and an <hr> INSIDE item `b`. Both used to
       // be carried off into the code fence the column-0 test opened.
       const quote = markdownToCarve(lines('- a', '  - b', '', sp(4) + '> quoted'))
-      expect(quote).toBe(lines('- a', '  - b', '', sp(4) + '> quoted'))
+      expect(quote).toBe(lines('- a', '  {loose}', '  - b', '', sp(4) + '> quoted'))
       expect(carveToHtml(quote)).toContain('<blockquote>')
 
       const rule = markdownToCarve(lines('- a', '  - b', '', sp(4) + '***'))
-      expect(rule).toBe(lines('- a', '  - b', '', sp(4) + '---'))
+      expect(rule).toBe(lines('- a', '  {loose}', '  - b', '', sp(4) + '---'))
       expect(carveToHtml(rule)).toContain('<hr>')
     })
   })
@@ -92,20 +92,20 @@ describe('a block at its container content column', () => {
     it('keeps the block quote inside the item', () => {
       // commonmark + marked: <li><p>item</p><blockquote>…</blockquote></li>.
       const carve = markdownToCarve(lines('- item', '', sp(2) + '> quoted'))
-      expect(carve).toBe(lines('- item', '', sp(2) + '> quoted'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '> quoted'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<blockquote>/)
     })
 
     it('keeps it inside an ordered item, whose column is 3', () => {
       const carve = markdownToCarve(lines('1. item', '', sp(3) + '> quoted'))
-      expect(carve).toBe(lines('1. item', '', sp(3) + '> quoted'))
+      expect(carve).toBe(lines('{loose}', '1. item', '', sp(3) + '> quoted'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<blockquote>/)
     })
 
     it('keeps the heading inside the item', () => {
       // commonmark + marked: <li><p>item</p><h1>Head</h1></li>.
       const carve = markdownToCarve(lines('- item', '', sp(2) + '# Head'))
-      expect(carve).toBe(lines('- item', '', sp(2) + '# Head'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '# Head'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<h1[^>]*>Head<\/h1>/)
     })
   })
@@ -116,7 +116,7 @@ describe('a block at its container content column', () => {
       // commonmark puts a code block holding `code();` inside the item. The
       // fence used to land at column 0 carrying two of the item's columns.
       const carve = markdownToCarve(lines('- item', '', sp(6) + 'code();'))
-      expect(carve).toBe(lines('- item', '', sp(2) + '```', sp(2) + 'code();', sp(2) + '```'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '```', sp(2) + 'code();', sp(2) + '```'))
       expect(carveToHtml(carve)).toContain('<code>code();')
       expect(carveToHtml(carve)).not.toContain('<code>  code();')
     })
@@ -124,7 +124,7 @@ describe('a block at its container content column', () => {
     it('does the same at a nested items column', () => {
       const carve = markdownToCarve(lines('- a', '  - b', '', sp(8) + 'code here'))
       expect(carve).toBe(
-        lines('- a', '  - b', '', sp(4) + '```', sp(4) + 'code here', sp(4) + '```'),
+        lines('- a', '  {loose}', '  - b', '', sp(4) + '```', sp(4) + 'code here', sp(4) + '```'),
       )
       expect(carveToHtml(carve)).toContain('<code>code here')
     })
@@ -133,13 +133,13 @@ describe('a block at its container content column', () => {
   describe('the remaining block branches', () => {
     it('writes a thematic break at the items column', () => {
       const carve = markdownToCarve(lines('- item', '', sp(2) + '***'))
-      expect(carve).toBe(lines('- item', '', sp(2) + '---'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '---'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<hr>/)
     })
 
     it('writes a converted setext heading at the items column', () => {
       const carve = markdownToCarve(lines('- item', '', sp(2) + 'Title', sp(2) + '====='))
-      expect(carve).toBe(lines('- item', '', sp(2) + '# Title'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '# Title'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<h1[^>]*>Title<\/h1>/)
     })
 
@@ -150,7 +150,7 @@ describe('a block at its container content column', () => {
       const carve = markdownToCarve(
         lines('- item', '', sp(2) + '| a | b |', sp(2) + '| --- | --- |', sp(2) + '| 1 | 2 |'),
       )
-      expect(carve).toBe(lines('- item', '', sp(2) + '|= a |= b |', sp(2) + '| 1 | 2 |'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '|= a |= b |', sp(2) + '| 1 | 2 |'))
       const html = carveToHtml(carve)
       expect(html).toMatch(/<li>[\s\S]*<table>/)
       expect(html).toContain('<td>1</td>')
@@ -203,7 +203,7 @@ describe('a block at its container content column', () => {
 
     it('keeps a fenced code block inside an item exactly where it was', () => {
       const md = lines('- item', '', sp(2) + '```js', sp(2) + 'x = 1', sp(2) + '```')
-      expect(markdownToCarve(md)).toBe(md)
+      expect(markdownToCarve(md)).toBe(`{loose}\n${md}`)
     })
 
     it('still dedents a top-level fence out of its 1-3 space slack', () => {
@@ -222,13 +222,13 @@ describe('a block at its container content column', () => {
       // commonmark + marked: <li><p>item</p><pre><code class="language-js">x
       const md = lines('- item', '', '\t```js', '\tx', '\t```')
       const carve = markdownToCarve(md)
-      expect(carve).toBe(lines('- item', '', sp(2) + '```js', sp(2) + 'x', sp(2) + '```'))
+      expect(carve).toBe(lines('{loose}', '- item', '', sp(2) + '```js', sp(2) + 'x', sp(2) + '```'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<pre><code class="language-js">x/)
     })
 
     it('does the same in an ordered item, whose column is 3', () => {
       const carve = markdownToCarve(lines('1. item', '', '\t```js', '\tx', '\t```'))
-      expect(carve).toBe(lines('1. item', '', sp(3) + '```js', sp(3) + 'x', sp(3) + '```'))
+      expect(carve).toBe(lines('{loose}', '1. item', '', sp(3) + '```js', sp(3) + 'x', sp(3) + '```'))
       expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<pre><code class="language-js">x/)
     })
   })

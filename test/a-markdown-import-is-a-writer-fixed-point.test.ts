@@ -308,7 +308,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
       md('- a', '', '  ```', '  x', '', '  y'),
     ],
     ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', '', 'more', '', '9. b')],
-    ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('- a', '', '  > iq', '', '> q')],
+    ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('{loose}', '- a', '', '  > iq', '', '> q')],
     [
       'writes a quoted fence at the quote column once a block left the item',
       md('> - a', '> # h', '>   ~~~', '>   x', '>   ~~~'),
@@ -573,5 +573,47 @@ describe('a Markdown import keeps the blocks containers hold', () => {
     expect(out).toBe(expected)
     if (html !== null) expect(carveToHtml(out)).toBe(html)
     expect(carveToCarve(out)).toBe(out)
+  })
+})
+
+// markup-carve/carve-js#1943. Each expectation is the reading cmark-gfm,
+// marked 18 and commonmark.js agree on, cmark-gfm deciding where they differ.
+describe('a Markdown import keeps quoted items and item looseness', () => {
+  it.each([
+    // A blank line between two blocks of an item makes the list loose, which
+    // Carve spells with blank lines between items or `{loose}` on one item.
+    ['sets a one-item list loose for a heading under a blank line', '- a\n\n  b\n  ---\n', '{loose}\n- a\n\n  ## b\n', '<ul>\n  <li><p>a</p>\n    <h2 id="b">b</h2>\n  </li>\n</ul>'],
+    ['keeps a list of two items loose for a heading under a blank line (control)', '1. a\n\n   # b\n2. c\n', '1. a\n\n   # b\n\n2. c\n', '<ol>\n  <li><p>a</p>\n    <h1 id="b">b</h1>\n  </li>\n  <li><p>c</p></li>\n</ol>'],
+    ['sets a quoted one-item list loose', '> - a\n>\n>   # b\n', '> {loose}\n> - a\n>\n>   # b\n', null],
+    ['sets a list opening on an item line loose', '- - a\n\n    # b\n', '- {loose}\n  - a\n\n    # b\n', null],
+    // Quoted marker padding is written as one space, as fmt writes it.
+    ['writes quoted marker padding as one space', '> -  a\n', '> - a\n', '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>'],
+    ['writes the padding of each quoted item as one space', '> -  a\n> -   b\n', '> - a\n> - b\n', null],
+    // Four columns past the quote's container, a lazy line opens no block.
+    ['reads a lazy heading four columns in as text', '> a\n    # b\n', '> a\n> \\# b\n', '<blockquote><p>a\n# b</p></blockquote>'],
+    ['reads a lazy quote marker four columns in as text', '> a\n    > b\n', '> a\n> \\> b\n', '<blockquote><p>a\n&gt; b</p></blockquote>'],
+    // A fence or indented code on a quoted item's line takes no lazy line.
+    ['takes no lazy line under a fence on a quoted item line', '> -  ```\n>    x\n     ```\n', '> - ```\n>   x\n>   ```\n\n````\n ```\n````\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> ```\n</code></pre>'],
+    ['takes no lazy line under tab-padded code on a quoted item line', '> -  \ta\n\t~~~\n', '> - ```\n>   a\n>   ```\n\n```\n~~~\n```\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>a\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code>~~~\n</code></pre>'],
+    ['closes a quoted item fence where the quote ends', '> - ~~~\n>   x\n     code\n', '> - ```\n>   x\n>   ```\n\n```\n code\n```\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> code\n</code></pre>'],
+    ['keeps a fence on a quoted item line', '> - ```\n>   *x*\n> - b\n', '> - ```\n>   *x*\n>   ```\n> - b\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>*x*\n</code></pre>\n    </li>\n    <li>b</li>\n  </ul>\n</blockquote>'],
+    ['writes indented code on a quoted item line as a fence', '> -     code\n>       more\n', '> - ```\n>   code\n>   more\n>   ```\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>code\nmore\n</code></pre>\n    </li>\n  </ul>\n</blockquote>'],
+    ['reads a tab-indented fence opener as indented code', 'a\n\n\t~~~\n', 'a\n\n```\n~~~\n```\n', '<p>a</p>\n<pre><code>~~~\n</code></pre>'],
+  ] as Array<[string, string, string, string | null]>)('%s', (_label, source, expected, html) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    if (html !== null) expect(carveToHtml(out)).toBe(html)
+    expect(carveToCarve(out)).toBe(out)
+  })
+
+  // The sources as the ticket gives them. Their fence is empty, and fmt writes
+  // an empty code block with a blank line in it, so only the reading is pinned.
+  it.each([
+    ['takes no lazy line under an empty fence on a quoted item line', '> -  ```\n     ```\n', '> - ```\n>   ```\n\n````\n ```\n````\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> ```\n</code></pre>'],
+    ['closes an empty quoted item fence where the quote ends', '> - ~~~\n     code\n', '> - ```\n>   ```\n\n```\n code\n```\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> code\n</code></pre>'],
+  ])('%s', (_label, source, expected, html) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    expect(carveToHtml(out)).toBe(html)
   })
 })
