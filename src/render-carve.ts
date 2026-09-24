@@ -1060,6 +1060,14 @@ function renderBlockBody(
       return withAttrs(thematicBreakSpelling(node.marker, thematicBreakMarker))
     case 'table':
       return renderTableWithColumns(node, ctx)
+    case 'directive': {
+      // Same opener as an admonition, minus the title slot the node does not
+      // have (CARVE-P12-057).
+      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
+      const fence = colonFenceFor(ctx)
+      const body = renderColonFenceBody(node.children, ctx)
+      return withAttrs(`${fence} ${node.kind}${label}\n${body}\n${fence}`)
+    }
     case 'admonition': {
       // The quoted title is re-parsed as a quoted_title token (which admits
       // no escapes and cannot contain a quote), so the inline serialization
@@ -2142,6 +2150,7 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
       case 'section':
       case 'line_block':
       case 'admonition':
+      case 'directive':
       case 'figure_group':
         descend(block.children)
         break

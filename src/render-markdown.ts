@@ -290,6 +290,9 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       }
       return `${labelLine}${body}`
     }
+    // A directive carries no title (CARVE-P12-057), so it degrades exactly as a
+    // div does: the label floor, if any, then the body.
+    case 'directive':
     case 'div':
       return node.label
         ? `${wrapperLine(escapeText(node.label), '**', 'strong')}${renderBlocks(node.children, ctx)}`
@@ -463,6 +466,7 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
       case 'section':
       case 'line_block':
       case 'admonition':
+      case 'directive':
       case 'figure_group':
         descend(block.children)
         break
@@ -1732,6 +1736,7 @@ function walkBlocks(
         break
       case 'block_quote':
       case 'admonition':
+      case 'directive':
       case 'div':
       case 'section':
       case 'line_block':

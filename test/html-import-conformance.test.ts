@@ -22,7 +22,34 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
+  [
+    'endnotes-section-not-last',
+    {
+      reason:
+        'CARVE-P12-057 makes `::: footnotes` a `directive`; the fixture still records the `admonition` every engine wrote before the split (markup-carve/carve#2243). The source exit is unchanged, so only the tree is listed here.',
+      ast: {
+        type: 'document',
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', value: 'a' },
+              { type: 'footnote_ref', label: '1' },
+            ],
+          },
+          { type: 'directive', kind: 'footnotes', children: [] },
+          { type: 'paragraph', children: [{ type: 'text', value: 'after' }] },
+          {
+            type: 'footnote',
+            label: '1',
+            children: [{ type: 'paragraph', children: [{ type: 'text', value: 'n' }] }],
+          },
+        ],
+      },
+    },
+  ],
+])
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.

@@ -525,6 +525,7 @@ export function lintCarve(
           indexHeadings(block.children, true)
           break
         case 'admonition':
+        case 'directive':
         case 'div':
         case 'section':
         case 'figure_group':
@@ -628,6 +629,7 @@ export function lintCarve(
           break
         }
         case 'block_quote':
+        case 'directive':
         case 'div':
         case 'section':
           checkFigureGroups(b.children)

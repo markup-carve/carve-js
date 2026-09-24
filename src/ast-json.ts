@@ -492,6 +492,7 @@ function pushIngestChildBlocks(block: BlockNode, worklist: BlockNode[][]): void 
   switch (block.type) {
     case 'block_quote':
     case 'admonition':
+    case 'directive':
     case 'div':
     case 'section':
     case 'figure_group':

@@ -284,7 +284,17 @@ export {
 // is; these two answer whether a token a host already holds is one. The scan
 // regexes stay internal on purpose: a host matching source text with them
 // would disagree with the expander about a token in a code block (carve-js#1678).
-export { isDirectiveShape, parseDirective, type Directive } from './include-directive.js'
+//
+// EXPORTED AS `IncludeDirective`, not as `Directive`. `directive` is a block
+// node type as of CARVE-P12-057, and `Directive` is its interface in `ast.ts` -
+// a name an explicit re-export here would shadow, leaving the AST type with no
+// reachable name at the package root. The two are unrelated: this one is a
+// parsed `{{include}}` token, which is what the module is called.
+export {
+  isDirectiveShape,
+  parseDirective,
+  type Directive as IncludeDirective,
+} from './include-directive.js'
 export { headingReference, type HeadingReferenceOptions } from './heading-reference.js'
 export {
   defaultAttributes,

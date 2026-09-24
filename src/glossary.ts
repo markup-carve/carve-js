@@ -1,6 +1,6 @@
 import type {
-  Admonition,
   Attrs,
+  Directive,
   BlockNode,
   DefinitionList,
   Document,
@@ -60,8 +60,8 @@ export function glossary(): CarveExtension {
     },
 
     blockRenderers: {
-      admonition: (node, ctx) =>
-        containers.has(node) ? renderGlossary(node as Admonition, ctx, idSeen) : undefined,
+      directive: (node, ctx) =>
+        containers.has(node) ? renderGlossary(node as Directive, ctx, idSeen) : undefined,
     },
   }
 }
@@ -69,11 +69,11 @@ export function glossary(): CarveExtension {
 const termSlug = (term: InlineNode[]): string => slugify(inlineText(term), { lowercase: true })
 
 function isGlossary(b: BlockNode): boolean {
-  return b.type === 'admonition' && (b as Admonition).kind === 'glossary'
+  return b.type === 'directive' && (b as Directive).kind === 'glossary'
 }
 
 function defListsOf(b: BlockNode): DefinitionList[] {
-  return (b as Admonition).children.filter(
+  return (b as Directive).children.filter(
     (c) => c.type === 'definition_list',
   ) as DefinitionList[]
 }
@@ -103,7 +103,7 @@ function stripHref(a: Attrs): Attrs {
 }
 
 function renderGlossary(
-  node: Admonition,
+  node: Directive,
   ctx: BlockExtensionRenderContext,
   idSeen: Set<string>,
 ): string {

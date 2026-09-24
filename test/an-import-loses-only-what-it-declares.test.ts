@@ -84,7 +84,7 @@ describe('an endnotes section that is not last', () => {
     const { value } = htmlToAst(ENDNOTES_NOT_LAST)
     const kinds = value.children.map((child) => child.type)
 
-    expect(kinds).toEqual(['paragraph', 'admonition', 'paragraph'])
+    expect(kinds).toEqual(['paragraph', 'directive', 'paragraph'])
   })
 
   it('says nothing, because nothing is lost', () => {

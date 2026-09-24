@@ -589,6 +589,7 @@ function resolveHeadingIdsImpl(
           assignIds(b.children, true)
           break
         case 'admonition':
+        case 'directive':
         case 'div':
         case 'section':
           assignIds(b.children, inBlockquote)
@@ -957,6 +958,7 @@ function resolveHeadingIdsImpl(
         if (b.title) fn(b.title)
         b.children.forEach((c) => walkBlock(c, fn))
         break
+      case 'directive':
       case 'div':
       case 'section':
         b.children.forEach((c) => walkBlock(c, fn))
@@ -1216,6 +1218,7 @@ function pushChildBlockLists(b: BlockNode, out: BlockNode[][]): void {
   switch (b.type) {
     case 'block_quote':
     case 'admonition':
+    case 'directive':
     case 'div':
     case 'figure_group':
     case 'section':
@@ -1250,6 +1253,7 @@ function withClonedChildBlockLists(b: BlockNode): BlockNode {
   switch (b.type) {
     case 'block_quote':
     case 'admonition':
+    case 'directive':
     case 'div':
     case 'figure_group':
     case 'section':
@@ -1390,6 +1394,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
     switch (b.type) {
       case 'block_quote':
       case 'admonition':
+      case 'directive':
       case 'div':
       case 'figure_group':
       case 'section':
@@ -1515,6 +1520,7 @@ export function numberCaptionsIn(
     for (const b of bs) {
       switch (b.type) {
         case 'block_quote':
+        case 'directive':
         case 'div':
         case 'section':
           walk(b.children, inPanel, suppressed)

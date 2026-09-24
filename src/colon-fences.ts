@@ -1,7 +1,7 @@
 import { parse, type UnclosedContainer } from './parse.js'
 
 export interface ColonFenceSite {
-  kind: 'div' | 'admonition' | 'line block' | 'hard-break block'
+  kind: 'div' | 'admonition' | 'directive' | 'line block' | 'hard-break block'
   line: number; column: number; start: number; end: number; width: number
 }
 export interface ColonFenceMismatch {
@@ -57,8 +57,9 @@ export function inspectColonFences(source: string): {
 
 function containerSite(node: Record<string, unknown>, lines: string[], starts: number[]): ColonFenceSite | null {
   const kind: ColonFenceSite['kind'] | null = node.type === 'div' ? 'div'
-    : node.type === 'admonition' ? 'admonition' : node.type === 'line_block' ? 'line block'
-      : node.type === 'hard_break_block' ? 'hard-break block' : null
+    : node.type === 'admonition' ? 'admonition'
+      : node.type === 'directive' ? 'directive' : node.type === 'line_block' ? 'line block'
+        : node.type === 'hard_break_block' ? 'hard-break block' : null
   const pos = node.pos as { startLine?: number; startColumn?: number } | undefined
   if (!kind || !pos?.startLine || !pos.startColumn) return null
   const run = lineRun(lines[pos.startLine - 1] ?? '', pos.startColumn - 1)

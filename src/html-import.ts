@@ -16,7 +16,7 @@ import type {
   TableRow,
   TableRowGroups,
 } from './ast.js'
-import { CANONICAL_ADMONITION_KINDS } from './ast.js'
+import { CANONICAL_ADMONITION_KINDS, GENERATED_CONTENT_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
@@ -1887,7 +1887,7 @@ class Importer {
     // section sat that was NOT last; never present in real HTML input. It reads
     // back as the `::: footnotes` placement directive, which is what puts the
     // rebuilt section back in that slot instead of at document end.
-    if (tag === 'carve-footnote-placement') return [{ type: 'admonition', kind: 'footnotes', children: [] }]
+    if (tag === 'carve-footnote-placement') return [{ type: 'directive', kind: 'footnotes', children: [] }]
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
     if (tag === 'table') return [this.table(node, path, depth, attrs)]
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
@@ -1934,7 +1934,13 @@ class Importer {
          * longer exists.
          */
         const children0 = node.childNodes ?? []
-        const titleAt = children0.findIndex((child) => this.isAdmonitionTitle(child))
+        // A directive has NO title slot (CARVE-P12-057 closes the node without
+        // one), so nothing is lifted out of a generated-content container: a
+        // `<p class="admonition-title">` inside one stays the ordinary paragraph
+        // it reads as, rather than being lifted into a field that does not exist
+        // and dropped on the way.
+        const generated = GENERATED_CONTENT_KINDS.has(container.kind)
+        const titleAt = generated ? -1 : children0.findIndex((child) => this.isAdmonitionTitle(child))
         const titleNode = titleAt < 0 ? undefined : children0[titleAt]
         // The paths stay the ones the elements arrived under: filtering the
         // title out renumbers everything after it, the same reason `details`
@@ -1987,18 +1993,30 @@ class Importer {
         // title the renderer wrote, so it is lifted off what the title lift
         // left behind (markup-carve/carve-js#1413).
         const lifted = this.containerLabel(body, bodyPaths, depth)
+        const containerChildren = this.blocks(
+          lifted?.body ?? body,
+          path,
+          depth + 1,
+          lifted?.bodyPaths ?? bodyPaths,
+        )
+        if (generated) {
+          return [
+            {
+              type: 'directive',
+              kind: container.kind,
+              ...(lifted ? { label: lifted.label } : {}),
+              children: containerChildren,
+              ...(container.attrs ? { attrs: container.attrs } : {}),
+            },
+          ]
+        }
         return [
           {
             type: 'admonition',
             kind: container.kind,
             ...(title ? { title } : {}),
             ...(lifted ? { label: lifted.label } : {}),
-            children: this.blocks(
-              lifted?.body ?? body,
-              path,
-              depth + 1,
-              lifted?.bodyPaths ?? bodyPaths,
-            ),
+            children: containerChildren,
             ...(container.attrs ? { attrs: container.attrs } : {}),
           },
         ]

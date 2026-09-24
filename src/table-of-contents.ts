@@ -1,4 +1,4 @@
-import type { Admonition, Attrs, Heading, InlineNode, RawBlock, Text } from './ast.js'
+import type { Attrs, Directive, Heading, InlineNode, RawBlock, Text } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { deriveDisplayNodes } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
@@ -349,7 +349,7 @@ function collectPlacementHeadings(node: unknown, out: TocEntry[]): void {
 }
 
 function renderToc(
-  node: Admonition,
+  node: Directive,
   ctx: BlockExtensionRenderContext,
   entries: TocEntry[],
   budget: AbbrBudget,
@@ -379,7 +379,7 @@ function renderToc(
  * `<nav class="toc">` exactly where the author writes a `::: toc` block, so a
  * long document can place its contents after an intro. Off by default.
  *
- * The block parses as a typed admonition (`kind: 'toc'`); this extension takes
+ * The block parses as a `directive` (`kind: 'toc'`, CARVE-P12-057); this extension takes
  * over its rendering. The level window is set with attributes on the line
  * *before* the opener (Carve attaches `:::`-block attributes on a preceding
  * attribute line, not inline on the opener):
@@ -400,12 +400,12 @@ function renderToc(
  * Reads the resolved (dedup-aware) heading ids from `heading.attrs.id`, so
  * links always match the emitted `<h*>` anchors.
  *
- * DEGRADATION. Without THIS extension registered, `::: toc` renders as the
- * ordinary non-canonical admonition it parsed as: an EMPTY `<div class="toc">`
- * where the author wrote the block, per extensions §8b.3's "labeled `<div>`
- * floor". Not an `<aside>`, and the class carries no `admonition` prefix and no
- * `aria-label` - `renderAdmonition` reads both the tag and the class off
- * `CANONICAL_ADMONITION_KINDS`, and `toc` is not in it.
+ * DEGRADATION. Without THIS extension registered, `::: toc` renders as the bare
+ * directive it parsed as: an EMPTY `<div class="toc">` where the author wrote
+ * the block, per extensions §8b.3's "labeled `<div>` floor". Not an `<aside>`,
+ * and the class carries no `admonition` prefix and no `aria-label` - a
+ * directive's kind is never in `CANONICAL_ADMONITION_KINDS`, which is what the
+ * renderer reads both the tag and the class off.
  *
  * "Without this extension" means without `tocPlacement()` specifically, which
  * is worth spelling out because {@link tableOfContents} does NOT stand in for
@@ -444,8 +444,8 @@ export function tocPlacement(): CarveExtension {
       return doc
     },
     blockRenderers: {
-      admonition: (node, ctx) => {
-        const a = node as Admonition
+      directive: (node, ctx) => {
+        const a = node as Directive
         return a.kind === 'toc' ? renderToc(a, ctx, entries, budget) : undefined
       },
     },

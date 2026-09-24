@@ -25,6 +25,7 @@ import type {
   Comment,
   DefinitionItem,
   DefinitionList,
+  Directive,
   Div,
   EscapedText,
   LineBlock,
@@ -60,7 +61,7 @@ import type {
   InlineFootnote,
   LinkReferenceDefinition,
 } from './ast.js'
-import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
+import { GENERATED_CONTENT_KINDS, SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
 import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
@@ -112,7 +113,7 @@ export interface ParseOptions {
 }
 
 export interface UnclosedContainer {
-  kind: 'div' | 'admonition' | 'line block' | 'hard-break block' | 'block quote'
+  kind: 'div' | 'admonition' | 'directive' | 'line block' | 'hard-break block' | 'block quote'
   line: number
   column: number
   startOffset: number
@@ -2024,8 +2025,8 @@ function lazyProbeFrame(blocks: BlockNode[]): LazyProbeFrame {
     endsInParagraph = last.type === 'paragraph'
     if (
       last.type === 'block_quote' || last.type === 'div' ||
-      last.type === 'admonition' || last.type === 'figure_group' ||
-      last.type === 'line_block'
+      last.type === 'admonition' || last.type === 'directive' ||
+      last.type === 'figure_group' || last.type === 'line_block'
     ) {
       current = last.children
       continue
@@ -3591,6 +3592,7 @@ const INDENT_LATITUDE = new Set([
   'admonition',
   'block_quote',
   'definition_list',
+  'directive',
   'div',
   'line_block',
   'list',
@@ -4595,7 +4597,7 @@ function parseFootnoteDef(lexer: Lexer): null {
   return null
 }
 
-function parseAdmonition(lexer: Lexer): Admonition | FigureGroup {
+function parseAdmonition(lexer: Lexer): Admonition | Directive | FigureGroup {
   const openLineIndex = lexer.pos
   const open = lexer.consume()
   const m = RE_ADMONITION_OPEN.exec(open)!
@@ -4620,7 +4622,9 @@ function parseAdmonition(lexer: Lexer): Admonition | FigureGroup {
   // uses it as the tab name; core does not render it.
   const label = m[4] !== undefined ? m[4]!.slice(1, -1) : undefined
   const inner = collectColonFenceBody(lexer, {
-    kind: 'admonition',
+    // Which of the two named-container types this fence opens, so an unclosed
+    // one is reported as the thing it was (CARVE-P12-057).
+    kind: GENERATED_CONTENT_KINDS.has(kind) ? 'directive' : 'admonition',
     lineIndex: openLineIndex,
     fenceWidth: fence,
   })
@@ -4652,6 +4656,20 @@ function parseAdmonition(lexer: Lexer): Admonition | FigureGroup {
     // (same as the admonition below); parseBlocks applies it to the returned
     // node.
     return group
+  }
+  // CARVE-P12-057: a named container whose kind names GENERATED CONTENT is a
+  // `directive`, not an `admonition`. The kind list is CLOSED - a seventh
+  // generated-looking word (`endnotes`, `contents`) takes the admonition branch
+  // below, because the clause rules that "every other named container is an
+  // `admonition`".
+  //
+  // A directive has no title slot (the schema closes the node without one), so
+  // a quoted title on one of these openers is not carried. No corpus document
+  // and no example spells one; where it should go is markup-carve/carve#2247.
+  if (GENERATED_CONTENT_KINDS.has(kind)) {
+    const directive: Directive = { type: 'directive', kind, children }
+    if (label !== undefined) directive.label = label
+    return directive
   }
   const node: Admonition = { type: 'admonition', kind, children }
   // `!== undefined` (not truthiness): an explicitly empty quoted title
@@ -4743,7 +4761,8 @@ function colonFenceKind(line: string): UnclosedContainer['kind'] {
   if (RE_LINE_BLOCK_OPEN.test(line)) return 'line block'
   if (RE_HARDBREAKS_OPEN.test(line)) return 'hard-break block'
   if (RE_QUOTE_BLOCK_OPEN.test(line)) return 'block quote'
-  if (RE_ADMONITION_OPEN.test(line)) return 'admonition'
+  const named = RE_ADMONITION_OPEN.exec(line)
+  if (named) return GENERATED_CONTENT_KINDS.has(named[2]!) ? 'directive' : 'admonition'
   return 'div'
 }
 

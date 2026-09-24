@@ -69,6 +69,7 @@ function walkBlockInlines(
       if (node.title) visit(node.title)
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
+    case 'directive':
     case 'div':
     case 'section':
     // A LINE BLOCK HOLDS ORDINARY BLOCKS and differs from a div only in that
