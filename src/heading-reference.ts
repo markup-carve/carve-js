@@ -126,6 +126,7 @@ function walkBlock(
     case 'div':
     case 'section':
     case 'admonition':
+    case 'directive':
     case 'figure_group':
       node.children.forEach((c) => walkBlock(c, targets, counts))
       break

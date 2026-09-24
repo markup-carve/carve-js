@@ -63,9 +63,10 @@ export const CANONICAL_BLOCK_TYPES = [
   // no parse emits one; a tree that arrived through a bridge can carry it and a
   // profile must be able to deny it (markup-carve/carve#2223).
   'block_extension',
-  // `:::` still produces `admonition` for the generated-content kinds here - the
-  // spec stages the split and moves `admonition.kind` only once an engine emits
-  // this type (markup-carve/carve#2225). The name is deniable ahead of that.
+  // `:::` with a generated-content kind produces this type (CARVE-P12-057,
+  // markup-carve/carve#2243). It carries `div` as its supertype, so a profile
+  // that denied `div` keeps stripping `::: toc` the way it did when the node
+  // was an admonition with a non-Tier-1 kind.
   'directive',
   // A DEFINITION LINE IS CONTENT, so both definition types are deniable
   // (carve#826, the ruling on carve#771). They render nothing in HTML and are
@@ -163,6 +164,11 @@ const INLINE_SET: ReadonlySet<string> = new Set(CANONICAL_INLINE_TYPES)
 const SUPERTYPE: Record<string, string> = {
   autolink: 'link',
   admonition: 'div',
+  // A directive renders `<div class="{kind}">`, exactly as the non-Tier-1
+  // admonition it used to parse as - and that classified as `div`. Without the
+  // supertype, splitting the type would quietly WIDEN every profile that denies
+  // `div`: `::: toc` would start surviving a deny list it never survived.
+  directive: 'div',
 }
 
 /** The type itself, plus its supertype when it has one. */
@@ -200,6 +206,8 @@ export function canonicalType(type: string): string {
       return 'section'
     case 'admonition':
       return 'admonition'
+    case 'directive':
+      return 'directive'
     case 'raw_block':
       return 'raw_block'
     case 'definition_list':

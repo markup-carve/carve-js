@@ -290,6 +290,9 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       }
       return `${labelLine}${body}`
     }
+    // A directive carries no title (CARVE-P12-057), so it degrades exactly as a
+    // div does: the label floor, if any, then the body.
+    case 'directive':
     case 'div':
       return node.label
         ? `${wrapperLine(escapeText(node.label), '**', 'strong')}${renderBlocks(node.children, ctx)}`

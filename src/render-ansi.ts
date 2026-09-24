@@ -193,6 +193,9 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     }
     case 'line_block':
       return renderBlocks(node.children, ctx)
+    // A directive carries no title (CARVE-P12-057), so it degrades exactly as a
+    // div does: the label floor, if any, then the body.
+    case 'directive':
     case 'div': {
       if (!node.label) return renderBlocks(node.children, ctx)
       // Caption floor: a bold label line. The blockquote bar, when there is

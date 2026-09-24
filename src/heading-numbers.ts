@@ -150,6 +150,7 @@ function walkHeadings(
       case 'div':
       case 'section':
       case 'admonition':
+      case 'directive':
       case 'figure_group':
         descend((b as { children?: unknown }).children, inBlockquote)
         break

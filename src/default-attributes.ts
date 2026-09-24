@@ -22,7 +22,7 @@ const TYPE_MAP: Record<string, string[]> = {
   block_quote: ['block_quote'],
   list: ['list'],
   table: ['table'],
-  div: ['div', 'admonition'],
+  div: ['div', 'admonition', 'directive'],
   thematic_break: ['thematic_break'],
   link: ['link'],
   image: ['image'],

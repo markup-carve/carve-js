@@ -19,6 +19,7 @@ describe('profile subtypes', () => {
   const autolink = 'See <https://example.com> here.\n'
   const admonition = '::: note\ncallout\n:::\n'
   const generic = '{.wrap}\n:::\ngeneric\n:::\n'
+  const directive = '::: toc\nplaced\n:::\n'
 
   const html = (src: string, profile?: Profile) =>
     carveToHtml(src, profile ? { profile } : {})
@@ -50,6 +51,21 @@ describe('profile subtypes', () => {
     const out = html(admonition + '\n' + generic, Profile.full().denyBlock(['admonition']))
     expect(out).not.toContain('<aside')
     expect(out).toContain('<div class="wrap">')
+  })
+
+  it('denies a directive when the profile names it', () => {
+    expect(html(directive, Profile.full().denyBlock(['directive']))).not.toContain('class="toc"')
+  })
+
+  it('still denies a directive when the profile names div', () => {
+    // CARVE-P12-057 gave `::: toc` its own type. It classified as `div` before
+    // the split, so without the supertype the split would quietly WIDEN every
+    // profile that denies `div`.
+    expect(html(directive, Profile.full().denyBlock(['div']))).not.toContain('class="toc"')
+  })
+
+  it('keeps a directive when only admonition is denied', () => {
+    expect(html(directive, Profile.full().denyBlock(['admonition']))).toContain('class="toc"')
   })
 
   it('admits a subtype through an allow list naming its supertype', () => {

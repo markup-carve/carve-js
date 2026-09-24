@@ -9,6 +9,7 @@
 
 import type {
   Admonition,
+  Directive,
   Attrs,
   BlockNode,
   BlockQuote,
@@ -654,7 +655,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     // marker is byte-identical to the previous behavior (default end append).
     if (isFootnotePlacement(node) && footnotes.order.length && !footnotesPlaced) {
       // Preserve any blocks authored inside the placeholder before flushing.
-      for (const child of (node as Admonition).children) {
+      for (const child of (node as Directive).children) {
         const r = renderBlock(child, opts, sectionStack.length)
         if (r !== '') out.push(r)
       }
@@ -715,10 +716,10 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   return out.join('\n')
 }
 
-/** A `::: footnotes` placement directive (typed admonition, kind `footnotes`):
+/** A `::: footnotes` placement directive (CARVE-P12-057, kind `footnotes`):
  *  marks where the endnotes section should render instead of at document end. */
 function isFootnotePlacement(node: BlockNode): boolean {
-  return node.type === 'admonition' && (node as Admonition).kind === 'footnotes'
+  return node.type === 'directive' && (node as Directive).kind === 'footnotes'
 }
 
 interface FootnoteEntry {
@@ -1372,6 +1373,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     case 'table':
       return renderTable(node, opts, level)
     case 'admonition':
+    case 'directive':
       return renderAdmonition(node, opts, level)
     case 'div': {
       const open = `${pad}<div${renderAttrs(node.attrs, 'div')}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
@@ -1810,17 +1812,28 @@ function labelFloor(label: string | undefined, level: number): string {
   return `${indent(level)}<p class="div-label">${escapeHtml(label)}</p>`
 }
 
-function renderAdmonition(node: Admonition, opts: RenderOptions, level: number): string {
+/**
+ * Render an admonition or a directive.
+ *
+ * One function for both: a directive's kind is never Tier-1, so it takes the
+ * same generic `<div class="{kind}">` shape a non-canonical admonition takes,
+ * and it has no `title` to place. Splitting them would be two copies of that
+ * shape, drifting.
+ */
+function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const canonical = CANONICAL_ADMONITION_KINDS.has(node.kind)
   const authoredName = Object.keys(node.attrs?.keyValues ?? {}).some((name) => {
     const folded = name.toLowerCase()
     return folded === 'aria-label' || folded === 'aria-labelledby'
   })
+  // A directive has no `title` field (CARVE-P12-057 closes the node without
+  // one), so the title slot is empty for every one of them.
+  const title = node.type === 'admonition' ? node.title : undefined
   let titleId: string | undefined
   let accessibleName = ''
   if (canonical && !authoredName) {
-    if (node.title !== undefined) {
+    if (title !== undefined) {
       const baseId = `adm-${++admonitionCount}`
       titleId = docIds?.uniqueId(baseId) ?? baseId
       accessibleName = ` aria-labelledby="${escapeAttr(titleId)}"`
@@ -1832,8 +1845,8 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   // `node.title` undefined => no title supplied; an empty-but-defined
   // title (`::: note ""`) still emits an (empty) title element.
   const titleLine =
-    node.title !== undefined
-      ? `${pad}  <p class="admonition-title"${titleId ? ` id="${escapeAttr(titleId)}"` : ''}>${renderInlines(node.title, opts)}</p>\n`
+    title !== undefined
+      ? `${pad}  <p class="admonition-title"${titleId ? ` id="${escapeAttr(titleId)}"` : ''}>${renderInlines(title, opts)}</p>\n`
       : ''
   // Core caption floor: surface an unconsumed `[label]` after the title (the
   // title is rendered first when a block carries both).

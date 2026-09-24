@@ -244,7 +244,8 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
       if (order.length === 0) return doc
       // Place the references list via a marked carrier div the block renderer
       // turns into the list: inside an explicit `::: references` container
-      // (div or admonition) if present, else appended at document end.
+      // (a `.references` div, or the `references` directive CARVE-P12-057 makes
+      // of `::: references`) if present, else appended at document end.
       const carrier: Div = {
         type: 'div',
         attrs: { keyValues: { [REFS_MARK]: '' } },
@@ -253,7 +254,7 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
       const explicit = doc.children.find(
         (b) =>
           (b.type === 'div' && hasClass(b, 'references')) ||
-          (b.type === 'admonition' && (b as { kind?: string }).kind === 'references'),
+          (b.type === 'directive' && (b as { kind?: string }).kind === 'references'),
       ) as { children: BlockNode[] } | undefined
       if (explicit) explicit.children.push(carrier)
       else doc.children.push(carrier)
@@ -505,6 +506,7 @@ function collectDefs(blocks: readonly BlockNode[], defs: Map<string, Def>): void
     switch (block.type) {
       case 'block_quote':
       case 'admonition':
+      case 'directive':
       case 'div':
       case 'section':
       case 'figure_group':

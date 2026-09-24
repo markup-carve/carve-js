@@ -359,6 +359,47 @@ export interface Admonition extends BaseNode {
 }
 
 /**
+ * The six kinds a `:::` container names to PLACE generated content
+ * (CARVE-P12-057). A named container carrying one of these is a
+ * {@link Directive}; every other named container is an {@link Admonition}.
+ *
+ * The list is CLOSED: the clause names six kinds and rules that "every other
+ * named container is an `admonition`", so a seventh generated-looking word
+ * (`endnotes`, `contents`) is an admonition, not a directive. The schema's
+ * `directive.kind` enum carries the same six.
+ */
+export const GENERATED_CONTENT_KINDS: ReadonlySet<string> = new Set([
+  'bibliography',
+  'footnotes',
+  'glossary',
+  'index',
+  'references',
+  'toc',
+])
+
+/**
+ * Generated-content placement (CARVE-P12-057): a named `:::` container whose
+ * kind asks the renderer to place something the document already holds.
+ *
+ * Its own type rather than an `Admonition` carrying one of six kinds, because a
+ * consumer dispatching on `type` to decide whether to draw a callout otherwise
+ * has to carry the not-a-callout list itself.
+ *
+ * No `title`: the schema names `kind`, `label`, `children`, `attrs` and `pos`
+ * and closes the node, so an opener's quoted title has no slot here. See
+ * markup-carve/carve#2247.
+ */
+export interface Directive extends BaseNode {
+  type: 'directive'
+  /** One of {@link GENERATED_CONTENT_KINDS}. */
+  kind: string
+  /** Opener `[label]` grouping id. Inert in core, like {@link Admonition.label}. */
+  label?: string
+  /** Blocks written inside the opener. Usually empty: the content is generated. */
+  children: BlockNode[]
+}
+
+/**
  * Generic fenced div — djot's generic container. A `:::` opener with NO
  * type word (bare `:::` or an attributes-only `::: {.class}`) is a Div;
  * a typed `::: word` is an Admonition (two-tier rule, PART 9 §12).
@@ -538,6 +579,7 @@ export type BlockNode =
   | ThematicBreak
   | Table
   | Admonition
+  | Directive
   | Div
   | LineBlock
   | DefinitionList

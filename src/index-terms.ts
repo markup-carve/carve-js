@@ -1,4 +1,4 @@
-import type { Admonition, Attrs, BlockNode, Document, Extension, InlineNode } from './ast.js'
+import type { Attrs, BlockNode, Directive, Document, Extension, InlineNode } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import type {
   BlockExtensionRenderContext,
@@ -75,10 +75,10 @@ export function index(opts: IndexOptions = {}): CarveExtension {
     },
 
     blockRenderers: {
-      admonition: (node, ctx) =>
+      directive: (node, ctx) =>
         containers.has(node) && counts.size > 0
           ? renderIndexList(
-              node as Admonition,
+              node as Directive,
               ctx,
               counts,
               display,
@@ -95,7 +95,7 @@ export function index(opts: IndexOptions = {}): CarveExtension {
 const termSlug = (term: InlineNode[]): string => slugify(inlineText(term), { lowercase: true })
 
 function isIndex(b: BlockNode): boolean {
-  return b.type === 'admonition' && (b as Admonition).kind === 'index'
+  return b.type === 'directive' && (b as Directive).kind === 'index'
 }
 
 function renderMarker(
@@ -114,7 +114,7 @@ function renderMarker(
 }
 
 function renderIndexList(
-  node: Admonition,
+  node: Directive,
   ctx: BlockExtensionRenderContext,
   counts: Map<string, number>,
   display: Map<string, InlineNode[]>,

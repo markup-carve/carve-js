@@ -169,6 +169,7 @@ function childArrays(node: NodeLike): ChildArray[] {
       if (node['title']) push(node['title'], false)
       push(node['children'], true)
       break
+    case 'directive':
     case 'block_quote':
       push(node['children'], true)
       break
@@ -217,6 +218,7 @@ const BLOCK_CANONICAL = new Set([
   'figure',
   'figure_group',
   'caption',
+  'directive',
 ])
 
 const BLOCK_JS_TYPES = new Set([
@@ -228,6 +230,7 @@ const BLOCK_JS_TYPES = new Set([
   'thematic_break',
   'table',
   'admonition',
+  'directive',
   'div',
   'definition_list',
   'figure',
