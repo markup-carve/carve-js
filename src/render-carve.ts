@@ -1061,12 +1061,11 @@ function renderBlockBody(
     case 'table':
       return renderTableWithColumns(node, ctx)
     case 'directive': {
-      // Same opener as an admonition, minus the title slot the node does not
-      // have (CARVE-P12-057).
+      const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
       const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
       const fence = colonFenceFor(ctx)
       const body = renderColonFenceBody(node.children, ctx)
-      return withAttrs(`${fence} ${node.kind}${label}\n${body}\n${fence}`)
+      return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
     }
     case 'admonition': {
       // The quoted title is re-parsed as a quoted_title token (which admits

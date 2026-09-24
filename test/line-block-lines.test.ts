@@ -8,23 +8,27 @@ describe('line block line sequences', () => {
     expect(block?.type).toBe('line_block')
     if (block?.type !== 'line_block') return
     expect(block.children).toHaveLength(1)
-    expect(block.lines).toHaveLength(2)
-    expect(block.lines?.[0]).toMatchObject([{ type: 'text', value: 'Roses are red' }])
-    expect(block.lines?.[1]).toMatchObject([{ type: 'text', value: '\uE000\uE000Violets are blue' }])
+    expect(block.lines).toEqual([['/children/1', '/children/-']])
   })
 
   it('keeps an inline wrapper split across verse lines', () => {
     const block = toAstJson(parse('::: |\n*a\nb*\n:::\n')).children[0]
     if (block?.type !== 'line_block') throw new Error('expected a line block')
-    expect(block.lines?.map((line) => line[0]?.type)).toEqual(['strong', 'strong'])
+    expect(block.lines).toEqual([['/children/0/children/1', '/children/-']])
     expect(block.children).toHaveLength(1)
+  })
+
+  it('does not point to a trailing authored break', () => {
+    const block = toAstJson(parse('::: |\n*a\nb*\\\n:::\n')).children[0]
+    if (block?.type !== 'line_block') throw new Error('expected a line block')
+    expect(block.lines).toEqual([['/children/0/children/1', '/children/-']])
   })
 
   it('retains a comment on the last line and round-trips the matrix', () => {
     const json = toAstJson(parse('::: |\na\n%% end\n:::\n'))
     const block = json.children[0]
     if (block?.type !== 'line_block') throw new Error('expected a line block')
-    expect(block.lines?.[1]?.[0]?.type).toBe('comment')
+    expect(block.lines).toEqual([['/children/1', '/children/-']])
     expect(toAstJson(fromAstJson(json))).toEqual(json)
   })
 
@@ -32,7 +36,7 @@ describe('line block line sequences', () => {
     const json = toAstJson(parse('::: |\na\n:::\n'))
     const block = json.children[0]
     if (block?.type !== 'line_block') throw new Error('expected a line block')
-    block.lines = [['bad' as never]]
+    block.lines = [['/children/9', '/children/-']]
     expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
   })
 
@@ -56,7 +60,7 @@ describe('line block line sequences', () => {
     const json = toAstJson(parse('::: |\na\nb\n:::\n'))
     const block = json.children[0]
     if (block?.type !== 'line_block') throw new Error('expected a line block')
-    block.lines = [[{ type: 'text', value: 'finer' } as never]]
+    block.lines = [['/children/-']]
     const emitted = toAstJson(fromAstJson(json)).children[0]
     if (emitted?.type !== 'line_block') throw new Error('expected a line block')
     expect(emitted.lines).toEqual(block.lines)
@@ -68,12 +72,10 @@ describe('line block line sequences', () => {
     expect(diffAst(before, after).filter((change) => change.type === 'line_block')).toEqual([])
   })
 
-  it('publishes a multiline inline footnote once after numbering', () => {
+  it('does not count a break inside an inline footnote', () => {
     const block = toAstJson(resolve(parse('::: |\n^[one\ntwo] x[^n]\n:::\n\n[^n]: note\n'))).children[0]
     if (block?.type !== 'line_block') throw new Error('expected a line block')
-    const notes = block.lines?.flat().filter((node) => node.type === 'inline_footnote') ?? []
-    expect(notes).toHaveLength(1)
-    expect(notes[0]).toMatchObject({ type: 'inline_footnote', number: 1 })
+    expect(block.lines).toEqual([['/children/-']])
   })
 
   it('does not duplicate lint findings for the second wire view', () => {

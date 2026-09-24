@@ -160,10 +160,11 @@ function renderIndexList(
   }
   // Carry the author's `{#id .class}` onto the <ul>, `index` stays leading.
   const ul = `${pad}<ul${ctx.renderAttrs(withBaseClass(node.attrs, 'index'))}>\n${items.join('\n')}\n${pad}</ul>`
+  const title = node.title === undefined ? '' : `${pad}<p class="admonition-title">${ctx.renderInlines(node.title)}</p>\n`
   // Preserve any authored content inside the placeholder before the list -
   // never silently drop authored blocks.
-  if (node.children.length === 0) return ul
-  return `${ctx.renderChildren(node.children, ctx.level)}\n${ul}`
+  if (node.children.length === 0) return title + ul
+  return title + `${ctx.renderChildren(node.children, ctx.level)}\n${ul}`
 }
 
 function withBaseClass(attrs: Attrs | undefined, base: string): Attrs {

@@ -955,10 +955,10 @@ function resolveHeadingIdsImpl(
           item.children.forEach((c) => walkBlock(c, fn))
         break
       case 'admonition':
+      case 'directive':
         if (b.title) fn(b.title)
         b.children.forEach((c) => walkBlock(c, fn))
         break
-      case 'directive':
       case 'div':
       case 'section':
         b.children.forEach((c) => walkBlock(c, fn))
@@ -1520,12 +1520,12 @@ export function numberCaptionsIn(
     for (const b of bs) {
       switch (b.type) {
         case 'block_quote':
-        case 'directive':
         case 'div':
         case 'section':
           walk(b.children, inPanel, suppressed)
           break
         case 'admonition':
+        case 'directive':
           numberMath(b.title, suppressed)
           walk(b.children, inPanel, suppressed)
           break

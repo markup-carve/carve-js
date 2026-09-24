@@ -57,10 +57,8 @@ describe('a generated-content kind parses to a directive', () => {
     expect(back.children.map((c) => c.type)).toEqual(['directive'])
   })
 
-  it('publishes no title, which the schema does not name on this node', () => {
-    // markup-carve/carve#2247: the opener grammar admits a quoted title on
-    // every named container and `directive` has no slot for one.
-    expect(firstBlock('::: toc "Contents"\n:::\n')).not.toHaveProperty('title')
+  it('publishes the quoted title the opener spells', () => {
+    expect(firstBlock('::: toc "Contents"\n:::\n').title).toMatchObject([{ type: 'text', value: 'Contents' }])
   })
 })
 
@@ -89,7 +87,7 @@ describe('every other named container is still an admonition', () => {
     },
   )
 
-  it('keeps the title the six kinds cannot carry', () => {
+  it('keeps an admonition title too', () => {
     expect(firstBlock('::: sidebar "Aside"\n:::\n').title).toBeDefined()
   })
 })
