@@ -553,6 +553,31 @@ export class AstJsonUnknownNodeTypeError extends Error {
 }
 
 /**
+ * Thrown when a node the schema only admits inside one owner appears somewhere
+ * else - today a `citation`, which lives in `citation_group.items` and nowhere
+ * else (markup-carve/carve#2227).
+ *
+ * The type IS one the schema names, so {@link AstJsonUnknownNodeTypeError} is
+ * the wrong answer; the payload is a tree this engine cannot render, and §12
+ * asks for the refusal to name what was wrong. It used to be accepted here and
+ * throw `renderHtml: unknown inline citation` one step later, which carve-php
+ * and carve-rs both refuse at decode.
+ */
+export class AstJsonMisplacedNodeTypeError extends Error {
+  constructor(
+    readonly nodeType: string,
+    readonly owner: string,
+    readonly path: string,
+  ) {
+    super(
+      `AST node at ${path === '' ? 'the root' : path} has type ${JSON.stringify(nodeType)}, ` +
+        `which the schema admits only in ${owner} (PART 12 §12)`,
+    )
+    this.name = 'AstJsonMisplacedNodeTypeError'
+  }
+}
+
+/**
  * Thrown when a node in a node position has no usable `type` at all - the key is
  * absent, or it is present carrying something that is not a string.
  */
@@ -1093,15 +1118,26 @@ const LEGACY_RECORD_FIELDS: readonly string[] = ['terms', 'definitions']
  *   CURRENT wire shape with a bad value - rode in on the legacy grouping form's
  *   exemption and was silently dropped by `entriesFromWire`.
  */
+/**
+ * Node types the schema admits in ONE position, and that position.
+ *
+ * `inlineNode` does not dispatch on `citation`: an item is a typed positioned
+ * node inside its group, not an inline a paragraph may hold (CARVE-P12-038).
+ */
+const OWNED_NODE_POSITIONS: ReadonlyMap<string, string> = new Map([
+  ['citation', 'citation_group.items'],
+])
+
 function refuseUnknownNodeTypes(
   node: unknown,
   path: string,
   typeRequired: boolean,
   legacyKeys?: readonly string[],
+  position?: string,
 ): void {
   if (Array.isArray(node)) {
     node.forEach((item, index) =>
-      refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired, legacyKeys),
+      refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired, legacyKeys, position),
     )
     return
   }
@@ -1124,6 +1160,15 @@ function refuseUnknownNodeTypes(
     }
   } else if (ownValue(WIRE_FIELDS, type) === undefined) {
     throw new AstJsonUnknownNodeTypeError(type, path)
+  } else {
+    // A type the schema names, in a position it does not admit. `citation` is
+    // in WIRE_FIELDS because `citation_group.items` needs it, and that entry
+    // used to make it acceptable as any node - including a paragraph's own
+    // child, which no engine renders.
+    const owner = OWNED_NODE_POSITIONS.get(type)
+    if (owner !== undefined && position !== owner) {
+      throw new AstJsonMisplacedNodeTypeError(type, owner, path)
+    }
   }
   // Only node-bearing fields, never every key: `attrs.keyValues` is a
   // string-to-string map whose keys are ordinary attribute identifiers, so a
@@ -1149,6 +1194,7 @@ function refuseUnknownNodeTypes(
       // empty document rather than being decided here.
       kind === 'node' ? true : kind === 'nodes' ? Array.isArray(value) : false,
       legacy,
+      position,
     )
   }
 }
