@@ -367,7 +367,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     } else {
       prefix = `${bullet} `
     }
-    const content = containerContent(() => renderListItem(item, ctx))
+    const content = containerContent(() => renderListItem(item, node.tight, ctx))
     const lines = content.split('\n')
     // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
     // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
@@ -390,8 +390,33 @@ function renderList(node: List, ctx: MarkdownContext): string {
   return out + (ctx.listDepth === 0 ? '\n' : '')
 }
 
-function renderListItem(item: ListItem, ctx: MarkdownContext): string {
-  return renderBlocks(item.children, ctx)
+function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): string {
+  if (!tight) return renderBlocks(item.children, ctx)
+
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
+  ctx.blockDepth++
+  try {
+    let out = ''
+    for (const child of item.children) {
+      const rendered = renderBlock(child, ctx)
+      // A blank between a tight item's block and its sub-list makes the item
+      // loose in CommonMark. Each block normally leaves one separator blank;
+      // remove that blank only where the following child is a list. An ordered
+      // marker above 1 cannot interrupt a paragraph, and an empty bullet can be
+      // read as a setext underline, so those two shapes still need the blank to
+      // remain lists at all.
+      const firstLine = rendered.slice(0, rendered.indexOf('\n'))
+      const startsWithBareMarker = child.type === 'list' && /^(?:[-*+]|\d+[.)]) *$/.test(firstLine)
+      const cannotInterrupt = child.type === 'list' && child.ordered && (child.start ?? 1) !== 1
+      if (child.type === 'list' && !startsWithBareMarker && !cannotInterrupt && out.endsWith('\n\n')) {
+        out = out.slice(0, -1)
+      }
+      out += rendered
+    }
+    return out
+  } finally {
+    ctx.blockDepth--
+  }
 }
 
 function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, trailingBlank: boolean): string {
