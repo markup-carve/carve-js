@@ -59,6 +59,14 @@ export const CANONICAL_BLOCK_TYPES = [
   // falls through the string-only `isTypeAllowed` as ALLOWED - the opposite of
   // what the same profile answers with an axis.
   'citation_definition',
+  // Declared, not yet produced. Carve 0.1 source spells no block extension, so
+  // no parse emits one; a tree that arrived through a bridge can carry it and a
+  // profile must be able to deny it (markup-carve/carve#2223).
+  'block_extension',
+  // `:::` still produces `admonition` for the generated-content kinds here - the
+  // spec stages the split and moves `admonition.kind` only once an engine emits
+  // this type (markup-carve/carve#2225). The name is deniable ahead of that.
+  'directive',
   // A DEFINITION LINE IS CONTENT, so both definition types are deniable
   // (carve#826, the ruling on carve#771). They render nothing in HTML and are
   // real output on the `carve`, `markdown` and `plain` targets, so a profile

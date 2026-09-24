@@ -244,6 +244,8 @@ const IMPLEMENTED = new Set([
   'table-cell-attributes',
   'table-row-attributes',
   'table-header-cell-rowspan',
+  'an-explicit-table-head-span-keeps-one-row-group',
+  'a-table-foot-span-keeps-one-row-group',
   'block-quote-continuation-marker',
   'heading-marker-column-zero',
   'paragraph-trailing-whitespace',
@@ -840,15 +842,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  [
-    '101-table-header-cell-rowspan',
-    {
-      reason: 'carve#2224 keeps a crossing rowspan in one tbody',
-      html: '<table>\n  <tbody>\n    <tr><th scope="col" rowspan="3">H</th><th scope="col">G</th></tr>\n    <tr><td>b</td></tr>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>',
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 
 
 

@@ -88,16 +88,17 @@ describe("the generated wire-field map", () => {
     }
 
     expect(inlineRecords.sort()).toEqual([
+      "block_extension.payload",
       "table.columns",
       "table.rowGroups",
       "table.rowGroups.bodies",
     ]);
-    expect(Object.keys(WIRE_RECORD_FIELDS).sort()).toEqual([
-      "attrs",
-      "pos",
-      "rubyPair",
-      ...inlineRecords,
-    ]);
+    // Sorted, because the left side is: until `block_extension.payload` the
+    // derived names all happened to fall after `rubyPair`, so the literal
+    // order read as intentional when it was an accident of the schema.
+    expect(Object.keys(WIRE_RECORD_FIELDS).sort()).toEqual(
+      ["attrs", "pos", "rubyPair", ...inlineRecords].sort(),
+    );
 
     // And every record is REACHABLE, which is what actually validates it: a
     // record named but never nested anywhere would be checked at no position.
