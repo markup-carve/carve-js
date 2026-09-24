@@ -98,10 +98,9 @@ export interface AstJsonDocument {
 /**
  * Fields that hold child nodes, in the order a walk should follow them.
  *
- * Listed rather than discovered, because two fields that look like child lists
- * are not: a citation group's `items` and a definition list's `items` hold
- * plain objects in the runtime tree, and walking them as nodes would rewrite
- * data that is not one.
+ * Listed rather than discovered, because a definition list's `items` holds
+ * records in the runtime tree. Citation items are nodes and carry inline arrays
+ * that the serializer visits separately.
  */
 const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
 
@@ -877,7 +876,7 @@ function refuseTaskState(record: Record<string, unknown>, path: string): void {
   }
 }
 
-/** Keep newly pinned interchange shapes away from renderers until #1969, #1971, and #1973 land. */
+/** Keep newly pinned interchange shapes away from renderers until #1969 and #1971 land. */
 function refuseUnimplementedSpecShapes(record: Record<string, unknown>, path: string): void {
   if (record.type === 'section') {
     throw new AstJsonSchemaError('section nodes are not implemented by this engine', path)
@@ -887,9 +886,6 @@ function refuseUnimplementedSpecShapes(record: Record<string, unknown>, path: st
   }
   if (record.type === 'math' && (record.label !== undefined || record.number !== undefined)) {
     throw new AstJsonSchemaError('math label and number fields are not implemented by this engine', path)
-  }
-  if (record.type === 'citation' && record.mode !== undefined) {
-    throw new AstJsonSchemaError('per-item citation mode is not implemented by this engine', path)
   }
 }
 
@@ -1140,7 +1136,7 @@ function refuseUnknownNodeTypes(
     if (value === undefined) continue
     const position = typeof type === 'string' ? `${type}.${field}` : undefined
     // A record with no `type` of its own is one the schema gives none - a
-    // citation item today - and its own array fields hold real nodes, so the
+    // legacy definition entry - and its own array fields hold real nodes, so the
     // requirement comes back on for them.
     const legacy = position === undefined ? undefined : LEGACY_TYPELESS_POSITIONS.get(position)
     const kind =

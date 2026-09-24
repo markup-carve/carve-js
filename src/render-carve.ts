@@ -2716,8 +2716,18 @@ function renderInlineBody(
       return `</#${escapeCrossrefTarget(node.target)}>`
     case 'caption_number':
       return '#'
-    case 'citation_group':
-      return node.raw
+    case 'citation_group': {
+      const integral = node.items[0]?.mode === 'integral'
+      if (node.items.some((item) => (item.mode === 'integral') !== integral)) {
+        throw new SourceUnspellableError(
+          'citation_group',
+          'a group with mixed per-item citation modes has no Carve source spelling',
+          node,
+        )
+      }
+      if (integral) return node.raw.startsWith('[+') ? node.raw : `[+${node.raw.slice(1)}`
+      return node.raw.startsWith('[+') ? `[${node.raw.slice(2)}` : node.raw
+    }
     case 'comment':
       if (node.delimited) return `{% ${node.content} %}`
       // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`

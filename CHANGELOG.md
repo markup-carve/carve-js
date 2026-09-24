@@ -9,6 +9,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Citation items carry `mode` through parsing and AST JSON. HTML rendering uses each item's mode (#1973).
 - The interchange AST supports `ruby` nodes with ordered base and annotation pairs (markup-carve/carve#2208). HTML import preserves ruby structure, HTML and Markdown emit native `<ruby>` markup, and plain, ANSI, and Carve output use the readable `base(annotation)` fallback. Checked rendering reports that fallback as `ruby-flattened`.
 - The interchange AST accepts `small_caps` as a structural inline node and renders it as native HTML and Markdown-compatible HTML.
 - `carve render --allow-loss ruby-flattened` permits the readable ruby fallback in strict loss mode.
@@ -16,7 +17,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - The serialized `footnote_ref` target field is named `label` instead of `id`, matching the field on its definition (#1965). AST ingest refuses the old wire spelling.
-- AST ingest returns a typed error for `section`, block content in table cells, labeled or numbered math, and per-item citation modes until those interchange shapes are implemented.
+- AST ingest returns a typed error for `section`, block content in table cells, and labeled or numbered math until those interchange shapes are implemented.
 - `RenderLoss` is discriminated by `code`. The `format` field exists only on `raw-format-dropped` losses, and `RenderLossError` now describes structural losses.
 
 ## [0.1.8] - 2026-09-25

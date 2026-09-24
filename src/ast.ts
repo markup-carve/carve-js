@@ -800,6 +800,8 @@ export interface CaptionNumber extends BaseNode {
 export interface Citation extends BaseNode {
   type: 'citation'
   key: string
+  /** Per-item citation mode; absent means parenthetical. */
+  mode?: 'integral'
   /** Inline prefix text before the `@` (e.g. "see "). */
   prefix?: InlineNode[]
   /** Raw inline locator after ", " (e.g. "p. 33"); what the built-in
@@ -824,7 +826,7 @@ export interface Citation extends BaseNode {
 export interface CitationGroup extends BaseNode {
   type: 'citation_group'
   items: Citation[]
-  /** Citation-level mode; set by a leading '+' after '['. Absent = non-integral (parenthetical). CSL/Citum CitationMode vocabulary. */
+  /** Authored shorthand set by a leading '+' after '['. */
   mode?: 'integral'
   /** Verbatim source `[…]` for the undefined-key literal fallback. */
   raw: string
