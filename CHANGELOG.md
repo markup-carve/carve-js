@@ -7,6 +7,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `fromAstJson()` rejects an array in `figure.target`, instead of accepting it and leaving renderers to fail on the malformed tree (#1959).
+
 ## [0.1.8] - 2026-09-25
 
 ### Added
