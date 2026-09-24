@@ -386,6 +386,75 @@ describe('LinkPolicy: a scheme split by a character a consumer discards', () => 
   })
 })
 
+/*
+ * The host LinkPolicy checks must be the host a browser navigates to. Each
+ * bypass spelling below reaches `evil.example` under WHATWG URL parsing.
+ */
+describe('LinkPolicy: reads the host a browser reads', () => {
+  const TAB = '\t'
+  const LF = '\n'
+  const policies: Array<[string, () => LinkPolicy, string | null]> = [
+    ['denied domain', () => LinkPolicy.unrestricted().setDeniedDomains(['evil.example']), null],
+    ['allowlist', () => LinkPolicy.allowlist(['good.example']), null],
+    ['internalOnly', () => LinkPolicy.internalOnly(), 'good.example'],
+  ]
+  const bypasses: Array<[string, string]> = [
+    ['two backslashes', 'https:\\\\evil.example/x'],
+    ['slash then backslash', 'HTTPS:/\\evil.example/x'],
+    ['three slashes', 'https:///evil.example/x'],
+    ['no slashes', 'https:evil.example/x'],
+    ['backslash ends the authority', 'https://evil.example\\@good.example/x'],
+    ['tab in the host', `https://evil.exa${TAB}mple/x`],
+    ['LF in the scheme', `ht${LF}tps://evil.example/x`],
+    ['tab between protocol-relative slashes', `/${TAB}/evil.example/x`],
+    ['percent-encoded dot', 'https://evil%2Eexample/x'],
+    ['trailing dot', 'https://evil.example./x'],
+    ['ideographic full stop', 'https://evil。example/x'],
+    ['fullwidth full stop', 'https://evil．example/x'],
+    ['halfwidth ideographic full stop', 'https://evil｡example/x'],
+    ['uppercase host', 'https://EVIL.EXAMPLE/x'],
+    ['userinfo naming the good host', 'https://good.example@evil.example/x'],
+    ['port on the evil host', 'https://evil.example:8443/x'],
+  ]
+  const allowed = [
+    'https://good.example/x',
+    'https://evil.example@good.example/x',
+    'https://GOOD.example./x',
+    'https://good.example:8443/x',
+  ]
+
+  for (const [policyName, make, baseHost] of policies) {
+    for (const [name, url] of bypasses) {
+      it(`${policyName} refuses: ${name}`, () => {
+        expect(make().isUrlAllowed(url, baseHost)).toBe(false)
+      })
+    }
+    for (const url of allowed) {
+      it(`CONTROL: ${policyName} allows ${url}`, () => {
+        expect(make().isUrlAllowed(url, baseHost)).toBe(true)
+      })
+    }
+  }
+
+  it('a hostless https URL is allowed only by a policy without host rules', () => {
+    expect(LinkPolicy.unrestricted().isUrlAllowed('https:')).toBe(true)
+    expect(LinkPolicy.unrestricted().setDeniedDomains(['evil.example']).isUrlAllowed('https:')).toBe(
+      false,
+    )
+    expect(LinkPolicy.allowlist(['good.example']).isUrlAllowed('https:///')).toBe(false)
+  })
+
+  it('configured domains and the base host are normalized like the URL host', () => {
+    const denied = (d: string) => LinkPolicy.unrestricted().setDeniedDomains([d])
+    expect(denied('EVIL.example.').isUrlAllowed('https://evil.example./x')).toBe(false)
+    expect(denied('evil.example.').isUrlAllowed('https://evil.example/x')).toBe(false)
+    expect(LinkPolicy.allowlist(['good.example.']).isUrlAllowed('https://good.example/x')).toBe(true)
+    expect(LinkPolicy.internalOnly().isUrlAllowed('https://good.example/x', 'Good.Example.')).toBe(
+      true,
+    )
+  })
+})
+
 describe('Profile presets behave per spec', () => {
   it('full allows everything', () => {
     const p = Profile.full()
