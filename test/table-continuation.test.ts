@@ -104,6 +104,12 @@ describe('table `+` multi-line cell continuation', () => {
     )
   })
 
+  it('lets an uncovered caret below a colspan span the next row', () => {
+    expect(h('| A | < | X |\n| B | ^ | Y |\n| C | ^ | Z |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td colspan="2">A</td><td>X</td></tr>\n    <tr><td>B</td><td rowspan="2"></td><td>Y</td></tr>\n    <tr><td>C</td><td>Z</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
   it('a plain + line is not a table continuation (and `+` is not a bullet)', () => {
     expect(h('+ one\n+ two')).toBe('<p>+ one\n+ two</p>')
   })
