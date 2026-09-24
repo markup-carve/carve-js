@@ -2196,6 +2196,12 @@ function collectBlockquoteInlineRun(
   const table = new Set<string>()
   // The prefix the lazy lines of the current paragraph take, once found.
   let lazyPrefix: string | null = null
+  // The answer for the run of blank lines being walked, so a run of `k` of them
+  // is scanned once rather than once per line. It names the code block it
+  // answers for, since a later one measures from a different column.
+  let blankRun: { through: number; prefix: string; col: number; resumes: boolean } | null = null
+  // Whether the run was carried past a blank line for the code block open now.
+  let resumedCode = false
   while (end < lines.length) {
     const line = lines[end]!
     let parsed: { prefix: string; text: string } | null = quotedLine(line, contentCol)
@@ -2224,10 +2230,53 @@ function collectBlockquoteInlineRun(
     const prefix: string = parsed.prefix
     const text: string = parsed.text
     const blank = text.trim() === ''
+    // A blank line does not end an indented code block, only a non-blank line
+    // left of its four columns does (CommonMark 4.4), so a blank the code comes
+    // back from neither closes the code nor ends the run. Trailing blanks are
+    // not the code's, and there the run still ends at the first of them
+    // (markup-carve/carve-js#1947).
+    const codeRuns =
+      code !== null &&
+      blank &&
+      // A DEEPER quote line is blank once its own marker is stripped, and it is
+      // no blank line of the code: it ends the code the way any line outside
+      // the quote does.
+      prefix === code.prefix &&
+      (() => {
+        if (blankRun !== null && end <= blankRun.through && blankRun.prefix === code!.prefix && blankRun.col === code!.col) {
+          return blankRun.resumes
+        }
+        let at = end + 1
+        for (; at < lines.length; at++) {
+          const ahead = quotedLine(lines[at]!, contentCol)
+          if (ahead === null || ahead.prefix !== code!.prefix) break
+          if (ahead.text.trim() === '') continue
+          break
+        }
+        const ahead = at < lines.length ? quotedLine(lines[at]!, contentCol) : null
+        blankRun = {
+          through: at - 1,
+          prefix: code!.prefix,
+          col: code!.col,
+          resumes: ahead !== null && ahead.prefix === code!.prefix && indentColumns(ahead.text) >= code!.col + 4,
+        }
+        return blankRun.resumes
+      })()
+    // Only the code's own quote is carried past the blank. At another depth the
+    // run ends here, where it used to end at the blank, so the caller re-enters
+    // and reads what that quote holds - indented code of its own included,
+    // which this run has no way to fence.
+    //
+    // Where that quote is DEEPER, the two are blocks of one quote and fmt puts
+    // an empty quote line between them, which neither run writes: those
+    // documents read the way cmark-gfm reads them now, where before they were
+    // fixed points of the wrong reading, but they are not fixed points.
+    if (resumedCode && code !== null && prefix !== code.prefix) break
+    if (codeRuns) resumedCode = true
     // A line left of the item holding a fence or code ends the item, and them.
     if (fence !== null && (prefix !== fence.prefix || (!blank && indentColumns(text) < fence.col))) fence = null
-    if (code !== null && (prefix !== code.prefix || blank || indentColumns(text) < code.col + 4)) code = null
-    if (blank && fence === null) break
+    if (code !== null && (prefix !== code.prefix || (blank ? !codeRuns : indentColumns(text) < code.col + 4))) code = null
+    if (blank && fence === null && !codeRuns) break
     const lazy = paragraph
     paragraph = false
     if (fence !== null) {
@@ -2240,7 +2289,10 @@ function collectBlockquoteInlineRun(
       // Left of the item, only a lazy paragraph line keeps it open.
       else if (held !== undefined && indentColumns(text) < held && !(lazy && quoteParagraphIsOpen(text))) lastItem.delete(prefix)
       const open = RE_MD_FENCE_LINE.exec(inner)
-      if (item?.code) code = { prefix, col: columnWidth(item.lead) }
+      if (item?.code) {
+        code = { prefix, col: columnWidth(item.lead) }
+        resumedCode = false
+      }
       else if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
         const under = item === null ? lastItem.get(prefix) : undefined
         const col: number = item !== null ? columnWidth(item.lead) : under !== undefined && indentColumns(text) >= under ? under : 0
@@ -2330,16 +2382,27 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
       // item's content under it.
       col = columnWidth(item.lead)
       const bodies = [stripColumns(part.text.slice(item.lead.length), 4)]
-      while (idx + 1 < run.length) {
-        const next = run[idx + 1]!
-        if (next.prefix !== part.prefix || next.continued || next.text.trim() === '' || indentColumns(next.text) < col + 4) break
-        bodies.push(stripColumns(next.text, col + 4))
-        idx++
+      // A blank line the code comes back from is the code's; trailing ones are
+      // not, so they are only kept once more code follows them.
+      let blanks: string[] = []
+      for (let ahead = idx + 1; ahead < run.length; ahead++) {
+        const next = run[ahead]!
+        if (next.prefix !== part.prefix || next.continued) break
+        if (next.text.trim() === '') {
+          blanks.push('')
+          continue
+        }
+        if (indentColumns(next.text) < col + 4) break
+        bodies.push(...blanks, stripColumns(next.text, col + 4))
+        blanks = []
+        idx = ahead
       }
       const fence = canonicalFence(bodies)
       out.push(
         { prefix: part.prefix, text: item.lead + fence },
-        ...bodies.map((body) => ({ prefix: part.prefix, text: ' '.repeat(col) + body })),
+        // A blank line of the code carries the quote marker alone, the way fmt
+        // writes one: padded to the item it would keep trailing whitespace.
+        ...bodies.map((body) => ({ prefix: part.prefix, text: body === '' ? '' : ' '.repeat(col) + body })),
         { prefix: part.prefix, text: ' '.repeat(col) + fence },
       )
       lastItem.set(part.prefix, col)
@@ -3461,9 +3524,76 @@ function blankInsideEmptyFences(source: string): string {
     if (after.has(at)) out.push(/^[ \t>]*/.exec(lines[at + 1] ?? '')![0].trimEnd())
   }
   const written = out.join('\n')
-  const reading = (text: string): string =>
-    JSON.stringify(parse(text), (key, value) => (key === 'pos' || key === 'srcByteLength' ? undefined : value))
   return reading(written) === reading(source) ? written : source
+}
+
+/** What a source reads as, with everything positional left out. */
+function reading(text: string): string {
+  return JSON.stringify(parse(text), (key, value) => (key === 'pos' || key === 'srcByteLength' ? undefined : value))
+}
+
+/** Matches a quote line carrying nothing but its own markers. */
+const RE_BARE_QUOTE_LINE = /^ *>(?:[ \t]*>)*[ \t]*$/
+
+/**
+ * Drop an empty quote line the quote ENDS at, which `carve fmt` does not write.
+ *
+ * A blank line inside a quote separates two of its blocks, and fmt keeps it;
+ * one the quote never comes back from carries nothing, and fmt drops it the way
+ * it drops a trailing blank in any container. The import wrote it wherever the
+ * source had one - `> alpha` over `>` at the document level as much as under
+ * `- > alpha` - so an imported document holding one failed `fmt --check`
+ * (markup-carve/carve-js#1947 case 2).
+ *
+ * A candidate is a quote line with a line of its own quote above it - dropping
+ * the only line a quote has would delete the quote - that the next line does not
+ * continue the quote of, or whose next line is itself a candidate: a run of them
+ * is scanned from the end, since dropping the last leaves the one above it
+ * trailing in turn.
+ *
+ * The reading decides whether the candidates go, because dropping one reopens
+ * the paragraph above it for a lazy line. All of them at once answers it in two
+ * parses, and one at a time from the end answers the rest - under a budget,
+ * since that costs a parse per candidate and the alternative is quadratic in a
+ * document built of them. Past the budget the lines stay, which is what the
+ * import wrote before any of this.
+ */
+const TRAILING_QUOTE_LINE_PARSE_BUDGET = 32
+
+function dropTrailingEmptyQuoteLines(source: string): string {
+  const lines = source.split('\n')
+  const candidates: number[] = []
+  const trailing = new Set<number>()
+  for (let at = lines.length - 1; at >= 0; at--) {
+    const line = lines[at]!
+    if (!RE_BARE_QUOTE_LINE.test(line)) continue
+    // A run of them is scanned from the end, but only a line spelled the same
+    // way is part of the run: a DEEPER quote under this one is the block fmt
+    // writes this very line to separate (markup-carve/carve-js#1921), and the
+    // reading alone cannot tell, since both spellings read alike.
+    const next = lines[at + 1] ?? ''
+    if (next.startsWith(line.trimEnd()) && !(trailing.has(at + 1) && next.trimEnd() === line.trimEnd())) continue
+    // The line above has to be a line of this quote, which it is when it holds
+    // a marker no further right than this one's - `- > alpha` over `  >` as
+    // much as `> alpha` over `>`.
+    const above = lines[at - 1] ?? ''
+    const marker = above.indexOf('>')
+    if (marker < 0 || marker > line.indexOf('>')) continue
+    trailing.add(at)
+    candidates.unshift(at)
+  }
+  if (candidates.length === 0) return source
+  const was = reading(source)
+  const without = (drop: ReadonlySet<number>): string => lines.filter((_, at) => !drop.has(at)).join('\n')
+  const all = without(new Set(candidates))
+  if (reading(all) === was) return all
+  if (candidates.length > TRAILING_QUOTE_LINE_PARSE_BUDGET) return source
+  const drop = new Set<number>()
+  for (const at of [...candidates].reverse()) {
+    drop.add(at)
+    if (reading(without(drop)) !== was) drop.delete(at)
+  }
+  return without(drop)
 }
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
@@ -4330,7 +4460,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   }
 
   const written = joinOutput(out, fromSource)
-  const body = blankInsideEmptyFences(separateLooseItems(written.text, written.sourceBlanks))
+  const body = dropTrailingEmptyQuoteLines(
+    blankInsideEmptyFences(separateLooseItems(written.text, written.sourceBlanks)),
+  )
   if (frontmatter.length === 0) return body
   return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
 }

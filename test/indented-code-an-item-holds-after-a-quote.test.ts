@@ -23,10 +23,11 @@ describe('indented code an item holds after a quote', () => {
 
   it('fences code after the item quote closes', () => {
     // cmark-gfm: <li><blockquote><p>alpha</p></blockquote><pre><code>code.
-    // The empty `>` line is not an fmt fixed point on its own, here or at the
-    // document level, so this pins the reading rather than the bytes.
+    // The quote never comes back from its empty `>` line, so fmt does not write
+    // one and neither does the import (markup-carve/carve-js#1947 case 2).
     const out = markdownToCarve(lines('- > alpha', sp(2) + '>', sp(6) + 'code'))
-    expect(out).toBe(lines('- > alpha', sp(2) + '>', sp(2) + '```', sp(2) + 'code', sp(2) + '```'))
+    expect(out).toBe(lines('- > alpha', sp(2) + '```', sp(2) + 'code', sp(2) + '```'))
+    expect(carveToCarve(out)).toBe(out)
     const html = carveToHtml(out)
     expect(html).toMatch(/<blockquote>[\s\S]*<pre><code>code/)
     expect(html).not.toContain('<blockquote><p>alpha</p></blockquote>\n    code')

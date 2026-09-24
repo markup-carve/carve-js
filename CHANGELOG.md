@@ -7,10 +7,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- `fromAstJson()` rejects an array in `figure.target`, instead of accepting it and leaving renderers to fail on the malformed tree (#1959).
-
 ## [0.1.8] - 2026-09-25
 
 ### Added
@@ -61,6 +57,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Markdown importer measures a quoted line from the item that holds it (#1946, #1947). A quote an item opens drops its own slack instead of carrying it through as the sample's indentation; a block leaving a quoted item is set apart from it by fmt's empty `>` line; and indented code an item inside a quote holds is fenced at the item's column rather than beside the list, where the item's columns used to become the sample's own indentation.
 - The Markdown importer writes indented code an item holds as that item's fence (#1947, #1952). Code under a quote the item holds, or after the item's quote closes, reached Carve as prose, since Carve has no indented code block and the sample's own `*` and `_` were then read as emphasis. Marker padding also collapses where the item carries its content along, so `-  a` over a blank and `   b` imports as `- a` / `  b`.
 - The Markdown importer writes the blank line `carve fmt` puts inside an empty code block (#1952), so a fence it closed on the next line passes `fmt --check`. Both spellings render the same empty block, and the blank is kept only where the parse is unchanged.
+- `fromAstJson()` rejects an array in `figure.target`, instead of accepting it and leaving renderers to fail on the malformed tree (#1959).
+- The Markdown importer writes no empty quote line the quote ends at, and lets a blank line run through indented code on a quoted item's marker line (#1947). `carve fmt` drops a trailing empty `>` the way it drops a trailing blank in any container, so an imported document carrying one failed `fmt --check` at the document level as much as under `- > alpha`; each one goes only where the parse is unchanged, since dropping it reopens the paragraph above for a lazy line. A blank does not end indented code (CommonMark 4.4), but the quote collector let one close the code and end its run, so `> -     a` over `>` over seven columns of `b` came out as two code blocks where cmark-gfm reads one.
 - A blank line inside a fence in a sibling nested list no longer loosens the outer item (#1951). The looseness scan in `parseList` skipped a blank whose following content belongs to the item's sub-list, but measured that against the FIRST sub-list's content column only, so a sibling sub-list with a narrower marker fell below it. Per PART 9 §17 a list is loose only when a blank separates its items or an item holds a second paragraph, and this blank is code content.
 
 ## [0.1.7] - 2026-09-18
