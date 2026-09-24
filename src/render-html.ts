@@ -27,6 +27,7 @@ import type {
   TableRow,
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS, SMART_PUNCTUATION_GLYPHS } from './ast.js'
+import { resolveTableSpans } from './table-spans.js'
 import type {
   BlockExtensionRenderContext,
   CarveExtension,
@@ -1612,58 +1613,8 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     lines.push(`${pad}  </colgroup>`)
   }
 
-  // Build effective rowspan/colspan by walking rows.
-  // For each cell, compute span counts: a '^' cell extends the cell above;
-  // a '<' cell extends the cell to its left.
-  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center'; valign?: 'top' | 'middle' | 'bottom' }>> = []
-  for (let r = 0; r < node.rows.length; r++) {
-    const row = node.rows[r]!
-    const gridRow: typeof grid[number] = []
-    for (let c = 0; c < row.cells.length; c++) {
-      const cell = row.cells[c]!
-      gridRow.push({ row, cell, rowspan: 1, colspan: 1, skip: false })
-    }
-    grid.push(gridRow)
-  }
-  // Per column, the last row index (above the current one) a '^' resolves
-  // against. Maintained incrementally so a '^' resolves in O(1) instead of
-  // walking up every prior row (an all-'^' table was O(rows^2)).
-  const base: number[] = []
-  for (let r = 0; r < grid.length; r++) {
-    for (let c = 0; c < grid[r]!.length; c++) {
-      const entry = grid[r]![c]!
-      if (entry.skip) continue
-      if (entry.cell.span === 'rowspan' && r > 0) {
-        const up = base[c]
-        const src = up !== undefined ? grid[up]?.[c] : undefined
-        if (src) {
-          // A '^' standing under a merged '<' is ABSORBED: it renders nothing.
-          // A cell spanning both ways carries a mark into each column it
-          // covers, and the origin's rowspan is grown by the mark at the
-          // origin's own index; the count this one adds lands on the merged
-          // '<', which renders nothing either, so it is discarded with it. (A
-          // branch skipping the increment was here and no mutation of it could
-          // change an output.) Before this, such a mark found no source at all
-          // and rendered an empty cell, putting a `<td>` in a row the spans
-          // above it already cover.
-          src.rowspan++
-          entry.skip = true
-        }
-      } else if (entry.cell.span === 'colspan' && c > 0) {
-        let left = c - 1
-        while (left >= 0 && grid[r]![left]!.skip) left--
-        const src = grid[r]![left]
-        if (src) {
-          src.colspan++
-          entry.skip = true
-        }
-      }
-      // Any cell that is not a RESOLVED '^' is what the cells below it in this
-      // column resolve against - a merged '<' included, because the column it
-      // covers is still a column of the grid.
-      if (!entry.skip || entry.cell.span === 'colspan') base[c] = r
-    }
-  }
+  // PART 9 §13 T5, shared with the AST encoder (carve#2190).
+  const grid = resolveTableSpans(node.rows)
 
   // An explicit source partition wins; otherwise retain the native leading
   // run of `|=` header rows.

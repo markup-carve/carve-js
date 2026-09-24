@@ -24,7 +24,8 @@
  * `parse()` directly.
  */
 
-import type { BlockNode, DefinitionItem, Document, Image, Paragraph, Position } from './ast.js'
+import type { BlockNode, DefinitionItem, Document, Image, Paragraph, Position, TableRow } from './ast.js'
+import { resolveTableSpans } from './table-spans.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { numberCaptionsIn } from './heading-ids.js'
@@ -112,6 +113,50 @@ const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content',
  * object, so `toAstJson` still leaves the runtime document untouched and a
  * large document does not pay for a deep copy it does not need.
  */
+/**
+ * PART 12 §26: publish a spanning cell's RESOLVED extent beside the markers the
+ * author wrote.
+ *
+ * The walk is `resolveTableSpans`, the same one the HTML renderer runs - the
+ * point of carve#2190 is that there is one implementation of T5, so a second
+ * copy here would recreate the divergence inside the engine that the clause
+ * removed between engines.
+ *
+ * A count already on the cell WINS and is not recomputed. A tree that reached
+ * this encoder through an ingest may carry counts an importer resolved from a
+ * source whose markers this engine never saw, and §23 settles that shape of
+ * question the same way for `blockImage`: trust the field where it is present.
+ *
+ * A count of 1 is not emitted: §26 makes absent mean 1, on the reasoning §22
+ * gives for a list's `start`.
+ */
+function tableSpansToWire(rows: readonly unknown[]): readonly unknown[] {
+  const grid = resolveTableSpans(rows as readonly TableRow[])
+  let changed = false
+  const mapped = rows.map((row, r) => {
+    if (typeof row !== 'object' || row === null) return row
+    const record = row as Record<string, unknown>
+    const cells = record['cells']
+    if (!Array.isArray(cells)) return row
+    let rowChanged = false
+    const nextCells = cells.map((cell, c) => {
+      const entry = grid[r]?.[c]
+      if (entry === undefined || typeof cell !== 'object' || cell === null) return cell
+      const existing = cell as Record<string, unknown>
+      const additions: Record<string, number> = {}
+      if (existing['colspan'] === undefined && entry.colspan > 1) additions['colspan'] = entry.colspan
+      if (existing['rowspan'] === undefined && entry.rowspan > 1) additions['rowspan'] = entry.rowspan
+      if (Object.keys(additions).length === 0) return cell
+      rowChanged = true
+      return { ...existing, ...additions }
+    })
+    if (!rowChanged) return row
+    changed = true
+    return { ...record, cells: nextCells }
+  })
+  return changed ? mapped : rows
+}
+
 function definitionListsToWire<T>(node: T): T {
   if (Array.isArray(node)) {
     let changed = false
@@ -132,6 +177,11 @@ function definitionListsToWire<T>(node: T): T {
     if (items.every(isRuntimeEntry)) {
       out = { ...record, items: entriesToWire(items) as unknown as DefinitionEntryNode[] }
     }
+  }
+
+  if (record['type'] === 'table' && Array.isArray(record['rows'])) {
+    const rows = tableSpansToWire(record['rows'])
+    if (rows !== record['rows']) out = { ...(out ?? record), rows }
   }
 
   for (const field of CHILD_FIELDS) {
