@@ -1658,6 +1658,21 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       if (v) grid[r]![c]!.valign = v
     }
   }
+  const crossesSection = grid.some((row, r) => row.some((entry) =>
+    !entry.skip && entry.rowspan > 1 &&
+    ((r < headerEnd && r + entry.rowspan > headerEnd) ||
+      (r < footerStart && r + entry.rowspan > footerStart)),
+  ))
+  if (crossesSection) {
+    lines.push(`${pad}  <tbody>`)
+    for (let r = 0; r < grid.length; r++) {
+      const inHeaderRun = r < headerEnd
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, inHeaderRun, inHeaderRun)}`)
+    }
+    lines.push(`${pad}  </tbody>`)
+    lines.push(`${pad}</table>`)
+    return lines.join('\n')
+  }
   // A ROW IS A ROW, IN EVERY SECTION (PART 10 §7, carve#1459). `thead` and
   // `tfoot` used to put their rows on the section's own line while `tbody` gave
   // each row a line, and nothing said why one element had two layouts - which

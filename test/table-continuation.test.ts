@@ -67,18 +67,28 @@ describe('table `+` multi-line cell continuation', () => {
     )
   })
 
-  it('puts a header rowspan continuation row in tbody', () => {
+  it('keeps a header rowspan and its continuation in one tbody', () => {
     expect(h('|= A |\n| ^ |')).toBe(
       [
         '<table>',
-        '  <thead>',
-        '    <tr><th scope="col" rowspan="2">A</th></tr>',
-        '  </thead>',
         '  <tbody>',
+        '    <tr><th scope="col" rowspan="2">A</th></tr>',
         '    <tr></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
+    )
+  })
+
+  it('keeps an explicit head rowspan in one tbody', () => {
+    expect(h('{header-rows=1}\n| H | G |\n| ^ | b |')).toBe(
+      '<table>\n  <tbody>\n    <tr><th scope="col" rowspan="2">H</th><th scope="col">G</th></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('keeps a footer rowspan in one tbody', () => {
+    expect(h('{footer-rows=1}\n| a | b |\n| ^ | c |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td rowspan="2">a</td><td>b</td></tr>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>',
     )
   })
 
