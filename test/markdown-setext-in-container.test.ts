@@ -192,10 +192,11 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
     expect(markdownToCarve('> 2. a\n> ===\n')).toBe('> 2. a\n>    ===\n')
   })
 
-  it('leaves a link reference definition a quote holds', () => {
+  it('moves a link reference definition out of a quote', () => {
     // CommonMark reads: <blockquote>\n<p>===</p>\n</blockquote> - the
     // definition is consumed and the `===` is a paragraph of its own.
-    expect(markdownToCarve('> [a]: /x\n> ===\n')).toBe('> [a]: /x\n> ===\n')
+    expect(markdownToCarve('> [a]: /x\n> ===\n')).toBe('> \n> ===\n\n[a]: /x\n')
+    expect(carveToHtml(markdownToCarve('> [a]: /x\n> ===\n'))).toContain('<blockquote>')
   })
 
   it('converts a bare `[label]:` a quote holds, which is not a definition', () => {

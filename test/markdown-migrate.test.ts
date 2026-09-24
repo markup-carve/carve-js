@@ -126,7 +126,7 @@ describe('markdownToCarve — inline construct mapping', () => {
   })
 
   it('protects a reference definition with no space after the colon', () => {
-    expect(conv('[id]:/api/_v1_/index')).toBe('[id]:/api/_v1_/index')
+    expect(conv('[id]:/api/_v1_/index')).toBe('[id]: /api/_v1_/index')
   })
 
   it('protects a reference definition whose URL is an http(s) link', () => {

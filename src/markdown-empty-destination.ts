@@ -10,15 +10,27 @@ import { htmlToCarve } from './html-import.js'
 export interface EmptyDestinationReferences {
   empty: Map<string, string>
   defined: Set<string>
+  labels: Map<string, string>
 }
 
-const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set() }
+const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map() }
 
 let references = NO_REFERENCES
 
 /** Makes the references a document defines visible to the inline pass. */
 export function useEmptyDestinationReferences(found: EmptyDestinationReferences | null): void {
   references = found ?? NO_REFERENCES
+}
+
+/** The first usable definition's source label, if this is a link reference. */
+export function referenceDestinationLabel(
+  label: string,
+  decodeEntity: (entity: string) => string,
+  placeholders: readonly string[] = [],
+): string | undefined {
+  if (label.startsWith('^')) return undefined
+  const key = normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders))
+  return references.empty.has(key) ? undefined : references.labels.get(key)
 }
 
 const RE_ENTITY = /&(?:#[xX][0-9A-Fa-f]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/g
@@ -59,15 +71,17 @@ function htmlBlockCloser(rest: string): RegExp | null {
 }
 
 /**
- * Drops reference definitions with an empty destination, recording each label
- * whose FIRST definition is one (CommonMark: the first definition wins).
+ * Remove reference definitions from the body. Empty destinations are recorded
+ * for inline fallback; other definitions are returned for the document end.
  */
-export function removeEmptyDestinationDefinitions(
+export function extractReferenceDefinitions(
   lines: readonly string[],
   decodeEntity: (entity: string) => string,
-): { lines: string[]; references: EmptyDestinationReferences } {
+): { lines: string[]; references: EmptyDestinationReferences; definitions: string[] } {
   const empty = new Map<string, string>()
   const defined = new Set<string>()
+  const labels = new Map<string, string>()
+  const definitions: string[] = []
   const kept: string[] = []
   let fence: string | null = null
   let htmlCloser: RegExp | null = null
@@ -78,6 +92,9 @@ export function removeEmptyDestinationDefinitions(
   let listIndent = 0
   const leadingSpaces = (s: string) => /^ */.exec(s)![0].length
   const lineTitle = new RegExp(String.raw`^[ \t]*(?:<[^<>\n]*>|[^<\s]\S*)(?:[ \t]+${TITLE})?[ \t]*$`)
+  const opensBlock = (text: string): boolean =>
+    /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$))/.test(text) ||
+    /^[ \t]*(?:=+|[-*_]{3,})[ \t]*$/.test(text)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     let prefix = /^((?: {0,3}>[ \t]?)*)/.exec(line)![1]!
@@ -155,15 +172,82 @@ export function removeEmptyDestinationDefinitions(
       const continued: string[] = []
       let destination = definition[2]!
       const following = lines[i + 1]
-      if (destination.trim() === '' && following !== undefined && following.startsWith(quotePrefix) && lineTitle.test(following.slice(quotePrefix.length))) {
+      if (destination.trim() === '' && following !== undefined && following.startsWith(quotePrefix) &&
+          !opensBlock(following.slice(quotePrefix.length)) && lineTitle.test(following.slice(quotePrefix.length))) {
         continued.push(following)
         i++
         destination = following.slice(quotePrefix.length)
       }
       const emptied = new RegExp(String.raw`^[ \t]*<>(?:[ \t]+${TITLE})?[ \t]*$`).exec(destination)
       if (!emptied) {
+        const target = destination.trim()
+        if (target === '') {
+          kept.push(line, ...continued)
+          canStart = false
+          continue
+        }
+        const repeated = defined.has(key)
         defined.add(key)
-        kept.push(line, ...continued)
+        if (definition[1]!.startsWith('^')) {
+          kept.push(line, ...continued)
+          canStart = true
+          continue
+        }
+        if (!repeated) labels.set(key, definition[1]!)
+        let preceding: string | undefined
+        for (let at = kept.length - 1; at >= 0; at--) {
+          if (kept[at]!.trim() !== '') { preceding = kept[at]; break }
+        }
+        let nextNonblank: string | undefined
+        for (let at = i + 1; at < lines.length; at++) {
+          if (lines[at]!.trim() !== '') { nextNonblank = lines[at]; break }
+        }
+        const isItem = (entry: string | undefined) => entry !== undefined &&
+          /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)/.test(entry.slice(quotePrefix.length))
+        if (!opensItem && kept.at(-1)?.trim() === '' && isItem(preceding) && isItem(nextNonblank)) {
+          kept.push(line, ...continued)
+          canStart = true
+          continue
+        }
+        const next = lines[i + 1]
+        const nextTitle = next !== undefined && next.startsWith(quotePrefix)
+          ? new RegExp(String.raw`^[ \t]*${TITLE}[ \t]*$`).exec(next.slice(quotePrefix.length)) : null
+        const title = !new RegExp(String.raw`[ \t]${TITLE}[ \t]*$`).test(target) && nextTitle
+          ? ` ${nextTitle[1]}` : ''
+        if (title) i++
+        const writtenTarget = `${target}${title}`.replace(/^<([^<>]+)>/, (_match, url: string) =>
+          url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
+        ).replace(
+          /[ \t]+\(((?:[^()\\]|\\.)*)\)\s*$/,
+          (_match, body: string) => ` "${body.replace(/"/g, '\\"')}"`,
+        )
+        if (!repeated || empty.has(key)) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
+        if (opensItem) {
+          const nextLine = lines[i + 1]
+          if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
+              !opensBlock(nextLine) && !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
+            lines = [...lines.slice(0, i + 1), prefix + nextLine.trimStart(), ...lines.slice(i + 2)]
+          } else {
+            const continuation = lines.findIndex((candidate, at) => at > i + 1 && candidate.trim() !== '')
+            if (nextLine?.trim() === '' && continuation > i + 1 &&
+                leadingSpaces(lines[continuation]!) >= prefix.length && leadingSpaces(lines[continuation]!) < prefix.length + 4 &&
+                !opensBlock(lines[continuation]!.trimStart())) {
+              lines = [...lines.slice(0, i + 1), prefix + lines[continuation]!.trimStart(),
+                ...lines.slice(i + 1, continuation), ...lines.slice(continuation + 1)]
+            } else kept.push(prefix.trimEnd() + ' \x00REFITEM\x00')
+          }
+        } else if (quotePrefix !== '') {
+          const nextLine = lines[i + 1]
+          if (nextLine !== undefined && nextLine.trim() !== '' && !opensBlock(nextLine) &&
+              !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
+            kept.push(quotePrefix + nextLine.trimStart())
+            i++
+          } else kept.push(quotePrefix)
+        } else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && lines[i + 1]?.trim() === '') {
+          i++
+        } else if (lines[i + 1]?.startsWith('    ') && lines[i + 1]!.trim() !== '') {
+          lines = [...lines.slice(0, i + 1), lines[i + 1]!.replace(/^ {4}/, ''), ...lines.slice(i + 2)]
+        }
         canStart = true
         continue
       }
@@ -186,7 +270,7 @@ export function removeEmptyDestinationDefinitions(
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }
-  return { lines: kept, references: { empty, defined } }
+  return { lines: kept, references: { empty, defined, labels }, definitions }
 }
 
 /** A line-initial block opener in text, escaped so the text stays a paragraph. */
