@@ -1856,6 +1856,6 @@
 95-abbreviation-definition-interrupts-a-paragraph md:49c694747207c071 txt:f0113ccb6c184a90 ansi:4049e8a761416bb0
 96-literal-less-than-in-prose md:d5d7efca621fb2e9 txt:d5d7efca621fb2e9 ansi:d5d7efca621fb2e9
 97-boolean-attributes md:3f76e1602e3a3a31 txt:3f76e1602e3a3a31 ansi:3f76e1602e3a3a31
-97-boolean-attributes-2 md:1c1c576e381c555d txt:1c1c576e381c555d ansi:1c1c576e381c555d
+97-boolean-attributes-2 md:90d0f7138b376689 txt:90d0f7138b376689 ansi:90d0f7138b376689
 98-table-span-marker-in-first-column md:b42b728f4aac6b77 txt:90734bccbed9d292 ansi:6b1b64bcaa4ee013
 99-table-cell-attributes md:50c40a8e7471c9e7 txt:6efde95e78605874 ansi:5cd6a89f417ca613

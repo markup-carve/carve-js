@@ -11,9 +11,9 @@ import { carveToAstJson, carveToHtml } from '../src/index.js'
 describe('footnote numbering is a resolution result (carve-js#479)', () => {
   it('numbers two distinct labels in reference order', () => {
     const json = carveToAstJson('P[^a] and [^b].\n\n[^a]: note a\n\n[^b]: note b\n')
-    const para = json.children[0] as { children: Array<{ type: string; id?: string; number?: number }> }
+    const para = json.children[0] as { children: Array<{ type: string; label?: string; number?: number }> }
     const refs = para.children.filter((n) => n.type === 'footnote_ref')
-    expect(refs.map((r) => [r.id, r.number])).toEqual([
+    expect(refs.map((r) => [r.label, r.number])).toEqual([
       ['a', 1],
       ['b', 2],
     ])
@@ -21,9 +21,9 @@ describe('footnote numbering is a resolution result (carve-js#479)', () => {
 
   it('a repeated reference shares the first occurrence\'s number', () => {
     const json = carveToAstJson('P[^a] and [^b] and [^a] again.\n\n[^a]: note a\n\n[^b]: note b\n')
-    const para = json.children[0] as { children: Array<{ type: string; id?: string; number?: number }> }
+    const para = json.children[0] as { children: Array<{ type: string; label?: string; number?: number }> }
     const refs = para.children.filter((n) => n.type === 'footnote_ref')
-    expect(refs.map((r) => [r.id, r.number])).toEqual([
+    expect(refs.map((r) => [r.label, r.number])).toEqual([
       ['a', 1],
       ['b', 2],
       ['a', 1],
@@ -34,9 +34,9 @@ describe('footnote numbering is a resolution result (carve-js#479)', () => {
     // Only `a` is referenced; `b` is defined but never used and must not
     // shift `a`'s number or appear as a footnote_ref anywhere.
     const json = carveToAstJson('P[^a].\n\n[^a]: note a\n\n[^b]: note b\n')
-    const para = json.children[0] as { children: Array<{ type: string; id?: string; number?: number }> }
+    const para = json.children[0] as { children: Array<{ type: string; label?: string; number?: number }> }
     const refs = para.children.filter((n) => n.type === 'footnote_ref')
-    expect(refs.map((r) => [r.id, r.number])).toEqual([['a', 1]])
+    expect(refs.map((r) => [r.label, r.number])).toEqual([['a', 1]])
   })
 
   it('an inline footnote gets a number too', () => {

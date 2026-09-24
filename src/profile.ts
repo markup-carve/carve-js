@@ -48,7 +48,10 @@ export const CANONICAL_BLOCK_TYPES = [
   'comment',
   'figure',
   'figure_group',
-  'caption',
+  // `caption` was listed here and is NOT a node: `figure`, `figure_group` and
+  // `table` each carry their caption as an inline array, so a profile had a
+  // name that denied nothing. Dropped from the spec page and from here in
+  // the same move (markup-carve/carve#2207).
   // PART 12 §18 gives a citation definition its own block type, and
   // `spec/docs/profiles.md` lists it alongside the other two definition kinds.
   // This engine already EMITS it (markup-carve/carve-js#1122); only the
@@ -103,6 +106,11 @@ export const CANONICAL_INLINE_TYPES = [
   'symbol',
   'math',
   'abbreviation',
+  // An interchange-only wrapper: Carve 0.1 source spells no small caps, so no
+  // parse produces one, but a tree that reached this engine through a bridge
+  // can carry it and a profile has to be able to deny it like any other
+  // inline type (markup-carve/carve#2210).
+  'small_caps',
   // Listed by profiles.md's inline vocabulary and missing here until carve-js#712.
   // `canonicalType`'s default arm already calls four of these "their own canonical
   // names, not absences" (carve-js#472) - so the mapper and the vocabulary
