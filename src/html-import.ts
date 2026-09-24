@@ -26,6 +26,7 @@ import {
   LABEL_DEFAULTS,
   SCHEME_PROBE_STRIP_RE,
   isDangerousAttrName,
+  sanitizeUrl,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
@@ -529,6 +530,19 @@ const ROUND_TRIP_MARKER_ATTRIBUTES = new Set(['data-djot-src', 'data-carve-src']
  */
 function destinationIsEmpty(value: string | undefined): boolean {
   return value === undefined || value.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, '') === ''
+}
+
+/**
+ * Whether the renderer's §25 sink would blank this destination
+ * (markup-carve/carve#2254). Asks the sink itself so the two cannot disagree
+ * on how a scheme is read.
+ */
+function destinationIsDenied(value: string | undefined): boolean {
+  return value !== undefined && !destinationIsEmpty(value) && sanitizeUrl(value, {}) === ''
+}
+
+function destinationIsCarried(value: string | undefined): boolean {
+  return !destinationIsEmpty(value) && !destinationIsDenied(value)
 }
 
 /**
@@ -1506,6 +1520,22 @@ class Importer {
   }
 
   /**
+   * The destination-less shape for a destination the §25 sink blanks, reported
+   * as the one dropped attribute it is rather than as an unwrap.
+   */
+  private dropDeniedDestination(
+    node: P5Node,
+    name: 'href' | 'src',
+    children: InlineNode[],
+    attrs: Attrs | undefined,
+    path: string,
+  ): InlineNode[] {
+    this.add('attribute-dropped', `Dropped ${name} with a denied URL scheme on <${node.tagName}>`, 'warning', path, node)
+    if (!attrs) return children
+    return [{ type: 'span', children, attrs }]
+  }
+
+  /**
    * Whether `data-task-state` IS this item's state: one PART 10 §11 writes, on
    * an EMPTY box. Anything else is the author's attribute, and kept.
    */
@@ -1546,7 +1576,7 @@ class Importer {
     // downstream reads one out of it.
     if (tag === 'a') {
       if (name === 'href') return true
-      return name === 'title' && !destinationIsEmpty(this.attr(node, 'href'))
+      return name === 'title' && destinationIsCarried(this.attr(node, 'href'))
     }
     if (tag === 'img') {
       // `alt` stays consumed either way: with a source it is the image node's
@@ -1554,7 +1584,7 @@ class Importer {
       // element's place, so it is in the emitted document as prose rather than
       // in an attribute position.
       if (name === 'src' || name === 'alt') return true
-      return name === 'title' && !destinationIsEmpty(this.attr(node, 'src'))
+      return name === 'title' && destinationIsCarried(this.attr(node, 'src'))
     }
     if (tag === 'ol') return name === 'start' || name === 'type'
     if (tag === 'li' && name === 'data-task-state') return this.readsTaskState(node)
@@ -3606,6 +3636,9 @@ class Importer {
       if (destinationIsEmpty(this.attr(node, 'href'))) {
         return this.unwrapDestinationLess(node, 'Unwrapped <a> with no destination', children, attrs, path)
       }
+      if (destinationIsDenied(this.attr(node, 'href'))) {
+        return this.dropDeniedDestination(node, 'href', children, attrs, path)
+      }
       const title = this.attr(node, 'title')
       // `!== undefined`, not truthiness: `<a href="u" title="">` has a title,
       // and the writer spells the empty one `[x](u "")`. Under a truthiness test
@@ -3627,6 +3660,11 @@ class Importer {
         const alt = this.attr(node, 'alt') ?? ''
         const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
         return this.unwrapDestinationLess(node, 'Unwrapped <img> with no source', stands, attrs, path)
+      }
+      if (destinationIsDenied(this.attr(node, 'src'))) {
+        const alt = this.attr(node, 'alt') ?? ''
+        const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
+        return this.dropDeniedDestination(node, 'src', stands, attrs, path)
       }
       const title = this.attr(node, 'title')
       return [{ type: 'image', src: this.attr(node, 'src') ?? '', alt: this.attr(node, 'alt') ?? '', ...(title !== undefined ? { title } : {}), ...(attrs ? { attrs } : {}) }]
