@@ -123,6 +123,25 @@ the document being parsed has no `pos.file`, so a tree with no includes is
 unchanged. Without it an included span would be ambiguous - a child's first
 paragraph and the parent's first paragraph both report line 1.
 
+A warning attributed to a child also carries `includedBy`: the directives that
+pulled that file in, root first, each bounding the directive token in the file
+that wrote it. `includedBy[0]` is therefore a position in the top-level
+document, which is what an editor needs - the author has the root open, and a
+child's offsets name nothing in it. `[...source].slice(start, end).join('')`
+reads the token back out of the file `site.file` names.
+
+The field is **absent**, never empty, on a warning raised in the top-level
+document, including one about a directive there that failed to resolve: such a
+warning is attributed to the document that wrote the directive, and its own
+`line` / `column` / `start` / `end` already name a position in it. So
+`includedBy === undefined` and "this warning is in the root" are one question.
+
+Reconstructing the chain from the resolver calls a host saw is exact only while
+every target is written once and reached once. The same target written twice
+resolves under one canonical id, and so does one child reached under two
+top-level directives, so only the engine can say which occurrence a warning
+came from.
+
 An inline include's leading and trailing text joins the host's text node, and
 that merged node keeps the host's span. Every other node the child contributes
 still names the child in `pos.file`.
