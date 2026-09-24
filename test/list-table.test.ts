@@ -449,12 +449,13 @@ describe('list-table Tier-3 extension', () => {
   })
 
   it('absorbs both carets beneath a crossing header colspan', () => {
-    const src = '{header-rows=1}\n::: list-table\n- - A\n  - <\n  - C\n- - ^\n  - ^\n  - Y\n:::'
+    const src = '{header-rows=1}\n::: list-table\n- - A\n  - <\n  - C\n- - ^\n  - ^\n  - Y\n- - ^\n  - ^\n  - Z\n:::'
     expect(h(src)).toBe([
       '<table>',
       '  <tbody>',
-      '    <tr><th scope="col" rowspan="2" colspan="2">A</th><th scope="col">C</th></tr>',
+      '    <tr><th scope="col" rowspan="3" colspan="2">A</th><th scope="col">C</th></tr>',
       '    <tr><td>Y</td></tr>',
+      '    <tr><td>Z</td></tr>',
       '  </tbody>',
       '</table>',
     ].join('\n'))

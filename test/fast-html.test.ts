@@ -86,6 +86,8 @@ describe('borrowed HTML layout', () => {
       '1. a\n\n2. b\n', '1. a\n\n1. b\n', '1. a\n\n\n2. b\n',
       '| H | G |\n| --- | --- |\n| ^ | b |\n',
       '| H | G |\n| --- | --- |\n| a | < |\n',
+      '| A | < |\n| --- | --- |\n| a | b |\n',
+      '| ^ | G |\n| --- | --- |\n| a | b |\n',
       // A lone `+` is the list continuation marker (§17 L3): it renders nothing
       // and attaches the block below to the item above, which the borrowed
       // layout has no model for. It used to come out as a literal `<p>+</p>`.

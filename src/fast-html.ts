@@ -365,6 +365,7 @@ function renderOrderedList(lines: string[], start: number, depth: number, defs: 
 function renderTable(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): { html: string; next: number } | undefined {
   const heads = cells(lines[start]!), delimiter = cells(lines[start + 1] ?? '')
   if (!heads || !delimiter || !heads.length || heads.length !== delimiter.length) return undefined
+  if (heads.some((cell) => cell === '^' || cell === '<')) return undefined
   const aligns = delimiter.map((cell) => alignment(cell))
   if (aligns.some((value) => value === false)) return undefined
   const renderCell = (tag: 'th' | 'td', cell: string, index: number): string | undefined => {
