@@ -1531,6 +1531,11 @@ type PrefixedInlineLine = {
   // Continues the paragraph above lazily or from four columns past its
   // container, so it cannot be the delimiter row of a table.
   continued?: boolean | undefined
+  // The paragraph body the collector escaped, without that escape, for a setext
+  // fold to write instead: the escape guards a marker at the start of a line,
+  // and a folded heading is one line with the marker in its middle, where it
+  // opens nothing (carve#2244).
+  bareBody?: string | undefined
 }
 
 const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
@@ -2064,7 +2069,10 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
         const indent = lead !== '' ? lead : /^[ \t]*/.exec(first)![0]
         const body = out
           .slice(start)
-          .map((entry) => headingLine(paragraphLine(entry, heldInContainer(entry).text)!.body))
+          // The collector's escape guarded a marker standing at the start of a
+          // line; in the heading that marker sits in the middle of one line and
+          // opens nothing, so the bare body is what gets written.
+          .map((entry) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body))
           .join(' ')
         const heading = `${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} ${body}`
         out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: heading })
@@ -2942,6 +2950,9 @@ function collectListInlineRun(
       return { lines: [...written, ...code.lines], end: code.end, verbatimFrom: written.length }
     }
     const trimmed = orderedText ? escapeBlockOpener(text.trimStart()) : text.trimStart()
+    // The same text with no block-opener escape, carried alongside so a setext
+    // fold can write the unescaped spelling (carve#2244).
+    const plain = text.trimStart()
     // A line of the quote the item holds sits at the QUOTE's content column
     // too, and Markdown's slack above it is the quote's, not the sample's. The
     // document-level collector already drops those columns; only the item-held
@@ -2955,11 +2966,11 @@ function collectListInlineRun(
     const inner = quote === null || over >= 4 || quoteHoldsItem ? null : blockquotePrefix(trimmed)
     if (inner !== null && inner.prefix === quote && inner.text.trim() !== '' && /^[ \t]/.test(inner.text)) {
       const body = inner.text.trimStart()
-      run.push({ prefix, text: pad + quote + (indentColumns(inner.text) >= 4 ? escapeBlockOpener(body) : body) })
-    } else if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true })
+      run.push({ prefix, text: pad + quote + (indentColumns(inner.text) >= 4 ? escapeBlockOpener(body) : body), bareBody: body })
+    } else if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true, bareBody: plain })
     else if (quote !== null && (over >= 4 || (!trimmed.startsWith('>') && isParagraphRunLine([trimmed], 0, 'text')))) {
       // A lazy line of the quote the item holds, written with its marker.
-      run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true })
+      run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain })
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
       run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true })
@@ -4431,6 +4442,13 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (!isHeading && !isList && !isBlockquote && (!isStandardTableRow(body) || !inGfmTable[i])) {
       const run = [body]
+      // The same lines with no block-opener escape, for the fold below. An
+      // escape has to earn its place by protecting against something, and a
+      // marker in the middle of a one-line heading could not have opened a
+      // block, so escaping it there spells a construct that is not present
+      // (carve#2244). The paragraph branch keeps `run`, where each line does
+      // start one and the escape is load-bearing.
+      const bare = [body]
       let end = i + 1
       while (end < lines.length) {
         const next = lines[end]!
@@ -4449,6 +4467,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         if (listCols.length > 0 && RE_LIST_MARKER.test(next) && indentColumns(next) < contentCol && listMarkers.hasListAt(indentColumns(next))) break
         const trimmedNext = next.trimStart()
         run.push(opens ? next.slice(0, next.length - trimmedNext.length) + escapeBlockOpener(trimmedNext) : next)
+        bare.push(next)
         end++
       }
       // A setext underline under the paragraph, after the run or after the
@@ -4456,11 +4475,15 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       let heading = run.length > 1 && end < lines.length ? setextParagraphEnd(lines, end - 1, contentCol, true) : null
       if (heading === null && end + 1 < lines.length) {
         heading = setextParagraphEnd(lines, end, contentCol)
-        if (heading !== null) run.push(lines[end++]!)
+        if (heading !== null) {
+          run.push(lines[end]!)
+          bare.push(lines[end]!)
+          end++
+        }
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        out.push(containerPad + convertInline(`${heading} ${run.map(headingLine).join(' ')}`, dialect))
+        out.push(containerPad + convertInline(`${heading} ${bare.map(headingLine).join(' ')}`, dialect))
         i = end
         if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
         prevType = 'heading'
