@@ -3498,8 +3498,12 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
 function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { text: string; sourceBlanks: Set<number> } {
   const lines: string[] = []
   const flags: boolean[] = []
-  const raw: boolean[] = []
-  let fence: { marker: string; length: number; raw: boolean } | null = null
+  // Whether the line sits inside a fence, where an empty line is CONTENT rather
+  // than block separation. The distinction used to be drawn at `=html` only, so
+  // a raw block kept its blank lines while an ordinary code block one line away
+  // still lost them.
+  const fenced: boolean[] = []
+  let fence: { marker: string; length: number } | null = null
   for (const [idx, entry] of out.entries()) {
     for (const line of entry.split('\n')) {
       const body = line.replace(/^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+))*[ \t]*/, '')
@@ -3508,10 +3512,10 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
         run[1]!.length >= fence.length && run[2]!.trim() === ''
       lines.push(line)
       flags.push(fromSource[idx]! && /^[ \t>]*$/.test(line))
-      raw.push(fence?.raw === true && !closer)
+      fenced.push(fence !== null && !closer)
       if (closer) fence = null
       else if (fence === null && run !== null) {
-        fence = { marker: run[1]![0]!, length: run[1]!.length, raw: run[2]!.trim() === '=html' }
+        fence = { marker: run[1]![0]!, length: run[1]!.length }
       }
     }
   }
@@ -3529,7 +3533,7 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
     // A run of empty lines is that many newlines, one more between two lines,
     // and a run of 3+ newlines keeps 2.
     const newlines = end - at + (at > 0 && end < lines.length ? 1 : 0)
-    const keep = raw.slice(at, end).some(Boolean)
+    const keep = fenced.slice(at, end).some(Boolean)
       ? end - at
       : newlines < 3 ? end - at : at > 0 && end < lines.length ? 1 : 2
     for (let k = 0; k < keep; k++) {
