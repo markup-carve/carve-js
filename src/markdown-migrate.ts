@@ -4439,6 +4439,12 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         const after = lines[end + 1]
         const opens = !isParagraphRunLine(after === undefined ? [inside(next)] : [inside(next), inside(after)], 0, 'text')
         if (opens && (next.trim() === '' || indentColumns(stripColumns(next, contentCol)) < 4)) break
+        // A line of only `=` is a setext underline and nothing else, so the run
+        // ends at it and the fold below reads it. A `-` underline reaches this
+        // as a thematic break and stops the run already; an `=` one matched no
+        // opener, so the run swallowed it and every paragraph whose middle line
+        // sat four columns in stayed a paragraph.
+        if (/^=+$/.test(next.trim()) && indentColumns(next) >= contentCol && indentColumns(inside(next)) < 4) break
         // The next item of an open list, whatever its number, ends the paragraph.
         if (listCols.length > 0 && RE_LIST_MARKER.test(next) && indentColumns(next) < contentCol && listMarkers.hasListAt(indentColumns(next))) break
         const trimmedNext = next.trimStart()
