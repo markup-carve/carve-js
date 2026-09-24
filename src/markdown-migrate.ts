@@ -1401,7 +1401,13 @@ function setextParagraphEnd(lines: readonly string[], index: number, contentCol:
   if (!/^(?:=+|-+)$/.test(underline) || indentColumns(below) < contentCol) return null
   if (indentColumns(stripColumns(below, contentCol)) >= 4) return null
   if (held) return underline[0] === '=' ? '#' : '##'
-  if (RE_MD_THEMATIC.test(line) || !isParagraphRunLine([line.trim()], 0, 'text') || RE_MD_LINK_REFERENCE.test(line.trim())) return null
+  // No link-reference test here, though the line is the one being taken INTO the
+  // heading: this is only ever asked about a line under an open paragraph, and a
+  // link reference definition cannot interrupt a paragraph at any indent, so
+  // there it is continuation text. Refusing it lost the heading and made a
+  // second one out of the definition line (carve-js#2016). A construct that CAN
+  // interrupt is still refused, by the two tests that remain.
+  if (RE_MD_THEMATIC.test(line) || !isParagraphRunLine([line.trim()], 0, 'text')) return null
   return underline[0] === '=' ? '#' : '##'
 }
 
@@ -1992,7 +1998,13 @@ function paragraphLine(part: PrefixedInlineLine, text: string): { lead: string; 
   const marker = RE_ITEM_LEAD.exec(text)![0]
   const opens = RE_ITEM_LINE.test(text)
   const body = (opens ? text.slice(marker.length) : text).trim()
-  if (body === '' || /^#{1,6}([ \t]|$)/.test(body) || RE_MD_LINK_REFERENCE.test(body)) return null
+  if (body === '' || /^#{1,6}([ \t]|$)/.test(body)) return null
+  // No link-reference test, though a definition opening a paragraph must not
+  // become a heading: the definition prepass lifts every definition out of a
+  // container before this runs, so by here one can only be continuation text,
+  // and a definition cannot interrupt a paragraph at any indent anyway. Gating
+  // the test on an open paragraph instead left a branch no input reaches
+  // (carve-js#2016).
   // `blank`, not `text`: after a blank an ordered marker of any number opens a
   // list, which is the reading that rejects the fold.
   if (!isParagraphRunLine([body], 0, 'blank')) return null
