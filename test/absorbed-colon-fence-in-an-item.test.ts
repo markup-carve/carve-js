@@ -72,7 +72,7 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // `:::` below it IS an opener, the div it opens is closed by nothing before
     // the item ends, and `tail` is a document paragraph again.
     expect(html('- item\n  :::note\n\n  :::\ntail\n')).toBe(
-      '<ul>\n  <li>item\n:::note\n    <div>\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
+      '<ul>\n  <li>item\n:::note\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 
@@ -104,10 +104,10 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // level, where `:::note` over `# h` over `:::` is a paragraph, a heading and
     // an empty div in all three engines.
     expect(html('- item\n  :::note\n  # h\n  :::\ntail\n')).toBe(
-      '<ul>\n  <li>item\n:::note\n    <h1 id="h">h</h1>\n    <div>\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
+      '<ul>\n  <li>item\n:::note\n    <h1 id="h">h</h1>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
     )
     expect(html('- item\n  :::note\n  | a |\n  :::\ntail\n')).toBe(
-      '<ul>\n  <li>item\n:::note\n    <table>\n      <tbody>\n        <tr><td>a</td></tr>\n      </tbody>\n    </table>\n    <div>\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
+      '<ul>\n  <li>item\n:::note\n    <table>\n      <tbody>\n        <tr><td>a</td></tr>\n      </tbody>\n    </table>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 

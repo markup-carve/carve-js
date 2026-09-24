@@ -63,13 +63,13 @@ describe('list lazy continuation', () => {
 
   it('an item-local bare div opener auto-closes before a flush-left opener', () => {
     expect(html('- :::\n:::')).toBe(
-      '<ul>\n  <li>\n    <div>\n    </div>\n  </li>\n</ul>\n<div>\n</div>',
+      '<ul>\n  <li>\n    <div>\n\n    </div>\n  </li>\n</ul>\n<div>\n\n</div>',
     )
   })
 
   it('a glued item-local typed opener stays literal before a flush-left div opener', () => {
     expect(html('- ::: note\nbody\n:::')).toBe(
-      '<ul>\n  <li>::: note\nbody</li>\n</ul>\n<div>\n</div>',
+      '<ul>\n  <li>::: note\nbody</li>\n</ul>\n<div>\n\n</div>',
     )
   })
 

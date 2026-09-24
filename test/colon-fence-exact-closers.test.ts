@@ -56,7 +56,7 @@ describe('colon fences with exact-length closers', () => {
 
   it('an unclosed opener produces a container, closed at EOF', () => {
     expect(h(':::\ncontent')).toBe('<div>\n  <p>content</p>\n</div>')
-    expect(h(':::')).toBe('<div>\n</div>')
+    expect(h(':::')).toBe('<div>\n\n</div>')
   })
 
   it('does not parse an admonition type glued to the fence', () => {
@@ -65,7 +65,7 @@ describe('colon fences with exact-length closers', () => {
   })
 
   it('one bare closer closes one container; outer ones still close at EOF', () => {
-    expect(h('::::\n:::\n:::\ntext')).toBe('<div>\n  <div>\n  </div>\n  <p>text</p>\n</div>')
+    expect(h('::::\n:::\n:::\ntext')).toBe('<div>\n  <div>\n\n  </div>\n  <p>text</p>\n</div>')
   })
 
   it('a bare fence that matches neither opens a nested container', () => {

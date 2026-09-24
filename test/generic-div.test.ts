@@ -38,7 +38,7 @@ describe('generic divs', () => {
   })
 
   it('opens an empty trailing ::: block and auto-closes it', () => {
-    expect(h('text\n:::')).toBe('<p>text</p>\n<div>\n</div>')
+    expect(h('text\n:::')).toBe('<p>text</p>\n<div>\n\n</div>')
   })
 
   it('opens and auto-closes a nested stray ::: without hanging', () => {

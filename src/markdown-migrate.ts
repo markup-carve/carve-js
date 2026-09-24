@@ -1099,6 +1099,9 @@ function convertInline(
   // mid-prose, attaching to nothing, was the position neither reached.
   if (!dialect.attributes) line = escapeAttributeBlockOpener(line)
   line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
+  // Numeric references are decoded below. Keep their hash available to that
+  // pass even though the standalone escaper freezes it.
+  line = line.replace(/&\\#(?=(?:[0-9]+|[xX][0-9A-Fa-f]+);)/g, '&#')
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
   if (!holdsFenceBody) line = escapeTypographicDashes(line)
 

@@ -46,7 +46,7 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
   })
 
   it('a flush-left bare div fence ends lazy quote continuation and auto-closes at EOF', () => {
-    expect(html('> a\n:::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
+    expect(html('> a\n:::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n\n</div>')
   })
 
   it('a flush-left typed div fence ends lazy quote continuation and auto-closes at EOF', () => {
@@ -56,7 +56,7 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
   })
 
   it('a flush-left longer div fence ends lazy quote continuation and auto-closes at EOF', () => {
-    expect(html('> a\n::::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
+    expect(html('> a\n::::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n\n</div>')
   })
 
   it('a caption attaches to the quote rather than folding in', () => {

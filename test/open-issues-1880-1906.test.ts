@@ -15,7 +15,7 @@ describe('open issue regressions', () => {
   })
 
   it('does not rescue a marker-line colon opener with a closer', () => {
-    expect(carveToHtml('- :::\n y\n  :::').trim()).toBe('<ul>\n  <li>:::\ny\n    <div>\n    </div>\n  </li>\n</ul>')
+    expect(carveToHtml('- :::\n y\n  :::').trim()).toBe('<ul>\n  <li>:::\ny\n    <div>\n\n    </div>\n  </li>\n</ul>')
   })
 
   it('lets a line comment consume bare emphasis closers', () => {

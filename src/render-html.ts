@@ -1373,10 +1373,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // double rendering when one is active.)
       const floor = labelFloor(node.label, level + 1)
       const body = renderBlocks(node.children, opts, level + 1)
-      if (body === '') {
-        return floor ? `${open}\n${floor}\n${pad}</div>` : `${open}\n${pad}</div>`
-      }
-      return `${open}\n${floor ? `${floor}\n` : ''}${body}\n${pad}</div>`
+      const visibleBody = floor ? `${floor}${body === '' ? '' : `\n${body}`}` : body
+      return frameBlockContainer(open, visibleBody, `${pad}</div>`)
     }
     case 'line_block': {
       // A line block renders as a div carrying the `line-block` class. The
@@ -1385,8 +1383,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // an author gave that class stays an ordinary div.
       const open = `${pad}<div${renderAttrs2(node.attrs, { trailingClass: 'line-block', tag: 'div' })}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
       const body = renderBlocks(node.children, opts, level + 1)
-      if (body === '') return `${open}\n${pad}</div>`
-      return `${open}\n${body}\n${pad}</div>`
+      return frameBlockContainer(open, body, `${pad}</div>`)
     }
     case 'definition_list': {
       const lines = [
@@ -1922,6 +1919,10 @@ function withoutClassSlot(attrs: Attrs | undefined): Attrs {
   return rest
 }
 
+function frameBlockContainer(open: string, body: string, close: string): string {
+  return `${open}\n${body === '' ? '\n' : `${body}\n`}${close}`
+}
+
 function renderFigureGroup(node: FigureGroup, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   // Class-first injection like renderAdmonition: `carve-figure-group` leads,
@@ -1960,8 +1961,7 @@ function renderFigureGroup(node: FigureGroup, opts: RenderOptions, level: number
   if (node.caption !== undefined) {
     lines.push(`${pad}  <figcaption>${renderInlines(node.caption, opts)}</figcaption>`)
   }
-  lines.push(`${pad}</figure>`)
-  return lines.join('\n')
+  return frameBlockContainer(lines[0]!, lines.slice(1).join('\n'), `${pad}</figure>`)
 }
 
 function renderImage(img: Image, opts: RenderOptions): string {
