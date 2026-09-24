@@ -3642,6 +3642,70 @@ function dropTrailingEmptyQuoteLines(source: string): string {
   return without(drop)
 }
 
+/**
+ * Write the footnote definitions where `carve fmt` writes them: last, in the
+ * order the source introduced them, so the import is a fixed point of the
+ * writer rather than a document `fmt` would immediately rearrange.
+ *
+ * Only a definition the document holds at column 0 moves. One inside a quote or
+ * a list item is that container's content, and hoisting it out is a structural
+ * change this pass does not make - `fmt` does hoist it, and that gap is
+ * markup-carve/carve-js#1992's remainder, not its subject.
+ *
+ * A definition's block runs over its indented continuation lines, and over a
+ * blank line that has more indented content under it, so a multi-paragraph note
+ * travels whole.
+ */
+function moveFootnoteDefinitions(source: string): string {
+  if (!/^\[\^/m.test(source)) return source
+  const lines = source.split('\n')
+  const blocks: string[][] = []
+  const drop = new Set<number>()
+  let fence: { char: string; len: number } | null = null
+  for (let at = 0; at < lines.length; at++) {
+    const line = lines[at]!
+    const run = /^(([`~])\2{2,})/.exec(line)
+    if (run) {
+      const marker = run[1]!
+      const char = run[2]!
+      if (fence === null) fence = { char, len: marker.length }
+      else if (char === fence.char && marker.length >= fence.len && line.slice(marker.length).trim() === '') fence = null
+      continue
+    }
+    if (fence !== null || !/^\[\^[^\]\n]+\]:/.test(line)) continue
+    const block = [line]
+    drop.add(at)
+    let end = at
+    for (let next = at + 1; next < lines.length; next++) {
+      const text = lines[next]!
+      if (text.trim() === '') continue
+      if (!/^[ \t]/.test(text)) break
+      for (let fill = end + 1; fill <= next; fill++) {
+        block.push(lines[fill]!)
+        drop.add(fill)
+      }
+      end = next
+    }
+    // The blank line that separated the definition from its neighbors goes with
+    // it, or the two blocks it stood between would come back with two blanks
+    // where the document had one.
+    if (lines[end + 1]?.trim() === '') drop.add(end + 1)
+    else if (at > 0 && lines[at - 1]!.trim() === '') drop.add(at - 1)
+    at = end
+    blocks.push(block)
+  }
+  if (blocks.length === 0) return source
+  const kept = lines.filter((_, at) => !drop.has(at))
+  while (kept.length > 0 && kept.at(-1)!.trim() === '') kept.pop()
+  // An empty body would put the definitions at line 0, where the whole document
+  // is definitions already.
+  if (kept.length === 0) return source
+  const tail: string[] = []
+  for (const block of blocks) tail.push('', ...block)
+  const written = [...kept, ...tail].join('\n')
+  return source.endsWith('\n') ? `${written}\n` : written
+}
+
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
@@ -4529,9 +4593,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (markdown.endsWith('\n')) out.push('')
   }
   const written = joinOutput(out, fromSource)
-  const body = dropTrailingEmptyQuoteLines(
-    blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
-  ).replace(/\x00REFITEM\x00/g, '%%')
+  const body = moveFootnoteDefinitions(
+    dropTrailingEmptyQuoteLines(
+      blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
+    ).replace(/\x00REFITEM\x00/g, '%%'),
+  )
   if (frontmatter.length === 0) return body
   return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
 }

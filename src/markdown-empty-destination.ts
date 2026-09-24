@@ -261,8 +261,14 @@ export function extractReferenceDefinitions(
       if (!defined.has(key)) empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity))
       defined.add(key)
       canStart = true
-      // A quote keeps its line; an emptied list item is dropped, as Carve cannot spell one.
-      if (quotePrefix !== '') kept.push(quotePrefix)
+      // A quote keeps its line, and so does a list item: dropping the item took
+      // it out of the list, so the list came back one item short of what
+      // CommonMark reads (markup-carve/carve-js#1991). The item is left holding
+      // the same placeholder a NON-empty destination leaves behind, since the
+      // two say the same thing - an item whose only content was a definition
+      // that moved away.
+      if (opensItem) kept.push(prefix.trimEnd() + ' \x00REFITEM\x00')
+      else if (quotePrefix !== '') kept.push(quotePrefix)
       else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && i + 1 < lines.length && lines[i + 1]!.trim() === '') i++
       continue
     }
