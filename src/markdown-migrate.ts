@@ -9,7 +9,8 @@ import {
   HANDLED_MARKDOWN,
 } from './carve-escape.js'
 import {
-  removeEmptyDestinationDefinitions,
+  extractReferenceDefinitions,
+  referenceDestinationLabel,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
@@ -934,6 +935,7 @@ function convertInline(
   input: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
   holdsFenceBody = false,
+  taskBox = false,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -948,6 +950,7 @@ function convertInline(
     return `\x00P${protectedSpans.length - 1}\x00`
   }
   let line = protectCodeSpans(input, protect)
+  line = escapeCarveOnlyMarker(line)
   // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
   // Carve one, so a continuation line shaped like one is escaped (carve-js#1812).
   line = line.replace(/\n([ \t]*)\[(?=[^^\]\n][^\]\n]*\]:)/g, '\n$1\\[')
@@ -1029,6 +1032,16 @@ function convertInline(
   line = line.replace(/\bhttps?:\/\/[^\s<>`]+/g, (url) =>
     protect(url.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))),
   )
+
+  line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?![\[(])/g, (match, label: string, offset: number, source: string) => {
+    const before = source.slice(source.lastIndexOf('\n', offset - 1) + 1, offset)
+    if (source[offset + match.length] === ':' && /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*$/.test(before)) return match
+    if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
+      /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
+    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans)
+    if (destinationLabel === undefined) return match
+    return `${match}${protect(label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
+  })
 
   // Reference-link definition `[label]: dest "title"` (optional space after
   // the colon). The whole line is consumed literally by Carve's ref-link
@@ -1204,6 +1217,38 @@ function convertInline(
     if (line === prev) break
   }
   return line
+}
+
+/** Escape list markers accepted by Carve but read as text by Markdown. */
+function escapeCarveOnlyMarker(input: string): string {
+  return input.replace(
+    /^((?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)*)(?:(\d{10,}|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)([.)])|(\.))(?=[ \t]|$|\{)/gm,
+    (_match, prefix: string, label: string | undefined, delimiter: string | undefined, bareDot: string | undefined) =>
+      `${prefix}${label ?? ''}\\${delimiter ?? bareDot}`,
+  )
+}
+
+/** Catch text lines carried through a block collector without inline conversion. */
+function escapeCarveOnlyMarkersOutsideFences(input: string): string {
+  const protectedSpans: string[] = []
+  const protectedInput = protectCodeSpans(input, (span) => {
+    protectedSpans.push(span)
+    return `\x00P${protectedSpans.length - 1}\x00`
+  })
+  let fence: { marker: string; length: number } | null = null
+  return protectedInput.split('\n').map((line) => {
+    const body = line.replace(/^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*/, '')
+    const run = /^(`{3,}|~{3,})/.exec(body)?.[1]
+    if (fence !== null) {
+      if (run && run[0] === fence.marker && run.length >= fence.length && body.slice(run.length).trim() === '') fence = null
+      return line
+    }
+    if (run) {
+      fence = { marker: run[0]!, length: run.length }
+      return line
+    }
+    return escapeCarveOnlyMarker(line)
+  }).join('\n').replace(/\x00P(\d+)\x00/g, (match, index: string) => protectedSpans[Number(index)] ?? match)
 }
 
 /** A GFM table delimiter row, e.g. `| --- | :--: |` (at least one column). */
@@ -1829,6 +1874,7 @@ function restorePrefixedInlineRun(
     run.map((part) => part.text).join('\n'),
     dialect,
     opensFence,
+    /^\s*(?:[-*+]|\d{1,9}[.)])\s+$/.test(run[0]?.prefix ?? ''),
   ).split('\n')
   const held = heldByItem(run)
   // Only a run whose lines this function can place in a container gets the
@@ -3602,7 +3648,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     .replace(/\r\n?/g, '\n')
     .split('\n')
   const { frontmatter, bodyStart } = splitFrontmatter(allLines)
-  const removed = removeEmptyDestinationDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw)
+  const removed = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw)
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
   const out: string[] = []
@@ -3745,6 +3791,13 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     itemQuote = null
     const afterLazy = lazyCol
     lazyCol = -1
+    const orderedInItemParagraph = (source: string): boolean => {
+      const candidate = /^[ \t]*(\d+)[.)](?=[ \t])/.exec(source)
+      return candidate !== null && Number(candidate[1]) !== 1 &&
+        !listMarkers.hasListAt(indentColumns(source))
+    }
+    const orderedContinuesItem = !wasPrevBlank && lazyAllowed && listCols.length > 0 &&
+      orderedInItemParagraph(line)
     const closedItem = fenceItem
     const afterTable = inTableBody
     // Whether this line left items no paragraph was open in.
@@ -3771,6 +3824,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       marker = RE_MD_THEMATIC.test(stripColumns(line, openCol))
         ? null
         : line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
+      if (orderedContinuesItem) marker = null
       // Four columns past the item holding it, a marker under an open
       // paragraph is text of that paragraph (indented code cannot interrupt).
       const anyMarker = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)/.exec(line)
@@ -3892,15 +3946,18 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       while (
         end < lines.length &&
-        !RE_LIST_MARKER.test(lines[end]!) &&
+        (!RE_LIST_MARKER.test(lines[end]!) || orderedInItemParagraph(lines[end]!)) &&
         continuesItemParagraph(end, contentCol)
       ) {
         const next = lines[end]!
         let holder = 0
         for (const col of listCols) if (col <= indentColumns(next)) holder = col
-        const lazyText = indentColumns(next) - holder >= 4 ? escapeBlockOpener(next.trimStart()) : next.trimStart()
+        const lazyText = indentColumns(next) - holder >= 4 || orderedInItemParagraph(next)
+          ? escapeBlockOpener(next.trimStart()) : next.trimStart()
         if (lazyQuote !== null) run.push(' '.repeat(lazyQuote.col) + lazyQuote.prefix + lazyText)
-        else run.push(indentColumns(next) < contentCol ? containerPad + lazyText : next)
+        else run.push(indentColumns(next) < contentCol ? containerPad + lazyText
+          : orderedInItemParagraph(next) || indentColumns(next) - holder >= 4
+            ? ' '.repeat(indentColumns(next)) + lazyText : next)
         end++
       }
       out.push(keepPipeRowsLiteral(convertInline(run.join('\n'), dialect)))
@@ -4094,6 +4151,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const ordered = trimmed.match(/^(\d+)[.)]\s/)
     const isList =
       (/^[-*+]\s/.test(trimmed) || ordered !== null) &&
+      !orderedContinuesItem &&
       !(
         prevType === 'text' &&
         !startsOwnList &&
@@ -4212,7 +4270,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         prevType = 'block_quote'
         continue
       }
-      const written = convertInline(slack >= 1 && slack <= 3 ? containerPad + held.trimStart() : line, dialect)
+      const content = slack >= 1 && slack <= 3 ? containerPad + held.trimStart() : line
+      const written = convertInline(orderedContinuesItem
+        ? content.replace(/^(\s*)(\S.*)$/, (_match, indent: string, body: string) => indent + escapeBlockOpener(body))
+        : content, dialect)
       // No table starts here, so a pipe row is paragraph text, in a quote too
       // unless a delimiter row makes it a quoted table.
       const pipeText = isStandardTableRow(written)
@@ -4459,10 +4520,18 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     fromSource.unshift(false)
   }
 
+  if (removed.definitions.length > 0) {
+    while (out.length > 0 && out.at(-1)!.trim() === '') out.pop()
+    for (const definition of removed.definitions) {
+      if (out.length > 0) out.push('')
+      out.push(convertInline(definition, dialect))
+    }
+    if (markdown.endsWith('\n')) out.push('')
+  }
   const written = joinOutput(out, fromSource)
   const body = dropTrailingEmptyQuoteLines(
-    blankInsideEmptyFences(separateLooseItems(written.text, written.sourceBlanks)),
-  )
+    blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
+  ).replace(/\x00REFITEM\x00/g, '%%')
   if (frontmatter.length === 0) return body
   return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
 }

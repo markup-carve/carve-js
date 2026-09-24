@@ -41,7 +41,7 @@ describe('a definition-shaped line continuing a paragraph', () => {
   })
 
   it.each([
-    ['a definition that opens its own block', '[p]: /x\n\na', '[p]: /x\n\na'],
+    ['a definition that opens its own block', '[p]: /x\n\na', 'a\n\n[p]: /x'],
     ['a line already escaped', 'a\n\\[p]: /x', 'a\n\\[p]: /x'],
     ['a bracket that opens no definition', 'a\n[p] x', 'a\n[p] x'],
   ])('leaves %s alone', (_, markdown, carve) => {
