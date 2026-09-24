@@ -125,6 +125,7 @@ interface CarveContext {
  */
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
   reportRubyLosses(ast, opts)
+  reportMathLosses(ast, opts)
   ast = withCellHardBreaksFlattened(ast)
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it
@@ -190,6 +191,32 @@ function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
     const entries = Object.entries(record)
     for (let index = entries.length - 1; index >= 0; index--) {
       const [key, child] = entries[index]!
+      if (key !== 'attrs' && key !== 'pos') stack.push(child)
+    }
+  }
+}
+
+function reportMathLosses(ast: Document, opts: CarveRenderOptions): void {
+  if (opts.onRenderLoss === undefined) return
+  const stack: unknown[] = [ast.children, ast.footnoteDefs]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (let index = value.length - 1; index >= 0; index--) stack.push(value[index])
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const record = value as Record<string, unknown>
+    if (record['type'] === 'math' && (record['label'] !== undefined || record['number'] !== undefined)) {
+      opts.onRenderLoss({
+        code: 'math-label-number-dropped',
+        target: 'carve',
+        nodeType: 'inline',
+        message: 'Carve source cannot spell a math label or number',
+        ...(record['pos'] ? { pos: record['pos'] as import('./ast.js').Position } : {}),
+      })
+    }
+    for (const [key, child] of Object.entries(record)) {
       if (key !== 'attrs' && key !== 'pos') stack.push(child)
     }
   }

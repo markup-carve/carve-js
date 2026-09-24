@@ -2126,12 +2126,14 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       const role = authoredRole ? '' : ' role="math"'
       if (opts.mode === 'static' && opts.renderers?.math) {
         const ssr = opts.renderers.math(node.content, node.display)
-        return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${ssr}</span>`
+        const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
+        return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${ssr}</span>${suffix}`
       }
       const body = node.display
         ? `\\[${escapeHtml(node.content)}\\]`
         : `\\(${escapeHtml(node.content)}\\)`
-      return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${body}</span>`
+      const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
+      return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${body}</span>${suffix}`
     }
     case 'raw_inline':
       // Verbatim only when the format matches this output; else dropped.
