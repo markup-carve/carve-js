@@ -698,11 +698,13 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     // exists - and the plain records they hold are therefore untouched.
     if (NODE_FIELDS.includes(key)) {
       const admitted = typeof type === 'string' ? NODE_POSITION_TYPES[`${type}.${key}`] : undefined
+      const positionKind =
+        typeof type === 'string' ? NODE_POSITION_KIND[`${type}.${key}`] : undefined
       const at = path === '' ? key : `${path}.${key}`
-      if (Array.isArray(value)) {
-        value.forEach((item, index) => refuseNodeAt(item, admitted, `${at}[${index}]`))
-      } else if (admitted !== undefined && NODE_POSITION_KIND[`${type as string}.${key}`] === 'node') {
+      if (positionKind === 'node') {
         refuseNodeAt(value, admitted, at)
+      } else if (Array.isArray(value)) {
+        value.forEach((item, index) => refuseNodeAt(item, admitted, `${at}[${index}]`))
       }
     }
     refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
