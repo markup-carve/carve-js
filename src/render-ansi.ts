@@ -10,7 +10,7 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -144,6 +144,8 @@ function renderBlocks(blocks: BlockNode[], ctx: AnsiContext): string {
 
 function renderBlock(node: BlockNode, ctx: AnsiContext): string {
   switch (node.type) {
+    case 'section':
+      return renderBlocks(node.children, ctx)
     case 'heading':
       return renderHeading(node.level, renderInlines(node.children, ctx))
     case 'paragraph':
@@ -345,7 +347,9 @@ function renderTable(node: Table, ctx: AnsiContext): string {
     const isHeader = row.cells.length > 0 && row.cells.every((c) => c.header)
     return Array.from({ length: cols }, (_, i) => {
       const cell = row.cells[i]
-      const content = cell ? trimNonNbsp(renderInlines(cell.children, ctx)) : ''
+      const content = cell ? trimNonNbsp(cell.blocks === undefined
+        ? renderInlines(cell.children ?? [], ctx)
+        : renderBlocks(cell.blocks, ctx)).replace(/\s*\n\s*/g, ' ') : ''
       return { content, plain: stripAnsi(content), isHeader }
     })
   })
@@ -522,6 +526,11 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     }
     case 'image':
       return renderImage(node)
+    case 'ruby':
+      rubyFlattened(ctx.options, node, 'ansi')
+      return node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')
+    case 'small_caps':
+      return renderInlines(node.children, ctx)
     case 'span': {
       // carve#1127 again: the authored value wins, and the nested expansion is
       // not emitted. ANSI has no markup to carry a title, so the expansion is
@@ -545,7 +554,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return renderInlines(node.children, ctx)
     }
     case 'math':
-      return style(stripControls(node.content), FG_BRIGHT_MAGENTA)
+      return style(stripControls(node.content), FG_BRIGHT_MAGENTA) + (node.number === undefined ? '' : ` ${stripControls(node.label!)} ${node.number}`)
     case 'raw_inline':
       rawFormatDropped(ctx.options, node, 'ansi')
       return ''

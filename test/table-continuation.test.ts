@@ -67,18 +67,46 @@ describe('table `+` multi-line cell continuation', () => {
     )
   })
 
-  it('puts a header rowspan continuation row in tbody', () => {
+  it('keeps a header rowspan and its continuation in one tbody', () => {
     expect(h('|= A |\n| ^ |')).toBe(
       [
         '<table>',
-        '  <thead>',
-        '    <tr><th scope="col" rowspan="2">A</th></tr>',
-        '  </thead>',
         '  <tbody>',
+        '    <tr><th scope="col" rowspan="2">A</th></tr>',
         '    <tr></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
+    )
+  })
+
+  it('keeps an explicit head rowspan in one tbody', () => {
+    expect(h('{header-rows=1}\n| H | G |\n| ^ | b |')).toBe(
+      '<table>\n  <tbody>\n    <tr><th scope="col" rowspan="2">H</th><th scope="col">G</th></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('keeps a footer rowspan in one tbody', () => {
+    expect(h('{footer-rows=1}\n| a | b |\n| ^ | c |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td rowspan="2">a</td><td>b</td></tr>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('keeps an uncovered caret below a colspan as an empty cell', () => {
+    expect(h('| A | < | X |\n| B | ^ | Y |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td colspan="2">A</td><td>X</td></tr>\n    <tr><td>B</td><td></td><td>Y</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('absorbs carets under a visible row and colspan', () => {
+    expect(h('{header-rows=1}\n| A | < | C |\n| ^ | ^ | Y |\n| ^ | ^ | Z |')).toBe(
+      '<table>\n  <tbody>\n    <tr><th scope="col" rowspan="3" colspan="2">A</th><th scope="col">C</th></tr>\n    <tr><td>Y</td></tr>\n    <tr><td>Z</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('lets an uncovered caret below a colspan span the next row', () => {
+    expect(h('| A | < | X |\n| B | ^ | Y |\n| C | ^ | Z |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td colspan="2">A</td><td>X</td></tr>\n    <tr><td>B</td><td rowspan="2"></td><td>Y</td></tr>\n    <tr><td>C</td><td>Z</td></tr>\n  </tbody>\n</table>',
     )
   })
 

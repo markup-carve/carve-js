@@ -123,7 +123,8 @@ function childArrays(node: NodeLike): ChildArray[] {
       push(node['cells'], true, 'table_cell')
       break
     case 'table_cell':
-      push(node['children'], false)
+      if (node['blocks'] !== undefined) push(node['blocks'], true)
+      else push(node['children'], false)
       break
     case 'definition_list':
       // items is DefinitionItem[]; handled specially in filterDefinitionList.
@@ -135,6 +136,9 @@ function childArrays(node: NodeLike): ChildArray[] {
       if (node['caption']) push(node['caption'], false)
       push(node['children'], true)
       break
+    case 'section':
+      push(node['children'], true)
+      break
     case 'footnote_ref':
     case 'inline_footnote':
       // Inline footnote content is inline.
@@ -142,6 +146,12 @@ function childArrays(node: NodeLike): ChildArray[] {
       break
     case 'inline_extension':
       push(node['content'], false)
+      break
+    case 'ruby':
+      for (const pair of (node['pairs'] as Array<Record<string, unknown>> | undefined) ?? []) {
+        push(pair['base'], false)
+        push(pair['annotation'], false)
+      }
       break
     case 'citation_group':
       push(node['items'], false)
@@ -838,6 +848,12 @@ function rendersNothing(node: NodeLike): boolean {
 
 function extractTextContent(node: NodeLike): string {
   switch (node.type) {
+    case 'ruby':
+      return ((node['pairs'] as Array<Record<string, unknown>> | undefined) ?? []).map((pair) => {
+        const base = ((pair['base'] as NodeLike[] | undefined) ?? []).map(extractTextContent).join('')
+        const annotation = ((pair['annotation'] as NodeLike[] | undefined) ?? []).map(extractTextContent).join('')
+        return `${base}(${annotation})`
+      }).join('')
     case 'image': {
       const alt = (node['alt'] as string | undefined) ?? ''
       return alt !== '' ? `[img: ${alt}]` : '[img]'

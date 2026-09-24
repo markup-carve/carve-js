@@ -1,5 +1,6 @@
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type {
+  Attrs,
   BlockNode,
   DefinitionItem,
   Document,
@@ -22,6 +23,7 @@ import { isUnresolvedReference, referenceSourceText } from './unresolved-referen
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
+import { isDangerousAttrName, renderedAttrValue } from './render-html.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -41,6 +43,18 @@ export type SmartTypographyMode = 'glyph' | 'source'
 export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   /** Defaults to `'glyph'`. */
   smartTypography?: SmartTypographyMode | boolean
+}
+
+function renderHtmlAttrs(attrs: Attrs | undefined): string {
+  if (!attrs) return ''
+  const entries: Array<[string, string]> = []
+  if (attrs.id !== undefined) entries.push(['id', attrs.id])
+  if (attrs.classes?.length) entries.push(['class', [...new Set(attrs.classes)].join(' ')])
+  for (const [name, value] of Object.entries(attrs.keyValues ?? {})) {
+    if (isDangerousAttrName(name) || !/^[A-Za-z_:][A-Za-z0-9_.:-]*$/.test(name)) continue
+    entries.push([name, renderedAttrValue(name, value)])
+  }
+  return entries.map(([name, value]) => ` ${name}="${escapeMdHtml(stripControls(value)).replace(/"/g, '&quot;')}"`).join('')
 }
 
 /**
@@ -223,6 +237,8 @@ function withMarker(marker: string, content: string): string {
 
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
+    case 'section':
+      return renderBlocks(node.children, ctx)
     case 'heading': {
       // A folded heading's line join takes PART 7's four characters. The class
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
@@ -367,7 +383,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     } else {
       prefix = `${bullet} `
     }
-    const content = containerContent(() => renderListItem(item, ctx))
+    const content = containerContent(() => renderListItem(item, node.tight, ctx))
     const lines = content.split('\n')
     // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
     // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
@@ -390,8 +406,33 @@ function renderList(node: List, ctx: MarkdownContext): string {
   return out + (ctx.listDepth === 0 ? '\n' : '')
 }
 
-function renderListItem(item: ListItem, ctx: MarkdownContext): string {
-  return renderBlocks(item.children, ctx)
+function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): string {
+  if (!tight) return renderBlocks(item.children, ctx)
+
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
+  ctx.blockDepth++
+  try {
+    let out = ''
+    for (const child of item.children) {
+      const rendered = renderBlock(child, ctx)
+      // A blank between a tight item's block and its sub-list makes the item
+      // loose in CommonMark. Each block normally leaves one separator blank;
+      // remove that blank only where the following child is a list. An ordered
+      // marker above 1 cannot interrupt a paragraph, and an empty bullet can be
+      // read as a setext underline, so those two shapes still need the blank to
+      // remain lists at all.
+      const firstLine = rendered.slice(0, rendered.indexOf('\n'))
+      const startsWithBareMarker = child.type === 'list' && /^(?:[-*+]|\d+[.)]) *$/.test(firstLine)
+      const cannotInterrupt = child.type === 'list' && child.ordered && (child.start ?? 1) !== 1
+      if (child.type === 'list' && !startsWithBareMarker && !cannotInterrupt && out.endsWith('\n\n')) {
+        out = out.slice(0, -1)
+      }
+      out += rendered
+    }
+    return out
+  } finally {
+    ctx.blockDepth--
+  }
 }
 
 function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, trailingBlank: boolean): string {
@@ -404,13 +445,71 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
   return trailingBlank ? `${out}\n` : out
 }
 
+function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0): string {
+  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
+  const parts: string[] = []
+  const descend = (children: BlockNode[]) => {
+    const content = renderCellBlocks(children, ctx, depth + 1)
+    if (content) parts.push(content)
+  }
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'heading':
+      case 'paragraph':
+        parts.push(renderInlines(block.children, ctx))
+        break
+      case 'block_quote':
+      case 'div':
+      case 'section':
+      case 'line_block':
+      case 'admonition':
+      case 'figure_group':
+        descend(block.children)
+        break
+      case 'list':
+        for (const item of block.items) descend(item.children)
+        break
+      case 'definition_list':
+        for (const item of block.items) {
+          for (const term of item.terms) parts.push(renderInlines(term, ctx))
+          for (const definition of item.definitions) descend(definition)
+        }
+        break
+      case 'table':
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) descend(cell.blocks)
+          else parts.push(renderInlines(cell.children ?? [], ctx))
+        }
+        break
+      case 'figure':
+        parts.push(renderInlines(block.caption, ctx))
+        if (block.target.type === 'block_quote') descend(block.target.children)
+        else if (block.target.type === 'table') descend([block.target])
+        else descend([block.target])
+        break
+      default:
+        parts.push(renderInlines([{ type: 'text', value: renderBlock(block, ctx).trim() }], ctx))
+        break
+    }
+  }
+  return parts.filter(Boolean).map((part) => part.replace(/\\*\r?\n/g, '<br>')).join('<br>')
+}
+
 function renderTable(node: Table, ctx: MarkdownContext): string {
   let header: string | undefined
   let headerColumns = 0
   const rows: string[] = []
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
-    const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
+    const cells = row.cells.map((cell) => {
+      if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
+      ctx.options.onRenderLoss?.({
+        code: 'table-cell-blocks-flattened', target: 'markdown', nodeType: 'block',
+        message: 'Flattened block content inside a table cell for Markdown',
+        ...(cell.pos ? { pos: cell.pos } : {}),
+      })
+      return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
+    })
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) {
       if (header === undefined) aligns.length = 0
@@ -619,6 +718,17 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
 
       return renderInlines(node.children, ctx)
     }
+    case 'ruby': {
+      const attrs = renderHtmlAttrs(node.attrs)
+      return `<ruby${attrs}>${node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}<rp>(</rp><rt>${renderInlines(pair.annotation, ctx)}</rt><rp>)</rp>`).join('')}</ruby>`
+    }
+    case 'small_caps': {
+      const attrs: Attrs = {
+        ...node.attrs,
+        classes: ['smallcaps', ...(node.attrs?.classes ?? []).filter((name) => name !== 'smallcaps')],
+      }
+      return `<span${renderHtmlAttrs(attrs)}>${renderInlines(node.children, ctx)}</span>`
+    }
     case 'math': {
       // Escaped, exactly as the HTML target escapes the same content: a
       // consumer decodes the entity back to the character before its math
@@ -626,7 +736,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // `<script>` cannot become a tag (markup-carve/carve-js#894).
       const math = escapeMdHtml(stripControls(node.content))
 
-      return node.display ? `$$${math}$$` : `$${math}$`
+      const suffix = node.number === undefined ? '' : ` ${escapeText(stripControls(node.label!))} ${node.number}`
+      return (node.display ? `$$${math}$$` : `$${math}$`) + suffix
     }
     case 'raw_inline':
       if (node.format !== 'html') {
@@ -1622,6 +1733,7 @@ function walkBlocks(
       case 'block_quote':
       case 'admonition':
       case 'div':
+      case 'section':
       case 'line_block':
         walkBlocks(block.children, visit, depth + 1)
         break
@@ -1636,7 +1748,10 @@ function walkBlocks(
         break
       case 'table':
         if (block.caption) visit(block, block.caption)
-        for (const row of block.rows) for (const cell of row.cells) visit(block, cell.children)
+        for (const row of block.rows) for (const cell of row.cells) {
+          if (cell.blocks) walkBlocks(cell.blocks, visit, depth + 1)
+          else visit(block, cell.children)
+        }
         break
       case 'figure':
         visit(block, block.caption)
@@ -1675,10 +1790,17 @@ function walkInlines(
       case 'highlight':
       case 'link':
       case 'span':
+      case 'small_caps':
       case 'insert':
       case 'delete':
         // A link's own label is inside a link; everything else inherits.
         walkInlines(node.children, visit, depth + 1, insideLink || node.type === 'link')
+        break
+      case 'ruby':
+        for (const pair of node.pairs) {
+          walkInlines(pair.base, visit, depth + 1, insideLink)
+          walkInlines(pair.annotation, visit, depth + 1, insideLink)
+        }
         break
       case 'inline_extension':
         walkInlines(node.content, visit, depth + 1, insideLink)

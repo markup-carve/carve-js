@@ -143,16 +143,19 @@ export function wireFieldsSource(schema) {
   const nestedAt = new Map();
   const walkRecords = (owner, properties) => {
     for (const [field, property] of Object.entries(properties)) {
-      if (holdsNode(property)) continue;
       const found = recordAt(owner, field, property);
-      if (found === null) continue;
-      nestedAt.set(`${owner}.${field}`, {
-        record: found.record,
-        array: found.array,
-      });
-      if (records.has(found.record)) continue;
-      records.set(found.record, found.def);
-      walkRecords(found.record, found.def.properties);
+      if (found !== null) {
+        nestedAt.set(`${owner}.${field}`, {
+          record: found.record,
+          array: found.array,
+        });
+        if (!records.has(found.record)) {
+          records.set(found.record, found.def);
+          walkRecords(found.record, found.def.properties);
+        }
+        continue;
+      }
+      if (holdsNode(property)) continue;
     }
   };
   for (const def of Object.values(defs)) {
@@ -218,9 +221,14 @@ export function wireFieldsSource(schema) {
     return false;
   };
   const positionKind = new Map();
-  for (const def of Object.values(defs)) {
-    const owner = def?.properties?.type?.const;
-    if (typeof owner !== "string") continue;
+  const positionOwners = [
+    ...Object.values(defs).flatMap((def) => {
+      const owner = def?.properties?.type?.const;
+      return typeof owner === "string" ? [[owner, def]] : [];
+    }),
+    ...records.entries(),
+  ];
+  for (const [owner, def] of positionOwners) {
     for (const [name, property] of Object.entries(def.properties)) {
       if (!holdsNode(property)) continue;
       const kind = refsPlainRecord(property)
@@ -367,9 +375,7 @@ export function wireFieldsSource(schema) {
     return null;
   };
   const positionTypes = new Map();
-  for (const def of Object.values(defs)) {
-    const owner = def?.properties?.type?.const;
-    if (typeof owner !== "string") continue;
+  for (const [owner, def] of positionOwners) {
     for (const [name, property] of Object.entries(def.properties)) {
       if (!holdsNode(property)) continue;
       const members = membersOf(property);

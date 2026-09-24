@@ -48,16 +48,17 @@ export function resolveTableSpans(rows: readonly TableRow[]): SpanCell[][] {
       if (entry.cell.span === 'rowspan' && r > 0) {
         const up = base[c]
         const src = up !== undefined ? grid[up]?.[c] : undefined
-        if (src) {
-          // A '^' standing under a merged '<' is ABSORBED: it renders nothing.
-          // A cell spanning both ways carries a mark into each column it
-          // covers, and the origin's rowspan is grown by the mark at the
-          // origin's own index; the count this one adds lands on the merged
-          // '<', which renders nothing either, so it is discarded with it. (A
-          // branch skipping the increment was here and no mutation of it could
-          // change an output.) Before this, such a mark found no source at all
-          // and rendered an empty cell, putting a `<td>` in a row the spans
-          // above it already cover.
+        let coveredByVisibleSpan = false
+        if (src?.skip && up !== undefined) {
+          let left = c - 1
+          while (left >= 0 && grid[up]![left]!.skip) left--
+          const origin = left >= 0 ? grid[up]![left] : undefined
+          coveredByVisibleSpan = !!origin && left + origin.colspan > c && up + origin.rowspan > r
+        }
+        if (src && (!src.skip || coveredByVisibleSpan)) {
+          // A caret under a merged colspan is absorbed only when its visible
+          // origin already spans this row. Otherwise it has no source and
+          // remains an empty cell.
           src.rowspan++
           entry.skip = true
         }

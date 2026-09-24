@@ -101,6 +101,92 @@ describe('carve render — loss reporting', () => {
     expect(t.err).toBe('')
   })
 
+  it('can allow ruby flattening from an encoded AST', async () => {
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [{ type: 'paragraph', children: [{
+        type: 'ruby',
+        pairs: [{ base: [{ type: 'text', value: '漢' }], annotation: [{ type: 'text', value: 'かん' }] }],
+      }] }],
+      srcByteLength: 0,
+    })
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--plain', '--strict-losses'], denied.io)).toBe(1)
+    expect(denied.err).toContain('ruby-flattened')
+
+    const allowed = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--plain', '--strict-losses', '--allow-loss', 'ruby-flattened',
+    ], allowed.io)).toBe(0)
+    expect(allowed.out).toBe('漢(かん)\n')
+    expect(allowed.err).toBe('')
+  })
+
+  it('can allow a math label and number loss from an encoded AST', async () => {
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [{ type: 'paragraph', children: [{
+        type: 'math', display: true, content: 'x', label: 'Equation', number: 1,
+      }] }],
+      srcByteLength: 0,
+    })
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], denied.io)).toBe(1)
+    expect(denied.err).toContain('math-label-number-dropped')
+
+    const allowed = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--carve', '--strict-losses', '--allow-loss', 'math-label-number-dropped',
+    ], allowed.io)).toBe(0)
+    expect(allowed.out).toContain('$$`x`')
+    expect(allowed.err).toBe('')
+  })
+
+  it('can allow flattened sections and block-content cells from an encoded AST', async () => {
+    const ast = JSON.stringify({
+      type: 'document', srcByteLength: 0, children: [{
+        type: 'section', children: [{ type: 'table', rows: [{ type: 'table_row', cells: [{
+          type: 'table_cell', header: false, blocks: [
+            { type: 'paragraph', children: [{ type: 'text', value: 'Cell' }] },
+          ],
+        }] }] }],
+      }],
+    })
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], denied.io)).toBe(1)
+    expect(denied.err).toContain('section-flattened')
+    expect(denied.err).toContain('table-cell-blocks-flattened')
+
+    const allowed = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--carve', '--strict-losses',
+      '--allow-loss', 'section-flattened', '--allow-loss', 'table-cell-blocks-flattened',
+    ], allowed.io)).toBe(0)
+    expect(allowed.out).toContain('Cell')
+    expect(allowed.err).toBe('')
+  })
+
+  it('does not let an allowed truncated loss hide a different code', async () => {
+    const ruby = {
+      type: 'ruby',
+      pairs: [{ base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'y' }] }],
+    }
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [
+        { type: 'paragraph', children: [ruby, ruby, ruby] },
+        { type: 'raw_block', format: 'latex', content: 'lost' },
+      ],
+      srcByteLength: 0,
+    })
+    const result = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--plain', '--strict-losses',
+      '--allow-loss', 'ruby-flattened', '--max-render-losses', '2',
+    ], result.io)).toBe(1)
+    expect(result.err).toContain('1 render loss')
+  })
+
   it('rejects unknown loss codes and invalid bounds', async () => {
     const unknown = makeIO({ stdin: source })
     expect(await run(['render', '--allow-loss', 'unknown'], unknown.io)).toBe(2)

@@ -309,7 +309,16 @@ export interface TableCell extends BaseNode {
    */
   align?: 'left' | 'right' | 'center'
   valign?: 'top' | 'middle' | 'bottom'
-  children: InlineNode[]
+  /** Inline content from Carve source, or block content imported from another format. */
+  children?: InlineNode[]
+  blocks?: BlockNode[]
+}
+
+/** Explicit sectioning from an interchange format. Carve source has no wrapper spelling. */
+export interface Section extends BaseNode {
+  type: 'section'
+  children: BlockNode[]
+  level?: number
 }
 
 /**
@@ -520,6 +529,7 @@ export interface Comment extends BaseNode {
 
 export type BlockNode =
   | Heading
+  | Section
   | Paragraph
   | BlockQuote
   | List
@@ -716,6 +726,8 @@ export interface Math extends BaseNode {
   type: 'math'
   display: boolean
   content: string
+  label?: string
+  number?: number
 }
 
 /**
@@ -800,6 +812,8 @@ export interface CaptionNumber extends BaseNode {
 export interface Citation extends BaseNode {
   type: 'citation'
   key: string
+  /** Per-item citation mode; absent means parenthetical. */
+  mode?: 'integral'
   /** Inline prefix text before the `@` (e.g. "see "). */
   prefix?: InlineNode[]
   /** Raw inline locator after ", " (e.g. "p. 33"); what the built-in
@@ -824,7 +838,7 @@ export interface Citation extends BaseNode {
 export interface CitationGroup extends BaseNode {
   type: 'citation_group'
   items: Citation[]
-  /** Citation-level mode; set by a leading '+' after '['. Absent = non-integral (parenthetical). CSL/Citum CitationMode vocabulary. */
+  /** Authored shorthand set by a leading '+' after '['. */
   mode?: 'integral'
   /** Verbatim source `[…]` for the undefined-key literal fallback. */
   raw: string
@@ -932,6 +946,24 @@ export interface CriticComment extends BaseNode {
   text: string
 }
 
+export interface RubyPair {
+  base: InlineNode[]
+  annotation: InlineNode[]
+}
+
+/** A sequence of HTML ruby base/annotation pairs. */
+export interface Ruby extends BaseNode {
+  type: 'ruby'
+  pairs: RubyPair[]
+  attrs?: Attrs
+}
+
+export interface SmallCaps extends BaseNode {
+  type: 'small_caps'
+  children: InlineNode[]
+  attrs?: Attrs
+}
+
 export type InlineNode =
   | Text
   | EscapedText
@@ -941,6 +973,8 @@ export type InlineNode =
   | Link
   | Image
   | Span
+  | Ruby
+  | SmallCaps
   | Math
   | RawInline
   | LiteralInline

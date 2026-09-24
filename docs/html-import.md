@@ -78,6 +78,14 @@ rather than a placeholder for a mapping still to come:
   `structure-unspellable` warning: `<td>x<br>y</td>` imports as `| x y |`.
   `htmlToAst` keeps the break, and `renderCarve` writes the same space for a
   tree that holds one.
+- **Ruby annotations stay structured.** A conforming `<ruby>` run becomes a
+  `ruby` AST node whose `pairs` keep each base and its first `<rt>` annotation.
+  Conventional `<rp>` parentheses are ignored. Custom `<rp>` content is
+  dropped with an `element-dropped` diagnostic. Obsolete `<rb>` is unwrapped;
+  `<rtc>` and additional annotation levels keep their visible text in
+  parentheses and report `element-unwrapped`. `htmlToCarve` also reports
+  `structure-unspellable`, because Carve 0.1 can preserve the readable
+  `base(annotation)` text but not the relationship.
 - **A span nested directly in a span of the same kind can lose a level.**
   Carve cannot open a braced span inside a braced span of the same kind, so
   where both levels need braces the inner element is unwrapped with a

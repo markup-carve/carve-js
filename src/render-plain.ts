@@ -8,7 +8,7 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -127,6 +127,8 @@ function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
 
 function renderBlock(node: BlockNode, ctx: PlainContext): string {
   switch (node.type) {
+    case 'section':
+      return renderBlocks(node.children, ctx)
     case 'heading':
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'paragraph':
@@ -249,7 +251,9 @@ function renderTable(node: Table, ctx: PlainContext): string {
   for (const row of node.rows) {
     const cells: string[] = []
     for (let i = 0; i < cols; i++) {
-      cells.push(i < row.cells.length ? trimNonNbsp(renderInlines(row.cells[i]!.children, ctx)) : '')
+      cells.push(i < row.cells.length ? trimNonNbsp(row.cells[i]!.blocks === undefined
+        ? renderInlines(row.cells[i]!.children ?? [], ctx)
+        : renderBlocks(row.cells[i]!.blocks!, ctx)).replace(/\s*\n\s*/g, ' ') : '')
     }
     // Drop only SYNTHETIC trailing padding (columns this row does not have, so
     // a short/rowspan row stays ragged: `A`, not `A | `), but KEEP a genuine
@@ -424,8 +428,13 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return withinLink(() => renderInlines(node.children, ctx))
     case 'image':
       return renderImageText(node)
+    case 'ruby':
+      rubyFlattened(ctx.options, node, 'plain')
+      return node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')
+    case 'small_caps':
+      return renderInlines(node.children, ctx)
     case 'math':
-      return stripControls(node.content)
+      return stripControls(node.content) + (node.number === undefined ? '' : ` ${stripControls(node.label!)} ${node.number}`)
     case 'raw_inline':
       rawFormatDropped(ctx.options, node, 'plain')
       return ''

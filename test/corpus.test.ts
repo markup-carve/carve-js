@@ -840,7 +840,15 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    '101-table-header-cell-rowspan',
+    {
+      reason: 'carve#2224 keeps a crossing rowspan in one tbody',
+      html: '<table>\n  <tbody>\n    <tr><th scope="col" rowspan="3">H</th><th scope="col">G</th></tr>\n    <tr><td>b</td></tr>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>',
+    },
+  ],
+])
 
 
 

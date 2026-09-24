@@ -114,6 +114,7 @@ export {
   // a way to catch it by type.
   AstJsonRootFieldError,
   AstJsonUnknownFieldError,
+  AstJsonMisplacedNodeTypeError,
   AstJsonUnknownNodeTypeError,
   AstJsonNodeTypeError,
   AstJsonPartitionError,
@@ -438,7 +439,7 @@ export function renderCarveWithReport(
   ast: Document,
   opts: CarveRenderOptions & CheckedRenderOptions = {},
 ): RenderResult {
-  return checkedRender(() => renderCarve(ast, opts), opts)
+  return checkedRender((onRenderLoss) => renderCarve(ast, { ...opts, onRenderLoss }), opts)
 }
 
 /** Render a resolved Carve AST to plain text. */

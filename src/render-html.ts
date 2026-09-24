@@ -1335,6 +1335,14 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     }
   }
   switch (node.type) {
+    case 'section': {
+      const body = renderBlocks(node.children, opts, level + 1)
+      return frameBlockContainer(
+        `${pad}<section${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`,
+        body,
+        `${pad}</section>`,
+      )
+    }
     case 'heading': {
       const inner = renderInlines(node.children, opts)
       return `${pad}<h${node.level}${renderAttrs(node.attrs, `h${node.level}`)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
@@ -1658,6 +1666,21 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       if (v) grid[r]![c]!.valign = v
     }
   }
+  const crossesSection = grid.some((row, r) => row.some((entry) =>
+    !entry.skip && entry.rowspan > 1 &&
+    ((r < headerEnd && r + entry.rowspan > headerEnd) ||
+      (r < footerStart && r + entry.rowspan > footerStart)),
+  ))
+  if (crossesSection) {
+    lines.push(`${pad}  <tbody>`)
+    for (let r = 0; r < grid.length; r++) {
+      const inHeaderRun = r < headerEnd
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, inHeaderRun, inHeaderRun)}`)
+    }
+    lines.push(`${pad}  </tbody>`)
+    lines.push(`${pad}</table>`)
+    return lines.join('\n')
+  }
   // A ROW IS A ROW, IN EVERY SECTION (PART 10 §7, carve#1459). `thead` and
   // `tfoot` used to put their rows on the section's own line while `tbody` gave
   // each row a line, and nothing said why one element had two layouts - which
@@ -1767,7 +1790,10 @@ function renderTableRowFlat(
       cellScopeAttr(entry.cell, tag === 'th', inHeaderRun) +
       renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
       (attrs.length ? ' ' + attrs.join(' ') : '')
-    parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
+    const content = entry.cell.blocks === undefined
+      ? renderInlines(entry.cell.children ?? [], opts)
+      : renderBlocks(entry.cell.blocks, opts, 0)
+    parts.push(`<${tag}${attrStr}>${content}</${tag}>`)
   }
   parts.push('</tr>')
   return parts.join('')
@@ -2095,6 +2121,10 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return renderImage(node, opts)
     case 'span':
       return renderSemanticSpan(node, opts)
+    case 'ruby':
+      return `<ruby${renderAttrs(node.attrs)}>${node.pairs.map((pair) => `${renderInlines(pair.base, opts)}<rp>(</rp><rt>${renderInlines(pair.annotation, opts)}</rt><rp>)</rp>`).join('')}</ruby>`
+    case 'small_caps':
+      return `<span${renderAttrs2(node.attrs, { baseClass: 'smallcaps' })}>${renderInlines(node.children, opts)}</span>`
     case 'math': {
       const base = node.display ? 'math display' : 'math inline'
       // Static mode: if a build-time math renderer is supplied, emit its
@@ -2107,12 +2137,14 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       const role = authoredRole ? '' : ' role="math"'
       if (opts.mode === 'static' && opts.renderers?.math) {
         const ssr = opts.renderers.math(node.content, node.display)
-        return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${ssr}</span>`
+        const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
+        return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${ssr}</span>${suffix}`
       }
       const body = node.display
         ? `\\[${escapeHtml(node.content)}\\]`
         : `\\(${escapeHtml(node.content)}\\)`
-      return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${body}</span>`
+      const suffix = node.number === undefined ? '' : ` <span class="equation-number">${escapeHtml(node.label!)} ${node.number}</span>`
+      return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${body}</span>${suffix}`
     }
     case 'raw_inline':
       // Verbatim only when the format matches this output; else dropped.

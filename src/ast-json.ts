@@ -98,12 +98,11 @@ export interface AstJsonDocument {
 /**
  * Fields that hold child nodes, in the order a walk should follow them.
  *
- * Listed rather than discovered, because two fields that look like child lists
- * are not: a citation group's `items` and a definition list's `items` hold
- * plain objects in the runtime tree, and walking them as nodes would rewrite
- * data that is not one.
+ * Listed rather than discovered, because a definition list's `items` holds
+ * records in the runtime tree. Citation items are nodes and carry inline arrays
+ * that the serializer visits separately.
  */
-const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title'] as const
+const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
 
 /**
  * Rewrite definition lists into their wire shape, everywhere in a subtree, and
@@ -233,6 +232,14 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
+  // A footnote reference's target is `label` on the wire, the name its
+  // definition already uses (PART 12 §25, carve#2193). The runtime field stays
+  // `id`, which is what the parser and the renderers carry.
+  if ((out ?? record)['type'] === 'footnote_ref' && (out ?? record)['id'] !== undefined) {
+    const { id: label, ...rest } = out ?? record
+    out = { ...rest, label }
+  }
+
   if ((out ?? record)['type'] === 'list' && (out ?? record)['start'] === 1) {
     const { start: _start, ...rest } = out ?? record
     out = rest
@@ -280,6 +287,17 @@ function definitionListsFromWire<T>(node: T): T {
     if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
   }
   if (record['target'] !== undefined) record['target'] = definitionListsFromWire(record['target'])
+
+  // The wire spells a footnote reference's target `label`; the runtime carries
+  // it as `id` (PART 12 §25). `id` on the wire is REFUSED rather than accepted
+  // as an alias - §11's narrow exception is a MAY, and this engine already
+  // refuses `footnote.id` on the definition half of the same pair (carve#743).
+  // Tolerating the old spelling on one half and not the other is the two-ways-
+  // to-say-it that §3 exists to stop.
+  if (record['type'] === 'footnote_ref' && record['label'] !== undefined) {
+    const { label, ...rest } = record
+    return definitionListsFromWire({ ...rest, id: label } as unknown as T)
+  }
 
   // Not read either, so an ingested reference does not arrive already carrying a
   // backlink anchor from whoever wrote the payload. `renderHtml` assigns
@@ -535,6 +553,31 @@ export class AstJsonUnknownNodeTypeError extends Error {
 }
 
 /**
+ * Thrown when a node the schema only admits inside one owner appears somewhere
+ * else - today a `citation`, which lives in `citation_group.items` and nowhere
+ * else (markup-carve/carve#2227).
+ *
+ * The type IS one the schema names, so {@link AstJsonUnknownNodeTypeError} is
+ * the wrong answer; the payload is a tree this engine cannot render, and §12
+ * asks for the refusal to name what was wrong. It used to be accepted here and
+ * throw `renderHtml: unknown inline citation` one step later, which carve-php
+ * and carve-rs both refuse at decode.
+ */
+export class AstJsonMisplacedNodeTypeError extends Error {
+  constructor(
+    readonly nodeType: string,
+    readonly owner: string,
+    readonly path: string,
+  ) {
+    super(
+      `AST node at ${path === '' ? 'the root' : path} has type ${JSON.stringify(nodeType)}, ` +
+        `which the schema admits only in ${owner} (PART 12 §12)`,
+    )
+    this.name = 'AstJsonMisplacedNodeTypeError'
+  }
+}
+
+/**
  * Thrown when a node in a node position has no usable `type` at all - the key is
  * absent, or it is present carrying something that is not a string.
  */
@@ -724,6 +767,9 @@ function refuseSchemaViolations(node: unknown, path: string): void {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
     }
+    if (type === 'ruby' && Array.isArray(record.pairs) && record.pairs.length === 0) {
+      throw new AstJsonSchemaError('property "pairs" must contain at least one item', path)
+    }
     // The typeless RECORDS that hang off a node. Every node kind can carry
     // `attrs` and `pos`, which makes them the easiest place for a wrong shape to
     // ride in - `pos` missing `endOffset` was accepted by two of the three
@@ -732,6 +778,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     refuseNestedRecordShapes(type as string, record, path)
     refusePartition(record, path)
     refuseTaskState(record, path)
+    refuseAdditionalSpecConstraints(record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
@@ -854,6 +901,18 @@ function refuseTaskState(record: Record<string, unknown>, path: string): void {
   }
 }
 
+/** Validate cross-field constraints and section levels beyond the wire field table. */
+function refuseAdditionalSpecConstraints(record: Record<string, unknown>, path: string): void {
+  if (record.type === 'section' && record.level !== undefined &&
+      (typeof record.level !== 'number' || record.level > 6)) {
+    throw new AstJsonSchemaError('section.level must be an integer from 1 through 6', path)
+  }
+  if (record.type === 'table_cell' &&
+      (record.children === undefined) === (record.blocks === undefined)) {
+    throw new AstJsonSchemaError('table_cell requires exactly one of children or blocks', path)
+  }
+}
+
 /** The required fields and value shapes of one closed record. */
 function refuseRecordShape(value: unknown, name: string, path: string): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -875,6 +934,19 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
     if (!(field in item) || item[field] === undefined) continue
     if (!matchesKind(item[field], kind)) {
       throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
+    }
+  }
+  if (name === 'rubyPair' && Array.isArray(item.base) && item.base.length === 0) {
+    throw new AstJsonSchemaError('property "base" must contain at least one item', path)
+  }
+  for (const [field, value] of Object.entries(item)) {
+    if (!NODE_FIELDS.includes(field)) continue
+    const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
+    const kind = NODE_POSITION_KIND[`${name}.${field}`]
+    const at = `${path}.${field}`
+    if (kind === 'node') refuseNodeAt(value, admitted, at)
+    else if (Array.isArray(value)) {
+      value.forEach((node, index) => refuseNodeAt(node, admitted, `${at}[${index}]`))
     }
   }
   refuseNestedRecordShapes(name, item, path)
@@ -1045,15 +1117,26 @@ const LEGACY_RECORD_FIELDS: readonly string[] = ['terms', 'definitions']
  *   CURRENT wire shape with a bad value - rode in on the legacy grouping form's
  *   exemption and was silently dropped by `entriesFromWire`.
  */
+/**
+ * Node types the schema admits in ONE position, and that position.
+ *
+ * `inlineNode` does not dispatch on `citation`: an item is a typed positioned
+ * node inside its group, not an inline a paragraph may hold (CARVE-P12-038).
+ */
+const OWNED_NODE_POSITIONS: ReadonlyMap<string, string> = new Map([
+  ['citation', 'citation_group.items'],
+])
+
 function refuseUnknownNodeTypes(
   node: unknown,
   path: string,
   typeRequired: boolean,
   legacyKeys?: readonly string[],
+  position?: string,
 ): void {
   if (Array.isArray(node)) {
     node.forEach((item, index) =>
-      refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired, legacyKeys),
+      refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired, legacyKeys, position),
     )
     return
   }
@@ -1076,6 +1159,15 @@ function refuseUnknownNodeTypes(
     }
   } else if (ownValue(WIRE_FIELDS, type) === undefined) {
     throw new AstJsonUnknownNodeTypeError(type, path)
+  } else {
+    // A type the schema names, in a position it does not admit. `citation` is
+    // in WIRE_FIELDS because `citation_group.items` needs it, and that entry
+    // used to make it acceptable as any node - including a paragraph's own
+    // child, which no engine renders.
+    const owner = OWNED_NODE_POSITIONS.get(type)
+    if (owner !== undefined && position !== owner) {
+      throw new AstJsonMisplacedNodeTypeError(type, owner, path)
+    }
   }
   // Only node-bearing fields, never every key: `attrs.keyValues` is a
   // string-to-string map whose keys are ordinary attribute identifiers, so a
@@ -1088,7 +1180,7 @@ function refuseUnknownNodeTypes(
     if (value === undefined) continue
     const position = typeof type === 'string' ? `${type}.${field}` : undefined
     // A record with no `type` of its own is one the schema gives none - a
-    // citation item today - and its own array fields hold real nodes, so the
+    // legacy definition entry - and its own array fields hold real nodes, so the
     // requirement comes back on for them.
     const legacy = position === undefined ? undefined : LEGACY_TYPELESS_POSITIONS.get(position)
     const kind =
@@ -1101,6 +1193,7 @@ function refuseUnknownNodeTypes(
       // empty document rather than being decided here.
       kind === 'node' ? true : kind === 'nodes' ? Array.isArray(value) : false,
       legacy,
+      position,
     )
   }
 }
@@ -1255,6 +1348,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // unknown type or an unnamed property is still reported as that, which is
   // the more specific answer and the one those clauses name.
   refuseSchemaViolations(json, '')
+  refuseMathNumberConstraints(json)
 
   // PART 12 §21, and BEFORE every read of a VALUE below - before a label
   // becomes a key, before an abbreviation half is joined into a pair key,
@@ -1370,11 +1464,45 @@ function measurePayload(json: AstJsonDocument): number {
  */
 function renumberCaptionsIfPublished(doc: Document): void {
   const bodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []
-  if (!hasPublishedCaptionNumber(doc.children) && !bodies.some(hasPublishedCaptionNumber)) return
+  if (!hasPublishedCaptionNumber(doc.children) && !bodies.some(hasPublishedCaptionNumber) &&
+      !hasPublishedMathNumber(doc.children) && !bodies.some(hasPublishedMathNumber)) return
 
   const counters = new Map<string, number>()
   numberCaptionsIn(doc.children, counters)
   for (const body of bodies) numberCaptionsIn(body, counters)
+}
+
+function hasPublishedMathNumber(blocks: unknown): boolean {
+  const stack: unknown[] = [blocks]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (!value || typeof value !== 'object') continue
+    if (Array.isArray(value)) { stack.push(...value); continue }
+    const node = value as Record<string, unknown>
+    if (node.type === 'math' && node.number !== undefined) return true
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'attrs' && key !== 'pos' && child && typeof child === 'object') stack.push(child)
+    }
+  }
+  return false
+}
+
+function refuseMathNumberConstraints(root: unknown): void {
+  const walk = (value: unknown, path: string): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach((child, i) => walk(child, `${path}[${i}]`)); return }
+    const node = value as Record<string, unknown>
+    if (node.type === 'math') {
+      if (typeof node.label === 'string' && (node.label.length === 0 || node.label.trim() !== node.label))
+        throw new AstJsonSchemaError('math.label must be non-empty and have no surrounding whitespace', path)
+      if (node.number !== undefined && (node.display !== true || node.label === undefined))
+        throw new AstJsonSchemaError('math.number requires display: true and label', path)
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'attrs' && key !== 'pos') walk(child, path ? `${path}.${key}` : key)
+    }
+  }
+  walk(root, '')
 }
 
 /** Whether any `caption_number` in `blocks` arrived carrying a number. */

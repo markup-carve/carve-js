@@ -84,6 +84,10 @@ describe('borrowed HTML layout', () => {
       // bullet spelling two lines up was listed here from the start and the
       // ordered one never was, which is the whole of carve-js#1270.
       '1. a\n\n2. b\n', '1. a\n\n1. b\n', '1. a\n\n\n2. b\n',
+      '| H | G |\n| --- | --- |\n| ^ | b |\n',
+      '| H | G |\n| --- | --- |\n| a | < |\n',
+      '| A | < |\n| --- | --- |\n| a | b |\n',
+      '| ^ | G |\n| --- | --- |\n| a | b |\n',
       // A lone `+` is the list continuation marker (§17 L3): it renders nothing
       // and attaches the block below to the item above, which the borrowed
       // layout has no model for. It used to come out as a literal `<p>+</p>`.

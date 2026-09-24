@@ -66,6 +66,7 @@ import {
   type HtmlImportAdapter,
   type HtmlImportMode,
   type RenderResult,
+  type RenderLossCode,
 } from './index.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
@@ -140,12 +141,14 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                                 keep it as source text (--ansi, --carve).
     --profile NAME              restrict features (full|article|comment|minimal)
     --profile-base-host HOST    base host for the profile's link policy
-    --strict-losses             write no rendered output and exit 1 when raw
-                                content would be dropped for this target
+    --strict-losses             write no rendered output and exit 1 when
+                                rendering would lose structure or content
     --report-losses FILE        write the structured render-loss report as JSON
                                 (use - for stderr)
     --allow-loss CODE           allow a loss code intentionally (repeatable;
-                                currently: raw-format-dropped)
+                                raw-format-dropped, ruby-flattened,
+                                math-label-number-dropped, section-flattened,
+                                table-cell-blocks-flattened)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
 
@@ -738,14 +741,16 @@ function renderFromJson(
 interface RenderCliLossOptions {
   strictLosses: boolean
   reportLosses?: string
-  allowRawFormatDropped: boolean
+  allowedLosses: ReadonlySet<RenderLossCode>
   maxRenderLosses: number
 }
 
 function finishRender(result: RenderResult, file: string, opts: RenderCliLossOptions, io: CliIO): number {
-  const allowed = opts.allowRawFormatDropped
-  const effectiveLosses = allowed ? [] : result.losses
-  const effectiveTotal = allowed ? 0 : result.totalLosses
+  const effectiveLosses = result.losses.filter((loss) => !opts.allowedLosses.has(loss.code))
+  const allowedTotal = [...opts.allowedLosses].reduce(
+    (total, code) => total + (result.lossCounts?.[code] ?? 0), 0,
+  )
+  const effectiveTotal = result.totalLosses - allowedTotal
   if (effectiveTotal > 0) {
     for (const loss of effectiveLosses) {
       const at = loss.pos ? `:${loss.pos.startLine}:${loss.pos.startColumn ?? 1}` : ''
@@ -761,7 +766,7 @@ function finishRender(result: RenderResult, file: string, opts: RenderCliLossOpt
       file,
       losses: effectiveLosses,
       totalLosses: effectiveTotal,
-      truncated: allowed ? false : result.truncated,
+      truncated: effectiveTotal > effectiveLosses.length,
     }, null, 2) + '\n'
     if (opts.reportLosses === '-') io.writeErr(report)
     else io.writeFile(opts.reportLosses, report)
@@ -924,9 +929,13 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const unknownLoss = allowedLosses.find((code) => code !== 'raw-format-dropped')
+  const knownLosses: RenderLossCode[] = [
+    'raw-format-dropped', 'ruby-flattened', 'math-label-number-dropped',
+    'section-flattened', 'table-cell-blocks-flattened',
+  ]
+  const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
-    io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected raw-format-dropped)\n`)
+    io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected ${knownLosses.join(', ')})\n`)
     return 2
   }
   const maxRenderLosses = values['max-render-losses'] === undefined
@@ -938,7 +947,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   }
   const lossOptions: RenderCliLossOptions = {
     strictLosses: values['strict-losses'] ?? false,
-    allowRawFormatDropped: allowedLosses.includes('raw-format-dropped'),
+    allowedLosses: new Set(allowedLosses as RenderLossCode[]),
     maxRenderLosses,
     ...(values['report-losses'] !== undefined ? { reportLosses: values['report-losses'] } : {}),
   }
