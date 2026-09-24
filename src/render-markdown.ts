@@ -476,12 +476,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
 }
 
 function renderFigure(node: Figure, ctx: MarkdownContext): string {
-  const target =
-    node.target.type === 'image'
-      ? renderImage(node.target)
-      : node.target.type === 'table'
-        ? trimNonNbsp(renderTable(node.target, ctx))
-        : trimNonNbsp(renderBlock(node.target, ctx))
+  const target = renderFigureTarget(node, ctx)
   // The caption sits on its own line directly under the figure (`\n`) - an
   // image target used to glue it on (`![a](/u)cap`). A block quote keeps the
   // blank-line separation, and so does a table: PART 11 §10e T2 requires one
@@ -501,17 +496,20 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
  * that keeps a panel caption visually subordinate to the group's bold one.
  */
 function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
-  const target =
-    node.target.type === 'image'
-      ? renderImage(node.target)
-      : node.target.type === 'table'
-        ? trimNonNbsp(renderTable(node.target, ctx))
-        : trimNonNbsp(renderBlock(node.target, ctx))
+  const target = renderFigureTarget(node, ctx)
   // A BLANK line before the caption, for every host: the emphasized caption is
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
   // example). The single-newline glue is the standalone figure's shape, not
   // the panel's.
   return `${target}\n\n${wrapperLine(trimNonNbsp(renderInlines(node.caption, ctx)), '*', 'em')}`
+}
+
+function renderFigureTarget(node: Figure, ctx: MarkdownContext): string {
+  return node.target.type === 'image'
+    ? renderImage(node.target)
+    : node.target.type === 'table'
+      ? trimNonNbsp(renderTable(node.target, ctx))
+      : trimNonNbsp(renderBlock(node.target, ctx))
 }
 
 function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {

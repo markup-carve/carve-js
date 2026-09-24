@@ -262,12 +262,7 @@ function renderTable(node: Table, ctx: PlainContext): string {
 }
 
 function renderFigure(node: Figure, ctx: PlainContext): string {
-  const target =
-    node.target.type === 'image'
-      ? stripControls(node.target.alt)
-      : node.target.type === 'table'
-        ? trimNonNbsp(renderTable(node.target, ctx))
-        : trimNonNbsp(renderBlock(node.target, ctx))
+  const target = renderFigureTarget(node, ctx)
   // The caption sits on its own line directly under the figure (`\n`) - an
   // image target used to glue it on. A blockquote target keeps the blank-line
   // separation. A table takes the same single newline as every other target:
@@ -288,13 +283,16 @@ function renderFigure(node: Figure, ctx: PlainContext): string {
  * as belonging to the NEXT panel.
  */
 function renderPanelFigure(node: Figure, ctx: PlainContext): string {
-  const target =
-    node.target.type === 'image'
-      ? stripControls(node.target.alt)
-      : node.target.type === 'table'
-        ? trimNonNbsp(renderTable(node.target, ctx))
-        : trimNonNbsp(renderBlock(node.target, ctx))
+  const target = renderFigureTarget(node, ctx)
   return `${trimNonNbsp(renderInlines(node.caption, ctx))}\n${target}\n\n`
+}
+
+function renderFigureTarget(node: Figure, ctx: PlainContext): string {
+  return node.target.type === 'image'
+    ? stripControls(node.target.alt)
+    : node.target.type === 'table'
+      ? trimNonNbsp(renderTable(node.target, ctx))
+      : trimNonNbsp(renderBlock(node.target, ctx))
 }
 
 function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {

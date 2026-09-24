@@ -394,12 +394,7 @@ function tableRow(
 }
 
 function renderFigure(node: Figure, ctx: AnsiContext): string {
-  const target =
-    node.target.type === 'image'
-      ? renderImage(node.target)
-      : node.target.type === 'table'
-        ? trimEndNonNbsp(renderTable(node.target, ctx))
-        : trimEndNonNbsp(renderBlock(node.target, ctx))
+  const target = renderFigureTarget(node, ctx)
   const sep = node.target.type === 'block_quote' ? '\n\n' : '\n'
   return `${target}${sep}${renderCaption(node.caption, ctx)}`
 }
@@ -413,13 +408,16 @@ function renderCaption(nodes: InlineNode[], ctx: AnsiContext): string {
  * degradation (D8) - see the plain-text twin for why the order inverts.
  */
 function renderPanelFigure(node: Figure, ctx: AnsiContext): string {
-  const target =
-    node.target.type === 'image'
-      ? renderImage(node.target)
-      : node.target.type === 'table'
-        ? trimEndNonNbsp(renderTable(node.target, ctx))
-        : trimEndNonNbsp(renderBlock(node.target, ctx))
+  const target = renderFigureTarget(node, ctx)
   return `${style(trimNonNbsp(renderInlines(node.caption, ctx)), ITALIC + DIM)}\n${target}\n\n`
+}
+
+function renderFigureTarget(node: Figure, ctx: AnsiContext): string {
+  return node.target.type === 'image'
+    ? renderImage(node.target)
+    : node.target.type === 'table'
+      ? trimEndNonNbsp(renderTable(node.target, ctx))
+      : trimEndNonNbsp(renderBlock(node.target, ctx))
 }
 
 function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
