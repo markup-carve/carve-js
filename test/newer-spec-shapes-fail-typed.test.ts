@@ -21,11 +21,4 @@ describe('newly pinned interchange shapes without renderer support', () => {
     expect(() => fromAstJson(doc(table) as never)).toThrow(/"blocks" is not implemented/)
   })
 
-  it('refuses labeled or numbered math at ingest', () => {
-    const paragraph = {
-      type: 'paragraph',
-      children: [{ type: 'math', display: true, content: 'x', label: 'eq:x', number: 1 }],
-    }
-    expect(() => fromAstJson(doc(paragraph) as never)).toThrow(/math label and number fields/)
-  })
 })

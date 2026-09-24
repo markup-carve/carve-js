@@ -122,6 +122,26 @@ describe('carve render — loss reporting', () => {
     expect(allowed.err).toBe('')
   })
 
+  it('can allow a math label and number loss from an encoded AST', async () => {
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [{ type: 'paragraph', children: [{
+        type: 'math', display: true, content: 'x', label: 'Equation', number: 1,
+      }] }],
+      srcByteLength: 0,
+    })
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], denied.io)).toBe(1)
+    expect(denied.err).toContain('math-label-number-dropped')
+
+    const allowed = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--carve', '--strict-losses', '--allow-loss', 'math-label-number-dropped',
+    ], allowed.io)).toBe(0)
+    expect(allowed.out).toContain('$$`x`')
+    expect(allowed.err).toBe('')
+  })
+
   it('does not let an allowed truncated loss hide a different code', async () => {
     const ruby = {
       type: 'ruby',
