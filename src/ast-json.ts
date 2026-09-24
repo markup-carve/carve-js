@@ -877,7 +877,7 @@ function refuseTaskState(record: Record<string, unknown>, path: string): void {
   }
 }
 
-/** Keep newly pinned interchange shapes away from renderers until #1969 and #1971 land. */
+/** Keep newly pinned interchange shapes away from renderers until #1969, #1971, and #1973 land. */
 function refuseUnimplementedSpecShapes(record: Record<string, unknown>, path: string): void {
   if (record.type === 'section') {
     throw new AstJsonSchemaError('section nodes are not implemented by this engine', path)
@@ -887,6 +887,9 @@ function refuseUnimplementedSpecShapes(record: Record<string, unknown>, path: st
   }
   if (record.type === 'math' && (record.label !== undefined || record.number !== undefined)) {
     throw new AstJsonSchemaError('math label and number fields are not implemented by this engine', path)
+  }
+  if (record.type === 'citation' && record.mode !== undefined) {
+    throw new AstJsonSchemaError('per-item citation mode is not implemented by this engine', path)
   }
 }
 
