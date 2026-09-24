@@ -8024,6 +8024,8 @@ function parseList(lexer: Lexer): List {
     // via the join, and lazy continuation / block-attribute lines must stay on
     // the join, so only an indented ordered marker triggers the split.
     let firstBlockIdx = -1
+    // Every `nested` index whose line opens a sub-list item, not only the first.
+    const subListMarkers = new Set<number>()
     let bodyHasContentColumnLine = false
     let bodyHasBelowColumnLine = false
     let pendingBlanks = 0
@@ -8246,6 +8248,7 @@ function parseList(lexer: Lexer): List {
         if (firstBlockIdx === -1 && isMarker) {
           firstBlockIdx = nested.length
         }
+        if (isMarker) subListMarkers.add(nested.length)
         // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
         // CONTENT COLUMN (markup-carve/carve-js#1645). It carries no `>`, so its
         // leading whitespace is alignment under the quoted item, not source the
@@ -8688,6 +8691,25 @@ function parseList(lexer: Lexer): List {
       for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
       k = last
     }
+    // The content column of the sub-list item each line sits in. A marker at
+    // the item's content column opens a sibling sub-list item or a new sibling
+    // sub-list (§24 C3, carve-js#1951), whose own column then applies; one
+    // indented below the current column folds into the open paragraph instead.
+    // Built on first use: most items never reach the check below.
+    let subColAt: number[] | null = null
+    const subListColumnAt = (at: number): number => {
+      if (subColAt === null) {
+        subColAt = new Array(nested.length).fill(-1)
+        let col = leadIsMarker ? markerContentColumn(content) : -1
+        for (let k = 0; k < nested.length; k++) {
+          if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
+            col = markerContentColumn(nested[k]!)
+          }
+          subColAt[k] = col
+        }
+      }
+      return subColAt[at]!
+    }
     for (let k = 0; k < nested.length; k++) {
       if (inFence[k + 1]!) continue
       if (inFootnoteRun[k]!) continue
@@ -8736,12 +8758,10 @@ function parseList(lexer: Lexer): List {
       // dedented column-0 paragraph) is the item's OWN block and still loosens.
       // Matches carve-php / carve-rs, and the sibling-blank invariant where the
       // outer item stays tight. A marker LEAD (`- 1. x`) is that sub-list's
-      // first item, so its column is the threshold for every line (carve-js#1938).
-      const subListLead = leadIsMarker ? content : firstBlockIdx !== -1 ? nested[firstBlockIdx]! : null
-      if (subListLead !== null) {
-        const subCol = markerContentColumn(subListLead)
-        if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
-      }
+      // first item (carve-js#1938); a later sibling sub-list brings its own
+      // column (carve-js#1951).
+      const subCol = subListColumnAt(k)
+      if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
       // `j` can no longer be an invisible line (skipped above), so this is the
       // plain "is the next visible thing a paragraph" test it always was.
       //
