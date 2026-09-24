@@ -1984,13 +1984,18 @@ function heldInContainer(part: PrefixedInlineLine): { key: string; text: string 
  * heading, a link reference definition, or anything else that opens a block.
  */
 function paragraphLine(part: PrefixedInlineLine, text: string): { lead: string; body: string } | null {
+  // A continued line opens nothing, so it is paragraph text whatever it is
+  // shaped like, and the markers on it are text rather than markers. Asking the
+  // tests below anyway refused a heading marker and a link reference outright,
+  // and peeled an item marker off the text (carve-js#2008).
+  if (part.continued) return text.trim() === '' ? null : { lead: '', body: text.trim() }
   const marker = RE_ITEM_LEAD.exec(text)![0]
   const opens = RE_ITEM_LINE.test(text)
   const body = (opens ? text.slice(marker.length) : text).trim()
   if (body === '' || /^#{1,6}([ \t]|$)/.test(body) || RE_MD_LINK_REFERENCE.test(body)) return null
   // `blank`, not `text`: after a blank an ordered marker of any number opens a
   // list, which is the reading that rejects the fold.
-  if (!part.continued && !isParagraphRunLine([body], 0, 'blank')) return null
+  if (!isParagraphRunLine([body], 0, 'blank')) return null
   return { lead: opens ? marker : '', body }
 }
 
@@ -2047,7 +2052,10 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
       starts.push(-1)
       continue
     }
-    const open = RE_MD_FENCE_LINE.exec(inner)
+    // `inner` has the line's indent stripped, so a continued line four columns
+    // in read as a fence opener and took the paragraph out of the fold. It
+    // opens nothing there, fence included (carve-js#2008).
+    const open = part.continued === true ? null : RE_MD_FENCE_LINE.exec(inner)
     if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
       closer = { prefix: part.prefix, test: new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`) }
       out.push(part)
@@ -2333,6 +2341,11 @@ function collectBlockquoteInlineRun(
     if (blank && fence === null && !codeRuns) break
     const lazy = paragraph
     paragraph = false
+    // Four columns past the column its paragraph stands at, a marked quote line
+    // opens nothing, so it continues the paragraph above. Without the flag the
+    // fold read a line shaped like a block opener as a block of its own, and a
+    // quoted setext heading holding one stayed a paragraph (carve-js#2008).
+    let continues = false
     if (fence !== null) {
       if (fence.closer.test(stripColumns(text, fence.col))) fence = null
     } else if (code === null) {
@@ -2359,6 +2372,7 @@ function collectBlockquoteInlineRun(
       } else {
         // A pipe row is paragraph text until a delimiter row under it makes
         // the two a table, whose rows take no lazy line.
+        continues = lazy && inner.trim() !== '' && indentColumns(text) >= (held ?? 0) + 4
         const row = isStandardTableRow(inner)
         const delimiter = RE_TABLE_DELIMITER.test(inner.trim()) && inner.includes('-')
         if (delimiter && !table.has(prefix) && run.at(-1)?.prefix === prefix && !run.at(-1)!.continued) table.add(prefix)
@@ -2366,7 +2380,7 @@ function collectBlockquoteInlineRun(
         paragraph = inner.trim() !== '' && (quoteParagraphIsOpen(inner) || (row && !table.has(prefix)))
       }
     }
-    run.push(parsed)
+    run.push(continues ? { ...parsed, continued: true } : parsed)
     end++
   }
   if (run.length === 0) return { lines: [pad + strip(lines[start]!)], end: start + 1, blank: true }
