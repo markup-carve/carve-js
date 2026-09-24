@@ -31,9 +31,10 @@ import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
+import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
-export interface CarveRenderOptions {}
+export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
 /**
  * The writer's recursion bound, and it must sit ABOVE the parser's.
@@ -122,7 +123,8 @@ interface CarveContext {
  *
  * @throws {SourceUnspellableError} when a node's content has no Carve spelling.
  */
-export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
+export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+  reportRubyLosses(ast, opts)
   ast = withCellHardBreaksFlattened(ast)
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it
@@ -171,6 +173,26 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // says how far that fallback actually reaches: the smallest unit whose minimal
   // form fails, and §2's own test everywhere else.
   return narrowEscalation(ast, conservative, conservativeTree)
+}
+
+function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
+  if (opts.onRenderLoss === undefined) return
+  const stack: unknown[] = [ast]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (let index = value.length - 1; index >= 0; index--) stack.push(value[index])
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const record = value as Record<string, unknown>
+    if (record['type'] === 'ruby') rubyFlattened(opts, record as unknown as { type: 'ruby'; pos?: import('./ast.js').Position }, 'carve')
+    const entries = Object.entries(record)
+    for (let index = entries.length - 1; index >= 0; index--) {
+      const [key, child] = entries[index]!
+      if (key !== 'attrs' && key !== 'pos') stack.push(child)
+    }
+  }
 }
 
 /**
@@ -2611,6 +2633,14 @@ function renderInlineBody(
       return renderImage(node)
     case 'span':
       return `[${escapeNoteReferenceLabel(renderInlines(node.children, ctx), ctx)}]${renderAttrs(node.attrs) || '{}'}`
+    case 'ruby': {
+      const fallback = node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')
+      return node.attrs ? `[${escapeNoteReferenceLabel(fallback, ctx)}]${renderAttrs(node.attrs)}` : fallback
+    }
+    case 'small_caps': {
+      const content = renderInlines(node.children, ctx)
+      return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderAttrs(node.attrs)}` : content
+    }
     case 'math':
       return withAttrs(renderMath(node.display, node.content))
     case 'raw_inline':

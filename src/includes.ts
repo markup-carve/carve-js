@@ -1052,9 +1052,16 @@ function expandInlines(nodes: InlineNode[], state: State): InlineNode[] {
         case 'highlight':
         case 'link':
         case 'span':
+        case 'small_caps':
         case 'insert':
         case 'delete':
           node.children = expandInlines(node.children, state)
+          break
+        case 'ruby':
+          for (const pair of node.pairs) {
+            pair.base = expandInlines(pair.base, state)
+            pair.annotation = expandInlines(pair.annotation, state)
+          }
           break
         case 'inline_extension':
           node.content = expandInlines(node.content, state)
@@ -1450,9 +1457,16 @@ function collectInlines(nodes: InlineNode[], sites: DirectiveSite[]): void {
       case 'highlight':
       case 'link':
       case 'span':
+      case 'small_caps':
       case 'insert':
       case 'delete':
         collectInlines(node.children, sites)
+        break
+      case 'ruby':
+        for (const pair of node.pairs) {
+          collectInlines(pair.base, sites)
+          collectInlines(pair.annotation, sites)
+        }
         break
       case 'inline_extension':
         collectInlines(node.content, sites)

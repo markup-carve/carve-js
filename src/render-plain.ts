@@ -8,7 +8,7 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -424,6 +424,11 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return withinLink(() => renderInlines(node.children, ctx))
     case 'image':
       return renderImageText(node)
+    case 'ruby':
+      rubyFlattened(ctx.options, node, 'plain')
+      return node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')
+    case 'small_caps':
+      return renderInlines(node.children, ctx)
     case 'math':
       return stripControls(node.content)
     case 'raw_inline':

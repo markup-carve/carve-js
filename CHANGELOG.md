@@ -7,6 +7,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The interchange AST supports `ruby` nodes with ordered base and annotation pairs (markup-carve/carve#2208). HTML import preserves ruby structure, HTML and Markdown emit native `<ruby>` markup, and plain, ANSI, and Carve output use the readable `base(annotation)` fallback. Checked rendering reports that fallback as `ruby-flattened`.
+
 ## [0.1.8] - 2026-09-25
 
 ### Added

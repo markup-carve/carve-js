@@ -95,6 +95,8 @@ export const CANONICAL_INLINE_TYPES = [
   'footnote_ref',
   'inline_footnote',
   'span',
+  'ruby',
+  'small_caps',
   'superscript',
   'subscript',
   'highlight',
@@ -260,6 +262,10 @@ export function canonicalType(type: string): string {
       return type
     case 'span':
       return 'span'
+    case 'ruby':
+      return 'ruby'
+    case 'small_caps':
+      return 'small_caps'
     case 'superscript':
       return 'superscript'
     case 'subscript':

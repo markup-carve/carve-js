@@ -101,6 +101,27 @@ describe('carve render — loss reporting', () => {
     expect(t.err).toBe('')
   })
 
+  it('can allow ruby flattening from an encoded AST', async () => {
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [{ type: 'paragraph', children: [{
+        type: 'ruby',
+        pairs: [{ base: [{ type: 'text', value: '漢' }], annotation: [{ type: 'text', value: 'かん' }] }],
+      }] }],
+      srcByteLength: 0,
+    })
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--plain', '--strict-losses'], denied.io)).toBe(1)
+    expect(denied.err).toContain('ruby-flattened')
+
+    const allowed = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--plain', '--strict-losses', '--allow-loss', 'ruby-flattened',
+    ], allowed.io)).toBe(0)
+    expect(allowed.out).toBe('漢(かん)\n')
+    expect(allowed.err).toBe('')
+  })
+
   it('rejects unknown loss codes and invalid bounds', async () => {
     const unknown = makeIO({ stdin: source })
     expect(await run(['render', '--allow-loss', 'unknown'], unknown.io)).toBe(2)

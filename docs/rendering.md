@@ -2,6 +2,21 @@
 
 Three rendering choices this package exposes: the depth ceiling, how heading ids are derived, and how sections are wrapped.
 
+## Ruby annotations
+
+An ingested AST can carry ruby as ordered `base` and `annotation` inline arrays:
+
+```json
+{
+  "type": "ruby",
+  "pairs": [
+    { "base": [{ "type": "text", "value": "漢" }], "annotation": [{ "type": "text", "value": "かん" }] }
+  ]
+}
+```
+
+HTML and Markdown preserve the relationship with native `<ruby>`, `<rt>`, and generated `<rp>` elements. Plain text, ANSI, and canonical Carve use `漢(かん)` and report `ruby-flattened`. With outer attributes, the Carve writer wraps the complete fallback in one attributed span.
+
 ## Renderers refuse a tree that nests too deeply
 
 
