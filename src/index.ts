@@ -114,6 +114,7 @@ export {
   // a way to catch it by type.
   AstJsonRootFieldError,
   AstJsonUnknownFieldError,
+  AstJsonMisplacedNodeTypeError,
   AstJsonUnknownNodeTypeError,
   AstJsonNodeTypeError,
   AstJsonPartitionError,
