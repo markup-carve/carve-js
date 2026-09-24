@@ -3058,6 +3058,15 @@ function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | nu
       block.push(line)
       if (endRe.test(line)) return { lines: block, end: i, interrupts }
     }
+    // Unclosed at the end of the document. Splitting on `\n` leaves one empty
+    // element for the document's FINAL NEWLINE, and taking it in wrote a blank
+    // line the source never had and left the output with no final newline.
+    // Only that one element goes: a source that really ends with a blank line
+    // splits to two, and its blank is content of the block.
+    if (block.at(-1) === '' && lines.length === block.length + start) {
+      block.pop()
+      return { lines: block, end: lines.length - 2, interrupts }
+    }
     return { lines: block, end: lines.length - 1, interrupts }
   }
 
@@ -3503,8 +3512,20 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
   }
   const text: string[] = []
   const sourceBlanks = new Set<number>()
+  // Blank lines inside a fence are CONTENT, not block separation: collapsing
+  // them rewrote what a raw `=html` block or a code block holds, and in a
+  // `<pre>` the blank lines are what the reader sees.
+  let fence: { char: string; len: number } | null = null
   for (let at = 0; at < lines.length; ) {
     if (lines[at] !== '') {
+      const bare = lines[at]!.replace(/^(?: {0,3}>[ \t]?)*/, '').replace(/^ {0,3}/, '')
+      const run = /^(([`~])\2{2,})/.exec(bare)
+      if (run) {
+        const char = run[2]!
+        const len = run[1]!.length
+        if (fence === null) fence = { char, len }
+        else if (char === fence.char && len >= fence.len && bare.slice(len).trim() === '') fence = null
+      }
       if (flags[at]) sourceBlanks.add(text.length)
       text.push(lines[at++]!)
       continue
@@ -3515,7 +3536,9 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
     // A run of empty lines is that many newlines, one more between two lines,
     // and a run of 3+ newlines keeps 2.
     const newlines = end - at + (at > 0 && end < lines.length ? 1 : 0)
-    const keep = newlines < 3 ? end - at : at > 0 && end < lines.length ? 1 : 2
+    const keep = fence !== null
+      ? end - at
+      : newlines < 3 ? end - at : at > 0 && end < lines.length ? 1 : 2
     for (let k = 0; k < keep; k++) {
       if (flagged) sourceBlanks.add(text.length)
       text.push('')
