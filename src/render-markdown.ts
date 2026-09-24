@@ -466,6 +466,7 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
       case 'section':
       case 'line_block':
       case 'admonition':
+      case 'directive':
       case 'figure_group':
         descend(block.children)
         break
@@ -1735,6 +1736,7 @@ function walkBlocks(
         break
       case 'block_quote':
       case 'admonition':
+      case 'directive':
       case 'div':
       case 'section':
       case 'line_block':

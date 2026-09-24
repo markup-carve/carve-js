@@ -7,8 +7,20 @@
  * is what shows the dispatch only moved the six kinds.
  */
 
-import { describe, it, expect } from 'vitest'
-import { parse, carveToHtml, renderCarve, toAstJson, fromAstJson, GENERATED_CONTENT_KINDS } from '../src/index.js'
+import { describe, expectTypeOf, it, expect } from 'vitest'
+import {
+  parse,
+  carveToHtml,
+  carveToMarkdown,
+  inspectColonFences,
+  lintCarve,
+  renderCarve,
+  toAstJson,
+  fromAstJson,
+  GENERATED_CONTENT_KINDS,
+  type Directive,
+  type IncludeDirective,
+} from '../src/index.js'
 
 const typeOf = (src: string): string => parse(src).children[0]!.type
 const firstBlock = (src: string): Record<string, unknown> =>
@@ -114,5 +126,66 @@ describe('what the split does not move', () => {
     const html = carveToHtml('a[^1]\n\n::: footnotes\n:::\n\nafter\n\n[^1]: n\n')
 
     expect(html.indexOf('doc-endnotes')).toBeLessThan(html.indexOf('after'))
+  })
+})
+
+describe('every pass that walked a container still walks a directive', () => {
+  // A prepass that stops at the new type does not fail loudly: it drops the
+  // heading anchor the reference beside it still needed, and the reference
+  // degrades to plain text. The div case is the control.
+  const anchored = (fence: string) =>
+    carveToMarkdown(`${fence}\n## Inner\n:::\n\nSee [x](#Inner).\n`)
+
+  it('keeps the anchor a reference into a directive needs', () => {
+    expect(anchored('::: toc')).toContain('## Inner {#Inner}')
+    expect(anchored('::: toc')).toContain('[x](#Inner)')
+  })
+
+  it('keeps it for a div too, as it always did', () => {
+    expect(anchored(':::')).toContain('## Inner {#Inner}')
+  })
+
+  it('numbers a footnote referenced from inside a directive', () => {
+    const html = carveToHtml('::: toc\nsee[^a]\n:::\n\n[^a]: note\n')
+
+    expect(html).toContain('doc-noteref')
+    expect(html).toContain('note')
+  })
+})
+
+describe('the diagnostics name what they found', () => {
+  const unclosed = (fence: string) =>
+    lintCarve(`${fence}\nbody\n`).find((w) => w.rule === 'unclosed-container-fence')?.message
+
+  it('calls an unclosed directive fence a directive', () => {
+    expect(unclosed('::: toc')).toContain('3-colon directive')
+  })
+
+  it('still calls an unclosed named fence an admonition', () => {
+    expect(unclosed('::: note')).toContain('3-colon admonition')
+  })
+
+  it('still calls an unclosed bare fence a div', () => {
+    expect(unclosed(':::')).toContain('3-colon div')
+  })
+
+  it('reports the fence it inspected under its own kind', () => {
+    const [pair] = inspectColonFences('::: toc\nbody\n:::\n').pairs
+
+    expect(pair?.opener.kind).toBe('directive')
+  })
+})
+
+describe('the node type is reachable by name from the package root', () => {
+  it('types a parsed directive as Directive', () => {
+    // The include module exports a different `Directive` (a parsed
+    // `{{include}}` token), and an explicit re-export of that one shadowed the
+    // star export from `ast.ts`, so the AST type had no reachable name. That one
+    // is `IncludeDirective` now.
+    const node = parse('::: toc\n:::\n').children[0]
+    const typed: Directive | undefined = node?.type === 'directive' ? node : undefined
+
+    expect(typed?.kind).toBe('toc')
+    expectTypeOf<IncludeDirective>().toHaveProperty('path')
   })
 })

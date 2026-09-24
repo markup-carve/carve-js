@@ -113,7 +113,7 @@ export interface ParseOptions {
 }
 
 export interface UnclosedContainer {
-  kind: 'div' | 'admonition' | 'line block' | 'hard-break block' | 'block quote'
+  kind: 'div' | 'admonition' | 'directive' | 'line block' | 'hard-break block' | 'block quote'
   line: number
   column: number
   startOffset: number
@@ -4622,7 +4622,9 @@ function parseAdmonition(lexer: Lexer): Admonition | Directive | FigureGroup {
   // uses it as the tab name; core does not render it.
   const label = m[4] !== undefined ? m[4]!.slice(1, -1) : undefined
   const inner = collectColonFenceBody(lexer, {
-    kind: 'admonition',
+    // Which of the two named-container types this fence opens, so an unclosed
+    // one is reported as the thing it was (CARVE-P12-057).
+    kind: GENERATED_CONTENT_KINDS.has(kind) ? 'directive' : 'admonition',
     lineIndex: openLineIndex,
     fenceWidth: fence,
   })
@@ -4759,7 +4761,8 @@ function colonFenceKind(line: string): UnclosedContainer['kind'] {
   if (RE_LINE_BLOCK_OPEN.test(line)) return 'line block'
   if (RE_HARDBREAKS_OPEN.test(line)) return 'hard-break block'
   if (RE_QUOTE_BLOCK_OPEN.test(line)) return 'block quote'
-  if (RE_ADMONITION_OPEN.test(line)) return 'admonition'
+  const named = RE_ADMONITION_OPEN.exec(line)
+  if (named) return GENERATED_CONTENT_KINDS.has(named[2]!) ? 'directive' : 'admonition'
   return 'div'
 }
 
