@@ -178,13 +178,9 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
     for (let row = group.start; row < group.end; row++) rowGroup[row] = index + 1
   })
 
-  // Resolve `^`/`<` span markers into a positional grid, mirroring carve-js's
-  // pipe-table span model (render-html `renderTable`) so the output is identical
-  // to the equivalent pipe table. The header-row count clamps rowspans at the
-  // header/body boundary: an HTML cell cannot reliably span across
-  // <thead>/<tbody>, so a `^` that would extend a header cell down into the body
-  // is not merged and degrades to an empty cell.
-  const grid = resolveSpans(rows, rowGroup)
+  // Resolve spans before choosing the HTML row-group wrappers. A span crossing
+  // a group boundary keeps its authored extent; the table then uses one tbody.
+  const grid = resolveSpans(rows)
 
   // Assign each rendered cell an output column by flowing it top-down past any
   // column a rowspan from an earlier row still holds (browser / pipe-table
@@ -263,6 +259,16 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
 
   const headGrid = grid.slice(0, headerRows)
   const footGrid = grid.slice(footerStart)
+  const crossesGroup = grid.some((row, r) => row.some((entry) =>
+    !entry.skip && entry.rowspan > 1 && rowGroup[r] !== rowGroup[r + entry.rowspan - 1],
+  ))
+
+  if (crossesGroup) {
+    const body = grid.map((gridRow, rowIndex) => `${pad}    ${renderRow(gridRow, rowIndex)}`)
+    lines.push(`${pad}  <tbody>\n${body.join('\n')}\n${pad}  </tbody>`)
+    const attrs = renderTableAttributes(node, ctx)
+    return `${pad}<table${attrs}>\n${lines.join('\n')}\n${pad}</table>`
+  }
 
   if (headGrid.length > 0) {
     // One row per line, as in every other section (PART 10 §7, carve#1459).
@@ -383,23 +389,22 @@ function extractCells(rowItem: ListItem): CellEntry[] | null {
 }
 
 /**
- * Resolve `^` / `<` span markers into a positional grid, EXACTLY mirroring
- * carve-js's pipe-table span model (render-html `renderTable`) so the output is
- * identical to the equivalent pipe table.
+ * Resolve `^` / `<` markers into a positional grid using the pipe-table span
+ * walk. A caret below a consumed colspan position stays empty unless a visible
+ * span already covers it.
  *
  * Each row becomes a positional list of grid entries (one per source cell). A
  * `^` cell grows the rowspan of the nearest non-skipped cell directly above it
  * in the same source column; a `<` cell grows the colspan of the nearest
  * non-skipped cell to its left. A merged marker is flagged `skip` and emits
- * nothing; an unmergeable marker (first row `^`, leading `<`, or a clamped one)
+ * nothing; an unmergeable marker (first row `^`, leading `<`, or a caret below
+ * a consumed colspan position that is not covered by a span)
  * stays a rendered-empty cell. A cell carrying its own attribute block, or one
  * that owns trailing blocks, is never a bare marker (its `^`/`<` is literal).
  *
- * `headerRows` clamps a rowspan so it never crosses the header/body boundary: a
- * `^` in a body row whose source sits in the header rows is NOT merged and
- * degrades to an empty cell (an HTML cell cannot span row groups reliably).
+ * The renderer puts every row in one tbody when a resolved span crosses groups.
  */
-function resolveSpans(rows: CellEntry[][], rowGroup: number[] = rows.map(() => 0)): GridEntry[][] {
+function resolveSpans(rows: CellEntry[][]): GridEntry[][] {
   const grid: GridEntry[][] = rows.map((cells) =>
     cells.map((entry) => ({
       cell: entry.cell,
@@ -423,11 +428,14 @@ function resolveSpans(rows: CellEntry[][], rowGroup: number[] = rows.map(() => 0
       if (entry.marker === '^' && r > 0) {
         const up = base[c]
         const src = up !== undefined ? grid[up]?.[c] : undefined
-        // Clamp at the header/body boundary: a `^` in a body row must not extend
-        // a cell that originated in the header rows. Leave it unmerged (it then
-        // renders as an empty cell) so no <th rowspan> crosses into <tbody>.
-        const crossesGroup = up !== undefined && rowGroup[up] !== rowGroup[r]
-        if (src && !crossesGroup) {
+        let coveredByVisibleSpan = false
+        if (src?.skip && up !== undefined) {
+          let left = c - 1
+          while (left >= 0 && grid[up]![left]!.skip) left--
+          const origin = left >= 0 ? grid[up]![left] : undefined
+          coveredByVisibleSpan = !!origin && left + origin.colspan > c && up + origin.rowspan > r
+        }
+        if (src && (!src.skip || coveredByVisibleSpan)) {
           // A `^` under a merged `<` is absorbed and renders nothing: the
           // origin's rowspan is grown by the mark at its own index, and the
           // count this one adds lands on the merged `<`, which renders nothing

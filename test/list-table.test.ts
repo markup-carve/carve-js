@@ -410,7 +410,7 @@ describe('list-table Tier-3 extension', () => {
     expect(h(listSrc)).toBe(plain(pipe))
   })
 
-  it('does not let a header-row rowspan cross into the body (^ in body)', () => {
+  it('keeps a header-row rowspan in one body group (^ in body)', () => {
     const src = [
       '{header-rows=1}',
       '::: list-table',
@@ -425,18 +425,98 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead>',
-        '    <tr><th scope="col">A</th><th scope="col">B</th><th scope="col">C</th></tr>',
-        '  </thead>',
         '  <tbody>',
-        '    <tr><td></td><td>E</td><td>F</td></tr>',
+        '    <tr><th scope="col" rowspan="2">A</th><th scope="col">B</th><th scope="col">C</th></tr>',
+        '    <tr><td>E</td><td>F</td></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
     )
   })
 
-  it('clamps a rowspan under a header colspan body at the header boundary', () => {
+  it('keeps a span across local body groups in one tbody', () => {
+    const src = '::: list-table\n- -{header-row} Name\n  - Value\n- - Alpha\n  - 1\n- -{header-row} Next\n  - ^\n- - Beta\n  - 2\n:::'
+    expect(h(src)).toBe([
+      '<table>',
+      '  <tbody>',
+      '    <tr><th scope="col">Name</th><th scope="col">Value</th></tr>',
+      '    <tr><td>Alpha</td><td rowspan="2">1</td></tr>',
+      '    <tr><th scope="col">Next</th></tr>',
+      '    <tr><td>Beta</td><td>2</td></tr>',
+      '  </tbody>',
+      '</table>',
+    ].join('\n'))
+  })
+
+  it('absorbs both carets beneath a crossing header colspan', () => {
+    const src = '{header-rows=1}\n::: list-table\n- - A\n  - <\n  - C\n- - ^\n  - ^\n  - Y\n:::'
+    expect(h(src)).toBe([
+      '<table>',
+      '  <tbody>',
+      '    <tr><th scope="col" rowspan="2" colspan="2">A</th><th scope="col">C</th></tr>',
+      '    <tr><td>Y</td></tr>',
+      '  </tbody>',
+      '</table>',
+    ].join('\n'))
+  })
+
+  it('keeps an uncovered caret empty within one body group', () => {
+    const src = '::: list-table\n- - A\n  - <\n  - X\n- - B\n  - ^\n  - Y\n:::'
+    expect(h(src)).toBe([
+      '<table>',
+      '  <tbody>',
+      '    <tr><td colspan="2">A</td><td>X</td></tr>',
+      '    <tr><td>B</td><td></td><td>Y</td></tr>',
+      '  </tbody>',
+      '</table>',
+    ].join('\n'))
+  })
+
+  it('keeps a blocked caret empty across local body groups', () => {
+    const src = '::: list-table\n- -{header-row} H0\n  - H1\n  - H2\n- - A\n  - <\n  - R\n- -{header-row} H\n  - ^\n  - z\n:::'
+    expect(h(src)).toBe([
+      '<table>',
+      '  <tbody>',
+      '    <tr><th scope="col">H0</th><th scope="col">H1</th><th scope="col">H2</th></tr>',
+      '    <tr><td colspan="2">A</td><td>R</td></tr>',
+      '  </tbody>',
+      '  <tbody>',
+      '    <tr><th scope="col">H</th><th scope="col"></th><th scope="col">z</th></tr>',
+      '  </tbody>',
+      '</table>',
+    ].join('\n'))
+  })
+
+  it('keeps a blocked caret empty at the body-to-foot boundary', () => {
+    const src = '{header-rows=1 footer-rows=1}\n::: list-table\n- - A\n  - B\n  - Q\n- - C\n  - <\n  - R\n- - x\n  - ^\n  - z\n:::'
+    expect(h(src)).toBe([
+      '<table>',
+      '  <thead>',
+      '    <tr><th scope="col">A</th><th scope="col">B</th><th scope="col">Q</th></tr>',
+      '  </thead>',
+      '  <tbody>',
+      '    <tr><td colspan="2">C</td><td>R</td></tr>',
+      '  </tbody>',
+      '  <tfoot>',
+      '    <tr><td>x</td><td></td><td>z</td></tr>',
+      '  </tfoot>',
+      '</table>',
+    ].join('\n'))
+  })
+
+  it('keeps a body-to-foot rowspan in one tbody', () => {
+    const src = '{footer-rows=1}\n::: list-table\n- - A\n  - B\n- - ^\n  - C\n:::'
+    expect(h(src)).toBe([
+      '<table>',
+      '  <tbody>',
+      '    <tr><td rowspan="2">A</td><td>B</td></tr>',
+      '    <tr><td>C</td></tr>',
+      '  </tbody>',
+      '</table>',
+    ].join('\n'))
+  })
+
+  it('leaves a marker beneath a consumed header colspan position empty', () => {
     const src = [
       '{header-rows=1}',
       '::: list-table',
@@ -623,7 +703,7 @@ describe('list-table Tier-3 extension', () => {
     expect(withExt.split('stray block').length - 1).toBe(1)
   })
 
-  it('does not let a header-row rowspan cross into the body (single ^)', () => {
+  it('keeps a single header-row rowspan across the authored boundary', () => {
     const src = [
       '{header-rows=1}',
       '::: list-table',
@@ -637,16 +717,14 @@ describe('list-table Tier-3 extension', () => {
     expect(html).toBe(
       [
         '<table>',
-        '  <thead>',
-        '    <tr><th scope="col">H1</th><th scope="col">H2</th></tr>',
-        '  </thead>',
         '  <tbody>',
-        '    <tr><td></td><td>x</td></tr>',
+        '    <tr><th scope="col" rowspan="2">H1</th><th scope="col">H2</th></tr>',
+        '    <tr><td>x</td></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
     )
-    expect(html).not.toContain('rowspan')
+    expect(html).toContain('rowspan="2"')
   })
 
   it('treats a multi-block cell starting with a marker char as content', () => {

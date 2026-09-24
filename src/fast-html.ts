@@ -382,6 +382,7 @@ function renderTable(lines: string[], start: number, depth: number, defs: Map<st
   while (lines[i]?.trimStart().startsWith('|')) {
     const row = cells(lines[i]!)
     if (!row || row.length !== heads.length) return undefined
+    if (row.some((cell) => cell === '^' || cell === '<')) return undefined
     if (stats) accept(stats, 'tableRows', i, i + 1)
     rows.push(row); i++
   }
