@@ -69,7 +69,7 @@ interface Node {
  * would put a line on every diff saying only "the document is a different
  * length".
  */
-const IGNORED = new Set(['pos', 'srcByteLength'])
+const IGNORED = new Set(['pos', 'srcByteLength', 'lines'])
 
 /**
  * Fields whose value is a list of child nodes, in the order a walk should

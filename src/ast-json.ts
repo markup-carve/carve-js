@@ -102,7 +102,58 @@ export interface AstJsonDocument {
  * records in the runtime tree. Citation items are nodes and carry inline arrays
  * that the serializer visits separately.
  */
-const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
+const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation', 'lines'] as const
+const ingestedLineBlockChildren = new WeakMap<object, string>()
+
+function rememberIngestedLineBlocks(root: Document): void {
+  const stack: unknown[] = [root.children, ...Object.values(root.footnoteDefs ?? {})]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (Array.isArray(value)) {
+      for (const item of value) stack.push(item)
+      continue
+    }
+    if (value === null || typeof value !== 'object') continue
+    const record = value as Record<string, unknown>
+    if (record['type'] === 'line_block' && Array.isArray(record['lines'])) {
+      ingestedLineBlockChildren.set(record, JSON.stringify(record['children']))
+    }
+    for (const field of CHILD_FIELDS) if (field !== 'lines' && record[field] !== undefined) stack.push(record[field])
+    if (record['target'] !== undefined) stack.push(record['target'])
+  }
+}
+
+/** Publish verse lines from the final inline tree, after resolution and filtering. */
+function lineBlockInlineLines(nodes: readonly Record<string, unknown>[]): Record<string, unknown>[][] {
+  const rows: Record<string, unknown>[][] = [[]]
+  for (const node of nodes) {
+    if (node['type'] === 'hard_break') {
+      rows.push([])
+      continue
+    }
+    const slot = (['children', 'inline', 'content'] as const).find((key) => Array.isArray(node[key]))
+    if (slot !== undefined) {
+      const parts = lineBlockInlineLines(node[slot] as Record<string, unknown>[])
+      if (parts.length > 1 && node['type'] === 'inline_footnote') {
+        rows.at(-1)!.push(node)
+        for (let index = 1; index < parts.length; index++) rows.push([])
+        continue
+      }
+      if (parts.length > 1) {
+        for (let index = 0; index < parts.length; index++) {
+          if (index > 0) rows.push([])
+          if (parts[index]!.length > 0) {
+            const { pos: _pos, ...fields } = node
+            rows.at(-1)!.push({ ...fields, [slot]: parts[index] })
+          }
+        }
+        continue
+      }
+    }
+    rows.at(-1)!.push(node)
+  }
+  return rows
+}
 
 /**
  * Rewrite definition lists into their wire shape, everywhere in a subtree, and
@@ -195,6 +246,16 @@ function definitionListsToWire<T>(node: T): T {
     }
     const mapped = definitionListsToWire(value)
     if (mapped !== value) out = { ...(out ?? record), [field]: mapped }
+  }
+
+  const originalChildren = ingestedLineBlockChildren.get(record)
+  if (record['type'] === 'line_block' &&
+      (!Array.isArray(record['lines']) || (originalChildren !== undefined && originalChildren !== JSON.stringify(record['children'])))) {
+    const paragraphs = (out ?? record)['children'] as Array<Record<string, unknown>> | undefined
+    const lines = (paragraphs ?? []).flatMap((paragraph) =>
+      lineBlockInlineLines((paragraph['children'] as Record<string, unknown>[] | undefined) ?? []),
+    )
+    out = { ...(out ?? record), lines }
   }
 
   const target = (out ?? record)['target']
@@ -1513,6 +1574,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // because a library caller hands over an object that has already lost its
   // string. See `expansionBudgetLength`.
   recordIngestPayloadLength(doc, payloadByteLength ?? measurePayload(json))
+  rememberIngestedLineBlocks(doc)
 
   return doc
 }
