@@ -70,6 +70,7 @@ function walkBlockInlines(
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'div':
+    case 'section':
     // A LINE BLOCK HOLDS ORDINARY BLOCKS and differs from a div only in that
     // its newlines are hard breaks (§4.4), so its inlines are numbered like any
     // other. Falling to `default` here did not degrade the note, it deleted it:
@@ -88,7 +89,10 @@ function walkBlockInlines(
       break
     case 'table':
       if (node.caption) visit(node.caption)
-      for (const row of node.rows) for (const cell of row.cells) visit(cell.children)
+      for (const row of node.rows) for (const cell of row.cells) {
+        if (cell.blocks) cell.blocks.forEach((block) => walkBlockInlines(block, visit, depth + 1))
+        else visit(cell.children ?? [])
+      }
       break
     case 'figure':
       visit(node.caption)

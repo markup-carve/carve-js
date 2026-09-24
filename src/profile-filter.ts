@@ -123,7 +123,8 @@ function childArrays(node: NodeLike): ChildArray[] {
       push(node['cells'], true, 'table_cell')
       break
     case 'table_cell':
-      push(node['children'], false)
+      if (node['blocks'] !== undefined) push(node['blocks'], true)
+      else push(node['children'], false)
       break
     case 'definition_list':
       // items is DefinitionItem[]; handled specially in filterDefinitionList.
@@ -133,6 +134,9 @@ function childArrays(node: NodeLike): ChildArray[] {
       break
     case 'figure_group':
       if (node['caption']) push(node['caption'], false)
+      push(node['children'], true)
+      break
+    case 'section':
       push(node['children'], true)
       break
     case 'footnote_ref':

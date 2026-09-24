@@ -127,6 +127,8 @@ function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
 
 function renderBlock(node: BlockNode, ctx: PlainContext): string {
   switch (node.type) {
+    case 'section':
+      return renderBlocks(node.children, ctx)
     case 'heading':
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'paragraph':
@@ -249,7 +251,9 @@ function renderTable(node: Table, ctx: PlainContext): string {
   for (const row of node.rows) {
     const cells: string[] = []
     for (let i = 0; i < cols; i++) {
-      cells.push(i < row.cells.length ? trimNonNbsp(renderInlines(row.cells[i]!.children, ctx)) : '')
+      cells.push(i < row.cells.length ? trimNonNbsp(row.cells[i]!.blocks === undefined
+        ? renderInlines(row.cells[i]!.children ?? [], ctx)
+        : renderBlocks(row.cells[i]!.blocks!, ctx)).replace(/\s*\n\s*/g, ' ') : '')
     }
     // Drop only SYNTHETIC trailing padding (columns this row does not have, so
     // a short/rowspan row stays ragged: `A`, not `A | `), but KEEP a genuine

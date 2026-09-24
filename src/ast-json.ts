@@ -102,7 +102,7 @@ export interface AstJsonDocument {
  * records in the runtime tree. Citation items are nodes and carry inline arrays
  * that the serializer visits separately.
  */
-const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
+const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
 
 /**
  * Rewrite definition lists into their wire shape, everywhere in a subtree, and
@@ -778,7 +778,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     refuseNestedRecordShapes(type as string, record, path)
     refusePartition(record, path)
     refuseTaskState(record, path)
-    refuseUnimplementedSpecShapes(record, path)
+    refuseAdditionalSpecConstraints(record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
@@ -901,13 +901,15 @@ function refuseTaskState(record: Record<string, unknown>, path: string): void {
   }
 }
 
-/** Keep section and block-content cells away from renderers until #1971 lands. */
-function refuseUnimplementedSpecShapes(record: Record<string, unknown>, path: string): void {
-  if (record.type === 'section') {
-    throw new AstJsonSchemaError('section nodes are not implemented by this engine', path)
+/** Validate cross-field constraints and section levels beyond the wire field table. */
+function refuseAdditionalSpecConstraints(record: Record<string, unknown>, path: string): void {
+  if (record.type === 'section' && record.level !== undefined &&
+      (typeof record.level !== 'number' || record.level > 6)) {
+    throw new AstJsonSchemaError('section.level must be an integer from 1 through 6', path)
   }
-  if (record.type === 'table_cell' && record.blocks !== undefined) {
-    throw new AstJsonSchemaError('property "blocks" is not implemented by this engine', path)
+  if (record.type === 'table_cell' &&
+      (record.children === undefined) === (record.blocks === undefined)) {
+    throw new AstJsonSchemaError('table_cell requires exactly one of children or blocks', path)
   }
 }
 

@@ -4212,7 +4212,7 @@ class Importer {
       const node = stack.pop()
       if (node === null || typeof node !== 'object') continue
       if ((node as { type?: unknown }).type === 'table_cell') {
-        flattenHardBreaks((node as TableCell).children, (hardBreak) => {
+        flattenHardBreaks((node as TableCell).children ?? [], (hardBreak) => {
           const origin = this.hardBreaks.get(hardBreak)
           if (origin === undefined) return
           this.add(

@@ -124,6 +124,7 @@ function walkBlock(
       break
     case 'block_quote':
     case 'div':
+    case 'section':
     case 'admonition':
     case 'figure_group':
       node.children.forEach((c) => walkBlock(c, targets, counts))
@@ -133,7 +134,10 @@ function walkBlock(
       break
     case 'table':
       for (const row of node.rows)
-        for (const cell of row.cells) resolveInlines(cell.children, targets, counts)
+        for (const cell of row.cells) {
+          if (cell.blocks) cell.blocks.forEach((block) => walkBlock(block, targets, counts))
+          else resolveInlines(cell.children ?? [], targets, counts)
+        }
       break
     case 'definition_list':
       for (const it of node.items) {

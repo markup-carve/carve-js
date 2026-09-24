@@ -1,7 +1,7 @@
 import type { Position } from './ast.js'
 
 export type RenderTarget = 'html' | 'markdown' | 'plain' | 'ansi' | 'carve'
-export type RenderLossCode = 'raw-format-dropped' | 'ruby-flattened' | 'math-label-number-dropped'
+export type RenderLossCode = 'raw-format-dropped' | 'ruby-flattened' | 'math-label-number-dropped' | 'section-flattened' | 'table-cell-blocks-flattened'
 
 interface RenderLossBase {
   target: RenderTarget
@@ -14,6 +14,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'raw-format-dropped'; format: string })
   | (RenderLossBase & { code: 'ruby-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'math-label-number-dropped'; nodeType: 'inline' })
+  | (RenderLossBase & { code: 'section-flattened' | 'table-cell-blocks-flattened'; nodeType: 'block' })
 
 export interface RenderResult<T = string> {
   value: T

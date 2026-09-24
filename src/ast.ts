@@ -309,7 +309,16 @@ export interface TableCell extends BaseNode {
    */
   align?: 'left' | 'right' | 'center'
   valign?: 'top' | 'middle' | 'bottom'
-  children: InlineNode[]
+  /** Inline content from Carve source, or block content imported from another format. */
+  children?: InlineNode[]
+  blocks?: BlockNode[]
+}
+
+/** Explicit sectioning from an interchange format. Carve source has no wrapper spelling. */
+export interface Section extends BaseNode {
+  type: 'section'
+  children: BlockNode[]
+  level?: number
 }
 
 /**
@@ -520,6 +529,7 @@ export interface Comment extends BaseNode {
 
 export type BlockNode =
   | Heading
+  | Section
   | Paragraph
   | BlockQuote
   | List

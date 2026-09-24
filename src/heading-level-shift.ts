@@ -20,6 +20,7 @@ function shiftBlock(node: BlockNode, shift: number): void {
       break
     case 'block_quote':
     case 'div':
+    case 'section':
     case 'admonition':
     case 'figure_group':
       node.children.forEach((c) => shiftBlock(c, shift))
@@ -33,6 +34,11 @@ function shiftBlock(node: BlockNode, shift: number): void {
       break
     case 'figure':
       if (node.target.type === 'block_quote') shiftBlock(node.target, shift)
+      else if (node.target.type === 'table') shiftBlock(node.target, shift)
+      break
+    case 'table':
+      for (const row of node.rows) for (const cell of row.cells)
+        cell.blocks?.forEach((block) => shiftBlock(block, shift))
       break
     default:
       break
