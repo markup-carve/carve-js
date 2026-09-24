@@ -341,6 +341,7 @@ const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMa
   for (const part of inner.split(';')) {
     const item = parseItem(part, ctx)
     if (!item) return null
+    if (mode) item.mode = mode
     items.push(item)
   }
   if (items.length === 0) return null
@@ -681,8 +682,13 @@ function renderGroup(
     return a.join(' ') + ' '
   }
 
+  const allIntegral = node.items.every((it) => it.mode === 'integral')
   const wrap = (s: string) =>
-    node.mode === 'integral'
+    allIntegral
+      ? `<span class="citation" data-cite-mode="integral">${s}</span>`
+      : s
+  const wrapItem = (it: Citation, s: string) =>
+    it.mode === 'integral' && !allIntegral
       ? `<span class="citation" data-cite-mode="integral">${s}</span>`
       : s
 
@@ -692,14 +698,14 @@ function renderGroup(
       const label = it.suppressAuthor
         ? d.year ?? String(it.number ?? '')
         : `${d.author ?? ''} ${d.year ?? ''}`.trim() || String(it.number ?? '')
-      return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#${refHref(it)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
+      return wrapItem(it, `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#${refHref(it)}">${ctx.escapeHtml(label)}</a>${loc(it)}`)
     })
     const out = `(${parts.join('; ')})`
     return wrap(out)
   }
   const parts = node.items.map((it) => {
     const n = numbers.get(it.key)
-    return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#${refHref(it)}">${n}</a>${loc(it)}`
+    return wrapItem(it, `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#${refHref(it)}">${n}</a>${loc(it)}`)
   })
   const out = `[${parts.join(', ')}]`
   return wrap(out)

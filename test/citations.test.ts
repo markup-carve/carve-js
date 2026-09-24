@@ -291,6 +291,7 @@ function parseFirstCitationGroup(src: string): {
   mode?: string
   items: {
     key: string
+    mode?: string
     suppressAuthor: boolean
     prefix?: unknown[]
     locatorLabel?: string
@@ -308,12 +309,11 @@ function parseFirstCitationGroup(src: string): {
 }
 
 describe('citation item parse (marker + typed locator)', () => {
-  it('[+@k]: group mode integral, item has no mode field and no prefix', () => {
+  it('[+@k]: group mode is copied to its item', () => {
     const g = parseFirstCitationGroup('[+@k]')
     expect(g.mode).toBe('integral')
     expect(g.items[0]!.suppressAuthor).toBe(false)
-    // mode field no longer exists on Citation; ensure it is absent
-    expect(('mode' in (g.items[0] as object))).toBe(false)
+    expect(g.items[0]!.mode).toBe('integral')
   })
   it('[+-@k]: group mode integral, item suppressAuthor (- after stripping leading +)', () => {
     const g = parseFirstCitationGroup('[+-@k]')

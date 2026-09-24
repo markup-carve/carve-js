@@ -74,9 +74,8 @@ const IGNORED = new Set(['pos', 'srcByteLength'])
 /**
  * Fields whose value is a list of child nodes, in the order a walk should
  * follow. Kept as a list rather than "any array of objects with a type",
- * because a citation group's `items` and a definition list's `items` are arrays
- * of plain objects with no `type` at all - they are content, but they are not
- * nodes, and treating them as nodes produces paths that point at nothing.
+ * because a definition list's `items` is an array of records without `type`,
+ * while a citation group's `items` is an array of citation nodes.
  */
 const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title', 'pairs', 'base', 'annotation']
 
