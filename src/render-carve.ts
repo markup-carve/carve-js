@@ -2368,7 +2368,7 @@ function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
 }
 
 function renderInlines(
-  nodes: InlineNode[],
+  sourceNodes: InlineNode[],
   ctx: CarveContext,
   captionCanOpen = false,
   /**
@@ -2379,6 +2379,7 @@ function renderInlines(
    */
   isStanza = false,
 ): string {
+  const nodes = flattenRubyForCarve(sourceNodes)
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
@@ -2634,8 +2635,7 @@ function renderInlineBody(
     case 'span':
       return `[${escapeNoteReferenceLabel(renderInlines(node.children, ctx), ctx)}]${renderAttrs(node.attrs) || '{}'}`
     case 'ruby': {
-      const fallback = node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')
-      return node.attrs ? `[${escapeNoteReferenceLabel(fallback, ctx)}]${renderAttrs(node.attrs)}` : fallback
+      return renderInlines(flattenRubyForCarve([node]), ctx)
     }
     case 'small_caps': {
       const content = renderInlines(node.children, ctx)
@@ -2724,6 +2724,20 @@ function renderInlineBody(
     }
   }
   }
+}
+
+/** Replace interchange-only ruby structure before the ordinary writer decides escapes. */
+function flattenRubyForCarve(nodes: InlineNode[]): InlineNode[] {
+  return nodes.flatMap((node): InlineNode[] => {
+    if (node.type !== 'ruby') return [node]
+    const children = node.pairs.flatMap((pair): InlineNode[] => [
+      ...pair.base,
+      { type: 'text', value: '(' },
+      ...pair.annotation,
+      { type: 'text', value: ')' },
+    ])
+    return node.attrs === undefined ? children : [{ type: 'span', children, attrs: node.attrs }]
+  })
 }
 
 /**

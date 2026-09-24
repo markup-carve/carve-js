@@ -131,11 +131,21 @@ describe('ruby annotations', () => {
     expect(result.report.diagnostics.map((row) => row.code)).toEqual(['element-unwrapped'])
   })
 
-  it('keeps wrapper attributes on only the first structured run', () => {
+  it('keeps split-run attributes on one span around the complete output', () => {
     const result = htmlToAst('<p><ruby id="r">a<rt>x</rt><rt>y</rt>b<rt>z</rt></ruby></p>')
-    const paragraph = result.value.children[0] as { children: Array<{ type: string; attrs?: unknown }> }
-    expect(paragraph.children.filter((node) => node.type === 'ruby')).toHaveLength(2)
-    expect(paragraph.children.filter((node) => node.attrs !== undefined)).toHaveLength(1)
+    expect(result.value.children[0]).toMatchObject({
+      children: [{
+        type: 'span',
+        attrs: { id: 'r' },
+        children: [
+          { type: 'ruby', pairs: [{ base: [{ value: 'a' }], annotation: [{ value: 'x' }] }] },
+          { type: 'text', value: '(' },
+          { type: 'text', value: 'y' },
+          { type: 'text', value: ')' },
+          { type: 'ruby', pairs: [{ base: [{ value: 'b' }], annotation: [{ value: 'z' }] }] },
+        ],
+      }],
+    })
     expect(renderHtml(result.value).match(/id="r"/g)).toHaveLength(1)
   })
 
@@ -165,6 +175,25 @@ describe('ruby annotations', () => {
       value: 'x(y)\n',
       report: { diagnostics: [{ code: 'structure-unspellable' }] },
     })
+  })
+
+  it('escapes generated fallback boundaries through the ordinary writer', () => {
+    const collision: Document = {
+      type: 'document',
+      children: [{
+        type: 'paragraph',
+        children: [{
+          type: 'ruby',
+          pairs: [
+            { base: [{ type: 'text', value: '[x]' }], annotation: [{ type: 'text', value: 'ann' }] },
+            { base: [{ type: 'text', value: 'mark' }], annotation: [{ type: 'text', value: 'c' }] },
+          ],
+        }],
+      }],
+    }
+    const rendered = renderCarveWithReport(collision).value
+    expect(rendered).not.toContain('[x](ann)')
+    expect(rendered).not.toContain('(c)')
   })
 
   it('uses the fallback for profile to_text', () => {

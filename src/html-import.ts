@@ -3716,13 +3716,10 @@ class Importer {
     let run: Array<{ base: InlineNode[]; annotation: InlineNode[] }> = []
     let base: InlineNode[] = []
     let hasAssociatedBase = false
-    let attrsUsed = false
     let emittedRuby = false
     const flushRun = (): void => {
       if (run.length === 0) return
-      const heldAttrs = attrs && !attrsUsed ? { attrs } : {}
-      output.push({ type: 'ruby', pairs: run, ...heldAttrs })
-      attrsUsed ||= attrs !== undefined
+      output.push({ type: 'ruby', pairs: run })
       emittedRuby = true
       run = []
     }
@@ -3787,6 +3784,10 @@ class Importer {
         path,
         message: 'Flattened <ruby> annotations: Carve 0.1 has no source spelling for their pairing',
       })
+      if (attrs !== undefined) {
+        if (output.length === 1 && output[0]!.type === 'ruby') output[0]!.attrs = attrs
+        else return [{ type: 'span', children: output, attrs }]
+      }
     } else if (attrs !== undefined) {
       this.reportUnwrappedAttributes(node, attrs, 'ruby', path)
     }
