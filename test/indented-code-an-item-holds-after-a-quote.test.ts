@@ -66,3 +66,22 @@ describe('marker padding collapses where the item carries its content along', ()
     expect(carveToHtml(out)).toMatch(/<\/ul>[\s\S]*<p>b<\/p>/)
   })
 })
+
+describe('an empty code block carries the blank line fmt writes', () => {
+  it.each([
+    ['at the document level', '```\n```\n', lines('```', '', '```')],
+    ['inside a list item', '- ```\n  ```\n', lines('- ```', '', sp(2) + '```')],
+    ['inside a quoted item, where the blank carries the marker', '> - ```\n>   ```\n', lines('> - ```', '>', sp(0) + '>' + sp(3) + '```')],
+    ['with an info string', '```js\n```\n', lines('```js', '', '```')],
+  ])('%s', (_label, source, expected) => {
+    const out = markdownToCarve(source)
+    expect(out).toBe(expected)
+    expect(carveToCarve(out)).toBe(out)
+    // Both spellings render the same empty block, so this is bytes only.
+    expect(carveToHtml(out)).toBe(carveToHtml(source))
+  })
+
+  it('leaves a fence that holds something alone', () => {
+    expect(markdownToCarve(lines('```', 'code', '```'))).toBe(lines('```', 'code', '```'))
+  })
+})

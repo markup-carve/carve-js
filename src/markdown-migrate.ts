@@ -3416,6 +3416,56 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
   return { text: text.join('\n'), sourceBlanks }
 }
 
+/**
+ * Write the blank line `carve fmt` puts inside an empty code block.
+ *
+ * A fence the import closed on the very next line renders the same empty
+ * block either way, so this is bytes; without it the document failed
+ * `fmt --check` (markup-carve/carve-js#1952). The blank carries the closer's
+ * own container prefix, and the reading is checked before it is kept, the way
+ * `separateLooseItems` answers from the parse.
+ */
+function blankInsideEmptyFences(source: string): string {
+  const openers: number[] = []
+  const visit = (node: unknown): void => {
+    if (node === null || typeof node !== 'object') return
+    type Block = {
+      type?: string
+      content?: string
+      pos?: { startLine: number; endLine: number }
+      items?: unknown[]
+      children?: unknown[]
+      footnoteDefs?: Record<string, unknown[]>
+    }
+    const block = node as Block
+    if (
+      block.type === 'code_block' &&
+      block.content === '' &&
+      block.pos !== undefined &&
+      block.pos.endLine === block.pos.startLine + 1
+    ) {
+      openers.push(block.pos.startLine)
+    }
+    // A footnote definition's body hangs off the document rather than off its
+    // children, so it needs naming to be reached.
+    const held = Object.values(block.footnoteDefs ?? {}).flat()
+    for (const child of [...(block.items ?? []), ...(block.children ?? []), ...held]) visit(child)
+  }
+  visit(parse(source))
+  if (openers.length === 0) return source
+  const lines = source.split('\n')
+  const after = new Set(openers.map((line) => line - 1))
+  const out: string[] = []
+  for (const [at, line] of lines.entries()) {
+    out.push(line)
+    if (after.has(at)) out.push(/^[ \t>]*/.exec(lines[at + 1] ?? '')![0].trimEnd())
+  }
+  const written = out.join('\n')
+  const reading = (text: string): string =>
+    JSON.stringify(parse(text), (key, value) => (key === 'pos' || key === 'srcByteLength' ? undefined : value))
+  return reading(written) === reading(source) ? written : source
+}
+
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
@@ -4280,7 +4330,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   }
 
   const written = joinOutput(out, fromSource)
-  const body = separateLooseItems(written.text, written.sourceBlanks)
+  const body = blankInsideEmptyFences(separateLooseItems(written.text, written.sourceBlanks))
   if (frontmatter.length === 0) return body
   return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
 }
