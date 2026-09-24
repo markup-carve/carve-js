@@ -312,7 +312,7 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
     [
       'writes a quoted fence at the quote column once a block left the item',
       md('> - a', '> # h', '>   ~~~', '>   x', '>   ~~~'),
-      md('> - a', '> # h', '>', '> ```', '> x', '> ```'),
+      md('> - a', '>', '> # h', '>', '> ```', '> x', '> ```'),
     ],
   ])('%s', (_label, source, expected) => {
     expect(markdownToCarve(source)).toBe(expected)
@@ -607,13 +607,15 @@ describe('a Markdown import keeps quoted items and item looseness', () => {
   })
 
   // The sources as the ticket gives them. Their fence is empty, and fmt writes
-  // an empty code block with a blank line in it, so only the reading is pinned.
+  // an empty code block with a blank line in it, which the import writes too
+  // now (markup-carve/carve-js#1952), so the bytes are a fixed point as well.
   it.each([
-    ['takes no lazy line under an empty fence on a quoted item line', '> -  ```\n     ```\n', '> - ```\n>   ```\n\n````\n ```\n````\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> ```\n</code></pre>'],
-    ['closes an empty quoted item fence where the quote ends', '> - ~~~\n     code\n', '> - ```\n>   ```\n\n```\n code\n```\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> code\n</code></pre>'],
+    ['takes no lazy line under an empty fence on a quoted item line', '> -  ```\n     ```\n', '> - ```\n>\n>   ```\n\n````\n ```\n````\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> ```\n</code></pre>'],
+    ['closes an empty quoted item fence where the quote ends', '> - ~~~\n     code\n', '> - ```\n>\n>   ```\n\n```\n code\n```\n', '<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<pre><code> code\n</code></pre>'],
   ])('%s', (_label, source, expected, html) => {
     const out = markdownToCarve(source)
     expect(out).toBe(expected)
     expect(carveToHtml(out)).toBe(html)
+    expect(carveToCarve(out)).toBe(out)
   })
 })
