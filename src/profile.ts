@@ -48,7 +48,6 @@ export const CANONICAL_BLOCK_TYPES = [
   'comment',
   'figure',
   'figure_group',
-  'caption',
   // PART 12 §18 gives a citation definition its own block type, and
   // `spec/docs/profiles.md` lists it alongside the other two definition kinds.
   // This engine already EMITS it (markup-carve/carve-js#1122); only the
