@@ -790,10 +790,42 @@ function refuseSchemaViolations(node: unknown, path: string): void {
  * legacy position, or one whose kind is `records`. The object test still runs,
  * because a scalar is not a node anywhere.
  */
+/**
+ * A STANDALONE `citation`, which this engine has no inline arm for.
+ *
+ * A citation is only ever an item of a `citation_group` (markup-carve/carve#2227):
+ * PART 7 makes the bracket the unit a source spells, and `prefix`, `locator` and
+ * `suffix` mean nothing outside one. carve-rs and carve-php refuse such a payload
+ * at DECODE. This engine accepted it and threw in the renderer instead - in ALL
+ * FOUR of them, `renderHtml: unknown inline citation` and the same for markdown,
+ * plain and ansi - which is section 9(b)'s "accepts a tree and then renders only
+ * part of it". A formatter or a language server holding the tree never reaches a
+ * renderer at all, so for those the bad node was simply carried.
+ *
+ * The check is by POSITION, not by type. `citation_group.items` is the only
+ * position whose admitted set is exactly `citation`, so it is the only one that
+ * may hold one; every other inline slot is refused. This closes the gap until the
+ * spec pin moves past markup-carve/carve#2229, which takes `citation` out of the
+ * inline dispatch and makes the position tables refuse it on their own.
+ */
+function refuseStandaloneCitation(
+  value: unknown,
+  admitted: readonly string[] | undefined,
+  path: string,
+): void {
+  if ((value as Record<string, unknown>).type !== 'citation') return
+  if (admitted !== undefined && admitted.length === 1 && admitted[0] === 'citation') return
+  throw new AstJsonSchemaError(
+    'a "citation" node sits outside a citation_group: a citation is only ever an item of a group',
+    path,
+  )
+}
+
 function refuseNodeAt(value: unknown, admitted: readonly string[] | undefined, path: string): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new AstJsonSchemaError(`${describe(value)} sits where a node belongs`, path)
   }
+  refuseStandaloneCitation(value, admitted, path)
   if (admitted === undefined) return
   const type = (value as Record<string, unknown>).type
   // A non-string `type` is section 12(c)'s error and carries its own; saying it
