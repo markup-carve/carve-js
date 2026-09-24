@@ -9,6 +9,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Directives retain quoted titles in the AST and render them across output formats (#2014).
 - Labeled display equations receive numbers in caption order and render those numbers in HTML, Markdown, plain text, and ANSI (#1969). AST JSON preserves `label` and `number`; canonical Carve output reports their loss.
 - AST JSON accepts explicit `section` blocks and block content in table cells. HTML preserves both structures; Markdown, plain text, ANSI, and canonical Carve retain their text. Markdown and canonical Carve report block-cell flattening, and canonical Carve reports section flattening (#1971).
 - Citation items carry `mode` through parsing and AST JSON. HTML rendering uses each item's mode (#1973).
@@ -18,6 +19,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- AST JSON line blocks publish stanza line boundaries as pointers, following the current spec.
 - Parsed line blocks publish their inline lines beside `children` (#1988).
 - Markdown import keeps raw HTML blank lines and terminal newlines, retains list items with empty-destination definitions, and writes footnote definitions at the document end (#1990, #1991, #1992, #1993).
 - Markdown import escapes list markers that only Carve recognizes, keeps non-1 ordered markers after lazy item lines as text, and moves link reference definitions to the document end. Shortcut references retain their links (#1981, #1982, #1983).

@@ -102,7 +102,7 @@ export interface AstJsonDocument {
  * records in the runtime tree. Citation items are nodes and carry inline arrays
  * that the serializer visits separately.
  */
-const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation', 'lines'] as const
+const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
 const ingestedLineBlockChildren = new WeakMap<object, string>()
 
 function rememberIngestedLineBlocks(root: Document): void {
@@ -118,41 +118,30 @@ function rememberIngestedLineBlocks(root: Document): void {
     if (record['type'] === 'line_block' && Array.isArray(record['lines'])) {
       ingestedLineBlockChildren.set(record, JSON.stringify(record['children']))
     }
-    for (const field of CHILD_FIELDS) if (field !== 'lines' && record[field] !== undefined) stack.push(record[field])
+    for (const field of CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
     if (record['target'] !== undefined) stack.push(record['target'])
   }
 }
 
 /** Publish verse lines from the final inline tree, after resolution and filtering. */
-function lineBlockInlineLines(nodes: readonly Record<string, unknown>[]): Record<string, unknown>[][] {
-  const rows: Record<string, unknown>[][] = [[]]
-  for (const node of nodes) {
-    if (node['type'] === 'hard_break') {
-      rows.push([])
-      continue
+function lineBlockBoundaryPointers(stanza: Record<string, unknown>): string[] {
+  const boundaries: string[] = []
+  let lastLeaf: string | undefined
+  const visit = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${path}/${index}`))
+      return
     }
-    const slot = (['children', 'inline', 'content'] as const).find((key) => Array.isArray(node[key]))
-    if (slot !== undefined) {
-      const parts = lineBlockInlineLines(node[slot] as Record<string, unknown>[])
-      if (parts.length > 1 && node['type'] === 'inline_footnote') {
-        rows.at(-1)!.push(node)
-        for (let index = 1; index < parts.length; index++) rows.push([])
-        continue
-      }
-      if (parts.length > 1) {
-        for (let index = 0; index < parts.length; index++) {
-          if (index > 0) rows.push([])
-          if (parts[index]!.length > 0) {
-            const { pos: _pos, ...fields } = node
-            rows.at(-1)!.push({ ...fields, [slot]: parts[index] })
-          }
-        }
-        continue
-      }
-    }
-    rows.at(-1)!.push(node)
+    if (value === null || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node['type'] === 'hard_break') boundaries.push(path)
+    if (Array.isArray(node['children']) && node['children'].length > 0) visit(node['children'], `${path}/children`)
+    else lastLeaf = path
   }
-  return rows
+  visit(stanza, '')
+  // A final authored break belongs to the last line; it closes no next line.
+  if (boundaries.at(-1) === lastLeaf) boundaries.pop()
+  return boundaries
 }
 
 /**
@@ -252,9 +241,9 @@ function definitionListsToWire<T>(node: T): T {
   if (record['type'] === 'line_block' &&
       (!Array.isArray(record['lines']) || (originalChildren !== undefined && originalChildren !== JSON.stringify(record['children'])))) {
     const paragraphs = (out ?? record)['children'] as Array<Record<string, unknown>> | undefined
-    const lines = (paragraphs ?? []).flatMap((paragraph) =>
-      lineBlockInlineLines((paragraph['children'] as Record<string, unknown>[] | undefined) ?? []),
-    )
+    const lines = (paragraphs ?? []).map((paragraph) => [
+      ...lineBlockBoundaryPointers(paragraph), '/children/-',
+    ])
     out = { ...(out ?? record), lines }
   }
 
@@ -841,6 +830,32 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     if (type === 'ruby' && Array.isArray(record.pairs) && record.pairs.length === 0) {
       throw new AstJsonSchemaError('property "pairs" must contain at least one item', path)
     }
+    if (type === 'line_block' && Array.isArray(record.lines)) {
+      const stanzas = record.children as unknown[]
+      if (record.lines.length !== stanzas.length) {
+        throw new AstJsonSchemaError('lines must have one entry per stanza', path)
+      }
+      record.lines.forEach((line, index) => {
+        const at = `${path}.lines[${index}]`
+        if (!Array.isArray(line) || line.length === 0 || line.at(-1) !== '/children/-') {
+          throw new AstJsonSchemaError('a stanza must end at /children/-', at)
+        }
+        const boundaries = lineBlockBoundaryPointers(stanzas[index] as Record<string, unknown>)
+        let previous = -1
+        line.forEach((pointer, pointerIndex) => {
+          if (typeof pointer !== 'string' || !/^(?:\/(?:[^~/]|~[01])*)+$/.test(pointer)) {
+            throw new AstJsonSchemaError('line boundary must be an RFC 6901 pointer', `${at}[${pointerIndex}]`)
+          }
+          if (pointer === '/children/-') {
+            if (pointerIndex !== line.length - 1) throw new AstJsonSchemaError('stanza end must occur once', at)
+            return
+          }
+          const offset = boundaries.indexOf(pointer)
+          if (offset <= previous) throw new AstJsonSchemaError('line boundaries must name hard breaks in order', `${at}[${pointerIndex}]`)
+          previous = offset
+        })
+      })
+    }
     // The typeless RECORDS that hang off a node. Every node kind can carry
     // `attrs` and `pos`, which makes them the easiest place for a wrong shape to
     // ride in - `pos` missing `endOffset` was accepted by two of the three
@@ -878,12 +893,8 @@ function refuseSchemaViolations(node: unknown, path: string): void {
 /**
  * One node position, dispatched on the shape the schema gives it.
  *
- * `node-matrix` is why this is a function rather than two lines at each call
- * site: `line_block.lines` is an array of ARRAYS of nodes, so the `type`
- * requirement lands one level deeper. Reading it as `nodes` refuses the
- * schema's own shape - every element is an array, and an array is not a node
- * anywhere - which is §9(a)'s "never refuses a tree this engine produced"
- * failing on a field this engine was about to start producing.
+ * A node-matrix role, if present in a pinned schema, places nodes one level
+ * below the outer array. The current line-block range field holds pointers.
  */
 function refuseNodePosition(
   value: unknown,

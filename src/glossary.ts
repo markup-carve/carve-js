@@ -116,6 +116,7 @@ function renderGlossary(
   // authored `{#id .class}` rides on the first <dl>.
   let firstDl = true
   const parts: string[] = []
+  if (node.title !== undefined) parts.push(`${pad}<p class="admonition-title">${ctx.renderInlines(node.title)}</p>`)
   for (const child of node.children) {
     if (child.type !== 'definition_list') {
       parts.push(ctx.renderChildren([child], ctx.level))

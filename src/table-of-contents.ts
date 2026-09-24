@@ -356,10 +356,11 @@ function renderToc(
 ): string {
   const attrs = ctx.renderAttrs(navAttrs(node.attrs, ctx.labels.tocNav))
   const emptyNav = `<nav${attrs}></nav>`
+  const title = node.title === undefined ? '' : `${ctx.indent(ctx.level)}<p class="admonition-title">${ctx.renderInlines(node.title)}</p>\n`
   // Preserve any authored blocks written inside the placeholder before the nav,
   // never silently drop them (mirrors the index/glossary directives).
   const wrap = (nav: string): string =>
-    node.children.length === 0 ? nav : `${ctx.renderChildren(node.children, ctx.level)}\n${nav}`
+    title + (node.children.length === 0 ? nav : `${ctx.renderChildren(node.children, ctx.level)}\n${nav}`)
 
   const { minLevel, maxLevel } = tocWindow(node.attrs)
   const picked = entries.filter((e) => e.level >= minLevel && e.level <= maxLevel)

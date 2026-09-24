@@ -4663,30 +4663,26 @@ function parseAdmonition(lexer: Lexer): Admonition | Directive | FigureGroup {
   // below, because the clause rules that "every other named container is an
   // `admonition`".
   //
-  // A directive has no title slot (the schema closes the node without one), so
-  // a quoted title on one of these openers is not carried. No corpus document
-  // and no example spells one; where it should go is markup-carve/carve#2247.
-  if (GENERATED_CONTENT_KINDS.has(kind)) {
-    const directive: Directive = { type: 'directive', kind, children }
-    if (label !== undefined) directive.label = label
-    return directive
-  }
-  const node: Admonition = { type: 'admonition', kind, children }
-  // `!== undefined` (not truthiness): an explicitly empty quoted title
-  // `""` still emits a (empty) <p class="admonition-title"> per §12.
+  // Keep the quoted opener title for either named container type. An explicit
+  // empty title still occupies the title slot.
+  let title: InlineNode[] | undefined
   if (titleText !== undefined) {
-    // The title sits inside quotes on the opener line. Without an anchor the
-    // scanner measured from offset 0, so the text "Pro Tip" reported the span of
-    // `::: tip` - an invented value (PART 12 section 4). The +1 steps past the
-    // opening quote, which m[3] includes.
     const titleStart = open.indexOf(m[3]!) + 1
-    node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs, {
+    title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs, {
       anchored: lexer.hasDocumentOffsets && titleStart > 0,
       baseOffset: lexer.lineOffset(openLineIndex) + titleStart,
       startLine: lexer.lineNumber(openLineIndex),
       startColumn: lexer.lineStartColumn(openLineIndex) + titleStart,
     })
   }
+  if (GENERATED_CONTENT_KINDS.has(kind)) {
+    const directive: Directive = { type: 'directive', kind, children }
+    if (title !== undefined) directive.title = title
+    if (label !== undefined) directive.label = label
+    return directive
+  }
+  const node: Admonition = { type: 'admonition', kind, children }
+  if (title !== undefined) node.title = title
   if (label !== undefined) {
     node.label = label
   }

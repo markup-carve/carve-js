@@ -166,10 +166,10 @@ function childArrays(node: NodeLike): ChildArray[] {
       if (node['suffix']) push(node['suffix'], false)
       break
     case 'admonition':
+    case 'directive':
       if (node['title']) push(node['title'], false)
       push(node['children'], true)
       break
-    case 'directive':
     case 'block_quote':
       push(node['children'], true)
       break

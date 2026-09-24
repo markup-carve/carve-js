@@ -654,6 +654,9 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     // falls through to its default typed-div rendering. A document without the
     // marker is byte-identical to the previous behavior (default end append).
     if (isFootnotePlacement(node) && footnotes.order.length && !footnotesPlaced) {
+      if (node.title !== undefined) {
+        out.push(`${indent(sectionStack.length)}<p class="admonition-title">${renderInlines(node.title, opts)}</p>`)
+      }
       // Preserve any blocks authored inside the placeholder before flushing.
       for (const child of (node as Directive).children) {
         const r = renderBlock(child, opts, sectionStack.length)
@@ -718,7 +721,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
 
 /** A `::: footnotes` placement directive (CARVE-P12-057, kind `footnotes`):
  *  marks where the endnotes section should render instead of at document end. */
-function isFootnotePlacement(node: BlockNode): boolean {
+function isFootnotePlacement(node: BlockNode): node is Directive {
   return node.type === 'directive' && (node as Directive).kind === 'footnotes'
 }
 
@@ -1816,9 +1819,8 @@ function labelFloor(label: string | undefined, level: number): string {
  * Render an admonition or a directive.
  *
  * One function for both: a directive's kind is never Tier-1, so it takes the
- * same generic `<div class="{kind}">` shape a non-canonical admonition takes,
- * and it has no `title` to place. Splitting them would be two copies of that
- * shape, drifting.
+ * same generic `<div class="{kind}">` shape a non-canonical admonition takes.
+ * Splitting them would be two copies of that shape, drifting.
  */
 function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, level: number): string {
   const pad = indent(level)
@@ -1827,9 +1829,7 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
     const folded = name.toLowerCase()
     return folded === 'aria-label' || folded === 'aria-labelledby'
   })
-  // A directive has no `title` field (CARVE-P12-057 closes the node without
-  // one), so the title slot is empty for every one of them.
-  const title = node.type === 'admonition' ? node.title : undefined
+  const title = node.title
   let titleId: string | undefined
   let accessibleName = ''
   if (canonical && !authoredName) {

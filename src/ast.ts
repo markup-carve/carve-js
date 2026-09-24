@@ -385,14 +385,13 @@ export const GENERATED_CONTENT_KINDS: ReadonlySet<string> = new Set([
  * consumer dispatching on `type` to decide whether to draw a callout otherwise
  * has to carry the not-a-callout list itself.
  *
- * No `title`: the schema names `kind`, `label`, `children`, `attrs` and `pos`
- * and closes the node, so an opener's quoted title has no slot here. See
- * markup-carve/carve#2247.
+ * The quoted opener title uses the same inline-node field as an admonition.
  */
 export interface Directive extends BaseNode {
   type: 'directive'
   /** One of {@link GENERATED_CONTENT_KINDS}. */
   kind: string
+  title?: InlineNode[]
   /** Opener `[label]` grouping id. Inert in core, like {@link Admonition.label}. */
   label?: string
   /** Blocks written inside the opener. Usually empty: the content is generated. */
@@ -428,7 +427,7 @@ export interface Div extends BaseNode {
 export interface LineBlock extends BaseNode {
   type: 'line_block'
   children: BlockNode[]
-  lines?: InlineNode[][]
+  lines?: string[][]
 }
 
 /**
