@@ -181,6 +181,11 @@ export function wireFieldsSource(schema) {
    *
    *   "nodes"   an ARRAY of nodes; each ELEMENT must carry a string `type`.
    *   "node"    a SINGLE node, e.g. `figure.target`; the object itself must.
+   *   "node-matrix" an array of ARRAYS of nodes - `line_block.lines` today. The
+   *             `type` requirement lands one level deeper, and a walker that
+   *             reads this as "nodes" refuses the schema's own shape: the
+   *             elements are arrays, and an array is not a node anywhere. The
+   *             spec names the same four roles in `node-roles.json`.
    *   "records" an array of PLAIN RECORDS the schema gives no `type` at all -
    *             only `citation_group.items` today. Requiring one there would
    *             refuse a tree this engine's own parser produced, which section
@@ -234,7 +239,9 @@ export function wireFieldsSource(schema) {
       const kind = refsPlainRecord(property)
         ? "records"
         : property.type === "array"
-          ? "nodes"
+          ? property.items?.type === "array"
+            ? "node-matrix"
+            : "nodes"
           : "node";
       positionKind.set(`${owner}.${name}`, kind);
     }
@@ -449,12 +456,15 @@ export function wireFieldsSource(schema) {
     " *   belongs is the unruled wrong-TYPE class, not this clause's business.",
     ' * - `"node"` - a single node, e.g. `figure.target`; the object itself carries',
     " *   one.",
+    ' * - `"node-matrix"` - an array of ARRAYS of nodes; the `type` requirement',
+    " *   lands one level deeper. Reading it as `nodes` refuses the schema's own",
+    " *   shape, because an array is not a node anywhere.",
     ' * - `"records"` - an array of plain records the schema gives no `type` at all.',
     " *",
     " * The owning type is part of the key because one field name means different",
     " * things in different places.",
     " */",
-    "export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'records'>> = {",
+    "export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'node-matrix' | 'records'>> = {",
   ].join("\n");
   const kindList = [...positionKind.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
