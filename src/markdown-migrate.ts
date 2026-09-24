@@ -4431,6 +4431,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (!isHeading && !isList && !isBlockquote && (!isStandardTableRow(body) || !inGfmTable[i])) {
       const run = [body]
+      // The same lines with no block-opener escape. A marker only opens a block
+      // at the start of a line, and the fold below puts every line of the run on
+      // ONE line, so the escape the paragraph reading needs protects nothing
+      // there (carve#2244).
+      const folded = [body]
       let end = i + 1
       while (end < lines.length) {
         const next = lines[end]!
@@ -4449,6 +4454,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         if (listCols.length > 0 && RE_LIST_MARKER.test(next) && indentColumns(next) < contentCol && listMarkers.hasListAt(indentColumns(next))) break
         const trimmedNext = next.trimStart()
         run.push(opens ? next.slice(0, next.length - trimmedNext.length) + escapeBlockOpener(trimmedNext) : next)
+        folded.push(next)
         end++
       }
       // A setext underline under the paragraph, after the run or after the
@@ -4456,11 +4462,15 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       let heading = run.length > 1 && end < lines.length ? setextParagraphEnd(lines, end - 1, contentCol, true) : null
       if (heading === null && end + 1 < lines.length) {
         heading = setextParagraphEnd(lines, end, contentCol)
-        if (heading !== null) run.push(lines[end++]!)
+        if (heading !== null) {
+          run.push(lines[end]!)
+          folded.push(lines[end]!)
+          end++
+        }
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        out.push(containerPad + convertInline(`${heading} ${run.map(headingLine).join(' ')}`, dialect))
+        out.push(containerPad + convertInline(`${heading} ${folded.map(headingLine).join(' ')}`, dialect))
         i = end
         if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
         prevType = 'heading'

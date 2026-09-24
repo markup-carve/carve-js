@@ -51,8 +51,11 @@ describe('an `=` underline folds an indented continuation line', () => {
   })
 
   it('writes the h1 as one ATX line and fabricates no rule', () => {
+    // The marker is BARE: carve#2244 ruled the folded opener carries no escape,
+    // since a `#` only opens a heading at the start of a line and the fold
+    // leaves it mid-line. This expectation read `# foo \\# bar` until then.
     const out = markdownToCarve(md('# bar', '==='))
-    expect(out).toBe('# foo \\# bar\n')
+    expect(out).toBe('# foo # bar\n')
     expect(out).not.toContain('---')
   })
 
