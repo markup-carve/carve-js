@@ -33,7 +33,9 @@ import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
-export interface CarveRenderOptions {}
+export interface CarveRenderOptions {
+  onRenderLoss?: (loss: import('./render-loss.js').RenderLoss) => void
+}
 
 /**
  * The writer's recursion bound, and it must sit ABOVE the parser's.
@@ -122,7 +124,26 @@ interface CarveContext {
  *
  * @throws {SourceUnspellableError} when a node's content has no Carve spelling.
  */
-export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
+export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+  if (opts.onRenderLoss) {
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return
+      if (Array.isArray(value)) { for (const item of value) visit(item); return }
+      const node = value as Record<string, unknown>
+      if (node.type === 'math' && (node.label !== undefined || node.number !== undefined)) {
+        opts.onRenderLoss!({
+          code: 'math-label-number-dropped', format: 'carve', target: 'carve', nodeType: 'inline',
+          message: 'Carve source cannot spell a math label or number',
+          ...(node.pos ? { pos: node.pos as import('./ast.js').Position } : {}),
+        })
+      }
+      for (const [key, child] of Object.entries(node)) {
+        if (key !== 'attrs' && key !== 'pos') visit(child)
+      }
+    }
+    visit(ast.children)
+    visit(ast.footnoteDefs)
+  }
   ast = withCellHardBreaksFlattened(ast)
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it

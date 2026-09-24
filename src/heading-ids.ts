@@ -256,6 +256,7 @@ function stripResolutionApparatus(nodes: InlineNode[]): InlineNode[] {
       out.push({ type: 'text', value: n.abbr } as Text)
       continue
     }
+    if (n.type === 'math') delete n.number
     const record = n as unknown as Record<string, unknown>
     // Generic descent: three byte-identical `CHILD_FIELDS` lists already live in
     // this package and none is exported, so a fourth spelling here is how a run
@@ -523,7 +524,7 @@ function resolveHeadingIdsImpl(
   // without lowercasing the emitted id. Folded per code point to stay
   // portable, mirroring slugify's optional lowercase.
   const foldId = (s: string): string =>
-    Array.from(s, (c) => c.toLowerCase()).join('')
+    Array.from(s.normalize('NFC'), (c) => c.toLowerCase()).join('')
   const foldedTargets = new Map<string, string>()
   // Implicit-reference index: normalized visible heading text -> heading id.
   // First-occurrence wins (matches `</#id>` ambiguous-ref behavior). Built
@@ -969,18 +970,19 @@ function resolveHeadingIdsImpl(
   const numberBlocks = (blocks: BlockNode[]): void => {
     numberCaptionsIn(blocks, counters, (labelNodes, next, attrs, suffix) => {
       const id = attrs?.id
-      if (id === undefined || targets.has(id)) return
+      if (id === undefined || foldedTargets.has(foldId(id))) return
       // Clean "Label N" auto-text: clone the label inlines, trim trailing
       // whitespace on the final text node, then append " N". Markup in the
       // label is preserved. A composite figure's PANEL arrives with a letter
       // suffix (`Figure 2a`, §4c) on the group's own number.
-      const autoNodes = labelNodes.map((n) => ({ ...n })) as InlineNode[]
+      const autoNodes = deriveDisplayNodes(labelNodes, false)
       const last = autoNodes[autoNodes.length - 1]
       if (last && last.type === 'text') {
         last.value = last.value.replace(RE_TRAILING_LABEL_WS, '')
       }
       autoNodes.push({ type: 'text', value: ` ${next}${suffix ?? ''}` } as Text)
       targets.set(id, autoNodes)
+      foldedTargets.set(foldId(id), id)
     })
   }
 
@@ -1394,15 +1396,35 @@ export function numberCaptionsIn(
   counters: Map<string, number>,
   onNumbered?: CaptionNumbered,
 ): void {
-  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined): number | undefined => {
+  const numberMath = (value: unknown, suppressed: boolean): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { for (const child of value) numberMath(child, suppressed); return }
+    const node = value as Record<string, unknown>
+    if (node.type === 'math') {
+      if (node.display === true && typeof node.label === 'string' && !suppressed) {
+        const label = node.label
+        const next = (counters.get(label) ?? 0) + 1
+        counters.set(label, next)
+        node.number = next
+        onNumbered?.([{ type: 'text', value: label } as Text], next, node.attrs as Attrs | undefined)
+      } else delete node.number
+      return
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'attrs' && key !== 'pos' && child && typeof child === 'object') numberMath(child, suppressed)
+    }
+  }
+  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined, suppressed: boolean): number | undefined => {
     const idx = caption.findIndex((n) => n.type === 'caption_number')
-    if (idx === -1) return undefined
+    if (idx === -1) { numberMath(caption, suppressed); return undefined }
+    numberMath(caption.slice(0, idx), suppressed)
     const labelNodes = caption.slice(0, idx)
     const label = inlineText(labelNodes).replace(RE_TRAILING_LABEL_WS, '')
     const next = (counters.get(label) ?? 0) + 1
     counters.set(label, next)
     ;(caption[idx] as CaptionNumber).n = next
     onNumbered?.(labelNodes, next, attrs)
+    numberMath(caption.slice(idx + 1), suppressed)
     return idx
   }
 
@@ -1413,32 +1435,44 @@ export function numberCaptionsIn(
   // typed node, render what the author wrote). Decided here, in the one
   // shared numbering pass, so the parse path and the AST-JSON ingest path
   // (carve#758) publish the same wire shape as carve-php and carve-rs.
-  const walk = (bs: BlockNode[], inPanel: boolean): void => {
+  const walk = (bs: BlockNode[], inPanel: boolean, suppressed = false): void => {
     for (const b of bs) {
+      let ownsNumber = false
       if (b.type === 'figure') {
-        if (!inPanel) numberCaption(b.caption, b.attrs)
+        if (!inPanel) ownsNumber = numberCaption(b.caption, b.attrs, suppressed) !== undefined
+        else numberMath(b.caption, suppressed)
       } else if (b.type === 'table' && b.caption) {
-        if (!inPanel) numberCaption(b.caption, b.attrs)
+        if (!inPanel) numberCaption(b.caption, b.attrs, suppressed)
+        else numberMath(b.caption, suppressed)
       }
       switch (b.type) {
         case 'block_quote':
-        case 'admonition':
         case 'div':
-          walk(b.children, inPanel)
+          walk(b.children, inPanel, suppressed)
+          break
+        case 'admonition':
+          numberMath(b.title, suppressed)
+          walk(b.children, inPanel, suppressed)
           break
         case 'list':
-          for (const it of b.items) walk(it.children, inPanel)
+          for (const it of b.items) walk(it.children, inPanel, suppressed)
           break
         case 'definition_list':
-          for (const it of b.items) for (const d of it.definitions) walk(d, inPanel)
+          for (const it of b.items) {
+            for (const term of it.terms) numberMath(term, suppressed)
+            for (const d of it.definitions) walk(d, inPanel, suppressed)
+          }
           break
         case 'figure':
           // A figure wraps an image / blockquote / table; descend into a
           // blockquote or table target so a nested captioned element is
           // numbered too (mirrors walkBlock's figure-target descent).
-          if (b.target.type === 'block_quote') walk(b.target.children, inPanel)
+          if (b.target.type === 'block_quote') walk(b.target.children, inPanel, suppressed || ownsNumber)
           else if (b.target.type === 'table' && b.target.caption && !inPanel) {
-            numberCaption(b.target.caption, b.target.attrs)
+            numberCaption(b.target.caption, b.target.attrs, suppressed || ownsNumber)
+            numberMath(b.target.rows, suppressed || ownsNumber)
+          } else {
+            numberMath(b.target, suppressed || ownsNumber)
           }
           break
         case 'figure_group': {
@@ -1447,8 +1481,10 @@ export function numberCaptionsIn(
           // letters - so `</#panel-id>` resolves as "Figure 2a". A group with
           // no numbered caption registers nothing for its panels either.
           const panels = figureGroupPanels(b)
+          let groupOwnsNumber = false
           if (!inPanel && b.caption) {
-            const labelIdx = numberCaption(b.caption, b.attrs)
+            const labelIdx = numberCaption(b.caption, b.attrs, suppressed)
+            groupOwnsNumber = labelIdx !== undefined
             if (labelIdx !== undefined && onNumbered) {
               const labelNodes = b.caption.slice(0, labelIdx)
               const n = (b.caption[labelIdx] as CaptionNumber).n!
@@ -1457,16 +1493,21 @@ export function numberCaptionsIn(
               })
             }
           }
+          if (inPanel && b.caption) numberMath(b.caption, suppressed)
           // Children walk: panels are not sequence units, and everything a
           // panel CONTAINS is suppressed with it; non-panel stray content
           // numbers normally, exactly as it would outside the group.
           for (const c of b.children) {
             const isPanel = c.type === 'figure' || c.type === 'table'
-            walk([c], inPanel || isPanel)
+            walk([c], inPanel || isPanel, suppressed || groupOwnsNumber)
           }
           break
         }
+        case 'table':
+          numberMath(b.rows, suppressed)
+          break
         default:
+          numberMath(b, suppressed)
           break
       }
     }

@@ -651,7 +651,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // `<script>` cannot become a tag (markup-carve/carve-js#894).
       const math = escapeMdHtml(stripControls(node.content))
 
-      return node.display ? `$$${math}$$` : `$${math}$`
+      const suffix = node.number === undefined ? '' : ` ${escapeText(stripControls(node.label!))} ${node.number}`
+      return (node.display ? `$$${math}$$` : `$${math}$`) + suffix
     }
     case 'raw_inline':
       if (node.format !== 'html') {
