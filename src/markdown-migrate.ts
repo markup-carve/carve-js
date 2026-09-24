@@ -3514,7 +3514,7 @@ function joinOutput(out: readonly string[], fromSource: readonly boolean[]): { t
       flags.push(fromSource[idx]! && /^[ \t>]*$/.test(line))
       fenced.push(fence !== null && !closer)
       if (closer) fence = null
-      else if (fence === null && run !== null) {
+      else if (fence === null && run !== null && (run[1]![0] === '~' || !run[2]!.includes('`'))) {
         fence = { marker: run[1]![0]!, length: run[1]!.length }
       }
     }
