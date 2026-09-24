@@ -439,6 +439,9 @@ export class LinkPolicy {
    */
   isUrlAllowed(url: string, baseHost: string | null = null): boolean {
     url = url.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '')
+    // A URL parser deletes every tab, CR and LF anywhere before parsing, so
+    // `ht<LF>tps:` and `evil.exa<TAB>mple` must be read without them.
+    url = url.replace(/[\t\n\r]/g, '')
     if (url === '') return true
 
     // WHATWG special URLs treat a backslash as a slash. Normalize only the
@@ -483,19 +486,17 @@ export class LinkPolicy {
       if (scheme === 'mailto' || scheme === 'tel') return true
 
       if (scheme === 'http' || scheme === 'https') {
-        // parseHost needs a scheme its own pattern accepts, or a split one
-        // returns null and skips the domain denylist and the allowExternal
-        // check with it. Only the scheme is repaired; the authority reaches
-        // parseHost with its original bytes, so no character outside the
-        // scheme changes which host is read.
-        const host = parseHost(scheme + url.slice(colonPos))
-        if (host !== null) {
-          if (this.isDomainDenied(host)) return false
-          if (this.allowedDomains !== null && !this.isDomainAllowed(host)) return false
-          if (!this.allowExternal) {
-            if (baseHost !== null && !this.isSameHost(host, baseHost)) return false
-            if (baseHost === null) return false
-          }
+        const host = specialUrlHost(url.slice(colonPos + 1))
+        // A host rule cannot be satisfied without a host; a policy with no
+        // host rules stays permissive.
+        if (host === null) {
+          return this.deniedDomains.length === 0 && this.allowedDomains === null && this.allowExternal
+        }
+        if (this.isDomainDenied(host)) return false
+        if (this.allowedDomains !== null && !this.isDomainAllowed(host)) return false
+        if (!this.allowExternal) {
+          if (baseHost !== null && !this.isSameHost(host, baseHost)) return false
+          if (baseHost === null) return false
         }
       }
     }
@@ -509,7 +510,7 @@ export class LinkPolicy {
       if (!schemes.includes('http') && !schemes.includes('https')) return false
     }
 
-    const host = parseHost('https:' + url)
+    const host = specialUrlHost(url)
     if (host === null) return false
     if (this.isDomainDenied(host)) return false
     if (this.allowedDomains !== null && !this.isDomainAllowed(host)) return false
@@ -521,42 +522,76 @@ export class LinkPolicy {
   }
 
   private isDomainDenied(host: string): boolean {
-    host = host.toLowerCase()
-    return this.deniedDomains.some(
-      (d) => host === d.toLowerCase() || host.endsWith('.' + d.toLowerCase()),
-    )
+    host = normalizeHost(host)
+    return this.deniedDomains.some((d) => domainMatches(host, normalizeHost(d)))
   }
 
   private isDomainAllowed(host: string): boolean {
     if (this.allowedDomains === null) return true
-    host = host.toLowerCase()
-    return this.allowedDomains.some(
-      (d) => host === d.toLowerCase() || host.endsWith('.' + d.toLowerCase()),
-    )
+    host = normalizeHost(host)
+    return this.allowedDomains.some((d) => domainMatches(host, normalizeHost(d)))
   }
 
   private isSameHost(a: string, b: string): boolean {
-    return a.toLowerCase() === b.toLowerCase()
+    return normalizeHost(a) === normalizeHost(b)
   }
 }
 
+function domainMatches(host: string, domain: string): boolean {
+  return host === domain || host.endsWith('.' + domain)
+}
+
 /**
- * Extract the host of an http(s) URL the way PHP's parse_url does for the
- * cases LinkPolicy needs (host only, no userinfo handling beyond `@`).
- * Returns null when no host can be determined.
+ * Read the host of a special (http/https) URL the way a WHATWG URL parser
+ * does. `afterScheme` is everything after the scheme colon. Returns null when
+ * there is no host.
  */
-function parseHost(url: string): string | null {
-  // Match scheme://[authority]/...; authority ends at /, ?, or #.
-  const m = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/([^/?#]*)/.exec(url)
-  if (!m) return null
-  let authority = m[1]!
-  // Strip userinfo.
+function specialUrlHost(afterScheme: string): string | null {
+  // Any run of `/` or `\` (including none) precedes the authority.
+  const rest = afterScheme.replace(/^[/\\]+/, '')
+  const end = rest.search(/[/\\?#]/)
+  let authority = end === -1 ? rest : rest.slice(0, end)
   const at = authority.lastIndexOf('@')
   if (at !== -1) authority = authority.slice(at + 1)
-  // Strip port. IPv6 literals are in [..]; keep brackets out of scope (rare).
-  const colon = authority.lastIndexOf(':')
-  if (colon !== -1 && !authority.includes(']')) authority = authority.slice(0, colon)
-  return authority === '' ? null : authority
+  let host: string
+  if (authority.startsWith('[')) {
+    const close = authority.indexOf(']')
+    host = close === -1 ? authority : authority.slice(0, close + 1)
+  } else {
+    const colon = authority.indexOf(':')
+    host = colon === -1 ? authority : authority.slice(0, colon)
+  }
+  host = normalizeHost(percentDecode(host))
+  return host === '' ? null : host
+}
+
+/**
+ * Configured domains and base hosts go through this too, so both sides of
+ * every comparison agree on case, full stops and trailing dots.
+ */
+function normalizeHost(host: string): string {
+  return host
+    .replace(/[\u3002\uFF0E\uFF61]/g, '.')
+    .toLowerCase()
+    .replace(/\.+$/, '')
+}
+
+/** Decode `%XX` escapes as UTF-8 bytes; malformed escapes stay literal. */
+function percentDecode(text: string): string {
+  if (!text.includes('%')) return text
+  const encoder = new TextEncoder()
+  const bytes: number[] = []
+  for (let i = 0; i < text.length; ) {
+    if (text[i] === '%' && /^[0-9a-fA-F]{2}$/.test(text.slice(i + 1, i + 3))) {
+      bytes.push(parseInt(text.slice(i + 1, i + 3), 16))
+      i += 3
+      continue
+    }
+    const ch = String.fromCodePoint(text.codePointAt(i)!)
+    bytes.push(...encoder.encode(ch))
+    i += ch.length
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes))
 }
 
 /**
