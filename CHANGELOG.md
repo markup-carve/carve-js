@@ -59,6 +59,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Markdown importer reads item shapes as GFM does, with cmark-gfm deciding where marked and commonmark.js differ: a header row needs its delimiter row in the same container, a tab after a marker is written as the spaces it covers, and five or more columns after a marker opens indented code written as a fence (#1935).
 - A blank line inside a fenced code block in a nested list no longer loosens the outer list (#1938).
 - The Markdown importer escapes every hyphen of a `--` or `---` run in text so smart typography leaves it alone, treats only `1.` as an ordered marker that interrupts its item's paragraph, and measures continuation lines in columns so a tab-indented line four columns past its item continues the paragraph (#1937).
+- Every empty block container renders one blank HTML body line (#1934): empty divs, line blocks, local hard-break blocks and figure groups, matching the spec ruling in markup-carve/carve#2184. Div, line-block and figure-group framing is centralized, and the decision about whether a body is empty now counts rendered output.
+- The Markdown importer keeps quoted item fences, lazy lines and item looseness (#1943). A list CommonMark reads loose is spelled loose the way `carve fmt` spells it, quoted marker padding collapses, a quoted lazy line four columns in continues the quote's paragraph and is escaped where it looks like an opener, and a fence in a quoted item closes where GFM closes it.
 
 ## [0.1.7] - 2026-09-18
 
