@@ -90,7 +90,7 @@ describe('markdownToCarve — a setext heading a container holds', () => {
 
   it('converts inside a nested item at that item’s own column', () => {
     // CommonMark reads an h1 in the inner item, not in the outer one.
-    expect(markdownToCarve('- a\n\n  - Title\n    =====\n')).toBe('- a\n\n  - # Title\n')
+    expect(markdownToCarve('- a\n\n  - Title\n    =====\n')).toBe('{loose}\n- a\n\n  - # Title\n')
   })
 
   it('keeps a following sibling item its own item', () => {
