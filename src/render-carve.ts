@@ -2211,7 +2211,7 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
   const content = cell.blocks === undefined
     ? renderInlines(cell.children ?? [], ctx)
-    : renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx)
+    : renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
   return padCell(prefix, escapeSpanMarkerPayload(content, cell.attrs))
 }
 
@@ -4244,7 +4244,6 @@ function withCellHardBreaksFlattened(ast: Document): Document {
     if (node === null || typeof node !== 'object') continue
     if ((node as { type?: unknown }).type === 'table_cell') {
       if (holdsHardBreak((node as TableCell).children ?? [])) cells.push(node as TableCell)
-      if ((node as TableCell).blocks) stack.push((node as TableCell).blocks)
       continue
     }
     for (const value of Object.values(node)) stack.push(value)
@@ -4257,7 +4256,6 @@ function withCellHardBreaksFlattened(ast: Document): Document {
     if (node === null || typeof node !== 'object') continue
     if ((node as { type?: unknown }).type === 'table_cell') {
       flattenHardBreaks((node as TableCell).children ?? [])
-      if ((node as TableCell).blocks) stack.push((node as TableCell).blocks)
       continue
     }
     for (const value of Object.values(node)) stack.push(value)

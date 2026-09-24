@@ -1227,6 +1227,15 @@ function pushChildBlockLists(b: BlockNode, out: BlockNode[][]): void {
     case 'definition_list':
       for (const it of b.items) for (const d of it.definitions) out.push(d)
       break
+    case 'table':
+      for (const row of b.rows) for (const cell of row.cells) {
+        if (cell.blocks) out.push(cell.blocks)
+      }
+      break
+    case 'figure':
+      if (b.target.type === 'block_quote') out.push(b.target.children)
+      else if (b.target.type === 'table') pushChildBlockLists(b.target, out)
+      break
     default:
       break
   }
@@ -1252,6 +1261,19 @@ function withClonedChildBlockLists(b: BlockNode): BlockNode {
         ...b,
         items: b.items.map((it) => ({ ...it, definitions: it.definitions.map((d) => d.slice()) })),
       }
+    case 'table':
+      return {
+        ...b,
+        rows: b.rows.map((row) => ({
+          ...row,
+          cells: row.cells.map((cell) => cell.blocks ? { ...cell, blocks: cell.blocks.slice() } : cell),
+        })),
+      }
+    case 'figure':
+      if (b.target.type === 'block_quote' || b.target.type === 'table') {
+        return { ...b, target: withClonedChildBlockLists(b.target) as typeof b.target }
+      }
+      return b
     default:
       return b
   }
@@ -1378,6 +1400,15 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
         break
       case 'definition_list':
         for (const it of b.items) for (const d of it.definitions) promoteBlockImages(d, figuresOnly)
+        break
+      case 'table':
+        for (const row of b.rows) for (const cell of row.cells) {
+          if (cell.blocks) promoteBlockImages(cell.blocks, figuresOnly)
+        }
+        break
+      case 'figure':
+        if (b.target.type === 'block_quote') promoteBlockImages(b.target.children, figuresOnly)
+        else if (b.target.type === 'table') promoteBlockImages([b.target], figuresOnly)
         break
       default:
         break

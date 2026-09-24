@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyProfile, AstJsonSchemaError, diffAst, fromAstJson, Profile, renderAnsi, renderCarveWithReport,
-  renderHtml, renderMarkdown, renderPlainText, resolve, toAstJson,
+  parse, renderHtml, renderMarkdown, renderPlainText, resolve, toAstJson,
 } from '../src/index.js'
+import { collapseLoneImageParagraphs } from '../src/heading-ids.js'
 
 const payload = () => ({
   type: 'document',
@@ -92,6 +93,38 @@ describe('interchange sections and block-content cells', () => {
     } as never
     expect(renderMarkdown(doc)).toContain('| See [^m] |')
     expect(renderCarveWithReport(doc).value).toContain('| See [^m] |')
+  })
+
+  it('keeps a table row intact when block cells contain line breaks', () => {
+    const doc = { type: 'document', children: [{
+      type: 'table', rows: [{ type: 'table_row', cells: [{
+        type: 'table_cell', header: false, blocks: [
+          { type: 'paragraph', children: [
+            { type: 'text', value: 'A' }, { type: 'hard_break' },
+            { type: 'text', value: 'B' }, { type: 'soft_break' },
+            { type: 'text', value: 'C' },
+          ] },
+          { type: 'code_block', content: 'x\ny', fenced: true },
+        ],
+      }] }] },
+    ] } as never
+    const markdown = renderMarkdown(doc)
+    const carve = renderCarveWithReport(doc).value
+    expect(markdown.split('\n').filter((line) => line.startsWith('|'))).toHaveLength(1)
+    expect(carve.split('\n').filter((line) => line.startsWith('|'))).toHaveLength(1)
+    expect(parse(carve).children[0]?.type).toBe('table')
+  })
+
+  it('visits block cells when promoting and cloning lone images', () => {
+    const doc = { type: 'document', children: [{ type: 'table', rows: [{
+      type: 'table_row', cells: [{ type: 'table_cell', header: false, blocks: [{
+        type: 'paragraph', children: [{ type: 'image', src: '/a.png', alt: 'A' }],
+      }] }],
+    }] }] } as never
+    const collapsed = collapseLoneImageParagraphs(doc)
+    expect((collapsed.children[0] as never as { rows: { cells: { blocks: { type: string }[] }[] }[] }).rows[0]!.cells[0]!.blocks[0]!.type).toBe('image')
+    expect((doc.children[0] as never as { rows: { cells: { blocks: { type: string }[] }[] }[] }).rows[0]!.cells[0]!.blocks[0]!.type).toBe('paragraph')
+    expect(renderHtml(resolve(doc))).toContain('<img src="/a.png" alt="A">')
   })
 
   it.each([

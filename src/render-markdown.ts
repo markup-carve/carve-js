@@ -492,7 +492,7 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
         break
     }
   }
-  return parts.filter(Boolean).join('<br>')
+  return parts.filter(Boolean).map((part) => part.replace(/\\*\r?\n/g, '<br>')).join('<br>')
 }
 
 function renderTable(node: Table, ctx: MarkdownContext): string {
