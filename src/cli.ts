@@ -748,14 +748,10 @@ function finishRender(result: RenderResult, file: string, opts: RenderCliLossOpt
     !((loss.code === 'raw-format-dropped' && opts.allowRawFormatDropped) ||
       (loss.code === 'ruby-flattened' && opts.allowRubyFlattened)),
   )
-  const hasAllowance = opts.allowRawFormatDropped || opts.allowRubyFlattened
-  const effectiveTotal = !hasAllowance
-    ? result.totalLosses
-    : effectiveLosses.length === 0
-      ? 0
-      : result.truncated
-        ? result.totalLosses - (result.losses.length - effectiveLosses.length)
-        : effectiveLosses.length
+  const allowedTotal =
+    (opts.allowRawFormatDropped ? (result.lossCounts?.['raw-format-dropped'] ?? 0) : 0) +
+    (opts.allowRubyFlattened ? (result.lossCounts?.['ruby-flattened'] ?? 0) : 0)
+  const effectiveTotal = result.totalLosses - allowedTotal
   if (effectiveTotal > 0) {
     for (const loss of effectiveLosses) {
       const at = loss.pos ? `:${loss.pos.startLine}:${loss.pos.startColumn ?? 1}` : ''

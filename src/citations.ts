@@ -755,6 +755,8 @@ function flattenText(nodes: InlineNode[] | undefined): string {
       out += n.glyph ?? SMART_PUNCTUATION_GLYPHS[n.kind] ?? n.value
     else if ('children' in n && Array.isArray((n as { children?: InlineNode[] }).children))
       out += flattenText((n as { children: InlineNode[] }).children)
+    else if (n.type === 'ruby')
+      for (const pair of n.pairs) out += `${flattenText(pair.base)}(${flattenText(pair.annotation)})`
   }
   return out
 }

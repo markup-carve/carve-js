@@ -19,6 +19,8 @@ export interface RenderResult<T = string> {
   losses: RenderLoss[]
   totalLosses: number
   truncated: boolean
+  /** Complete counts used when a caller permits one loss code before truncation. */
+  lossCounts?: Partial<Record<RenderLossCode, number>>
 }
 
 export interface CheckedRenderOptions {
@@ -83,9 +85,11 @@ export function checkedRender(
     throw new RangeError('maxRenderLosses must be a non-negative safe integer')
   }
   const losses: RenderLoss[] = []
+  const lossCounts: Partial<Record<RenderLossCode, number>> = {}
   let totalLosses = 0
   const value = render((loss) => {
     totalLosses++
+    lossCounts[loss.code] = (lossCounts[loss.code] ?? 0) + 1
     if (losses.length < maximum) losses.push(loss)
   })
   const result: RenderResult = {
@@ -94,6 +98,7 @@ export function checkedRender(
     totalLosses,
     truncated: totalLosses > losses.length,
   }
+  Object.defineProperty(result, 'lossCounts', { value: lossCounts, enumerable: false })
   if (opts.strictLosses && totalLosses > 0) throw new RenderLossError(result)
   return result
 }

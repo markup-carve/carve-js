@@ -3663,11 +3663,6 @@ class Importer {
 
   private ruby(node: P5Node, path: string, depth: number): InlineNode[] {
     const attrs = this.attrs(node, path)
-    this.unspellable.push({
-      node,
-      path,
-      message: 'Flattened <ruby> annotations: Carve 0.1 has no source spelling for their pairing',
-    })
     const input: Array<{ node: P5Node; path: string }> = []
     const retainedRtc: InlineNode[][] = []
 
@@ -3721,9 +3716,14 @@ class Importer {
     let run: Array<{ base: InlineNode[]; annotation: InlineNode[] }> = []
     let base: InlineNode[] = []
     let hasAssociatedBase = false
+    let attrsUsed = false
+    let emittedRuby = false
     const flushRun = (): void => {
       if (run.length === 0) return
-      output.push({ type: 'ruby', pairs: run, ...(attrs ? { attrs } : {}) })
+      const heldAttrs = attrs && !attrsUsed ? { attrs } : {}
+      output.push({ type: 'ruby', pairs: run, ...heldAttrs })
+      attrsUsed ||= attrs !== undefined
+      emittedRuby = true
       run = []
     }
     const unpairedBase = (): void => {
@@ -3736,6 +3736,7 @@ class Importer {
 
     for (let index = 0; index < input.length; index++) {
       const item = input[index]!
+      if (item.node.nodeName === '#comment') continue
       if (item.node.tagName === 'rp') {
         acceptRp(item.node, item.path, depth + 1)
         continue
@@ -3779,6 +3780,15 @@ class Importer {
     flushRun()
     for (const content of retainedRtc) {
       output.push({ type: 'text', value: '(' }, ...content, { type: 'text', value: ')' })
+    }
+    if (emittedRuby) {
+      this.unspellable.push({
+        node,
+        path,
+        message: 'Flattened <ruby> annotations: Carve 0.1 has no source spelling for their pairing',
+      })
+    } else if (attrs !== undefined) {
+      this.reportUnwrappedAttributes(node, attrs, 'ruby', path)
     }
     return output
   }

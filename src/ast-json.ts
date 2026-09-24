@@ -724,6 +724,9 @@ function refuseSchemaViolations(node: unknown, path: string): void {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
     }
+    if (type === 'ruby' && Array.isArray(record.pairs) && record.pairs.length === 0) {
+      throw new AstJsonSchemaError('property "pairs" must contain at least one item', path)
+    }
     // The typeless RECORDS that hang off a node. Every node kind can carry
     // `attrs` and `pos`, which makes them the easiest place for a wrong shape to
     // ride in - `pos` missing `endOffset` was accepted by two of the three
@@ -876,6 +879,9 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
     if (!matchesKind(item[field], kind)) {
       throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
     }
+  }
+  if (name === 'rubyPair' && Array.isArray(item.base) && item.base.length === 0) {
+    throw new AstJsonSchemaError('property "base" must contain at least one item', path)
   }
   refuseNestedRecordShapes(name, item, path)
 }

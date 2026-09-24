@@ -122,6 +122,27 @@ describe('carve render — loss reporting', () => {
     expect(allowed.err).toBe('')
   })
 
+  it('does not let an allowed truncated loss hide a different code', async () => {
+    const ruby = {
+      type: 'ruby',
+      pairs: [{ base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'y' }] }],
+    }
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [
+        { type: 'paragraph', children: [ruby, ruby, ruby] },
+        { type: 'raw_block', format: 'latex', content: 'lost' },
+      ],
+      srcByteLength: 0,
+    })
+    const result = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--plain', '--strict-losses',
+      '--allow-loss', 'ruby-flattened', '--max-render-losses', '2',
+    ], result.io)).toBe(1)
+    expect(result.err).toContain('1 render loss')
+  })
+
   it('rejects unknown loss codes and invalid bounds', async () => {
     const unknown = makeIO({ stdin: source })
     expect(await run(['render', '--allow-loss', 'unknown'], unknown.io)).toBe(2)

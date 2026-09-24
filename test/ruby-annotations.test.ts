@@ -50,9 +50,15 @@ describe('ruby annotations', () => {
 
   it('round-trips through encoded AST JSON', () => {
     expect(toAstJson(fromAstJson(toAstJson(document)))).toEqual(toAstJson(document))
-    const wire = toAstJson(document) as unknown as { children: Array<{ children: Array<{ pairs: Array<Record<string, unknown>> }> }> }
+    const wire = structuredClone(toAstJson(document)) as unknown as { children: Array<{ children: Array<{ pairs: Array<Record<string, unknown>> }> }> }
     wire.children[0]!.children[0]!.pairs[0]!.extra = true
     expect(() => fromAstJson(wire as never)).toThrow(/carries "extra"/)
+    const emptyPairs = structuredClone(toAstJson(document)) as unknown as { children: Array<{ children: Array<{ pairs: unknown[] }> }> }
+    emptyPairs.children[0]!.children[0]!.pairs = []
+    expect(() => fromAstJson(emptyPairs as never)).toThrow(/pairs.*at least one/)
+    const emptyBase = structuredClone(toAstJson(document)) as unknown as { children: Array<{ children: Array<{ pairs: Array<{ base: unknown[] }> }> }> }
+    emptyBase.children[0]!.children[0]!.pairs[0]!.base = []
+    expect(() => fromAstJson(emptyBase as never)).toThrow(/base.*at least one/)
   })
 
   it('imports conventional rp and reports custom fallback only', () => {
@@ -67,6 +73,26 @@ describe('ruby annotations', () => {
     expect(custom.report.diagnostics.map((row) => row.fidelity)).toEqual(['degraded', 'degraded'])
   })
 
+  it('keeps an empty annotation and reads nested ruby recursively', () => {
+    const empty = htmlToAst('<p><ruby>x<rt></rt></ruby></p>')
+    expect(empty.value.children[0]).toMatchObject({
+      children: [{ type: 'ruby', pairs: [{ base: [{ value: 'x' }], annotation: [] }] }],
+    })
+
+    const nested = htmlToAst('<p><ruby><ruby>B<rt>a</rt></ruby><rt>outer</rt></ruby></p>')
+    expect(nested.value.children[0]).toMatchObject({
+      children: [{
+        type: 'ruby',
+        pairs: [{ base: [{ type: 'ruby', pairs: [{ base: [{ value: 'B' }], annotation: [{ value: 'a' }] }] }], annotation: [{ value: 'outer' }] }],
+      }],
+    })
+  })
+
+  it('applies ordinary URL policy inside annotations', () => {
+    const result = htmlToAst('<p><ruby>x<rt><a href="javascript:alert(1)">note</a></rt></ruby></p>')
+    expect(renderHtml(result.value)).not.toContain('javascript:')
+  })
+
   it('keeps unpaired content and reports its declared fidelity', () => {
     const base = htmlToAst('<p><ruby>base</ruby></p>')
     expect(base.value.children[0]).toMatchObject({ children: [{ type: 'text', value: 'base' }] })
@@ -75,6 +101,11 @@ describe('ruby annotations', () => {
     const annotation = htmlToAst('<p><ruby><rt>note</rt></ruby></p>')
     expect(annotation.value.children[0]).toMatchObject({ children: [{ type: 'text', value: '(note)' }] })
     expect(annotation.report.diagnostics).toMatchObject([{ code: 'element-unwrapped', fidelity: 'degraded' }])
+
+    const attributed = htmlToAst('<p><ruby id="r" lang="ja">base</ruby></p>')
+    expect(attributed.report.diagnostics.map((row) => row.code)).toEqual([
+      'element-unwrapped', 'attribute-dropped', 'attribute-dropped',
+    ])
   })
 
   it('preserves obsolete component content and declares its degradation', () => {
@@ -98,6 +129,34 @@ describe('ruby annotations', () => {
       ],
     })
     expect(result.report.diagnostics.map((row) => row.code)).toEqual(['element-unwrapped'])
+  })
+
+  it('keeps wrapper attributes on only the first structured run', () => {
+    const result = htmlToAst('<p><ruby id="r">a<rt>x</rt><rt>y</rt>b<rt>z</rt></ruby></p>')
+    const paragraph = result.value.children[0] as { children: Array<{ type: string; attrs?: unknown }> }
+    expect(paragraph.children.filter((node) => node.type === 'ruby')).toHaveLength(2)
+    expect(paragraph.children.filter((node) => node.attrs !== undefined)).toHaveLength(1)
+    expect(renderHtml(result.value).match(/id="r"/g)).toHaveLength(1)
+  })
+
+  it('ignores comments while deciding whether a base exists', () => {
+    const result = htmlToAst('<p><ruby><!-- hidden --><rt>x</rt></ruby></p>')
+    expect(result.value.children[0]).toMatchObject({ children: [{ type: 'text', value: '(x)' }] })
+    expect(result.report.diagnostics).toMatchObject([{ code: 'element-unwrapped', fidelity: 'degraded' }])
+  })
+
+  it('numbers footnotes inside both sides', () => {
+    const withNotes = structuredClone(document)
+    const ruby = (withNotes.children[0] as { children: Array<{ pairs: Array<{ base: unknown[]; annotation: unknown[] }> }> }).children[0]!
+    ruby.pairs[0]!.base.push({ type: 'footnote_ref', id: 'base' })
+    ruby.pairs[0]!.annotation.push({ type: 'footnote_ref', id: 'note' })
+    withNotes.footnoteDefs = {
+      base: [{ type: 'paragraph', children: [{ type: 'text', value: 'Base note' }] }],
+      note: [{ type: 'paragraph', children: [{ type: 'text', value: 'Annotation note' }] }],
+    }
+    const html = renderHtml(withNotes)
+    expect(html).toContain('id="fnref1"')
+    expect(html).toContain('id="fnref2"')
   })
 
   it('declares source flattening only on the HTML-to-Carve exit', () => {
