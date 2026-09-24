@@ -658,7 +658,7 @@ function stableJson(value: unknown): string {
  * Key-order-insensitive view of a node tree.
  */
 function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
+  if (Array.isArray(value)) return mergeTextRuns(flattenRubyForComparison(value)).map(canonical)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
@@ -675,6 +675,22 @@ function canonical(value: unknown): unknown {
     return out
   }
   return value
+}
+
+/** Compare source output with the tree the ruby fallback actually spells. */
+function flattenRubyForComparison(nodes: unknown[]): unknown[] {
+  const pending = nodes.slice().reverse()
+  const out: unknown[] = []
+  while (pending.length > 0) {
+    const node = pending.pop()
+    if (node && typeof node === 'object' && (node as { type?: string }).type === 'ruby') {
+      const flattened = flattenRubyForCarve([node as InlineNode])
+      for (let i = flattened.length - 1; i >= 0; i--) pending.push(flattened[i])
+    } else {
+      out.push(node)
+    }
+  }
+  return out
 }
 
 /**

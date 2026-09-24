@@ -48,6 +48,17 @@ describe('ruby annotations', () => {
     expect(carve.losses[0]).not.toHaveProperty('format')
   })
 
+  it('compares escape candidates with flattened ruby', () => {
+    const withRuby: Document = {
+      type: 'document',
+      children: [{ type: 'paragraph', children: [
+        { type: 'ruby', pairs: [{ base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'y' }] }] },
+        { type: 'text', value: ' 1. x' },
+      ] }],
+    }
+    expect(renderCarveWithReport(withRuby).value).toBe('x(y) 1. x\n')
+  })
+
   it('round-trips through encoded AST JSON', () => {
     expect(toAstJson(fromAstJson(toAstJson(document)))).toEqual(toAstJson(document))
     const wire = structuredClone(toAstJson(document)) as unknown as { children: Array<{ children: Array<{ pairs: Array<Record<string, unknown>> }> }> }
