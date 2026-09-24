@@ -932,6 +932,24 @@ export interface CriticComment extends BaseNode {
   text: string
 }
 
+export interface RubyPair {
+  base: InlineNode[]
+  annotation: InlineNode[]
+}
+
+/** A sequence of HTML ruby base/annotation pairs. */
+export interface Ruby extends BaseNode {
+  type: 'ruby'
+  pairs: RubyPair[]
+  attrs?: Attrs
+}
+
+export interface SmallCaps extends BaseNode {
+  type: 'small_caps'
+  children: InlineNode[]
+  attrs?: Attrs
+}
+
 export type InlineNode =
   | Text
   | EscapedText
@@ -941,6 +959,8 @@ export type InlineNode =
   | Link
   | Image
   | Span
+  | Ruby
+  | SmallCaps
   | Math
   | RawInline
   | LiteralInline

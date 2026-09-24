@@ -101,6 +101,48 @@ describe('carve render — loss reporting', () => {
     expect(t.err).toBe('')
   })
 
+  it('can allow ruby flattening from an encoded AST', async () => {
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [{ type: 'paragraph', children: [{
+        type: 'ruby',
+        pairs: [{ base: [{ type: 'text', value: '漢' }], annotation: [{ type: 'text', value: 'かん' }] }],
+      }] }],
+      srcByteLength: 0,
+    })
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--plain', '--strict-losses'], denied.io)).toBe(1)
+    expect(denied.err).toContain('ruby-flattened')
+
+    const allowed = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--plain', '--strict-losses', '--allow-loss', 'ruby-flattened',
+    ], allowed.io)).toBe(0)
+    expect(allowed.out).toBe('漢(かん)\n')
+    expect(allowed.err).toBe('')
+  })
+
+  it('does not let an allowed truncated loss hide a different code', async () => {
+    const ruby = {
+      type: 'ruby',
+      pairs: [{ base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'y' }] }],
+    }
+    const ast = JSON.stringify({
+      type: 'document',
+      children: [
+        { type: 'paragraph', children: [ruby, ruby, ruby] },
+        { type: 'raw_block', format: 'latex', content: 'lost' },
+      ],
+      srcByteLength: 0,
+    })
+    const result = makeIO({ stdin: ast })
+    expect(await run([
+      'render', '--from-json', '--plain', '--strict-losses',
+      '--allow-loss', 'ruby-flattened', '--max-render-losses', '2',
+    ], result.io)).toBe(1)
+    expect(result.err).toContain('1 render loss')
+  })
+
   it('rejects unknown loss codes and invalid bounds', async () => {
     const unknown = makeIO({ stdin: source })
     expect(await run(['render', '--allow-loss', 'unknown'], unknown.io)).toBe(2)

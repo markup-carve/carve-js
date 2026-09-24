@@ -7,7 +7,7 @@ import type { Document } from './ast.js'
  * serializer: it exists to make the RUNTIME tree right, and the serializer is
  * only where the breach happened to be measured.
  */
-const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title']
+const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title', 'pairs', 'base', 'annotation']
 
 /**
  * Join adjacent `text` nodes everywhere in a resolved document (PART 12 §1a).

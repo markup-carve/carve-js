@@ -46,7 +46,7 @@ describe('shared migration result', () => {
       expect.objectContaining({ code: 'attribute-dropped', fidelity: 'dropped', confidence: 'exact' }),
     )
     expect(migrateHtml('<ruby>x<rt>y</rt></ruby>').report.diagnostics).toContainEqual(
-      expect.objectContaining({ code: 'element-unwrapped', fidelity: 'degraded', confidence: 'exact' }),
+      expect.objectContaining({ code: 'structure-unspellable', fidelity: 'dropped', confidence: 'exact' }),
     )
   })
 

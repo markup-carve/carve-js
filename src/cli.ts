@@ -140,12 +140,12 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                                 keep it as source text (--ansi, --carve).
     --profile NAME              restrict features (full|article|comment|minimal)
     --profile-base-host HOST    base host for the profile's link policy
-    --strict-losses             write no rendered output and exit 1 when raw
-                                content would be dropped for this target
+    --strict-losses             write no rendered output and exit 1 when
+                                rendering would lose structure or content
     --report-losses FILE        write the structured render-loss report as JSON
                                 (use - for stderr)
     --allow-loss CODE           allow a loss code intentionally (repeatable;
-                                currently: raw-format-dropped)
+                                raw-format-dropped, ruby-flattened)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
 
@@ -739,13 +739,19 @@ interface RenderCliLossOptions {
   strictLosses: boolean
   reportLosses?: string
   allowRawFormatDropped: boolean
+  allowRubyFlattened: boolean
   maxRenderLosses: number
 }
 
 function finishRender(result: RenderResult, file: string, opts: RenderCliLossOptions, io: CliIO): number {
-  const allowed = opts.allowRawFormatDropped
-  const effectiveLosses = allowed ? [] : result.losses
-  const effectiveTotal = allowed ? 0 : result.totalLosses
+  const effectiveLosses = result.losses.filter((loss) =>
+    !((loss.code === 'raw-format-dropped' && opts.allowRawFormatDropped) ||
+      (loss.code === 'ruby-flattened' && opts.allowRubyFlattened)),
+  )
+  const allowedTotal =
+    (opts.allowRawFormatDropped ? (result.lossCounts?.['raw-format-dropped'] ?? 0) : 0) +
+    (opts.allowRubyFlattened ? (result.lossCounts?.['ruby-flattened'] ?? 0) : 0)
+  const effectiveTotal = result.totalLosses - allowedTotal
   if (effectiveTotal > 0) {
     for (const loss of effectiveLosses) {
       const at = loss.pos ? `:${loss.pos.startLine}:${loss.pos.startColumn ?? 1}` : ''
@@ -761,7 +767,7 @@ function finishRender(result: RenderResult, file: string, opts: RenderCliLossOpt
       file,
       losses: effectiveLosses,
       totalLosses: effectiveTotal,
-      truncated: allowed ? false : result.truncated,
+      truncated: effectiveTotal > effectiveLosses.length,
     }, null, 2) + '\n'
     if (opts.reportLosses === '-') io.writeErr(report)
     else io.writeFile(opts.reportLosses, report)
@@ -924,9 +930,10 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const unknownLoss = allowedLosses.find((code) => code !== 'raw-format-dropped')
+  const knownLosses = ['raw-format-dropped', 'ruby-flattened']
+  const unknownLoss = allowedLosses.find((code) => !knownLosses.includes(code))
   if (unknownLoss !== undefined) {
-    io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected raw-format-dropped)\n`)
+    io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected raw-format-dropped or ruby-flattened)\n`)
     return 2
   }
   const maxRenderLosses = values['max-render-losses'] === undefined
@@ -939,6 +946,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   const lossOptions: RenderCliLossOptions = {
     strictLosses: values['strict-losses'] ?? false,
     allowRawFormatDropped: allowedLosses.includes('raw-format-dropped'),
+    allowRubyFlattened: allowedLosses.includes('ruby-flattened'),
     maxRenderLosses,
     ...(values['report-losses'] !== undefined ? { reportLosses: values['report-losses'] } : {}),
   }

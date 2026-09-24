@@ -78,7 +78,7 @@ const IGNORED = new Set(['pos', 'srcByteLength'])
  * of plain objects with no `type` at all - they are content, but they are not
  * nodes, and treating them as nodes produces paths that point at nothing.
  */
-const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title']
+const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title', 'pairs', 'base', 'annotation']
 
 function isNode(value: unknown): value is Node {
   return (
@@ -132,6 +132,17 @@ function mergeText(nodes: Node[]): Node[] {
 
 function childrenOf(node: Node): { field: string; nodes: Node[] }[] {
   const out: { field: string; nodes: Node[] }[] = []
+  if (node.type === 'ruby' && Array.isArray(node['pairs'])) {
+    node['pairs'].forEach((pair, index) => {
+      if (pair === null || typeof pair !== 'object' || Array.isArray(pair)) return
+      for (const field of ['base', 'annotation']) {
+        const value = (pair as Record<string, unknown>)[field]
+        if (Array.isArray(value) && value.every(isNode)) {
+          out.push({ field: `pairs[${index}].${field}`, nodes: mergeText(value) })
+        }
+      }
+    })
+  }
   for (const field of CHILD_FIELDS) {
     const value = node[field]
     if (!Array.isArray(value)) continue

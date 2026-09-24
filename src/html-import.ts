@@ -107,7 +107,8 @@ export interface HtmlImportDiagnostic {
 }
 
 /**
- * The fidelity of a diagnostic code, from the v2 contract.
+ * The default fidelity of a diagnostic code, from the v2 contract. A mapping
+ * may override it when the same operation has a narrower declared outcome.
  *
  * Ordered `preserved < normalized < degraded < dropped`, and the producer's
  * answer is FINAL: a binding must not reclassify it, and it must never be
@@ -847,6 +848,7 @@ class Importer {
     severity: HtmlImportDiagnostic['severity'],
     path: string,
     node: P5Node,
+    fidelity = diagnosticFidelity(code),
   ): void {
     if (this.entries.length >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
     this.entries.push({
@@ -854,7 +856,7 @@ class Importer {
         code,
         message,
         severity,
-        fidelity: diagnosticFidelity(code),
+        fidelity,
         confidence: diagnosticConfidence(code),
         path,
       },
@@ -3532,6 +3534,7 @@ class Importer {
       this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
       return []
     }
+    if (tag === 'ruby') return this.ruby(node, path, depth)
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
     // An element the HTML left empty holds nothing a reader sees, so it is
@@ -3656,6 +3659,139 @@ class Importer {
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
     this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
     return children
+  }
+
+  private ruby(node: P5Node, path: string, depth: number): InlineNode[] {
+    const attrs = this.attrs(node, path)
+    const input: Array<{ node: P5Node; path: string }> = []
+    const retainedRtc: InlineNode[][] = []
+
+    const dropComponentAttrs = (component: P5Node, componentPath: string): void => {
+      const held = this.attrs(component, componentPath)
+      this.reportUnwrappedAttributes(component, held, component.tagName ?? 'ruby component', componentPath)
+    }
+    const acceptRp = (rp: P5Node, rpPath: string, rpDepth: number): void => {
+      this.enter(rpDepth)
+      this.budget(rp, rpDepth)
+      dropComponentAttrs(rp, rpPath)
+      const text = this.text(rp).trim()
+      if (text !== '' && text !== '(' && text !== ')' && text !== '（' && text !== '）') {
+        this.add('element-dropped', 'Dropped non-standard <rp> fallback content', 'warning', rpPath, rp, 'degraded')
+      }
+    }
+
+    ;(node.childNodes ?? []).forEach((child, index) => {
+      const childPath = this.childPath(path, child, index)
+      if (child.tagName === 'rb') {
+        this.enter(depth + 1)
+        dropComponentAttrs(child, childPath)
+        ;(child.childNodes ?? []).forEach((nested, nestedIndex) => {
+          input.push({ node: nested, path: this.childPath(childPath, nested, nestedIndex) })
+        })
+        return
+      }
+      if (child.tagName === 'rtc') {
+        this.enter(depth + 1)
+        dropComponentAttrs(child, childPath)
+        const content: InlineNode[] = []
+        ;(child.childNodes ?? []).forEach((nested, nestedIndex) => {
+          const nestedPath = this.childPath(childPath, nested, nestedIndex)
+          if (nested.tagName === 'rp') acceptRp(nested, nestedPath, depth + 2)
+          else {
+            if (nested.tagName === 'rt') {
+              this.enter(depth + 2)
+              dropComponentAttrs(nested, nestedPath)
+            }
+            content.push(...this.inlines(nested.tagName === 'rt' ? (nested.childNodes ?? []) : [nested], nestedPath, depth + 1))
+          }
+        })
+        retainedRtc.push(content)
+        this.add('element-unwrapped', 'Unwrapped obsolete <rtc> annotation level', 'warning', childPath, child)
+        return
+      }
+      input.push({ node: child, path: childPath })
+    })
+
+    const output: InlineNode[] = []
+    let run: Array<{ base: InlineNode[]; annotation: InlineNode[] }> = []
+    let base: InlineNode[] = []
+    let hasAssociatedBase = false
+    let emittedRuby = false
+    const flushRun = (): void => {
+      if (run.length === 0) return
+      output.push({ type: 'ruby', pairs: run })
+      emittedRuby = true
+      run = []
+    }
+    const unpairedBase = (): void => {
+      if (base.length === 0) return
+      flushRun()
+      output.push(...base)
+      this.add('element-unwrapped', 'Unwrapped ruby base with no annotation', 'info', path, node, 'normalized')
+      base = []
+    }
+
+    for (let index = 0; index < input.length; index++) {
+      const item = input[index]!
+      if (item.node.nodeName === '#comment') continue
+      if (item.node.tagName === 'rp') {
+        acceptRp(item.node, item.path, depth + 1)
+        continue
+      }
+      if (item.node.tagName === 'rt') {
+        this.enter(depth + 1)
+        dropComponentAttrs(item.node, item.path)
+        const annotation = this.inlines(item.node.childNodes ?? [], item.path, depth + 1)
+        if (hasAssociatedBase) {
+          flushRun()
+          output.push({ type: 'text', value: '(' }, ...annotation, { type: 'text', value: ')' })
+          this.add('element-unwrapped', 'Flattened an additional ruby annotation level', 'warning', item.path, item.node)
+        } else if (base.length === 0) {
+          flushRun()
+          output.push({ type: 'text', value: '(' }, ...annotation, { type: 'text', value: ')' })
+          this.add('element-unwrapped', 'Unwrapped ruby annotation with no base', 'warning', item.path, item.node)
+        } else {
+          run.push({ base, annotation })
+          base = []
+          hasAssociatedBase = true
+        }
+        continue
+      }
+      if (
+        hasAssociatedBase &&
+        item.node.nodeName === '#text' &&
+        /^[\t\n\f\r ]*$/.test(item.node.value ?? '')
+      ) {
+        let lookahead = index + 1
+        while (
+          lookahead < input.length &&
+          input[lookahead]!.node.nodeName === '#text' &&
+          /^[\t\n\f\r ]*$/.test(input[lookahead]!.node.value ?? '')
+        ) lookahead++
+        if (lookahead === input.length || input[lookahead]!.node.tagName === 'rt' || input[lookahead]!.node.tagName === 'rp') continue
+      }
+      hasAssociatedBase = false
+      base.push(...this.inline(item.node, item.path, depth + 1))
+    }
+    unpairedBase()
+    flushRun()
+    for (const content of retainedRtc) {
+      output.push({ type: 'text', value: '(' }, ...content, { type: 'text', value: ')' })
+    }
+    if (emittedRuby) {
+      this.unspellable.push({
+        node,
+        path,
+        message: 'Flattened <ruby> annotations: Carve 0.1 has no source spelling for their pairing',
+      })
+      if (attrs !== undefined) {
+        if (output.length === 1 && output[0]!.type === 'ruby') output[0]!.attrs = attrs
+        else return [{ type: 'span', children: output, attrs }]
+      }
+    } else if (attrs !== undefined) {
+      this.reportUnwrappedAttributes(node, attrs, 'ruby', path)
+    }
+    return output
   }
 
   /**

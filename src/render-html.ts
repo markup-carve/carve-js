@@ -2095,6 +2095,10 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return renderImage(node, opts)
     case 'span':
       return renderSemanticSpan(node, opts)
+    case 'ruby':
+      return `<ruby${renderAttrs(node.attrs)}>${node.pairs.map((pair) => `${renderInlines(pair.base, opts)}<rp>(</rp><rt>${renderInlines(pair.annotation, opts)}</rt><rp>)</rp>`).join('')}</ruby>`
+    case 'small_caps':
+      return `<span${renderAttrs2(node.attrs, { baseClass: 'smallcaps' })}>${renderInlines(node.children, opts)}</span>`
     case 'math': {
       const base = node.display ? 'math display' : 'math inline'
       // Static mode: if a build-time math renderer is supplied, emit its

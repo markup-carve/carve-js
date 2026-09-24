@@ -61,11 +61,8 @@ describe('HTML import', () => {
   })
 
   it('preserves unsupported trusted inline markup only in roundtrip mode', () => {
-    // `<ruby>`, not `<kbd>`: the seven semantic elements stopped being
-    // unsupported in carve#1140 and are spelled in every mode now, so using one
-    // here would test the mapping rather than the raw-HTML fallback.
-    const result = htmlToAst('<p><ruby>x</ruby></p>', { mode: 'roundtrip' })
-    expect(result.value.children[0]).toMatchObject({ children: [{ type: 'raw_inline', format: 'html', content: '<ruby>x</ruby>' }] })
+    const result = htmlToAst('<p><x-unsupported>x</x-unsupported></p>', { mode: 'roundtrip' })
+    expect(result.value.children[0]).toMatchObject({ children: [{ type: 'raw_inline', format: 'html', content: '<x-unsupported>x</x-unsupported>' }] })
     expect(result.report.diagnostics[0]?.code).toBe('raw-preserved')
   })
 
@@ -1136,13 +1133,15 @@ describe('the import decisions that are policy', () => {
     for (const html of [
       '<section id="s">x</section>',
       '<form id="f">x</form>',
-      '<p><ruby id="r">x</ruby></p>',
       // The figure that has no representable target is a fourth unwrap arm,
       // and it kept the same silence.
       '<figure id="f"><ul><li>a</li></ul><figcaption>c</figcaption></figure>',
     ]) {
       expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'attribute-dropped'])
     }
+    expect(htmlToCarve('<p><ruby id="r">x<rt>y</rt></ruby></p>').report.diagnostics.map((d) => d.code)).toEqual([
+      'structure-unspellable',
+    ])
   })
 
   it('CONTROL: a div KEEPS its attributes, so nothing is reported there', () => {

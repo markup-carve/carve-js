@@ -133,6 +133,12 @@ function visitInlineTree(
       visitInlineTree(n.old, fn, depth + 1, discarded)
       visitInlineTree(n.new, fn, depth + 1, discarded)
     }
+    if (n.type === 'ruby') {
+      for (const pair of n.pairs) {
+        visitInlineTree(pair.base, fn, depth + 1, discarded)
+        visitInlineTree(pair.annotation, fn, depth + 1, discarded)
+      }
+    }
   }
 }
 

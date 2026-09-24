@@ -95,6 +95,7 @@ describe("the generated wire-field map", () => {
     expect(Object.keys(WIRE_RECORD_FIELDS).sort()).toEqual([
       "attrs",
       "pos",
+      "rubyPair",
       ...inlineRecords,
     ]);
 

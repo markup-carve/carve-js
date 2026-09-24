@@ -189,9 +189,17 @@ function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): InlineNo
       case 'subscript':
       case 'highlight':
       case 'span':
+      case 'small_caps':
       case 'insert':
       case 'delete':
         n.children = unwrapNestedAnchors(n.children, insideLink)
+        out.push(n)
+        break
+      case 'ruby':
+        for (const pair of n.pairs) {
+          pair.base = unwrapNestedAnchors(pair.base, insideLink)
+          pair.annotation = unwrapNestedAnchors(pair.annotation, insideLink)
+        }
         out.push(n)
         break
       case 'inline_extension':
@@ -459,9 +467,13 @@ export function inlineText(nodes: InlineNode[]): string {
       case 'highlight':
       case 'link':
       case 'span':
+      case 'small_caps':
       case 'insert':
       case 'delete':
         out += inlineText(n.children)
+        break
+      case 'ruby':
+        for (const pair of n.pairs) out += `${inlineText(pair.base)}(${inlineText(pair.annotation)})`
         break
       case 'inline_extension':
         // An `:index[term]` marker is invisible (§8.1): it emits no visible
@@ -692,9 +704,16 @@ function resolveHeadingIdsImpl(
         case 'highlight':
         case 'link':
         case 'span':
+        case 'small_caps':
         case 'insert':
         case 'delete':
           resolveRefs(n.children)
+          break
+        case 'ruby':
+          for (const pair of n.pairs) {
+            resolveRefs(pair.base)
+            resolveRefs(pair.annotation)
+          }
           break
         case 'inline_extension':
           resolveRefs(n.content)
@@ -748,9 +767,16 @@ function resolveHeadingIdsImpl(
         case 'highlight':
         case 'link':
         case 'span':
+        case 'small_caps':
         case 'insert':
         case 'delete':
           flattenNestedCrossrefs(n.children)
+          break
+        case 'ruby':
+          for (const pair of n.pairs) {
+            flattenNestedCrossrefs(pair.base)
+            flattenNestedCrossrefs(pair.annotation)
+          }
           break
         case 'inline_extension':
           flattenNestedCrossrefs(n.content)
@@ -873,9 +899,16 @@ function resolveHeadingIdsImpl(
         case 'highlight':
         case 'link':
         case 'span':
+        case 'small_caps':
         case 'insert':
         case 'delete':
           resolveCrossrefs(n.children)
+          break
+        case 'ruby':
+          for (const pair of n.pairs) {
+            resolveCrossrefs(pair.base)
+            resolveCrossrefs(pair.annotation)
+          }
           break
         case 'inline_extension':
           resolveCrossrefs(n.content)

@@ -10,7 +10,7 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -522,6 +522,11 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     }
     case 'image':
       return renderImage(node)
+    case 'ruby':
+      rubyFlattened(ctx.options, node, 'ansi')
+      return node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')
+    case 'small_caps':
+      return renderInlines(node.children, ctx)
     case 'span': {
       // carve#1127 again: the authored value wins, and the nested expansion is
       // not emitted. ANSI has no markup to carry a title, so the expansion is

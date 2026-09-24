@@ -1,5 +1,6 @@
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type {
+  Attrs,
   BlockNode,
   DefinitionItem,
   Document,
@@ -22,6 +23,7 @@ import { isUnresolvedReference, referenceSourceText } from './unresolved-referen
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
+import { isDangerousAttrName, renderedAttrValue } from './render-html.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -41,6 +43,18 @@ export type SmartTypographyMode = 'glyph' | 'source'
 export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   /** Defaults to `'glyph'`. */
   smartTypography?: SmartTypographyMode | boolean
+}
+
+function renderHtmlAttrs(attrs: Attrs | undefined): string {
+  if (!attrs) return ''
+  const entries: Array<[string, string]> = []
+  if (attrs.id !== undefined) entries.push(['id', attrs.id])
+  if (attrs.classes?.length) entries.push(['class', [...new Set(attrs.classes)].join(' ')])
+  for (const [name, value] of Object.entries(attrs.keyValues ?? {})) {
+    if (isDangerousAttrName(name) || !/^[A-Za-z_:][A-Za-z0-9_.:-]*$/.test(name)) continue
+    entries.push([name, renderedAttrValue(name, value)])
+  }
+  return entries.map(([name, value]) => ` ${name}="${escapeMdHtml(stripControls(value)).replace(/"/g, '&quot;')}"`).join('')
 }
 
 /**
@@ -643,6 +657,17 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       }
 
       return renderInlines(node.children, ctx)
+    }
+    case 'ruby': {
+      const attrs = renderHtmlAttrs(node.attrs)
+      return `<ruby${attrs}>${node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}<rp>(</rp><rt>${renderInlines(pair.annotation, ctx)}</rt><rp>)</rp>`).join('')}</ruby>`
+    }
+    case 'small_caps': {
+      const attrs: Attrs = {
+        ...node.attrs,
+        classes: ['smallcaps', ...(node.attrs?.classes ?? []).filter((name) => name !== 'smallcaps')],
+      }
+      return `<span${renderHtmlAttrs(attrs)}>${renderInlines(node.children, ctx)}</span>`
     }
     case 'math': {
       // Escaped, exactly as the HTML target escapes the same content: a
@@ -1700,10 +1725,17 @@ function walkInlines(
       case 'highlight':
       case 'link':
       case 'span':
+      case 'small_caps':
       case 'insert':
       case 'delete':
         // A link's own label is inside a link; everything else inherits.
         walkInlines(node.children, visit, depth + 1, insideLink || node.type === 'link')
+        break
+      case 'ruby':
+        for (const pair of node.pairs) {
+          walkInlines(pair.base, visit, depth + 1, insideLink)
+          walkInlines(pair.annotation, visit, depth + 1, insideLink)
+        }
         break
       case 'inline_extension':
         walkInlines(node.content, visit, depth + 1, insideLink)

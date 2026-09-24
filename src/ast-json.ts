@@ -103,7 +103,7 @@ export interface AstJsonDocument {
  * plain objects in the runtime tree, and walking them as nodes would rewrite
  * data that is not one.
  */
-const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title'] as const
+const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
 
 /**
  * Rewrite definition lists into their wire shape, everywhere in a subtree, and
@@ -743,6 +743,9 @@ function refuseSchemaViolations(node: unknown, path: string): void {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
     }
+    if (type === 'ruby' && Array.isArray(record.pairs) && record.pairs.length === 0) {
+      throw new AstJsonSchemaError('property "pairs" must contain at least one item', path)
+    }
     // The typeless RECORDS that hang off a node. Every node kind can carry
     // `attrs` and `pos`, which makes them the easiest place for a wrong shape to
     // ride in - `pos` missing `endOffset` was accepted by two of the three
@@ -751,6 +754,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     refuseNestedRecordShapes(type as string, record, path)
     refusePartition(record, path)
     refuseTaskState(record, path)
+    refuseUnimplementedSpecShapes(record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
@@ -873,6 +877,22 @@ function refuseTaskState(record: Record<string, unknown>, path: string): void {
   }
 }
 
+/** Keep newly pinned interchange shapes away from renderers until #1969, #1971, and #1973 land. */
+function refuseUnimplementedSpecShapes(record: Record<string, unknown>, path: string): void {
+  if (record.type === 'section') {
+    throw new AstJsonSchemaError('section nodes are not implemented by this engine', path)
+  }
+  if (record.type === 'table_cell' && record.blocks !== undefined) {
+    throw new AstJsonSchemaError('property "blocks" is not implemented by this engine', path)
+  }
+  if (record.type === 'math' && (record.label !== undefined || record.number !== undefined)) {
+    throw new AstJsonSchemaError('math label and number fields are not implemented by this engine', path)
+  }
+  if (record.type === 'citation' && record.mode !== undefined) {
+    throw new AstJsonSchemaError('per-item citation mode is not implemented by this engine', path)
+  }
+}
+
 /** The required fields and value shapes of one closed record. */
 function refuseRecordShape(value: unknown, name: string, path: string): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -894,6 +914,19 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
     if (!(field in item) || item[field] === undefined) continue
     if (!matchesKind(item[field], kind)) {
       throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
+    }
+  }
+  if (name === 'rubyPair' && Array.isArray(item.base) && item.base.length === 0) {
+    throw new AstJsonSchemaError('property "base" must contain at least one item', path)
+  }
+  for (const [field, value] of Object.entries(item)) {
+    if (!NODE_FIELDS.includes(field)) continue
+    const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
+    const kind = NODE_POSITION_KIND[`${name}.${field}`]
+    const at = `${path}.${field}`
+    if (kind === 'node') refuseNodeAt(value, admitted, at)
+    else if (Array.isArray(value)) {
+      value.forEach((node, index) => refuseNodeAt(node, admitted, `${at}[${index}]`))
     }
   }
   refuseNestedRecordShapes(name, item, path)

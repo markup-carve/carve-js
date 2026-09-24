@@ -143,6 +143,12 @@ function childArrays(node: NodeLike): ChildArray[] {
     case 'inline_extension':
       push(node['content'], false)
       break
+    case 'ruby':
+      for (const pair of (node['pairs'] as Array<Record<string, unknown>> | undefined) ?? []) {
+        push(pair['base'], false)
+        push(pair['annotation'], false)
+      }
+      break
     case 'citation_group':
       push(node['items'], false)
       break
@@ -838,6 +844,12 @@ function rendersNothing(node: NodeLike): boolean {
 
 function extractTextContent(node: NodeLike): string {
   switch (node.type) {
+    case 'ruby':
+      return ((node['pairs'] as Array<Record<string, unknown>> | undefined) ?? []).map((pair) => {
+        const base = ((pair['base'] as NodeLike[] | undefined) ?? []).map(extractTextContent).join('')
+        const annotation = ((pair['annotation'] as NodeLike[] | undefined) ?? []).map(extractTextContent).join('')
+        return `${base}(${annotation})`
+      }).join('')
     case 'image': {
       const alt = (node['alt'] as string | undefined) ?? ''
       return alt !== '' ? `[img: ${alt}]` : '[img]'
