@@ -1447,17 +1447,15 @@ export function numberCaptionsIn(
       if (key !== 'attrs' && key !== 'pos' && child && typeof child === 'object') numberMath(child, suppressed)
     }
   }
-  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined, suppressed: boolean): number | undefined => {
+  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined): number | undefined => {
     const idx = caption.findIndex((n) => n.type === 'caption_number')
-    if (idx === -1) { numberMath(caption, suppressed); return undefined }
-    numberMath(caption.slice(0, idx), suppressed)
+    if (idx === -1) return undefined
     const labelNodes = caption.slice(0, idx)
     const label = inlineText(labelNodes).replace(RE_TRAILING_LABEL_WS, '')
     const next = (counters.get(label) ?? 0) + 1
     counters.set(label, next)
     ;(caption[idx] as CaptionNumber).n = next
     onNumbered?.(labelNodes, next, attrs)
-    numberMath(caption.slice(idx + 1), suppressed)
     return idx
   }
 
@@ -1489,10 +1487,9 @@ export function numberCaptionsIn(
           }
           break
         case 'figure': {
-          const ownsNumber = !inPanel && b.caption.some((node) => node.type === 'caption_number')
+          const ownsNumber = !inPanel && numberCaption(b.caption, b.attrs) !== undefined
           walk([b.target], inPanel, suppressed || ownsNumber)
-          if (inPanel) numberMath(b.caption, suppressed)
-          else numberCaption(b.caption, b.attrs, suppressed)
+          numberMath(b.caption, suppressed)
           break
         }
         case 'figure_group': {
@@ -1501,7 +1498,15 @@ export function numberCaptionsIn(
           // letters - so `</#panel-id>` resolves as "Figure 2a". A group with
           // no numbered caption registers nothing for its panels either.
           const panels = figureGroupPanels(b)
-          const groupOwnsNumber = !inPanel && b.caption?.some((node) => node.type === 'caption_number') === true
+          const labelIdx = !inPanel && b.caption ? numberCaption(b.caption, b.attrs) : undefined
+          const groupOwnsNumber = labelIdx !== undefined
+          if (labelIdx !== undefined && b.caption && onNumbered) {
+            const labelNodes = b.caption.slice(0, labelIdx)
+            const n = (b.caption[labelIdx] as CaptionNumber).n!
+            panels.forEach((panel, k) => {
+              onNumbered(labelNodes, n, panel.attrs, panelLetter(k))
+            })
+          }
           // Children walk: panels are not sequence units, and everything a
           // panel CONTAINS is suppressed with it; non-panel stray content
           // numbers normally, exactly as it would outside the group.
@@ -1509,25 +1514,13 @@ export function numberCaptionsIn(
             const isPanel = c.type === 'figure' || c.type === 'table'
             walk([c], inPanel || isPanel, suppressed || groupOwnsNumber)
           }
-          if (inPanel && b.caption) numberMath(b.caption, suppressed)
-          else if (b.caption) {
-            const labelIdx = numberCaption(b.caption, b.attrs, suppressed)
-            if (labelIdx !== undefined && onNumbered) {
-              const labelNodes = b.caption.slice(0, labelIdx)
-              const n = (b.caption[labelIdx] as CaptionNumber).n!
-              panels.forEach((panel, k) => {
-                onNumbered(labelNodes, n, panel.attrs, panelLetter(k))
-              })
-            }
-          }
+          if (b.caption) numberMath(b.caption, suppressed)
           break
         }
         case 'table':
+          if (b.caption && !inPanel) numberCaption(b.caption, b.attrs)
           numberMath(b.rows, suppressed)
-          if (b.caption) {
-            if (inPanel) numberMath(b.caption, suppressed)
-            else numberCaption(b.caption, b.attrs, suppressed)
-          }
+          if (b.caption) numberMath(b.caption, suppressed)
           break
         default:
           numberMath(b, suppressed)
