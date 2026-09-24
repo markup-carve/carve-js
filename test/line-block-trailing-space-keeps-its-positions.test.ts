@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parse, toAstJson } from '../src/index.js'
+import { parse } from '../src/index.js'
 
 /*
  * A trailing space on ONE line of a line block does not unplace the STANZA.
@@ -55,7 +55,7 @@ const inlines = (source: string): Placed[] => {
     }
     Object.values(record).forEach(walk)
   }
-  walk(toAstJson(parse(source)))
+  walk(parse(source))
 
   return out
 }

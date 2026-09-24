@@ -387,6 +387,7 @@ export interface Div extends BaseNode {
 export interface LineBlock extends BaseNode {
   type: 'line_block'
   children: BlockNode[]
+  lines?: InlineNode[][]
 }
 
 /**

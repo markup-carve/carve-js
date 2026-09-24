@@ -18,6 +18,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Parsed line blocks publish their inline lines beside `children` (#1988).
 - Markdown import escapes list markers that only Carve recognizes, keeps non-1 ordered markers after lazy item lines as text, and moves link reference definitions to the document end. Shortcut references retain their links (#1981, #1982, #1983).
 - The serialized `footnote_ref` target field is named `label` instead of `id`, matching the field on its definition (#1965). AST ingest refuses the old wire spelling.
 - `RenderLoss` is discriminated by `code`. The `format` field exists only on `raw-format-dropped` losses, and `RenderLossError` now describes structural losses.
