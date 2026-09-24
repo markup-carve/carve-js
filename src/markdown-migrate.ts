@@ -2200,6 +2200,8 @@ function collectBlockquoteInlineRun(
   // is scanned once rather than once per line. It names the code block it
   // answers for, since a later one measures from a different column.
   let blankRun: { through: number; prefix: string; col: number; resumes: boolean } | null = null
+  // Whether the run was carried past a blank line for the code block open now.
+  let resumedCode = false
   while (end < lines.length) {
     const line = lines[end]!
     let parsed: { prefix: string; text: string } | null = quotedLine(line, contentCol)
@@ -2260,6 +2262,17 @@ function collectBlockquoteInlineRun(
         }
         return blankRun.resumes
       })()
+    // Only the code's own quote is carried past the blank. At another depth the
+    // run ends here, where it used to end at the blank, so the caller re-enters
+    // and reads what that quote holds - indented code of its own included,
+    // which this run has no way to fence.
+    //
+    // Where that quote is DEEPER, the two are blocks of one quote and fmt puts
+    // an empty quote line between them, which neither run writes: those
+    // documents read the way cmark-gfm reads them now, where before they were
+    // fixed points of the wrong reading, but they are not fixed points.
+    if (resumedCode && code !== null && prefix !== code.prefix) break
+    if (codeRuns) resumedCode = true
     // A line left of the item holding a fence or code ends the item, and them.
     if (fence !== null && (prefix !== fence.prefix || (!blank && indentColumns(text) < fence.col))) fence = null
     if (code !== null && (prefix !== code.prefix || (blank ? !codeRuns : indentColumns(text) < code.col + 4))) code = null
@@ -2276,7 +2289,10 @@ function collectBlockquoteInlineRun(
       // Left of the item, only a lazy paragraph line keeps it open.
       else if (held !== undefined && indentColumns(text) < held && !(lazy && quoteParagraphIsOpen(text))) lastItem.delete(prefix)
       const open = RE_MD_FENCE_LINE.exec(inner)
-      if (item?.code) code = { prefix, col: columnWidth(item.lead) }
+      if (item?.code) {
+        code = { prefix, col: columnWidth(item.lead) }
+        resumedCode = false
+      }
       else if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
         const under = item === null ? lastItem.get(prefix) : undefined
         const col: number = item !== null ? columnWidth(item.lead) : under !== undefined && indentColumns(text) >= under ? under : 0
