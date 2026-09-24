@@ -20,6 +20,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- An include warning carries `includedBy`, the directives that pulled its file in, root first (#1956; markup-carve/carve-lsp#224). Each entry bounds the directive token in the file that wrote it, so a host that has to anchor a child's warning in the document a client has open reads `includedBy[0]` instead of reconstructing the chain from the resolver calls it saw. That reconstruction is inexact where a document writes the same target twice or reaches one child under two top-level directives. Absent, never empty, on a warning raised in the top-level document.
 - `carve lint` reports a fence opener that fell back to inline text, as rule `fence-opener-fallback` (#1914). A fence line whose info string the parser rejects does not open a fence: the backtick run becomes an inline code span, the block a paragraph, and the closer can then open a fence that swallows the rest of the document. The rule tests validity with the parser's own `RE_FENCE` / `RE_RAW_FENCE`, exported as `opensCodeFence`, and hints the respaced or `{.diff}` spelling where one applies.
 
 ### Changed
