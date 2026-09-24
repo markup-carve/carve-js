@@ -375,9 +375,7 @@ export function wireFieldsSource(schema) {
     return null;
   };
   const positionTypes = new Map();
-  for (const def of Object.values(defs)) {
-    const owner = def?.properties?.type?.const;
-    if (typeof owner !== "string") continue;
+  for (const [owner, def] of positionOwners) {
     for (const [name, property] of Object.entries(def.properties)) {
       if (!holdsNode(property)) continue;
       const members = membersOf(property);

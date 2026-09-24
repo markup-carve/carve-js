@@ -754,6 +754,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     refuseNestedRecordShapes(type as string, record, path)
     refusePartition(record, path)
     refuseTaskState(record, path)
+    refuseUnimplementedSpecShapes(record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
@@ -876,6 +877,19 @@ function refuseTaskState(record: Record<string, unknown>, path: string): void {
   }
 }
 
+/** Keep newly pinned interchange shapes away from renderers until #1969 and #1971 land. */
+function refuseUnimplementedSpecShapes(record: Record<string, unknown>, path: string): void {
+  if (record.type === 'section') {
+    throw new AstJsonSchemaError('section nodes are not implemented by this engine', path)
+  }
+  if (record.type === 'table_cell' && record.blocks !== undefined) {
+    throw new AstJsonSchemaError('property "blocks" is not implemented by this engine', path)
+  }
+  if (record.type === 'math' && (record.label !== undefined || record.number !== undefined)) {
+    throw new AstJsonSchemaError('math label and number fields are not implemented by this engine', path)
+  }
+}
+
 /** The required fields and value shapes of one closed record. */
 function refuseRecordShape(value: unknown, name: string, path: string): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -901,6 +915,16 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
   }
   if (name === 'rubyPair' && Array.isArray(item.base) && item.base.length === 0) {
     throw new AstJsonSchemaError('property "base" must contain at least one item', path)
+  }
+  for (const [field, value] of Object.entries(item)) {
+    if (!NODE_FIELDS.includes(field)) continue
+    const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
+    const kind = NODE_POSITION_KIND[`${name}.${field}`]
+    const at = `${path}.${field}`
+    if (kind === 'node') refuseNodeAt(value, admitted, at)
+    else if (Array.isArray(value)) {
+      value.forEach((node, index) => refuseNodeAt(node, admitted, `${at}[${index}]`))
+    }
   }
   refuseNestedRecordShapes(name, item, path)
 }

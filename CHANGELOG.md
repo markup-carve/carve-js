@@ -10,6 +10,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - The interchange AST supports `ruby` nodes with ordered base and annotation pairs (markup-carve/carve#2208). HTML import preserves ruby structure, HTML and Markdown emit native `<ruby>` markup, and plain, ANSI, and Carve output use the readable `base(annotation)` fallback. Checked rendering reports that fallback as `ruby-flattened`.
+- The interchange AST accepts `small_caps` as a structural inline node and renders it as native HTML and Markdown-compatible HTML.
+
+### Changed
+
+- The serialized `footnote_ref` target field is named `label` instead of `id`, matching the field on its definition. AST ingest refuses the old wire spelling.
 
 ## [0.1.8] - 2026-09-25
 

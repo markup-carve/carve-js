@@ -59,6 +59,12 @@ describe('ruby annotations', () => {
     const emptyBase = structuredClone(toAstJson(document)) as unknown as { children: Array<{ children: Array<{ pairs: Array<{ base: unknown[] }> }> }> }
     emptyBase.children[0]!.children[0]!.pairs[0]!.base = []
     expect(() => fromAstJson(emptyBase as never)).toThrow(/base.*at least one/)
+    const blockBase = structuredClone(toAstJson(document)) as unknown as { children: Array<{ children: Array<{ pairs: Array<{ base: unknown[] }> }> }> }
+    blockBase.children[0]!.children[0]!.pairs[0]!.base = [{ type: 'paragraph', children: [] }]
+    expect(() => fromAstJson(blockBase as never)).toThrow(/paragraph.*admits only/)
+    const blockAnnotation = structuredClone(toAstJson(document)) as unknown as { children: Array<{ children: Array<{ pairs: Array<{ annotation: unknown[] }> }> }> }
+    blockAnnotation.children[0]!.children[0]!.pairs[0]!.annotation = [{ type: 'heading', level: 1, children: [] }]
+    expect(() => fromAstJson(blockAnnotation as never)).toThrow(/heading.*admits only/)
   })
 
   it('imports conventional rp and reports custom fallback only', () => {
