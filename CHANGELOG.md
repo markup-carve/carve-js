@@ -33,6 +33,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - An empty term marker followed by a space folds into a description body like the bare marker (#1891).
 - An escaped delimiter closes no braced pair, in all nine kinds, and leaves no stray hard break (#1897, #1902).
 - A `%%` comment inside a bare emphasis run consumes the rest of the line, and the Carve writer braces such a span so it reads back (#1899, #1906).
+- A `%%` line comment's content drops trailing spaces and tabs and the one leading space or tab that separates it from the marker, while a `%%%` block comment keeps its bytes and a no-break space survives either way (#2079; markup-carve/carve-rs#1951).
 - A caption's `#` glued to the word before it is numbered where no tag name follows (#1900).
 - A `boldItalic` strong takes the nested spelling when its content cannot sit against `/*` (#1877).
 - An attribute block after an editorial substitution or comment stays literal text (#1876; markup-carve/carve#2138).
@@ -42,7 +43,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - A node-matrix position is validated one level deeper (#1994).
 - Footnotes, citation definitions and code callouts are found inside nested sections and block table cells (#1985).
 - A profile denial reaches `block_extension` and `directive`, which the vocabulary had no name for and `isTypeAllowed` therefore answered yes about, and ingest admits `line_block.lines` (#1984).
-- The BBCode importer spells the four formatting tags the way the Carve writer would, escapes what a post's own text forms beside a converted tag, marks the links it writes, and escapes a brace run or a line-initial block opener the author never typed (#1884, #1885, #1893, #1896, #1898, #1904).
+- The BBCode importer spells the four formatting tags the way the Carve writer would, escapes what a post's own text forms beside a converted tag, marks the links it writes, escapes a brace run or a line-initial block opener the author never typed, and writes a bare `>` for an empty or whitespace-only quote line instead of a marker with a trailing space (#1884, #1885, #1893, #1896, #1898, #1904, #2076).
 - The Markdown importer writes tables, fences, list markers, nested quotes, continuation lines and reference definitions the way `carve fmt` does, so an imported document passes `fmt --check` (#1918, #1920, #1921, #1929, #1932, #1952).
 - The Markdown importer reads item shapes, setext headings, indented code, tab columns, ordered interrupts and bold-italic nesting the way cmark-gfm does (#1935, #1937, #1941, #2049).
 - The Markdown importer measures quoted lines from the item that holds them, keeps quoted item fences and lazy lines, and preserves an item's looseness (#1943, #1946, #1947).
