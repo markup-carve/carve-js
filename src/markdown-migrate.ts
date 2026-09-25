@@ -1135,6 +1135,20 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
+  // Whether a bare slash would be glued to a star at either end of `body`. Glued,
+  // the two are ONE token opening Carve's `bold_italic`, which carries `strong`
+  // outside `emphasis` from a single run of delimiters. cmark-gfm reads the
+  // Markdown the other way round, and the braced form is `forced_emphasis`
+  // holding a bare strong, which is the nesting the source meant
+  // (carve-js#2041). Asked past the placeholders, the strong passes having
+  // stashed their output before an emphasis pass wraps it.
+  const glued = (body: string): boolean => {
+    let inner = body
+    for (let depth = 0; depth < 8 && inner.includes('\x00S'); depth++) {
+      inner = inner.replace(/\x00S(\d+)\x00/g, (_m, index: string) => stash[Number(index)] ?? '')
+    }
+    return inner.startsWith('*') || inner.endsWith('*')
+  }
 
   // Recursively convert *em* / _em_ nested inside a strong/bold-italic span to
   // /em/ (so a nested `_x_` becomes `/x/`, not Carve underline).
@@ -1144,15 +1158,21 @@ function convertInline(
         wrap('/', body, '/', intraword(full, at, match.length)))
       .replace(/(?<![A-Za-z0-9_])_(?!\s)([^_]+?)(?<!\s)_(?![A-Za-z0-9_])/g, '/$1/')
 
-  // ***bold italic*** / ___bold italic___ -> /*x*/ (Carve's canonical
-  // bold-italic). The underscore form needs word boundaries: CommonMark `_`
-  // cannot open/close emphasis intraword (foo___bar___baz stays literal).
-  line = line.replace(/\*{3}(?!\s)([\s\S]+?)(?<!\s)\*{3}/g, (match, inner: string, at: number, full: string) =>
-    hold(wrap('/*', convertNestedEm(inner), '*/', intraword(full, at, match.length))),
+  // ***bold italic*** / ___bold italic___ -> `{/*x*/}`, ALWAYS braced. cmark-gfm
+  // reads both as `<em><strong>`, and bare `/*x*/` is one run of delimiters
+  // carrying `strong` outside `emphasis` - normatively so, which is why this is
+  // the importer's spelling to change and not the renderer's (carve-js#2041).
+  // The braced form is `forced_emphasis` holding a bare strong, the nesting the
+  // source meant, and it survives `fmt` unchanged.
+  //
+  // The underscore form needs word boundaries: CommonMark `_` cannot open or
+  // close emphasis intraword (foo___bar___baz stays literal).
+  line = line.replace(/\*{3}(?!\s)([\s\S]+?)(?<!\s)\*{3}/g, (_m, inner: string) =>
+    hold(`{/*${convertNestedEm(inner)}*/}`),
   )
   line = line.replace(
     /(?<![A-Za-z0-9])___(?!\s)([\s\S]+?)(?<!\s)___(?![A-Za-z0-9])/g,
-    (_m, inner: string) => hold(`/*${convertNestedEm(inner)}*/`),
+    (_m, inner: string) => hold(`{/*${convertNestedEm(inner)}*/}`),
   )
 
   // **strong** -> *strong*, braced where it opens intraword. Written bare there
@@ -1171,12 +1191,14 @@ function convertInline(
   // *emphasis* -> /emphasis/, and `{/emphasis/}` where it opens intraword, which
   // `/` cannot do bare. `2 * 3` stays literal on the whitespace guards alone.
   line = line.replace(/(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)/g, (match, body: string, at: number, full: string) =>
-    wrap('/', body, '/', intraword(full, at, match.length)))
+    wrap('/', body, '/', intraword(full, at, match.length) || glued(body)))
 
-  // _emphasis_ -> /emphasis/ (word-boundary, so snake_case is left alone)
+  // _emphasis_ -> /emphasis/ (word-boundary, so snake_case is left alone), and
+  // `{/emphasis/}` where a strong sits at either end: `*__x__*` is an emphasis
+  // AROUND a strong in cmark-gfm, and bare it came back the other way round.
   line = line.replace(
     /(?<![A-Za-z0-9_])_(?!\s)([^_]+?)(?<!\s)_(?![A-Za-z0-9_])/g,
-    '/$1/',
+    (_m, body: string) => wrap('/', body, '/', glued(body)),
   )
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
