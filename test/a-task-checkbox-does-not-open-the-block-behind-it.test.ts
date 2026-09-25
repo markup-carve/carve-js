@@ -29,6 +29,12 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  *
  * What is pinned is the RENDER: the defect was a quote in the document that the
  * source did not spell.
+ *
+ * The box itself now answers to cmark-gfm 0.29.0.gfm.13 rather than to Carve's
+ * own state set (carve-js#2047, carve-js#2048), so a pair GFM does not read is
+ * text and moves no content position. The cases below are the ones where both
+ * readers see a box; `a-task-pair-outside-gfms-reach-imports-as-text` holds the
+ * rest.
  */
 const held: Array<[string, string]> = [
   ['a heading marker', '# bar'],
@@ -79,11 +85,19 @@ describe('a task checkbox does not open the block behind it', () => {
     expect(carveToHtml('- [ ] \\> foo\n  \\> bar\n')).not.toContain('<blockquote')
   })
 
-  it('escapes behind every box spelling Carve reads, and none it does not', () => {
-    // The parser's `RE_TASK` takes `[ xX-_>?]` behind a `-` or `*` bullet.
-    for (const box of ['[ ]', '[x]', '[X]', '[-]', '[_]', '[>]', '[?]']) {
+  it('escapes behind every box spelling GFM reads, and none it does not', () => {
+    // The parser's `RE_TASK` takes `[ xX-_>?]` behind a `-` or `*` bullet, and
+    // GFM's tasklist extension the first three of those. Only where both read a
+    // box does the box survive to move the content position.
+    for (const box of ['[ ]', '[x]', '[X]']) {
       expect(markdownToCarve(`- ${box} > foo\n`)).toBe(`- ${box} \\> foo\n`)
       expect(markdownToCarve(`* ${box} > foo\n`)).toBe(`* ${box} \\> foo\n`)
+    }
+    // The four states GFM has none of are imported as their own text
+    // (carve-js#2048), so the pair is escaped as well.
+    for (const box of ['[-]', '[_]', '[>]', '[?]']) {
+      expect(markdownToCarve(`- ${box} > foo\n`)).toBe(`- \\${box} \\> foo\n`)
+      expect(markdownToCarve(`* ${box} > foo\n`)).toBe(`* \\${box} \\> foo\n`)
     }
     // `[y]` is no box, so the `>` behind it was never at a content position.
     expect(markdownToCarve('- [y] > foo\n')).toBe('- [y] > foo\n')
@@ -95,8 +109,11 @@ describe('a task checkbox does not open the block behind it', () => {
     expect(carveToHtml('1. [ ] > foo\n')).not.toContain('<input')
   })
 
-  it('escapes behind a box a nested item opens', () => {
-    expect(markdownToCarve('- - [ ] > foo\n')).toBe('- - [ ] \\> foo\n')
+  it('keeps the pair of a box a nested item opens, which GFM does not read', () => {
+    // A second container marker on the line puts the list out of the tasklist
+    // extension's reach, so the pair is text too (carve-js#2047).
+    expect(markdownToCarve('- - [ ] > foo\n')).toBe('- - \\[ ] \\> foo\n')
+    expect(carveToHtml(markdownToCarve('- - [ ] > foo\n'))).not.toContain('<input')
   })
 
   it('leaves an item with no box alone', () => {

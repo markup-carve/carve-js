@@ -1265,6 +1265,45 @@ function escapeCarveOnlyMarker(input: string): string {
   )
 }
 
+/**
+ * The container markers a line opens with, quote and item alike, innermost last.
+ */
+function containerMarkersOnLine(prefix: string): string[] {
+  const markers: string[] = []
+  let rest = prefix
+  for (;;) {
+    const m = /^[ \t]*(?:(>)[ \t]?|([-*+]|\d{1,9}[.)])[ \t]+)/.exec(rest)
+    if (m === null) return markers
+    markers.push(m[1] ?? m[2]!)
+    rest = rest.slice(m[0].length)
+  }
+}
+
+/** A task pair at a line's item content, as Carve's `RE_TASK` reads one. */
+const RE_TASK_PAIR_LINE = /^((?:[ \t]*(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+))*)\[([ xX\-_>?])\](?= +[ \t]*\S)/
+
+/**
+ * Keep a task pair cmark-gfm read as text as text, by escaping its bracket.
+ *
+ * GFM's tasklist extension takes a box off a line carrying ONE container
+ * marker, a bullet, and off the three states ` `, `x` and `X`. Carve's task
+ * item has neither restriction, so it reads a box in a quoted or nested list
+ * and behind its four further states, where the source meant the characters
+ * (carve-js#2047, carve-js#2048). cmark-gfm 0.29.0.gfm.13 is the reader the
+ * importers answer to (carve#2187), extension scope included.
+ *
+ * Behind an ordered marker Carve reads no task at all, so an escape there would
+ * guard nothing: `1. [x] done` is already the text it renders.
+ */
+function escapeUnreadTaskMarker(line: string): string {
+  const m = RE_TASK_PAIR_LINE.exec(line)
+  if (m === null) return line
+  const markers = containerMarkersOnLine(m[1]!)
+  if (!/^[-*]$/.test(markers.at(-1) ?? '')) return line
+  if (markers.length === 1 && /^[ xX]$/.test(m[2]!)) return line
+  return `${m[1]!}\\[${m[2]!}]${line.slice(m[0].length)}`
+}
+
 /** Catch text lines carried through a block collector without inline conversion. */
 function escapeCarveOnlyMarkersOutsideFences(input: string): string {
   const protectedSpans: string[] = []
@@ -1284,7 +1323,9 @@ function escapeCarveOnlyMarkersOutsideFences(input: string): string {
       fence = { marker: run[0]!, length: run.length }
       return line
     }
-    return escapeCarveOnlyMarker(line)
+    // The task escape first: once the pair is text, what follows it is the item
+    // paragraph rather than a content position, so no marker there is structural.
+    return escapeCarveOnlyMarker(escapeUnreadTaskMarker(line))
   }).join('\n').replace(/\x00P(\d+)\x00/g, (match, index: string) => protectedSpans[Number(index)] ?? match)
 }
 
