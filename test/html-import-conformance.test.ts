@@ -22,34 +22,11 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
-  [
-    'endnotes-section-not-last',
-    {
-      reason:
-        'CARVE-P12-057 makes `::: footnotes` a `directive`; the fixture still records the `admonition` every engine wrote before the split (markup-carve/carve#2243). The source exit is unchanged, so only the tree is listed here.',
-      ast: {
-        type: 'document',
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              { type: 'text', value: 'a' },
-              { type: 'footnote_ref', label: '1' },
-            ],
-          },
-          { type: 'directive', kind: 'footnotes', children: [] },
-          { type: 'paragraph', children: [{ type: 'text', value: 'after' }] },
-          {
-            type: 'footnote',
-            label: '1',
-            children: [{ type: 'paragraph', children: [{ type: 'text', value: 'n' }] }],
-          },
-        ],
-      },
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>()
+// The map is empty right now. Its one entry was `endnotes-section-not-last`,
+// whose golden recorded the `admonition` every engine wrote before
+// `CARVE-P12-057` split the kind out; upstream re-cut it and the entry went
+// out with the bump that reached it (markup-carve/carve#2243).
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.
