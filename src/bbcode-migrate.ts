@@ -752,7 +752,7 @@ function formatAsBlockquote(content: string, author: string | null): string {
   const quoted = content
     .trim()
     .split('\n')
-    .map((line) => `> ${line}`)
+    .map((line) => (line.trim() === '' ? '>' : `> ${line}`))
     .join('\n')
 
   let out = `\n\n${quoted}\n`
