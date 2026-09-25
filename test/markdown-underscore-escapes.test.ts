@@ -86,10 +86,9 @@ describe('markdown underscore escaping', () => {
     expect(carveToMarkdown(source)).toBe(expected)
   })
 
-  it('writes a loose list tight, and the item boundary still ends the scan', () => {
-    // The writer collapses the blank line, so the boundary the pre-#1755 scan
-    // relied on is not in its own output. The item marker is.
-    expect(carveToMarkdown('- a _y\n\n- z_ w\n')).toBe('- a _y\n- z_ w\n')
+  it('ends the scan at the item boundary of a loose list', () => {
+    // The pair does not close, because neither half is in the other's item.
+    expect(carveToMarkdown('- a _y\n\n- z_ w\n')).toBe('- a _y\n\n- z_ w\n')
   })
 
   it('does not let an AUTHORED escape supply the other half of a pair', () => {

@@ -22,7 +22,7 @@ describe('a tight item has no blank before its sub-list', () => {
 
   it('keeps the separator in a loose item', () => {
     const source = '{loose}\n- fruit\n\n  - apples\n- vegetables\n'
-    expect(carveToMarkdown(source)).toBe('- fruit\n\n  - apples\n- vegetables\n')
+    expect(carveToMarkdown(source)).toBe('- fruit\n\n  - apples\n\n- vegetables\n')
   })
 
   it('keeps the separator when a non-1 ordered sub-list cannot interrupt', () => {

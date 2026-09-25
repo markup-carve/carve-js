@@ -113,7 +113,12 @@ describe('a Markdown marker with no content keeps no trailing space', () => {
     it('writes a bare `1.` for an ordered item', () => {
       const out = renderMarkdown(
         doc([
-          { type: 'list', ordered: true, items: [{ type: 'list_item', children: [] }, { type: 'list_item', children: [TAIL] }] },
+          {
+            type: 'list',
+            ordered: true,
+            tight: true,
+            items: [{ type: 'list_item', children: [] }, { type: 'list_item', children: [TAIL] }],
+          },
         ] as unknown as Document['children']),
       )
 
@@ -123,7 +128,11 @@ describe('a Markdown marker with no content keeps no trailing space', () => {
     it('writes a bare `- [ ]` for a task item', () => {
       const out = renderMarkdown(
         doc([
-          { type: 'list', items: [{ type: 'list_item', checked: false, children: [] }, { type: 'list_item', children: [TAIL] }] },
+          {
+            type: 'list',
+            tight: true,
+            items: [{ type: 'list_item', checked: false, children: [] }, { type: 'list_item', children: [TAIL] }],
+          },
         ] as unknown as Document['children']),
       )
 
