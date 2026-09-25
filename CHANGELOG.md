@@ -9,6 +9,15 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Added
+
+- Node identity, annotation range, and provenance sidecar APIs for AST JSON. Editor snapshots include session-scoped node identities, and `parseWithProvenance` measures top-level source bytes.
+- `renderCarveWithConversionReport` names AST structures and fields that Carve source cannot spell.
+
+### Fixed
+
+- `applyAstPatch` rejects unknown operations and malformed pointers before applying a patch.
+
 ## [0.1.8] - 2026-09-25
 
 ### Breaking

@@ -1,5 +1,6 @@
 import type { AstJsonDocument } from './ast-json.js'
 import type { ParseOptions } from './parse.js'
+import { astNodePaths, toNodeIdentity, type NodeIdentitySidecar } from './ast-sidecars.js'
 
 export interface EditorRange { start: number; end: number }
 export interface EditorToken extends EditorRange {
@@ -13,6 +14,7 @@ export interface EditorSnapshot {
   readonly ast: AstJsonDocument
   /** Document-space UTF-16 ranges, ready for browser and CodeMirror APIs. */
   readonly nodes: readonly EditorMappedNode[]
+  readonly identity: NodeIdentitySidecar
 }
 export interface EditorUpdate extends EditorSnapshot { readonly changedPaths: readonly string[] }
 export interface EditorSession {
@@ -142,9 +144,40 @@ export function createEditorSession(
   parseDocument: (source: string, options?: ParseOptions) => AstJsonDocument,
   options: ParseOptions = {},
 ): EditorSession {
-  const build = (source: string, revision: number): EditorSnapshot => {
+  const session = globalThis.crypto?.randomUUID?.() ?? `s${Date.now().toString(36)}-${(++sessionCounter).toString(36)}`
+  let nextId = 0
+  const build = (source: string, revision: number, previous?: EditorSnapshot, changes: readonly EditorChange[] = []): EditorSnapshot => {
     const ast = parseDocument(source, { ...options, positions: true })
-    return Object.freeze({ revision, source, ast, nodes: Object.freeze(mappedNodes(source, ast)) })
+    const nodes = Object.freeze(mappedNodes(source, ast))
+    const ids = new Map<string, string>()
+    if (previous) {
+      ids.set('', previous.identity.nodes.find((entry) => entry.path === '')!.id)
+      const oldIds = new Map(previous.identity.nodes.map((entry) => [entry.path, entry.id]))
+      const candidates = new Map<string, EditorMappedNode[]>()
+      for (const node of nodes) {
+        const key = `${node.type ?? ''}:${node.start}:${node.end}`
+        const bucket = candidates.get(key) ?? []
+        bucket.push(node)
+        candidates.set(key, bucket)
+      }
+      for (const old of previous.nodes) {
+        if (old.path === '') continue
+        let delta = 0, touched = false
+        for (const change of changes) {
+          if (change.to <= old.start) delta += change.insert.length - (change.to - change.from)
+          else if (change.from < old.end) { touched = true; break }
+        }
+        if (touched) continue
+        const start = old.start + delta, end = old.end + delta
+        const matches = candidates.get(`${old.type ?? ''}:${start}:${end}`) ?? []
+        if (matches.length !== 1 || previous.source.slice(old.start, old.end) !== source.slice(start, end)) continue
+        const id = oldIds.get(old.path)
+        if (id && !ids.has(matches[0]!.path)) ids.set(matches[0]!.path, id)
+      }
+    }
+    for (const path of astNodePaths(ast)) if (!ids.has(path)) ids.set(path, `n${nextId++}`)
+    const identity = toNodeIdentity(ast, session, ids)
+    return Object.freeze({ revision, source, ast, nodes, identity })
   }
   let current = build(initialSource, 0)
   return {
@@ -156,10 +189,12 @@ export function createEditorSession(
         const change = changes[index]!
         source = source.slice(0, change.from) + change.insert + source.slice(change.to)
       }
-      const next = build(source, current.revision + 1)
+      const next = build(source, current.revision + 1, current, changes)
       const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(current.nodes, next.nodes)) })
       current = next
       return update
     },
   }
 }
+
+let sessionCounter = 0

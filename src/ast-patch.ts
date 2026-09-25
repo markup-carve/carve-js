@@ -28,11 +28,20 @@ function pointer(path: string, key: string): string {
 
 function decode(path: string): string[] {
   if (path === '') return []
-  if (!path.startsWith('/')) throw new AstPatchError(`invalid JSON Pointer ${JSON.stringify(path)}`)
+  if (!/^(?:\/(?:[^~/]|~[01])*)+$/.test(path)) throw new AstPatchError(`invalid JSON Pointer ${JSON.stringify(path)}`)
   return path
     .slice(1)
     .split('/')
     .map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'))
+}
+
+function validateOperation(value: unknown): asserts value is AstPatchOperation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AstPatchError('patch operation must be an object')
+  const operation = value as Record<string, unknown>
+  if (operation.op !== 'add' && operation.op !== 'replace' && operation.op !== 'remove') throw new AstPatchError('unknown patch operation')
+  if (typeof operation.path !== 'string') throw new AstPatchError('patch path must be a string')
+  decode(operation.path)
+  if (operation.op !== 'remove' && !Object.hasOwn(operation, 'value')) throw new AstPatchError('patch operation requires a value')
 }
 
 function childIsNode(type: unknown, field: string): boolean {
@@ -182,6 +191,7 @@ export function applyAstPatch(
   ast: AstJsonDocument,
   operations: readonly AstPatchOperation[],
 ): AstJsonDocument {
+  for (const operation of operations) validateOperation(operation)
   let root = clean(ast)
   for (const operation of operations) {
     if (operation.op !== 'remove') assertBounded(operation.value)

@@ -35,6 +35,7 @@ import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 import { coalesceTextRuns } from './coalesce-text-runs.js'
 import { DocumentIdRegistry } from './document-ids.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
+import { toAuthoredProvenance as authoredProvenance, type ProvenanceSidecar } from './ast-sidecars.js'
 import { tryFastHtml } from './fast-html.js'
 import { createEditorSession as createEditorSessionInternal } from './editor-session.js'
 import {
@@ -43,6 +44,7 @@ import {
   type RenderResult,
 } from './render-loss.js'
 import { createSourcePatch, type SourcePatch } from './source-patch.js'
+import { renderCarveWithConversionReport as collectCarveConversionDiagnostics } from './conversion-diagnostics.js'
 
 export * from './ast.js'
 export {
@@ -58,6 +60,26 @@ export {
 } from './html-import.js'
 export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
+export type { ConversionDiagnostic, ConversionDiagnostics, CarveConversionResult } from './conversion-diagnostics.js'
+export {
+  astNodePaths,
+  readNodeIdentity,
+  toNodeIdentity,
+  readAnnotationRanges,
+  toAnnotationRanges,
+  readProvenance,
+  toProvenance,
+  toAuthoredProvenance,
+  AstSidecarError,
+  type NodeIdentity,
+  type NodeIdentitySidecar,
+  type AnnotationAnchor,
+  type AnnotationRange,
+  type AnnotationRangeSidecar,
+  type ProvenanceSource,
+  type NodeProvenance,
+  type ProvenanceSidecar,
+} from './ast-sidecars.js'
 export { lintAccessibility, type AccessibilityDiagnostic } from './accessibility.js'
 export { tryRenderHtmlStreaming, type StreamOutcome } from './stream.js'
 export {
@@ -419,6 +441,15 @@ export function parseWithSourceLayout(source: string, opts: ParseOptions = {}): 
   return { ast, layout: toSourceLayout(source, ast) }
 }
 
+/** Parse source and measure provenance for its top-level authored blocks. */
+export function parseWithProvenance(source: string, uri: string, opts: ParseOptions = {}): {
+  ast: AstJsonDocument
+  provenance: ProvenanceSidecar
+} {
+  const ast = toAstJsonImpl(parse(source, { ...opts, positions: true }))
+  return { ast, provenance: authoredProvenance(ast, source, uri) }
+}
+
 /** Create a source-authoritative, UTF-16-addressed editor session. */
 export function createEditorSession(source: string, opts: ParseOptions = {}) {
   return createEditorSessionInternal(source, (next, options) => toAstJsonImpl(parse(next, options)), opts)
@@ -464,6 +495,15 @@ export function renderCarveWithReport(
   opts: CarveRenderOptions & CheckedRenderOptions = {},
 ): RenderResult {
   return checkedRender((onRenderLoss) => renderCarve(ast, { ...opts, onRenderLoss }), opts)
+}
+
+/** Render an AST and report structures or fields with no Carve spelling. */
+export function renderCarveWithConversionReport(
+  ast: Document,
+  opts: CarveRenderOptions = {},
+  maxDiagnostics = 100,
+): import('./conversion-diagnostics.js').CarveConversionResult {
+  return collectCarveConversionDiagnostics(ast, (tree) => renderCarve(tree, opts), maxDiagnostics)
 }
 
 /** Render a resolved Carve AST to plain text. */

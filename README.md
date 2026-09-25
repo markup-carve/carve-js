@@ -72,6 +72,7 @@ editors apply canonical formatting without replacing unrelated bytes.
 - [HTML import](https://github.com/markup-carve/carve-js/blob/main/docs/html-import.md)
 - [Source-preserving patches](https://github.com/markup-carve/carve-js/blob/main/docs/source-patches.md)
 - [Reversible patches](https://github.com/markup-carve/carve-js/blob/main/docs/reversible-patches.md)
+- [AST sidecars](https://github.com/markup-carve/carve-js/blob/main/docs/ast-sidecars.md)
 
 ## Includes
 
