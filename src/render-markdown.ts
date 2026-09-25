@@ -412,6 +412,55 @@ function renderList(node: List, ctx: MarkdownContext): string {
   return out + (ctx.listDepth === 0 ? '\n' : '')
 }
 
+/*
+ * The openers this target can emit that interrupt a paragraph, asked of the
+ * EMITTED LINE. A node kind cannot answer it: `thematic_break` emits `---`,
+ * which under a paragraph line is a SETEXT HEADING and changes what that
+ * paragraph is rather than interrupting it, and an empty bullet is a setext
+ * underline too. `***` and `___` would interrupt, and no node emits them.
+ */
+const PARAGRAPH_INTERRUPTERS = [
+  /^>/, // a block quote
+  /^#{1,6}(?:[ \t]|$)/, // an ATX heading
+  /^(?:`{3,}|~{3,})/, // a fenced code block
+  /^[-*+][ \t]+\S/, // a bullet item, content and all
+  /^1[.)][ \t]+\S/, // an ordered item - only a `1` interrupts a paragraph
+]
+
+/** A GFM delimiter row, which is what promotes the row above it to a header. */
+const DELIMITER_ROW = /^\|(?:[ \t]*:?-+:?[ \t]*\|)+$/
+
+/** The blocks a table row may follow with no blank line between them. */
+const A_TABLE_MAY_FOLLOW = new Set(['paragraph', 'heading', 'code_block', 'thematic_break'])
+
+/**
+ * Whether the separator between two of a tight item's blocks can go.
+ *
+ * `CARVE-P11-047` asks whether the block below OPENS with something that
+ * interrupts a paragraph, and the two spellings the clause names are examples of
+ * that property, not the whole of it (carve-js#2056). Every answer here comes
+ * from the emitted lines, because that is what a reader sees.
+ */
+function separatorCanGo(rendered: string, above: BlockNode | undefined, aboveRendered: string): boolean {
+  const [firstLine = '', secondLine = ''] = rendered.split('\n')
+  if (firstLine.startsWith('|')) {
+    // A row is paragraph continuation text until a delimiter row promotes it, so
+    // a headerless table glues itself to the block above instead of opening one,
+    // and a container above takes the row lazily - a table above takes it as
+    // another row of its own.
+    return DELIMITER_ROW.test(secondLine) && above !== undefined && A_TABLE_MAY_FOLLOW.has(above.type)
+  }
+  // An unseparated `>` under an open quote continues THAT quote.
+  if (firstLine.startsWith('>') && lastNonBlankLine(aboveRendered).startsWith('>')) return false
+  return PARAGRAPH_INTERRUPTERS.some((opener) => opener.test(firstLine))
+}
+
+const lastNonBlankLine = (rendered: string): string =>
+  rendered
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .at(-1) ?? ''
+
 function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): string {
   if (!tight) return renderBlocks(item.children, ctx)
 
@@ -419,26 +468,24 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
   ctx.blockDepth++
   try {
     let out = ''
-    let previous: BlockNode | undefined
+    // The block the separator hangs off is the last child that WROTE something:
+    // a comment and a raw block for another format render nothing here, so the
+    // sibling above can be two positions back (carve-php#2406).
+    let above: BlockNode | undefined
+    let aboveRendered = ''
     for (const child of item.children) {
       const rendered = renderBlock(child, ctx)
       // A blank between a tight item's blocks makes the item loose in
       // CommonMark, so drop the separator the block above left wherever the
-      // child below opens a construct that interrupts a paragraph on its own.
-      // An ordered marker above 1 cannot interrupt one, and an empty bullet can
-      // be read as a setext underline. A quote always interrupts, but only a
-      // paragraph: under any other block an unseparated `>` is absorbed by it.
-      const firstLine = rendered.slice(0, rendered.indexOf('\n'))
-      const startsWithBareMarker = child.type === 'list' && /^(?:[-*+]|\d+[.)]) *$/.test(firstLine)
-      const cannotInterrupt = child.type === 'list' && child.ordered && (child.start ?? 1) !== 1
-      const interrupts =
-        (child.type === 'list' && !startsWithBareMarker && !cannotInterrupt) ||
-        (child.type === 'block_quote' && previous?.type === 'paragraph')
-      if (interrupts && out.endsWith('\n\n')) {
+      // child below opens a construct of its own under it.
+      if (out.endsWith('\n\n') && separatorCanGo(rendered, above, aboveRendered)) {
         out = out.slice(0, -1)
       }
       out += rendered
-      previous = child
+      if (rendered !== '') {
+        above = child
+        aboveRendered = rendered
+      }
     }
     return out
   } finally {

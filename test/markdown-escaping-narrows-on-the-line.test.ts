@@ -270,7 +270,9 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
 
     it('reaches a heading a container encloses', () => {
-      expect(md('> - a\n>\n>   ### b ###')).toBe('> - a\n>\n>   ### b \\###')
+      // No blank above the heading: the item is tight, and the separator that
+      // would make it loose goes under CARVE-P11-047 (carve-js#2056).
+      expect(md('> - a\n>\n>   ### b ###')).toBe('> - a\n>   ### b \\###')
     })
 
     it('leaves a run no space or tab precedes', () => {
