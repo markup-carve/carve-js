@@ -374,7 +374,12 @@ function renderList(node: List, ctx: MarkdownContext): string {
   // input with one delimiter gives one. The AST records `delim` and `renderCarve`
   // already reproduces it (carve#352, corpus 31).
   const delim = node.delim === ')' ? ')' : '.'
+  let first = true
   for (const item of node.items) {
+    // A loose list is loose in CommonMark because blank lines separate its
+    // items, so the separator is what carries the looseness across.
+    if (!node.tight && !first) out += '\n'
+    first = false
     let prefix: string
     if (node.ordered) {
       prefix = `${counter}${delim} `
@@ -414,21 +419,26 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
   ctx.blockDepth++
   try {
     let out = ''
+    let previous: BlockNode | undefined
     for (const child of item.children) {
       const rendered = renderBlock(child, ctx)
-      // A blank between a tight item's block and its sub-list makes the item
-      // loose in CommonMark. Each block normally leaves one separator blank;
-      // remove that blank only where the following child is a list. An ordered
-      // marker above 1 cannot interrupt a paragraph, and an empty bullet can be
-      // read as a setext underline, so those two shapes still need the blank to
-      // remain lists at all.
+      // A blank between a tight item's blocks makes the item loose in
+      // CommonMark, so drop the separator the block above left wherever the
+      // child below opens a construct that interrupts a paragraph on its own.
+      // An ordered marker above 1 cannot interrupt one, and an empty bullet can
+      // be read as a setext underline. A quote always interrupts, but only a
+      // paragraph: under any other block an unseparated `>` is absorbed by it.
       const firstLine = rendered.slice(0, rendered.indexOf('\n'))
       const startsWithBareMarker = child.type === 'list' && /^(?:[-*+]|\d+[.)]) *$/.test(firstLine)
       const cannotInterrupt = child.type === 'list' && child.ordered && (child.start ?? 1) !== 1
-      if (child.type === 'list' && !startsWithBareMarker && !cannotInterrupt && out.endsWith('\n\n')) {
+      const interrupts =
+        (child.type === 'list' && !startsWithBareMarker && !cannotInterrupt) ||
+        (child.type === 'block_quote' && previous?.type === 'paragraph')
+      if (interrupts && out.endsWith('\n\n')) {
         out = out.slice(0, -1)
       }
       out += rendered
+      previous = child
     }
     return out
   } finally {
