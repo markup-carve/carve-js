@@ -278,8 +278,13 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `blockquote-marker-without-space` | a `>` blockquote marker with no space after it. Carve requires the separator space, so the marker does not open a quote |
 | `empty-include-path` | a `{{ … }}` run shaped like an include directive but with no path (empty braces, or only a `#section` / `@option`); an empty path is not a directive, so it renders as literal text - add a path or remove the braces |
 | `footnotes-placement-in-container` | a `::: footnotes` marker inside a block-level container - a block quote, a list item, a div or directive body, a definition description, a footnote definition. Only a top-level marker places (PART 9 §16, `CARVE-P9-073`), so the marker renders the `<div class="footnotes">` floor where it is written and the endnotes section goes where it would without the marker. Move the marker to document level, or delete it to accept the default position |
+| `references-placement-in-container` | a `::: references` marker inside a container while the citations extension is enabled. It renders as a div there, while the reference list keeps its document position. Move the marker to document level to place the list |
 
-The `carve lint` CLI reports both the collision warnings and these lint
+Pass `{ extensions: [citations()] }` to `lintCarve` when rendering with
+citations, or run `carve lint --extension citations doc.crv`. The references
+rule is off for a core render.
+
+The `carve lint` CLI reports collision warnings and lint
 findings as `file:line:col rule - message`, and exits non-zero if anything is
 found:
 

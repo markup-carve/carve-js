@@ -24,6 +24,7 @@ import {
   djotMigrationWarnings,
   formatMigrationWarnings,
   lintCarve,
+  citations,
   type LintPlatform,
   KNOWN_LINT_PLATFORMS,
   formatLintWarnings,
@@ -212,11 +213,12 @@ exits 1 if anything is reported, 0 if clean.
   lint options:
         --json       Emit semantic lint findings as structured JSON
         --from-djot  Also flag valid Carve whose meaning differs from Djot
-        --platform NAME  Also flag bare tokens NAME re-linkifies in published
-                     output (repeatable; off by default). Known: github
                      (\`_x_\` underline vs emphasis, \`~x~\` strike vs subscript,
                      \`{=x=}\` highlight) — noise for hand-written Carve, useful
                      when checking a document migrated from Djot.
+        --platform NAME  Also flag bare tokens NAME re-linkifies in published
+                     output (repeatable; off by default). Known: github
+        --extension citations  Check references placement (only known value)
         --portable   Deprecated compatibility option; blockquote marker spacing
                      is now core Carve syntax and is always checked. For an
                      actual portability check see the \`portability\`
@@ -1153,6 +1155,7 @@ function reportLint(
   fromDjot: boolean,
   portable: boolean,
   platforms: readonly LintPlatform[],
+  citationsEnabled: boolean,
 ): number {
   // Default lint targets hand-written Carve, so it reports only constructs
   // that mis-render in Carve (`carve-breakage`). Djot-semantic shifts such as
@@ -1161,7 +1164,7 @@ function reportLint(
   const migration = djotMigrationWarnings(source).filter(
     (w) => fromDjot || w.category === 'carve-breakage',
   )
-  const semantic = lintCarve(source, { portable, platforms })
+  const semantic = lintCarve(source, { portable, platforms, extensions: citationsEnabled ? [citations()] : [] })
   if (migration.length) io.write(formatMigrationWarnings(migration, file) + '\n')
   if (semantic.length) io.write(formatLintWarnings(semantic, file) + '\n')
   return migration.length + semantic.length
@@ -1414,6 +1417,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   let fromDjot: boolean
   let portable: boolean
   let platforms: LintPlatform[]
+  let citationsEnabled: boolean
   let json: boolean
   try {
     const parsed = parseArgs({
@@ -1426,6 +1430,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
         // Repeatable, so a document can be checked against two hosts at once
         // and a second host's table can be added without a new flag.
         platform: { type: 'string', multiple: true },
+        extension: { type: 'string', multiple: true },
       },
       allowPositionals: true,
     })
@@ -1449,6 +1454,11 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
       }
       return name as LintPlatform
     })
+    const extensions = parsed.values.extension ?? []
+    for (const name of extensions) {
+      if (name !== 'citations') throw new Error(`unknown --extension ${name} (known: citations)`)
+    }
+    citationsEnabled = extensions.includes('citations')
   } catch (e) {
     io.writeErr(`carve lint: ${(e as Error).message}\n`)
     return 2
@@ -1457,11 +1467,11 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   if (positionals.length === 0) {
     const src = await io.readStdin()
     if (json) {
-      const warnings = jsonLintWarnings(src, '<stdin>', fromDjot, portable, platforms)
+      const warnings = jsonLintWarnings(src, '<stdin>', fromDjot, portable, platforms, citationsEnabled)
       io.write(JSON.stringify(warnings, null, 2) + '\n')
       return warnings.length > 0 ? 1 : 0
     }
-    return reportLint(src, '<stdin>', io, fromDjot, portable, platforms) > 0 ? 1 : 0
+    return reportLint(src, '<stdin>', io, fromDjot, portable, platforms, citationsEnabled) > 0 ? 1 : 0
   }
 
   let total = 0
@@ -1477,11 +1487,11 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
       continue
     }
     if (json) {
-      const warnings = jsonLintWarnings(src, file, fromDjot, portable, platforms)
+      const warnings = jsonLintWarnings(src, file, fromDjot, portable, platforms, citationsEnabled)
       total += warnings.length
       jsonWarnings.push(...warnings)
     } else {
-      total += reportLint(src, file, io, fromDjot, portable, platforms)
+      total += reportLint(src, file, io, fromDjot, portable, platforms, citationsEnabled)
     }
   }
   if (json) io.write(JSON.stringify(jsonWarnings, null, 2) + '\n')
@@ -1489,11 +1499,11 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   return total > 0 ? 1 : 0
 }
 
-function jsonLintWarnings(source: string, file: string, fromDjot: boolean, portable: boolean, platforms: readonly LintPlatform[]): Array<Record<string, unknown>> {
+function jsonLintWarnings(source: string, file: string, fromDjot: boolean, portable: boolean, platforms: readonly LintPlatform[], citationsEnabled: boolean): Array<Record<string, unknown>> {
   const migration = djotMigrationWarnings(source)
     .filter((warning) => fromDjot || warning.category === 'carve-breakage')
     .map((warning) => ({ file, ...warning }))
-  const semantic = lintCarve(source, { portable, platforms }).map((warning) => ({ file, ...warning }))
+  const semantic = lintCarve(source, { portable, platforms, extensions: citationsEnabled ? [citations()] : [] }).map((warning) => ({ file, ...warning }))
   return [...migration, ...semantic]
 }
 
