@@ -40,8 +40,8 @@ npm run test:watch
 ```
 
 The suite is about 740 test files. `npm run test:includes` runs the
-include-conformance vectors on their own, which CI keeps as a separate step
-because a silent skip there would look like a pass.
+include-conformance vectors on their own; CI runs it as a step of its own after
+`npm test`, so a failure there names that gate rather than the whole suite.
 
 Two suites need a browser and stay out of the everyday run:
 
