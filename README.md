@@ -1,5 +1,8 @@
 # carve-js
 
+[![CI](https://github.com/markup-carve/carve-js/actions/workflows/ci.yml/badge.svg)](https://github.com/markup-carve/carve-js/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Reference TypeScript implementation of the
 [Carve](https://github.com/markup-carve/carve) markup language. It implements
 Carve spec 0.1 and passes the shared specification corpus. Try it in the
@@ -11,6 +14,8 @@ Carve spec 0.1 and passes the shared specification corpus. Try it in the
 ```bash
 npm install @markup-carve/carve
 ```
+
+Node 20 or newer.
 
 ## Render Carve
 
@@ -93,5 +98,7 @@ streaming, browser use, the CLI, migration, rendering, and integrations.
 
 ## Development
 
-Contributor setup and tests are in the
-[development guide](https://github.com/markup-carve/carve-js/blob/main/docs/development.md).
+Start with [CONTRIBUTING.md](https://github.com/markup-carve/carve-js/blob/main/CONTRIBUTING.md)
+for the toolchain, the test commands, and what a spec-affecting change involves.
+The [development guide](https://github.com/markup-carve/carve-js/blob/main/docs/development.md)
+has the source map.
