@@ -66,9 +66,23 @@ describe('HTML import', () => {
     expect(result.report.diagnostics[0]?.code).toBe('raw-preserved')
   })
 
-  it('enforces resource limits with a typed error', () => {
+  it('enforces a structural limit with a typed error', () => {
     expect(() => htmlToAst('<p>x</p>', { maxNodes: 1 })).toThrow(HtmlImportLimitError)
-    expect(() => htmlToAst('<p onclick="x()">x</p>', { maxDiagnostics: 0 })).toThrow(HtmlImportLimitError)
+  })
+
+  it('bounds the report with a truncation row rather than a typed error', () => {
+    // The diagnostic cap bounds the REPORT, and the conversion succeeded, so it
+    // hands back what it converted plus a row saying more was found
+    // (carve-js#2034).
+    const result = htmlToAst('<p onclick="x()">x</p>', { maxDiagnostics: 0 })
+    expect(result.value.children).toHaveLength(1)
+    expect(result.report.diagnostics).toEqual([{
+      code: 'diagnostics-truncated',
+      message: 'HTML import diagnostics limit reached',
+      severity: 'error',
+      fidelity: 'dropped',
+      confidence: 'fallback',
+    }])
   })
 })
 
@@ -110,7 +124,11 @@ describe('unspellable HTML import structures', () => {
   })
 
   it('applies the existing diagnostics limit to serialization losses', () => {
-    expect(() => htmlToCarve(tableFigure, { maxDiagnostics: 0 })).toThrow(HtmlImportLimitError)
+    // The cap still reaches a serialization loss; it now says so in a row
+    // instead of refusing the conversion (carve-js#2034).
+    const result = htmlToCarve(tableFigure, { maxDiagnostics: 0 })
+    expect(result.value).toContain('Cap')
+    expect(result.report.diagnostics.map((d) => d.code)).toEqual(['diagnostics-truncated'])
   })
 })
 

@@ -198,7 +198,12 @@ export interface HtmlImportResult<T> {
 }
 
 export class HtmlImportLimitError extends Error {
-  constructor(public readonly limit: 'depth' | 'nodes' | 'diagnostics') {
+  /**
+   * `diagnostics` is gone: the diagnostic cap bounds the REPORT rather than the
+   * document, and it now replaces its last row with `diagnostics-truncated`
+   * instead of refusing a conversion that succeeded (carve-js#2034).
+   */
+  constructor(public readonly limit: 'depth' | 'nodes') {
     super(`HTML import ${limit} limit exceeded`)
     this.name = 'HtmlImportLimitError'
   }
@@ -716,6 +721,8 @@ class Importer {
   }> = []
   private latentCount = 0
   private capSuspended = false
+  /** Whether the diagnostic cap turned a row away (carve-js#2034). */
+  private truncated = false
   /**
    * Every node of the parsed tree, numbered in DOCUMENT ORDER
    * (markup-carve/carve#1586).
@@ -736,10 +743,25 @@ class Importer {
     // An element's own row comes before its other rows, so a reader learns the
     // element is gone before its attributes are (carve-php#1737).
     const rank = (entry: { diagnostic: HtmlImportDiagnostic }) => (entry.diagnostic.code.startsWith('element-') ? 0 : 1)
-    return this.entries
+    const rows = this.entries
       .filter((entry) => !entry.latent)
       .sort((a, b) => a.at - b.at || rank(a) - rank(b) || a.seq - b.seq)
       .map((entry) => entry.diagnostic)
+    if (!this.truncated) return rows
+    // LAST, and it REPLACES the row it stands behind: the marker reports the
+    // state of the report rather than a loss at a place, so it has no element
+    // to be ordered by, and replacing keeps the cap a bound on the rows a
+    // reader gets. With a cap of zero there is no row to replace and the marker
+    // is the whole report, a truncated report having to be able to say so.
+    rows.pop()
+    rows.push({
+      code: 'diagnostics-truncated',
+      message: 'HTML import diagnostics limit reached',
+      severity: 'error',
+      fidelity: diagnosticFidelity('diagnostics-truncated'),
+      confidence: diagnosticConfidence('diagnostics-truncated'),
+    })
+    return rows
   }
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
@@ -873,8 +895,8 @@ class Importer {
     path: string,
     node: P5Node,
     fidelity = diagnosticFidelity(code),
-  ): void {
-    this.checkDiagnosticCap()
+  ): boolean {
+    if (this.capReached()) return false
     this.entries.push({
       diagnostic: {
         code,
@@ -887,6 +909,7 @@ class Importer {
       at: this.positionOf(node),
       seq: this.entries.length,
     })
+    return true
   }
 
   /**
@@ -916,7 +939,9 @@ class Importer {
     severity: HtmlImportDiagnostic['severity'],
     live: boolean,
   ): void {
-    this.add('attribute-dropped', `Dropped ${subject} on <${node.tagName}>${reason}`, severity, path, node)
+    // No row means the cap turned this one away, and there is nothing to record
+    // the preserve reading on.
+    if (!this.add('attribute-dropped', `Dropped ${subject} on <${node.tagName}>${reason}`, severity, path, node)) return
     const entry = this.entries[this.entries.length - 1]!
     entry.owner = node
     entry.refusal = { subject, reason, live }
@@ -946,9 +971,22 @@ class Importer {
     this.latentCount++
   }
 
-  private checkDiagnosticCap(): void {
-    if (this.capSuspended) return
-    if (this.entries.length - this.latentCount >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
+  /**
+   * Whether the diagnostic cap has been reached, marking the report truncated
+   * where it has.
+   *
+   * The cap bounds the REPORT, not the document: what it turns away is a row,
+   * not a node, so refusing the conversion threw away a conversion that had
+   * already succeeded. PART 9 lets a diagnostic cap replace its last entry with
+   * the `diagnostics-truncated` row instead, which is what a consumer can act
+   * on and what carve-rs writes (carve-js#2034). The depth and node caps stay
+   * a refusal, the document itself being what they bound.
+   */
+  private capReached(): boolean {
+    if (this.capSuspended) return false
+    if (this.entries.length - this.latentCount < this.maxDiagnostics) return false
+    this.truncated = true
+    return true
   }
 
   private recountLatent(): void {
@@ -959,8 +997,10 @@ class Importer {
   private preserveRow(entry: (typeof this.entries)[number], kept: P5Node | undefined): void {
     const { subject, reason, live } = entry.refusal!
     const where = kept ? `inside the raw HTML <${kept.tagName}> is kept as` : 'in the raw HTML this element is kept as'
+    // A latent row promoted past the cap stays latent, so it stays out of the
+    // report and the marker below says a row was turned away.
     if (entry.latent) {
-      this.checkDiagnosticCap()
+      if (this.capReached()) return
       entry.latent = false
       this.latentCount--
     }
@@ -1038,23 +1078,29 @@ class Importer {
    * something the document did not keep. When `figure()` decides to hand the
    * element back verbatim, the walk's claims are all false - the attribute it
    * called dropped rides on bytes the output still carries - so the mark is
-   * taken before the walk and the arm rewinds to it. Nothing outside these four
-   * lists survives a walk, which is why rewinding them is the whole of it.
+   * taken before the walk and the arm rewinds to it.
+   *
+   * The truncation flag rewinds WITH them. A cap the discarded walk reached is a
+   * claim about rows that are being discarded too, and left standing it made the
+   * marker replace a row the report does keep - so a document under the cap came
+   * back saying it was over it, with a real finding swallowed (carve-js#2034).
    */
-  private mark(): [number, number, number, number] {
+  private mark(): [number, number, number, number, boolean] {
     return [
       this.entries.length,
       this.unspellable.length,
       this.loneImageParagraphs.length,
       this.displacedFigureAttrs.length,
+      this.truncated,
     ]
   }
 
-  private restore([entries, unspellable, loneImages, displaced]: [number, number, number, number]): void {
+  private restore([entries, unspellable, loneImages, displaced, truncated]: [number, number, number, number, boolean]): void {
     this.entries.length = entries
     this.unspellable.length = unspellable
     this.loneImageParagraphs.length = loneImages
     this.displacedFigureAttrs.length = displaced
+    this.truncated = truncated
     this.recountLatent()
   }
 
