@@ -19,6 +19,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Markdown migration reports ordered task checkboxes kept as text with a
+  `structure-unspellable` row beside `fidelity-unverified` (markup-carve/carve#2288).
 - AST JSON line blocks publish stanza line boundaries as pointers, following the current spec.
 - Parsed line blocks publish their inline lines beside `children` (#1988).
 - Markdown import keeps raw HTML blank lines and terminal newlines, retains list items with empty-destination definitions, and writes footnote definitions at the document end (#1990, #1991, #1992, #1993).
