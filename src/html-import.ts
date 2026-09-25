@@ -25,6 +25,7 @@ import {
   DANGEROUS_URL_SCHEMES,
   LABEL_DEFAULTS,
   SCHEME_PROBE_STRIP_RE,
+  decodedStyleValue,
   isDangerousAttrName,
   renderedAttrValue,
   sanitizeUrl,
@@ -585,10 +586,12 @@ const CSS_URL_RE = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)/gi
  * than chosen per call - a denied scheme inside `url(...)`, else anything the
  * renderer's own `style` sanitizer blanks the value for. Asking
  * `renderedAttrValue` rather than restating its needles is what keeps the
- * importer from refusing a different set than the renderer does.
+ * importer from refusing a different set than the renderer does - including the
+ * TEXT they read, which is `decodedStyleValue` and not the raw attribute
+ * (markup-carve/carve-js#2058).
  */
 function styleRefusal(value: string): { subject: string; live: boolean } {
-  for (const match of value.matchAll(CSS_URL_RE)) {
+  for (const match of decodedStyleValue(value).matchAll(CSS_URL_RE)) {
     if (destinationIsDenied((match[1] ?? match[2] ?? match[3] ?? '').trim())) {
       return { subject: 'style with a denied URL scheme in a declaration value', live: true }
     }
