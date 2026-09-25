@@ -842,6 +842,7 @@ class Importer {
   private nodes = 0
   /** How many `<q>` elements enclose the one being read, for the mark pair. */
   private quoteDepth = 0
+  private cellDepth = 0
   /**
    * The id PART 9 §16a's counter derives for each `<p class="admonition-title">`,
    * keyed by the node, so the drop is an equality match on the value the
@@ -3281,11 +3282,18 @@ class Importer {
           if (Object.keys(cellAttrs.keyValues).length === 0) delete cellAttrs.keyValues
         }
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
+        this.cellDepth++
+        let children: InlineNode[]
+        try {
+          children = this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1)
+        } finally {
+          this.cellDepth--
+        }
         return {
           cell: {
             type: 'table_cell' as const,
             header: cell.tagName === 'th',
-            children: this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1),
+            children,
             ...(alignment?.align ? { align: alignment.align as 'left' | 'right' | 'center' } : {}),
             ...(alignment?.valign ? { valign: alignment.valign as 'top' | 'middle' | 'bottom' } : {}),
             ...(kept ? { attrs: kept } : {}),
@@ -3808,7 +3816,7 @@ class Importer {
       this.budget(node, depth)
       const math = this.mathml(node, path)
       if (math) return [math]
-      if (this.mode === 'roundtrip') {
+      if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node as never)))) {
         // The same answer the generic arm below gave a `<math>` before this
         // branch existed, and byte for byte the same output. Reported once for
         // the element rather than once per descendant, because the descendants
@@ -3853,7 +3861,11 @@ class Importer {
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sup') return [{ type: 'superscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'code') {
-      const code: InlineNode = { type: 'code', value: this.text(node), ...(attrs ? { attrs } : {}) }
+      const value = this.text(node)
+      if (this.cellDepth > 0 && /[\r\n]/.test(value)) {
+        this.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
+      }
+      const code: InlineNode = { type: 'code', value: this.cellDepth > 0 ? value.replace(/\r\n?|\n/g, ' ') : value, ...(attrs ? { attrs } : {}) }
       if (code.value === '') this.emptyCodeSpans.set(code, { node, path })
       return [code]
     }
@@ -3946,7 +3958,7 @@ class Importer {
      * for exactly this case, says what it dropped, and keeps the markup
      * verbatim in the mode whose contract is Carve-produced HTML.
      */
-    if (this.mode === 'roundtrip') {
+    if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node as never)))) {
       // The walk into the children reported bytes this arm keeps.
       this.discardWalk(beforeWalk, walked)
       this.keepRaw(node, path, `Preserved unsupported <${tag}> element as raw HTML`)
