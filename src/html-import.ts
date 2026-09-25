@@ -215,6 +215,11 @@ interface P5Node {
   parentNode?: P5Node
 }
 
+/** A `<template>` holds its children in `content`, and they serialize too. */
+function serializedChildren(node: P5Node): P5Node[] {
+  return (node as { content?: P5Node }).content?.childNodes ?? node.childNodes ?? []
+}
+
 const EMPTY_DROPPED_MARKS = new Set(['del', 'ins', 'em', 'i', 'strong', 'b', 's', 'strike', 'u', 'mark', 'sub', 'sup'])
 const ACTIVE = new Set(['script', 'style', 'template', 'noscript'])
 const BLOCK = new Set([
@@ -705,8 +710,12 @@ class Importer {
      * alternative is a second copy of the wording next to every preserve arm.
      */
     owner?: P5Node
-    preserved?: Pick<HtmlImportDiagnostic, 'code' | 'message' | 'severity'>
+    refusal?: { subject: string; reason: string; live: boolean }
+    /** Reported only if its element ends up kept raw (markup-carve/carve#2261). */
+    latent?: boolean
   }> = []
+  private latentCount = 0
+  private capSuspended = false
   /**
    * Every node of the parsed tree, numbered in DOCUMENT ORDER
    * (markup-carve/carve#1586).
@@ -727,7 +736,8 @@ class Importer {
     // An element's own row comes before its other rows, so a reader learns the
     // element is gone before its attributes are (carve-php#1737).
     const rank = (entry: { diagnostic: HtmlImportDiagnostic }) => (entry.diagnostic.code.startsWith('element-') ? 0 : 1)
-    return [...this.entries]
+    return this.entries
+      .filter((entry) => !entry.latent)
       .sort((a, b) => a.at - b.at || rank(a) - rank(b) || a.seq - b.seq)
       .map((entry) => entry.diagnostic)
   }
@@ -864,7 +874,7 @@ class Importer {
     node: P5Node,
     fidelity = diagnosticFidelity(code),
   ): void {
-    if (this.entries.length >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
+    this.checkDiagnosticCap()
     this.entries.push({
       diagnostic: {
         code,
@@ -885,11 +895,10 @@ class Importer {
    * (markup-carve/carve-js#1468).
    *
    * The row goes out as `attribute-dropped`, which is what it is for every
-   * element the import rewrites. `preserveOwnAttributes` turns it into
-   * `attribute-preserved` where the element turned out to be kept whole, and
-   * the two messages are built here, side by side, from the same subject and
-   * the same reason - so the pair cannot say two different things about one
-   * attribute.
+   * element the import rewrites. `keepRaw` turns it into
+   * `attribute-preserved` where the element turned out to be kept whole, from
+   * the same subject and the same reason - so the pair cannot say two
+   * different things about one attribute.
    *
    * `live` is the half that decides severity, and it is the SAFETY test rather
    * than the old severity: an event handler, an injection sink or a value
@@ -907,36 +916,116 @@ class Importer {
     severity: HtmlImportDiagnostic['severity'],
     live: boolean,
   ): void {
-    const tag = `<${node.tagName}>`
-    this.add('attribute-dropped', `Dropped ${subject} on ${tag}${reason}`, severity, path, node)
+    this.add('attribute-dropped', `Dropped ${subject} on <${node.tagName}>${reason}`, severity, path, node)
     const entry = this.entries[this.entries.length - 1]!
     entry.owner = node
-    entry.preserved = {
+    entry.refusal = { subject, reason, live }
+  }
+
+  /**
+   * A value the renderer's URL sanitizer blanks. Kept or consumed on an element
+   * the import rewrites, so it is only a row where the element is kept raw
+   * (markup-carve/carve#2261).
+   */
+  private refuseIfKept(node: P5Node, path: string, subject: string): void {
+    this.entries.push({
+      diagnostic: {
+        code: 'attribute-dropped',
+        message: '',
+        severity: 'error',
+        fidelity: diagnosticFidelity('attribute-dropped'),
+        confidence: diagnosticConfidence('attribute-dropped'),
+        path,
+      },
+      at: this.positionOf(node),
+      seq: this.entries.length,
+      owner: node,
+      refusal: { subject, reason: '', live: true },
+      latent: true,
+    })
+    this.latentCount++
+  }
+
+  private checkDiagnosticCap(): void {
+    if (this.capSuspended) return
+    if (this.entries.length - this.latentCount >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
+  }
+
+  private recountLatent(): void {
+    this.latentCount = this.entries.filter((entry) => entry.latent).length
+  }
+
+  /** Restate a refusal row as what the kept bytes make it (markup-carve/carve-js#1468). */
+  private preserveRow(entry: (typeof this.entries)[number], kept: P5Node | undefined): void {
+    const { subject, reason, live } = entry.refusal!
+    const where = kept ? `inside the raw HTML <${kept.tagName}> is kept as` : 'in the raw HTML this element is kept as'
+    if (entry.latent) {
+      this.checkDiagnosticCap()
+      entry.latent = false
+      this.latentCount--
+    }
+    entry.diagnostic = {
+      ...entry.diagnostic,
       code: 'attribute-preserved',
-      message: `Preserved ${subject} on ${tag} in the raw HTML this element is kept as${reason}`,
+      message: `Preserved ${subject} on <${entry.owner!.tagName}> ${where}${reason}`,
       severity: live ? 'error' : 'info',
     }
   }
 
   /**
-   * The element's OWN refused-attribute rows, restated as what the preserved
-   * bytes make them (markup-carve/carve-js#1468).
+   * Report an element kept whole as raw HTML: its own refused attributes, the
+   * `raw-preserved` row, then every refused attribute of every element inside
+   * it, in document order (markup-carve/carve#2261).
    *
-   * Every raw-preserve arm calls this, and calls it on the element it is about
-   * to hand back verbatim. Matching on the node rather than on the path is what
-   * keeps it to the element's own rows: a descendant's row names a deeper path
-   * but a different node, and rewriting one would claim something this arm did
-   * not decide.
-   *
-   * Rewriting IN PLACE rather than dropping and re-adding keeps each row's
-   * `seq`, so the attribute rows still stand ahead of the `raw-preserved` row
-   * for the same element, which is the order they have always come out in.
+   * Own rows are rewritten IN PLACE so they keep their `seq` and still stand
+   * ahead of the `raw-preserved` row. Matching on the node keeps it to the
+   * element's own rows.
    */
-  private preserveOwnAttributes(node: P5Node): void {
+  private keepRaw(node: P5Node, path: string, message: string): void {
     for (const entry of this.entries) {
-      if (entry.owner !== node || !entry.preserved) continue
-      entry.diagnostic = { ...entry.diagnostic, ...entry.preserved }
+      if (entry.owner === node && entry.refusal) this.preserveRow(entry, undefined)
     }
+    this.add('raw-preserved', message, 'warning', path, node)
+    const pending: Array<[P5Node, string]> = []
+    const queueChildren = (parent: P5Node, parentPath: string) => {
+      const children = serializedChildren(parent)
+      for (let i = children.length - 1; i >= 0; i--) pending.push([children[i]!, this.childPath(parentPath, children[i]!, i)])
+    }
+    queueChildren(node, path)
+    while (pending.length > 0) {
+      const [child, childPath] = pending.pop()!
+      if (child.tagName === undefined) continue
+      // `attrs()` is the own-attribute policy; only its refusal rows are kept,
+      // so the rows it discards are not charged against the cap.
+      const start = this.entries.length
+      this.capSuspended = true
+      try {
+        this.attrs(child, childPath)
+      } finally {
+        this.capSuspended = false
+      }
+      const refused = this.entries.slice(start).filter((entry) => entry.owner === child && entry.refusal)
+      this.entries.length = start
+      for (const entry of refused) {
+        entry.seq = this.entries.length
+        entry.latent = true
+        this.entries.push(entry)
+      }
+      this.recountLatent()
+      for (const entry of refused) this.preserveRow(entry, node)
+      queueChildren(child, childPath)
+    }
+  }
+
+  /** Drop what the walk into a now-raw element recorded, keeping the rows after `walked`. */
+  private discardWalk(before: ReturnType<Importer['mark']>, walked: ReturnType<Importer['mark']>): void {
+    const after = this.entries.slice(walked[0])
+    this.restore(before)
+    for (const entry of after) {
+      entry.seq = this.entries.length
+      this.entries.push(entry)
+    }
+    this.recountLatent()
   }
 
   /**
@@ -964,6 +1053,7 @@ class Importer {
     this.unspellable.length = unspellable
     this.loneImageParagraphs.length = loneImages
     this.displacedFigureAttrs.length = displaced
+    this.recountLatent()
   }
 
   /**
@@ -998,7 +1088,7 @@ class Importer {
     while (stack.length > 0) {
       const node = stack.pop()!
       this.documentOrder.set(node, next++)
-      const children = node.childNodes ?? []
+      const children = serializedChildren(node)
       for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!)
     }
   }
@@ -1033,7 +1123,10 @@ class Importer {
         // renderer's.
         const kind = name.startsWith('on') ? 'event-handler' : 'injection-sink'
         this.refuseAttribute(node, path, `${kind} attribute ${name}`, '', 'warning', true)
-      } else if (name === 'style') {
+        continue
+      }
+      const refusedBefore = this.entries.length
+      if (name === 'style') {
         this.styles(node, attr.value, keyValues, path)
       } else if (name === 'id') {
         attrs.id = attr.value
@@ -1083,6 +1176,9 @@ class Importer {
             setOwn(keyValues, name, attr.value)
           }
         }
+      }
+      if (this.mode === 'roundtrip' && destinationIsDenied(attr.value) && !this.entries.slice(refusedBefore).some((entry) => entry.owner === node)) {
+        this.refuseIfKept(node, path, `${name} with a denied URL scheme`)
       }
     }
     if (classes.length) attrs.classes = classes
@@ -2121,8 +2217,7 @@ class Importer {
     // they take the inline arm of this same pair of answers, where the policy
     // that covers them is written down.
     if (this.mode === 'roundtrip') {
-      this.preserveOwnAttributes(node)
-      this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
+      this.keepRaw(node, path, `Preserved unsupported <${tag}> element as raw HTML`)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
@@ -3364,8 +3459,7 @@ class Importer {
      */
     if (this.mode === 'roundtrip' && this.captionSpellsSomething(caption) && (!captionable || doubleCaption)) {
       this.restore(before)
-      this.preserveOwnAttributes(node)
-      this.add('raw-preserved', 'Preserved a <figure> as raw HTML: no Carve spelling reproduces a figure around this target', 'warning', path, node)
+      this.keepRaw(node, path, 'Preserved a <figure> as raw HTML: no Carve spelling reproduces a figure around this target')
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
     if (captionable) {
@@ -3575,15 +3669,16 @@ class Importer {
         // branch existed, and byte for byte the same output. Reported once for
         // the element rather than once per descendant, because the descendants
         // are not preserved separately - they are inside this one raw span.
-        this.preserveOwnAttributes(node)
-        this.add('raw-preserved', 'Preserved unsupported <math> element as raw HTML', 'warning', path, node)
+        this.keepRaw(node, path, 'Preserved unsupported <math> element as raw HTML')
         return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
       }
       this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
       return []
     }
     if (tag === 'ruby') return this.ruby(node, path, depth)
+    const beforeWalk = this.mark()
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
+    const walked = this.mark()
     const attrs = this.attrs(node, path)
     // An element the HTML left empty holds nothing a reader sees, so it is
     // dropped without a row (ruling markup-carve/carve-rs#1719): an empty brace
@@ -3708,8 +3803,9 @@ class Importer {
      * verbatim in the mode whose contract is Carve-produced HTML.
      */
     if (this.mode === 'roundtrip') {
-      this.preserveOwnAttributes(node)
-      this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
+      // The walk into the children reported bytes this arm keeps.
+      this.discardWalk(beforeWalk, walked)
+      this.keepRaw(node, path, `Preserved unsupported <${tag}> element as raw HTML`)
       return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
     }
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
