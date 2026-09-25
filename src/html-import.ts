@@ -26,6 +26,7 @@ import {
   LABEL_DEFAULTS,
   SCHEME_PROBE_STRIP_RE,
   isDangerousAttrName,
+  renderedAttrValue,
   sanitizeUrl,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
@@ -575,6 +576,34 @@ function destinationIsCarried(value: string | undefined): boolean {
  */
 const DENIED_SCHEMES = new Set(DANGEROUS_URL_SCHEMES.map((scheme) => scheme.toLowerCase()))
 
+/** A `url(...)` argument, with the quotes CSS allows around it stripped. */
+const CSS_URL_RE = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)/gi
+
+/**
+ * How the refusal policy reads a `style` value: the subject the row names and
+ * whether what it preserved is LIVE (markup-carve/carve#2267).
+ *
+ * The reason comes from a closed set of two, so the wording is derived rather
+ * than chosen per call - a denied scheme inside `url(...)`, else anything the
+ * renderer's own `style` sanitizer blanks the value for. Asking
+ * `renderedAttrValue` rather than restating its needles is what keeps the
+ * importer from refusing a different set than the renderer does.
+ */
+function styleRefusal(value: string): { subject: string; live: boolean } {
+  for (const match of value.matchAll(CSS_URL_RE)) {
+    if (destinationIsDenied((match[1] ?? match[2] ?? match[3] ?? '').trim())) {
+      return { subject: 'style with a denied URL scheme in a declaration value', live: true }
+    }
+  }
+  // BLANKED, not empty. `renderedAttrValue` answers `''` for `style=""` too, so
+  // asking whether it changed the value is what keeps an empty attribute out of
+  // the refused class.
+  if (renderedAttrValue('style', value) !== value) {
+    return { subject: 'style with a construct the CSS sanitizer refuses', live: true }
+  }
+  return { subject: 'style', live: false }
+}
+
 function launderableScheme(value: string): string | undefined {
   // The FIRST token is the renderer's business: it blanks the whole value.
   for (const token of value.split(/[\s,]+/).slice(1)) {
@@ -952,12 +981,12 @@ class Importer {
    * the import rewrites, so it is only a row where the element is kept raw
    * (markup-carve/carve#2261).
    */
-  private refuseIfKept(node: P5Node, path: string, subject: string): void {
+  private refuseIfKept(node: P5Node, path: string, subject: string, live = true): void {
     this.entries.push({
       diagnostic: {
         code: 'attribute-dropped',
         message: '',
-        severity: 'error',
+        severity: live ? 'error' : 'info',
         fidelity: diagnosticFidelity('attribute-dropped'),
         confidence: diagnosticConfidence('attribute-dropped'),
         path,
@@ -965,9 +994,19 @@ class Importer {
       at: this.positionOf(node),
       seq: this.entries.length,
       owner: node,
-      refusal: { subject, reason: '', live: true },
+      refusal: { subject, reason: '', live },
       latent: true,
     })
+    this.latentCount++
+  }
+
+  /**
+   * Hold a row out of the report without dropping the entry, for a row the
+   * kept bytes supersede rather than contradict.
+   */
+  private withhold(entry: (typeof this.entries)[number]): void {
+    if (entry.latent) return
+    entry.latent = true
     this.latentCount++
   }
 
@@ -1024,6 +1063,12 @@ class Importer {
    * element's own rows.
    */
   private keepRaw(node: P5Node, path: string, message: string): void {
+    // `style-unmapped` names a CSS mapping kept bytes do not run, so it goes
+    // first and the refusal row below is the only one the reader gets for a
+    // `style` here (markup-carve/carve#2267).
+    for (const entry of this.entries) {
+      if (entry.owner === node && entry.diagnostic.code === 'style-unmapped') this.withhold(entry)
+    }
     for (const entry of this.entries) {
       if (entry.owner === node && entry.refusal) this.preserveRow(entry, undefined)
     }
@@ -1758,8 +1803,32 @@ class Importer {
     return undefined
   }
 
+  /**
+   * A declaration the language has no slot for, owned by its element so the
+   * raw-keep path can withhold it where the mapping never runs.
+   */
+  private styleUnmapped(node: P5Node, path: string, property: string): void {
+    if (!this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)) return
+    this.entries[this.entries.length - 1]!.owner = node
+  }
+
+  /**
+   * `style`, through the CSS mapping AND through the refusal policy every other
+   * attribute goes through (markup-carve/carve#2267).
+   *
+   * The mapping answers for a document the import rewrites, where an unmapped
+   * declaration is a `style-unmapped` row. Inside an element `roundtrip` keeps
+   * whole, no mapping runs and the bytes carry the CSS into the output, so the
+   * same latent-refusal channel `refuseIfKept` gives a denied destination
+   * reports the attribute as `attribute-preserved` and `keepRaw` withholds the
+   * mapping rows it stands in for.
+   */
   private styles(node: P5Node, value: string, keyValues: Record<string, string>, path: string): void {
     const cell = node.tagName === 'td' || node.tagName === 'th'
+    if (this.mode === 'roundtrip') {
+      const { subject, live } = styleRefusal(value)
+      this.refuseIfKept(node, path, subject, live)
+    }
     for (const declaration of value.split(';')) {
       const split = declaration.indexOf(':')
       if (split < 0) continue
@@ -1785,9 +1854,9 @@ class Importer {
         // `valign` is defined for table cells and nothing else, so writing it
         // onto a paragraph would emit an attribute no reader honours - a
         // spelling that looks like a mapping and is not one.
-        this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)
+        this.styleUnmapped(node, path, property)
       } else {
-        this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)
+        this.styleUnmapped(node, path, property)
       }
     }
   }
