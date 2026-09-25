@@ -2798,6 +2798,11 @@ function respellQuotedBlocks(
     if (((written.separate && prev !== undefined) || (deeper && prev.text.trim() !== '')) && out.at(-1)!.text !== '') {
       out.push({ prefix: deeper ? prev.prefix : part.prefix, text: '' })
     }
+    // A quote a line of this run holds, whatever wrote it: as text the marker is
+    // escaped above, so a `>` still standing here is structural and Carve reads
+    // it only in its spaced form. A quote an ITEM of this run holds reaches no
+    // other respelling at all (carve-js#2035).
+    if (!asText) text = respellHeldQuoteMarkers(text)
     if (leavesList) separate(part.prefix)
     leavesList = false
     // `fmt` sets a block in a quote apart from the paragraph above it with an
@@ -2990,7 +2995,7 @@ function collectListInlineRun(
   const taskLead = RE_CARVE_TASK_LEAD.exec(first)
   const firstLineText =
     taskLead === null
-      ? first.slice(marker[0].length)
+      ? respellHeldQuoteMarkers(first.slice(marker[0].length))
       : first.slice(marker[0].length, taskLead[0].length) + escapeBlockOpener(first.slice(taskLead[0].length))
   const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: firstLineText }]
   const itemCols = [contentCol, ...nestedItems.map((item) => item.content)]
@@ -3128,8 +3133,10 @@ function collectListInlineRun(
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
       run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true })
-    } else if (over > 0 && over < 4) run.push({ prefix, text: pad + trimmed })
-    else run.push({ prefix, text: orderedText ? pad + trimmed : text })
+    } else if (over > 0 && over < 4) run.push({ prefix, text: pad + respellHeldQuoteMarkers(trimmed) })
+    // A later line the item holds, at the column the quote opens at. As text
+    // the marker is escaped above, so a `>` arriving here is structural.
+    else run.push({ prefix, text: orderedText ? pad + trimmed : respellHeldQuoteMarkers(text) })
     quoteHoldsItem ||= quotesAnItem(run.at(-1)!.text)
     end++
   }
@@ -3144,6 +3151,26 @@ function collectListInlineRun(
 function openQuoteParagraph(text: string): string | null {
   const quote = blockquotePrefix(text.trimStart())
   return quote !== null && quote.text.trim() !== '' && quoteParagraphIsOpen(quote.text) ? quote.prefix : null
+}
+
+/**
+ * `text` with the quote markers it holds respelled in Carve's spaced form,
+ * reached past the indentation and the item markers that hold them.
+ *
+ * The document-level path peels a quote into a prefix and writes it back
+ * spaced, so `>> a` goes out `> > a` there. A quote a list item holds is
+ * written from the item's own branch, which left the two characters as the
+ * source spelled them; Carve reads `>>` as text, so both quotes went missing
+ * from the import (carve-js#2035).
+ */
+function respellHeldQuoteMarkers(text: string): string {
+  const held = /^([ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*)(>[\s\S]*)$/.exec(text)
+  const quote = held === null ? null : blockquotePrefix(held[2]!)
+  if (quote === null) return text
+  const respelled = held![1]! + quote.prefix + quote.text
+  // An empty quote line keeps no trailing space, the way the document-level
+  // collector writes one.
+  return quote.text.trim() === '' ? respelled.trimEnd() : respelled
 }
 
 /**
