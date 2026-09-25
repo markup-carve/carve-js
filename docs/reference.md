@@ -421,6 +421,7 @@ default. The threat model and every knob is in [docs/security.md](https://github
 - [Accessibility lint](https://github.com/markup-carve/carve-js/blob/main/docs/accessibility-lint.md) - the accessibility rules.
 - [Streaming render](https://github.com/markup-carve/carve-js/blob/main/docs/streaming-render.md) - rendering without buffering.
 - [Reversible patches](https://github.com/markup-carve/carve-js/blob/main/docs/reversible-patches.md) - editing an AST in place.
+- [AST sidecars](https://github.com/markup-carve/carve-js/blob/main/docs/ast-sidecars.md) - node identity, annotation ranges, provenance, and source conversion diagnostics.
 - [Source-preserving patches](https://github.com/markup-carve/carve-js/blob/main/docs/source-patches.md) - stale-safe UTF-8 edits.
 - [Development](https://github.com/markup-carve/carve-js/blob/main/docs/development.md) - the checkout, the layout, the roadmap.
 
