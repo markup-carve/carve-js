@@ -392,58 +392,15 @@ function renderToc(
 }
 
 /**
- * In-document TOC placement directive (Tier-3). Unlike {@link tableOfContents}
- * (which injects one TOC at the document top or bottom), this renders a
- * `<nav class="toc">` exactly where the author writes a `::: toc` block, so a
- * long document can place its contents after an intro. Off by default.
+ * Render `::: toc` as a `<nav class="toc">` at its source position, using
+ * resolved heading ids for links. Without this extension the directive stays
+ * an empty div. `tableOfContents()` adds a separate nav at the document edge.
+ * Registering only `tableOfContents()` leaves the empty div in place;
+ * registering both extensions adds both navs.
  *
- * The block parses as a `directive` (`kind: 'toc'`, CARVE-P12-057); this extension takes
- * over its rendering. The level window is set with attributes on the line
- * *before* the opener (Carve attaches `:::`-block attributes on a preceding
- * attribute line, not inline on the opener):
- *
- * ```
- * ::: toc              (all levels, 1-6)
- * :::
- *
- * {depth=2}            (levels 1-2)
- * ::: toc
- * :::
- *
- * {from=2 to=4}        (levels 2-4)
- * ::: toc
- * :::
- * ```
- *
- * Reads the resolved (dedup-aware) heading ids from `heading.attrs.id`, so
- * links always match the emitted `<h*>` anchors.
- *
- * DEGRADATION. Without THIS extension registered, `::: toc` renders as the bare
- * directive it parsed as: an EMPTY `<div class="toc">` where the author wrote
- * the block, per extensions §8b.3's "labeled `<div>` floor". Not an `<aside>`,
- * and the class carries no `admonition` prefix and no `aria-label` - a
- * directive's kind is never in `CANONICAL_ADMONITION_KINDS`, which is what the
- * renderer reads both the tag and the class off.
- *
- * "Without this extension" means without `tocPlacement()` specifically, which
- * is worth spelling out because {@link tableOfContents} does NOT stand in for
- * it. Registering that one instead puts a `<nav class="toc">` at the document
- * top and STILL leaves the empty floor in place, so a document ends up with a
- * TOC that is not where the `::: toc` block is:
- *
- * | registered | `::: toc` written | output |
- * | --- | --- | --- |
- * | neither | yes | the empty `<div class="toc">` floor, in place |
- * | `tocPlacement` | yes | the named `<nav class="toc">` in place |
- * | `tableOfContents` | yes | nav at the top, PLUS the empty floor in place |
- * | both | yes | two navs, one at the top and one in place |
- * | `tocPlacement` | no | nothing |
- * | `tableOfContents` | no | nav at the top |
- *
- * A separate empty case is NOT the floor: with this extension registered and no
- * heading inside the level window, the block renders an EMPTY nav - still a
- * landmark, so it is still named.
- * Both are empty; only one means the extension is missing.
+ * Place `{depth=2}` or `{from=2 to=4}` on the line before the opener, never
+ * inline on it. With no headings in the selected range, the nav remains an
+ * empty named landmark. See `docs/extensions.md` for the other TOC option.
  */
 export function tocPlacement(): CarveExtension {
   let entries: TocEntry[] = []
