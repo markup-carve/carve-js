@@ -120,6 +120,7 @@ describe('the Markdown importer replaces an authored NUL rather than reading it 
       '*bold* and /italic/ and `code`',
     )
     expect(markdownToCarve('a \\* b')).toBe('a \\* b')
-    expect(markdownToCarve('***bi*** and __b__')).toBe('/*bi*/ and *b*')
+    // Braced since carve-js#2041; the nesting is the reason, not the bytes.
+    expect(markdownToCarve('***bi*** and __b__')).toBe('{/*bi*/} and *b*')
   })
 })

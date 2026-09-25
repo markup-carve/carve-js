@@ -23,8 +23,10 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('a __bold__ word')).toBe('a *bold* word')
   })
 
-  it('converts ***bold italic*** to Carve /*bold italic*/', () => {
-    expect(conv('a ***strong em*** word')).toBe('a /*strong em*/ word')
+  // Braced, because cmark-gfm reads `***x***` as an emphasis AROUND a strong and
+  // bare `/*x*/` is the other nesting (carve-js#2041).
+  it('converts ***bold italic*** to Carve {/*bold italic*/}', () => {
+    expect(conv('a ***strong em*** word')).toBe('a {/*strong em*/} word')
   })
 
   it('leaves space-flanked asterisks literal (arithmetic 2 * 3 * 4)', () => {
@@ -39,8 +41,8 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('foo*bar*baz')).toBe('foo{/bar/}baz')
   })
 
-  it('converts ___bold italic___ to Carve /*bold italic*/', () => {
-    expect(conv('a ___strong em___ word')).toBe('a /*strong em*/ word')
+  it('converts ___bold italic___ to Carve {/*bold italic*/}', () => {
+    expect(conv('a ___strong em___ word')).toBe('a {/*strong em*/} word')
   })
 
   it('converts **bold with *italic* inside** to *bold with /italic/ inside*', () => {
@@ -52,7 +54,7 @@ describe('markdownToCarve — inline construct mapping', () => {
   })
 
   it('converts emphasis nested inside ***bold italic***', () => {
-    expect(conv('***outer _inner_ end***')).toBe('/*outer /inner/ end*/')
+    expect(conv('***outer _inner_ end***')).toBe('{/*outer /inner/ end*/}')
   })
 
   it('converts Markdown ~~strike~~ to Carve ~strike~', () => {
