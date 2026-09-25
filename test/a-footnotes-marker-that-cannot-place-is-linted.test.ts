@@ -78,6 +78,28 @@ describe('a footnotes marker that cannot place is linted', () => {
     expect(findings('> ::: footnotes\n> :::\n')).toHaveLength(1)
   })
 
+  it('reports the fmt-canonical spelling of the same empty container', () => {
+    // `carve fmt` writes an empty container in a quote with the quote line
+    // between the fences, so the rule has to read the shape a formatted document
+    // carries as well as the compact one the ticket spells.
+    expect(findings(withMarker('> ::: footnotes\n>\n> :::'))).toHaveLength(1)
+  })
+
+  it('says only that the section goes where it would without the marker', () => {
+    // Raised by codex review. "Appended at the document end" is false when a
+    // top-level marker places the section earlier: the contained marker still
+    // refuses, and the message must not claim where the section landed.
+    const source =
+      'Intro[^a].\n\n> ::: footnotes\n>\n> :::\n\n::: footnotes\n:::\n\nAfter.\n\n[^a]: only note\n'
+    const found = findings(source)
+    expect(found).toHaveLength(1)
+    expect(found[0]!.line).toBe(3)
+    expect(found[0]!.message).not.toContain('document end')
+
+    const html = carveToHtml(source)
+    expect(html.indexOf('<section role="doc-endnotes"')).toBeLessThan(html.indexOf('<p>After.</p>'))
+  })
+
   it('reports each contained marker separately', () => {
     const source = withMarker('> ::: footnotes\n> :::\n\n- ::: footnotes\n  :::')
     expect(findings(source)).toHaveLength(2)

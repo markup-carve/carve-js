@@ -762,8 +762,8 @@ export function lintCarve(
  *
  * Only a marker at document top level places. One inside a block-level
  * container renders §12's typed-div floor where it stands and the endnotes
- * section is appended at the document end, so the output says nothing about the
- * placement the author asked for. carve#2292 ruled that lint is the home for a
+ * section goes where it would without the marker, so the output says nothing
+ * about the placement the author asked for. carve#2292 ruled that lint is the home for a
  * render-time refusal: nothing is dropped from the tree and the shape is spelled
  * perfectly well, so neither machine-readable report has a code for it.
  *
@@ -784,7 +784,7 @@ function collectContainedFootnotePlacements(
       ...locate(node as Positioned, toUtf16),
       rule: 'footnotes-placement-in-container',
       message:
-        'This "::: footnotes" marker is inside a container, where it does not place: it renders as a plain typed div and the endnotes section is appended at the document end. ' +
+        'This "::: footnotes" marker is inside a container, where it does not place: it renders as a plain typed div and the endnotes section goes where it would without the marker. ' +
         'Move the marker to document level, or delete it to accept the default position.',
     })
   })
