@@ -74,14 +74,19 @@ describe('the diagnostic cap', () => {
     // document under the cap came back saying it was over it.
     const figure =
       '<figure><ul><li style="color:red;font-weight:bold;letter-spacing:1px">x</li></ul><figcaption>Cap</figcaption></figure>'
-    for (const maxDiagnostics of [1, 2, 3, 5]) {
+    // The `<li>` costs ONE row - its `style` as a refused attribute - and the
+    // walk's three `style-unmapped` rows are the discarded ones, so a cap of two
+    // is not truncated even though the walk recorded five.
+    for (const maxDiagnostics of [2, 3, 5]) {
       const result = htmlToCarve(figure, { mode: 'roundtrip', maxDiagnostics })
-      expect(result.report.diagnostics.map((row) => row.code)).toEqual(['raw-preserved'])
+      expect(result.report.diagnostics.map((row) => row.code)).toEqual(['raw-preserved', 'attribute-preserved'])
       expect(result.report.diagnostics[0]?.message).toContain('<figure>')
     }
-    // A cap of zero turns the kept row itself away, and there the marker is right.
-    expect(htmlToCarve(figure, { mode: 'roundtrip', maxDiagnostics: 0 }).report.diagnostics.map((row) => row.code))
-      .toEqual(['diagnostics-truncated'])
+    // Below the rows the report does keep the marker is right.
+    for (const maxDiagnostics of [0, 1]) {
+      expect(htmlToCarve(figure, { mode: 'roundtrip', maxDiagnostics }).report.diagnostics.map((row) => row.code))
+        .toEqual(['diagnostics-truncated'])
+    }
   })
 
   it('reaches a refused attribute on an element kept raw', () => {

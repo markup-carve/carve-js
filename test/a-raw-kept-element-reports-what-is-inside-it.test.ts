@@ -77,8 +77,14 @@ describe('a raw-kept element reports what is inside it', () => {
   it('charges only the rows it reports against the diagnostics cap', () => {
     const denied = htmlToCarve('<form><a href="javascript:x">t</a></form>', { mode: 'roundtrip', maxDiagnostics: 2 })
     expect(denied.report.diagnostics.map((d) => d.code)).toEqual(['raw-preserved', 'attribute-preserved'])
-    const styled = htmlToCarve('<form><div style="color:red">x</div></form>', { mode: 'roundtrip', maxDiagnostics: 1 })
-    expect(styled.report.diagnostics.map((d) => d.code)).toEqual(['raw-preserved'])
+    // A `style` in kept bytes is ONE refusal row however many declarations it
+    // holds: the mapping rows the descendant walk records are discarded with the
+    // walk, so three unmapped declarations still fit a cap of two.
+    const styled = htmlToCarve('<form><div style="color:red;font-size:9px;letter-spacing:1px">x</div></form>', {
+      mode: 'roundtrip',
+      maxDiagnostics: 2,
+    })
+    expect(styled.report.diagnostics.map((d) => d.code)).toEqual(['raw-preserved', 'attribute-preserved'])
   })
 
   it('adds no row for a denied value on an element the import rewrites', () => {
