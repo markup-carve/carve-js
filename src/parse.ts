@@ -3304,7 +3304,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     // class, so a `%%<VT>note` line had its vertical tab eaten as the
     // separator and `carve fmt` wrote a SPACE back in its place: a character
     // the clause calls content, replaced by one the author did not write.
-    return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '') }
+    return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '').replace(/[ \t]+$/, '') }
   }
   if (RE_LINE_BLOCK_OPEN.test(line)) return parseLineBlock(lexer)
   if (RE_HARDBREAKS_OPEN.test(line)) return parseHardBreaksBlock(lexer)
@@ -4770,7 +4770,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       const comment: Comment = {
         type: 'comment',
         block: false,
-        content: ln.slice(2).replace(/^[ \t]/, ''),
+        content: ln.slice(2).replace(/^[ \t]/, '').replace(/[ \t]+$/, ''),
       }
       if (lexer.hasDocumentOffsets) {
         comment.pos = {
@@ -11326,7 +11326,7 @@ function scanInlineInner(
       buf = ''
       const nl = text.indexOf('\n', i)
       const end = nl === -1 ? text.length : nl
-      const content = text.slice(i + 2, end).replace(/^[ \t]/, '')
+      const content = text.slice(i + 2, end).replace(/^[ \t]/, '').replace(/[ \t]+$/, '')
       out.push(
         withPos({ type: 'comment', block: false, content } as Comment, source, text, i, end),
       )
