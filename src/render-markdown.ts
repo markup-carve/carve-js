@@ -381,13 +381,21 @@ function renderList(node: List, ctx: MarkdownContext): string {
     if (!node.tight && !first) out += '\n'
     first = false
     let prefix: string
+    // The pad is the item's CONTENT COLUMN, which is only the same as the
+    // printed prefix where the whole prefix is the marker. A task item's `[x] `
+    // is the first inline of its first paragraph, so padding by it puts every
+    // block below four columns past where a reader looks for them (carve-js#2085).
+    let pad: number
     if (node.ordered) {
       prefix = `${counter}${delim} `
+      pad = prefix.length
       counter++
     } else if (item.checked !== undefined) {
       prefix = `${bullet} ${item.checked ? '[x]' : '[ ]'} `
+      pad = bullet.length + 1
     } else {
       prefix = `${bullet} `
+      pad = prefix.length
     }
     const content = containerContent(() => renderListItem(item, node.tight, ctx))
     const lines = content.split('\n')
@@ -402,7 +410,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     // which is why this was invisible from inside the engine and only pandoc
     // showed it (carve#1069, carve-php#1142).
     out += `${withMarker(prefix, lines.shift() ?? '')}\n`
-    const continuation = ' '.repeat(prefix.length)
+    const continuation = ' '.repeat(pad)
     // A line with no content takes no pad: PART 11 section 7 emits such a line
     // empty, and trailing whitespace is what editors and `git apply
     // --whitespace=fix` rewrite behind the writer.
@@ -461,9 +469,41 @@ const lastNonBlankLine = (rendered: string): string =>
     .filter((line) => line.trim() !== '')
     .at(-1) ?? ''
 
-function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): string {
-  if (!tight) return renderBlocks(item.children, ctx)
+/** A list marker with nothing after it: `-`, `*`, `1.`, `1)`. */
+const BARE_MARKER = /^(?:[-*+]|\d+[.)]) *$/
 
+/** A run of three or more of one break character, which closes what is above it. */
+const THEMATIC_BREAK_LINE = /^(-+|\*+|_+)[ \t]*$/
+
+/** A line's content with one list marker taken off, for the line a nested list ends on. */
+const markerContent = (line: string): string => line.replace(/^(?:[-*+]|\d+[.)]) +/, '')
+
+/** The blocks whose Markdown spelling opens with plain text, so a reader can take them lazily. */
+const SWALLOWED_BY_A_LAZY_LINE = new Set(['paragraph', 'table', 'definition_list'])
+
+/**
+ * Whether the block below is read as more text of the block above because no
+ * blank line separates them and its own spelling opens with plain text.
+ *
+ * A nested list is the only block this target writes with no blank line behind
+ * it, so this is the seam `separatorCanGo` cannot reach: that decides whether to
+ * TAKE a blank away, and here there is none to take. A table is in the swallowed
+ * set even though a delimiter row promotes a paragraph at the same level,
+ * because a lazy continuation line cannot open one - the rows arrive as the last
+ * nested item's text and the table does not reach the output at all.
+ *
+ * The tail has to be able to TAKE lazy text, which a bare marker and a heading
+ * cannot, so those pairs stay glued and the item stays tight.
+ */
+function swallowedByALazyLine(aboveRendered: string, below: BlockNode): boolean {
+  if (!SWALLOWED_BY_A_LAZY_LINE.has(below.type)) return false
+  const tail = lastNonBlankLine(aboveRendered).replace(/^[ \t]+/, '')
+  if (BARE_MARKER.test(tail) || THEMATIC_BREAK_LINE.test(tail)) return false
+  const text = markerContent(tail)
+  return text !== '' && !'#>|`~='.includes(text[0] ?? '')
+}
+
+function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): string {
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
@@ -478,8 +518,10 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
       // A blank between a tight item's blocks makes the item loose in
       // CommonMark, so drop the separator the block above left wherever the
       // child below opens a construct of its own under it.
-      if (out.endsWith('\n\n') && separatorCanGo(rendered, above, aboveRendered)) {
+      if (tight && out.endsWith('\n\n') && separatorCanGo(rendered, above, aboveRendered)) {
         out = out.slice(0, -1)
+      } else if (out.endsWith('\n') && !out.endsWith('\n\n') && swallowedByALazyLine(out, child)) {
+        out += '\n'
       }
       out += rendered
       if (rendered !== '') {
