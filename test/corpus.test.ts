@@ -828,6 +828,9 @@ const IMPLEMENTED = new Set([
   // its lint finding on carve-js#2060.
   'a-footnotes-placement-marker-inside-a-container-does-not-place',
   'a-title-or-label-fills-the-container-body-slot',
+  // Arrives with carve 34e9333 and already reads the ruled way: the comment
+  // trailing-whitespace rule landed on carve-js#2080.
+  'a-comment-line-s-text-is-content-and-a-block-body-is-payload',
 ])
 
 /**
