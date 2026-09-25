@@ -967,6 +967,8 @@ class Importer {
     entry.diagnostic = {
       ...entry.diagnostic,
       code: 'attribute-preserved',
+      fidelity: diagnosticFidelity('attribute-preserved'),
+      confidence: diagnosticConfidence('attribute-preserved'),
       message: `Preserved ${subject} on <${entry.owner!.tagName}> ${where}${reason}`,
       severity: live ? 'error' : 'info',
     }
