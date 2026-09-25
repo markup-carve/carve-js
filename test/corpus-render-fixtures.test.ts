@@ -30,19 +30,13 @@ type Target = keyof typeof targets
  *
  * It is declared in this file rather than beside the `.fmt` map because only
  * this suite reads a `.md` sidecar.
+ *
+ * The map is empty right now. Its one entry was `84-single-line-headings-10`,
+ * whose blank line above an ATX heading `CARVE-P11-047` removes; upstream re-cut
+ * the sidecar in markup-carve/carve#2300 and the entry went out with the bump
+ * that reached it.
  */
-const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map([
-  [
-    '84-single-line-headings-10',
-    {
-      reason:
-        'CARVE-P11-047 drops the separator above an opener that interrupts a paragraph, an ATX ' +
-        'heading among them (ruled on markup-carve/carve-rs#1914, carve-js#2056). The pinned ' +
-        'sidecar carries the blank that makes the item loose; markup-carve/carve#2300 re-cuts it.',
-      md: '> - a\n>   ### b \\###\n',
-    },
-  ],
-])
+const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map()
 
 /** The bytes this engine is ahead of the pinned sidecar with, if it is. */
 const aheadOfPin = (fixture: { slug: string; target: Target }) => {
