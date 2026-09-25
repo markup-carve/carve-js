@@ -2961,6 +2961,10 @@ function collectListInlineRun(
     return body !== null && RE_LIST_MARKER.test(body.text)
   }
   let quoteHoldsItem = quotesAnItem(firstText)
+  // The closer of a fence the quote on the item's OWN line opened, while it is
+  // still open: the lines up to it are the fence's content, and no block
+  // reading is taken on them.
+  let quotedFence = quotedFenceCloser(firstText)
 
   while (end < lines.length) {
     const line = lines[end]!
@@ -3001,7 +3005,29 @@ function collectListInlineRun(
     if (indent < contentCol) break
 
     // Leave fenced code blocks inside list items to the main fence handler.
-    if (isMarkdownFenceLine(text)) break
+    //
+    // Measured from the innermost item that holds the line, not from the
+    // outermost marker the run's prefix took: a fence opens on up to three
+    // columns of slack, and past two items of depth every such line stood more
+    // than three columns from the OUTER column and read as paragraph text, so
+    // the fence and what it was meant to hold went out escaped (carve-js#2028).
+    if (isMarkdownFenceLine(' '.repeat(Math.max(0, indent - base)) + line.replace(/^[ \t]+/, ''))) break
+    // The same for a fence the quote this item holds opens: writing it, and
+    // closing it where the source leaves it open, is the quote collector's job.
+    // Carried into the run instead, the opener reached the inline converter,
+    // which escaped an unmatched backtick run and read a tilde run as a
+    // strikethrough, so the fence and its content went out as prose
+    // (carve-js#2028).
+    const openFence = blockquotePrefix(text.trimStart())
+    if (quotedFence !== null) {
+      if (openFence !== null && quotedFence.test(openFence.text)) quotedFence = null
+    } else if (
+      quote !== null &&
+      openFence !== null &&
+      openFence.prefix === quote &&
+      indentColumns(openFence.text) < 4 &&
+      isMarkdownFenceLine(openFence.text.trimStart())
+    ) break
     // Same for an HTML block opening at the item's content column.
     if (interruptingHtmlBlock(text)) break
     // And for a quote opening with indented code, which the quote collector
@@ -3044,9 +3070,16 @@ function collectListInlineRun(
     // item's content column, measured from somewhere this loop does not track,
     // and taking them off moved the line out of the item.
     const inner = quote === null || over >= 4 || quoteHoldsItem ? null : blockquotePrefix(trimmed)
-    if (inner !== null && inner.prefix === quote && inner.text.trim() !== '' && /^[ \t]/.test(inner.text)) {
+    // A link reference definition cannot interrupt a paragraph (CommonMark
+    // 4.7), so on a line of the open quoted paragraph above it is that
+    // paragraph's text. Carve reads one at the quote's content column, where it
+    // opens no element at all and takes its line with it (carve-js#2029).
+    const definition =
+      inner !== null && inner.prefix === quote && RE_MD_LINK_REFERENCE.test(inner.text.trimStart())
+    if (inner !== null && inner.prefix === quote && inner.text.trim() !== '' && (definition || /^[ \t]/.test(inner.text))) {
       const body = inner.text.trimStart()
-      run.push({ prefix, text: pad + quote + (indentColumns(inner.text) >= 4 ? escapeBlockOpener(body) : body), bareBody: body })
+      const asText = definition || indentColumns(inner.text) >= 4
+      run.push({ prefix, text: pad + quote + (asText ? escapeBlockOpener(body) : body), bareBody: body })
     } else if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true, bareBody: plain })
     else if (quote !== null && (over >= 4 || (!trimmed.startsWith('>') && isParagraphRunLine([trimmed], 0, 'text')))) {
       // A lazy line of the quote the item holds, written with its marker.
@@ -3070,6 +3103,16 @@ function collectListInlineRun(
 function openQuoteParagraph(text: string): string | null {
   const quote = blockquotePrefix(text.trimStart())
   return quote !== null && quote.text.trim() !== '' && quoteParagraphIsOpen(quote.text) ? quote.prefix : null
+}
+
+/**
+ * The closer of the fence a quote in `text` opens, or null when it opens none.
+ */
+function quotedFenceCloser(text: string): RegExp | null {
+  const quoted = blockquotePrefix(text.trimStart())
+  const open = quoted === null ? null : RE_MD_FENCE_LINE.exec(quoted.text)
+  if (open === null || columnWidth(open[1]!) > 3 || !fenceRunIsAFence(open[2]!, open[3]!)) return null
+  return new RegExp(`^ {0,3}${open[2]![0]}{${open[2]!.length},}[ \t]*$`)
 }
 
 /**
@@ -4373,7 +4416,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       const quoted = blockquotePrefix(held.trimStart())
       const prevInItem = i > 0 && lines[i - 1]!.trim() !== '' && indentColumns(lines[i - 1]!) >= contentCol
       if (
-        (afterLazy >= 0 || prevInItem) &&
+        // `lazyQuote` is the quote the item run above left open, which is where
+        // this fence stands when the item's own marker line opened that quote:
+        // `prevInItem` cannot see that line, since a marker line sits LEFT of
+        // the content column it establishes (carve-js#2028).
+        (afterLazy >= 0 || prevInItem || lazyQuote !== null) &&
         indentColumns(line) >= contentCol &&
         slack < 4 &&
         quoted !== null &&
