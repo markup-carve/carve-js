@@ -293,15 +293,7 @@ const trimCellPadding = (text: string): string => {
 const RE_BLANK_LINE = /^[ \t]*$/
 
 export function isBlankLine(line: string | undefined): boolean {
-  // A non-existent line (past EOF) is NOT a blank line: lookahead loops must
-  // terminate at EOF, not treat it as an endless run of blank lines.
-  //
-  // This is asked of every line at every nesting level, so on a deep container
-  // it is one of the parse's hottest paths (markup-carve/carve#752) - 17.8% of
-  // a depth-200 ladder's parse. Rewriting it as the hand loop the class
-  // describes was measured and was SLOWER, reproducibly: 54.8 ms against 49.9
-  // on that ladder, three runs each. V8 compiles this class to native code, and
-  // the loop's per-character `charCodeAt` does not beat it. Left as the regex.
+  // EOF ends lookahead. Keep the regex: a hand-written scan was slower on deep containers.
   return line !== undefined && RE_BLANK_LINE.test(line)
 }
 
@@ -764,17 +756,8 @@ class Lexer {
    */
   markerOpensSublist = false
 
-  // Negative cache for fenceHasCloser (paragraph-interruption closer
-  // lookahead), the same entry the container-local scans keep: per fence
-  // CHARACTER, where a scan started and the longest bare run of that character
-  // it saw. Once proven, every later opener (pos only advances) whose marker is
-  // longer than that run short-circuits, keeping "many unclosed fences" input
-  // linear.
-  //
-  // This was one index, char- and length-agnostic, so a single `~~~` or a
-  // single short ``` ``` ``` anywhere ahead pinned it at Infinity forever and
-  // the lookahead stayed quadratic: 500 unterminated ` ````js ` openers over
-  // one ``` ``` ``` took 25ms and 4000 took 347ms.
+  // Cache the scan start and longest bare run by fence character. Later
+  // openers with a longer marker can skip the scan.
   fenceCloserMemo: QuotedFenceCloserMemo = new Map()
 
   // Where a closer of each fence shape LAST occurs in these lines, built once
@@ -792,17 +775,7 @@ class Lexer {
   // one before the container ends" - the question `commentCloserInScope` asks.
   commentRunLines: Map<number, { line: number; depth: number }[]> | undefined = undefined
 
-  // Document line number -> every index of THIS lexer's lines carrying it,
-  // built once by attachDocumentOffsets when the first child asks for it.
-  //
-  // BUILT ONCE PER PARENT, NOT ONCE PER CHILD. The inversion is a function of
-  // this lexer alone - `lines` and `lineNumber` - and neither changes after the
-  // constructor runs, so every child of the same parent was rebuilding a map it
-  // could have shared. A list gets one sub-lexer per item, so an n-line
-  // document paid n x O(n): 16,000 flat bullets took 18 s where 0.1.2 took
-  // 82 ms, on the DEFAULT path (this is not behind the `positions` option).
-  //
-  // Undefined until asked for, so a document that never nests never allocates.
+  // Document line number to indices of this lexer's lines, built once per parent.
   lineIndicesByNumber: Map<number, number[]> | undefined = undefined
 
   constructor(
@@ -2508,79 +2481,10 @@ function collectLinkDefs(lexer: Lexer) {
     }
     {
       const open = RE_COMMENT_BLOCK_ANY.exec(line)
-      // Only a fence that CLOSES opens the opaque region. An unterminated
-      // `%%%` degrades to a single-line comment, and treating it as open would
-      // suppress every definition in the rest of the document.
-      //
-      // AND THE CLOSER HAS TO ARRIVE INSIDE THE CONTAINER THE OPENER SITS IN.
-      // `commentBlockHasCloser` is a document-wide index of the LAST line
-      // carrying a run of each width, which is the right question only for an
-      // opener at document level - nothing bounds that body but the end of
-      // input. For an opener inside a list item or a quote the container bounds
-      // it, and asking the document-wide question got both directions wrong at
-      // once (carve-js#1146):
-      //
-      //   - a `%%%` written back at column 0 two blocks below counted as the
-      //     closer for an item-scoped fence, so the region opened and swallowed
-      //     the definition between them. That definition neither registered nor
-      //     rendered - it was gone, which is the worse of the two failure modes,
-      //     and the `hidden` line above it still rendered, so the two halves of
-      //     the answer did not even agree with each other;
-      //   - and the index reads RAW lines, where a `> %%%` closer carries its
-      //     quote marker and matches nothing. A quoted fence that closes inside
-      //     its own quote therefore read as unterminated, the region never
-      //     opened, and a definition the author commented out went live in the
-      //     link table - carve-js#634's failure with a quoted spelling.
-      //
-      // Both kinds this pass collects are fixed by the one change, because the
-      // region gates the whole loop body: carve-js registers ABBREVIATIONS here
-      // too, where carve-rs registers them in the block parser. The footnote
-      // form is unaffected either way - `parseFootnoteDef` runs during block
-      // parsing, which reads the fence for itself.
-      //
-      // THE TWO SCOPES ASK DIFFERENT QUESTIONS, AND EACH GETS ITS OWN INDEX.
-      // A document-level opener is bounded by nothing but the end of input, so
-      // the document-wide index is the right question there - and it reads RAW
-      // lines, which is also right there: a `> %%%` inside a quote cannot close
-      // a fence opened at column 0, and counting it would open a region over
-      // the definitions between them.
-      //
-      // AN OPENER INSIDE A CONTAINER IS BOUNDED BY THAT CONTAINER, and asking
-      // the raw index first refuted it wrongly. A quoted `> %%%` carries its
-      // marker and is not in that index, so a quoted fence whose only closer is
-      // quoted read as unterminated: the region never opened and a definition
-      // the author had commented out went live in the link table, even though
-      // the quote itself renders empty. §5 registers no definition written
-      // inside a comment AT ANY COLUMN A FENCE CAN SIT AT (markup-carve/carve#1309);
-      // the corpus pinned the column-0 and list-item spellings and all three
-      // engines leaked through the quoted one (markup-carve/carve#1341).
-      //
-      // The tell that it was leakage and not a reading of the rule: it sorted
-      // definitions BY KIND. A footnote written in the same quoted fence stayed
-      // literal, because `parseFootnoteDef` runs during block parsing and reads
-      // the fence for itself, while the link reference definition this pass
-      // collects went through. No rule distinguishes them.
-      //
-      // So the container arm goes straight to `commentCloserInScope`, which
-      // reads the `stripContainerPrefixes` view the loop that CONSUMES the
-      // region closes on - a quoted `> %%%` counts there exactly as it counts
-      // in the parser. The hot-path property the raw index carried is kept
-      // inside that helper: it refutes on its own line index before it walks a
-      // container, so a run of unterminated openers stays linear.
-      //
-      // A `+`-ATTACHED BLOCK SITS AT THE MARKER'S COLUMN, not the item's. §17
-      // lets `+` attach a FLUSH-LEFT block to an item whose content column is
-      // two, and the attached comment then legitimately continues at column 0.
-      // Measured at the item's column instead, it read as leaving the container
-      // on its own first body line, the region never opened, and the definition
-      // inside an invisible comment went live (raised by codex review). This is
-      // the same column `atAnOpenContentColumn` below already prefers, and
-      // `plusColumn` is set on the marker line above, so it is the marker's own
-      // column here and null again after the blank that ends the attachment.
-      //
-      // THE DOCUMENT-LEVEL ARM IS ALSO WHERE THE CHEAP ANSWER LIVES. It skips
-      // BUILDING the stripped line index: an ordinary 300 KB document carrying
-      // one `%%%` block pays 127ms on this arm and 137ms without.
+      // Under §5, an opener hides definitions only when its closer is in the same
+      // container. Document-level fences use the raw line index; nested fences
+      // use the stripped container view. Attached blocks start at the `+`
+      // marker column, which can differ from the item content column.
       const commentScope: PrepassScope = {
         quoteDepth: rawQuoteDepth,
         contentCol: plusColumn ?? contentCol,
@@ -4128,23 +4032,7 @@ function commentRunLines(lexer: Lexer): Map<number, { line: number; depth: numbe
   return m
 }
 
-/**
- * The scan a `commentCloserInScope` boundary needs, remembered across the
- * openers that share it.
- *
- * The boundary is a function of the lines and the scope alone, so the first
- * line that ends a given scope is the same one for every opener BEFORE it.
- * Openers are visited in ascending order, so one entry per scope is enough: a
- * run of openers inside one container walks it once between them all instead of
- * once each. Without any memo, 2000 openers in one item cost 316ms against
- * 16ms.
- *
- * ONE ENTRY IN TOTAL WAS NOT ENOUGH. A document alternating openers at an outer
- * scope with openers one item deeper evicted the single entry on every unit, so
- * every outer opener rescanned the rest of the document - 2000 such units took
- * 1295ms against 75ms (raised by codex review). Keyed by scope, each container
- * keeps its own boundary and the alternation costs nothing.
- */
+/** Remember each container boundary across its comment openers. */
 type CommentScopeMemo = Map<string, { from: number; end: number }>
 
 /**
@@ -4234,50 +4122,9 @@ interface FenceCloserMemoEntry {
 type QuotedFenceCloserMemo = Map<string, FenceCloserMemoEntry>
 
 /**
- * Whether a code or raw fence opened with `marker` closes LATER IN THIS QUOTE.
- *
- * The §10 CLOSER LOOKAHEAD `startsInterruptingBlock` applies through
- * `fenceHasCloser`, restated over the quote's own lines for the same two
- * reasons `quotedCommentHasCloser` gives: the tracker runs while the quote is
- * still being collected, and it has to agree with a sub-lexer that only ever
- * sees this quote's lines. So the scan strips ONE `>` marker per line and STOPS
- * at the first unquoted line.
- *
- * The closer is matched by `fenceCloseRe`, i.e. a run of the SAME character at
- * least as long — the code fence's rule, not the comment fence's exact-length
- * one.
- *
- * THE NEGATIVE CACHE IS LOAD-BEARING, and it is `fenceHasCloser`'s. This runs
- * per fence-shaped line while a quoted paragraph is open, so a quote of N
- * unterminated openers was scanned N times without it: 500 lines took 27ms and
- * 4000 took 397ms, a 3.8x for a 2x input. Every line matching some marker's
- * `closeRe` also matches the bare `RE_FENCE_CLOSER`, so seeing none in the
- * quoted prefix proves no marker of that character closes from here on - and
- * the bound only moves forward, since a later opener scans a suffix of what
- * this one did.
- *
- * The bound is per fence CHARACTER, which is where this differs from
- * `fenceHasCloser`: a single `~~~` closer would otherwise keep the cache from
- * ever advancing for a quote full of unterminated backtick openers. Raised by
- * codex review on this function; the same shape is quadratic through
- * `fenceHasCloser` today, byte-for-byte as it is on main, and that is left
- * alone here rather than folded into a parser fix.
- */
-/**
- * Whether a code or raw fence opened inside a LIST ITEM closes later in that
- * item's content stream (PART 9 §10's CLOSER LOOKAHEAD, markup-carve/carve#950).
- *
- * THE MEMO IS KEYED BY FENCE CHARACTER ALONE, DELIBERATELY, even though a
- * description body now asks at more than one column. Adding `contentCol` to the
- * key is the obvious reading, and measuring it against the executable spec at
- * carve `063656e` refuses it twice over: on 162 mixed-COLUMN fence bodies the
- * column-keyed memo agrees on 28 where this one agrees on 56, and on 144
- * mixed-WIDTH ones it agrees on NONE where this one agrees on 22. In both it
- * removes no divergence and adds only divergence. The oracle reaches its answer
- * from a body scan that is flat in the same way, so partitioning by column buys
- * self-consistency at the cost of the arbiter. Raised three times by `codex
- * review` on this change, the third time with a worked example; each time the
- * measurement went the other way. Re-measure before changing it.
+ * Find a code or raw fence closer within this list item. The memo uses only
+ * the fence character as its key. A column key diverged from the
+ * executable spec; re-measure before changing it.
  */
 function itemFenceHasCloser(
   lexer: Lexer,
@@ -4395,6 +4242,7 @@ function fenceCloserMemoRefutes(
   return cached !== undefined && start >= cached.from && len > cached.maxRun
 }
 
+/** Strip one `>` per line and stop at the first unquoted line. Cache misses by fence character. */
 function quotedFenceHasCloser(
   lexer: Lexer,
   marker: string,

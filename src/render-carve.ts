@@ -1466,51 +1466,12 @@ function markerColumnTag(): string {
   return sentinels[SENTINEL_COUNT - 1]!
 }
 
-/**
- * The tag that says §11 N1a's boundary - three blank lines - goes ABOVE the
- * line it opens.
- *
- * IT MARKS A LINE, NOT A JOIN. It used to be spliced BETWEEN two rendered
- * blocks (`a` + tag + `b`), which reads the same at the document level and is
- * wrong everywhere else: splicing hides a line break from every host that
- * indents its body line by line. A list item prefixes each line with its content
- * column and a blockquote prefixes each line with `> `, and neither could see a
- * second line inside `- a<tag>- b` - so the boundary came out at column 0, taking
- * the list it opened out of the item with it (markup-carve/carve#1501).
- *
- * Written at the START of the following block's first line instead, the tag
- * rides through every host's prefix pass as ordinary text, and `normalize`
- * expands it once the prefix it has to repeat is finally visible: whatever
- * columns sit to its left ARE the host's, so the three blank lines are spelled
- * with them - nothing at all inside a list item, `>` inside a blockquote, which
- * is exactly how each host spells a blank line of its own.
- */
-/**
- * Does this block put anything on the page that a re-parse can see?
- *
- * PART 11 §10j: an unspellable block does not cancel the adjacency it cannot
- * spell. When two sibling lists are parted by a block that reaches the page,
- * that block separates them and PART 9 §11 N1a's boundary is not needed; when
- * it reaches the page with NOTHING, the lists are still adjacent and the
- * boundary is the only thing keeping them two.
- *
- * ASKED OVER WHAT THE BLOCK SPELLS, NEVER OVER ITS TYPE. A test written
- * against `paragraph` would pass the shape that found this and miss the
- * rule - a `figure` wrapping a `table` is interchange-only too (PART 12
- * §17), and so is anything a later clause makes unspellable.
- *
- * A length test was the near miss: an EMPTY paragraph renders to nothing and
- * was already handled, while a paragraph holding one space rendered to one
- * space and cancelled the boundary - so the writer disagreed with itself
- * about two trees it puts the same thing on the page for. A space and a tab
- * are the `whitespace` terminal, which a re-parse reads as a blank line. A
- * NO-BREAK space is not in it and is content, so a paragraph holding one
- * spells a paragraph and does separate the lists.
- */
+/** Whether rendered text contains a character a re-parse can see. */
 function spellsSomething(rendered: string): boolean {
   return /[^ \t\n\r]/.test(rendered)
 }
 
+/** Mark the next line for §11 N1a's boundary. `normalize` expands it with the container prefix. */
 function boundaryTag(): string {
   return sentinels[4]!
 }
