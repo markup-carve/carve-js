@@ -4546,7 +4546,22 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         // The next item of an open list, whatever its number, ends the paragraph.
         if (listCols.length > 0 && RE_LIST_MARKER.test(next) && indentColumns(next) < contentCol && listMarkers.hasListAt(indentColumns(next))) break
         const trimmedNext = next.trimStart()
-        run.push(opens ? next.slice(0, next.length - trimmedNext.length) + escapeBlockOpener(trimmedNext) : next)
+        // carve#2256 rules the escape by whether the marker would be structural
+        // AT COLUMN 0, and `fmt` dedents this line to column 0. `opens` is
+        // measured where the line stands, which is the right reading for ending
+        // the run and the wrong one for the escape: `RE_MD_THEMATIC` is anchored
+        // at three columns of slack, so a thematic run four columns in was not
+        // read as one and went out bare. `fmt` then wrote the escape itself, so
+        // the import was not a fixed point of this engine's own formatter.
+        //
+        // The thematic run and nothing else. A tilde fence interrupts no
+        // paragraph in Carve, a lone pipe is no table without its delimiter row
+        // and an equals line opens nothing at all, so an escape on any of those
+        // would guard nothing (carve#2244). Measured one spelling at a time
+        // rather than widened to "whatever opens a block at column 0", which
+        // reads the fence at any indent and would have taken `~~~` with it.
+        const structural = opens || RE_MD_THEMATIC.test(trimmedNext)
+        run.push(structural ? next.slice(0, next.length - trimmedNext.length) + escapeBlockOpener(trimmedNext) : next)
         bare.push(next)
         end++
       }
