@@ -4,8 +4,8 @@
  * Each occurrence of an abbreviation re-emits its full expansion
  * (`<abbr title="EXPANSION">KEY</abbr>` in HTML, a raw `<abbr>` in Markdown,
  * `(EXPANSION)` in ANSI). Repeating a large expansion can amplify output until
- * it exceeds V8's max string length (`RangeError: Invalid string length`), crashing the
- * render. We bound the cumulative bytes contributed by expansions across a
+ * it exceeds V8's max string length. That crashes the render with
+ * `RangeError: Invalid string length`. We bound the cumulative bytes across a
  * single render: once the next occurrence would exceed the budget, that
  * occurrence (and all later ones) degrade gracefully to the plain key text
  * only (no `<abbr>` wrapper, no title). No throw, no giant allocation.
@@ -17,9 +17,8 @@
  * by carve-rs and carve-php so all three impls degrade at the exact same
  * occurrence, keeping output cross-impl-aligned. An escape-heavy expansion
  * can therefore overshoot the budget by that constant escape factor, while
- * remaining linear in the input. The crash
- * DoS this guards against requires unbounded amplification, which the byte
- * cap removes regardless of the escape factor.
+ * remaining linear in the input. The byte cap prevents unbounded amplification
+ * regardless of the escape factor.
  *
  * The counter is per render call. A renderer constructs a fresh tracker at its
  * top-level entry; it must never leak across calls.

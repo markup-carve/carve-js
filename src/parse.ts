@@ -7059,7 +7059,7 @@ const PREFIX_WINDOW = 32
  * CHEAP FIRST, because this runs on every line an item collects. `isLinkDefLine`
  * splits a trailing attribute block off the line before it tests, which makes it
  * the most expensive predicate in the tracker - putting it on the path of every
- * ordinary prose line makes it pay for that predicate.
+ * ordinary prose line makes each one pay for that predicate.
  *
  * A strict superset, so it decides nothing: both definition forms open with `[`
  * after optional indentation and a comment with `%`, and `splitTrailingAttrBlock`
@@ -8394,11 +8394,10 @@ function parseList(lexer: Lexer): List {
     //
     // STILL ONE STATEFUL PASS, not one scan per line. Asking
     // `fencedBlockEnd` at every index reads the same suffix again for every
-    // unterminated opener, which is quadratic: an item of N comment openers of
-    // strictly increasing width, none of which can close, repeats that scan.
+    // unterminated opener, which is quadratic. With comment openers of
+    // increasing width that cannot close, each opener repeats the suffix scan.
     // The stack below runs `findColonCloser`'s nesting model once, left to right,
-    // which is what
-    // keeps the whole pass linear (ranges never overlap).
+    // keeping the whole pass linear (ranges never overlap).
     const fenceLines = [content, ...nested]
     const inFence: boolean[] = new Array(fenceLines.length).fill(false)
     // AN OPENER WITH NO CLOSER AHEAD OPENS NOTHING, so it must not latch this
