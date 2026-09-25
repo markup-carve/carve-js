@@ -9,15 +9,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Added
-
-- Node identity, annotation range, and provenance sidecar APIs for AST JSON. Editor snapshots include session-scoped node identities, and `parseWithProvenance` measures top-level source bytes.
-- `renderCarveWithConversionReport` names AST structures and fields that Carve source cannot spell.
-
-### Fixed
-
-- `applyAstPatch` rejects unknown operations and malformed pointers before applying a patch.
-
 ## [0.1.8] - 2026-09-25
 
 ### Breaking
@@ -34,6 +25,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- `applyAstPatch` rejects unknown operations and malformed pointers before applying a patch (#2091).
 - The Markdown target keeps every block a list item holds. A continuation line is
   padded from the item's marker rather than from a task item's checkbox, and a
   block below a nested list gets the blank line that stops GFM reading it as a
@@ -81,6 +73,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Improvements
 
+- Node identity, annotation range, and provenance sidecar APIs for AST JSON. Editor snapshots include session-scoped node identities, and `parseWithProvenance` measures top-level source bytes (#2091).
+- `renderCarveWithConversionReport` names AST structures and fields that Carve source cannot spell (#2091).
 - An include warning carries `includedBy`, the directives that pulled its file in, root first (#1956; markup-carve/carve-lsp#224).
 - `carve lint` reports a fence opener that fell back to inline text, as rule `fence-opener-fallback` (#1914).
 - `carve lint` reports a `::: footnotes` or `::: references` marker inside a container, which renders a plain typed div and places nothing, and takes `--extension citations` so the references rule is reachable from the command line (#2045, #2068).
