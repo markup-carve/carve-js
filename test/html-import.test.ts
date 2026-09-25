@@ -270,6 +270,27 @@ describe('table cell scope on import', () => {
   })
 })
 
+describe('multiline content in table cells', () => {
+  for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+    it(`keeps a multiline form inside the table in ${mode} mode`, () => {
+      const result = htmlToCarve('<table><tr><td><form>f\ng</form></td></tr></table>', { mode })
+      expect(result.value).toBe('| f g |\n')
+      expect(parse(result.value).children[0]?.type).toBe('table')
+      expect(result.report.diagnostics.map((d) => d.code)).toContain('element-unwrapped')
+      expect(result.report.diagnostics.map((d) => d.code)).not.toContain('raw-preserved')
+    })
+
+    it(`flattens code lines inside the table in ${mode} mode`, () => {
+      const result = htmlToCarve('<table><tr><td><pre><code>f\ng</code></pre></td></tr></table>', { mode })
+      expect(result.value).toBe('| `f g` |\n')
+      expect(parse(result.value).children[0]?.type).toBe('table')
+      expect(result.report.diagnostics.map((d) => d.code)).toContain('structure-unspellable')
+      expect(result.report.diagnostics.map((d) => d.code)).toContain('element-unwrapped')
+      expect(result.report.diagnostics.map((d) => d.code)).not.toContain('raw-preserved')
+    })
+  }
+})
+
 describe('table caption on import', () => {
   const carve = (html: string) => htmlToCarve(html).value.trim()
   const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
