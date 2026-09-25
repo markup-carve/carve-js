@@ -2125,8 +2125,7 @@ export function renderInlinesInLinkContext(nodes: InlineNode[], opts?: RenderOpt
  * from a BLOCK renderer without being handed the options - the extension render
  * context does not carry them - and rendering a label with defaults is not a
  * cosmetic difference. `allowRawHtml: false` escaped a heading's raw inline HTML
- * and a table-of-contents entry built from the same nodes emitted it live
- * (raised by codex review).
+ * and a table-of-contents entry built from the same nodes emitted it live.
  *
  * A transform that runs BEFORE the render still sees `{}`, which is correct:
  * there is no active render to inherit from. markup-carve/carve-js#871 tracks

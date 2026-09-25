@@ -450,8 +450,7 @@ export const migrateScanSteps = { count: 0 }
  * of its time on for a large input is the per-edit whole-string splice below,
  * which is a separate O(edits x length) cost this sweep has no bearing on - so
  * a wall-clock bound on the whole call reads mostly that, loosely, and a loose
- * bound on a jittery dominant term is what carve-js#1268 walked across at
- * 2651 ms against 2500 ms on unchanged code.
+ * bound on that dominant term would not measure this sweep.
  */
 export const migrateCrossSteps = { count: 0 }
 

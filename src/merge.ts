@@ -34,10 +34,7 @@ const MISSING = Symbol('missing')
  * 1_000_000 and pairs the remaining kinds monotonically instead, which is the
  * only thing standing between a large ambiguous sibling edit and a quadratic
  * merge. That refusal is COUNTABLE - the table is either built or it is not -
- * so the guard on it does not need a clock, and should not have one: the wall
- * clock reading for 2000 ambiguous siblings sat 5.8x under its 2500 ms bound on
- * an idle box and ambient load alone inflates readings in this suite by more
- * than 10x (carve-js#1268).
+ * so the guard counts cells rather than relying on wall-clock timing.
  */
 export const mergeMatchDpCells = { count: 0 }
 type Value = unknown | typeof MISSING
