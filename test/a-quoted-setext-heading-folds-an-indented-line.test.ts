@@ -84,8 +84,14 @@ describe('a quoted setext heading folds an indented continuation line', () => {
     // CommonMark reads: <blockquote><p>foo</p><h1>bar</h1><hr /></blockquote> -
     // three columns in the heading interrupts, so there is nothing to underline
     // and the rule below it is a rule. carve-php reads the same. The control.
+    //
+    // Those three columns used to be carried through, and Carve reads an opener
+    // only AT its container's content column, so what this case calls a heading
+    // came out inside the paragraph (carve-js#2030, carve-js#2031). Asking only
+    // for the rule left that invisible, which is why the heading is asserted now.
     const out = markdownToCarve(`> foo\n> ${sp(3)}# bar\n> ---\n`)
-    expect(out).toBe('> foo\n>    # bar\n> ---\n')
+    expect(out).toBe('> foo\n>\n> # bar\n> ---\n')
+    expect(carveToHtml(out)).toMatch(/<h1[^>]*>bar<\/h1>/)
     expect(carveToHtml(out)).toContain('<hr>')
   })
 
