@@ -3761,9 +3761,7 @@ const RE_ANY_COLON_CLOSER = /^[ \t]*(:{3,})[ \t]*$/
 //
 // Too wide, a line the real matcher rejects turns "no closer ahead" into "go
 // and scan", and the scan runs to end of document. That is only slow - the
-// quadratic path this index exists to close, and a document of ` ```js `
-// openers under a single ` ```<TAB> ` went from 11ms to 270ms at 4000 lines
-// when the real matcher was narrowed and this one was not (carve-js#1121).
+// quadratic path this index exists to close.
 //
 // Too narrow, an opener is told no closer exists and swallows the rest of the
 // document past a closer that is really there. So this constant follows the
@@ -4112,8 +4110,7 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
  *
  * Keying on the character alone was not enough: a single short `` ``` `` after
  * a thousand unterminated `` ````js `` openers set "saw one" on every scan and
- * the bound never advanced, so the lookahead stayed quadratic - 500 openers
- * took 41ms and 4000 took 1104ms. Raised by codex review.
+ * the bound never advanced, so the lookahead stayed quadratic.
  */
 interface FenceCloserMemoEntry {
   from: number
@@ -7062,8 +7059,7 @@ const PREFIX_WINDOW = 32
  * CHEAP FIRST, because this runs on every line an item collects. `isLinkDefLine`
  * splits a trailing attribute block off the line before it tests, which makes it
  * the most expensive predicate in the tracker - putting it on the path of every
- * ordinary prose line cost about 3x on a deeply-indented staircase, and the
- * scaling guard caught it at 2.28x per byte against a 2.0 threshold.
+ * ordinary prose line makes it pay for that predicate.
  *
  * A strict superset, so it decides nothing: both definition forms open with `[`
  * after optional indentation and a comment with `%`, and `splitTrailingAttrBlock`
@@ -7191,8 +7187,7 @@ function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
  * Split out of the classifier so the three questions asked of a marker line -
  * does it leave a paragraph, does it end on a table row, and what quote does it
  * end on - are answered from ONE walk. Asking them separately walked the prefix
- * twice per marker line and cost about 40% on a deeply-indented staircase; the
- * scaling guard read it as 2.28x per byte against a 2.0 threshold.
+ * twice per marker line.
  */
 function markerLineBottomBlock(content: string): string {
   // `> > # H` is the quote's question twice over, and `- - # H` is the
@@ -8400,9 +8395,9 @@ function parseList(lexer: Lexer): List {
     // STILL ONE STATEFUL PASS, not one scan per line. Asking
     // `fencedBlockEnd` at every index reads the same suffix again for every
     // unterminated opener, which is quadratic: an item of N comment openers of
-    // strictly increasing width (none of which can close) went from 137ms to
-    // 15s at N=4000, a parser DoS on a 4000-line document. The stack below is
-    // `findColonCloser`'s nesting model run once, left to right, which is what
+    // strictly increasing width, none of which can close, repeats that scan.
+    // The stack below runs `findColonCloser`'s nesting model once, left to right,
+    // which is what
     // keeps the whole pass linear (ranges never overlap).
     const fenceLines = [content, ...nested]
     const inFence: boolean[] = new Array(fenceLines.length).fill(false)
@@ -11006,8 +11001,7 @@ interface InlineSource {
    * than re-basing the array is what keeps this linear: a cell accumulates one
    * range per continuation row and a nested scan per inline construct, so
    * copying the array on every `shiftSource` is quadratic in a tall cell that
-   * also carries markup - measured at 3.0x per byte over a 4x input before this
-   * was a delta.
+   * also carries markup.
    */
   rangeShift?: number
 }

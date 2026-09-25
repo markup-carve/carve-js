@@ -3205,8 +3205,7 @@ class Importer {
 
     // How many rows are left in each row's own group, INCLUDING it. Computed
     // once: asking per cell meant scanning the whole table for each one, which
-    // is quadratic in the row count and showed as 3000 rows in 299 ms against
-    // 6000 in 852 ms.
+    // is quadratic in the row count.
     const remainingInGroup = new Map<P5Node, number>()
     const groupTotals = new Map<P5Node | undefined, number>()
     for (const row of tr) groupTotals.set(group.get(row), (groupTotals.get(group.get(row)) ?? 0) + 1)

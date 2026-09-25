@@ -59,10 +59,8 @@ export interface CarveRenderOptions extends RenderLossSinkOptions {}
  * pattern `/[^\S\u00a0]+$/` is quadratic on its input, because the engine
  * retries the run from every start position before it can fail. The writer
  * trims whole rendered subtrees, whose length grows with nesting depth, so
- * that cost compounded per level - `fmt` on an 80-level list took 88 seconds
- * here against 0.24 in carve-php and 0.009 in carve-rs, all of it inside
- * these two patterns (carve-js#638). A scan from the end is linear in the
- * run it removes.
+ * that cost compounds per level. A scan from the end is linear in the run it
+ * removes.
  */
 function isWsNonNbsp(ch: string): boolean {
   return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
@@ -301,13 +299,8 @@ function narrowEscalation(ast: Document, conservative: string, conservativeTree:
   // renders the same bytes in or out of the set, so offering it its minimal form
   // is a render and a parse spent to learn nothing.
   //
-  // The gap is not small on nested documents. On the deepest corpus document -
-  // 203 nested colon fences, whose overflow past the nesting cap is the text the
-  // writer must keep from re-opening a div - the walk yields 209 units and the
-  // writer asks about FOUR of them. The other 205 were halved over at a render
-  // and a parse each, and that document's own output is 21x its source (a fence
-  // widens by one colon per level, PART 9 §12), so each of those cost about
-  // what parsing 42 KB costs.
+  // Deep nesting produces many units the writer never asks about. Probing each
+  // would re-render and re-parse output that grows with nesting depth.
   //
   // Logging it rather than predicting it is the same choice `collectEscapeUnits`
   // makes and for the same reason: the set is whatever the arms visit, so an arm
@@ -340,10 +333,6 @@ function narrowEscalation(ast: Document, conservative: string, conservativeTree:
   // budget runs out and returns the state it has reached, which is verified like
   // every other - the escalation is wider than §2b's minimum there, never
   // narrower, and no document's output can be wrong for it.
-  //
-  // MEASURED over the 1358 pinned corpus documents: 51 reach the search at all,
-  // and once the control render has narrowed the candidates to the units the
-  // writer asks about, the widest holds five and none holds more.
   let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
 
   /** Hand `group` its minimal form, keeping it only if the document still holds. */
@@ -1039,8 +1028,7 @@ function renderBlockBody(
     case 'block_quote': {
       // Written back in the spelling it was read in (markup-carve/carve#1718).
       // Choosing structurally instead - the fence whenever the quote holds a
-      // non-paragraph block - re-canonicalizes 50 of the corpus documents and
-      // every user document with a multi-block quote, which is why the node
+      // non-paragraph block - changes authored multi-block quotes, so the node
       // carries the author's choice rather than the writer inferring one.
       if (node.fenced) {
         const fence = colonFenceFor(ctx)
@@ -2279,10 +2267,8 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
  * than relocate visible output" - so an abbreviation definition already sits
  * where the author wrote it and must be written there.
  *
- * Listing it here moved every abbreviation definition to the end of the
- * document (carve-js#756): `compare:impls` reported five corpus documents at
- * once, all abbreviation cases, with carve-rs and carve-php agreeing against
- * this engine.
+ * Adding abbreviation definitions here would move them from their authored
+ * position to the end of the document.
  */
 const HOISTED_DEFINITION_TYPES = new Set(['link_reference_definition'])
 
