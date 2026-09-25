@@ -116,7 +116,14 @@ function renderGlossary(
   // authored `{#id .class}` rides on the first <dl>.
   let firstDl = true
   const parts: string[] = []
+  // A `<dl>` holds no `<p>`, so the marker's title and label sit immediately
+  // before the generated lists rather than inside one, and name nothing
+  // (CARVE-P9-072). The label was dropped here, which the unconsumed-label
+  // floor forbids.
   if (node.title !== undefined) parts.push(`${pad}<p class="admonition-title">${ctx.renderInlines(node.title)}</p>`)
+  if (node.label !== undefined && node.label !== '') {
+    parts.push(`${pad}<p class="div-label">${ctx.escapeHtml(node.label)}</p>`)
+  }
   for (const child of node.children) {
     if (child.type !== 'definition_list') {
       parts.push(ctx.renderChildren([child], ctx.level))

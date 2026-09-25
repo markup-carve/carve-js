@@ -292,7 +292,7 @@ function authoredAttr(attrs: Attrs | undefined, name: string): boolean {
 /** Build the `<nav>`'s attributes: force a leading `toc` class, carry the
  *  author's `{#id .class}`, name the landmark, and drop the directive-only
  *  `depth`/`from`/`to` keys so they never render as HTML attributes. */
-function navAttrs(attrs: Attrs | undefined, navLabel: string): Attrs {
+function navAttrs(attrs: Attrs | undefined, navLabel: string, titleId?: string): Attrs {
   // `toc` leads; drop any author-supplied `toc` so `{.toc}` never doubles it.
   const a: Attrs = { classes: ['toc', ...(attrs?.classes ?? []).filter((c) => c !== 'toc')] }
   if (attrs?.id !== undefined) a.id = attrs.id
@@ -302,8 +302,14 @@ function navAttrs(attrs: Attrs | undefined, navLabel: string): Attrs {
     for (const k of Object.keys(kv)) if (!RESERVED_TOC_ATTRS.has(k)) kept[k] = kv[k]!
   }
   // APPENDED, after whatever the author wrote, so naming the landmark never
-  // moves an attribute they placed.
-  if (namesTheNav(navLabel, attrs)) kept['aria-label'] = navLabel
+  // moves an attribute they placed. A quoted title on the marker IS the name
+  // (CARVE-P9-072), so it replaces the `tocNav` default rather than sitting
+  // beside it.
+  if (titleId !== undefined && !authoredAttr(attrs, 'aria-label') && !authoredAttr(attrs, 'aria-labelledby')) {
+    kept['aria-labelledby'] = titleId
+  } else if (titleId === undefined && namesTheNav(navLabel, attrs)) {
+    kept['aria-label'] = navLabel
+  }
   if (Object.keys(kept).length > 0) a.keyValues = kept
   return a
 }
@@ -354,19 +360,30 @@ function renderToc(
   entries: TocEntry[],
   budget: AbbrBudget,
 ): string {
-  const attrs = ctx.renderAttrs(navAttrs(node.attrs, ctx.labels.tocNav))
-  const emptyNav = `<nav${attrs}></nav>`
-  const title = node.title === undefined ? '' : `${ctx.indent(ctx.level)}<p class="admonition-title">${ctx.renderInlines(node.title)}</p>\n`
+  // The marker's title and label are the nav's FIRST CHILDREN, and the title is
+  // the nav's accessible name (CARVE-P9-072). Column 0 like the list below it,
+  // so the fragment stays byte-identical across implementations.
+  const titleId = node.title === undefined
+    ? undefined
+    : (authoredAttr(node.attrs, 'aria-label') || authoredAttr(node.attrs, 'aria-labelledby')
+        ? ''
+        : ctx.titleId())
+  const attrs = ctx.renderAttrs(navAttrs(node.attrs, ctx.labels.tocNav, titleId === '' ? undefined : titleId))
+  const idAttr = titleId === undefined || titleId === '' ? '' : ` id="${ctx.escapeAttr(titleId)}"`
+  const head =
+    (node.title === undefined ? '' : `<p class="admonition-title"${idAttr}>${ctx.renderInlines(node.title)}</p>\n`) +
+    (node.label === undefined || node.label === '' ? '' : `<p class="div-label">${ctx.escapeHtml(node.label)}</p>\n`)
+  const emptyNav = head === '' ? `<nav${attrs}></nav>` : `<nav${attrs}>\n${head}</nav>`
   // Preserve any authored blocks written inside the placeholder before the nav,
   // never silently drop them (mirrors the index/glossary directives).
   const wrap = (nav: string): string =>
-    title + (node.children.length === 0 ? nav : `${ctx.renderChildren(node.children, ctx.level)}\n${nav}`)
+    node.children.length === 0 ? nav : `${ctx.renderChildren(node.children, ctx.level)}\n${nav}`
 
   const { minLevel, maxLevel } = tocWindow(node.attrs)
   const picked = entries.filter((e) => e.level >= minLevel && e.level <= maxLevel)
   if (picked.length === 0) return wrap(emptyNav)
   // Newlined, column-0 nav matching carve-php byte-for-byte.
-  const nav = `<nav${attrs}>\n${buildList(picked, 'ul', undefined)}</nav>`
+  const nav = `<nav${attrs}>\n${head}${buildList(picked, 'ul', undefined)}</nav>`
   // Bound cumulative nav bytes across all `::: toc` blocks in one render: K
   // blocks x N headings would otherwise amplify output ~K*N. Once the
   // per-render budget is exhausted, further blocks degrade to an empty nav.
