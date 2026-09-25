@@ -18,6 +18,7 @@ import type {
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS, GENERATED_CONTENT_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
+import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
 import { mergeAttrs } from './parse.js'
@@ -2429,11 +2430,16 @@ class Importer {
       // (carve-js#2053). The bracket pair is kept as text where the `<input>`
       // stood and the row says what could not be spelled. The AST holds the box
       // either way, so this runs on the writing exit alone (PART 12 §16).
+      //
+      // The message is the contract's, shared with the Markdown entry point:
+      // one loss with one cause reads the same from either direction, and the
+      // grammar clause behind it stays in the contract's prose rather than in
+      // the row (carve-js#2062).
       const orderedTask = ordered && input !== undefined && this.writing
       if (orderedTask) {
         this.add(
           'structure-unspellable',
-          "Wrote an ordered task item's checkbox as its bracket text: a Carve task marker is spelled behind a bullet only, so the item keeps the characters and loses the task-item semantics",
+          ORDERED_TASK_ITEM_UNSPELLABLE,
           'warning',
           this.childPath(liPath, input, (li.childNodes ?? []).indexOf(input)),
           input,

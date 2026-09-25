@@ -14,6 +14,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
+import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { isTableRow, parse } from './parse.js'
 import { escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 
@@ -1429,7 +1430,7 @@ function reportOrderedTask(line: string): void {
   if (match === null || itemContentColumn(match[1]!) < columnWidth(match[1]!)) return
   importLosses.push({
     code: 'structure-unspellable',
-    message: 'An ordered task item is not spellable as a Carve task item; the checkbox marker was kept as text',
+    message: ORDERED_TASK_ITEM_UNSPELLABLE,
   })
 }
 
