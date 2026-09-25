@@ -823,6 +823,11 @@ const IMPLEMENTED = new Set([
   'an-item-s-fence-is-read-once-whatever-block-it-follows',
   'an-unresolved-reference-s-literal-source-is-html-escaped-like-any-other-text',
   'any-character-is-content-of-the-combined-bold-italic-token',
+  // Both arrive with carve 4733094 and both already read the ruled way: the
+  // container body slot on carve-js#2038, the refused footnotes placement and
+  // its lint finding on carve-js#2060.
+  'a-footnotes-placement-marker-inside-a-container-does-not-place',
+  'a-title-or-label-fills-the-container-body-slot',
 ])
 
 /**
