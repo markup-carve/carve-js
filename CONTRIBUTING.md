@@ -43,15 +43,24 @@ The suite is about 740 test files. `npm run test:includes` runs the
 include-conformance vectors on their own; CI runs it as a step of its own after
 `npm test`, so a failure there names that gate rather than the whole suite.
 
-Two suites need a browser and stay out of the everyday run:
+Two suites run against the built artifact, so they need `npm run build` first and
+stay out of the everyday run:
 
 ```bash
+npm run build
 npm run test:browser   # the IIFE bundle renders identically to the ESM build
 npm run test:mxss      # mutation-XSS check on the svg fence
 ```
 
-`test:mxss` needs Playwright and Chromium, which CI installs for that job alone
-rather than carrying as a devDependency.
+`test:browser` loads the bundle in a Node `vm` context holding only globals a
+browser also provides, so a Node builtin creeping into the entry fails there
+rather than in a consumer's iframe. `test:mxss` is the one that needs a real
+browser: Playwright and Chromium, which CI installs for that job alone rather than
+carrying as a devDependency.
+
+Both scripts run their own `--selfcheck` pass first: each builds a deliberately
+wrong artifact and asserts the check reports it, so neither gate can pass by being
+unable to fail.
 
 ### The scaling guards
 
