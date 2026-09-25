@@ -477,12 +477,9 @@ export function escapeAttrValue(value: string): string {
  *  the legacy `behavior` / `-moz-binding` script bindings. Whitespace is
  *  collapsed first so `expr ession (` cannot evade. */
 function hasDangerousCss(value: string): boolean {
-  // Decode CSS escapes BEFORE lowercasing: an escaped uppercase code point
-  // (e.g. `\55` -> `U`) must fold to lowercase too, or `\55rl(` would slip past
-  // the lowercase needles.
-  const compact = decodeCssEscapes(value.replace(/\/\*[\s\S]*?\*\//g, ''))
-    .toLowerCase()
-    .replace(/\s+/g, '')
+  // Case and whitespace fold HERE rather than in `decodedStyleValue`, because a
+  // `url(...)` argument needs its own spacing and quoting to parse.
+  const compact = decodedStyleValue(value).toLowerCase().replace(/\s+/g, '')
   return (
     compact.includes('expression(') ||
     compact.includes('url(') ||
@@ -490,6 +487,24 @@ function hasDangerousCss(value: string): boolean {
     compact.includes('behavior:') ||
     compact.includes('-moz-binding')
   )
+}
+
+/**
+ * The text §25's `style` needles act on: comments removed, then CSS escapes
+ * decoded.
+ *
+ * Exported as the ONE seam both readings of a `style` value ask, so a caller
+ * outside the renderer cannot answer "what does this declaration say?" from the
+ * raw bytes. `html-import.ts` scans it for `url(...)` arguments: over the raw
+ * attribute the two readings drifted in both directions - a denied URL inside a
+ * comment looked live, and one written `java\73 cript:` looked like an unnamed
+ * construct (markup-carve/carve-js#2058).
+ *
+ * Escapes decode BEFORE the caller lowercases, or `\55rl(` would slip past a
+ * lowercase needle.
+ */
+export function decodedStyleValue(value: string): string {
+  return decodeCssEscapes(value.replace(/\/\*[\s\S]*?\*\//g, ''))
 }
 
 function decodeCssEscapes(value: string): string {

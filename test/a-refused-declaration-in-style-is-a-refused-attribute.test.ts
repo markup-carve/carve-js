@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { htmlToCarve } from '../src/index.js'
+import { renderedAttrValue } from '../src/render-html.js'
 
 type Row = [string, string, string, string, string, string]
 
@@ -110,7 +111,7 @@ describe('a refused declaration in style is a refused attribute', () => {
    * the two error reasons are not the same test: the renderer blanks the value
    * for the construct, and no scheme in it is denied.
    */
-  it.each([
+  const DECLARATIONS: Array<[string, 'error' | 'info', string]> = [
     ['background:url(javascript:x)', 'error', 'style with a denied URL scheme in a declaration value'],
     ['background:url(vbscript:x)', 'error', 'style with a denied URL scheme in a declaration value'],
     ['width:expression(alert(1))', 'error', 'style with a construct the CSS sanitizer refuses'],
@@ -123,7 +124,26 @@ describe('a refused declaration in style is a refused attribute', () => {
     // alone. It is one row like any other `style` in the bytes.
     ['', 'info', 'style'],
     ['   ', 'info', 'style'],
-  ])('reads %s as %s', (declaration, severity, subject) => {
+    // BOTH READINGS OVER ONE TEXT (markup-carve/carve-js#2058). A scan of the raw
+    // attribute answered `error` about a comment the renderer writes back
+    // untouched, and gave the construct reason where the scheme reason is the
+    // true one. Comments are gone and CSS escapes decoded before either reading.
+    ['color:red;/*url(javascript:x)*/', 'info', 'style'],
+    ['/*url(javascript:x)*/color:red', 'info', 'style'],
+    ['background:url(pic.png)/*url(javascript:x)*/', 'error', 'style with a construct the CSS sanitizer refuses'],
+    ['background:url(java\\73 cript:x)', 'error', 'style with a denied URL scheme in a declaration value'],
+    ['background:\\75 rl(javascript:x)', 'error', 'style with a denied URL scheme in a declaration value'],
+    ['background:u\\72 l(javascript:x)', 'error', 'style with a denied URL scheme in a declaration value'],
+    // The same denied URL outside the comment keeps the scheme reason.
+    ['/*a*/background:url(javascript:x)', 'error', 'style with a denied URL scheme in a declaration value'],
+    // Neither escaping nor commenting adds a THIRD reason: carve#2267 closes the
+    // set at two. An escaped `expression(` and a denied scheme with no `url(...)`
+    // in the value both stay on the construct reason.
+    ['width:\\65 xpression(alert(1))', 'error', 'style with a construct the CSS sanitizer refuses'],
+    ['javascript:x', 'error', 'style with a construct the CSS sanitizer refuses'],
+  ]
+
+  it.each(DECLARATIONS)('reads %s as %s', (declaration, severity, subject) => {
     expect(report(`<form style="${declaration}">t</form>`)[0]).toEqual([
       'attribute-preserved',
       severity,
@@ -132,6 +152,24 @@ describe('a refused declaration in style is a refused attribute', () => {
       '/form[1]',
       `Preserved ${subject} on <form> in the raw HTML this element is kept as`,
     ])
+  })
+
+  /*
+   * The class as a BICONDITIONAL against the sanitizer rather than an imitation
+   * of it: the row is `error` exactly where the renderer blanks the value. A
+   * raw-byte scan cannot satisfy it, because a denied URL inside a CSS comment
+   * reports `error` about a value the renderer writes back as authored.
+   */
+  it.each(DECLARATIONS)('marks %s error exactly where the renderer blanks it', (declaration) => {
+    const blanked = renderedAttrValue('style', declaration) !== declaration
+    expect(report(`<form style="${declaration}">t</form>`)[0]![1] === 'error').toBe(blanked)
+  })
+
+  /* The bytes still reach the output as authored, comment and escape included. */
+  it('keeps a commented or escaped declaration in the output', () => {
+    for (const declaration of ['color:red;/*url(javascript:x)*/', 'background:url(java\\73 cript:x)']) {
+      expect(value(`<form style="${declaration}">t</form>`)).toContain(`style="${declaration}"`)
+    }
   })
 
   /* The inline arm keeps a raw SPAN through its own walk. */
