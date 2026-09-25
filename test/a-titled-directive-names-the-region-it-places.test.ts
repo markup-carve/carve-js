@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
+import { citations } from '../src/citations.js'
 import { glossary } from '../src/glossary.js'
+import { index } from '../src/index-terms.js'
 import { tocPlacement } from '../src/table-of-contents.js'
 
 const placed = 'a[^1]\n\n::: footnotes "Notes" [End]\n:::\n\n[^1]: body\n'
+
+/** What an untitled, unlabeled marker renders: the same lines, minus the tokens. */
+const withoutTokens = (html: string): string =>
+  html
+    .split('\n')
+    .filter((line) => !/class="(admonition-title|div-label)"/.test(line))
+    .join('\n')
 
 describe('a titled directive names the region it places (CARVE-P9-072)', () => {
   it('opens the endnotes section with the title, the label and then the rule', () => {
@@ -75,5 +84,65 @@ describe('a titled directive names the region it places (CARVE-P9-072)', () => {
       ['<p class="admonition-title">Gloss</p>', '<p class="div-label">G</p>', '<dl class="glossary">'].join('\n'),
     )
     expect(html).not.toContain('aria-labelledby')
+  })
+
+  it('puts the tokens before an index list, whose <ul> holds no paragraph', () => {
+    const src = (tokens: string) => `A :index[parser] here.\n\n::: index${tokens}\n:::\n`
+    const opts = { extensions: [index()] }
+    const html = carveToHtml(src(' "Idx" [I]'), opts)
+    expect(html).toContain(
+      ['<p class="admonition-title">Idx</p>', '<p class="div-label">I</p>', '<ul class="index">'].join('\n'),
+    )
+    expect(html).not.toContain('aria-labelledby')
+    expect(html).not.toContain('adm-')
+    expect(withoutTokens(html)).toBe(carveToHtml(src(''), opts))
+  })
+
+  it('carries both tokens into a references list, with no name on it', () => {
+    const src = (tokens: string) => `See [@k].\n\n::: references${tokens}\n:::\n\n[@k]: An entry\n`
+    const opts = { extensions: [citations()] }
+    const html = carveToHtml(src(' "Cited" [R]'), opts)
+    expect(html).toContain(
+      [
+        '<div class="references">',
+        '  <p class="admonition-title">Cited</p>',
+        '  <p class="div-label">R</p>',
+        '  <ol class="references">',
+      ].join('\n'),
+    )
+    expect(html).not.toContain('aria-label')
+    expect(html).not.toContain('adm-')
+    expect(withoutTokens(html)).toBe(carveToHtml(src(''), opts))
+  })
+
+  it('carries both tokens into a bibliography marker that places nothing itself', () => {
+    const bibliography = [{ id: 'k', author: [{ family: 'Doe' }], title: 'An entry' }]
+    const html = carveToHtml('See [@k].\n\n::: bibliography "Sources" [B]\n:::\n', {
+      extensions: [citations({ bibliography })],
+    })
+    expect(html).toContain(
+      [
+        '<div class="bibliography">',
+        '  <p class="admonition-title">Sources</p>',
+        '  <p class="div-label">B</p>',
+        '</div>',
+      ].join('\n'),
+    )
+    expect(html).not.toContain('aria-label')
+    expect(html).not.toContain('adm-')
+  })
+
+  it('leaves a label alone with the name the labels map supplies, and mints no id', () => {
+    const notes = carveToHtml('a[^1]\n\n::: footnotes [End]\n:::\n\n[^1]: body\n')
+    expect(notes).toContain(
+      ['<section role="doc-endnotes" aria-label="Footnotes">', '  <p class="div-label">End</p>', '  <hr>'].join('\n'),
+    )
+    expect(notes).not.toContain('adm-')
+
+    const toc = carveToHtml('# Intro\n\n::: toc [T]\n:::\n', { extensions: [tocPlacement()] })
+    expect(toc).toContain(
+      ['<nav class="toc" aria-label="Table of contents">', '<p class="div-label">T</p>', '<ul>'].join('\n'),
+    )
+    expect(toc).not.toContain('adm-')
   })
 })
