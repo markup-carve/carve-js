@@ -16,3 +16,5 @@
 1838: written up in the 0.1.7 section under the issue it addresses part of, #1827
 1945: an unreleased regression in #1942, corrected before the 0.1.8 cut; the section's #1941 entry describes the behavior that ships
 1953: Extracts figure-target rendering into one helper per non-HTML renderer and routes standalone figures and panels through it. The PR states Markdown, plain-text and ANSI output are unchanged, and no public signature moves, so a consumer installing the package has nothing to act on.
+2066: Trims parser, writer and table-of-contents comments. No statement, signature or emitted byte moves, so a consumer installing the package has nothing to act on.
+2067: Removes stale benchmark figures from source comments across twelve modules. Comment text only; no code moves.
