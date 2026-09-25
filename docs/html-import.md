@@ -32,6 +32,28 @@ only for input you know came from that editor: on arbitrary HTML a mutually
 linked anchor pair is not proof of a footnote, which is why `generic` stays
 out.
 
+## Resource limits
+
+`maxDepth` and `maxNodes` bound the document. Past either, the import throws
+`HtmlImportLimitError` with the limit that stopped it, rather than handing back
+part of a document.
+
+`maxDiagnostics` (default 1000) bounds the REPORT instead. The conversion still
+returns its Carve or its AST; the report carries the rows that fit, and its last
+row is replaced by a `diagnostics-truncated` row of `error` severity saying more
+findings existed. Read that row as "some loss is not listed here": its fidelity
+is `dropped` and its confidence `fallback`, because nothing is known about the
+rows it stands for.
+
+```ts
+const { value, report } = htmlToCarve(html, { maxDiagnostics: 50 })
+if (report.diagnostics.at(-1)?.code === 'diagnostics-truncated') {
+  // `value` is complete; the report is not.
+}
+```
+
+Raising `maxDiagnostics` and importing again is what gets the rest.
+
 ## What the importer does not model
 
 
