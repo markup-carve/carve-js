@@ -69,7 +69,9 @@ describe('roundtrip rebuilds a figure only when Carve spells it', () => {
   it('preserves an orphan table cell, which Carve cannot spell at all', () => {
     expect(roundtrip(ORPHAN_CELL)).toEqual({
       carve: '`' + ORPHAN_CELL + '`{=html}\n',
-      codes: ['raw-preserved', 'raw-preserved'],
+      // The `<h1>` is inside the kept bytes, so it takes no row of its own
+      // (markup-carve/carve#2261).
+      codes: ['raw-preserved'],
     })
   })
 
