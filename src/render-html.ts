@@ -1924,7 +1924,12 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
   if (node.attrs?.order) restAttrs.order = node.attrs.order.filter((s) => s !== '.class')
   const tag = canonical ? 'aside' : 'div'
   const rest = renderAttrs(restAttrs, tag)
-  return `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}${accessibleName}>\n${titleLine}${labelLine}${body}\n${pad}</${tag}>`
+  const open = `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}${accessibleName}>`
+  // A title or a label IS visible container content and fills the body slot
+  // (CARVE-P10-001), so the blank line an empty body keeps must not follow one.
+  const head = `${titleLine}${labelLine}`.replace(/\n$/, '')
+  const visibleBody = head === '' ? body : `${head}${body === '' ? '' : `\n${body}`}`
+  return frameBlockContainer(open, visibleBody, `${pad}</${tag}>`)
 }
 
 function renderFigure(node: Figure, opts: RenderOptions, level: number, leadClass?: string): string {
