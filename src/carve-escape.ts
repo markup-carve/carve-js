@@ -59,9 +59,7 @@ function isEscapedAt(subject: string, offset: number): boolean {
  *
  * Built in one forward pass rather than by splicing each insertion into a
  * growing string. Splicing copies the whole string per insertion, which is
- * quadratic in the NUMBER of escapes rather than in the input length: a line of
- * 32000 braced pairs - 192KB, well inside the BBCode converter's own input
- * bound - took 5.5 seconds that way and 8 milliseconds this way.
+ * quadratic in the number of escapes rather than in the input length.
  */
 function insertEscapes(subject: string, offsets: readonly number[]): string {
   if (offsets.length === 0) {

@@ -245,7 +245,7 @@ export function deriveDisplayNodes(nodes: InlineNode[], insideLink: boolean): In
  * node carrying the expansion. Cloning THAT into a label publishes the full
  * `<abbr title="...">` once per derived site, which is an output amplification
  * the body renderer bounds with a budget this path has no access to - it runs in
- * `beforeRender`, before the renderer's budget exists (raised by codex review).
+ * `beforeRender`, before the renderer's budget exists.
  * Taking the author's `abbr` back out is both the bounded answer and the correct
  * one: an expansion the author did not write at that spot is an injection, and
  * `inlineText` already reduced the node this way.
@@ -258,7 +258,7 @@ function stripResolutionApparatus(nodes: InlineNode[]): InlineNode[] {
     // text, so its term feeds no heading slug and no derived text - `inlineText`
     // above carries that carve-out in as many words, and the node form has to
     // carry it too. Left in, a table-of-contents entry renders the term VISIBLY
-    // where the heading renders an empty anchor target (raised by codex review).
+    // where the heading renders an empty anchor target.
     if (n.type === 'inline_extension' && n.name === 'index') continue
     if (n.type === 'abbreviation') {
       out.push({ type: 'text', value: n.abbr } as Text)
@@ -1158,7 +1158,7 @@ export function collapseLoneImageParagraphs(doc: Document): Document {
   // lone-image paragraph: the reference then falls back to literal source and
   // the whole footnote section disappears. `fromEntries` defines rather than
   // assigns. Same hazard `ownValue` (src/own-property.ts) exists for on the
-  // read side; found by `codex review`.
+  // read side.
   const footnoteDefs = defs
     ? Object.fromEntries(Object.entries(defs).map(([label, blocks]) => [label, collapsedBlocks(blocks)]))
     : undefined

@@ -16,9 +16,7 @@
  * That is invisible until something feeds it a long, deeply indented string.
  * `renderMarkdown` does: it re-indents each list level by rendering the whole
  * subtree and trimming it, so a list ladder of depth N is trimmed N times, and
- * the string it trims is itself O(N^2) characters of indentation. Depth 50 took
- * 6.4 seconds and depth 80 did not return inside a minute, on a document well
- * inside the parse cap of 200 (carve-js#701).
+ * the string it trims is itself O(N^2) characters of indentation.
  *
  * ONE COPY, deliberately, where there were three. The trim is subtle in exactly
  * the way that drifts: which characters count, and that NBSP does not.

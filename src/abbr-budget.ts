@@ -3,27 +3,22 @@
  *
  * Each occurrence of an abbreviation re-emits its full expansion
  * (`<abbr title="EXPANSION">KEY</abbr>` in HTML, a raw `<abbr>` in Markdown,
- * `(EXPANSION)` in ANSI). A tiny input that defines a huge expansion
- * (`*[KEY]: <50KB>`) and uses the key many times amplifies output by
- * expansion_len x occurrences - up to thousands of times - and can exceed
- * V8's max string length (`RangeError: Invalid string length`), crashing the
- * render. We bound the cumulative bytes contributed by expansions across a
+ * `(EXPANSION)` in ANSI). Repeating a large expansion can amplify output until
+ * it exceeds V8's max string length. That crashes the render with
+ * `RangeError: Invalid string length`. We bound the cumulative bytes across a
  * single render: once the next occurrence would exceed the budget, that
  * occurrence (and all later ones) degrade gracefully to the plain key text
  * only (no `<abbr>` wrapper, no title). No throw, no giant allocation.
  *
- * Budget = max(BASE, FACTOR * sourceByteLength). This is far above any real
- * document and above every spec-corpus fixture, so the corpus is unaffected.
+ * Budget = max(BASE, FACTOR * sourceByteLength).
  *
  * Each occurrence is charged the RAW UTF-8 byte length of `expansion` (not the
  * HTML/Markdown-escaped form). This is deliberate: the same charge unit is used
  * by carve-rs and carve-php so all three impls degrade at the exact same
  * occurrence, keeping output cross-impl-aligned. An escape-heavy expansion
- * (e.g. all `&`, which inflates ~5x to `&amp;`) can therefore overshoot the
- * budget by that constant escape factor - a benign linear overage (a 1MB
- * budget tops out near ~5MB), nowhere near V8's max string length. The crash
- * DoS this guards against requires unbounded amplification, which the byte
- * cap removes regardless of the escape factor.
+ * can therefore overshoot the budget by that constant escape factor, while
+ * remaining linear in the input. The byte cap prevents unbounded amplification
+ * regardless of the escape factor.
  *
  * The counter is per render call. A renderer constructs a fresh tracker at its
  * top-level entry; it must never leak across calls.
@@ -61,7 +56,7 @@ export function abbrBudget(srcByteLength: number | undefined): number {
  * is on the bytes that actually exist. The three engines still agree, because
  * for one target they render the same label to the same bytes; what differs is
  * that an escape-heavy label costs more in HTML than in plain text, which is
- * true of the output as well (raised by codex review).
+ * true of the output as well.
  *
  * Every renderer and extension sizes its budget through this one call, so the
  * document's length is read in exactly ONE place. That matters because the
@@ -107,10 +102,8 @@ export function recordIngestPayloadLength(doc: object, bytes: number): void {
  *
  * On the INGEST path that number arrives INSIDE the payload (PART 12 §7 makes
  * it a field of the wire). Left alone it let the payload choose the size of the
- * guard meant to bound it: rewriting one number from 62,009 to 1,000,000,000
- * took a document from 1.01 MB of HTML to 200 MB, for nine extra bytes and no
- * extra payload. So an ingested document is bounded by what its payload cost as
- * well as by what it claims, and THE SMALLER WINS.
+ * guard meant to bound it. Bound ingested documents by payload size and claimed
+ * source length, using the smaller value.
  *
  * The claim is still honored where it is smaller, because a document that says
  * it came from a short source is not made suspect by its AST being verbose - and
