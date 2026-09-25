@@ -1793,8 +1793,11 @@ class ListMarkers {
         next: inner.number === undefined ? 0 : Number(inner.number) + 1,
       })
     }
+    // The markers the line nests are respelled the way the leading one just
+    // was. The kinds above stay the SOURCE characters, because whether the next
+    // line is a sibling turns on the bullet the author wrote.
     return {
-      line: m[1]! + marker + line.slice(m[0].length + pad - 1),
+      line: m[1]! + marker + respellNestedBullets(line, own).slice(m[0].length + pad - 1),
       separate: prev !== undefined && !same,
       outer,
       shift,
@@ -1809,8 +1812,16 @@ class ListMarkers {
 function nestedItemsOnLine(
   line: string,
   from: number,
-): Array<{ col: number; content: number; kind: string; bullet?: string; number?: string; end: number }> {
-  const items: Array<{ col: number; content: number; kind: string; bullet?: string; number?: string; end: number }> = []
+): Array<{ col: number; content: number; kind: string; bullet?: string; number?: string; marker: number; end: number }> {
+  const items: Array<{
+    col: number
+    content: number
+    kind: string
+    bullet?: string
+    number?: string
+    marker: number
+    end: number
+  }> = []
   // Past four columns of padding a marker's content is indented code, which
   // nests nothing (CommonMark 5.2).
   const padded = (start: number, end: number): boolean =>
@@ -1831,10 +1842,27 @@ function nestedItemsOnLine(
       kind: m[2] ?? m[4]!,
       bullet: m[2],
       number: m[3],
+      marker: at + m[1]!.length,
       end: at + m[0].length,
     })
     at += m[0].length
   }
+}
+
+/**
+ * `line` with every `+` marker it nests past `from` written as `-`, which is
+ * what `ListMarkers` already records for those items and what the leading
+ * marker is written as. Carve reads `+` as the continuation marker, so one left
+ * as it stands is the item's prose where cmark-gfm read a list
+ * (markup-carve/carve-js#2061). Both characters are one column wide, so nothing
+ * moves.
+ */
+function respellNestedBullets(line: string, from: number): string {
+  let out = line
+  for (const inner of nestedItemsOnLine(line, from)) {
+    if (inner.bullet === '+') out = out.slice(0, inner.marker) + '-' + out.slice(inner.marker + 1)
+  }
+  return out
 }
 
 /**
@@ -4703,9 +4731,6 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     let body = dedent ? containerPad + line.slice(indent) : line
     // Strip an ATX heading's optional closing `#` run (Carve keeps it as text).
     if (isHeading) body = body.replace(/[ \t]+#+[ \t]*$/, '')
-    // Carve has no `+` bullet (it is the list-continuation marker); normalize a
-    // Markdown `+` bullet to `-` so the converted list survives.
-    if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
     if (isBlockquote) {
       const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
       quoteCol = contentCol
