@@ -35,4 +35,9 @@ describe('line comment content', () => {
   it('keeps a no-break space as comment content', () => {
     expect(commentContents('%%.\u00a0\n')).toEqual(['.\u00a0'])
   })
+
+  it('consumes only one leading separator and keeps a vertical tab', () => {
+    expect(commentContents('%%  x \t\n')).toEqual([' x'])
+    expect(commentContents('%%\v x\n')).toEqual(['\v x'])
+  })
 })
