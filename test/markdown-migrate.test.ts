@@ -31,10 +31,12 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('2 * 3 * 4')).toBe('2 * 3 * 4')
   })
 
-  it('leaves intraword asterisk emphasis literal (not expressible in Carve)', () => {
-    // Carve `/` cannot open/close intraword, so `foo*bar*baz` is left as-is
-    // rather than emitting literal-slash garbage.
-    expect(conv('foo*bar*baz')).toBe('foo*bar*baz')
+  it('braces intraword asterisk emphasis, which is how Carve spells it', () => {
+    // cmark-gfm and GitHub both read <em>bar</em> here. Carve's BARE `/` cannot
+    // open or close intraword, but its braced form can, so the construct is
+    // expressible after all and the run is no longer left literal
+    // (carve-js#2031).
+    expect(conv('foo*bar*baz')).toBe('foo{/bar/}baz')
   })
 
   it('converts ___bold italic___ to Carve /*bold italic*/', () => {

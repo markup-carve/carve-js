@@ -1126,27 +1126,40 @@ function convertInline(
     return `\x00S${stash.length - 1}\x00`
   }
 
+  // Whether a run at `offset` has an alphanumeric neighbor, so it opens or
+  // closes INTRAWORD. Carve's bare markers do not open there and its braced
+  // forms do, so that is the spelling Markdown's intraword emphasis takes
+  // (carve-js#2031). `*` can open intraword in Markdown and `_` cannot, which
+  // is why only the star passes below drop their boundary guard.
+  const intraword = (full: string, offset: number, length: number): boolean =>
+    /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
+  const wrap = (open: string, body: string, close: string, braced: boolean): string =>
+    braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
+
   // Recursively convert *em* / _em_ nested inside a strong/bold-italic span to
   // /em/ (so a nested `_x_` becomes `/x/`, not Carve underline).
   const convertNestedEm = (inner: string): string =>
     inner
-      .replace(/(?<![A-Za-z0-9*])\*(?!\s)([^*]+?)(?<!\s)\*(?![A-Za-z0-9*])/g, '/$1/')
+      .replace(/(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)/g, (match, body: string, at: number, full: string) =>
+        wrap('/', body, '/', intraword(full, at, match.length)))
       .replace(/(?<![A-Za-z0-9_])_(?!\s)([^_]+?)(?<!\s)_(?![A-Za-z0-9_])/g, '/$1/')
 
   // ***bold italic*** / ___bold italic___ -> /*x*/ (Carve's canonical
   // bold-italic). The underscore form needs word boundaries: CommonMark `_`
   // cannot open/close emphasis intraword (foo___bar___baz stays literal).
-  line = line.replace(/\*{3}(?!\s)([\s\S]+?)(?<!\s)\*{3}/g, (_m, inner: string) =>
-    hold(`/*${convertNestedEm(inner)}*/`),
+  line = line.replace(/\*{3}(?!\s)([\s\S]+?)(?<!\s)\*{3}/g, (match, inner: string, at: number, full: string) =>
+    hold(wrap('/*', convertNestedEm(inner), '*/', intraword(full, at, match.length))),
   )
   line = line.replace(
     /(?<![A-Za-z0-9])___(?!\s)([\s\S]+?)(?<!\s)___(?![A-Za-z0-9])/g,
     (_m, inner: string) => hold(`/*${convertNestedEm(inner)}*/`),
   )
 
-  // **strong** -> *strong*
-  line = line.replace(/\*\*(?!\s)([\s\S]+?)(?<!\s)\*\*/g, (_m, inner: string) =>
-    hold(`*${convertNestedEm(inner)}*`),
+  // **strong** -> *strong*, braced where it opens intraword. Written bare there
+  // it was no strong at all AND the run came out one star shorter, so a reader
+  // saw `a*b*c` where the source said `a**b**c` (carve-js#2031).
+  line = line.replace(/\*\*(?!\s)([\s\S]+?)(?<!\s)\*\*/g, (match, inner: string, at: number, full: string) =>
+    hold(wrap('*', convertNestedEm(inner), '*', intraword(full, at, match.length))),
   )
 
   // __strong__ -> *strong* (word-boundary: intraword `_` is literal)
@@ -1155,10 +1168,10 @@ function convertInline(
     (_m, inner: string) => hold(`*${convertNestedEm(inner)}*`),
   )
 
-  // *emphasis* -> /emphasis/. Carve `/` cannot flank whitespace OR open/close
-  // intraword, so `2 * 3` and `foo*bar*baz` are left literal (Markdown
-  // intraword emphasis is not expressible in Carve — see module header).
-  line = line.replace(/(?<![A-Za-z0-9*])\*(?!\s)([^*]+?)(?<!\s)\*(?![A-Za-z0-9*])/g, '/$1/')
+  // *emphasis* -> /emphasis/, and `{/emphasis/}` where it opens intraword, which
+  // `/` cannot do bare. `2 * 3` stays literal on the whitespace guards alone.
+  line = line.replace(/(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)/g, (match, body: string, at: number, full: string) =>
+    wrap('/', body, '/', intraword(full, at, match.length)))
 
   // _emphasis_ -> /emphasis/ (word-boundary, so snake_case is left alone)
   line = line.replace(
@@ -1166,8 +1179,10 @@ function convertInline(
     '/$1/',
   )
 
-  // ~~strikethrough~~ -> ~strikethrough~
-  line = line.replace(/~~([^~]+)~~/g, '~$1~')
+  // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
+  // strikethrough and the run lost a tilde as well.
+  line = line.replace(/~~([^~]+)~~/g, (match, body: string, at: number, full: string) =>
+    wrap('~', body, '~', intraword(full, at, match.length)))
 
   // ==highlight== -> =highlight=. Carve highlight is a single `=`; a literal
   // `==x==` renders as plain text in Carve (corpus 74-two-char-delimiter-runs),
@@ -2755,6 +2770,19 @@ function respellQuotedBlocks(
         // One to three columns past the item's content read as none.
         if (kept !== undefined && markerCol > kept.content && markerCol < kept.content + 4) {
           text = ' '.repeat(kept.content + kept.shift) + trimmed
+        } else if (
+          // The same slack where the quote holds no item at all. Markdown's one
+          // to three columns there are the QUOTE's, and the block still opens;
+          // Carve reads an opener only AT its container's content column, so
+          // the slack turned the line back into text of the paragraph above
+          // (carve-js#2030, carve-js#2031).
+          kept === undefined &&
+          markerCol > 0 &&
+          markerCol < 4 &&
+          part.continued !== true &&
+          opensAtTheContentColumn(trimmed)
+        ) {
+          text = trimmed
         } else text = moved(asText ? { ...part, text: ' '.repeat(markerCol) + trimmed } : part).text
       }
     }
@@ -2772,6 +2800,19 @@ function respellQuotedBlocks(
     }
     if (leavesList) separate(part.prefix)
     leavesList = false
+    // `fmt` sets a block in a quote apart from the paragraph above it with an
+    // empty quote line. Carve reads the block either way, so this changes no
+    // render; written without it the import was not a fixed point of this
+    // engine's own formatter (carve-js#2031).
+    if (
+      part.continued !== true &&
+      indentColumns(text) === 0 &&
+      prev !== undefined &&
+      prev.prefix === part.prefix &&
+      prev.text.trim() !== '' &&
+      opensParagraph(prev.text.replace(RE_LIST_MARKER, '')) &&
+      opensAtTheContentColumn(text)
+    ) separate(part.prefix)
     out.push({ prefix: part.prefix, text, continued: part.continued })
     // A fence on the item's own line holds the lines up to its closer.
     const lead = asText ? null : quotedItemLead(part.text)
@@ -3103,6 +3144,20 @@ function collectListInlineRun(
 function openQuoteParagraph(text: string): string | null {
   const quote = blockquotePrefix(text.trimStart())
   return quote !== null && quote.text.trim() !== '' && quoteParagraphIsOpen(quote.text) ? quote.prefix : null
+}
+
+/**
+ * Whether `text` opens a block Carve reads at its container's content column
+ * and Markdown lets interrupt a paragraph from one to three columns in.
+ *
+ * Enumerated one spelling at a time rather than widened to "whatever opens a
+ * block at column 0": a fence belongs to the fence path, a list marker is
+ * written by the list that holds it, and a link reference definition interrupts
+ * no paragraph in Markdown, so dedenting one would spell a definition the source
+ * does not hold.
+ */
+function opensAtTheContentColumn(text: string): boolean {
+  return RE_MD_THEMATIC.test(text) || /^#{1,6}(?:[ \t]|$)/.test(text) || text.startsWith('>')
 }
 
 /**

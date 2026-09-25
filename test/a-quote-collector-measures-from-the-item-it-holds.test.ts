@@ -104,8 +104,15 @@ describe('the item column stops where the item does', () => {
     // `>  # h` sits left of the item's content column, so it ends the list and
     // the code below it is the quote's, not the item's.
     // cmark-gfm: <blockquote><ul><li>alpha</li></ul><h1>h</h1><pre><code>  code
+    //
+    // The heading is written AT the quote's content column. One column in it was
+    // no heading in Carve at all - the render held `<p># h</p>` and `fmt`
+    // escaped the marker, so the import was not a fixed point of it either
+    // (carve-js#2031). The assertion that asked only for the code block could
+    // not see that.
     const out = markdownToCarve(lines('> - alpha', '>' + sp(2) + '# h', '>', '>' + sp(7) + 'code'))
-    expect(out).toBe(lines('> - alpha', '>', '>' + sp(2) + '# h', '>', '> ```', '>' + sp(3) + 'code', '> ```'))
+    expect(out).toBe(lines('> - alpha', '>', '> # h', '>', '> ```', '>' + sp(3) + 'code', '> ```'))
+    expect(carveToHtml(out)).toMatch(/<h1[^>]*>h<\/h1>/)
     expect(carveToHtml(out)).toContain('<code>  code')
   })
 
