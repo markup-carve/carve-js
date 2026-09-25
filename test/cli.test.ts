@@ -407,6 +407,27 @@ describe('carve fix — files mode', () => {
 })
 
 describe('carve lint', () => {
+  it('checks references placement only when citations are selected', async () => {
+    const source = 'See [@x].\n\n> ::: references\n> :::\n\n[@x]: Source\n'
+    const plain = makeIO({ stdin: source })
+    expect(await run(['lint'], plain.io)).toBe(0)
+    expect(plain.out).toBe('')
+
+    const selected = makeIO({ stdin: source })
+    expect(await run(['lint', '--extension', 'citations'], selected.io)).toBe(1)
+    expect(selected.out).toContain('references-placement-in-container')
+
+    const json = makeIO({ stdin: source })
+    expect(await run(['lint', '--extension', 'citations', '--json'], json.io)).toBe(1)
+    expect(JSON.parse(json.out).some((warning: { rule: string }) => warning.rule === 'references-placement-in-container')).toBe(true)
+  })
+
+  it('rejects an unknown lint extension', async () => {
+    const t = makeIO({ stdin: '' })
+    expect(await run(['lint', '--extension', 'unknown'], t.io)).toBe(2)
+    expect(t.err).toContain('unknown --extension')
+  })
+
   it('reports a broken cross-reference and exits 1', async () => {
     const t = makeIO({ stdin: '# A\n\nSee </#ghost>.' })
     const code = await run(['lint'], t.io)
