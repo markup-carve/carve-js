@@ -4429,6 +4429,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
         quoteCol = contentCol
         if (run.blank) sourceBlanks.add(out.length)
+        // The paragraph this fence interrupts is on the item's own marker line,
+        // so it is not in this run and the collector cannot set the two apart
+        // the way `fmt` does.
+        if (lazyQuote !== null) out.push(' '.repeat(contentCol) + quoted.prefix.trimEnd())
         out.push(...run.lines)
         i = run.end - 1
         prevType = 'block_quote'

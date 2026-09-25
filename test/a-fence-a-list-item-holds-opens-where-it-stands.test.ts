@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { markdownToCarve } from '../src/markdown-migrate.js'
-import { carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml } from '../src/index.js'
 
 /**
  * A fence opener inside a list item is read at the position it stands in: at
@@ -109,6 +109,16 @@ describe('a fence a list item holds', () => {
       expect(html).toContain('<pre><code>x')
       expect(html).not.toContain('<del>')
       expect(html).not.toContain('~~')
+    })
+
+    it('is written the way fmt writes it, set apart from the paragraph', () => {
+      // `fmt` puts an empty quote line between a paragraph and a block below it.
+      // That paragraph is on the item's own marker line, so the quote collector
+      // cannot see it, and the import was not a fixed point of this engine's own
+      // formatter.
+      const carve = markdownToCarve(lines('- > a', sp(2) + '> ' + fence, sp(2) + '> x'))
+      expect(carveToCarve(carve)).toBe(carve)
+      expect(carveToHtml(carve)).toContain('<pre><code>x')
     })
 
     it('reads three columns of slack inside the quote as none', () => {
