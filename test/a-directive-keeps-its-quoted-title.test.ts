@@ -42,15 +42,18 @@ describe('a generated-content directive keeps its quoted title', () => {
     expect(carveToHtml(empty)).toContain('<p class="admonition-title"></p>')
   })
 
-  it('renders the title before a generated TOC', () => {
+  // Both cases read the other way round before CARVE-P9-072: the title was a
+  // sibling BEFORE the placed element, which left it outside the region it
+  // names while the region kept the labels-map default.
+  it('renders the title inside a generated TOC', () => {
     const html = carveToHtml('# Intro\n\n::: toc "Contents"\n:::\n', { extensions: [tocPlacement()] })
-    expect(html).toContain('<p class="admonition-title">Contents</p>')
-    expect(html.indexOf('admonition-title')).toBeLessThan(html.indexOf('<nav class="toc"'))
+    expect(html).toContain('<nav class="toc" aria-labelledby="adm-1">')
+    expect(html.indexOf('<nav class="toc"')).toBeLessThan(html.indexOf('admonition-title'))
   })
 
-  it('renders the title before placed endnotes', () => {
+  it('renders the title inside the placed endnotes section', () => {
     const html = carveToHtml('a[^1]\n\n::: footnotes "Notes"\n:::\n\n[^1]: body\n')
-    expect(html).toContain('<p class="admonition-title">Notes</p>')
-    expect(html.indexOf('admonition-title')).toBeLessThan(html.indexOf('doc-endnotes'))
+    expect(html).toContain('<section role="doc-endnotes" aria-labelledby="adm-1">')
+    expect(html.indexOf('doc-endnotes')).toBeLessThan(html.indexOf('admonition-title'))
   })
 })

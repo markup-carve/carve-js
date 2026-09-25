@@ -654,9 +654,10 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     // falls through to its default typed-div rendering. A document without the
     // marker is byte-identical to the previous behavior (default end append).
     if (isFootnotePlacement(node) && footnotes.order.length && !footnotesPlaced) {
-      if (node.title !== undefined) {
-        out.push(`${indent(sectionStack.length)}<p class="admonition-title">${renderInlines(node.title, opts)}</p>`)
-      }
+      // The marker's title takes its id BEFORE its children render, so the
+      // `adm-{n}` sequence follows document order even when a titled admonition
+      // is written inside the marker.
+      const placedTokens = placedTitleParts(node, opts, 1)
       // Preserve any blocks authored inside the placeholder before flushing.
       for (const child of (node as Directive).children) {
         const r = renderBlock(child, opts, sectionStack.length)
@@ -665,7 +666,9 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       // Flush the endnotes in place at the marker. Do NOT close open sections:
       // that would drop any following content out of its section (and diverged
       // from carve-php / carve-rs, which insert the section at the marker).
-      out.push(renderFootnoteSection(ast, footnotes, opts))
+      // The marker's title and label go INSIDE the section it places, so they
+      // travel with it rather than being pushed here.
+      out.push(renderFootnoteSection(ast, footnotes, opts, placedTokens))
       footnotesPlaced = true
       continue
     }
@@ -777,10 +780,55 @@ function collectFootnotes(ast: Document): FootnoteState {
  * plain return arrow `↩` (Carve's choice; djot appends a variation
  * selector). Indentation follows Carve's house style.
  */
-function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOptions): string {
+/** The `aria-labelledby` and the opening child lines a marker contributes. */
+interface PlacedTokens {
+  name: string
+  head: string
+}
+
+/**
+ * The next id in the ONE `adm-{n}` sequence a titled admonition and a titled
+ * directive share (PART 9 §12, CARVE-P9-072). Two counters would mint `adm-1`
+ * twice in a document holding both, and the registry would then rename an id
+ * the other element's `aria-labelledby` already points at.
+ */
+function mintTitleId(): string {
+  const baseId = `adm-${++admonitionCount}`
+  return docIds?.uniqueId(baseId) ?? baseId
+}
+
+/**
+ * The title and label a titled `directive` contributes to the element it
+ * places: the `aria-labelledby` for the element's own tag, and the two child
+ * lines that open it. Empty strings where the author wrote neither token.
+ */
+function placedTitleParts(
+  node: Directive,
+  opts: RenderOptions,
+  level: number,
+): PlacedTokens {
+  const title = node.title
+  let head = ''
+  let name = ''
+  if (title !== undefined) {
+    const titleId = mintTitleId()
+    name = ` aria-labelledby="${escapeAttr(titleId)}"`
+    head += `${indent(level)}<p class="admonition-title" id="${escapeAttr(titleId)}">${renderInlines(title, opts)}</p>\n`
+  }
+  const floor = labelFloor(node.label, level)
+  if (floor) head += `${floor}\n`
+  return { name, head }
+}
+
+function renderFootnoteSection(
+  ast: Document,
+  st: FootnoteState,
+  opts: RenderOptions,
+  placement?: PlacedTokens,
+): string {
   // The endnotes render outside every anchor, whatever the reference sites
   // were inside, so a crossref in a note body is a real link again.
-  return outsideLink(() => renderFootnoteSectionInner(ast, st, opts))
+  return outsideLink(() => renderFootnoteSectionInner(ast, st, opts, placement))
 }
 
 /** The keys of the `labels` render option (PART 9 §16a). */
@@ -834,10 +882,21 @@ function renderFootnoteSectionInner(
   ast: Document,
   st: FootnoteState,
   opts: RenderOptions,
+  placement?: PlacedTokens,
 ): string {
   const defs = ast.footnoteDefs ?? {}
+  // A `::: footnotes "Notes" [End]` marker names the section it places: the
+  // title and the label are its first children, before the `<hr>`, and the
+  // title supplies the accessible name in place of the `endnotes` default
+  // (CARVE-P9-072). The marker's own attributes do not reach this element, so
+  // nothing here can be overridden from the source.
+  const placed = placement ?? { name: '', head: '' }
+  const name = placed.name === ''
+    ? ` aria-label="${escapeAttr(label(opts, 'endnotes'))}"`
+    : placed.name
   const lines: string[] = [
-    `<section role="doc-endnotes" aria-label="${escapeAttr(label(opts, 'endnotes'))}">`,
+    `<section role="doc-endnotes"${name}>`,
+    ...(placed.head === '' ? [] : [placed.head.replace(/\n$/, '')]),
     `${indent(1)}<hr>`,
     `${indent(1)}<ol>`,
   ]
@@ -1180,6 +1239,7 @@ function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderConte
     escapeAttr,
     renderAttrs,
     uniqueId,
+    titleId: mintTitleId,
     mode: opts.mode ?? 'interactive',
     renderers: opts.renderers ?? {},
     labels: resolvedLabels(opts),
@@ -1834,8 +1894,7 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
   let accessibleName = ''
   if (canonical && !authoredName) {
     if (title !== undefined) {
-      const baseId = `adm-${++admonitionCount}`
-      titleId = docIds?.uniqueId(baseId) ?? baseId
+      titleId = mintTitleId()
       accessibleName = ` aria-labelledby="${escapeAttr(titleId)}"`
     } else {
       const key = `admonition${node.kind[0]!.toUpperCase()}${node.kind.slice(1)}` as LabelKey

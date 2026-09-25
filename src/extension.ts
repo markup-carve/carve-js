@@ -71,6 +71,17 @@ export type ExtensionRenderer = (
  * and context (no section-wrapping or tight-list elision leaks).
  */
 export interface BlockExtensionRenderContext extends ExtensionRenderContext {
+  /**
+   * The next id in the `adm-{n}` sequence a titled admonition uses, already
+   * reserved in the document id namespace (PART 9 §12, CARVE-P9-072).
+   *
+   * A `directive` renderer calls this when the element it places carries the
+   * author's title as its accessible name, so both kinds of titled block draw
+   * from ONE counter: a private counter in an extension would mint `adm-1` a
+   * second time and the shared registry would rename an id the other block's
+   * `aria-labelledby` points at.
+   */
+  titleId(): string
   /** Indentation level of the node being rendered. */
   level: number
   /** The indent string for a given level. */
