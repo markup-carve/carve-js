@@ -1285,10 +1285,10 @@ const RE_TASK_PAIR_LINE = /^((?:[ \t]*(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+))*)
 /**
  * Keep a task pair cmark-gfm read as text as text, by escaping its bracket.
  *
- * GFM's tasklist extension takes a box off a line carrying ONE container
- * marker, a bullet, and off the three states ` `, `x` and `X`. Carve's task
- * item has neither restriction, so it reads a box in a quoted or nested list
- * and behind its four further states, where the source meant the characters
+ * GFM's tasklist extension takes a box off a line carrying ONE list marker,
+ * bullet or ordered, and off the three states ` `, `x` and `X`. Carve reads a
+ * box behind a quoted item, two markers on one line, or four further states,
+ * where the source meant the characters
  * (carve-js#2047, carve-js#2048). cmark-gfm 0.29.0.gfm.13 is the reader the
  * importers answer to (carve#2187), extension scope included.
  *
@@ -1419,6 +1419,19 @@ export interface MarkdownImportLoss {
 }
 
 let importLosses: MarkdownImportLoss[] = []
+
+/** Report an ordered task item only when the list path reads it as an item. */
+function reportOrderedTask(line: string): void {
+  // cmark-gfm's task extension reaches one marker on this line. A quote or
+  // another list marker before the ordered marker leaves the pair as text.
+  // More than four columns after the marker start indented code in the item.
+  const match = /^([ \t]*\d{1,9}[.)][ \t]+)\[[ xX]\](?=[ \t])/.exec(line)
+  if (match === null || itemContentColumn(match[1]!) < columnWidth(match[1]!)) return
+  importLosses.push({
+    code: 'structure-unspellable',
+    message: 'An ordered task item is not spellable as a Carve task item; the checkbox marker was kept as text',
+  })
+}
 
 /**
  * Whether `row` is a row the parser reads back as a table row - the same
@@ -4544,6 +4557,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // inline conversion only — no top-level block spacing or dedent.
     if (prevType === 'list' && indent >= 1 && listCols.length > (isList ? 1 : 0)) {
       if (isList) {
+        reportOrderedTask(line)
         const run = collectListInlineRun(lines, i, dialect)
         if (lazyQuote !== null && indentColumns(line) >= lazyQuote.col) out.push('')
         out.push(...writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end)).lines)
@@ -4702,6 +4716,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       continue
     }
     if (isList) {
+      reportOrderedTask(line)
       const run = collectListInlineRun(lines, i, dialect)
       const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
       // A list under a quote an item holds is set apart from it, or Carve reads

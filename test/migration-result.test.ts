@@ -57,4 +57,29 @@ describe('shared migration result', () => {
       )
     }
   })
+
+  it('reports an ordered task checkbox kept as text beside the incomplete-assessment row', () => {
+    const result = migrateMarkdown('1. [x] done\n2. [ ] next\n')
+    expect(result.value).toContain('1. [x] done')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
+      ...Array.from({ length: 2 }, () => expect.objectContaining({
+        code: 'structure-unspellable',
+        message: 'An ordered task item is not spellable as a Carve task item; the checkbox marker was kept as text',
+        fidelity: 'dropped',
+        confidence: 'exact',
+      })),
+    ])
+    for (const source of ['- [x] done\n', '> 1. [x] done\n', '```\n1. [x] done\n```\n', 'para\n2. [x] done\n']) {
+      expect(migrateMarkdown(source).report.diagnostics.map(({ code }) => code)).toEqual(['fidelity-unverified'])
+    }
+    for (const source of ['- a\n  1. [x] b\n', 'para\n1. [x] done\n', '1. [x] \n', '1. [x]\t\n']) {
+      expect(migrateMarkdown(source).report.diagnostics.map(({ code }) => code)).toEqual([
+        'fidelity-unverified', 'structure-unspellable',
+      ])
+    }
+    for (const source of ['- 1. [x] b\n', '- a\n\n      1. [x] code\n', '1. [x]\n', '1.     [x] code\n', '- a\n\n  > 1. [x] b\n']) {
+      expect(migrateMarkdown(source).report.diagnostics.map(({ code }) => code)).toEqual(['fidelity-unverified'])
+    }
+  })
 })
