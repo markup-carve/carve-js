@@ -216,9 +216,14 @@ describe('a doubled quote marker a list item holds', () => {
     })
 
     it('leaves the marker behind a checkbox inside a quote as text too', () => {
+      // The pair itself is text here as well: the tasklist extension does not
+      // reach a quoted list, so the box goes with the marker (carve-js#2047).
+      // The `>>` then needs no escape of its own, the whole line being the item
+      // paragraph's text.
       const carve = markdownToCarve(lines('> - [ ] >> a', '>   >> b'))
-      expect(carve).toContain('- [ ] >> a')
-      expect(html(carve)).toContain('&gt;&gt; a')
+      expect(carve).toContain('- \\[ ] >> a')
+      expect(html(carve)).toContain('[ ] &gt;&gt; a')
+      expect(html(carve)).not.toContain('<input')
     })
 
     it('leaves a lazy continuation line four columns in as text', () => {

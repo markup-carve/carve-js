@@ -157,6 +157,32 @@ or a list item as much as at the top level - is untouched.
 > applies smart typography to prose. That is true of any `---` a migrated
 > document carries, not only one inside a pipe row.
 
+**A task checkbox GFM does not read stays text.** cmark-gfm's task-list
+extension takes a box off a line carrying one container marker, a bullet, and
+off the states `[ ]`, `[x]` and `[X]`. Carve's task item has neither
+restriction, so a quoted or nested list and the four Carve-only states would
+otherwise grow a box the source never spelled. The pair is escaped there:
+
+```md
+> - [ ] foo
+- - [x] bar
+- [-] baz
+```
+
+migrates to
+
+```
+> - \[ ] foo
+- - \[x] bar
+- \[-] baz
+```
+
+A top-level `- [ ] foo` still imports a checkbox, and so does a sublist that
+opens on a line of its own: indentation never puts a list out of the extension's
+reach, a second marker on the line does. An ordered item takes no escape, Carve
+spelling a task marker behind a bullet only, so `1. [x] done` is already the
+text it renders.
+
 ## Migrating from Djot
 
 `djotToCarve(source)` converts a complete Djot document. Unlike
