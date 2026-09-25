@@ -312,8 +312,7 @@ const FIGCAPTION_DETACHED =
  *
  * A BREAK IS ASKED FROM BOTH SIDES for the same reason the whitespace is.
  * `<p>a</p><p><br>b</p>` reaches the join with the break on the RIGHT, and a
- * separator inserted before it writes a trailing space the source never had
- * (raised by `codex review`).
+ * separator inserted before it writes a trailing space the source never had.
  */
 function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
   const last = before.at(-1)
@@ -338,11 +337,10 @@ function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
  * writer, handed the tree that whitespace produced, writes the space back out
  * and then removes it on the next pass.
  *
- * Measured over the 1370-document render corpus, the surviving space was ONE
- * root cause wearing four faces: a hard break whose next line began with it, a
- * padded table cell, a caption whose separator became a run, and a lazy
- * continuation carried one column too far. Every one of them is a text run
- * holding a space at a boundary where the re-parse does not keep it.
+ * The relevant cases are a hard break whose next line begins with a space, a
+ * padded table cell, a caption separator that became a text run, and an
+ * overindented lazy continuation.
+ * Each leaves a space at a boundary where the re-parse does not keep it.
  */
 function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean {
   if (node === undefined || node.type !== 'text') return false

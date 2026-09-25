@@ -934,7 +934,7 @@ class Lexer {
  * Offsets index the RAW source, endings and all, while every line the scanner
  * walks has already been normalized - so a document slice compared against the
  * scanner's text differs on every line of a CRLF document unless both are read
- * the same way (raised by `codex review`).
+ * the same way.
  */
 function normalizeNewlines(source: string): string {
   return source.replace(/\r\n?/g, '\n')
@@ -1155,18 +1155,8 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
 
     const offset = parent.lineOffset(parentIndex) + prefix
     const width = parent.lineStartColumn(parentIndex) - 1 + prefix
-    // What a negative prefix must NOT do is push a base off the FRONT of the
-    // document, which would make every span on the line a lie rather than a gap.
-    //
-    // NOT REACHABLE TODAY, and kept anyway - stated here rather than presented
-    // as tested. A continuation line always has its marker line above it, so its
-    // document offset is at least that line's length plus a newline, while the
-    // prefix goes no lower than minus the synthetic run. Removing this guard
-    // renders all 1373 corpus documents and eleven probes built from the
-    // shortest possible marker lines byte-identically, and no published offset
-    // in any of them is negative. It is a bound on arithmetic rather than a
-    // check on input: the cliff it guards is a negative offset escaping into a
-    // published position, which no assertion downstream would catch.
+    // Refuse a negative published offset. This guard is unreachable under the
+    // current prefix bounds but protects the position map if those bounds change.
     //
     // The COLUMN base is deliberately NOT clamped the same way. It is a width
     // added to a sub-column, and a sub-column starts at 1, so the first real
@@ -1809,7 +1799,7 @@ interface PrepassScope {
  * renders that line as a paragraph. That looseness predates this pass's
  * container scopes and is left alone; what it may NOT do is decide anything a
  * malformed line has no business deciding. Two such decisions are gated on this
- * instead (both raised by codex review):
+ * instead:
  *
  *   - which width a fence takes as its ENCLOSING div's closer, where a phantom
  *     level let a `:::` inside a code sample end the fence and publish the
@@ -1854,7 +1844,7 @@ function scopeHoldsLine(
       // VISUAL COLUMNS, the way the parser measures reach: a tab is worth up to
       // four. Counting characters read a tab-indented body line as column one
       // against a column of three, ended the fence on it, and published the
-      // definitions in the sample below (raised by codex review). The cap keeps
+      // definitions in the sample below. The cap keeps
       // it O(the column) rather than O(the indentation run).
       indentColumns(view, scope.contentCol) >= scope.contentCol)
   )
@@ -2199,7 +2189,7 @@ function collectLinkDefs(lexer: Lexer) {
   // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
   // is invisible. `prepassOpensBlock` sees only the leading brace, so the
   // continuation lines read as prose and reopened a paragraph over a run the
-  // block parser consumes whole (raised by codex review). `peekBlockAttributes`
+  // block parser consumes whole. `peekBlockAttributes`
   // is the real reader and ends the run at the first `}` or a blank line.
   let attrRun = false
   const hasBlockMatchers = activeMatchers.some((e) => e.matchBlock)
@@ -2324,7 +2314,7 @@ function collectLinkDefs(lexer: Lexer) {
       // sample is CODE and the block parser renders it - only an unterminated
       // fence degrades at its container's boundary. Ending the fence there
       // anyway collected the definitions below it out of a visible `<pre>`,
-      // which is the worst outcome this pass has (raised by codex review).
+      // which is the worst outcome this pass has.
       //
       // Matched with the block parser's OWN colon closer, on `d` - the same
       // re-based view the fence's closer above reads. That settles three things
@@ -2343,8 +2333,7 @@ function collectLinkDefs(lexer: Lexer) {
       // along with the `> ` - and a fence opened behind both (`- > ``` `)
       // records the ITEM's column while its body lines score zero against it.
       // Every body line then looked out of the item, the fence ended on its
-      // own first one, and the code sample's definitions went live (raised by
-      // codex review). `unquoted` strips only a COLUMN-0 quote marker, so it
+      // own first one, and the code sample's definitions went live. `unquoted` strips only a COLUMN-0 quote marker, so it
       // keeps exactly the indentation the column was measured against - and it
       // is never the SHALLOWER of the two, since `k` removes a superset of what
       // `unquoted` does wherever the fence is quoted at all.
@@ -2377,7 +2366,7 @@ function collectLinkDefs(lexer: Lexer) {
       // - so the item's content column is gone. Left here, the column stayed
       // live and the div recorded it as the container it was opened in, which
       // then released at the next blank line and let an abbreviation written
-      // INSIDE a visibly rendered div register (raised by codex review).
+      // INSIDE a visibly rendered div register.
       //
       // Only a fence the parser REALLY opens: `:::note` is prose, and the
       // parser folds it into the item lazily, so popping the column there
@@ -2452,7 +2441,7 @@ function collectLinkDefs(lexer: Lexer) {
       // lead text and so is everything after it on the line; recording it as a
       // container replaced the real owner with the folded marker's own columns,
       // and the next line was then measured against a window that never
-      // existed (raised by codex review on markup-carve/carve-js#1598).
+      // existed (markup-carve/carve-js#1598).
       const foldAt = composed.peeled.findIndex((one) => one.folds)
       if (foldAt !== 0) {
         // The walk confirmed `depth` of the open containers. Anything past that
@@ -2558,7 +2547,7 @@ function collectLinkDefs(lexer: Lexer) {
     // parser opens a top-level fence there even with a paragraph open inside the
     // note - unlike a list item, whose paragraph a flush line really does
     // continue. `line` has the body's indentation stripped, so without this the
-    // two are indistinguishable here (raised by codex review).
+    // two are indistinguishable here.
     // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0 - see the note on
     // `paraState`. Read here, where `inFootnoteBody` still describes the line
     // above; the expensive half is deferred to the opener below.
@@ -2735,8 +2724,7 @@ function collectLinkDefs(lexer: Lexer) {
           // before this change; the other direction ends a live fence early and
           // publishes a definition out of a visible code sample. An exact
           // answer wants a container-bounded scan per opener, which is the
-          // quadratic shape this index exists to avoid (raised by codex review,
-          // and unchanged from `origin/main` on the document it names).
+          // quadratic shape this index exists to avoid.
           hasCloser:
             enclosingDiv !== undefined &&
             codeCloserPossibleIn(
@@ -3987,7 +3975,7 @@ function commentCloserInScope(
   //     to a line comment, its body RENDERS, and the definition beside it is
   //     ordinary. Accepting it suppressed a definition the parser publishes,
   //     which is the same two-halves-disagree shape this whole change is
-  //     about, one quote deeper (raised by codex review at high effort).
+  //     about, one quote deeper.
   //
   // A non-matching run is skipped and the next one of this width is asked, so
   // an opener is not refuted by a line that was never its closer. Bounded by
@@ -4056,8 +4044,7 @@ function commentScopeEnd(
     // (PART 17), so the fence is still inside its container and the closer
     // below the marker is still its own. Taken as the boundary, the region
     // never opened and the definition inside it went live while the comment
-    // body above it stayed invisible - the leak, one marker over (raised by
-    // codex review).
+    // body above it stayed invisible - the leak, one marker over.
     if (isContinuationMarker(raw)) continue
     // A QUOTED SCOPE IS OVER AT THE BLANK, whatever stands after it. A
     // blockquote does not survive a blank line, so the next non-blank line
@@ -5627,13 +5614,9 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
    * still continues the body, so the next turn of its loop always consumes that
    * line - the last thing it takes is a content line by construction.
    *
-   * A trimming loop was written here first and could not be made to fire: with
-   * it removed the engine renders all 1373 corpus documents and eight probes
-   * built specifically to leave a trailing blank byte-identically. It came out
-   * rather than shipping as a guard nothing can exercise (markup-carve/carve#755).
    */
   function lineRange(lx: Lexer, first: number, last: number): Position | undefined {
-    // Unframed for the same reason, and unobservable for the same one.
+    // Measure the final line after stripping its lazy frame.
     const lastLine = lx.lines[last] === undefined ? undefined : stripLazyFrame(lx.lines[last]!)
     if (lastLine === undefined) return undefined
 
@@ -7377,8 +7360,7 @@ function trackItemLazyState(
   // `FOOTNOTE_BODY_COLUMN`, so a line one column in is the CONTAINER's prose
   // and leaves an open paragraph behind it. Reading any indent as body made
   // `- a` / `  [^f]: t` / ` more` / `tail` end the item where carve-php folds
-  // `tail` into it - found by sweeping the columns after `codex review` named
-  // the mechanism, and not by the shape it predicted.
+  // `tail` into it.
   if (
     state.inFootnoteBody &&
     !isBlankLine(content) &&
@@ -8404,7 +8386,7 @@ function parseList(lexer: Lexer): List {
     // pass either. Without the check an unterminated `%%%` swallowed every
     // later line and a genuinely CLOSED code fence below it went unmarked, so a
     // blank inside that code loosened the item - the divergence from what the
-    // block parser does with the same lines. Raised by codex review.
+    // block parser does with the same lines.
     const closers = buildCloserIndex(fenceLines)
     // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
     // `:::` container that IS the item's first block is the item's own body:
@@ -9197,8 +9179,7 @@ function parseTable(lexer: Lexer): Table | Figure {
       // required `/^:?-+:?$/` of the SAME space-trimmed string, so a cell whose
       // padding is not a space has already stopped the row from being a
       // delimiter row and never reaches here - reverting this one site to the
-      // wider trim renders all 1366 corpus documents byte-identically, plus
-      // seven targeted delimiter-row probes. It is narrowed regardless, because
+      // wider trim cannot change the answer. It is narrowed regardless, because
       // one rule spelled two ways is how this class of defect starts: the
       // domination is a property of the code above, not of the rule.
       const t = trimCellPadding(c.raw)
@@ -9540,7 +9521,7 @@ function startsInterruptingBlock(
       // The override is threaded through: this is the one arm that re-reads the
       // line from the lexer instead of testing `ln`, so without it a below-column
       // `{.x}` stayed lazy text while every other opener kind left the container
-      // (raised by codex review on markup-carve/carve-js#864).
+      // (markup-carve/carve-js#864).
       return invisibleArms && peekBlockAttributes(lexer, content === undefined ? undefined : ln)
     default:
       // An ordered-list marker does NOT interrupt a paragraph (it needs a blank

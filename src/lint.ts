@@ -728,8 +728,8 @@ export function lintCarve(
   // The source-line rules skip a COMMENT body as well as a verbatim one. A
   // comment is discarded text - it reaches no output at all - so a report that
   // some construct inside it silently degraded is describing something that was
-  // never going to render. Raised by codex review against the new table-cell
-  // rule; `fence-delimiter-indentation` beside it had the same false positive.
+  // never going to render. `table-cell-attribute-before-marker` and
+  // `fence-delimiter-indentation` both had this false positive.
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc)) unrendered.add(ln)
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
@@ -746,7 +746,7 @@ export function lintCarve(
     // ...but a captioned listing's CAPTION is published. `collectVerbatimLines`
     // marks the whole wrapping figure verbatim, because a captioned code block
     // carries no position of its own, and the caption rides along inside that
-    // range. Raised by codex review.
+    // range.
     for (const ln of collectListingCaptionLines(doc)) skip.delete(ln)
     collectPlatformAutolinks(source, opts.platforms, skip, out)
   }
@@ -1911,8 +1911,8 @@ const PLATFORM_RULES: Record<LintPlatform, { mention: RegExp; issue: RegExp }> =
     // so a heading marker (`## 2`), an id-shaped `#a1` and a URL FRAGMENT
     // (`https://e.com/#99`) are out; the run is DIGITS ONLY, so `#release-1.0`
     // is a tag rather than an issue reference. A fragment is part of a URL the
-    // host linkifies AS a URL, not a separate issue reference - raised by
-    // codex review, and the `/` in the mention class above is the same case.
+    // host linkifies AS a URL, not a separate issue reference. The `/` in the
+    // mention class above covers the same case.
     issue: /(?<![\w#/])#(\d+)(?![\w-])/g,
   },
 }
@@ -1946,8 +1946,7 @@ function collectPlatformAutolinks(
 ): void {
   // An OWN-property test, not `in`. `'toString' in PLATFORM_RULES` is true, so
   // an untyped caller threading a config value through crashed on the lookup
-  // instead of being ignored the way the type comment promises. Raised by codex
-  // review.
+  // instead of being ignored the way the type comment promises.
   const active = platforms.filter(
     (p, i) => platforms.indexOf(p) === i && Object.hasOwn(PLATFORM_RULES, p),
   )
@@ -1981,7 +1980,6 @@ function collectPlatformAutolinks(
           // caller passed, which is the unit LintWarning documents, so these do
           // NOT go through the codepoint map the tree-derived findings use -
           // mapping them again shifted every span after an astral character.
-          // Raised by codex review.
           const start = lineStart[i]! + m.index
           out.push({
             line: lineNo,
@@ -2028,7 +2026,7 @@ function hasUnescapedBefore(line: string, ch: string, end: number): boolean {
  *
  * Guessing it as "the figure's first or last line carrying the caret" was close
  * enough for a one-line caption and wrong for a CONTINUED one, whose second
- * line has no marker and stayed skipped. Raised by codex review. Deriving it
+ * line has no marker and stayed skipped. Deriving it
  * from the spans also leaves a caret line in the fence BODY protected without
  * having to reason about which lines the delimiters occupy.
  */
@@ -2065,21 +2063,20 @@ function collectListingCaptionLines(doc: Document): Set<number> {
  * `[x](a(b)#123)` has the whole `a(b)#123` as its href, and a `[^)]*` pattern
  * stopped at the first `)` and scanned the rest of the real destination as
  * prose. A backslash escapes the next character, so it cannot close the run
- * either. An UNBALANCED run is not a destination, so it is left alone. Raised
- * by codex review, twice.
+ * either. An UNBALANCED run is not a destination, so it is left alone.
  */
 function maskInlineDestinations(line: string): string {
   // A BARE URL is linkified AS A URL, so a token in its query or path is part
   // of it and not a separate mention or issue reference. Masked first, and
   // length-preserving like the destination walk below, so a token after the URL
-  // still indexes the real source. Raised by codex review.
+  // still indexes the real source.
   line = line.replace(/\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+/g, (m) => ' '.repeat(m.length))
   let out: string[] | null = null
   for (let i = 0; i + 1 < line.length; i++) {
     if (line[i] !== ']' || line[i + 1] !== '(') continue
     // A LABEL HAS TO OPEN SOMEWHERE. A bare `](#123)` in prose is visible text,
     // not a destination, and masking it lost the finding. An escaped `\]` does
-    // not close a label either. Raised by codex review.
+    // not close a label either.
     if (line[i - 1] === '\\' || !hasUnescapedBefore(line, '[', i)) continue
     let depth = 1
     let j = i + 2
@@ -2111,7 +2108,6 @@ function maskInlineDestinations(line: string): string {
  *
  * Both were spurious `--platform` failures on valid documents, which is the
  * failure mode the ruling warns about most: a rule people turn off wholesale.
- * Raised by codex review.
  */
 function collectUnpublishedLines(
   source: string,
@@ -2153,7 +2149,7 @@ function collectUnpublishedLines(
   // Frontmatter carries no node in `children`, but it DOES report a span - so
   // the span is used rather than re-derived from the source. Re-deriving it
   // meant matching the opener by hand, and a TYPED opener (`--- yaml`) did not
-  // match, leaving every typed block scanned. Raised by codex review.
+  // match, leaving every typed block scanned.
   const fmPos = doc.frontmatter?.pos
   if (fmPos) {
     const end = fmPos.endLine ?? fmPos.startLine

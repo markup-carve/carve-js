@@ -1517,8 +1517,7 @@ function pairableUnderscoresPerBlock(line: string): Set<number> {
  * carry. This writer separates a heading from the block below it with a blank
  * line in every container except a tight list item, where the item marker is
  * the separator - so both rules above already cut there, and a heading case
- * would be a branch that cannot fire. Measured over the 1707-document corpus
- * and four inline matrices: removing it moves no byte.
+ * would be a branch that cannot fire.
  */
 function inlineBlocks(line: string): Array<Array<[number, number]>> {
   const blocks: Array<Array<[number, number]>> = []
@@ -1587,8 +1586,7 @@ function containerPrefixEnd(line: string, at: number): number | null {
 
   // A bullet. The task box after it - `- [ ] ` - needs no case of its own: it
   // is bracketed by spaces, so no candidate can stand beside it, and whether it
-  // counts as prefix or as content changes no answer. Measured over the corpus
-  // and four matrices, reading it as content moves no byte.
+  // counts as prefix or as content changes no answer.
   if ((ch === '-' || ch === '*' || ch === '+') && line[at + 1] === ' ') return at + 2
 
   // An ordered marker: digits, then the authored delimiter, then the separator.

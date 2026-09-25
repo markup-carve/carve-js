@@ -56,7 +56,7 @@ export function abbrBudget(srcByteLength: number | undefined): number {
  * is on the bytes that actually exist. The three engines still agree, because
  * for one target they render the same label to the same bytes; what differs is
  * that an escape-heavy label costs more in HTML than in plain text, which is
- * true of the output as well (raised by codex review).
+ * true of the output as well.
  *
  * Every renderer and extension sizes its budget through this one call, so the
  * document's length is read in exactly ONE place. That matters because the
