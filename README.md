@@ -74,9 +74,9 @@ The parser leaves `{{ path }}` literal. Hosts opt into `expandIncludes` and
 supply a resolver, containment rules, and source identities. Included nodes
 retain their source identity for diagnostics and dependency tracking.
 
-The [complete API and include reference](https://github.com/markup-carve/carve-js/blob/main/docs/reference.md) preserves the
-advanced examples for expansion, positioned warnings, resolver behavior,
-rendering parsed trees, and editor integrations.
+The [complete API and include reference](https://github.com/markup-carve/carve-js/blob/main/docs/reference.md) covers
+expansion, positioned warnings, resolver behavior, rendering parsed trees, and
+editor integrations.
 
 ## Security
 
@@ -89,9 +89,7 @@ do not treat symbol values or renderer output as escaped text. On the CLI use
 ## Documentation
 
 The [`docs/`](https://github.com/markup-carve/carve-js/tree/main/docs) directory covers extensions, accessibility linting,
-streaming, browser use, the CLI, migration, rendering, and integrations. The
-[complete reference](https://github.com/markup-carve/carve-js/blob/main/docs/reference.md) retains material formerly kept in this
-README.
+streaming, browser use, the CLI, migration, rendering, and integrations.
 
 ## Development
 
