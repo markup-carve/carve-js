@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, htmlToAst, htmlToCarve, renderCarve } from '../src/index.js'
+import { carveToHtml, htmlToAst, htmlToCarve, migrateMarkdown, renderCarve } from '../src/index.js'
 
 /**
  * An ordered HTML task item keeps its bracket text and says what it lost
@@ -16,13 +16,19 @@ import { carveToHtml, htmlToAst, htmlToCarve, renderCarve } from '../src/index.j
  * stays silent while `htmlToCarve` flattens it and reports: only a writer loses
  * this (PART 12 §16). carve-rs#1904 pinned the wording on the Rust side.
  *
+ * The MESSAGE is the Markdown entry point's, and the contract pins it for both
+ * (carve-js#2062). This side used to add "a Carve task marker is spelled behind a
+ * bullet only", which is `unordered_item` restated inside a diagnostic: one loss
+ * with one cause now reads the same whichever importer ran, and the grammar
+ * clause lives in the contract's prose instead of in every row.
+ *
  * Every case asserts the rendered HTML beside the Carve, because bracket text
  * and a checkbox are hard to tell apart in the Carve.
  */
 
 const BOX = '<input type="checkbox"'
 const MESSAGE =
-  "Wrote an ordered task item's checkbox as its bracket text: a Carve task marker is spelled behind a bullet only, so the item keeps the characters and loses the task-item semantics"
+  'An ordered task item is not spellable as a Carve task item; the checkbox marker was kept as text'
 
 const imported = (html: string) => {
   const result = htmlToCarve(html)
@@ -127,6 +133,25 @@ describe('an ordered HTML task item declares its lost box', () => {
       const out = imported('<ol><li>plain</li></ol>')
       expect(out.carve).toBe('1. plain\n')
       expect(out.rows).toEqual([])
+    })
+
+    it('says the same thing the Markdown entry point says', () => {
+      // The ruling itself (carve-js#2062): one loss with one cause, so a consumer
+      // filtering on the message does not have to know which importer ran. Both
+      // literals here on purpose - reading one constant from both sides would let
+      // a wrong string pass in step.
+      const fromMarkdown = migrateMarkdown('1. [x] done\n').report.diagnostics
+        .filter((row) => row.code === 'structure-unspellable')
+      expect(fromMarkdown.map((row) => row.message)).toEqual([MESSAGE])
+      const fromHtml = imported('<ol><li><input type="checkbox" checked> done</li></ol>').rows
+      expect(fromHtml.map((row) => row.message)).toEqual([MESSAGE])
+      // Everything but `path` matches too: an HTML importer locates the `<input>`
+      // it read and a Markdown importer has no element to locate.
+      for (const row of [...fromMarkdown, ...fromHtml]) {
+        expect(row.severity).toBe('warning')
+        expect(row.fidelity).toBe('dropped')
+        expect(row.confidence).toBe('exact')
+      }
     })
   })
 })
