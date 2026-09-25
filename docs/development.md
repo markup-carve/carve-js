@@ -1,9 +1,10 @@
 # Development
 
-Working on carve-js itself: the checkout, the source layout, and what is planned.
+Working on carve-js itself: the checkout and the source layout. Contributor
+guidelines, the test commands and the other gates are in
+[CONTRIBUTING.md](https://github.com/markup-carve/carve-js/blob/main/CONTRIBUTING.md).
 
 ## Install and develop
-
 
 ```sh
 git clone --recurse-submodules https://github.com/markup-carve/carve-js.git
@@ -16,7 +17,6 @@ If you cloned without `--recurse-submodules`, run `git submodule update --init`
 to fetch the spec corpus.
 
 ## Layout
-
 
 ```
 carve-js/
@@ -37,19 +37,6 @@ carve-js/
 ├── package.json
 └── tsconfig.json
 ```
-
-## Roadmap
-
-
-See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) in the spec repo.
-
-| Phase | Scope | Status |
-|-------|-------|--------|
-| M0.5 | Scaffold, AST types, corpus runner | ✅ Done |
-| M1   | Block parser: headings, paragraphs, lists, quotes, fences, tables, frontmatter, hr, admonitions, captions | ✅ Done |
-| M2   | Inline parser: emphasis (all 8 forms), links, images, code, autolinks, attributes, extensions, mentions, tags, smart typography, CriticMarkup | ✅ Done |
-| M3   | HTML renderer; full corpus green | ✅ Done |
-| M4   | npm publish; playground page in the docs site | ✅ Done |
 
 ---
 
