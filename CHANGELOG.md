@@ -25,6 +25,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- The Markdown target keeps every block a list item holds. A continuation line is
+  padded from the item's marker rather than from a task item's checkbox, and a
+  block below a nested list gets the blank line that stops GFM reading it as a
+  continuation of the last sublist item (#2085).
 - A node pulled in by a sliced include reports positions in its own file's coordinates (#1862).
 - A reference definition reads its destination through the same `link_destination` production as an inline tail, and a still-open parenthesis leaves the line a paragraph (#1868, #1872).
 - A tab does not satisfy a list or task marker separator, and a tab guards a bare delimiter on both sides (#1870, #1887).
