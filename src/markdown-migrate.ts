@@ -1550,6 +1550,19 @@ const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
 const RE_ITEM_LINE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/
 
 /**
+ * The item markers and task checkbox a line opens with, as CARVE reads them:
+ * any nesting of item markers, the innermost a `-` or `*` bullet, then a box.
+ * Mirrors `RE_TASK` in the parser, which takes `[ xX-_>?]` and neither `+` nor
+ * an ordered marker.
+ *
+ * Markdown's own reading stops at the bullet: the box is the first paragraph's
+ * text there, so what follows it opened no block. Carve's reading does not, so
+ * what follows the box stands at a content position, and a marker there opens
+ * exactly what the source said was text.
+ */
+const RE_CARVE_TASK_LEAD = /^([ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*?[-*][ \t]+)\[[ xX\-_>?]\][ \t]+/
+
+/**
  * `content` is the item's content column in the source and `shift` how far the
  * import moves it: the sum of every enclosing item's change of marker width.
  */
@@ -1976,12 +1989,40 @@ function heldByItem(run: readonly PrefixedInlineLine[]): Array<{ marker: string;
 
 /**
  * An entry of a container run as the container holds it: `key` names the
- * container (what the collector consumed, and the quote markers still on the
- * text), `text` is what is left inside it.
+ * container (what the collector consumed, the item columns still on the text,
+ * and the quote markers inside them), `text` is what is left inside it, `lead`
+ * the item markers or columns peeled off in front of the quote and `quote` the
+ * quote markers themselves.
+ *
+ * The item collector consumes only the OUTERMOST marker into `prefix`, so one
+ * item of depth leaves `> foo` on the text and two leave `- > foo` over
+ * `  > bar`. Read without peeling, the deeper quote was not a quote at all: the
+ * key said "no container", every line of the quote's paragraph disagreed with
+ * every other, and no paragraph was registered inside it - so the fold below
+ * could not see one (carve-js#2022). Peeling makes the reading depth-
+ * independent, and the peeled WIDTH joins the key so two different items stay
+ * two containers.
+ *
+ * Only where peeling reveals a quote. A lead peeled unconditionally would take
+ * the item markers `paragraphLine` reads for the paragraph's column and
+ * `RE_ITEM_LINE` reads for the item stack, which are the same markers.
+ *
+ * And not on a CONTINUED line, where a quote marker four columns in is text of
+ * the paragraph above rather than a marker - the same reading that keeps a
+ * fence opener out of the fold's closer test. Peeled there, `>     > bar` under
+ * `> foo` read as a quote inside the quote and took its own paragraph out of
+ * the fold.
  */
-function heldInContainer(part: PrefixedInlineLine): { key: string; text: string } {
+function heldInContainer(part: PrefixedInlineLine): { key: string; text: string; lead: string; quote: string } {
   const quoted = blockquotePrefix(part.text)
-  return { key: `${part.prefix.length}:${quoted?.prefix ?? ''}`, text: quoted ? quoted.text : part.text }
+  if (quoted !== null) return { key: `${part.prefix.length}:0:${quoted.prefix}`, text: quoted.text, lead: '', quote: quoted.prefix }
+  if (part.continued === true) return { key: `${part.prefix.length}:0:`, text: part.text, lead: '', quote: '' }
+  const lead = RE_ITEM_LEAD.exec(part.text)![0]
+  const inner = lead === '' ? null : blockquotePrefix(part.text.slice(lead.length))
+  if (inner !== null) {
+    return { key: `${part.prefix.length}:${columnWidth(lead)}:${inner.prefix}`, text: inner.text, lead, quote: inner.prefix }
+  }
+  return { key: `${part.prefix.length}:0:`, text: part.text, lead: '', quote: '' }
 }
 
 /**
@@ -2077,15 +2118,18 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
     const rule = /^[ \t]*(=+|-+)[ \t]*$/.exec(text)
     const start = starts.at(-1) ?? -1
     if (rule && !part.continued && start >= 0 && heldInContainer(out.at(-1)!).key === key) {
-      const first = heldInContainer(out[start]!).text
+      const held = heldInContainer(out[start]!)
+      const first = held.text
       const lead = paragraphLine(out[start]!, first)!.lead
       // The paragraph's column: past its own item markers, or the content
-      // column of the innermost item holding its first line.
+      // column of the innermost item holding its first line. Markers peeled in
+      // FRONT of a quote stand outside it and add no column inside it, which is
+      // why they are `held.lead` here rather than part of `lead`.
       let col = columnWidth(lead)
       if (lead === '') for (const content of items.get(key) ?? []) if (content <= indentColumns(first)) col = content
       const at = indentColumns(text)
       if ((lead !== '' || indentColumns(first) - col < 4) && at >= col && at - col < 4) {
-        const quote = blockquotePrefix(part.text)?.prefix ?? ''
+        const quote = heldInContainer(part).quote
         const indent = lead !== '' ? lead : /^[ \t]*/.exec(first)![0]
         const body = out
           .slice(start)
@@ -2094,7 +2138,7 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
           // opens nothing, so the bare body is what gets written.
           .map((entry) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body))
           .join(' ')
-        const heading = `${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} ${body}`
+        const heading = `${held.lead}${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} ${body}`
         out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: heading })
         starts.splice(start, starts.length - start, -1)
         continue
@@ -2897,7 +2941,17 @@ function collectListInlineRun(
     return collectItemFence(lines, start, first.slice(0, nestedEnd), fence[2]!, fenceInfo(fence[3]!))
   }
 
-  const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
+  // A block marker behind a task checkbox is the item paragraph's text in
+  // Markdown and a block opener in Carve, so the first line carried it across
+  // bare and the quote, heading or list it spelled was not in the source. The
+  // continuation lines of that same paragraph already escape it, which is what
+  // made the two halves of one paragraph disagree (carve-js#2023).
+  const taskLead = RE_CARVE_TASK_LEAD.exec(first)
+  const firstLineText =
+    taskLead === null
+      ? first.slice(marker[0].length)
+      : first.slice(marker[0].length, taskLead[0].length) + escapeBlockOpener(first.slice(taskLead[0].length))
+  const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: firstLineText }]
   const itemCols = [contentCol, ...nestedItems.map((item) => item.content)]
   const firstText = first.slice(nestedEnd)
   let end = start + 1
