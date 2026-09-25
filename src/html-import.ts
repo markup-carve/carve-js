@@ -2420,11 +2420,38 @@ class Importer {
       // treatment the checkbox `<input>` already gets.
       const checked = input ? this.attr(input, 'checked') !== undefined : undefined
       const taskState = this.readsTaskState(li) ? (this.attr(li, 'data-task-state') as NonNullable<ListItem['taskState']>) : undefined
+      // UNSPELLABLE BEHIND AN ORDERED MARKER. `task_marker` in
+      // `resources/spec/03-blocks-core.ebnf` hangs off `unordered_item` alone,
+      // so no Carve source carries a box on an ordered item and the writer
+      // dropped both the box and the characters it was read from
+      // (carve-js#2053). The bracket pair is kept as text where the `<input>`
+      // stood and the row says what could not be spelled. The AST holds the box
+      // either way, so this runs on the writing exit alone (PART 12 §16).
+      const orderedTask = ordered && input !== undefined && this.writing
+      if (orderedTask) {
+        this.add(
+          'structure-unspellable',
+          "Wrote an ordered task item's checkbox as its bracket text: a Carve task marker is spelled behind a bullet only, so the item keeps the characters and loses the task-item semantics",
+          'warning',
+          this.childPath(liPath, input, (li.childNodes ?? []).indexOf(input)),
+          input,
+        )
+      }
+      const content = (li.childNodes ?? []).flatMap((child) => {
+        if (child !== input) return [child]
+        // PART 11 §6g's default, and the `data-task-state` character where the
+        // renderer wrote one: the bracket pair the writer would have spelled
+        // behind a bullet. It stands where the `<input>` stood rather than at
+        // the head of the item, so `before <input> after` keeps its order.
+        return orderedTask
+          ? [{ nodeName: '#text', value: `[${taskState ?? (checked ? 'x' : ' ')}]`, parentNode: li } satisfies P5Node]
+          : []
+      })
       return {
         type: 'list_item' as const,
-        ...(checked !== undefined ? { checked } : {}),
-        ...(taskState !== undefined ? { taskState } : {}),
-        children: this.blocks((li.childNodes ?? []).filter((n) => n !== input), liPath, depth + 1),
+        ...(checked !== undefined && !orderedTask ? { checked } : {}),
+        ...(taskState !== undefined && !orderedTask ? { taskState } : {}),
+        children: this.blocks(content, liPath, depth + 1),
         ...(liAttrs ? { attrs: liAttrs } : {}),
       }
     })

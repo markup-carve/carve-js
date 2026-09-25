@@ -108,6 +108,14 @@ rather than a placeholder for a mapping still to come:
   parentheses and report `element-unwrapped`. `htmlToCarve` also reports
   `structure-unspellable`, because Carve 0.1 can preserve the readable
   `base(annotation)` text but not the relationship.
+- **An ordered task item keeps its bracket text.** `task_marker` in the grammar
+  hangs off `unordered_item` alone, so no Carve source carries a checkbox behind
+  an ordered marker. The pair is written where the `<input>` stood, with a
+  `structure-unspellable` warning at the `<input>`'s own path:
+  `<ol><li><input type="checkbox" checked> done</li></ol>` imports as
+  `1. [x] done`. A `data-task-state` character reaches the brackets, because
+  that is the marker a bullet would have carried. `htmlToAst` keeps the box on
+  the item and reports nothing, only a writer losing it.
 - **A span nested directly in a span of the same kind can lose a level.**
   Carve cannot open a braced span inside a braced span of the same kind, so
   where both levels need braces the inner element is unwrapped with a
