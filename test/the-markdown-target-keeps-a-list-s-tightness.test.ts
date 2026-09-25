@@ -53,4 +53,97 @@ describe("the Markdown target keeps a list's tightness", () => {
       items: [{ children: [{ type: 'paragraph' }, { type: 'block_quote' }, { type: 'block_quote' }] }],
     })
   })
+
+  // `CARVE-P11-047` asks whether the block below OPENS with something that
+  // interrupts a paragraph, and the nested list and block quote the clause names
+  // are examples of that property rather than the whole of it (carve-js#2056). An
+  // ATX heading, a fenced code block and a GFM table interrupt one as well, in
+  // cmark-gfm 0.29.0.gfm.13 and in this repo's own reader alike, and the question
+  // is asked per PAIR: a heading opens under a quote as readily as under a
+  // paragraph, because a line that opens a block is not lazy continuation.
+  describe('above an opener the clause did not spell out', () => {
+    it('drops the separator above an ATX heading', () => {
+      const { markdown, list, html } = readBack('- a\n  # h\n')
+
+      expect(markdown).toBe('- a\n  # h\n')
+      expect(list).toMatchObject({ type: 'list', tight: true })
+      expect(html).toBe(renderHtml(parse('- a\n  # h\n')))
+    })
+
+    it('drops it above a fenced code block', () => {
+      const { markdown, list, html } = readBack('- a\n  ```\n  x\n  ```\n')
+
+      expect(markdown).toBe('- a\n  ```\n  x\n  ```\n')
+      expect(list).toMatchObject({ type: 'list', tight: true })
+      expect(html).toBe(renderHtml(parse('- a\n  ```\n  x\n  ```\n')))
+    })
+
+    it('drops it above a table, whose delimiter row promotes the row above it', () => {
+      const { markdown, list, html } = readBack('- one\n  |= H |\n  | x |\n')
+
+      expect(markdown).toBe('- one\n  | H |\n  | --- |\n  | x |\n')
+      expect(list).toMatchObject({ type: 'list', tight: true })
+      expect(html).toBe(renderHtml(parse('- one\n  |= H |\n  | x |\n')))
+    })
+
+    it('drops it under a block quote, which does not absorb a heading', () => {
+      const { markdown, list, html } = readBack('- intro\n  > quote\n  # heading\n')
+
+      expect(markdown).toBe('- intro\n  > quote\n  # heading\n')
+      expect(list).toMatchObject({ type: 'list', tight: true })
+      expect(html).toBe(renderHtml(parse('- intro\n  > quote\n  # heading\n')))
+    })
+
+    it('drops it at every pair of a run', () => {
+      expect(readBack('- a\n  # h\n  - m\n').markdown).toBe('- a\n  # h\n  - m\n')
+    })
+
+    it('reads the seam off the written text, not the sibling index', () => {
+      // A comment writes nothing here, so the block the separator hangs off is
+      // two children back and only the written text says so (carve-php#2406).
+      const { markdown, list } = readBack('- a\n  %% c\n  |= H |\n  | x |\n')
+
+      expect(markdown).toBe('- a\n  | H |\n  | --- |\n  | x |\n')
+      expect(list).toMatchObject({ type: 'list', tight: true })
+    })
+  })
+
+  // The separator each case below keeps is load-bearing, and `glued` is what the
+  // writer would emit without it. Every reading asserted there is cmark-gfm's
+  // too, except where the comment says otherwise.
+  describe('where the separator carries the meaning', () => {
+    const glued = (markdown: string) => renderHtml(parse(markdownToCarve(markdown)))
+
+    it('keeps it above a thematic break, which a paragraph line turns into a setext heading', () => {
+      expect(readBack('- a\n  ---\n').markdown).toBe('- a\n\n  ---\n')
+      expect(glued('- a\n  ---\n')).toContain('<h2>a</h2>')
+    })
+
+    it('keeps it above an empty bullet, a setext underline of its own', () => {
+      expect(readBack('- a\n+\n-\n').markdown).toBe('- a\n\n  -\n')
+      expect(glued('- a\n  -\n')).toContain('<h2>a</h2>')
+    })
+
+    it('keeps it above a headerless table row, which is paragraph continuation text', () => {
+      expect(readBack('- item\n  | a | b |\n').markdown).toBe('- item\n\n  | a | b |\n')
+      expect(glued('- item\n  | a | b |\n')).toContain('item\n| a | b |')
+    })
+
+    it('keeps it between two tables, where the second would read as more rows', () => {
+      // cmark-gfm 0.29.0.gfm.13 on the glued spelling: one table of four body
+      // rows, the second delimiter row among them as a `---` data cell. This
+      // repo's reader keeps the two tables apart, so it cannot witness this one.
+      expect(readBack('- x\n+\n| a |\n|---|\n| b |\n+\n| a |\n|---|\n| b |\n').markdown).toBe(
+        '- x\n  | a |\n  | --- |\n  | b |\n\n  | a |\n  | --- |\n  | b |\n',
+      )
+    })
+
+    it('keeps it above a table under a quote, which takes the row lazily', () => {
+      // cmark-gfm reads the glued spelling with all three rows inside the quote's
+      // own paragraph; this repo's reader puts the table after the quote.
+      expect(readBack('- x\n+\n> q\n+\n| a |\n|---|\n| b |\n').markdown).toBe(
+        '- x\n  > q\n\n  | a |\n  | --- |\n  | b |\n',
+      )
+    })
+  })
 })

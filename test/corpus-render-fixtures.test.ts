@@ -21,6 +21,42 @@ const targets = {
 
 type Target = keyof typeof targets
 
+/*
+ * Corpus `.md` sidecars this engine has deliberately moved PAST the pinned
+ * corpus on, under the same contract as `CANONICAL_AHEAD_OF_PIN`: the value is
+ * what the clause states TODAY, so a regression fails here as the sidecar would
+ * have caught it, and the pinned bytes must still DIFFER, so the entry goes out
+ * with the bump that reaches the re-cut fixture.
+ *
+ * It is declared in this file rather than beside the `.fmt` map because only
+ * this suite reads a `.md` sidecar.
+ */
+const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map([
+  [
+    '84-single-line-headings-10',
+    {
+      reason:
+        'CARVE-P11-047 drops the separator above an opener that interrupts a paragraph, an ATX ' +
+        'heading among them (ruled on markup-carve/carve-rs#1914, carve-js#2056). The pinned ' +
+        'sidecar carries the blank that makes the item loose; markup-carve/carve#2300 re-cuts it.',
+      md: '> - a\n>   ### b \\###\n',
+    },
+  ],
+])
+
+/** The bytes this engine is ahead of the pinned sidecar with, if it is. */
+const aheadOfPin = (fixture: { slug: string; target: Target }) => {
+  if (fixture.target === 'fmt') {
+    const entry = CANONICAL_AHEAD_OF_PIN.get(fixture.slug)
+    return entry && { reason: entry.reason, bytes: entry.fmt }
+  }
+  if (fixture.target === 'md') {
+    const entry = MARKDOWN_AHEAD_OF_PIN.get(fixture.slug)
+    return entry && { reason: entry.reason, bytes: entry.md }
+  }
+  return undefined
+}
+
 const fixtures = readdirSync(corpusDir)
   .flatMap((name) => {
     const match = /^(\d+-.*)\.(md|txt|ansi|fmt)$/.exec(name)
@@ -48,18 +84,18 @@ describe('spec corpus non-HTML render fixtures', () => {
       // The `fmt` target reads the SAME sidecars `corpus-canonical-form.test.ts`
       // does, so it honors the same ahead-of-pin declaration rather than a
       // second copy of it. See `canonical-ahead-of-pin.ts`.
-      const ahead = fixture.target === 'fmt' ? CANONICAL_AHEAD_OF_PIN.get(fixture.slug) : undefined
+      const ahead = aheadOfPin(fixture)
       if (ahead === undefined) {
         expect(targets[fixture.target](source)).toBe(expected)
         return
       }
-      expect(targets[fixture.target](source), ahead.reason).toBe(ahead.fmt)
+      expect(targets[fixture.target](source), ahead.reason).toBe(ahead.bytes)
       // The staleness half: when the pin moves past the clause the sidecar is
       // rewritten to exactly this value, and the entry must be deleted.
       expect(
         expected,
         `${fixture.slug} now matches: delete its AHEAD_OF_PIN entry`,
-      ).not.toBe(ahead.fmt)
+      ).not.toBe(ahead.bytes)
     })
   }
 })
