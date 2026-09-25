@@ -751,9 +751,43 @@ export function lintCarve(
     collectPlatformAutolinks(source, opts.platforms, skip, out)
   }
   collectEmptyIncludePathWarnings(source, doc, out)
+  collectContainedFootnotePlacements(doc, toUtf16, out)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
+}
+
+/**
+ * A `::: footnotes` marker that cannot place (`CARVE-P9-073`).
+ *
+ * Only a marker at document top level places. One inside a block-level
+ * container renders §12's typed-div floor where it stands and the endnotes
+ * section goes where it would without the marker, so the output says nothing
+ * about the placement the author asked for. carve#2292 ruled that lint is the home for a
+ * render-time refusal: nothing is dropped from the tree and the shape is spelled
+ * perfectly well, so neither machine-readable report has a code for it.
+ *
+ * REACHABILITY, NOT A CONTAINER LIST. The renderer places a marker it finds
+ * among `children` and nothing else, so identity against that array is the same
+ * question asked once rather than a second enumeration of the containers to
+ * drift from it.
+ */
+function collectContainedFootnotePlacements(
+  doc: Document,
+  toUtf16: (offset: number) => number,
+  out: LintWarning[],
+): void {
+  const places = new Set<unknown>(doc.children)
+  walkDocument(doc, (node) => {
+    if (node.type !== 'directive' || node.kind !== 'footnotes' || places.has(node)) return
+    out.push({
+      ...locate(node as Positioned, toUtf16),
+      rule: 'footnotes-placement-in-container',
+      message:
+        'This "::: footnotes" marker is inside a container, where it does not place: it renders as a plain typed div and the endnotes section goes where it would without the marker. ' +
+        'Move the marker to document level, or delete it to accept the default position.',
+    })
+  })
 }
 
 /** A trailing `{.class}` / `{#id}` attribute block at the end of a line. The

@@ -273,6 +273,7 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `list-item-body-detached` | a block-shaped line that does not reach the preceding list item's minimum content column and therefore parses outside the item; indent it to the reported column to attach it, or escape the opener to keep literal text |
 | `blockquote-marker-without-space` | a `>` blockquote marker with no space after it. Carve requires the separator space, so the marker does not open a quote |
 | `empty-include-path` | a `{{ … }}` run shaped like an include directive but with no path (empty braces, or only a `#section` / `@option`); an empty path is not a directive, so it renders as literal text - add a path or remove the braces |
+| `footnotes-placement-in-container` | a `::: footnotes` marker inside a block-level container - a block quote, a list item, a div or directive body, a definition description, a footnote definition. Only a top-level marker places (PART 9 §16, `CARVE-P9-073`), so the marker renders the `<div class="footnotes">` floor where it is written and the endnotes section goes where it would without the marker. Move the marker to document level, or delete it to accept the default position |
 
 The `carve lint` CLI reports both the collision warnings and these lint
 findings as `file:line:col rule - message`, and exits non-zero if anything is
