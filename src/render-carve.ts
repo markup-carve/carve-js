@@ -2764,6 +2764,8 @@ function renderInlineBody(
       return withAttrs(node.inline
         ? `^[${renderInlines(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
         : `[^${writeFlatBracketRun(node.id ?? '')}]`)
+    case 'non_breaking_space':
+      return renderAttrs(node.attrs) ? `[${sentinels[3]}]${renderAttrs(node.attrs)}` : sentinels[3]!
     case 'soft_break':
       return '\n'
     case 'hard_break':
@@ -3053,7 +3055,6 @@ function renderCode(content: string, allowUnclosed = false, nodeType = 'code'): 
   // (carve-js#688). Same sentinel as protectVerbatim uses; `restoreVerbatim`
   // puts the character back at the end of normalization. carve-rs already emits
   // it as itself here.
-  content = content.replace(/\ue000/g, sentinels[3])
   const fence = safeFence(content, 1)
   const needsPad =
     content.startsWith('`') ||
@@ -3272,7 +3273,7 @@ function isCarveBlank(text: string): boolean {
 }
 
 function lineBlockLayoutWhitespace(body: string): string {
-  return body.replace(/(?:^\ue000+)|\ue000{2,}/gm, (run) => sentinels[0].repeat(run.length))
+  return body.replace(new RegExp(`(?:^${sentinels[3]}+)|${sentinels[3]}{2,}`, 'gm'), (run) => sentinels[0].repeat(run.length))
 }
 
 /**
@@ -3322,7 +3323,7 @@ function dropTrailingWs(line: string): string {
 
 function normalize(text: string): string {
   const lines = trimNonNbspKeepingGuard(
-    text.replace(/\ue000(?=[ \t]*(?:\n|$))/g, '\u00a0').replace(/\ue000/g, '\\ '),
+    text.replace(new RegExp(`${sentinels[3]}(?=[ \t]*(?:\n|$))`, 'g'), '\u00a0').replace(new RegExp(sentinels[3], 'g'), '\\ '),
   ).split('\n')
   const swept = lines.map((line) => {
     // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
@@ -3382,7 +3383,7 @@ let sentinels: string[] = pickSentinelRun(new Set(), SENTINEL_BASE, SENTINEL_COU
  * run extend the scheme.
  */
 function protectVerbatim(content: string): string {
-  const [sp, tab, blank, nbsp] = sentinels
+  const [sp, tab, blank] = sentinels
 
   return content
     // An authored U+E000 inside verbatim content is the CHARACTER, not an
@@ -3393,7 +3394,6 @@ function protectVerbatim(content: string): string {
     // normalization under its own sentinel keeps it out of that rewrite;
     // `restoreVerbatim` puts the character back. carve-rs already emits it as
     // itself.
-    .replace(/\ue000/g, nbsp)
     .replace(/[ \t]+(?=\n|$)/g, (run) => run.replace(/ /g, sp).replace(/\t/g, tab))
     .split('\n')
     .map((line) => (line === '' ? blank : line))
@@ -3410,7 +3410,6 @@ function restoreVerbatim(text: string): string {
       .replace(new RegExp(sentinels[1], 'g'), '\t')
       .replace(new RegExp(sentinels[2], 'g'), '')
       // Back to the character itself - see protectVerbatim.
-      .replace(new RegExp(sentinels[3], 'g'), '\ue000')
   )
 }
 
@@ -4359,6 +4358,8 @@ function firstBoundary(node: InlineNode | undefined): string {
     // disagree and `fmt(fmt(x)) != fmt(x)`.
     case 'escaped_text':
       return node.value
+    case 'non_breaking_space':
+      return '\u00a0'
     case 'soft_break':
     case 'hard_break':
       return '\n'
@@ -4380,6 +4381,8 @@ function lastBoundary(node: InlineNode | undefined): string {
       return node.value[node.value.length - 1] ?? ''
     case 'escaped_text':
       return node.value
+    case 'non_breaking_space':
+      return '\u00a0'
     case 'soft_break':
     case 'hard_break':
       return '\n'

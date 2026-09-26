@@ -662,6 +662,10 @@ export interface EscapedText extends BaseNode {
   value: string
 }
 
+export interface NonBreakingSpace extends BaseNode {
+  type: 'non_breaking_space'
+}
+
 export interface Text extends BaseNode {
   type: 'text'
   value: string
@@ -1031,6 +1035,7 @@ export type InlineNode =
   | Abbreviation
   | FootnoteRef
   | InlineFootnote
+  | NonBreakingSpace
   | SoftBreak
   | HardBreak
   | CriticInsert

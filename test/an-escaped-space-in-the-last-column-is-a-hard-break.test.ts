@@ -116,7 +116,7 @@ describe('an ingested text node ending in a no-break space', () => {
     const written = renderCarve(doc)
     // Not `a\` - that is a hard break - and not `a\ ` either, which is the same
     // thing after the strip.
-    expect(written).toBe('a\u00a0\n')
+    expect(written).toBe('a\ue000\n')
     expect(carveToHtml(written)).toBe(renderHtml(doc))
     expect(carveToCarve(written)).toBe(written)
   })

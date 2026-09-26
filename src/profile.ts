@@ -100,6 +100,7 @@ export const CANONICAL_INLINE_TYPES = [
   'code',
   'link',
   'image',
+  'non_breaking_space',
   'soft_break',
   'hard_break',
   'raw_inline',
@@ -663,7 +664,8 @@ export class Profile {
       'mention',
       'code',
       'link',
-      'soft_break',
+      'non_breaking_space',
+  'soft_break',
       'hard_break',
       'delete',
       'insert',
@@ -720,7 +722,8 @@ export class Profile {
       'insert',
       'superscript',
       'subscript',
-      'soft_break',
+      'non_breaking_space',
+  'soft_break',
       'hard_break',
     ])
       .allowBlock(['paragraph', 'list', 'list_item'])

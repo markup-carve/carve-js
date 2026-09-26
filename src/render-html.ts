@@ -2351,6 +2351,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return node.number === undefined
         ? escapeHtml(`[^${node.id ?? ''}]`)
         : `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
+    case 'non_breaking_space':
+      return node.attrs ? `<span${renderAttrs(node.attrs)}>&nbsp;</span>` : '&nbsp;'
     case 'soft_break':
       return '\n'
     case 'hard_break':
@@ -2465,7 +2467,6 @@ const HTML_ESCAPE: Record<string, string> = {
   '>': '&gt;',
   '\u00a0': '&nbsp;',
   // Internal non-breaking-space placeholder (line-block indent / escaped space).
-  '\ue000': '&nbsp;',
 }
 
 /**
@@ -2484,7 +2485,7 @@ const HTML_ESCAPE: Record<string, string> = {
 export function escapeHtml(s: string): string {
   // Strip the Trojan-Source bidi controls, then escape the structural HTML
   // metacharacters.
-  return stripBidiControls(s).replace(/[&<>\u00a0\ue000]/g, (c) => HTML_ESCAPE[c]!)
+  return stripBidiControls(s).replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)
 }
 
 function escapeAttr(s: string): string {

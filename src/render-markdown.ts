@@ -906,6 +906,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       if (!ctx.definedFootnotes.has(id)) return `\\[^${escapeMdHtml(id)}\\]`
       return `[^${escapeMdHtml(id)}]`
     }
+    case 'non_breaking_space':
+      return '\u00a0'
     case 'soft_break':
       return '\n'
     case 'hard_break':
@@ -1803,10 +1805,7 @@ function normalize(text: string): string {
   // re-render as `&nbsp;` and is never mistaken for an indented code-block
   // prefix the way ordinary leading spaces would be. Done after trimming so
   // placeholder-derived leading indentation survives.
-  const collapsed = `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(
-    /\ue000/g,
-    '\u00a0',
-  )
+  const collapsed = `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`
 
   return resolveNarrowedEscapes(collapsed)
 }
@@ -1929,7 +1928,7 @@ function walkInlines(
  * for an escaped `\ `, which `normalize` only resolves to a real nbsp at the very
  * end of the render (carve-js#1688).
  */
-const PAD_SPACE = /^([\p{White_Space}\ue000]*)([\s\S]*?)([\p{White_Space}\ue000]*)$/u
+const PAD_SPACE = /^([\p{White_Space}]*)([\s\S]*?)([\p{White_Space}]*)$/u
 
 /**
  * A delimiter run only opens emphasis while it is left-flanking, which a run
@@ -1967,7 +1966,7 @@ const DELIMITER_RUN: Record<string, { delimiter: string; tag: string }> = {
   strike: { delimiter: '~~', tag: 'del' },
 }
 
-const FLANK_SPACE = /[\p{White_Space}\ue000]/u
+const FLANK_SPACE = /[\p{White_Space}]/u
 
 /**
  * CommonMark 0.31 punctuation: ASCII punctuation plus the Unicode P* and S*

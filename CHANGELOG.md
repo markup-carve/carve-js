@@ -12,6 +12,12 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Breaking
 
 - AST ingest rejects a `directive` without `children`. An empty directive publishes `children: []` (markup-carve/carve#2333).
+- Escaped spaces and preserved line-block columns are `non_breaking_space` nodes, and U+E000 is literal content in every field. A tree stored under the old marker emits that character raw into HTML, with no error and no version signal, because the AST contract stays `1.0`. Reparsing the source is the only remedy - a stored tree cannot tell a generated space from an authored character (#2100).
+
+### Changed
+
+- Annotation offsets use a fixed codepoint projection independent of JSON key order, including image alt text, math, breaks and generated spaces (#2100).
+
 
 ## [0.1.8] - 2026-09-25
 

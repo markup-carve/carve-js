@@ -762,6 +762,7 @@ class ProfileFilter {
         node.type === 'abbreviation' ||
         node.type === 'heading_ref' ||
         node.type === 'caption_number' ||
+        node.type === 'non_breaking_space' ||
         node.type === 'soft_break' ||
         node.type === 'hard_break' ||
         contentTypes.includes(node.type)
@@ -960,6 +961,8 @@ function extractTextContent(node: NodeLike): string {
     case 'raw_inline':
     case 'literal_inline':
       return (node['content'] as string) ?? ''
+    case 'non_breaking_space':
+      return '\u00a0'
     case 'soft_break':
       return ' '
     case 'hard_break':

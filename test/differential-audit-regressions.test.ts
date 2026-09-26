@@ -64,7 +64,7 @@ describe('differential audit regressions', () => {
 
   it('anchors a line-block hard break to the source line when tabs expand', () => {
     const ast = carveToAstJson('::: |\nwide\t\tgap\nnext\n:::\n')
-    const hardBreak = ast.children[0].children[0].children[1]
+    const hardBreak = ast.children[0].children[0].children.find((n: any) => n.type === 'hard_break')
     expect(hardBreak.type).toBe('hard_break')
     expect(hardBreak.pos.startOffset).toBe(15)
     expect(hardBreak.pos.endOffset).toBe(16)

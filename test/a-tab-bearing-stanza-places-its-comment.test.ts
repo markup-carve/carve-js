@@ -56,14 +56,14 @@ describe('a tab-bearing line block stanza', () => {
   })
 
   it('places the break that ends the tab-bearing line, from line geometry', () => {
-    const [, hardBreak] = stanza(DOC).children!
+    const hardBreak = stanza(DOC).children!.find(n => n.type === 'hard_break')
     expect(hardBreak!.type).toBe('hard_break')
     expect(spanOf(hardBreak!)).toEqual([9, 10])
     expect(sliceOf(DOC, hardBreak!)).toBe('\n')
   })
 
   it('places the comment from that same line table', () => {
-    const [, , comment] = stanza(DOC).children!
+    const comment = stanza(DOC).children!.find(n => n.type === 'comment')
     expect(comment!.type).toBe('comment')
     expect(spanOf(comment!)).toEqual([10, 12])
     expect(sliceOf(DOC, comment!)).toBe('%%')
@@ -71,7 +71,7 @@ describe('a tab-bearing line block stanza', () => {
 
   it('keeps the comment inside the paragraph that holds it', () => {
     const paragraph = stanza(DOC)
-    const [, , comment] = paragraph.children!
+    const comment = paragraph.children!.find(n => n.type === 'comment')
     expect(spanOf(paragraph)).toEqual([6, 12])
     expect(comment!.pos!.startOffset).toBeGreaterThanOrEqual(paragraph.pos!.startOffset)
     expect(comment!.pos!.endOffset).toBeLessThanOrEqual(paragraph.pos!.endOffset)
