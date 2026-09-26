@@ -4368,7 +4368,7 @@ function holdsHardBreak(nodes: readonly unknown[]): boolean {
  * decide which character carries an escape (`x (r` beside `) y` is `x \(r) y`,
  * as the single node is).
  */
-function withTextAsOneRun(ast: Document): Document {
+export function withTextAsOneRun(ast: Document): Document {
   const splits = (list: unknown[]): boolean =>
     list.some((node, index) => {
       const type = (node as { type?: unknown } | null)?.type
@@ -4397,18 +4397,26 @@ function withTextAsOneRun(ast: Document): Document {
   const copy = structuredClone(ast)
   lists(copy, (list) => {
     if (!splits(list)) return
-    let nodes = list as InlineNode[]
+    let nodes = (list as InlineNode[]).slice()
     while (nodes.some((node) => node.type === 'ruby')) nodes = flattenRubyForCarve(nodes)
-    const merged: InlineNode[] = []
-    for (const node of nodes) {
-      const previous = merged[merged.length - 1]
-      if (node.type === 'text' && previous?.type === 'text') {
-        merged[merged.length - 1] = { type: 'text', value: previous.value + node.value }
-      } else {
-        merged.push(node)
-      }
+    // Each run's fragments are joined once, where the run ends. The list is
+    // rewritten in place without spreading, which a long list would overflow.
+    list.length = 0
+    let run: Text[] = []
+    const flush = (): void => {
+      if (run.length === 1) list.push(run[0]!)
+      else if (run.length > 1) list.push({ type: 'text', value: run.map((text) => text.value).join('') })
+      run = []
     }
-    list.splice(0, list.length, ...merged)
+    for (const node of nodes) {
+      if (node.type === 'text') {
+        run.push(node)
+        continue
+      }
+      flush()
+      list.push(node)
+    }
+    flush()
   })
   return copy
 }
