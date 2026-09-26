@@ -149,7 +149,8 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --allow-loss CODE           allow a loss code intentionally (repeatable;
                                 raw-format-dropped, ruby-flattened,
                                 math-label-number-dropped, section-flattened,
-                                table-cell-blocks-flattened)
+                                table-cell-blocks-flattened,
+                                table-section-attributes-dropped)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
 
@@ -933,7 +934,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   const allowedLosses = values['allow-loss'] ?? []
   const knownLosses: RenderLossCode[] = [
     'raw-format-dropped', 'ruby-flattened', 'math-label-number-dropped',
-    'section-flattened', 'table-cell-blocks-flattened',
+    'section-flattened', 'table-cell-blocks-flattened', 'table-section-attributes-dropped',
   ]
   const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
