@@ -593,7 +593,10 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
         break
     }
   }
-  return parts.filter(Boolean).map((part) => part.replace(/\\*\r?\n/g, '<br>')).join('<br>')
+  // ONE SPACE between blocks, not `<br>` (PART 12 §27, CARVE-P12-049): the cell
+  // reaches an inline-only slot and flattens under PART 11 §1b. A hard break is
+  // the separate case and still writes `<br>`, from the inline renderer.
+  return parts.filter(Boolean).map((part) => part.replace(/\\*[ \t\r]*(?:\n[ \t\r]*)+/g, ' ')).join(' ')
 }
 
 function renderTable(node: Table, ctx: MarkdownContext): string {

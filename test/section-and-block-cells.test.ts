@@ -37,7 +37,7 @@ describe('interchange sections and block-content cells', () => {
     expect(html).toContain('<section id="s">')
     expect(html).toContain('<td><p>First</p>\n<p>Second</p></td>')
     expect(html).toContain('</section>')
-    expect(renderMarkdown(doc)).toContain('First<br>Second')
+    expect(renderMarkdown(doc)).toContain('First Second')
     expect(renderPlainText(doc)).toContain('First Second')
     expect(renderAnsi(doc)).toContain('First Second')
   })
