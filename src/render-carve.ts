@@ -37,7 +37,7 @@ import { renderPlainText } from './render-plain.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
-import { collectLoneBrackets, type LoneBrackets } from './bracket-escapes.js'
+import { collectLoneBrackets, type LeftToSearch, type LoneBrackets } from './bracket-escapes.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
@@ -2507,7 +2507,7 @@ function renderInlines(
 ): string {
   const nodes = flattenRubyForCarve(sourceNodes)
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-  if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, loneBrackets)
+  if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, loneBrackets, leftToSearch)
   ctx.inlineDepth++
   try {
     let out = ''
@@ -3612,6 +3612,7 @@ const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
 
 /** §5's lone brackets, which both forms escape, by writing node and offset. */
 const loneBrackets: LoneBrackets = new WeakMap()
+const leftToSearch: LeftToSearch = new WeakSet()
 
 /**
  * Which units the occurrence search numbers, so a key survives a re-render.
@@ -3980,7 +3981,7 @@ function escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteClo
     let sourceOffset = (range.sourceStart ?? 0) - 1
     for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
       sourceOffset = source.indexOf('(', sourceOffset + 1)
-      if (!paired.has(i) || precededByOddBackslashRun(text, i)) continue
+      if (!paired.has(i) || precededByOddBackslashRun(text, i) || leftToSearch.has(range.node)) continue
       let forced = destinationParensByUnit.get(range.node)
       if (forced === undefined) destinationParensByUnit.set(range.node, forced = new Set())
       forced.add(sourceOffset)

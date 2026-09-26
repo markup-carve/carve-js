@@ -9,6 +9,12 @@ import type { InlineNode } from './ast.js'
  */
 export type LoneBrackets = WeakMap<object, Set<number>>
 
+/**
+ * Text nodes of a run holding an empty code span. Neither §5 half selects a
+ * bracket or `(` in them; the escape search decides them instead.
+ */
+export type LeftToSearch = WeakSet<object>
+
 const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 
 const TRANSPARENT = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
@@ -28,21 +34,27 @@ interface Scope {
  * Record the lone brackets of one inline scope and of every bracketed scope
  * nested in it. Iterative, because it runs before the render depth guard.
  */
-export function collectLoneBrackets(nodes: readonly InlineNode[], bracketed: boolean, into: LoneBrackets): void {
+export function collectLoneBrackets(
+  nodes: readonly InlineNode[],
+  bracketed: boolean,
+  into: LoneBrackets,
+  leftToSearch: LeftToSearch,
+): void {
   const scopes: Scope[] = [{ content: nodes, bracketed }]
-  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into)
+  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into, leftToSearch)
 }
 
-function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: LoneBrackets): void {
+function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: LoneBrackets, leftToSearch: LeftToSearch): void {
   const sites: Site[] = []
   const owners: object[] = []
-  // An empty code span is written as an unclosed run, which hides every later
-  // bracket of the scope from the parser's pairing.
-  let hidden = false
+  // A run holding an empty code span is left to the escape search whole: the
+  // span is written as a bare backtick run, so a pairing read from the tree no
+  // longer matches the written bytes, before the span or after it.
+  let hasEmptyCode = false
 
   const addText = (owner: object, value: string): void => {
     owners.push(owner)
-    if (hidden || !bracketed || !/[[\]]/.test(value)) return
+    if (!bracketed || !/[[\]]/.test(value)) return
     const text = value.replace(UNWRITABLE_CONTROLS, '')
     for (let offset = 0; offset < text.length; offset++) {
       const char = text[offset]!
@@ -75,7 +87,7 @@ function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: Lone
         addText(node, node.abbr)
         break
       case 'code':
-        if (node.value === '') hidden = true
+        if (node.value === '') hasEmptyCode = true
         break
       case 'small_caps':
         if (node.attrs === undefined) descend(node.children)
@@ -111,6 +123,13 @@ function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: Lone
     }
   }
 
+  for (const owner of owners) {
+    into.delete(owner)
+    if (hasEmptyCode) leftToSearch.add(owner)
+    else leftToSearch.delete(owner)
+  }
+  if (hasEmptyCode) return
+
   const lone: Site[] = []
   const open: Site[] = []
   for (const site of sites) {
@@ -119,7 +138,6 @@ function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: Lone
   }
   for (const site of open) lone.push(site)
 
-  for (const owner of owners) into.delete(owner)
   for (const site of lone) {
     let offsets = into.get(site.owner)
     if (offsets === undefined) into.set(site.owner, (offsets = new Set()))
