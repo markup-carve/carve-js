@@ -2561,10 +2561,9 @@ function renderInlines(
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
         opensBacktickRun(nodes[idx + 1]),
-        // MAY A VERBATIM SPAN HERE RUN TO THE END OF THIS TEXT? Only if it is
-        // the last node AND something is already written - a backtick run that
-        // opens a block's first line is a code FENCE, not a span at all.
-        idx === nodes.length - 1 && out !== '',
+        // A run of three or more backticks at block start is a code fence.
+        // A shorter run, or one after an inline opener, can start a code span.
+        idx === nodes.length - 1 && (out !== '' || ctx.inlineDepth > 1 || (node.type === 'code' && safeFence(node.value, 1).length < 3)),
       )
       // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
       // live here and not in `renderInline`: the answer is a property of the
@@ -3126,9 +3125,9 @@ function unclosedVerbatimSpells(content: string): boolean {
   // LINE-TRAILING WHITESPACE is stripped from every line, inside the span or
   // not, so content carrying any cannot be spelled this way (nor any other -
   // see the note in the test file).
-  if (/[ \t](?:\r?\n)/.test(content) || /[ \t]$/.test(content)) return false
+  if (/[ \t][\r\n]/.test(content) || /[ \t]$/.test(content)) return false
   // A BLANK LINE ends the paragraph, and the span with it.
-  if (/\n[ \t]*(?:\r?\n)/.test(content)) return false
+  if (/\n[ \t\r\n]/.test(content)) return false
   // LINE-LEADING WHITESPACE is a continuation line's indent, which the block
   // layer strips before the inline scanner runs - so content carrying any is
   // not spelled by this form either. (A line block PRESERVES it, so the form

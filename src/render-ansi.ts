@@ -351,7 +351,7 @@ function renderTable(node: Table, ctx: AnsiContext): string {
       const cell = row.cells[i]
       const content = cell ? trimNonNbsp(cell.blocks === undefined
         ? renderInlines(cell.children ?? [], ctx)
-        : renderCellContent(cell.blocks, nodes => renderInlines(nodes, ctx), 'renderAnsi')).replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ') : ''
+        : renderCellContent(cell.blocks, nodes => renderInlines(nodes, ctx), 'renderAnsi', ctx.blockDepth)).replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ') : ''
       return { content, plain: stripAnsi(content), isHeader }
     })
   })

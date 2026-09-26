@@ -1,3 +1,4 @@
+import { MAX_RENDER_DEPTH } from '../src/render-depth.js'
 import { expect, it } from 'vitest'
 import { fromAstJson, renderPlainText, renderAnsi, renderMarkdown, renderCarve, renderHtml, parse } from '../src/index.js'
 
@@ -61,9 +62,22 @@ it('refuses a padded leading-newline span before following content or a link clo
   }
 })
 
-it('preserves the open run inside a braced strike', () => {
-  const source = '{~before ``\n`~}\n'
-  const formatted = renderCarve(parse(source))
-  expect(renderHtml(parse(formatted))).toBe(renderHtml(parse(source)))
-  expect(renderCarve(parse(formatted))).toBe(formatted)
+it('preserves an open run first in a braced span or with a two-backtick opener', () => {
+  for (const source of ['{~before ``\n`~}\n', 'x {~``\n`~}\n', '``\n`\n']) {
+    const formatted = renderCarve(parse(source))
+    expect(renderHtml(parse(formatted))).toBe(renderHtml(parse(source)))
+    expect(renderCarve(parse(formatted))).toBe(formatted)
+  }
+})
+
+it('counts the enclosing blocks toward the cell render depth limit', () => {
+  const half = Math.floor(MAX_RENDER_DEPTH / 2) + 1
+  const nest = (block: object) => {
+    for (let i = 0; i < half; i++) block = { type: 'block_quote', children: [block] }
+    return block
+  }
+  const cell = { type: 'table_cell', header: false, blocks: [nest(paragraph('deep'))] }
+  const block = nest({ type: 'table', rows: [{ type: 'table_row', cells: [cell] }] })
+  const doc = { type: 'document', children: [block] } as never
+  for (const render of [renderPlainText, renderAnsi]) expect(() => render(doc)).toThrow(/render cap/)
 })
