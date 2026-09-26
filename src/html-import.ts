@@ -589,6 +589,7 @@ const isBlankOrComment = (node: P5Node): boolean =>
  */
 function linearMathText(math: P5Node): string | undefined {
   let text = ''
+  let spaced = false
   const read = (nodes: P5Node[]): boolean => {
     for (const node of nodes) {
       if (isBlankOrComment(node)) continue
@@ -601,8 +602,14 @@ function linearMathText(math: P5Node): string | undefined {
       } else if (tag !== undefined && LINEAR_MATH_TOKENS.has(tag)) {
         const children = node.childNodes ?? []
         if (children.some((child) => child.nodeName !== '#text')) return false
-        text += children.map((child) => child.value ?? '').join('').replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
-      } else if (tag !== 'mspace') {
+        const token = children.map((child) => child.value ?? '').join('').replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
+        // A space keeps two words or numbers apart, so 1, space, 2 is not 12.
+        if (spaced && /[\p{L}\p{N}]$/u.test(text) && /^[\p{L}\p{N}]/u.test(token)) text += ' '
+        text += token
+        spaced = false
+      } else if (tag === 'mspace') {
+        spaced = true
+      } else {
         return false
       }
     }

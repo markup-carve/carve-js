@@ -43,6 +43,11 @@ describe('MathML with no TeX', () => {
     expect(htmlToCarve(html).value).toBe('∀x∈X,yif y\n')
   })
 
+  it('keeps a space where mspace separates two words or numbers', () => {
+    expect(htmlToCarve('<p><math><mn>1</mn><mspace width="1em"></mspace><mn>2</mn></math></p>').value).toBe('1 2\n')
+    expect(htmlToCarve('<p><math><mi>x</mi><mo>,</mo><mspace></mspace><mi>y</mi><mspace></mspace></math></p>').value).toBe('x,y\n')
+  })
+
   it.each(['<mfrac><mn>1</mn><mn>2</mn></mfrac>', '<msup><mi>x</mi><mn>2</mn></msup>', '<mphantom><mi>x</mi></mphantom>', '<mi><mglyph></mglyph></mi>'])(
     'keeps the drop for %s',
     (inner) => {
