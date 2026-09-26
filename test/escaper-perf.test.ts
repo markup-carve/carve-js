@@ -1,6 +1,7 @@
 import { describe } from 'vitest'
 import { bbcodeToCarve } from '../src/bbcode-migrate.js'
 import { escapePlainCarveInlineSyntax } from '../src/carve-escape.js'
+import { completeDestinationOpeners } from '../src/link-destination.js'
 import { carveToCarve } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
@@ -110,5 +111,16 @@ describe('escaper perf: narrowing to the occurrence stays linear', () => {
       label: 'lines that all escalate one occurrence',
       smallRepeats: 100,
     })
+  })
+})
+
+describe('destination scan perf', () => {
+  perfIt('unclosed and nested destinations scale near-linearly', () => {
+    for (const suffix of ['', ')'.repeat(32_000)]) {
+      expectScansLinearly((input) => void completeDestinationOpeners(input + suffix), '[a](b', {
+        label: suffix ? 'nested destinations' : 'unclosed destinations',
+        smallRepeats: 8_000,
+      })
+    }
   })
 })

@@ -68,3 +68,37 @@ export function linkDestinationValue(run: string): string | null {
 
   return scanned.dest
 }
+
+export const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+
+const RE_LINK_REST_STICKY = new RegExp(RE_LINK_REST.source.slice(1), 'y')
+
+/** Complete destination openers, with nested destinations scanned once. */
+export function completeDestinationOpeners(text: string): Set<number> {
+  const stops = new Int32Array(text.length + 1)
+  stops[text.length] = text.length
+  for (let i = text.length - 1; i >= 0; i--) {
+    const c = text[i]!
+    if (c === '\\' && /[\\()]/.test(text[i + 1] ?? '')) stops[i] = stops[i + 2]!
+    else if (c === '(') {
+      const close = stops[i + 1]!
+      stops[i] = text[close] === ')' ? stops[close + 1]! : -1
+    } else if (c === ')' || RE_DESTINATION_WHITESPACE.test(c)) stops[i] = i
+    else stops[i] = stops[i + 1]!
+  }
+  const found = new Set<number>()
+  const closes = new Map<number, boolean>()
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '(') continue
+    const stop = stops[i + 1]!
+    if (stop <= i + 1) continue
+    let closed = closes.get(stop)
+    if (closed === undefined) {
+      RE_LINK_REST_STICKY.lastIndex = stop
+      closed = RE_LINK_REST_STICKY.test(text)
+      closes.set(stop, closed)
+    }
+    if (closed) found.add(i)
+  }
+  return found
+}

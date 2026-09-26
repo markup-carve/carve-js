@@ -10,6 +10,8 @@ describe('PART 11 §5 destination-opening parentheses', () => {
     ['f(x) and (see above) and [a] (b) and [a](b c)', 'f(x) and (see above) and [a] (b) and [a](b c)'],
     ['](b) and [a]() and [a](b', '](b) and [a]() and [a](b'],
     ['[a](b(c d))', '[a](b(c d))'],
+    ['[a](b) {{ file.crv }}', '[a]\\(b) {{ file.crv }}'],
+    ['{{ file.crv }} [a](b) *x*', '{{ file.crv }} [a]\\(b) \\*x*'],
     ['[a](b) *x*', '[a]\\(b) \\*x*'],
     ['[a](b \"title\")', '[a](b \\\"title\\\")'],
     ['[a](b\\)c)', '[a]\\(b\\\\)c)'],
@@ -25,6 +27,26 @@ describe('PART 11 §5 destination-opening parentheses', () => {
     const out = htmlToCarve('<p><span class="c">[a](u)</span></p>').value
     expect(out).toBe('[[a]\\(u)]{.c}\n')
     expect(carveToCarve(out)).toBe(out)
+  })
+
+  it.each([
+    ['[<em>a](b)</em>', '[/a]\\(b)/'],
+    ['<em>[a](b</em>)', '/[a]\\(b/)'],
+    ['[<em>a</em>](b)', '[/a/]\\(b)'],
+    ['[a](<em>b</em>)', '[a]\\(/b/)'],
+    ['[a<code>x</code>](b)', '[a`x`]\\(b)'],
+    ['[a <strong>b</strong> c](d)', '[a *b* c]\\(d)'],
+    ['[<a href="u">x</a>](b)', '[[x](u)]\\(b)'],
+    ['[<em>a</em>](b) *literal*', '[/a/]\\(b) \\*literal*'],
+  ])('pairs brackets across inline nodes: %s', (body, expected) => {
+    const out = htmlToCarve(`<p>${body}</p>`).value
+    expect(out).toBe(`${expected}\n`)
+    expect(carveToCarve(out)).toBe(out)
+    expect(carveToHtml(out)).toBe(`<p>${body}</p>`)
+  })
+
+  it.each(['x[^n](b)\n\n[^n]: note\n', 'x^[note](b)\n', '/x^[note](b)/\n'])('keeps parentheses after a note bare: %s', (source) => {
+    expect(carveToCarve(source)).toBe(source)
   })
 
   it('preserves real links', () => {

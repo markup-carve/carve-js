@@ -17,12 +17,13 @@ import type {
 import {
   aBodyRebaseWouldMoveALine,
   cellPayloadIsSpanMarker,
-  execLinkTail,
+  buildBracketMap,
   opensFrontmatter,
   parse,
   rawBracketRunCloses,
   symbolOpensAt,
 } from './parse.js'
+import { completeDestinationOpeners } from './link-destination.js'
 import { findDirectives } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
@@ -125,6 +126,7 @@ interface CarveContext {
  * @throws {SourceUnspellableError} when a node's content has no Carve spelling.
  */
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+  destinationParensByUnit = new WeakMap()
   reportRubyLosses(ast, opts)
   ast = withCellHardBreaksFlattened(ast)
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
@@ -2424,8 +2426,8 @@ function emitDirective(raw: string): string {
   return raw
 }
 
-function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
-  const overrides = new Map<number, string>()
+function directiveOverrides(nodes: InlineNode[]): Map<number, { text: string; ranges: LiteralRange[] }> {
+  const overrides = new Map<number, { text: string; ranges: LiteralRange[] }>()
   let i = 0
   while (i < nodes.length) {
     if (directiveRunText(nodes[i]!) === null) {
@@ -2450,9 +2452,22 @@ function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
         const covering = spans.filter((s) => s.start < offset && s.end > start)
         if (covering.length === 0) continue
         let out = ''
+        const ranges: LiteralRange[] = []
+        const node = nodes[i + k]!
+        const appendLiteral = (from: number, to: number): void => {
+          const previous = escapeUnit
+          escapeUnit = node
+          let piece: string
+          try { piece = escapeText(text.slice(from, to), false, false, from) }
+          finally { escapeUnit = previous }
+          if (node.type === 'text' && piece.includes('(')) {
+            ranges.push({ start: out.length, end: out.length + piece.length, node, sourceStart: from })
+          }
+          out += piece
+        }
         let cursor = start
         for (const span of covering) {
-          if (span.start > cursor) out += escapeText(text.slice(cursor - start, span.start - start))
+          if (span.start > cursor) appendLiteral(cursor - start, span.start - start)
           // The whole directive is emitted once, by the node where it STARTS.
           // A later node that the same span merely runs THROUGH contributes
           // nothing, which is what lets the emitted form differ in length
@@ -2460,8 +2475,8 @@ function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
           if (span.start >= start) out += emitDirective(span.raw)
           cursor = Math.min(span.end, offset)
         }
-        out += escapeText(text.slice(cursor - start))
-        overrides.set(i + k, out)
+        appendLiteral(cursor - start, text.length)
+        overrides.set(i + k, { text: out, ranges })
       }
     }
     i = end
@@ -2494,6 +2509,8 @@ function renderInlines(
   ctx.inlineDepth++
   try {
     let out = ''
+    const literalRanges: LiteralRange[] = []
+    const noteCloses: number[] = []
     let firstLine = true
     let lineNodeCount = 0
     let lineHostsCaption = false
@@ -2514,7 +2531,10 @@ function renderInlines(
         : { text: outTail, offset: out.length - outTail.length }
     const overrides = directiveOverrides(nodes)
     nodes.forEach((node, idx) => {
-      let piece = overrides.get(idx) ?? renderInline(
+      lastLiteralRanges = []
+      lastNoteCloses = []
+      const override = overrides.get(idx)
+      let piece = override?.text ?? renderInline(
         node,
         ctx,
         // A span leaves no boundary character of its own, so the one it WROTE
@@ -2572,6 +2592,12 @@ function renderInlines(
         lineTail = (lineTail + EMPTY_COMMENT).slice(-2)
       }
 
+      if (escapeMode === 'minimal') {
+        if (override === undefined) for (const close of lastNoteCloses) noteCloses.push(out.length + close)
+        for (const range of override?.ranges ?? lastLiteralRanges) {
+          literalRanges.push({ ...range, start: out.length + range.start, end: out.length + range.end })
+        }
+      }
       out += piece
       outTail = (outTail + piece).slice(-OUT_TAIL_LENGTH)
       const lastNewline = piece.lastIndexOf('\n')
@@ -2593,6 +2619,12 @@ function renderInlines(
       lineHostsCaption = lineNodeCount === 1 && inlineHostsCaption(node)
       captionCanOpen = false
     })
+    if (escapeMode === 'minimal') {
+      // A bracket or destination may cross a nested emphasis boundary. Keep
+      // its text-node ranges until the outer inline run is complete.
+      if (ctx.inlineDepth === 1) return escapeLiteralDestinations(out, literalRanges, new Set(noteCloses))
+      inlineChildProjections.push({ text: out, ranges: literalRanges, noteCloses })
+    }
     return out
   } finally {
     ctx.inlineDepth--
@@ -2614,19 +2646,40 @@ function renderInline(
   mayRunToEndOfText = false,
 ): string {
   const previous = escapeUnit
+  const parentProjections = inlineChildProjections
+  inlineChildProjections = []
   escapeUnit = node as unknown as object
   try {
-    return renderInlineBody(
-      node,
-      ctx,
-      prevChar,
-      nextChar,
-      captionCanOpen,
-      nextOpensBacktickRun,
-      mayRunToEndOfText,
+    const result = renderInlineBody(
+      node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun, mayRunToEndOfText,
     )
+    lastLiteralRanges = []
+    lastNoteCloses = []
+    if (escapeMode === 'minimal') {
+      if (node.type === 'text' && result.includes('(')) {
+        lastLiteralRanges.push({ start: 0, end: result.length, node })
+      } else {
+        let cursor = 0
+        for (const child of inlineChildProjections) {
+          if (child.ranges.length === 0 && child.noteCloses.length === 0) continue
+          const start = result.indexOf(child.text, cursor)
+          if (start === -1) continue
+          for (const close of child.noteCloses) lastNoteCloses.push(start + close)
+          for (const range of child.ranges) {
+            lastLiteralRanges.push({ ...range, start: start + range.start, end: start + range.end })
+          }
+          cursor = start + child.text.length
+        }
+      }
+    }
+    if (escapeMode === 'minimal' && (node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
+      const close = buildBracketMap(result, true)(result.indexOf('['))
+      if (close !== undefined) lastNoteCloses.push(close)
+    }
+    return result
   } finally {
     escapeUnit = previous
+    inlineChildProjections = parentProjections
   }
 }
 
@@ -3895,45 +3948,58 @@ const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
  */
 const DIRECTIVE_UNSAFE = new RegExp(UNWRITABLE_CONTROLS.source)
 
-/** Parentheses that open destinations after paired literal brackets (PART 11 §5). */
-function literalDestinationParens(text: string): Set<number> {
-  const offsets = new Set<number>()
-  if (!text.includes('](')) return offsets
-  // Read the spelling after unconditional escapes, including literal backslashes
-  // and quotes. Titles containing escaped quotes do not open a destination.
-  const sourceOffsets: number[] = []
-  let written = ''
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!
-    if ('\\`"\''.includes(c)) {
-      sourceOffsets.push(i)
-      written += '\\'
-    }
-    sourceOffsets.push(i)
-    written += c
+let destinationParensByUnit = new WeakMap<object, Set<number>>()
+interface LiteralRange { start: number; end: number; node: Text; sourceStart?: number }
+let lastLiteralRanges: LiteralRange[] = []
+let lastNoteCloses: number[] = []
+let inlineChildProjections: Array<{ text: string; ranges: LiteralRange[]; noteCloses: number[] }> = []
+
+/** Choose escapes from the emitted inline run, including intervening inline nodes. */
+function escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteCloses: Set<number>): string {
+  if (!text.includes('](') || ranges.length === 0) return text
+  const destinations = completeDestinationOpeners(text)
+  const bracketClose = buildBracketMap(text, true)
+  const paired = new Set<number>()
+  for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', i + 1)) {
+    const close = bracketClose(i)
+    if (close !== undefined && !noteCloses.has(close) && destinations.has(close + 1)) paired.add(close + 1)
   }
-  let depth = 0
-  for (let i = 0; i < written.length; i++) {
-    if (written[i] === '\\') { i++; continue }
-    if (written[i] === '[') depth++
-    if (written[i] !== ']' || depth === 0) continue
-    depth--
-    if (written[i + 1] === '(' && execLinkTail(written.slice(i + 1)) !== null) {
-      offsets.add(sourceOffsets[i + 1]!)
+  const selected: number[] = []
+  const sources = new Map<Text, string>()
+  for (const range of ranges) {
+    let source = sources.get(range.node)
+    if (source === undefined) {
+      source = cleanEscapedText(range.node).replace(UNWRITABLE_CONTROLS, '')
+      sources.set(range.node, source)
+    }
+    let sourceOffset = (range.sourceStart ?? 0) - 1
+    for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
+      sourceOffset = source.indexOf('(', sourceOffset + 1)
+      if (!paired.has(i) || precededByOddBackslashRun(text, i)) continue
+      let forced = destinationParensByUnit.get(range.node)
+      if (forced === undefined) destinationParensByUnit.set(range.node, forced = new Set())
+      forced.add(sourceOffset)
+      selected.push(i)
     }
   }
-  return offsets
+  let out = ''
+  let cursor = 0
+  for (const i of selected) {
+    out += text.slice(cursor, i) + '\\'
+    cursor = i
+  }
+  return out + text.slice(cursor)
 }
 
-function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
+function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false, sourceOffset = 0): string {
   const mode = escapeModeHere()
   text = text.replace(UNWRITABLE_CONTROLS, '')
-  const destinationParens = literalDestinationParens(text)
+  const destinationParens = escapeUnit == null ? undefined : destinationParensByUnit.get(escapeUnit)
   const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
   const call = mode === 'conservative' ? nextEscapeCallIndex() : 0
   let out = text
     .replace(escapes, (char, offset: number, subject: string) => {
-      if (destinationParens.has(offset)) return '\\('
+      if (destinationParens?.has(sourceOffset + offset)) return '\\('
       if (mode === 'minimal' && char === '(') return char
       // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
       // search has escalated, each candidate site is offered back on its own,
