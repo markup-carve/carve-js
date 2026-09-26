@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   fromAstJson, parse, resolve, renderHtml, renderMarkdown, renderPlainText,
-  renderAnsi, renderCarveWithReport, toAstJson, AstJsonSchemaError,
+  renderAnsi, renderCarve, renderCarveWithConversionReport, renderCarveWithReport,
+  toAstJson, AstJsonSchemaError,
 } from '../src/index.js'
 import type { Document, Math } from '../src/ast.js'
 
@@ -138,10 +139,12 @@ describe('labeled display equations', () => {
     expect(() => fromAstJson(json)).toThrow(AstJsonSchemaError)
   })
 
-  it('reports fields that canonical Carve cannot spell', () => {
+  it('reports fields that canonical Carve cannot spell on the diagnostics channel, not as render losses', () => {
     const doc = resolve(equation())
     const report = renderCarveWithReport(doc)
     expect(report.value).toContain('$$`x`')
-    expect(report.losses.map((loss) => loss.code)).toEqual(['math-label-number-dropped'])
+    expect(report.losses).toEqual([])
+    const { report: diagnostics } = renderCarveWithConversionReport(resolve(equation()), renderCarve)
+    expect(diagnostics.diagnostics.filter((entry) => entry.node === 'math').map((entry) => entry.field)).toEqual(['label', 'number'])
   })
 })

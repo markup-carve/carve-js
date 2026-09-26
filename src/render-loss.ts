@@ -1,7 +1,7 @@
 import type { Position } from './ast.js'
 
 export type RenderTarget = 'html' | 'markdown' | 'plain' | 'ansi' | 'carve'
-export type RenderLossCode = 'raw-format-dropped' | 'ruby-flattened' | 'math-label-number-dropped' | 'section-flattened' | 'table-cell-blocks-flattened' | 'table-section-attributes-dropped'
+export type RenderLossCode = 'raw-format-dropped' | 'ruby-flattened'
 
 interface RenderLossBase {
   target: RenderTarget
@@ -13,8 +13,6 @@ interface RenderLossBase {
 export type RenderLoss =
   | (RenderLossBase & { code: 'raw-format-dropped'; format: string })
   | (RenderLossBase & { code: 'ruby-flattened'; nodeType: 'inline' })
-  | (RenderLossBase & { code: 'math-label-number-dropped'; nodeType: 'inline' })
-  | (RenderLossBase & { code: 'section-flattened' | 'table-cell-blocks-flattened' | 'table-section-attributes-dropped'; nodeType: 'block' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -103,16 +101,4 @@ export function checkedRender(
   Object.defineProperty(result, 'lossCounts', { value: lossCounts, enumerable: false })
   if (opts.strictLosses && totalLosses > 0) throw new RenderLossError(result)
   return result
-}
-
-export function tableSectionAttributesDropped(opts: RenderLossSinkOptions, node: import('./ast.js').Table, target: RenderTarget): void {
-  const groups = node.rowGroups
-  if (!groups) return
-  const fields = [['rowGroups.headAttrs', groups.headAttrs], ['rowGroups.footAttrs', groups.footAttrs],
-    ...groups.bodies.map((body, i) => [`rowGroups.bodies[${i}].attrs`, body.attrs])] as const
-  for (const [field, attrs] of fields) {
-    if (attrs && Object.values(attrs).some(value => typeof value === 'string' || Object.keys(value ?? {}).length > 0)) {
-      opts.onRenderLoss?.({ code: 'table-section-attributes-dropped', target, nodeType: 'block', message: `Dropped ${field} while rendering ${target}`, ...(node.pos ? { pos: node.pos } : {}) })
-    }
-  }
 }

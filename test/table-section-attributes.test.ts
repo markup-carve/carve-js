@@ -38,11 +38,15 @@ describe('table section attributes', () => {
     ;(wire.children[0].rowGroups as any).headAttrs = { classes: 7 }
     expect(() => fromAstJson(wire)).toThrow()
   })
-  it('reports each attribute loss on text targets', () => {
-    for (const render of [renderPlainText, renderMarkdown, renderAnsi]) {
+  it('diagnoses each dropped attributes field and names no render loss on text targets', () => {
+    for (const render of [renderCarve, renderPlainText, renderMarkdown, renderAnsi]) {
       const losses: any[] = []
       render(fromAstJson(document()), { onRenderLoss: loss => losses.push(loss) })
-      expect(losses.filter(loss => loss.code === 'table-section-attributes-dropped')).toHaveLength(3)
+      expect(losses).toEqual([])
+      const { report } = renderCarveWithConversionReport(fromAstJson(document()), render as never)
+      expect(report.diagnostics.filter(d => d.code === 'field-unspellable').map(d => d.field)).toEqual([
+        'rowGroups.headAttrs', 'rowGroups.footAttrs', 'rowGroups.bodies[0].attrs',
+      ])
     }
   })
   it('keeps section attributes when a span meets a boundary without mutating the AST', () => {

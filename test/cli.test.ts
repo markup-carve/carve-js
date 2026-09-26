@@ -101,14 +101,14 @@ describe('carve render — loss reporting', () => {
     expect(t.err).toBe('')
   })
 
-  it('can allow table section losses with a zero report limit', async () => {
+  it('does not name a dropped table section attribute as a render loss', async () => {
     const ast = '{"type":"document","srcByteLength":0,"children":[{"type":"table","rows":[],"rowGroups":{"headRows":0,"footRows":0,"bodies":[],"headAttrs":{"id":"head"}}}]}'
-    const denied = makeIO({ stdin: ast })
-    expect(await run(['render', '--from-json', '--plain', '--strict-losses', '--max-render-losses', '0'], denied.io)).toBe(1)
-    expect(denied.out).toBe('')
-    const allowed = makeIO({ stdin: ast })
-    expect(await run(['render', '--from-json', '--plain', '--strict-losses', '--max-render-losses', '0', '--allow-loss', 'table-section-attributes-dropped'], allowed.io)).toBe(0)
-    expect(allowed.err).toBe('')
+    const strict = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--plain', '--strict-losses', '--max-render-losses', '0'], strict.io)).toBe(0)
+    expect(strict.err).toBe('')
+    const refused = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--plain', '--allow-loss', 'table-section-attributes-dropped'], refused.io)).toBe(2)
+    expect(refused.err).toContain("unknown loss code 'table-section-attributes-dropped' (expected raw-format-dropped, ruby-flattened)")
   })
 
   it('can allow ruby flattening from an encoded AST', async () => {
@@ -132,7 +132,7 @@ describe('carve render — loss reporting', () => {
     expect(allowed.err).toBe('')
   })
 
-  it('can allow a math label and number loss from an encoded AST', async () => {
+  it('does not name a dropped math label or number as a render loss', async () => {
     const ast = JSON.stringify({
       type: 'document',
       children: [{ type: 'paragraph', children: [{
@@ -140,19 +140,13 @@ describe('carve render — loss reporting', () => {
       }] }],
       srcByteLength: 0,
     })
-    const denied = makeIO({ stdin: ast })
-    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], denied.io)).toBe(1)
-    expect(denied.err).toContain('math-label-number-dropped')
-
-    const allowed = makeIO({ stdin: ast })
-    expect(await run([
-      'render', '--from-json', '--carve', '--strict-losses', '--allow-loss', 'math-label-number-dropped',
-    ], allowed.io)).toBe(0)
-    expect(allowed.out).toContain('$$`x`')
-    expect(allowed.err).toBe('')
+    const strict = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], strict.io)).toBe(0)
+    expect(strict.out).toContain('$$`x`')
+    expect(strict.err).toBe('')
   })
 
-  it('can allow flattened sections and block-content cells from an encoded AST', async () => {
+  it('does not name a flattened section or block-content cell as a render loss', async () => {
     const ast = JSON.stringify({
       type: 'document', srcByteLength: 0, children: [{
         type: 'section', children: [{ type: 'table', rows: [{ type: 'table_row', cells: [{
@@ -162,18 +156,10 @@ describe('carve render — loss reporting', () => {
         }] }] }],
       }],
     })
-    const denied = makeIO({ stdin: ast })
-    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], denied.io)).toBe(1)
-    expect(denied.err).toContain('section-flattened')
-    expect(denied.err).toContain('table-cell-blocks-flattened')
-
-    const allowed = makeIO({ stdin: ast })
-    expect(await run([
-      'render', '--from-json', '--carve', '--strict-losses',
-      '--allow-loss', 'section-flattened', '--allow-loss', 'table-cell-blocks-flattened',
-    ], allowed.io)).toBe(0)
-    expect(allowed.out).toContain('Cell')
-    expect(allowed.err).toBe('')
+    const strict = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--carve', '--strict-losses'], strict.io)).toBe(0)
+    expect(strict.out).toContain('Cell')
+    expect(strict.err).toBe('')
   })
 
   it('does not let an allowed truncated loss hide a different code', async () => {
