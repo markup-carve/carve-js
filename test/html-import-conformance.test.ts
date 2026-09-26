@@ -22,25 +22,8 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
-  [
-    'security',
-    {
-      reason: "markup-carve/carve#2361: a span's edge whitespace stands outside it",
-      carve: 'safe [text]{title=lost}\n',
-      ast: {
-        type: 'document',
-        children: [{
-          type: 'paragraph',
-          children: [
-            { type: 'text', value: 'safe ' },
-            { type: 'span', children: [{ type: 'text', value: 'text' }], attrs: { keyValues: { title: 'lost' } } },
-          ],
-        }],
-      },
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>()
+// Empty. Its `security` entry went out with the bump past markup-carve/carve#2361.
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.
