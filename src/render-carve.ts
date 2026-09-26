@@ -2510,6 +2510,7 @@ function renderInlines(
   try {
     let out = ''
     const literalRanges: LiteralRange[] = []
+    const noteCloses: number[] = []
     let firstLine = true
     let lineNodeCount = 0
     let lineHostsCaption = false
@@ -2531,6 +2532,7 @@ function renderInlines(
     const overrides = directiveOverrides(nodes)
     nodes.forEach((node, idx) => {
       lastLiteralRanges = []
+      lastNoteCloses = []
       const override = overrides.get(idx)
       let piece = override?.text ?? renderInline(
         node,
@@ -2591,6 +2593,7 @@ function renderInlines(
       }
 
       if (escapeMode === 'minimal') {
+        if (override === undefined) for (const close of lastNoteCloses) noteCloses.push(out.length + close)
         for (const range of override?.ranges ?? lastLiteralRanges) {
           literalRanges.push({ ...range, start: out.length + range.start, end: out.length + range.end })
         }
@@ -2619,8 +2622,8 @@ function renderInlines(
     if (escapeMode === 'minimal') {
       // A bracket or destination may cross a nested emphasis boundary. Keep
       // its text-node ranges until the outer inline run is complete.
-      if (ctx.inlineDepth === 1) return escapeLiteralDestinations(out, literalRanges)
-      inlineChildProjections.push({ text: out, ranges: literalRanges })
+      if (ctx.inlineDepth === 1) return escapeLiteralDestinations(out, literalRanges, new Set(noteCloses))
+      inlineChildProjections.push({ text: out, ranges: literalRanges, noteCloses })
     }
     return out
   } finally {
@@ -2651,21 +2654,27 @@ function renderInline(
       node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun, mayRunToEndOfText,
     )
     lastLiteralRanges = []
+    lastNoteCloses = []
     if (escapeMode === 'minimal') {
       if (node.type === 'text' && result.includes('(')) {
         lastLiteralRanges.push({ start: 0, end: result.length, node })
       } else {
         let cursor = 0
         for (const child of inlineChildProjections) {
-          if (child.ranges.length === 0) continue
+          if (child.ranges.length === 0 && child.noteCloses.length === 0) continue
           const start = result.indexOf(child.text, cursor)
           if (start === -1) continue
+          for (const close of child.noteCloses) lastNoteCloses.push(start + close)
           for (const range of child.ranges) {
             lastLiteralRanges.push({ ...range, start: start + range.start, end: start + range.end })
           }
           cursor = start + child.text.length
         }
       }
+    }
+    if (escapeMode === 'minimal' && (node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
+      const close = buildBracketMap(result, true)(result.indexOf('['))
+      if (close !== undefined) lastNoteCloses.push(close)
     }
     return result
   } finally {
@@ -3942,17 +3951,18 @@ const DIRECTIVE_UNSAFE = new RegExp(UNWRITABLE_CONTROLS.source)
 let destinationParensByUnit = new WeakMap<object, Set<number>>()
 interface LiteralRange { start: number; end: number; node: Text; sourceStart?: number }
 let lastLiteralRanges: LiteralRange[] = []
-let inlineChildProjections: Array<{ text: string; ranges: LiteralRange[] }> = []
+let lastNoteCloses: number[] = []
+let inlineChildProjections: Array<{ text: string; ranges: LiteralRange[]; noteCloses: number[] }> = []
 
 /** Choose escapes from the emitted inline run, including intervening inline nodes. */
-function escapeLiteralDestinations(text: string, ranges: LiteralRange[]): string {
+function escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteCloses: Set<number>): string {
   if (!text.includes('](') || ranges.length === 0) return text
   const destinations = completeDestinationOpeners(text)
   const bracketClose = buildBracketMap(text, true)
   const paired = new Set<number>()
   for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', i + 1)) {
     const close = bracketClose(i)
-    if (close !== undefined && destinations.has(close + 1)) paired.add(close + 1)
+    if (close !== undefined && !noteCloses.has(close) && destinations.has(close + 1)) paired.add(close + 1)
   }
   const selected: number[] = []
   const sources = new Map<Text, string>()

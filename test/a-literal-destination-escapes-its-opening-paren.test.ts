@@ -45,6 +45,10 @@ describe('PART 11 §5 destination-opening parentheses', () => {
     expect(carveToHtml(out)).toBe(`<p>${body}</p>`)
   })
 
+  it.each(['x[^n](b)\n\n[^n]: note\n', 'x^[note](b)\n', '/x^[note](b)/\n'])('keeps parentheses after a note bare: %s', (source) => {
+    expect(carveToCarve(source)).toBe(source)
+  })
+
   it('preserves real links', () => {
     expect(carveToCarve('[a](b)\n')).toBe('[a](b)\n')
   })
