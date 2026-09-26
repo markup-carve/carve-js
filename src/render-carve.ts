@@ -17,6 +17,7 @@ import type {
 import {
   aBodyRebaseWouldMoveALine,
   cellPayloadIsSpanMarker,
+  execLinkTail,
   opensFrontmatter,
   parse,
   rawBracketRunCloses,
@@ -3486,7 +3487,7 @@ function cleanEscapedText(node: Text): string {
   return node.value
 }
 
-const UNCONDITIONAL_ESCAPES = /[\\`"']/g
+const MINIMAL_ESCAPE_SITES = /[\\`"'(]/g
 const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 
 // Which set the writer is escaping right now. renderCarve renders the document
@@ -3894,13 +3895,46 @@ const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
  */
 const DIRECTIVE_UNSAFE = new RegExp(UNWRITABLE_CONTROLS.source)
 
+/** Parentheses that open destinations after paired literal brackets (PART 11 §5). */
+function literalDestinationParens(text: string): Set<number> {
+  const offsets = new Set<number>()
+  if (!text.includes('](')) return offsets
+  // Read the spelling after unconditional escapes, including literal backslashes
+  // and quotes. Titles containing escaped quotes do not open a destination.
+  const sourceOffsets: number[] = []
+  let written = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if ('\\`"\''.includes(c)) {
+      sourceOffsets.push(i)
+      written += '\\'
+    }
+    sourceOffsets.push(i)
+    written += c
+  }
+  let depth = 0
+  for (let i = 0; i < written.length; i++) {
+    if (written[i] === '\\') { i++; continue }
+    if (written[i] === '[') depth++
+    if (written[i] !== ']' || depth === 0) continue
+    depth--
+    if (written[i + 1] === '(' && execLinkTail(written.slice(i + 1)) !== null) {
+      offsets.add(sourceOffsets[i + 1]!)
+    }
+  }
+  return offsets
+}
+
 function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
   const mode = escapeModeHere()
-  const escapes = mode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
+  text = text.replace(UNWRITABLE_CONTROLS, '')
+  const destinationParens = literalDestinationParens(text)
+  const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
   const call = mode === 'conservative' ? nextEscapeCallIndex() : 0
   let out = text
-    .replace(UNWRITABLE_CONTROLS, '')
     .replace(escapes, (char, offset: number, subject: string) => {
+      if (destinationParens.has(offset)) return '\\('
+      if (mode === 'minimal' && char === '(') return char
       // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
       // search has escalated, each candidate site is offered back on its own,
       // so the one occurrence that needed the escape no longer drags the rest
