@@ -222,13 +222,16 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       if (writeRole) attrs.keyValues.role = role
       if (writeName) attrs.keyValues['aria-label'] = groupLabel
     }
-    const authorOrder = (wrapper.attrs?.order ?? []).filter((s) => s !== '.class')
-    // APPENDED: naming the set must not move an attribute the author placed.
+    const authorOrder = wrapper.attrs?.order ?? []
+    // APPENDED: naming the set must not move an attribute the author placed, an
+    // authored `role` included. The wrapper class trails those and leads the
+    // appended names (carve#2328); it is pinned here because
+    // renderAttrs emits an omitted class LAST, which would put it behind them.
     attrs.order = [
-      '.class',
-      ...authorOrder.filter((s) => s !== 'role' && s !== 'aria-label'),
-      ...(writeRole ? ['role'] : []),
-      ...(writeName ? ['aria-label'] : []),
+      ...authorOrder,
+      ...(authorOrder.includes('.class') ? [] : ['.class']),
+      ...(writeRole && !authorOrder.includes('role') ? ['role'] : []),
+      ...(writeName && !authorOrder.includes('aria-label') ? ['aria-label'] : []),
     ]
     return ctx.renderAttrs(attrs)
   }

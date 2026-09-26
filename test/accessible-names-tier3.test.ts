@@ -78,9 +78,12 @@ describe('a tab set and a code group are named as a whole (carve#1468)', () => {
   })
 
   it('leaves an attribute the author placed exactly where they placed it', () => {
+    // Which is the authored id ahead of the structural class, the position
+    // carve#2328 rules for an extension wrapper. The appended role and name
+    // still trail both.
     const src = '{#t1}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n'
     expect(carveToHtml(src, { extensions: [tabs()] })).toContain(
-      '<div class="tabs" id="t1" role="group" aria-label="Tabs">',
+      '<div id="t1" class="tabs" role="group" aria-label="Tabs">',
     )
   })
 })
@@ -459,5 +462,53 @@ describe('the table-of-contents nav carries its own name (carve#1509)', () => {
         }),
       ),
     ).toBe('Option-summary')
+  })
+})
+
+/*
+ * carve#2328. An extension wrapper's structural class TRAILS the author's own
+ * attributes, with the engine-minted names behind it. The two
+ * authored attributes are what separate that from "after the id": with only
+ * `{#g}` both readings render the same bytes, which is how the tabs and
+ * code-group wrappers kept a leading class for so long.
+ */
+describe('an extension wrapper class trails the authored attributes (carve#2328)', () => {
+  const cases = [
+    ['tabs', '{#g k=v}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n', () => tabs(),
+      '<div id="g" k="v" class="tabs" role="group" aria-label="Tabs">'],
+    ['code-group', '{#g k=v}\n::: code-group\n\n``` php\n$a=1;\n```\n\n:::\n', () => codeGroup(),
+      '<div id="g" k="v" class="code-group" role="group" aria-label="Code examples">'],
+  ] as const
+
+  for (const [name, src, ext, expected] of cases) {
+    it(`${name} puts the class after every authored slot`, () => {
+      expect(carveToHtml(src, { extensions: [ext()] })).toContain(expected)
+    })
+  }
+
+  // An AUTHORED `role` is an authored slot, so it keeps its own position rather
+  // than being lifted to the end beside the minted name.
+  it('keeps an authored role where the author wrote it', () => {
+    const out = carveToHtml('{#g role=navigation}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n', {
+      extensions: [tabs()],
+    })
+    expect(out).toContain('<div id="g" role="navigation" class="tabs" aria-label="Tabs">')
+  })
+
+  it('keeps an authored role on a code group too', () => {
+    const out = carveToHtml('{#g role=navigation}\n::: code-group\n\n``` php\n$a=1;\n```\n\n:::\n', {
+      extensions: [codeGroup()],
+    })
+    expect(out).toContain('<div id="g" role="navigation" class="code-group" aria-label="Code examples">')
+  })
+
+  // A class the AUTHOR wrote is an authored slot, and the structural class
+  // merges into it rather than opening a second one.
+  it("merges into a class the author wrote, at the author's position", () => {
+    expect(
+      carveToHtml('{.foo #g}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n', {
+        extensions: [tabs()],
+      }),
+    ).toContain('<div class="tabs foo" id="g" role="group" aria-label="Tabs">')
   })
 })
