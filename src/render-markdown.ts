@@ -681,7 +681,8 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
       ),
     )
     const rendered = `| ${cells.join(' | ')} |`
-    if (row.cells.every((cell) => cell.header)) {
+    // A span placeholder belongs to the cell that covers it (PART 11 section 10n).
+    if (row.cells.every((cell) => cell.header || cell.span !== undefined) && row.cells.some((cell) => cell.header)) {
       if (header === undefined) aligns.length = 0
       row.cells.forEach((cell, i) => {
         // Multiple header rows collapse to Markdown's one header row. The
