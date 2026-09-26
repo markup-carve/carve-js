@@ -1007,6 +1007,7 @@ class Importer {
   /** How many `<q>` elements enclose the one being read, for the mark pair. */
   private quoteDepth = 0
   private cellDepth = 0
+  private headingDepth = 0
   /**
    * The id PART 9 §16a's counter derives for each `<p class="admonition-title">`,
    * keyed by the node, so the drop is an equality match on the value the
@@ -2269,7 +2270,13 @@ class Importer {
     }
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
-      const children = this.blockInlines(node.childNodes ?? [], path, depth + 1)
+      this.headingDepth++
+      let children: InlineNode[]
+      try {
+        children = this.blockInlines(node.childNodes ?? [], path, depth + 1)
+      } finally {
+        this.headingDepth--
+      }
       let held = attrs
       if (held?.id !== undefined) {
         /*
@@ -2784,6 +2791,7 @@ class Importer {
    */
   private definitionList(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
     const items: DefinitionItem[] = []
+    const before: BlockNode[] = []
     const trailing: P5Node[] = []
     const trailingPaths: string[] = []
     // Every entry is written, so a `<dl>` imports and writes back as ONE list:
@@ -2829,9 +2837,24 @@ class Importer {
         }
         if (child.tagName === 'dd') {
           this.enter(level)
-          // A description with no term before it: kept in the AST, where it is
-          // a description of nothing, and reported when a WRITER has to spell
-          // it, because `:  text` alone re-reads as a paragraph.
+          // A description before the list's first term: its content is written
+          // as blocks ahead of the list, in both exits, because `: text` with
+          // no term re-reads as a paragraph (carve#2384).
+          if (current === undefined && items.length === 0) {
+            this.add(
+              'element-unwrapped',
+              'A <dd> with no <dt> before it kept its content but not its role: it is emitted as blocks ahead of the definition list',
+              'warning',
+              childPath,
+              child,
+            )
+            this.entryAttributes(child, childPath, 'dd')
+            before.push(...this.blocks(child.childNodes ?? [], childPath, level + 1))
+            return
+          }
+          // A description with no term in a later group: kept in the AST, where
+          // it is a description of nothing, and reported when a WRITER has to
+          // spell it.
           if (current === undefined) {
             current = openEntry()
             this.unspellable.push({
@@ -2855,7 +2878,12 @@ class Importer {
     }
     visit(node.childNodes ?? [], path, depth + 1)
     const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
-    return [...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
+    if (!items.length && attrs) {
+      for (const name of this.attrNames(attrs)) {
+        this.add('attribute-dropped', `Dropped ${name} on <dl>: a definition list holding no entry is not written`, 'warning', path, node)
+      }
+    }
+    return [...before, ...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
   }
 
   /**
@@ -4730,6 +4758,11 @@ class Importer {
     // (carve#2372).
     if (this.cellDepth > 0 && /[\r\n]/.test(content)) {
       this.add('element-dropped', 'Dropped an HTML comment in a table cell: its text holds a line break, and a table row is one line', 'warning', path, node)
+      return []
+    }
+    // A heading is one line too (carve#2396).
+    if (this.headingDepth > 0 && /[\r\n]/.test(content)) {
+      this.add('element-dropped', 'Dropped an HTML comment in a heading: its text holds a line break, and a heading is one line', 'warning', path, node)
       return []
     }
     return [{ type: 'comment', block: false, delimited: true, content }]
