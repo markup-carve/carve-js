@@ -34,6 +34,7 @@ import { SourceUnspellableError } from './source-unspellable-error.js'
 import { renderPlainText } from './render-plain.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
+import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
@@ -333,36 +334,99 @@ function narrowEscalation(ast: Document, conservative: string, conservativeTree:
   // budget runs out and returns the state it has reached, which is verified like
   // every other - the escalation is wider than §2b's minimum there, never
   // narrower, and no document's output can be wrong for it.
-  let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
+  const probe = windowedProbe(ast, conservative, conservativeTree, () => {
+    escalatedUnits = escalated
+  }, renderSelectively)
 
-  /** Hand `group` its minimal form, keeping it only if the document still holds. */
-  const relaxAll = (group: object[]): boolean => {
-    budget -= 1
-    for (const unit of group) escalated.delete(unit)
-    const candidate = renderSelectively()
-    if (treeOf(candidate) === conservativeTree) {
-      best = candidate
-      return true
+  const search = (local: boolean): string => {
+    for (const unit of all) escalated.add(unit)
+    let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
+
+    /** Hand `group` its minimal form, keeping it only if the document still holds. */
+    const relaxAll = (group: object[]): boolean => {
+      budget -= 1
+      return probe.keeps(
+        local,
+        group,
+        () => { for (const unit of group) escalated.delete(unit) },
+        () => { for (const unit of group) escalated.add(unit) },
+      )
     }
-    for (const unit of group) escalated.add(unit)
-    return false
+
+    const relax = (group: object[]): void => {
+      if (group.length === 0 || budget <= 0 || relaxAll(group) || group.length === 1) return
+      const half = group.length >> 1
+      relax(group.slice(0, half))
+      relax(group.slice(half))
+    }
+
+    relax(units)
+    return renderSelectively()
   }
 
-  const relax = (group: object[]): void => {
-    if (group.length === 0 || budget <= 0 || relaxAll(group) || group.length === 1) return
-    const half = group.length >> 1
-    relax(group.slice(0, half))
-    relax(group.slice(half))
-  }
-
-  relax(units)
+  best = search(true)
+  if (treeOf(best) !== conservativeTree) best = search(false)
 
   // PART 11 §2 TAKES THE DECISION PER OPENER OCCURRENCE, and a unit is still
   // ONE KNOB: a unit that fails is written conservatively IN FULL, so every
   // candidate character beside the one that needed it is escaped for nothing -
   // `\\{\\.note\\}` where §2 wants `\\{.note}`. §2b bounds how far the fallback
   // reaches; this is what is left inside the bound (markup-carve/carve#1533).
-  return narrowOccurrences(units, best, conservativeTree, renderSelectively)
+  return narrowOccurrences(units, best, conservativeTree, renderSelectively, probe)
+}
+
+interface EscapeProbe {
+  /** Apply a relaxation and keep it when the tree still holds; undo it otherwise. */
+  keeps(local: boolean, units: Iterable<object>, apply: () => void, undo: () => void): boolean
+}
+
+/**
+ * The narrowing searches' oracle. With `local`, a probe renders and re-parses
+ * only the blocks around the relaxed units (`EscapeWindows`) and compares that
+ * window before and after, which keeps each probe proportional to the window
+ * instead of the document. Every search re-verifies its final state against
+ * the whole document and repeats itself with `local` off when it does not hold.
+ */
+function windowedProbe(
+  ast: Document,
+  conservative: string,
+  conservativeTree: string,
+  enter: () => void,
+  renderAll: () => string,
+): EscapeProbe {
+  // A document whose break spelling needs the frontmatter fallback renders
+  // differently from its pruned windows, so it keeps the document-wide probe.
+  let windows: EscapeWindows | null | undefined = !ast.frontmatter && opensFrontmatter(conservative) ? null : undefined
+  const renderWindow = (window: EscapeWindow): string | null =>
+    windows!.renderPruned(window, (doc) => {
+      enter()
+      try {
+        return withFreshWriteBackState(() => renderOnePass(doc, 'conservative'))
+      } finally {
+        escalatedUnits = null
+      }
+    })
+  return {
+    keeps(local, units, apply, undo) {
+      if (local && windows === undefined) windows = new EscapeWindows(ast)
+      const window = local && windows ? windows.windowFor(units) : null
+      const before = window === null ? null : renderWindow(window)
+      // A window near the document's size saves nothing over the whole-document probe.
+      const beforeTree = before === null || before.length * 2 > conservative.length ? null : treeOf(before)
+      apply()
+      if (beforeTree !== null) {
+        const after = renderWindow(window!)
+        if (after !== null) {
+          if (treeOf(after) === beforeTree) return true
+          undo()
+          return false
+        }
+      }
+      if (treeOf(renderAll()) === conservativeTree) return true
+      undo()
+      return false
+    },
+  }
 }
 
 /**
@@ -402,12 +466,12 @@ function narrowOccurrences(
   unitScoped: string,
   conservativeTree: string,
   renderSelectively: () => string,
+  probe: EscapeProbe,
 ): string {
   const numbers = new Map<object, number>()
   units.forEach((unit, index) => numbers.set(unit, index))
   const occurrences: string[] = []
   const relaxed = new Set<string>()
-  let best = unitScoped
 
   unitNumbers = numbers
   relaxedOccurrences = relaxed
@@ -417,26 +481,25 @@ function narrowOccurrences(
     occurrenceLog = null
     if (control !== unitScoped || occurrences.length === 0) return unitScoped
 
-    let budget = 8 * Math.ceil(Math.log2(occurrences.length + 1)) + 8
+    const unitOf = (key: string): object => units[Number(key.slice(0, key.indexOf(':')))]!
+    let budget = 0
 
     /** Hand `group` its bare form, keeping it only if the document still holds. */
-    const relaxAll = (group: string[]): boolean => {
+    const relaxAll = (group: string[], local: boolean): boolean => {
       budget -= 1
-      for (const key of group) relaxed.add(key)
-      const candidate = renderSelectively()
-      if (treeOf(candidate) === conservativeTree) {
-        best = candidate
-        return true
-      }
-      for (const key of group) relaxed.delete(key)
-      return false
+      return probe.keeps(
+        local,
+        group.map(unitOf),
+        () => { for (const key of group) relaxed.add(key) },
+        () => { for (const key of group) relaxed.delete(key) },
+      )
     }
 
-    const relax = (group: string[]): void => {
-      if (group.length === 0 || budget <= 0 || relaxAll(group) || group.length === 1) return
+    const relax = (group: string[], local: boolean): void => {
+      if (group.length === 0 || budget <= 0 || relaxAll(group, local) || group.length === 1) return
       const half = group.length >> 1
-      relax(group.slice(0, half))
-      relax(group.slice(half))
+      relax(group.slice(0, half), local)
+      relax(group.slice(half), local)
     }
 
     // OFFERED FROM THE END OF THE DOCUMENT BACKWARDS, which is what makes the
@@ -448,23 +511,29 @@ function narrowOccurrences(
     // `\\{.note}`). Both spellings re-parse to the same tree, so only the order
     // separates them.
     const order = occurrences.slice().reverse()
-    relax(order)
-    // AND THEN ONE SWEEP OF WHAT IS LEFT, because the halving is not a
-    // FIXPOINT. Relaxing occurrences is not monotone: an occurrence rejected
-    // while a neighbour was still escaped can be free once that neighbour is
-    // relaxed, and the halving never revisits a group it has descended past.
-    // Corpus 160 is the case - the closing `:::` line cannot go bare while the
-    // OPENING one is escaped, because then it is the only fence marker on the
-    // page, and it can once the opener is bare. The sweep offers every
-    // still-escalated occurrence once more, on top of everything the halving
-    // accepted, and spends the same budget - so where the budget is already
-    // gone it costs nothing, which is the pathological document.
-    for (const key of order) {
-      if (budget <= 0) break
-      if (relaxed.has(key)) continue
-      relaxAll([key])
+    const search = (local: boolean): string => {
+      relaxed.clear()
+      budget = 8 * Math.ceil(Math.log2(occurrences.length + 1)) + 8
+      relax(order, local)
+      // AND THEN ONE SWEEP OF WHAT IS LEFT, because the halving is not a
+      // FIXPOINT. Relaxing occurrences is not monotone: an occurrence rejected
+      // while a neighbour was still escaped can be free once that neighbour is
+      // relaxed, and the halving never revisits a group it has descended past.
+      // Corpus 160 is the case - the closing `:::` line cannot go bare while the
+      // OPENING one is escaped, because then it is the only fence marker on the
+      // page, and it can once the opener is bare. The sweep offers every
+      // still-escalated occurrence once more, on top of everything the halving
+      // accepted, and spends the same budget - so where the budget is already
+      // gone it costs nothing, which is the pathological document.
+      for (const key of order) {
+        if (budget <= 0) break
+        if (relaxed.has(key)) continue
+        relaxAll([key], local)
+      }
+      return renderSelectively()
     }
-    return best
+    const best = search(true)
+    return treeOf(best) === conservativeTree ? best : search(false)
   } finally {
     unitNumbers = null
     relaxedOccurrences = null
@@ -2453,6 +2522,14 @@ function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
   return overrides
 }
 
+const OUT_TAIL_LENGTH = 256
+/**
+ * A character `boundaryEscapeAt` and `separatesBacktickRuns` never read past
+ * when it sits before the last one: their backward scans cross only name
+ * characters, one `:` and backslashes.
+ */
+const RE_BOUNDARY_STOP = /[^A-Za-z0-9_:\\-]/
+
 function renderInlines(
   sourceNodes: InlineNode[],
   ctx: CarveContext,
@@ -2481,6 +2558,13 @@ function renderInlines(
     let lineLength = 0
     /** The last up-to-two characters of the current output line. */
     let lineTail = ''
+    // The end of `out`, for the boundary checks below: reading `out` itself
+    // flattens the growing string on every node, which is quadratic per line.
+    let outTail = ''
+    const written = (): { text: string; offset: number } =>
+      outTail.length < out.length && !RE_BOUNDARY_STOP.test(outTail.slice(0, -1))
+        ? { text: out, offset: 0 }
+        : { text: outTail, offset: out.length - outTail.length }
     const overrides = directiveOverrides(nodes)
     nodes.forEach((node, idx) => {
       let piece = overrides.get(idx) ?? renderInline(
@@ -2522,22 +2606,27 @@ function renderInlines(
       // start: `^[` an inline note, `:name[` an inline extension, `$` plus a
       // backtick run or `$` math. The escape belongs to the previous node, so
       // its form decides (PART 11 §2b).
-      const escapeAt = boundaryEscapeAt(out, piece)
+      const end = written()
+      const escapeAt = boundaryEscapeAt(end.text, piece)
       if (escapeAt !== -1 && escapeModeOf(nodes[idx - 1]) === 'conservative') {
-        out = `${out.slice(0, escapeAt)}\\${out.slice(escapeAt)}`
+        const at = end.offset + escapeAt
+        out = `${out.slice(0, at)}\\${out.slice(at)}`
+        outTail = out.slice(-OUT_TAIL_LENGTH)
         lineLength += 1
         lineTail = out.slice(-2)
       }
 
-      refuseGluedName(node, nodes[idx - 1], out, piece)
+      refuseGluedName(node, nodes[idx - 1], outTail, piece)
 
-      if (separatesBacktickRuns(out, piece)) {
+      if (separatesBacktickRuns(written().text, piece)) {
         out += EMPTY_COMMENT
+        outTail = (outTail + EMPTY_COMMENT).slice(-OUT_TAIL_LENGTH)
         lineLength += EMPTY_COMMENT.length
         lineTail = (lineTail + EMPTY_COMMENT).slice(-2)
       }
 
       out += piece
+      outTail = (outTail + piece).slice(-OUT_TAIL_LENGTH)
       const lastNewline = piece.lastIndexOf('\n')
       if (lastNewline === -1) {
         lineLength += piece.length
@@ -4284,7 +4373,7 @@ export function flattenHardBreaks(children: InlineNode[], onBreak: (hardBreak: I
  * (carve-js#1807).
  */
 function refuseGluedName(node: InlineNode, previous: InlineNode | undefined, written: string, piece: string): void {
-  if ((node.type === 'mention' || node.type === 'tag') && /[A-Za-z0-9_]$/.test(written)) {
+  if ((node.type === 'mention' || node.type === 'tag') && /[A-Za-z0-9_]/.test(written.at(-1) ?? '')) {
     throw new SourceUnspellableError(node.type, `a ${node.type} after a word character has no Carve source spelling`)
   }
   if ((previous?.type === 'mention' || previous?.type === 'tag') && /^\.?[A-Za-z0-9_-]/.test(piece)) {
@@ -4292,12 +4381,24 @@ function refuseGluedName(node: InlineNode, previous: InlineNode | undefined, wri
   }
 }
 
+/**
+ * Where `written` ends in `:name`, as `/:[A-Za-z_][A-Za-z0-9_-]*$/` would find
+ * it, or -1. Walks back from the end: the regex scans from the start, which is
+ * quadratic over a line of many pieces.
+ */
+function trailingExtensionName(written: string): number {
+  let start = written.length
+  while (start > 0 && /[A-Za-z0-9_-]/.test(written[start - 1]!)) start -= 1
+  if (start === written.length || start === 0 || written[start - 1] !== ':' || !/[A-Za-z_]/.test(written[start]!)) return -1
+  return start - 1
+}
+
 /** Where a backslash keeps the written end and the next piece apart, or -1. */
 function boundaryEscapeAt(written: string, piece: string): number {
   const last = written.at(-1)
   const next = piece[0]
   if (last === undefined || next === undefined) return -1
-  const at = next === '[' ? written.search(/:[A-Za-z_][A-Za-z0-9_-]*$/) : -1
+  const at = next === '[' ? trailingExtensionName(written) : -1
   if (at !== -1 && !precededByOddBackslashRun(written, at)) return at
   if (precededByOddBackslashRun(written, written.length - 1)) return -1
   const opens = (last === '^' && next === '[') || (last === '$' && (next === '`' || next === '$'))
