@@ -121,18 +121,14 @@ describe('a line block keeps its positions across a dropped trailing run', () =>
     expect(inlines(source).map((i) => i.slice)).toEqual(['abc', ' ', ' ', '\n', 'def'])
   })
 
-  it('a TAB still unanchors the stanza, which is what §4 is for', () => {
-    // The exemption this change must NOT widen. A tab expands to up to four
-    // sentinels, so every character after it sits at an offset that is not its
-    // own and no honest span exists - PART 12 §4's actual case. If this row ever
-    // goes green, the alignment test has stopped testing anything.
+  it('keeps unchanged text anchored beside a tab and a dropped trailing space', () => {
     const source = '::: |\n\tabc\ndef \n:::\n'
 
     expect(
       inlines(source)
         .filter((i) => i.type === 'text')
         .map((i) => i.slice),
-    ).toEqual([null, null])
+    ).toEqual(['abc', 'def'])
   })
 
   it('does not change what the document SAYS', () => {

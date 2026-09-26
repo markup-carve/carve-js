@@ -4722,26 +4722,8 @@ function parseLineBlock(lexer: Lexer): LineBlock {
   interface StanzaLine {
     text: string
     lineIndex: number
-    /**
-     * The expansion kept every character AT ITS OWN OFFSET, so document offsets
-     * still line up.
-     *
-     * Each preserved space becomes exactly one U+E000 sentinel, so a line with
-     * an indent or a medial gap is not a verbatim slice but every character
-     * still sits at its own offset - the whitespace is consumed as layout and
-     * never reaches a text node's value. A TAB expands to up to four sentinels,
-     * which shifts everything after it, so those stay unanchored.
-     *
-     * Measured BEFORE the trailing-whitespace drop, which is why it is not
-     * simply a length comparison against the source line. Dropping a run at the
-     * END of a line moves nothing: every character that remains is still at the
-     * offset it came from, and the newline after it is placed from line
-     * geometry rather than from this text. Comparing the trimmed length instead
-     * unanchored the WHOLE stanza over one trailing space on one line - so
-     * `abc` on the line above came back unplaced too, even though it is a
-     * verbatim slice of the source and nothing about it had changed
-     * (corpus 268-trailing-whitespace-on-a-content-line-is-dropped-12).
-     */
+    /** Source UTF-16 offset for each expanded character; absent for tab columns. */
+    sourceOffsets: Array<number | undefined>
     aligned: boolean
     /**
      * The comment this line WAS, for a line the block layer emptied.
@@ -4782,30 +4764,23 @@ function parseLineBlock(lexer: Lexer): LineBlock {
           endOffset: lexer.lineOffset(lineIndex) + ln.length,
         }
       }
-      stanza.push({ text: '', lineIndex, aligned: true, comment })
+      stanza.push({ text: '', lineIndex, sourceOffsets: [], aligned: true, comment })
       continue
     }
-    const expanded = expandLineBlockWhitespace(ln)
+    const sourceOffsets: Array<number | undefined> = []
+    const expanded = expandLineBlockWhitespace(ln, sourceOffsets)
     stanza.push({
       text: dropTrailingSpaces(expanded),
       lineIndex,
-      aligned: expanded.length === ln.length,
+      sourceOffsets,
+      aligned: !ln.includes('\t'),
     })
   }
   if (stanza.length) stanzas.push(stanza)
 
   const children = stanzas.map<Paragraph>((lines) => {
-    // A line's leading whitespace is rewritten to the U+E000 indent sentinel.
-    // That is not a verbatim slice, but it is still ALIGNED: one sentinel per
-    // space, so every character keeps its own offset and the indent is consumed
-    // as indentation rather than reaching a text node's value. Requiring
-    // verbatim lines instead left a whole stanza unplaced because one line was
-    // indented (#462).
-    //
-    // A TAB is the exception - it expands to up to four sentinels and shifts
-    // everything after it - so a stanza containing one stays unanchored, which
-    // is what PART 12 §4 asks for when a position cannot be produced.
-    const anchorable = lexer.hasDocumentOffsets && lines.every((l) => l.aligned)
+    const anchorable = lexer.hasDocumentOffsets
+    const unchangedColumns = lines.every((line) => line.aligned)
 
     const terminalCommentGuard = lines.at(-1)?.comment ? '\uE001' : ''
     const joined = lines.map((line) => line.text).join('\n') + terminalCommentGuard
@@ -4840,11 +4815,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         endOffset: lexer.lineOffset(next.lineIndex),
       }
     }
-    // ANCHORS EVEN WHEN THE STANZA IS NOT ANCHORABLE, then stripped below. A
-    // stanza holding a tab places none of its inlines (PART 12 §4), but its
-    // breaks were always placed from line geometry and still are - and the only
-    // way to know WHICH boundary a surviving break sits on is the line the
-    // inline parser put it on.
+    // Parse with expanded columns, then map each surviving span to its source.
     const outerLineBlock = inLineBlock
     inLineBlock = true
     let parsed: InlineNode[]
@@ -4968,6 +4939,43 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     }
     readBoundaries(parsed)
     if (!anchorable) stripPositions(parsed)
+    else if (!unchangedColumns) {
+      const byLine = new Map(lines.map((line) => [lexer.lineNumber(line.lineIndex), line]))
+      const remap = (nodes: InlineNode[]): void => {
+        for (const node of nodes) {
+          const pos = node.pos
+          if (pos) {
+            const first = byLine.get(pos.startLine)
+            const last = byLine.get(pos.endLine)
+            const start = first && pos.startColumn !== undefined
+              ? pos.startColumn - lexer.lineStartColumn(first.lineIndex) : -1
+            const end = last && pos.endColumn !== undefined
+              ? pos.endColumn - lexer.lineStartColumn(last.lineIndex) : -1
+            const sourceStart = first?.sourceOffsets[start]
+            const sourceLast = end === 0 && last
+              ? -1 : last?.sourceOffsets[end - 1]
+            const contiguousText = node.type !== 'text' || (first === last &&
+              sourceStart !== undefined && sourceLast !== undefined &&
+              sourceLast - sourceStart === end - start - 1 &&
+              first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined))
+            if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText) {
+              delete node.pos
+            } else {
+              pos.startColumn = lexer.lineStartColumn(first.lineIndex) + sourceStart
+              pos.endColumn = lexer.lineStartColumn(last.lineIndex) + sourceLast + 1
+              pos.startOffset = lexer.lineOffset(first.lineIndex) + sourceStart
+              pos.endOffset = lexer.lineOffset(last.lineIndex) + sourceLast + 1
+            }
+          }
+          for (const [key, value] of Object.entries(node)) {
+            if (key !== 'pos' && value && typeof value === 'object') {
+              remap((Array.isArray(value) ? value : [value]) as InlineNode[])
+            }
+          }
+        }
+      }
+      remap(parsed)
+    }
     const pendingComments = new Map<number, Comment>()
     lines.forEach((line, index) => {
       if (!line.comment) return
@@ -5049,7 +5057,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         startOffset: lexer.lineOffset(first.lineIndex),
         endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
       }
-      const placed = anchorable ? inline.filter((node) => node.pos !== undefined) : []
+      const placed = anchorable && unchangedColumns ? inline.filter((node) => node.pos !== undefined) : []
       const firstPos = placed.find(
         (node) => node.type !== 'soft_break' && node.type !== 'hard_break',
       )?.pos
@@ -5090,7 +5098,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
  * with a literal U+00A0 in the author's text and are converted per renderer
  * (HTML &nbsp;, Markdown U+00A0, plain/ANSI an ordinary space).
  */
-function expandLineBlockWhitespace(line: string): string {
+function expandLineBlockWhitespace(line: string, sourceOffsets: Array<number | undefined>): string {
   let out = ''
   let i = 0
   let column = 0
@@ -5098,12 +5106,14 @@ function expandLineBlockWhitespace(line: string): string {
   while (i < line.length) {
     const ch = line[i]
     if (ch !== ' ' && ch !== '\t') {
+      sourceOffsets.push(i)
       out += ch
       seenContent = true
       column++
       i++
       continue
     }
+    const sourceStart = i
     let width = 0
     while (i < line.length && (line[i] === ' ' || line[i] === '\t')) {
       if (line[i] === '\t') width += 4 - ((column + width) % 4)
@@ -5111,7 +5121,12 @@ function expandLineBlockWhitespace(line: string): string {
       i++
     }
     column += width
-    out += !seenContent || width >= 2 ? '\0'.repeat(width) : ' '
+    const rewritten = !seenContent || width >= 2 ? '\0'.repeat(width) : ' '
+    const hasTab = line.slice(sourceStart, i).includes('\t')
+    for (let column = 0; column < rewritten.length; column++) {
+      sourceOffsets.push(hasTab ? undefined : sourceStart + column)
+    }
+    out += rewritten
   }
 
   return out
