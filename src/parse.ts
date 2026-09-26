@@ -5090,6 +5090,14 @@ function parseLineBlock(lexer: Lexer): LineBlock {
   return node
 }
 
+/** Whether UTF-16 index `i` opens a surrogate pair: one codepoint, two units. */
+function isAstralAt(line: string, i: number): boolean {
+  const high = line.charCodeAt(i)
+  if (high < 0xd800 || high > 0xdbff) return false
+  const low = line.charCodeAt(i + 1)
+  return low >= 0xdc00 && low <= 0xdfff
+}
+
 /**
  * Rewrites the whitespace a line block preserves to the U+E000 sentinel.
  *
@@ -5112,11 +5120,17 @@ function expandLineBlockWhitespace(line: string, sourceOffsets: Array<number | u
   while (i < line.length) {
     const ch = line[i]
     if (ch !== ' ' && ch !== '\t') {
-      sourceOffsets.push(i)
-      out += ch
+      // A column counts CODEPOINTS, so a surrogate pair advances the tab stop
+      // by one. The offsets stay per code unit: the caller indexes them with
+      // UTF-16 positions and `toCodepointPositions` converts the result.
+      const units = isAstralAt(line, i) ? 2 : 1
+      for (let unit = 0; unit < units; unit++) {
+        sourceOffsets.push(i + unit)
+        out += line[i + unit]
+      }
       seenContent = true
       column++
-      i++
+      i += units
       continue
     }
     const sourceStart = i
