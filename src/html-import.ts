@@ -3998,7 +3998,17 @@ class Importer {
         })
       }
       this.recordDisplacedFigureAttrs(node, path, attrs, target)
-      return [{ type: 'figure', target: target as never, caption, ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
+      // Only an image has an attribute slot of its own under a caption line;
+      // any other target shares the figure's line, merged the way the parser
+      // merges two stacked lines (carve#2370).
+      let figureAttrs = attrs
+      const targetAttrs = (target as { attrs?: Attrs }).attrs
+      if (target.type !== 'image' && targetAttrs) {
+        figureAttrs = mergeAttrs(attrs, targetAttrs)
+        if (!attrs?.order && !targetAttrs.order) delete figureAttrs.order
+        delete (target as { attrs?: Attrs }).attrs
+      }
+      return [{ type: 'figure', target: target as never, caption, ...(figureAttrs ? { attrs: figureAttrs } : {}) }, ...targets.slice(1)]
     }
     /*
      * A TARGET THAT CANNOT CARRY A CAPTION LINE UNWRAPS AND DECLARES, in every

@@ -1,6 +1,7 @@
 /*
- * A rebuilt figure writes its TARGET's own attribute line, and whatever the
- * merge displaces is declared (ruling markup-carve/carve#1721).
+ * A rebuilt figure keeps its TARGET's own attributes, merged into the one
+ * attribute line the two share, and whatever the merge displaces is declared
+ * (ruling markup-carve/carve#1721; one line since markup-carve/carve#2370).
  *
  * THE ID THAT SURVIVED BELONGED TO THE ELEMENT THAT DID NOT. A `<figure id="f">`
  * around a `<table id="g">` was written as `{#f}` over the rows, so the table's
@@ -70,9 +71,9 @@ describe('a figure and its target both carrying attributes', () => {
    */
   const TABLE = '<figure id="f" class="c"><table id="g" class="d"><tr><td>a</td></tr></table><figcaption>Cap</figcaption></figure>'
 
-  it.each(MODES)('writes the table its own attribute line and declares the displaced id (%s)', (mode) => {
+  it.each(MODES)('keeps the table attributes in the shared line and declares the displaced id (%s)', (mode) => {
     expect(imported(TABLE, mode)).toEqual({
-      carve: '{#f .c}\n{#g .d}\n| a |\n^ Cap\n',
+      carve: '{#g .c .d}\n| a |\n^ Cap\n',
       rows: [UNSPELLABLE, DISPLACED_ID],
     })
   })
@@ -96,7 +97,7 @@ describe('a figure and its target both carrying attributes', () => {
    */
   it.each(MODES)('declares the displaced id on a quote target (%s)', (mode) => {
     expect(imported('<figure id="f" class="c"><blockquote id="g" class="d"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode)).toEqual({
-      carve: '{#f .c}\n{#g .d}\n> a\n^ Cap\n',
+      carve: '{#g .c .d}\n> a\n^ Cap\n',
       rows: [DISPLACED_ID],
     })
   })
@@ -116,7 +117,7 @@ describe('a figure and its target both carrying attributes', () => {
 
   it.each(MODES)('declares the displaced id on a code-block target (%s)', (mode) => {
     expect(imported('<figure id="f" class="c"><pre id="g" class="d"><code>a</code></pre><figcaption>Cap</figcaption></figure>', mode)).toEqual({
-      carve: '{#f .c}\n{#g .d}\n```\na\n```\n^ Cap\n',
+      carve: '{#g .c .d}\n```\na\n```\n^ Cap\n',
       rows: [DISPLACED_ID],
     })
   })
@@ -128,7 +129,7 @@ describe('a figure and its target both carrying attributes', () => {
    */
   it.each(MODES)('declares a displaced key-value pair by its own name (%s)', (mode) => {
     const { carve, rows } = imported('<figure data-k="1"><blockquote data-k="2"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode)
-    expect(carve).toBe('{data-k=1}\n{data-k=2}\n> a\n^ Cap\n')
+    expect(carve).toBe('{data-k=2}\n> a\n^ Cap\n')
     expect(rows).toEqual([
       "info :: attribute-dropped :: Dropped one data-k on <figure>: the figure and its target both set data-k, and their two attribute lines merge into a single value",
     ])
@@ -137,7 +138,7 @@ describe('a figure and its target both carrying attributes', () => {
 
   it.each(MODES)('owes no row for a key the target does not set (%s)', (mode) => {
     expect(imported('<figure data-k="1"><blockquote data-j="2"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode)).toEqual({
-      carve: '{data-k=1}\n{data-j=2}\n> a\n^ Cap\n',
+      carve: '{data-k=1 data-j=2}\n> a\n^ Cap\n',
       rows: [],
     })
   })
@@ -150,7 +151,7 @@ describe('a figure and its target both carrying attributes', () => {
    */
   it.each(MODES)('fires when the two values are equal, because one of them is still gone (%s)', (mode) => {
     const { carve, rows } = imported('<figure id="x"><blockquote id="x"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode)
-    expect(carve).toBe('{#x}\n{#x}\n> a\n^ Cap\n')
+    expect(carve).toBe('{#x}\n> a\n^ Cap\n')
     expect(rows).toEqual([DISPLACED_ID])
     const html = carveToHtml(carve)
     expect(html).toContain('<figure id="x">')
@@ -163,7 +164,7 @@ describe('a figure and its target both carrying attributes', () => {
    */
   it.each(MODES)('owes no row when only the classes meet (%s)', (mode) => {
     expect(imported('<figure class="c"><table class="d"><tr><td>a</td></tr></table><figcaption>Cap</figcaption></figure>', mode)).toEqual({
-      carve: '{.c}\n{.d}\n| a |\n^ Cap\n',
+      carve: '{.c .d}\n| a |\n^ Cap\n',
       rows: [UNSPELLABLE],
     })
   })
