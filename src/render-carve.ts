@@ -129,6 +129,7 @@ export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): strin
   destinationParensByUnit = new WeakMap()
   reportRubyLosses(ast, opts)
   ast = withCellHardBreaksFlattened(ast)
+  ast = withTextAsOneRun(ast)
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it
   // does. The check is the parser's, not a table's, so the writer cannot drift
@@ -4351,6 +4352,59 @@ function holdsHardBreak(nodes: readonly unknown[]): boolean {
  * The tree to write: a copy with every table cell's hard breaks flattened when
  * it has any, so every later pass sees the same nodes (markup-carve/carve#2067).
  */
+/**
+ * The tree with every stretch of adjacent text nodes merged into one, ruby
+ * flattened first as the writer writes it, or `ast` itself when nothing merges.
+ *
+ * PART 11 §2: adjacent text is one run, so where a tree splits text cannot
+ * decide which character carries an escape (`x (r` beside `) y` is `x \(r) y`,
+ * as the single node is).
+ */
+function withTextAsOneRun(ast: Document): Document {
+  const splits = (list: unknown[]): boolean =>
+    list.some((node, index) => {
+      const type = (node as { type?: unknown } | null)?.type
+      return type === 'ruby' || (type === 'text' && (list[index + 1] as { type?: unknown } | null)?.type === 'text')
+    })
+  const lists = (root: unknown, visit: (list: unknown[]) => void): void => {
+    const stack: unknown[] = [root]
+    while (stack.length > 0) {
+      const value = stack.pop()
+      if (value === null || typeof value !== 'object') continue
+      if (Array.isArray(value)) {
+        visit(value)
+        for (const item of value) stack.push(item)
+        continue
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (key !== 'attrs' && key !== 'pos') stack.push(child)
+      }
+    }
+  }
+  let found = false
+  lists(ast, (list) => {
+    found ||= splits(list)
+  })
+  if (!found) return ast
+  const copy = structuredClone(ast)
+  lists(copy, (list) => {
+    if (!splits(list)) return
+    let nodes = list as InlineNode[]
+    while (nodes.some((node) => node.type === 'ruby')) nodes = flattenRubyForCarve(nodes)
+    const merged: InlineNode[] = []
+    for (const node of nodes) {
+      const previous = merged[merged.length - 1]
+      if (node.type === 'text' && previous?.type === 'text') {
+        merged[merged.length - 1] = { type: 'text', value: previous.value + node.value }
+      } else {
+        merged.push(node)
+      }
+    }
+    list.splice(0, list.length, ...merged)
+  })
+  return copy
+}
+
 function withCellHardBreaksFlattened(ast: Document): Document {
   const cells: TableCell[] = []
   const stack: unknown[] = [ast]
