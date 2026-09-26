@@ -1262,7 +1262,7 @@ function dropPositions(doc: Document): void {
     const record = value as Record<string, unknown>
     for (const field of POSITION_FIELDS) delete record[field]
     for (const key of Object.keys(record)) {
-      if (key !== 'attrs') walk(record[key])
+      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
     }
   }
   walk(doc)
@@ -1363,7 +1363,7 @@ function toCodepointPositions(doc: Document, source: string): void {
       return
     }
     for (const key of Object.keys(record)) {
-      if (key !== 'attrs') walk(record[key])
+      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
     }
   }
   walk(doc)
@@ -4551,7 +4551,7 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
     const record = value as Record<string, unknown>
     delete record['pos']
     for (const key of Object.keys(record)) {
-      if (key !== 'attrs') walk(record[key])
+      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
     }
   }
   walk(nodes)
@@ -4974,7 +4974,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
             }
           }
           for (const [key, value] of Object.entries(node)) {
-            if (key !== 'pos' && key !== 'attrs' && value && typeof value === 'object') {
+            if (key !== 'pos' && (key !== 'attrs' || typeof node.type !== 'string') && value && typeof value === 'object') {
               remap((Array.isArray(value) ? value : [value]) as InlineNode[])
             }
           }

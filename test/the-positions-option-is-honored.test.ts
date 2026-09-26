@@ -155,3 +155,20 @@ describe('the entry points that read positions force them back on', () => {
     expect(warnings.every((w) => typeof w.start === 'number')).toBe(true)
   })
 })
+
+for (const positions of [true, false]) {
+  it(`still visits a footnote labeled attrs with positions=${positions}`, () => {
+    const source = '😀[^attrs]\n\n[^attrs]: note\n'
+    const doc = parse(source, { positions })
+    const paragraph = doc.footnoteDefs!.attrs![0]!
+    expect(paragraph.type).toBe('paragraph')
+    if (paragraph.type !== 'paragraph') throw new Error('expected paragraph')
+    const text = paragraph.children[0]!
+    if (positions) {
+      expect(text.pos).toBeDefined()
+      expect([...source].slice(text.pos!.startOffset, text.pos!.endOffset).join('')).toBe('note')
+    } else {
+      expect(positionFieldsIn(doc)).toEqual([])
+    }
+  })
+}
