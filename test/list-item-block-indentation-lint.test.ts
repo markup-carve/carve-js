@@ -130,4 +130,47 @@ describe('list item block indentation diagnostics', () => {
       { rule: 'list-item-body-detached', line: 3 },
     ])
   })
+
+  /*
+   * An astral character before the marker made the marker line's columns
+   * disagree with the candidate line's indentation, which is counted in spaces:
+   * the advice named a column one too high and the gate fell silent one column
+   * late. The two sources below are the same shape in codepoints, so every
+   * number below must match across the pair (carve-js#2140).
+   */
+  describe('an astral character before the marker', () => {
+    const marked = (label: string, indent: number) =>
+      `[^${label}]: - a\n${' '.repeat(indent)}> q\n`
+
+    it.each([
+      ['in the BMP', '€'],
+      ['above the BMP', '😀'],
+    ])('names content column 8 with a label %s', (_name, label) => {
+      const [warning] = findings(marked(label, 10))
+      expect(warning).toMatchObject({ rule: 'list-item-block-overindented', line: 2 })
+      expect(warning!.message).toContain("canonical content column 8;")
+      expect(warning!.message).toContain('Dedent it to column 8')
+    })
+
+    it('opens the gate at the same indent on either side of the BMP', () => {
+      const silent = [6, 7, 8]
+      const warns = [9, 10, 11]
+      for (const label of ['€', '😀']) {
+        for (const indent of silent) {
+          expect(findings(marked(label, indent)), `indent ${indent}`).toEqual([])
+        }
+        for (const indent of warns) {
+          expect(findings(marked(label, indent)), `indent ${indent}`).toMatchObject([
+            { rule: 'list-item-block-overindented', line: 2 },
+          ])
+        }
+      }
+    })
+
+    it('keeps reporting the opener span in UTF-16 code units', () => {
+      const source = marked('😀', 10)
+      const [warning] = findings(source)
+      expect(source.slice(warning!.start, warning!.end)).toBe('>')
+    })
+  })
 })

@@ -870,12 +870,24 @@ function collectListItemIndentWarnings(
     }
     return { column, chars, rest: line.slice(chars) }
   }
+  // A column is compared against a candidate line's indentation, which is
+  // counted in spaces, so a surrogate pair advances it once and not twice.
   const visualColumnAt = (line: string, end: number): number => {
     let column = 0
-    for (let i = 0; i < end; i++) {
+    for (let i = 0; i < end && i < line.length; ) {
       column = line[i] === '\t' ? Math.floor(column / 4 + 1) * 4 : column + 1
+      i += (line.codePointAt(i) ?? 0) > 0xffff ? 2 : 1
     }
     return column
+  }
+  // `pos` columns count codepoints (PART 12 section 4); a slice index counts
+  // UTF-16 code units, and the two part company at the first astral character.
+  const utf16IndexOfColumn = (line: string, column: number): number => {
+    let index = 0
+    for (let n = 0; n < column && index < line.length; n++) {
+      index += (line.codePointAt(index) ?? 0) > 0xffff ? 2 : 1
+    }
+    return index
   }
   const blockView = (line: string, quoteDepth: number): { column: number; chars: number; rest: string } => {
     let prefixChars = 0
@@ -899,7 +911,7 @@ function collectListItemIndentWarnings(
     const pos = (node as Positioned).pos
     if (!pos) return
     const markerLine = lines[pos.startLine - 1] ?? ''
-    const markerOffset = Math.max(0, (pos.startColumn ?? 1) - 1)
+    const markerOffset = utf16IndexOfColumn(markerLine, Math.max(0, (pos.startColumn ?? 1) - 1))
     const marker = LINT_LIST_ITEM.exec(markerLine.slice(markerOffset))
     if (!marker) return
     const baseColumn = visualColumnAt(markerLine, markerOffset) + visualIndent(marker[1]!).column
