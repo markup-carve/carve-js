@@ -63,7 +63,8 @@ describe('a titled directive names the region it places (CARVE-P9-072)', () => {
     const html = carveToHtml('# Intro\n\n{aria-label="Mine"}\n::: toc "Contents"\n:::\n', {
       extensions: [tocPlacement()],
     })
-    expect(html).toContain('<nav class="toc" aria-label="Mine">')
+    // The structural class follows the authored name (markup-carve/carve#2328).
+    expect(html).toContain('<nav aria-label="Mine" class="toc">')
     expect(html).toContain('<p class="admonition-title">Contents</p>')
     expect(html).not.toContain('aria-labelledby')
   })
