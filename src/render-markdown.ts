@@ -602,10 +602,12 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   const rows: string[] = []
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
-    const cells = row.cells.map((cell) => {
-      if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
-      return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
-    })
+    const cells = row.cells.map((cell) =>
+      withinTableCell(() => {
+        if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
+        return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
+      }),
+    )
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) {
       if (header === undefined) aligns.length = 0
@@ -911,7 +913,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // editors that strip on save, by `git apply --whitespace=fix` and by CI
       // whitespace checks - and losing ONE of the two spaces is enough for the
       // break to vanish rather than degrade, silently, in a file nobody edited.
-      return '\\\n'
+      // In a table cell the newline would end the GFM row (PART 11 section 9a).
+      return insideTableCell ? '<br>' : '\\\n'
     case 'insert':
       return `<ins>${renderInlines(node.children, ctx)}</ins>`
     case 'delete':
@@ -1009,14 +1012,28 @@ function outsideLink<T>(fn: () => T): T {
   }
 }
 
+let insideTableCell = false
+
+function withinTableCell<T>(fn: () => T): T {
+  const previous = insideTableCell
+  insideTableCell = true
+  try {
+    return fn()
+  } finally {
+    insideTableCell = previous
+  }
+}
+
 function renderLink(node: Link, ctx: MarkdownContext): string {
   // Markdown has no nested links either: `[see [H](#H)](/outer)` is not a link
   // with a link inside, it is broken. A crossref in the label renders as its
   // text, the same suppression the HTML target makes.
   const text = withinLink(() => renderInlines(node.children, ctx))
+  // A fragment that names no heading is still the author's destination, so the
+  // link is kept (PART 11 section 11a).
   const id = fragmentId(node.href)
-  if (id && !ctx.headingIds.has(id)) return text
-  const destination = id ? markdownFragmentDestination(id) : markdownDestination(node.href)
+  const destination =
+    id && ctx.headingIds.has(id) ? markdownFragmentDestination(id) : markdownDestination(node.href)
   return node.title === undefined
     ? `[${text}](${destination})`
     : `[${text}](${destination} "${escapeMdTitle(node.title)}")`
