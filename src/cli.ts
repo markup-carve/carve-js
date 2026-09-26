@@ -106,8 +106,10 @@ Usage:
                                    in Djot (needs @djot/djot)
   carve migrate --from FORMAT [options] [file]
                                    Convert html, markdown (md), djot or bbcode to
-                                   Carve. --mode and --adapter are HTML-only;
-                                   --report and --check-loss apply to all
+                                   Carve. --mode, --adapter and --list-table
+                                   (write a table whose cells hold blocks as
+                                   ::: list-table) are HTML-only; --report and
+                                   --check-loss apply to all
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -226,14 +228,15 @@ exits 1 if anything is reported, 0 if clean.
 `
 
 async function runMigrate(args: string[], io: CliIO): Promise<number> {
-  let values: { from?: string; mode?: string; adapter?: string; report?: string; 'check-loss'?: boolean; help?: boolean }
+  let values: { from?: string; mode?: string; adapter?: string; report?: string; 'check-loss'?: boolean; 'list-table'?: boolean; help?: boolean }
   let positionals: string[]
   try {
     const parsed = parseArgs({
       args,
       options: {
         from: { type: 'string' }, mode: { type: 'string' }, adapter: { type: 'string' },
-        report: { type: 'string' }, 'check-loss': { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+        report: { type: 'string' }, 'check-loss': { type: 'boolean' }, 'list-table': { type: 'boolean' },
+        help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
     })
@@ -270,7 +273,11 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
   let result
   try {
     result = from === 'html'
-      ? migrateHtml(source, { mode: mode as HtmlImportMode, adapter: adapter as HtmlImportAdapter })
+      ? migrateHtml(source, {
+          mode: mode as HtmlImportMode,
+          adapter: adapter as HtmlImportAdapter,
+          ...(values['list-table'] ? { listTableForBlockCells: true } : {}),
+        })
       : from === 'bbcode'
         ? migrateBbcode(source)
         : from === 'djot'

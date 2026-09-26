@@ -1,6 +1,7 @@
 import { renderCellContent } from './render-cell-content.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type {
+  Admonition,
   Attrs,
   BlockNode,
   DefinitionItem,
@@ -12,6 +13,7 @@ import type {
   List,
   ListItem,
   Table,
+  TableCell,
   Text,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -293,6 +295,12 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return renderTable(node, ctx)
     case 'admonition':
     case 'directive': {
+      const listTable = node.type === 'admonition' ? listTableAsTable(node) : undefined
+      if (listTable) {
+        if (!node.label) return renderTable(listTable, ctx)
+        ctx.lastList = undefined
+        return `${wrapperLine(escapeText(node.label), '**', 'strong')}${renderTable(listTable, ctx)}`
+      }
       // Markdown has no admonition; preserve the title (otherwise lost) as a
       // leading bold line, then an unconsumed grouping [label] (also bold, the
       // caption floor; title first when both are present), then the body.
@@ -575,6 +583,60 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): st
 function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
   return renderCellContent(blocks, nodes => renderInlines(nodes, ctx), 'renderMarkdown', 0,
     part => part.replace(/\\*[ \t\r]*(?:\n[ \t\r]*)+/g, ' '))
+}
+
+const ALIGNMENTS = new Set(['left', 'right', 'center'])
+
+/** A `header-rows` / `header-cols` value as the ListTable extension reads it. */
+function listTableCount(value: string | undefined): number {
+  if (value === undefined) return 0
+  if (value.trim() === '') return 1
+  const n = parseInt(value, 10)
+  return Number.isNaN(n) ? 0 : Math.max(0, n)
+}
+
+/**
+ * The pipe table a `::: list-table` is equivalent to (PART 11 §10q,
+ * CARVE-P11-059), or undefined when its body is not a grid.
+ */
+function listTableAsTable(node: Admonition): Table | undefined {
+  if (node.kind !== 'list-table' || node.children.length !== 1) return undefined
+  const outer = node.children[0]!
+  if (outer.type !== 'list' || outer.items.some((row) => row.children[0]?.type !== 'list')) return undefined
+  const kv = node.attrs?.keyValues ?? {}
+  const headerRows = listTableCount(kv['header-rows'])
+  const headerCols = listTableCount(kv['header-cols'])
+  const aligns = kv.aligns === undefined ? [] : kv.aligns.split(',').map((value) => value.trim())
+  const rows = outer.items.map((row, r) => {
+    // Every list in the row gives cells; any other block joins the cell before it.
+    const entries: Array<{ item: ListItem; blocks: BlockNode[] }> = []
+    for (const block of row.children) {
+      if (block.type === 'list') for (const item of block.items) entries.push({ item, blocks: [...item.children] })
+      else entries.at(-1)!.blocks.push(block)
+    }
+    const items = entries.map((entry) => entry.item)
+    const headerRow = r < headerRows || items[0]?.attrs?.keyValues?.['header-row'] !== undefined
+    const cells = entries.map(({ item, blocks }, c): TableCell => {
+      const only = blocks.length === 1 && blocks[0]!.type === 'paragraph' ? blocks[0] : undefined
+      const text = only?.type === 'paragraph' && only.children.length === 1 ? only.children[0] : undefined
+      if (!item.attrs && !only?.attrs && text?.type === 'text' && !text.attrs) {
+        const marker = text.value.trim()
+        if (marker === '^' || marker === '<') {
+          return { type: 'table_cell', header: false, span: marker === '^' ? 'rowspan' : 'colspan', children: [] }
+        }
+      }
+      const own = item.attrs?.keyValues
+      const align = [own?.align, aligns[c]].find((value) => value !== undefined && ALIGNMENTS.has(value))
+      return {
+        type: 'table_cell',
+        header: headerRow || c < headerCols || own?.header !== undefined,
+        ...(align ? { align: align as 'left' | 'right' | 'center' } : {}),
+        ...(only?.type === 'paragraph' ? { children: only.children } : blocks.length === 0 ? { children: [] } : { blocks }),
+      }
+    })
+    return { type: 'table_row' as const, cells }
+  })
+  return { type: 'table', rows, ...(node.title && node.title.length > 0 ? { caption: node.title } : {}) }
 }
 
 function renderTable(node: Table, ctx: MarkdownContext): string {
@@ -1132,8 +1194,12 @@ function gfmHeadingSlugs(blocks: BlockNode[], typography: SmartTypographyMode): 
           if (id !== undefined && !slugs.has(id)) slugs.set(id, slug)
           break
         }
-        case 'block_quote':
         case 'admonition':
+          // A list table is written as a table, whose cells hold no heading.
+          if (listTableAsTable(block)) break
+          visit(block.children, depth + 1)
+          break
+        case 'block_quote':
         case 'directive':
         case 'div':
         case 'section':
