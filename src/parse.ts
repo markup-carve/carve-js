@@ -6353,14 +6353,16 @@ function markerContentColumn(line: string): number {
   // uses the SAME threshold the recursive sub-list parse uses -- including the
   // task convention (content column is base + 2, the bullet width, NOT the
   // `- [ ] ` checkbox width) and an abutting `{...}` attribute (stripped first).
+  // A marker-attached block contributes zero (§24 C3), so the width is read
+  // off the stripped line.
   const la = extractItemAttr(line)
   const mline = la ? la.stripped : line
   const base = indentColumns(line)
-  if (RE_TASK.test(mline)) return base + 2 + (la ? line.length - mline.length : 0)
+  if (RE_TASK.test(mline)) return base + 2
   const m = RE_ORDERED.exec(mline) ?? RE_UNORDERED.exec(mline)
   if (!m) return -1
   const content = m[m.length - 1]!
-  return base + (line.length - leadingWhitespace(line) - content.length)
+  return base + (mline.length - leadingWhitespace(mline) - content.length)
 }
 
 // Ordered-list dialect, fixed by the first item's marker.
