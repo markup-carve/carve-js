@@ -233,7 +233,7 @@ export const WIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   "definition_list": ["items", "type"],
   "definition_term": ["children", "type"],
   "delete": ["children", "type"],
-  "directive": ["kind", "type"],
+  "directive": ["children", "kind", "type"],
   "div": ["children", "type"],
   "document": ["children", "srcByteLength", "type"],
   "emphasis": ["children", "type"],

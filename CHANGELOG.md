@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Breaking
+
+- AST ingest rejects a `directive` without `children`. An empty directive publishes `children: []` (markup-carve/carve#2333).
+
 ## [0.1.8] - 2026-09-25
 
 ### Breaking
