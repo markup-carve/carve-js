@@ -340,12 +340,12 @@ describe('line blocks', () => {
     }
   })
 
-  it('declines to anchor the TEXT of a TAB-indented stanza', () => {
-    // A tab expands to up to four sentinels, so everything after it shifts and
-    // no offset inside a line is trustworthy. Absent beats wrong.
+  it('anchors unchanged text beside expanded tabs', () => {
     const src = '::: |\nRoses are red,\n\tViolets are blue.\n:::\n'
     for (const node of textNodesOf(parse(src))) {
-      if (node.type === 'text') expect(node.pos).toBeUndefined()
+      if (node.type !== 'text') continue
+      expect(node.pos).toBeDefined()
+      expect([...src].slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(node.value)
     }
   })
 
