@@ -633,20 +633,7 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
         // the cell was block decoration, not content.
         break
       case 'raw_block':
-        // Raw HTML is text here (PART 12 §27): the escaping keeps it inert
-        // without spelling it as entities a reader would show verbatim.
-        if (block.format === 'html') {
-          parts.push(renderInlines([{ type: 'text', value: stripControls(block.content) }], ctx))
-          break
-        }
-        parts.push(renderInlines([{ type: 'text', value: renderBlock(block, ctx).trim() }], ctx))
-        break
       case 'abbreviation_def':
-        // The one pair whose content no inline node holds. Each keeps the
-        // target's own spelling, because dropping it would lose the only place
-        // the Markdown output carries it (carve#589 for the definition).
-        parts.push(renderInlines([{ type: 'text', value: renderBlock(block, ctx).trim() }], ctx))
-        break
       case 'link_reference_definition':
       case 'citation_definition':
       case 'comment':

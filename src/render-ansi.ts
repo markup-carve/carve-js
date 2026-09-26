@@ -1,3 +1,4 @@
+import { renderCellContent } from './render-cell-content.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -350,7 +351,7 @@ function renderTable(node: Table, ctx: AnsiContext): string {
       const cell = row.cells[i]
       const content = cell ? trimNonNbsp(cell.blocks === undefined
         ? renderInlines(cell.children ?? [], ctx)
-        : renderBlocks(cell.blocks, ctx)).replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ') : ''
+        : renderCellContent(cell.blocks, nodes => renderInlines(nodes, ctx), 'renderAnsi')).replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ') : ''
       return { content, plain: stripAnsi(content), isHeader }
     })
   })
