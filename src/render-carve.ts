@@ -2561,10 +2561,9 @@ function renderInlines(
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
         opensBacktickRun(nodes[idx + 1]),
-        // MAY A VERBATIM SPAN HERE RUN TO THE END OF THIS TEXT? Only if it is
-        // the last node AND something is already written - a backtick run that
-        // opens a block's first line is a code FENCE, not a span at all.
-        idx === nodes.length - 1 && out !== '',
+        // A run of three or more backticks at block start is a code fence.
+        // A shorter run, or one after an inline opener, can start a code span.
+        idx === nodes.length - 1 && (out !== '' || ctx.inlineDepth > 1 || (node.type === 'code' && safeFence(node.value, 1).length < 3)),
       )
       // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
       // live here and not in `renderInline`: the answer is a property of the
@@ -2745,7 +2744,7 @@ function renderInlineBody(
     // An empty code span is written as an unclosed run, which swallows a bare
     // closer; only the braced one ends it.
     const last = children[children.length - 1]
-    return (last?.type === 'code' && last.value === '') || holdsUnboundedComment(children) || bracedForScope.has(node)
+    return (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || bracedForScope.has(node)
       ? renderForcedEmphasis(delim, content)
       : renderEmphasis(delim, content, prevChar, nextChar)
   }
@@ -2810,10 +2809,10 @@ function renderInlineBody(
     case 'highlight':
       return withAttrs(emphasisOf('=', node.children))
     case 'code':
-      if (node.value === '' && unspellableEmptyCodeSpans.has(node)) {
+      if (unspellableEmptyCodeSpans.has(node)) {
         throw new SourceUnspellableError(
           'code',
-          'an empty code span has no Carve source spelling where its open run does not end',
+          'a code span has no Carve source spelling where its open run does not end',
         )
       }
       // The unclosed spelling is offered only when NOTHING is written after the
@@ -3126,9 +3125,9 @@ function unclosedVerbatimSpells(content: string): boolean {
   // LINE-TRAILING WHITESPACE is stripped from every line, inside the span or
   // not, so content carrying any cannot be spelled this way (nor any other -
   // see the note in the test file).
-  if (/[ \t](?:\r?\n)/.test(content) || /[ \t]$/.test(content)) return false
+  if (/[ \t][\r\n]/.test(content) || /[ \t]$/.test(content)) return false
   // A BLANK LINE ends the paragraph, and the span with it.
-  if (/\n[ \t]*(?:\r?\n)/.test(content)) return false
+  if (/\n[ \t\r\n]/.test(content)) return false
   // LINE-LEADING WHITESPACE is a continuation line's indent, which the block
   // layer strips before the inline scanner runs - so content carrying any is
   // not spelled by this form either. (A line block PRESERVES it, so the form
@@ -3186,6 +3185,9 @@ function renderCode(content: string, allowUnclosed = false, nodeType = 'code'): 
   // end of the text, so it says so.
   if (needsPad && /^[\r\n]/.test(content) && allowUnclosed && unclosedVerbatimSpells(content)) {
     return `${fence}${content}`
+  }
+  if (needsPad && /^[\r\n]/.test(content)) {
+    throw new SourceUnspellableError(nodeType, 'a leading newline loses its padding where the code span cannot run to the end')
   }
   return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
@@ -3808,6 +3810,10 @@ const LABEL_INLINE_TYPES = new Set([
  * span has not got, and elsewhere the open run must end where the span does
  * (carve-js#1789).
  */
+function codeNeedsOpenRun(value: unknown): boolean {
+  return typeof value === 'string' && (value === '' || (/^[\r\n]/.test(value) && value.endsWith('`')))
+}
+
 function findUnspellableEmptyCodeSpans(root: object): WeakSet<object> {
   const found = new WeakSet<object>()
   let anyEmpty = false
@@ -3816,13 +3822,13 @@ function findUnspellableEmptyCodeSpans(root: object): WeakSet<object> {
     const node = stack.pop()
     if (node === null || typeof node !== 'object') continue
     const typed = node as { type?: unknown; value?: unknown; attrs?: InlineNode['attrs'] }
-    if (typed.type === 'code' && typed.value === '') {
+    if (typed.type === 'code' && codeNeedsOpenRun(typed.value)) {
       anyEmpty = true
       if (renderAttrs(typed.attrs) !== '') found.add(node)
     }
     for (const value of Object.values(node)) stack.push(value)
   }
-  if (anyEmpty) for (const code of emptyCodeSpansWhoseRunDoesNotEnd(root)) found.add(code)
+  if (anyEmpty) for (const code of emptyCodeSpansWhoseRunDoesNotEnd(root, isEmptyText, codeNeedsOpenRun)) found.add(code)
   return found
 }
 
@@ -3831,7 +3837,7 @@ function findUnspellableEmptyCodeSpans(root: object): WeakSet<object> {
  * run ends at the end of a block or at a braced closer (PART 3, UNCLOSED RUN);
  * anything else behind it is read into the span, and a label never closes.
  */
-export function emptyCodeSpansWhoseRunDoesNotEnd(root: object, isNothing: (item: object) => boolean = isEmptyText): object[] {
+export function emptyCodeSpansWhoseRunDoesNotEnd(root: object, isNothing: (item: object) => boolean = isEmptyText, needsOpenRun: (value: unknown) => boolean = value => value === ''): object[] {
   const found: object[] = []
   const parents = new WeakMap<object, Parent>()
   const empties: Array<{ value: string; attrs?: unknown }> = []
@@ -3855,7 +3861,7 @@ export function emptyCodeSpansWhoseRunDoesNotEnd(root: object, isNothing: (item:
       })
     }
     const typed = node as { type?: unknown; value?: unknown }
-    if (typed.type === 'code' && typed.value === '') empties.push(node as { value: string })
+    if (typed.type === 'code' && needsOpenRun(typed.value)) empties.push(node as { value: string })
   }
   for (const code of empties) {
     if (!runEndsAtEmptyCodeSpan(code, parents)) found.push(code)

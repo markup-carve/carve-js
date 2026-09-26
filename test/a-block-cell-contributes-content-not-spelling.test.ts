@@ -57,18 +57,17 @@ describe('a block cell contributes content, not spelling', () => {
       .toBe('|  |')
   })
 
-  // The two kinds whose content no inline node holds keep the target's own
-  // spelling: the cell is the only place the Markdown output carries it, and
-  // carve#589 refused dropping a definition on this target.
-  // PART 12 §27: raw HTML contributes its payload as escaped text, as in
-  // carve-rs and carve-php.
-  it('keeps a raw block under the target rule for raw HTML', () => {
-    expect(bodyRow([{ type: 'raw_block', format: 'html', content: '<b>raw</b>\n' }])).toBe('| \\<b>raw\\</b> |')
-  })
-
-  it('keeps an abbreviation definition', () => {
-    expect(bodyRow([{ type: 'abbreviation_def', abbr: 'HTML', expansion: 'HyperText Markup Language' }]))
-      .toBe('| \\*[HTML\\]: HyperText Markup Language |')
+  it('omits raw blocks and abbreviation definitions under carve#2390', () => {
+    for (const block of [
+      { type: 'raw_block', format: 'html', content: '<b>raw</b>\n' },
+      { type: 'abbreviation_def', abbr: 'HTML', expansion: 'HyperText Markup Language' },
+    ]) {
+      expect(bodyRow([block])).toBe('|  |')
+      expect(bodyRow([
+        { type: 'paragraph', children: [{ type: 'text', value: 'one' }] }, block,
+        { type: 'paragraph', children: [{ type: 'text', value: 'two' }] },
+      ])).toBe('| one two |')
+    }
   })
 
   it('agrees with the plain and ANSI targets on the payload', () => {

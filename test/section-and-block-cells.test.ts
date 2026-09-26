@@ -75,7 +75,7 @@ describe('interchange sections and block-content cells', () => {
     expect(html).toContain('href="#Cell-heading"')
   })
 
-  it('escapes raw HTML when Markdown flattens block cells', () => {
+  it('omits raw HTML when Markdown flattens block cells', () => {
     const doc = fromAstJson({
       type: 'document', srcByteLength: 0, children: [{
         type: 'table', rows: [{ type: 'table_row', cells: [{
@@ -85,8 +85,7 @@ describe('interchange sections and block-content cells', () => {
         }] }],
       }],
     } as never)
-    // Written as escaped text, so a reader shows the tag and never runs it.
-    expect(renderMarkdown(doc)).toContain('\\<script>alert(1)\\</script>')
+    expect(renderMarkdown(doc)).not.toContain('alert(1)')
   })
 
   it('keeps inline references when flattening block cells', () => {

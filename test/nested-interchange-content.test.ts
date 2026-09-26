@@ -112,12 +112,12 @@ describe('nested interchange content', () => {
     expect(renderAnsi(doc)).toContain('A\u00a0')
   })
 
-  it('folds whitespace-only lines to one space in plain cells', () => {
+  it('preserves code spaces while replacing each newline in plain cells', () => {
     const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [{
       type: 'table', rows: [{ type: 'table_row', cells: [{
         type: 'table_cell', header: false, blocks: [{ type: 'code_block', content: 'a\n   \nb' }],
       }] }],
     }] } as never)
-    expect(renderPlainText(doc)).toContain('a b')
+    expect(renderPlainText(doc)).toContain('a     b')
   })
 })
