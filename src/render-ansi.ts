@@ -612,6 +612,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       if (!ctx.definedFootnotes.has(id)) return `[^${id}]`
       return style(`[${id}]`, FG_CYAN + BOLD)
     }
+    case 'non_breaking_space':
+      return '\0'
     case 'soft_break':
       return ' '
     case 'hard_break':
@@ -805,7 +807,7 @@ function normalize(text: string): string {
   // The internal non-breaking-space placeholder (U+E000) collapses to an
   // ordinary space in terminal output. Done after trimming so placeholder-
   // derived leading indentation survives; a literal U+00A0 is left intact.
-  return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\ue000/g, ' ')
+  return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\0/g, ' ')
 }
 
 function cleanEscapedText(node: Text): string {

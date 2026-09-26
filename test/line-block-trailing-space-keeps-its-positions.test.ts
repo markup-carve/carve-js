@@ -42,7 +42,7 @@ const inlines = (source: string): Placed[] => {
     if (typeof node !== 'object' || node === null) return
     const record = node as Record<string, unknown>
     const type = record['type']
-    if (type === 'text' || type === 'hard_break') {
+    if (type === 'text' || type === 'hard_break' || type === 'non_breaking_space') {
       const pos = record['pos'] as { startOffset?: number; endOffset?: number } | undefined
       out.push({
         type: type as string,
@@ -74,7 +74,9 @@ describe('a line block keeps its positions across a dropped trailing run', () =>
     const source = '::: |\nabc  \ndef \n:::\n'
 
     expect(inlines(source)).toEqual([
-      { type: 'text', value: `abc${NBSP}${NBSP}`, slice: 'abc  ' },
+      { type: 'text', value: 'abc', slice: 'abc' },
+      { type: 'non_breaking_space', value: undefined, slice: ' ' },
+      { type: 'non_breaking_space', value: undefined, slice: ' ' },
       { type: 'hard_break', value: undefined, slice: '\n' },
       { type: 'text', value: 'def', slice: 'def' },
     ])
@@ -116,7 +118,7 @@ describe('a line block keeps its positions across a dropped trailing run', () =>
     // expansion never got shorter and this line never triggered the defect.
     const source = '::: |\nabc  \ndef\n:::\n'
 
-    expect(inlines(source).map((i) => i.slice)).toEqual(['abc  ', '\n', 'def'])
+    expect(inlines(source).map((i) => i.slice)).toEqual(['abc', ' ', ' ', '\n', 'def'])
   })
 
   it('a TAB still unanchors the stanza, which is what §4 is for', () => {
@@ -139,7 +141,9 @@ describe('a line block keeps its positions across a dropped trailing run', () =>
     // space in the output: the one-column run is gone from the value and the
     // two-column run is still the two sentinels it always was.
     expect(inlines('::: |\nabc  \ndef \n:::\n').map((i) => i.value)).toEqual([
-      `abc${NBSP}${NBSP}`,
+      'abc',
+      undefined,
+      undefined,
       undefined,
       'def',
     ])

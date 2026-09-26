@@ -791,6 +791,7 @@ function flattenText(nodes: InlineNode[] | undefined): string {
   let out = ''
   for (const n of nodes) {
     if (n.type === 'text') out += (n as Text).value
+    else if (n.type === 'non_breaking_space') out += '\u00a0'
     else if (n.type === 'smart_punctuation')
       out += n.glyph ?? SMART_PUNCTUATION_GLYPHS[n.kind] ?? n.value
     else if ('children' in n && Array.isArray((n as { children?: InlineNode[] }).children))

@@ -4869,6 +4869,16 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     } finally {
       inLineBlock = outerLineBlock
     }
+    // Source NULs were replaced before block parsing; these are generated gaps.
+    const restoreVerbatimGaps = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return
+      for (const [key, child] of Object.entries(value)) {
+        if (typeof child === 'string' && child.includes('\0')) {
+          (value as Record<string, unknown>)[key] = child.replace(/\0/g, '\u00a0')
+        } else restoreVerbatimGaps(child)
+      }
+    }
+    restoreVerbatimGaps(parsed)
     if (terminalCommentGuard) {
       const removeGuard = (nodes: InlineNode[]): boolean => {
         for (let index = 0; index < nodes.length; index++) {
@@ -5101,7 +5111,7 @@ function expandLineBlockWhitespace(line: string): string {
       i++
     }
     column += width
-    out += !seenContent || width >= 2 ? '\ue000'.repeat(width) : ' '
+    out += !seenContent || width >= 2 ? '\0'.repeat(width) : ' '
   }
 
   return out
@@ -10199,6 +10209,7 @@ const ATTR_INERT_PREV = new Set([
   // literal. Attaching it to `escaped_text`, whose renderer emits nothing, made
   // the source characters vanish (carve-js#1766).
   'escaped_text',
+  'non_breaking_space',
   'soft_break',
   'hard_break',
   'mention',
@@ -10789,7 +10800,7 @@ const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
  * and a nbsp is a space to the reader - in either of its spellings, so the
  * internal U+E000 placeholder for an escaped `\ ` counts too.
  */
-const isFlankSpace = (ch: string) => /[ \t\n\r\u00a0\ue000]/.test(ch)
+const isFlankSpace = (ch: string) => /[ \t\n\r\u00a0\0]/.test(ch)
 // Adjudicated smart-quote opening context (matches carve-rs on these inputs):
 // a straight quote curls OPENING when preceded by start-of-content, Unicode
 // whitespace (incl. NBSP, handled below via the U+E000 placeholder), or one of
@@ -10801,10 +10812,7 @@ const isQuoteOpenContext = (prev: string) =>
   prev === '' ||
   /[ \t\n\r\u00a0([{\-–—/=:]/.test(prev) ||
   prev === '“' ||
-  prev === '‘' ||
-  // U+E000 is the internal non-breaking-space placeholder (escaped `\ ` /
-  // line-block indent); a nbsp is whitespace, so a quote after it opens.
-  prev === ''
+  prev === '‘'
 
 /**
  * Recognize one smart-typography construct at `text[i]`.
@@ -10829,6 +10837,7 @@ function lastEmittedGlyph(out: InlineNode[]): string {
   // An escaped character is its own node but still the character before the
   // quote, and quote flanking reads that character: `\{"quoted"` opens on the
   // brace exactly as an unescaped `{` would (corpus 163).
+  if (previous && previous.type === 'non_breaking_space') return '\u00a0'
   if (previous && previous.type === 'escaped_text') return previous.value
   return 'x'
 }
@@ -11150,6 +11159,12 @@ function scanInlineInner(
 
   while (i < text.length) {
     const c = text[i]!
+    if (c === '\0' && inLineBlock) {
+      flush()
+      out.push(withPos({ type: 'non_breaking_space' }, source, text, i, i + 1))
+      i++
+      continue
+    }
 
     // Core inline constructs all begin with punctuation. When no extension
     // matcher can claim an arbitrary offset, append ordinary ASCII prose as a
@@ -11210,9 +11225,10 @@ function scanInlineInner(
     // converted per renderer (HTML &nbsp;, Markdown U+00A0, plain/ANSI a
     // space) and never confused with an author's literal non-breaking space.
     if (c === '\\' && text[i + 1] === ' ') {
-        append('\ue000')
-        i += 2
-        continue
+      flush()
+      out.push(withPos({ type: 'non_breaking_space' }, source, text, i, i + 2))
+      i += 2
+      continue
     }
 
     // Escape: a backslash before any ASCII punctuation yields that literal

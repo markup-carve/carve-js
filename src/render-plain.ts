@@ -492,6 +492,8 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // (carve#352, corpus 132/133/157/161).
       return ctx.definedFootnotes.has(id) ? `[${id}]` : `[^${id}]`
     }
+    case 'non_breaking_space':
+      return '\0'
     case 'soft_break':
       return ' '
     case 'hard_break':
@@ -552,7 +554,7 @@ function normalize(text: string): string {
   // because there it is layout rather than content: a table row ending in an empty
   // cell renders `x | ` and that space is an artifact of the separator.
   const body = trimEndNonNbsp(text.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, ''))
-  return `${body}\n`.replace(/\ue000/g, ' ')
+  return `${body}\n`.replace(/\0/g, ' ')
 }
 
 function cleanEscapedText(node: Text): string {

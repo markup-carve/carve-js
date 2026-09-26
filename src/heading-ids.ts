@@ -438,6 +438,9 @@ export function inlineText(nodes: InlineNode[]): string {
   let out = ''
   for (const n of nodes) {
     switch (n.type) {
+      case 'non_breaking_space':
+        out += '\u00a0'
+        break
       case 'text':
       case 'code':
       // The escape is authoring syntax; the heading still contains the

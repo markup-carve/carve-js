@@ -14,6 +14,8 @@ export class AstSidecarError extends TypeError {
   constructor(message: string) { super(message); this.name = 'AstSidecarError' }
 }
 
+const ANNOTATION_CHILD_FIELDS = ['target', 'title', 'children', 'items', 'rows', 'cells', 'blocks', 'inline', 'content', 'prefix', 'locator', 'suffix', 'old', 'new', 'pairs', 'base', 'annotation', 'caption', 'shortCaption', 'fallback'] as const
+
 type RecordValue = Record<string, unknown>
 const record = (value: unknown): value is RecordValue => !!value && typeof value === 'object' && !Array.isArray(value)
 const nonempty = (value: unknown): value is string => typeof value === 'string' && value.length > 0
@@ -41,7 +43,8 @@ function collectNodes(ast: AstJsonDocument): Map<string, RecordValue> {
   const visitNode = (value: unknown, path: string): void => {
     if (!record(value) || !nonempty(value.type)) return
     nodes.set(path, value)
-    for (const [key, child] of Object.entries(value)) {
+    for (const key of ANNOTATION_CHILD_FIELDS) {
+      const child = value[key]
       const kind = NODE_POSITION_KIND[`${value.type}.${key}`]
       const next = `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`
       if (kind === 'node') visitNode(child, next)
@@ -52,7 +55,8 @@ function collectNodes(ast: AstJsonDocument): Map<string, RecordValue> {
   }
   const visitRecord = (value: unknown, path: string, name: string): void => {
     if (!record(value)) return
-    for (const [key, child] of Object.entries(value)) {
+    for (const key of ANNOTATION_CHILD_FIELDS) {
+      const child = value[key]
       if (NODE_POSITION_KIND[`${name}.${key}`] !== 'nodes' || !Array.isArray(child)) continue
       child.forEach((item, index) => visitNode(item, `${path}/${key}/${index}`))
     }
@@ -105,7 +109,9 @@ function textMetrics(canonical: Map<string, RecordValue>): Map<string, { start: 
     }
     result.set(path, { start: offset, length: 0 })
     active.push(path)
-    const own = typeof node.value === 'string' ? node.value : typeof node.content === 'string' ? node.content : typeof node.text === 'string' ? node.text : ''
+    const own = node.type === 'soft_break' || node.type === 'hard_break' ? '\n'
+      : node.type === 'non_breaking_space' ? '\u00a0'
+      : [node.value, node.content, node.text, node.alt].find((value): value is string => typeof value === 'string') ?? ''
     offset += [...own].length
   }
   while (active.length) {
