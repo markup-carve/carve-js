@@ -70,7 +70,7 @@ import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 import { ownValue } from './own-property.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
-import { linkDestinationValue, scanDestination } from './link-destination.js'
+import { linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
 
 export interface ParseOptions {
@@ -10247,7 +10247,6 @@ const ATTR_INERT_PREV = new Set([
   'critic_comment',
 ])
 
-const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 
 /**
  * The whole tail of a link or image: `(destination)`, optionally with a title
@@ -10255,7 +10254,7 @@ const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:
  * full match, destination, the two title spellings, attribute payload -- so
  * the call sites read the same either way.
  */
-export function execLinkTail(tail: string): [string, string, string | undefined, string | undefined, string | undefined] | null {
+function execLinkTail(tail: string): [string, string, string | undefined, string | undefined, string | undefined] | null {
   const scanned = scanDestination(tail)
   if (scanned === null || scanned.dest === '') return null
   const rest = RE_LINK_REST.exec(tail.slice(scanned.end))
@@ -10369,7 +10368,7 @@ const BRACKET_RESCAN_BUDGET = 8
  * span's opening run up, and from that `[` the run is not there, so it is
  * scanned from itself (carve-js#1815).
  */
-function buildBracketMap(s: string): BracketClose {
+export function buildBracketMap(s: string, outsideOnly = false): BracketClose {
   const lastRunStart = s.includes('`') ? lastBacktickRunStarts(s) : new Map<number, number>()
   const closedRunEnd = (j: number, openLen: number): number | undefined =>
     (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
@@ -10464,7 +10463,7 @@ function buildBracketMap(s: string): BracketClose {
     if (s[open] !== '[') return undefined
     const direct = map.get(open)
     if (direct !== undefined) return direct
-    return insideSpan(open) ? scanFrom(open) : undefined
+    return !outsideOnly && insideSpan(open) ? scanFrom(open) : undefined
   }
 }
 

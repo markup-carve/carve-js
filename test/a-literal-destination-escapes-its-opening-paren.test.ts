@@ -27,6 +27,22 @@ describe('PART 11 §5 destination-opening parentheses', () => {
     expect(carveToCarve(out)).toBe(out)
   })
 
+  it.each([
+    ['[<em>a](b)</em>', '[/a]\\(b)/'],
+    ['<em>[a](b</em>)', '/[a]\\(b/)'],
+    ['[<em>a</em>](b)', '[/a/]\\(b)'],
+    ['[a](<em>b</em>)', '[a]\\(/b/)'],
+    ['[a<code>x</code>](b)', '[a`x`]\\(b)'],
+    ['[a <strong>b</strong> c](d)', '[a *b* c]\\(d)'],
+    ['[<a href="u">x</a>](b)', '[[x](u)]\\(b)'],
+    ['[<em>a</em>](b) *literal*', '[/a/]\\(b) \\*literal*'],
+  ])('pairs brackets across inline nodes: %s', (body, expected) => {
+    const out = htmlToCarve(`<p>${body}</p>`).value
+    expect(out).toBe(`${expected}\n`)
+    expect(carveToCarve(out)).toBe(out)
+    expect(carveToHtml(out)).toBe(`<p>${body}</p>`)
+  })
+
   it('preserves real links', () => {
     expect(carveToCarve('[a](b)\n')).toBe('[a](b)\n')
   })
