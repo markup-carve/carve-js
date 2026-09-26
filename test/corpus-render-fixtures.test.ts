@@ -30,31 +30,8 @@ type Target = keyof typeof targets
  *
  * It is declared in this file rather than beside the `.fmt` map because only
  * this suite reads a `.md` sidecar.
- *
  */
-const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map([
-  [
-    '227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace',
-    {
-      reason: 'CARVE-P11-058 writes a definition list with no `:` marker, so an empty description writes nothing',
-      md: '**term**\n\nsee [t](/u)\n',
-    },
-  ],
-  [
-    '227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace-2',
-    {
-      reason: 'CARVE-P11-058 writes a definition list with no `:` marker, so an empty description writes nothing',
-      md: '**term**\n\nsee[^f]\n\n[^f]: x\n',
-    },
-  ],
-  [
-    '284-a-ragged-table-keeps-each-row-s-cell-count',
-    {
-      reason: 'CARVE-P11-056 gives a headerless table an empty header row as wide as its widest row',
-      md: '|  |  |\n| --- | --- |\n| ~~x~~ |\n| a | b |\n',
-    },
-  ],
-])
+const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map()
 
 /** The bytes this engine is ahead of the pinned sidecar with, if it is. */
 const aheadOfPin = (fixture: { slug: string; target: Target }) => {

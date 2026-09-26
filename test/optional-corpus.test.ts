@@ -172,15 +172,7 @@ const DECLARED_UNIMPLEMENTED: Record<string, string> = {}
  *  - and it must still DIFFER from the pinned fixture, so an entry the pin has
  *    caught up on fails and is deleted in the commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; expected: string }>([
-  [
-    '37-crossref-label-typography-source-markdown',
-    {
-      reason: 'CARVE-P11-038 writes no heading suffix and links a heading by its GFM slug',
-      expected: '# The \"quoted\" -- heading\n\nSee [The \"quoted\" -- heading](#the-quoted----heading)',
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; expected: string }>()
 
 /*
  * THE RATCHET ON THE EXCUSE, because a DECLARED_UNIMPLEMENTED entry can only
