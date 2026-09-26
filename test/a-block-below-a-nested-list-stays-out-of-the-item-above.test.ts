@@ -58,7 +58,7 @@ describe('a block below a nested list keeps its blank line', () => {
   it('leaves the tight-item separator rule where it was', () => {
     // Two sibling quotes keep their separator and read back as two quotes; a
     // quote under a paragraph still drops it and reads tight (carve-js#2056).
-    expect(carveToMarkdown('- x\n  > q\n+\n  > r\n')).toBe('- x\n  > q\n\n  > r\n')
+    expect(carveToMarkdown('- x\n  > q\n\n  > r\n')).toBe('- x\n  > q\n\n  > r\n')
     expect(carveToMarkdown('- x\n  > q\n')).toBe('- x\n  > q\n')
   })
 })

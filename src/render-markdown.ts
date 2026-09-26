@@ -1227,7 +1227,8 @@ function escapeText(text: string): string {
   // PART 11 section 8a M1e: a `<` is escaped only where the emitted line would
   // read it as markup - before an ASCII letter, `/`, `!` or `?`, the four
   // things that open raw HTML. Everything else is inert, and so is `>`
-  // mid-line; at line start `>` is a block quote marker M1 already covers.
+  // mid-line; at line start `>` is a block quote marker, escaped per line by
+  // protectParagraphListMarkers.
   //
   // A BACKSLASH, not an entity. This wrote `&lt;`/`&gt;` unconditionally with no
   // clause behind it (carve#1148), and that is precisely because an entity is
@@ -1240,7 +1241,10 @@ function escapeText(text: string): string {
   return text.replace(/<(?=[A-Za-z/!?])/g, '\\<')
 }
 
-/** Keep paragraph continuation lines from becoming lists in Markdown readers. */
+/**
+ * Keep paragraph lines from opening a list or a block quote in Markdown readers.
+ * A `>` opens a quote with or without a following space.
+ */
 function protectParagraphListMarkers(text: string): string {
   let codeFence = 0
   const lines = text.split('\n')
@@ -1251,6 +1255,7 @@ function protectParagraphListMarkers(text: string): string {
       line = line
         .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
         .replace(/^([ \t]{0,3}\d{1,9})([.)])(?=[ \t])/, '$1\\$2')
+        .replace(/^([ \t]{0,3})>/, '$1\\>')
       lines[lineIndex] = line
     }
 
