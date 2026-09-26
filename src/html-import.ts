@@ -2161,7 +2161,18 @@ class Importer {
         continue
       }
       flush()
-      out.push(...this.block(node, path, depth + level + 1))
+      const produced = this.block(node, path, depth + level + 1)
+      const previous = out.at(-1)
+      const next = produced[0]
+      // Carve source has no boundary between two definition lists, so an
+      // attribute-less one following another joins it (carve#2369).
+      if (previous?.type === 'definition_list' && next?.type === 'definition_list' && !next.attrs) {
+        previous.items.push(...next.items)
+        if (next.loose) previous.loose = true
+        produced.shift()
+        this.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
+      }
+      out.push(...produced)
     }
     flush()
     return out
