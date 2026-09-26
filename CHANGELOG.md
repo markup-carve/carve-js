@@ -13,10 +13,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 - HTML import recognizes explicit code-language hints on code blocks and Sphinx, GitHub and MediaWiki wrappers, with validated tokens and deterministic fallback (markup-carve/carve#2387).
 
-### Fixed
-
-- Flatten block content in table cells without heading, quote, list, or thematic-break decoration on the plain and ANSI targets. Keep code payloads as text.
-- Omit raw blocks and abbreviation definitions from flattened table cells on Markdown, plain, and ANSI, following markup-carve/carve#2390.
 
 ## [0.1.8] - 2026-09-25
 

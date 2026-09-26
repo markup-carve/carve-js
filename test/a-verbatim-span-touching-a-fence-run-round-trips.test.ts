@@ -110,35 +110,22 @@ describe('a verbatim span touching a fence run round-trips', () => {
      * The form is offered only where it cannot mean something else. These pin
      * the guards, so a later widening has to move a test rather than a comment.
      */
-    it('is not used where the span would open the block, which is a fence', () => {
-      // At the start of a paragraph the same run at column 0 is a code FENCE
-      // and not a span at all, so the closed form stays - it does not
-      // round-trip, but the tree is one no parse produces (see below).
-      const src = renderCarve({
+    it('refuses a span at the start of a block, where the open run is a fence', () => {
+      expect(() => renderCarve({
         type: 'document',
         children: [{ type: 'paragraph', children: [{ type: 'code', value: '\n```' }] }],
-      })
-      expect(src).toContain('``` ````')
+      })).toThrow(/cannot spell code/)
     })
 
-    it('is not used when an attribute block follows the span', () => {
-      const src = renderCarve({
+    it('refuses a span whose attributes need a closing fence', () => {
+      expect(() => renderCarve({
         type: 'document',
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              { type: 'text', value: 'x' },
-              { type: 'soft_break' },
-              { type: 'code', value: '\n```', attrs: { classes: ['k'] } },
-            ],
-          },
-        ],
-      })
-      // The attributes are written after the span, so the opener may not run to
-      // the end of the text.
-      expect(src).toContain('{.k}')
-      expect(src).toContain('``` ````')
+        children: [{ type: 'paragraph', children: [
+          { type: 'text', value: 'x' },
+          { type: 'soft_break' },
+          { type: 'code', value: '\n```', attrs: { classes: ['k'] } },
+        ] }],
+      })).toThrow(/cannot spell code/)
     })
   })
 

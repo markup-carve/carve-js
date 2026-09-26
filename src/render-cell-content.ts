@@ -8,10 +8,11 @@ export function renderCellContent(
   inlines: (nodes: InlineNode[]) => string,
   target: string,
   depth = 0,
+  flatten = (part: string) => part.replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' '),
 ): string {
   if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError(target, MAX_RENDER_DEPTH)
   const parts: string[] = []
-  const descend = (children: BlockNode[]) => parts.push(renderCellContent(children, inlines, target, depth + 1))
+  const descend = (children: BlockNode[]) => parts.push(renderCellContent(children, inlines, target, depth + 1, flatten))
   for (const block of blocks) {
     switch (block.type) {
       case 'paragraph':
@@ -53,7 +54,7 @@ export function renderCellContent(
         parts.push(inlines([block]))
         break
       case 'code_block':
-        parts.push(inlines([{ type: 'text', value: trimNonNbsp(block.content.replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ')) }]))
+        parts.push(inlines([{ type: 'text', value: trimNonNbsp(block.content.replace(/\r\n|\r|\n/g, ' ')) }]))
         break
       case 'raw_block':
       case 'abbreviation_def':
@@ -68,5 +69,5 @@ export function renderCellContent(
       }
     }
   }
-  return parts.filter(Boolean).map(part => part.replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ')).join(' ')
+  return parts.filter(Boolean).map(flatten).join(' ')
 }

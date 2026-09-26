@@ -1,3 +1,4 @@
+import { renderCellContent } from './render-cell-content.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type {
   Attrs,
@@ -571,86 +572,9 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): st
   return out
 }
 
-function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0): string {
-  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
-  const parts: string[] = []
-  const descend = (children: BlockNode[]) => {
-    const content = renderCellBlocks(children, ctx, depth + 1)
-    if (content) parts.push(content)
-  }
-  for (const block of blocks) {
-    switch (block.type) {
-      case 'heading':
-      case 'paragraph':
-        parts.push(renderInlines(block.children, ctx))
-        break
-      case 'block_quote':
-      case 'div':
-      case 'section':
-      case 'line_block':
-      case 'admonition':
-      case 'directive':
-      case 'figure_group':
-        descend(block.children)
-        break
-      case 'list':
-        for (const item of block.items) descend(item.children)
-        break
-      case 'definition_list':
-        for (const item of block.items) {
-          for (const term of item.terms) parts.push(renderInlines(term, ctx))
-          for (const definition of item.definitions) descend(definition)
-        }
-        break
-      case 'table':
-        for (const row of block.rows) for (const cell of row.cells) {
-          if (cell.blocks) descend(cell.blocks)
-          else parts.push(renderInlines(cell.children ?? [], ctx))
-        }
-        break
-      case 'figure':
-        parts.push(renderInlines(block.caption, ctx))
-        if (block.target.type === 'block_quote') descend(block.target.children)
-        else if (block.target.type === 'table') descend([block.target])
-        else descend([block.target])
-        break
-      case 'image':
-        // An image IS inline content, so the cell takes the inline spelling.
-        // Rendering the block and escaping it as text wrote `![a\](u)`, whose
-        // escaped bracket is no longer an image (carve-js#2125).
-        parts.push(renderInlines([block], ctx))
-        break
-      case 'code_block':
-        // PART 12 §27 (CARVE-P12-049): a code block contributes its PAYLOAD.
-        // The fence, the info string, the quoted header and the bracketed label
-        // are its spelling, and the cell takes none of them. HTML shows the
-        // same: the payload is the `<pre>`'s text, the header rides as an
-        // attribute.
-        parts.push(renderInlines([{ type: 'text', value: block.content }], ctx))
-        break
-      case 'thematic_break':
-        // No inline content to contribute, and §27 admits no markers: `---` in
-        // the cell was block decoration, not content.
-        break
-      case 'raw_block':
-      case 'abbreviation_def':
-      case 'link_reference_definition':
-      case 'citation_definition':
-      case 'comment':
-        // Each renders nothing on this target at block level, in the cell too.
-        break
-      default: {
-        // Exhaustive on purpose: a new block kind must decide what it
-        // contributes rather than fall through to its own source spelling.
-        const t: never = block
-        throw new Error(`renderMarkdown: unknown block in a table cell ${(t as { type: string }).type}`)
-      }
-    }
-  }
-  // ONE SPACE between blocks, not `<br>` (PART 12 §27, CARVE-P12-049): the cell
-  // reaches an inline-only slot and flattens under PART 11 §1b. A hard break is
-  // the separate case and still writes `<br>`, from the inline renderer.
-  return parts.filter(Boolean).map((part) => part.replace(/\\*[ \t\r]*(?:\n[ \t\r]*)+/g, ' ')).join(' ')
+function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
+  return renderCellContent(blocks, nodes => renderInlines(nodes, ctx), 'renderMarkdown', 0,
+    part => part.replace(/\\*[ \t\r]*(?:\n[ \t\r]*)+/g, ' '))
 }
 
 function renderTable(node: Table, ctx: MarkdownContext): string {
