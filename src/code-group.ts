@@ -121,11 +121,13 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     if (writeRole) attrs.keyValues.role = role
     if (writeName) attrs.keyValues['aria-label'] = groupLabel
     // APPENDED: naming the group must not move an attribute the author placed,
-    // so role/aria-label go at the END of the existing order.
+    // an authored `role` included, so role/aria-label go at the END of the
+    // existing order and only when that order does not already carry them.
+    const order = attrs.order ?? ['.class']
     attrs.order = [
-      ...(attrs.order ?? ['.class']).filter((x) => x !== 'role' && x !== 'aria-label'),
-      ...(writeRole ? ['role'] : []),
-      ...(writeName ? ['aria-label'] : []),
+      ...order,
+      ...(writeRole && !order.includes('role') ? ['role'] : []),
+      ...(writeName && !order.includes('aria-label') ? ['aria-label'] : []),
     ]
   }
   const panelClass = opts.panelClass ?? 'code-group-panel'
@@ -147,7 +149,10 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     const attrs: Attrs = { classes }
     if (node.attrs?.id !== undefined) attrs.id = node.attrs.id
     if (node.attrs?.keyValues) attrs.keyValues = { ...node.attrs.keyValues }
-    attrs.order = ['.class', ...(node.attrs?.order ?? []).filter((s) => s !== '.class')]
+    // The wrapper class follows every authored slot (carve#2328);
+    // groupAttrs then appends role/aria-label behind it.
+    const authorOrder = node.attrs?.order ?? []
+    attrs.order = authorOrder.includes('.class') ? [...authorOrder] : [...authorOrder, '.class']
     groupAttrs(node, attrs, opts.groupLabel ?? ctx.labels.codeGroup, role)
     return attrs
   }
