@@ -10255,7 +10255,7 @@ const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:
  * full match, destination, the two title spellings, attribute payload -- so
  * the call sites read the same either way.
  */
-function execLinkTail(tail: string): [string, string, string | undefined, string | undefined, string | undefined] | null {
+export function execLinkTail(tail: string): [string, string, string | undefined, string | undefined, string | undefined] | null {
   const scanned = scanDestination(tail)
   if (scanned === null || scanned.dest === '') return null
   const rest = RE_LINK_REST.exec(tail.slice(scanned.end))
