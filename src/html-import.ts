@@ -3533,6 +3533,7 @@ class Importer {
     }
     const headAttrs = takeSectionAttrs('thead')
     const footAttrs = takeSectionAttrs('tfoot')
+    const bodyPaths = new Map([...sectionAttrs].map(([section, own]) => [section, own.path]))
     const bodies: TableBodyGroup[] = []
     const bodySections: Array<P5Node | undefined> = []
     let index = 0
@@ -3562,7 +3563,6 @@ class Importer {
       // output.
       if (section && own) {
         sectionAttrs.delete(section)
-        this.unspellable.push({ node: section, path: own.path, message: `Dropped rowGroups.bodies[${bodies.length - 1}].attrs because Carve source cannot spell section attributes` })
       }
     }
 
@@ -3575,7 +3575,6 @@ class Importer {
       bodies.splice(index, 0, { headRows: 0, bodyRows: 0, attrs: own.attrs })
       bodySections.splice(index, 0, section)
       sectionAttrs.delete(section)
-      this.unspellable.push({ node: section, path: own.path, message: `Dropped rowGroups.bodies[${index}].attrs because Carve source cannot spell section attributes` })
     }
 
     // No `<thead>` at all: the leading run of header rows is what every renderer
@@ -3598,6 +3597,10 @@ class Importer {
       if (bodies[0]!.headRows === 0 && bodies[0]!.bodyRows === 0 && bodies[0]!.rowHeadColumns === undefined && bodies[0]!.attrs === undefined) bodies.shift()
     }
 
+    for (const [i, body] of bodies.entries()) {
+      const section = bodySections[i]
+      if (body.attrs && section) this.unspellable.push({ node: section, path: bodyPaths.get(section) ?? path, message: `Dropped rowGroups.bodies[${i}].attrs because Carve source cannot spell section attributes` })
+    }
     const derivable =
       headAttrs === undefined && footAttrs === undefined &&
       headRows2 === leadingHeaderRows &&

@@ -153,3 +153,9 @@ describe('the tables this does not change', () => {
     expect(htmlToCarve(html, { mode: 'semantic' }).value).toBe('| a |{bogus=1}\n')
   })
 })
+
+it('reports final body indices after inserting an empty group', () => {
+  const losses = report('<table><tbody id="a"></tbody><tbody id="b"><tr><td>1</td></tr></tbody></table>').join('\n')
+  expect(losses).toContain('rowGroups.bodies[0].attrs')
+  expect(losses).toContain('rowGroups.bodies[1].attrs')
+})
