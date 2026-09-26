@@ -21,7 +21,7 @@ import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
-import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { tableSectionAttributesDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { isDangerousAttrName, renderedAttrValue } from './render-html.js'
 
@@ -597,6 +597,7 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
 }
 
 function renderTable(node: Table, ctx: MarkdownContext): string {
+  tableSectionAttributesDropped(ctx.options, node, 'markdown')
   let header: string | undefined
   let headerColumns = 0
   const rows: string[] = []

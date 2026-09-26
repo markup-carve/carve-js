@@ -41,6 +41,7 @@ describe('a table section keeps the attributes it has a slot for', () => {
     // attributes themselves are represented, so they are not a loss.
     expect(report(html)).toEqual([
       'structure-unspellable: A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows',
+      'structure-unspellable: Dropped rowGroups.bodies[0].attrs because Carve source cannot spell section attributes',
     ])
   })
 
@@ -89,40 +90,20 @@ describe('a table section keeps the attributes it has a slot for', () => {
   })
 })
 
-describe('a table section with no slot for them is named', () => {
-  it('reports a `<thead>`\'s attributes', () => {
-    const html =
-      '<table><thead id="h"><tr><th>a</th></tr></thead><tbody><tr><td>1</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>'
-    expect(report(html)).toContain(
-      "attribute-dropped: Dropped id on <thead>: a table's head is stated as a row count and has no attribute slot",
-    )
-    // Reported by `htmlToAst` too: the loss is the import's, not the writer's.
-    expect(htmlToAst(html, { mode: 'semantic' }).report.diagnostics.map((d) => d.code)).toEqual([
-      'attribute-dropped',
-    ])
+describe('table section attribute preservation', () => {
+  it('keeps head and foot attributes in the AST', () => {
+    const html = '<table><thead id="h"><tr><th>a</th></tr></thead><tbody><tr><td>1</td></tr></tbody><tfoot id="f" class="sum"><tr><td>f</td></tr></tfoot></table>'
+    expect(groups(html)).toMatchObject({ headAttrs: { id: 'h' }, footAttrs: { id: 'f', classes: ['sum'] } })
+    expect(htmlToAst(html, { mode: 'semantic' }).report.diagnostics).toEqual([])
   })
 
-  it('reports a `<tfoot>`\'s attributes', () => {
-    const html =
-      '<table><thead><tr><th>a</th></tr></thead><tbody><tr><td>1</td></tr></tbody><tfoot id="f" class="sum"><tr><td>f</td></tr></tfoot></table>'
-    expect(report(html)).toContain(
-      "attribute-dropped: Dropped id, class on <tfoot>: a table's foot is stated as a row count and has no attribute slot",
-    )
-  })
-
-  it('reports a section that has no rows at all', () => {
-    // A body group IS the run of rows it consumes, so a section with none is
-    // not a group. Reading the sections back off the ROWS missed these
-    // entirely, which left them as silent as before.
-    expect(report('<table><tbody id="a"><tr><td>1</td></tr></tbody><tbody id="empty"></tbody></table>')).toContain(
-      'attribute-dropped: Dropped id on <tbody>: a body group is the rows it consumes, and this one has none',
-    )
-    expect(report('<table><tbody id="empty"></tbody></table>')).toEqual([
-      'attribute-dropped: Dropped id on <tbody>: a body group is the rows it consumes, and this one has none',
-    ])
-    expect(report('<table><thead id="eh"></thead><tbody><tr><td>1</td></tr></tbody></table>')).toEqual([
-      "attribute-dropped: Dropped id on <thead>: a table's head is stated as a row count and has no attribute slot",
-    ])
+  it('keeps empty attributed sections and reports their source losses', () => {
+    const html = '<table><thead id="eh"></thead><tbody id="empty"></tbody><tfoot id="ef"></tfoot></table>'
+    expect(groups(html)).toMatchObject({ headRows: 0, headAttrs: { id: 'eh' }, bodies: [{ headRows: 0, bodyRows: 0, attrs: { id: 'empty' } }], footRows: 0, footAttrs: { id: 'ef' } })
+    const loss = report(html).join('\n')
+    expect(loss).toContain('rowGroups.headAttrs')
+    expect(loss).toContain('rowGroups.bodies[0].attrs')
+    expect(loss).toContain('rowGroups.footAttrs')
   })
 
   it('reports a `<tbody>`\'s attributes when the grouping itself is dropped', () => {
@@ -133,7 +114,7 @@ describe('a table section with no slot for them is named', () => {
     expect(report(html)).toEqual([
       'table-degraded: Dropped the row grouping of a table whose <thead> or <tfoot> is not at the edge of its rows: the head is a prefix of the rows and the foot a suffix',
       'attribute-dropped: Dropped id on <tbody>: the row grouping this body belongs to was not kept, and nothing else holds it',
-      "attribute-dropped: Dropped id on <thead>: a table's head is stated as a row count and has no attribute slot",
+      "attribute-dropped: Dropped id on <thead>: the section cannot be represented in the retained row partition",
     ])
   })
 })
@@ -171,4 +152,10 @@ describe('the tables this does not change', () => {
     expect(report(html)).toEqual([])
     expect(htmlToCarve(html, { mode: 'semantic' }).value).toBe('| a |{bogus=1}\n')
   })
+})
+
+it('reports final body indices after inserting an empty group', () => {
+  const losses = report('<table><tbody id="a"></tbody><tbody id="b"><tr><td>1</td></tr></tbody></table>').join('\n')
+  expect(losses).toContain('rowGroups.bodies[0].attrs')
+  expect(losses).toContain('rowGroups.bodies[1].attrs')
 })

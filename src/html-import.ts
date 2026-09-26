@@ -3424,7 +3424,7 @@ class Importer {
       // not a group and has nowhere to put them. Stating it as a zero-count
       // group would put a body in the partition that describes no rows.
       const reason = tag !== 'tbody'
-        ? `a table's ${tag === 'thead' ? 'head' : 'foot'} is stated as a row count and has no attribute slot`
+        ? 'the section cannot be represented in the retained row partition'
         : sectionsWithRows.has(section)
           ? 'the row grouping this body belongs to was not kept, and nothing else holds it'
           : 'a body group is the rows it consumes, and this one has none'
@@ -3497,7 +3497,6 @@ class Importer {
     path: string,
     sectionAttrs: Map<P5Node, { attrs: Attrs; path: string }>,
   ): TableRowGroups | undefined {
-    if (tr.length === 0) return undefined
     const sectionOf = (row: P5Node): string => group.get(row)?.tagName ?? 'tbody'
     const isHeaderRow = (row: P5Node): boolean => {
       const cells = (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
@@ -3522,7 +3521,21 @@ class Importer {
       return undefined
     }
 
+    const takeSectionAttrs = (tag: string): Attrs | undefined => {
+      const sections = (node.childNodes ?? []).filter(section => section.tagName === tag)
+      if (sections.length !== 1) return undefined
+      const section = sections[0]!
+      const own = sectionAttrs.get(section)
+      if (!own) return undefined
+      sectionAttrs.delete(section)
+      this.unspellable.push({ node: section, path: own.path, message: `Dropped rowGroups.${tag === 'thead' ? 'headAttrs' : 'footAttrs'} because Carve source cannot spell section attributes` })
+      return own.attrs
+    }
+    const headAttrs = takeSectionAttrs('thead')
+    const footAttrs = takeSectionAttrs('tfoot')
+    const bodyPaths = new Map([...sectionAttrs].map(([section, own]) => [section, own.path]))
     const bodies: TableBodyGroup[] = []
+    const bodySections: Array<P5Node | undefined> = []
     let index = 0
     while (index < middle.length) {
       const section = group.get(middle[index]!)
@@ -3540,6 +3553,7 @@ class Importer {
       // The `<tbody>`'s own attributes: the body group is where the exchanged
       // model puts them, and it is the only section with a slot.
       const own = section ? sectionAttrs.get(section) : undefined
+      bodySections.push(section)
       bodies.push({ headRows: groupHead, bodyRows: groupRows.length - groupHead, ...(rowHeadColumns > 0 ? { rowHeadColumns } : {}), ...(own ? { attrs: own.attrs } : {}) })
       // Claimed here rather than after the return below, because a body
       // carrying attributes is never DERIVABLE - that is what the clause on
@@ -3547,7 +3561,20 @@ class Importer {
       // and the only return that skips this point is the one before the loop.
       // A deferral for it was here and no mutation of it could change an
       // output.
-      if (section && own) sectionAttrs.delete(section)
+      if (section && own) {
+        sectionAttrs.delete(section)
+      }
+    }
+
+    const orderedSections = node.childNodes ?? []
+    for (const [section, own] of [...sectionAttrs]) {
+      if (section.tagName !== 'tbody' || tr.some(row => group.get(row) === section)) continue
+      const sourceIndex = orderedSections.indexOf(section)
+      const at = bodySections.findIndex(body => body !== undefined && orderedSections.indexOf(body) > sourceIndex)
+      const index = at < 0 ? bodies.length : at
+      bodies.splice(index, 0, { headRows: 0, bodyRows: 0, attrs: own.attrs })
+      bodySections.splice(index, 0, section)
+      sectionAttrs.delete(section)
     }
 
     // No `<thead>` at all: the leading run of header rows is what every renderer
@@ -3561,7 +3588,7 @@ class Importer {
     // BOUNDARY the field exists to record, and absorbing it away left a single
     // ordinary body that the derivation reproduces - so the two bodies went
     // silently, which is the opposite of the point.
-    if (headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0) {
+    if (headAttrs === undefined && headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0) {
       const absorbed = Math.min(leadingHeaderRows, bodies[0]!.headRows)
       headRows2 = absorbed
       bodies[0] = { ...bodies[0]!, headRows: bodies[0]!.headRows - absorbed }
@@ -3570,7 +3597,12 @@ class Importer {
       if (bodies[0]!.headRows === 0 && bodies[0]!.bodyRows === 0 && bodies[0]!.rowHeadColumns === undefined && bodies[0]!.attrs === undefined) bodies.shift()
     }
 
+    for (const [i, body] of bodies.entries()) {
+      const section = bodySections[i]
+      if (body.attrs && section) this.unspellable.push({ node: section, path: bodyPaths.get(section) ?? path, message: `Dropped rowGroups.bodies[${i}].attrs because Carve source cannot spell section attributes` })
+    }
     const derivable =
+      headAttrs === undefined && footAttrs === undefined &&
       headRows2 === leadingHeaderRows &&
       footRows === 0 &&
       bodies.length <= 1 &&
@@ -3583,7 +3615,7 @@ class Importer {
       path,
       message: 'A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows',
     })
-    return { headRows: headRows2, bodies, footRows }
+    return { headRows: headRows2, bodies, footRows, ...(headAttrs ? { headAttrs } : {}), ...(footAttrs ? { footAttrs } : {}) }
   }
 
   /**

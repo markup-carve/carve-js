@@ -56,6 +56,18 @@ export function renderCarveWithConversionReport(
     if (type === 'paragraph' && Array.isArray(node.children) && node.children.length === 1 && ['image', 'comment'].includes((node.children[0] as { type?: string }).type ?? '')) report('structure-unspellable', 'Carve source spells the paragraph content as a block')
     if ((type === 'figure' || type === 'table') && node.shortCaption !== undefined) report('field-unspellable', 'Carve source cannot spell a short caption', 'shortCaption')
     if (type === 'figure' && (node.target as { type?: string } | undefined)?.type === 'table') report('structure-unspellable', 'Carve source cannot spell a figure wrapper around a table')
+    if (type === 'table' && node.rowGroups) {
+      const groups = node.rowGroups as { headAttrs?: object; footAttrs?: object; bodies: Array<{ attrs?: object }> }
+      const fields: Array<[string, object | undefined]> = [
+        ['rowGroups.headAttrs', groups.headAttrs], ['rowGroups.footAttrs', groups.footAttrs],
+        ...groups.bodies.map((body, i): [string, object | undefined] => [`rowGroups.bodies[${i}].attrs`, body.attrs]),
+      ]
+      for (const [field, attrs] of fields) {
+        if (attrs && Object.values(attrs).some((value) => typeof value === 'string' || Object.keys(value ?? {}).length > 0)) {
+          report('field-unspellable', 'Carve source cannot spell table section attributes', field)
+        }
+      }
+    }
     if (type === 'table_cell' && node.blocks !== undefined) report('field-unspellable', 'Carve table cells cannot hold blocks', 'blocks')
     if (type === 'math' && node.label !== undefined) report('field-unspellable', 'Carve source cannot spell an equation label', 'label')
     if (type === 'math' && node.number !== undefined) report('field-unspellable', 'Carve source cannot spell an equation number', 'number')

@@ -101,6 +101,16 @@ describe('carve render — loss reporting', () => {
     expect(t.err).toBe('')
   })
 
+  it('can allow table section losses with a zero report limit', async () => {
+    const ast = '{"type":"document","srcByteLength":0,"children":[{"type":"table","rows":[],"rowGroups":{"headRows":0,"footRows":0,"bodies":[],"headAttrs":{"id":"head"}}}]}'
+    const denied = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--plain', '--strict-losses', '--max-render-losses', '0'], denied.io)).toBe(1)
+    expect(denied.out).toBe('')
+    const allowed = makeIO({ stdin: ast })
+    expect(await run(['render', '--from-json', '--plain', '--strict-losses', '--max-render-losses', '0', '--allow-loss', 'table-section-attributes-dropped'], allowed.io)).toBe(0)
+    expect(allowed.err).toBe('')
+  })
+
   it('can allow ruby flattening from an encoded AST', async () => {
     const ast = JSON.stringify({
       type: 'document',

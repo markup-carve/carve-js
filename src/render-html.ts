@@ -1679,6 +1679,13 @@ function renderListItem(
   return `${head}\n${body.join('\n')}\n${pad}</li>`
 }
 
+function emptyContinuation(cell: TableCell): TableCell {
+  const result = { ...cell, children: [] }
+  delete result.span
+  delete result.blocks
+  return result
+}
+
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const tableAttrs = node.attrs ? {
@@ -1702,20 +1709,27 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   }
 
   // PART 9 §13 T5, shared with the AST encoder (carve#2190).
-  const grid = resolveTableSpans(node.rows)
+  let spanRows = node.rows
+  const explicitAttrs = node.rowGroups && (node.rowGroups.headAttrs !== undefined || node.rowGroups.footAttrs !== undefined || node.rowGroups.bodies.some(body => body.attrs !== undefined))
+  if (explicitAttrs && node.rowGroups) {
+    const boundaries = new Set<number>([node.rowGroups.headRows])
+    let end = node.rowGroups.headRows
+    for (const body of node.rowGroups.bodies) { end += body.headRows + body.bodyRows; boundaries.add(end) }
+    spanRows = node.rows.map((row, i) => boundaries.has(i) ? { ...row, cells: row.cells.map(cell => cell.span === 'rowspan' ? emptyContinuation(cell) : cell) } : row)
+  }
+  const grid = resolveTableSpans(spanRows)
 
   // An explicit source partition wins; otherwise retain the native leading
   // run of `|=` header rows.
-  const sourcePartition = node.attrs?.keyValues?.['header-rows'] !== undefined || node.attrs?.keyValues?.['footer-rows'] !== undefined
-  let headerEnd = sourcePartition && node.rowGroups ? node.rowGroups.headRows : 0
-  if (!sourcePartition || !node.rowGroups) {
+  let headerEnd = node.rowGroups ? node.rowGroups.headRows : 0
+  if (!node.rowGroups) {
     while (
       headerEnd < grid.length &&
       grid[headerEnd]!.some((e) => !e.skip) &&
       grid[headerEnd]!.every((e) => e.cell.header || e.skip)
     ) headerEnd++
   }
-  const footerStart = sourcePartition && node.rowGroups ? grid.length - node.rowGroups.footRows : grid.length
+  const footerStart = node.rowGroups ? grid.length - node.rowGroups.footRows : grid.length
 
   // Column defaults come from the header section. With multiple header
   // rows the last row that specifies an alignment for a column wins;
@@ -1746,10 +1760,12 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       if (v) grid[r]![c]!.valign = v
     }
   }
+  const sectionEnds = [headerEnd, footerStart]
+  let sectionEnd = headerEnd
+  for (const body of node.rowGroups?.bodies ?? []) { sectionEnd += body.headRows + body.bodyRows; sectionEnds.push(sectionEnd) }
   const crossesSection = grid.some((row, r) => row.some((entry) =>
     !entry.skip && entry.rowspan > 1 &&
-    ((r < headerEnd && r + entry.rowspan > headerEnd) ||
-      (r < footerStart && r + entry.rowspan > footerStart)),
+    sectionEnds.some(end => r < end && r + entry.rowspan > end),
   ))
   if (crossesSection) {
     lines.push(`${pad}  <tbody>`)
@@ -1765,22 +1781,27 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   // `tfoot` used to put their rows on the section's own line while `tbody` gave
   // each row a line, and nothing said why one element had two layouts - which
   // is how two corpus fixtures came to demand different `tfoot` shapes.
-  if (headerEnd > 0) {
-    lines.push(`${pad}  <thead>`)
+  if (headerEnd > 0 || node.rowGroups?.headAttrs !== undefined) {
+    lines.push(`${pad}  <thead${renderAttrs(node.rowGroups?.headAttrs)}>`)
     for (let r = 0; r < headerEnd; r++) {
       lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, true, true)}`)
     }
     lines.push(`${pad}  </thead>`)
   }
-  if (headerEnd < footerStart) {
-    lines.push(`${pad}  <tbody>`)
-    for (let r = headerEnd; r < footerStart; r++) {
-      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts)}`)
+  const bodies = node.rowGroups?.bodies ?? (headerEnd < footerStart
+    ? [{ headRows: 0, bodyRows: footerStart - headerEnd }] : [])
+  let bodyStart = headerEnd
+  for (const body of bodies) {
+    lines.push(`${pad}  <tbody${renderAttrs(body.attrs)}>`)
+    const end = bodyStart + body.headRows + body.bodyRows
+    for (let r = bodyStart; r < end; r++) {
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, r < bodyStart + body.headRows, r < bodyStart + body.headRows)}`)
     }
     lines.push(`${pad}  </tbody>`)
+    bodyStart = end
   }
-  if (footerStart < grid.length) {
-    lines.push(`${pad}  <tfoot>`)
+  if (footerStart < grid.length || node.rowGroups?.footAttrs !== undefined) {
+    lines.push(`${pad}  <tfoot${renderAttrs(node.rowGroups?.footAttrs)}>` )
     for (let r = footerStart; r < grid.length; r++) {
       lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts)}`)
     }
