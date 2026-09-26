@@ -2657,6 +2657,12 @@ class Importer {
     // share of the node budget land in document order rather than behind every
     // item the list happens to hold.
     const before = stray.length ? this.blocks(stray, path, depth + 1, strayPaths) : []
+    // No item, no list: an empty list has no spelling, and its attributes would
+    // be an attribute line with no block under it (carve#2367).
+    if (listItems.length === 0) {
+      this.add('element-dropped', `Dropped <${ordered ? 'ol' : 'ul'}> holding no item`, 'warning', path, node)
+      return before
+    }
     const items = listItems.map((li, i) => {
       const liPath = `${path}/li[${i + 1}]`
       const input = this.taskCheckbox(li)
