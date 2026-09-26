@@ -9,23 +9,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Added
-
-- Table heads and feet retain attributes through AST exchange and HTML import. HTML applies section attributes to `thead`, `tbody`, and `tfoot`; source and text targets report unsupported attributes. (markup-carve/carve#2339)
-
-### Breaking
-
-- AST ingest rejects a `directive` without `children`. An empty directive publishes `children: []` (markup-carve/carve#2333).
-- Escaped spaces and preserved line-block columns are `non_breaking_space` nodes, and U+E000 is literal content in every field. A tree stored under the old marker emits that character raw into HTML, with no error and no version signal, because the AST contract stays `1.0`. Reparsing the source is the only remedy - a stored tree cannot tell a generated space from an authored character (#2100).
-
-### Fixes
-
-- The HTML importer unwraps an unsupported element in place, so the headings, lists and code blocks inside a custom element such as `<react-app>` stay blocks (markup-carve/carve#2341).
-
-### Changed
-
-- Annotation offsets use a fixed codepoint projection independent of JSON key order, including image alt text, math, breaks and generated spaces (#2100).
-
 
 ## [0.1.8] - 2026-09-25
 
@@ -40,6 +23,9 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Every empty block container renders one blank HTML body line (#1934; markup-carve/carve#2184).
 - The HTML importer's diagnostics cap emits a `diagnostics-truncated` row instead of throwing `HtmlImportLimitError`, which narrows to the depth and node limits (#2034, #2044).
 - Twelve runtime symbols that never left their declaring module lost their `export` (#1916, #1917). None of them was reachable through the package's exports map.
+- The `RenderLoss` code enum closes at `raw-format-dropped` and `ruby-flattened`. A dropped table-section attributes field, a flattened table cell's blocks and a dropped math label number report `field-unspellable` on the PART 11 §1d conversion-diagnostics channel, a flattened section reports `structure-unspellable` there, and `carve render --allow-loss` accepts two code names where it accepted six (#2111; markup-carve/carve#2252).
+- Escaped spaces and preserved line-block columns are `non_breaking_space` nodes, and U+E000 is literal content in every field. A stored tree carrying U+E000 where a generated space belongs is read as authored text and reaches HTML raw, with no error and no version signal, because the AST contract stays `1.0`. Reparsing the source is the only remedy (#2100; markup-carve/carve#2337).
+- AST ingest rejects a `directive` without `children`, and an empty directive publishes `children: []` (#2097; markup-carve/carve#2333).
 
 ### Fixes
 
@@ -88,6 +74,12 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - An imported table cell keeps multiline HTML on one Carve row, unwrapping what raw HTML would otherwise split the row on and reporting the flattening (#2054).
 - An ordered task item keeps its checkbox as bracket text and reports the loss, from the HTML importer (#2053) and the Markdown importer (#2064), in one wording at both entry points (#2062).
 - Pipe and list table span resolution agree, and a rowspan crossing a row-group boundary renders in one HTML body group (#1975, #1979).
+- A structural wrapper class trails the attributes the author wrote instead of leading them, for a `::: toc` nav and for the `tabs` and `code-group` wrappers, which also stop re-emitting an authored `role` behind the minted name (#2096, #2099; markup-carve/carve#2328).
+- The HTML importer unwraps an unsupported element in place, so the headings, lists and code blocks inside a custom element such as `<react-app>` stay blocks rather than collapsing into one line (#2104; markup-carve/carve#2341).
+- A line block whose stanza holds a tab keeps the source spans of its unchanged text runs; synthesized columns and text merged across a tab stay unplaced (#2108; markup-carve/carve#2175).
+- A position walk keeps an authored attribute named `pos`, both where positions are remapped and where `positions: false` removes them (#2110).
+- The Carve writer escapes the opening destination parenthesis in link-shaped text, so importing `<p>[a](b)</p>` writes `[a]\(b)` rather than `\[a](b)` (#2114; markup-carve/carve#2357).
+- The Markdown writer escapes a `>` standing at a paragraph line's content position, which every CommonMark reader otherwise read as a block quote; a mid-line `>` stays bare and an authored escape keeps its bytes (#2113, #2116).
 
 ### Improvements
 
@@ -105,6 +97,9 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Citation items carry `mode` through parsing and AST JSON, and HTML rendering uses each item's mode (#1973).
 - A spanning table cell publishes its resolved extent (#1964).
 - Parsed line blocks publish their inline lines beside `children` (#1988).
+- Table heads, bodies and feet keep their attributes through AST exchange and HTML import, rendered on `thead`, `tbody` and `tfoot`, with the source, Markdown, plain-text and ANSI targets reporting what they cannot represent (#2103; markup-carve/carve#2339).
+- Annotation offsets use a fixed codepoint projection independent of JSON key order, over image alt text, math, breaks and generated spaces (#2100).
+- The escape narrowing search probes a pruned window around the units it relaxes instead of re-rendering the whole document, and reaches block lists nested in untyped items such as a definition list's descriptions; the inline writer also stops flattening its growing output before every node. Re-parsed source on the largest html-to-markdown corpus pages falls from 194-218 documents' worth to 16-45, with byte-identical Carve, diagnostics and Markdown output (#2109, #2112).
 
 ## [0.1.7] - 2026-09-18
 
