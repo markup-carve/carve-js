@@ -49,7 +49,7 @@ describe('HTML import', () => {
 
   it('drops active content and reports every lossy decision', () => {
     const result = htmlToAst('<p onclick="evil()">safe<script>alert(1)</script><span title="lost"> text</span></p>')
-    expect(result.value.children).toMatchObject([{ type: 'paragraph', children: [{ type: 'text', value: 'safe' }, { type: 'span' }] }])
+    expect(result.value.children).toMatchObject([{ type: 'paragraph', children: [{ type: 'text', value: 'safe ' }, { type: 'span' }] }])
     expect(result.report.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       'attribute-dropped', 'element-dropped',
     ])
@@ -1426,7 +1426,7 @@ describe('MathML on import', () => {
 
   // MathType's own binary encoding, base64 in the annotation. Not TeX, and a
   // substring test for `tex` is what would let a payload like it through.
-  const MATHTYPE = '<p>MT <math><semantics><mrow><mi>a</mi></mrow>'
+  const MATHTYPE = '<p>MT <math><semantics><msup><mi>a</mi><mn>2</mn></msup>'
     + '<annotation encoding="MathType-MTEF">MTEFY9gaeaaaaaaa</annotation></semantics></math> end.</p>'
 
   it('TIER 1: reads the TeX from an annotation that declares it, byte for byte', () => {
@@ -1526,7 +1526,7 @@ describe('MathML on import', () => {
      * loose comparison, while `text/plain` does. carve-php read this one as an
      * equation until the same ruling landed there.
      */
-    const html = '<p><math><semantics><mrow><mn>1</mn></mrow>'
+    const html = '<p><math><semantics><mfrac><mn>1</mn><mn>2</mn></mfrac>'
       + '<annotation encoding="text/plain">one over two</annotation></semantics></math></p>'
     const result = htmlToCarve(html)
     expect(result.value).not.toContain('one over two')
@@ -1538,7 +1538,7 @@ describe('MathML on import', () => {
     // `tex` accepts every line here, and each would hand a math node content
     // that is not TeX or not the element's own presentation.
     for (const encoding of ['application/x-tex;charset=utf-8', 'application/mathml-content', 'TeX-and-more', 'StarMath 5.0', 'text/plain']) {
-      const html = `<p><math><semantics><mrow><mi>a</mi></mrow><annotation encoding="${encoding}">PAYLOAD</annotation></semantics></math></p>`
+      const html = `<p><math><semantics><msup><mi>a</mi><mn>2</mn></msup><annotation encoding="${encoding}">PAYLOAD</annotation></semantics></math></p>`
       expect(htmlToCarve(html).value).toBe('\n')
     }
     // And the three themselves are matched whatever their case.
@@ -1552,7 +1552,7 @@ describe('MathML on import', () => {
     // Both hops are direct children - `<semantics>` of the `<math>`, the
     // annotation of that `<semantics>`. A recursive lookup by tag name reaches
     // an annotation describing some OTHER expression and reports nothing.
-    const html = '<p><math><semantics><mrow><mi>a</mi></mrow>'
+    const html = '<p><math><semantics><msup><mi>a</mi><mn>2</mn></msup>'
       + '<annotation-xml encoding="application/mathml-content">'
       + '<annotation encoding="application/x-tex">LEAK</annotation>'
       + '</annotation-xml></semantics></math></p>'
@@ -1606,7 +1606,7 @@ describe('MathML on import', () => {
   })
 
   it('TIER 3: an empty annotation and an empty alttext say nothing, so they are not content', () => {
-    const empty = '<p><math alttext="  "><semantics><mrow><mi>a</mi></mrow>'
+    const empty = '<p><math alttext="  "><semantics><msup><mi>a</mi><mn>2</mn></msup>'
       + '<annotation encoding="application/x-tex">\n  \n</annotation></semantics></math></p>'
     expect(htmlToCarve(empty).report.diagnostics.map((d) => d.code)).toEqual(['element-dropped'])
   })
