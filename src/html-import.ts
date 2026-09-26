@@ -3740,7 +3740,7 @@ class Importer {
         this.add('structure-unspellable', 'Dropped a row with no cells: a list table row is the list of its cells', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
         return false
       })
-      return listTableOf(kept, ownAlignment, caption, attrs)
+      return listTableOf(kept, ownAlignment, caption, attrs, this.writing)
     }
     return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
   }
@@ -5870,6 +5870,7 @@ function listTableOf(
   ownAlignment: Map<TableCell, Pick<TableCell, 'align' | 'valign'>>,
   caption: InlineNode[] | undefined,
   attrs: Attrs | undefined,
+  writing: boolean,
 ): Admonition {
   // A placeholder is a header cell when the cell it continues is one.
   const header: boolean[][] = []
@@ -5899,7 +5900,9 @@ function listTableOf(
       }
       let children = cell.blocks ?? []
       const only = children.length === 1 ? children[0] : undefined
-      if (only?.type === 'paragraph' && !only.attrs && only.children.length === 1) {
+      // The escape is the writer's: a bare `^` or `<` item is a span marker. The
+      // published tree holds the text, as it does for a pipe-table cell.
+      if (writing && only?.type === 'paragraph' && !only.attrs && only.children.length === 1) {
         const text = only.children[0]!
         if (text.type === 'text' && !text.attrs && (text.value === '^' || text.value === '<')) {
           children = [{ ...only, children: [{ type: 'escaped_text', value: text.value }] }]
