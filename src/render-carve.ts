@@ -2765,7 +2765,7 @@ function renderInlineBody(
         ? `^[${renderInlines(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
         : `[^${writeFlatBracketRun(node.id ?? '')}]`)
     case 'non_breaking_space':
-      return withAttrs(sentinels[3]!)
+      return renderAttrs(node.attrs) ? `[${sentinels[3]}]${renderAttrs(node.attrs)}` : sentinels[3]!
     case 'soft_break':
       return '\n'
     case 'hard_break':

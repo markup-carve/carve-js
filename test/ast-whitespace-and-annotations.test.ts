@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToHtml, carveToCarve, carveToMarkdown, carveToPlainText,
-  Profile, fromAstJson, toAstJson, readAnnotationRanges, AstSidecarError, fromAstEnvelope, AstEnvelopeVersionError } from '../src/index.js'
+  Profile, fromAstJson, toAstJson, readAnnotationRanges, AstSidecarError, renderCarve, renderHtml } from '../src/index.js'
 
 describe('AST whitespace and annotation contract', () => {
   it('keeps authored private-use characters distinct from generated spaces', () => {
@@ -47,4 +47,11 @@ it('never publishes an internal line-block marker in string fields', () => {
   const source = '::: |\n![a  b](u.png) [t](x  y) [s]{title="p  q"}\n:::\n'
   expect(JSON.stringify(carveToAstJson(source))).not.toContain('\\u0000')
   expect(carveToHtml(source)).not.toContain('\0')
+})
+
+it('preserves attributes on an ingested generated space through source', () => {
+  const doc = fromAstJson({ type: 'document', srcByteLength: 0, children: [{ type: 'paragraph', children: [
+    { type: 'non_breaking_space', attrs: { classes: ['gap'] } },
+  ] }] })
+  expect(carveToHtml(renderCarve(doc))).toBe(renderHtml(doc))
 })
