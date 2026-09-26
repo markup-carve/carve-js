@@ -20,3 +20,21 @@ describe('Markdown writer targets fixture', () => {
     })
   }
 })
+
+describe('adjacent lists across unmarked wrappers (PART 11 section 10o)', () => {
+  it('alternates the marker when a div between two lists writes nothing of its own', () => {
+    const list = (text: string) => ({
+      type: 'list',
+      ordered: false,
+      tight: true,
+      bulletChar: '-',
+      items: [{ type: 'list_item', children: [{ type: 'paragraph', children: [{ type: 'text', value: text }] }] }],
+    })
+    const doc = fromAstJson({
+      type: 'document',
+      srcByteLength: 0,
+      children: [list('a'), { type: 'div', children: [list('b')] }, { type: 'block_quote', children: [list('c')] }],
+    })
+    expect(renderMarkdown(doc)).toBe('- a\n\n* b\n\n> - c\n')
+  })
+})

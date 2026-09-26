@@ -140,10 +140,11 @@ describe('a Markdown marker with no content keeps no trailing space', () => {
     })
   })
 
-  it('writes a bare `:` for a definition description that was emptied', () => {
+  it('writes nothing for a definition description that was emptied', () => {
+    // PART 11 section 10p: no `:` marker, and an empty description writes nothing.
     const out = carveToMarkdown(':: term\n:  [r]: /u\n\nsee [t][r]\n')
 
-    expect(out.split('\n')[1]).toBe(':')
+    expect(out).toBe('**term**\n\nsee [t](/u)\n')
     expect(trailingWsLines(out)).toEqual([])
   })
 

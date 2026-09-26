@@ -55,12 +55,12 @@ describe("a line's content position is after its container prefix", () => {
     expect(md('a[^n]\n\n[^n]: \\# heading')).toContain('[^n]: \\# heading')
   })
 
-  it('keeps it behind a definition marker', () => {
-    // Named in the clause alongside the quote and the list markers. The
-    // narrowing holds behind it too: a run closed by a letter opens no heading
-    // there any more than anywhere else.
-    expect(md(':: term\n:  \\# heading')).toBe('**term**\n: \\# heading')
-    expect(md(':: term\n:  \\#tag rest')).toBe('**term**\n: #tag rest')
+  it('keeps it in a definition description', () => {
+    // PART 11 section 10p writes the description as an ordinary block, so its
+    // line starts at column 0. The narrowing holds there too: a run closed by a
+    // letter opens no heading.
+    expect(md(':: term\n:  \\# heading')).toBe('**term**\n\n\\# heading')
+    expect(md(':: term\n:  \\#tag rest')).toBe('**term**\n\n#tag rest')
   })
 
   it('keeps it on a lazy continuation, which the writer re-prefixes', () => {

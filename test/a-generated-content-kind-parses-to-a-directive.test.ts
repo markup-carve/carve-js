@@ -146,12 +146,13 @@ describe('every pass that walked a container still walks a directive', () => {
     carveToMarkdown(`${fence}\n## Inner\n:::\n\nSee [x](#Inner).\n`)
 
   it('keeps the anchor a reference into a directive needs', () => {
-    expect(anchored('::: toc')).toContain('## Inner {#Inner}')
-    expect(anchored('::: toc')).toContain('[x](#Inner)')
+    // PART 11 section 11: the heading is linked by its GFM slug.
+    expect(anchored('::: toc')).toContain('## Inner\n')
+    expect(anchored('::: toc')).toContain('[x](#inner)')
   })
 
   it('keeps it for a div too, as it always did', () => {
-    expect(anchored(':::')).toContain('## Inner {#Inner}')
+    expect(anchored(':::')).toContain('[x](#inner)')
   })
 
   it('numbers a footnote referenced from inside a directive', () => {

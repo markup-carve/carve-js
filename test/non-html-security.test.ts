@@ -65,11 +65,12 @@ describe('Markdown renderer is safe-by-default', () => {
   })
 
   it('a bare ampersand cannot reintroduce a tag', () => {
-    // The reason `&` stopped being escaped (carve#1071): an entity in Markdown
-    // TEXT decodes to a CHARACTER, and a character cannot open a tag. Text
-    // authored as `&lt;script&gt;` therefore comes back as the four characters
-    // a reader sees, never as live markup.
-    expect(md('a &lt;script&gt; b')).toBe('a &lt;script&gt; b')
+    // An entity in Markdown TEXT decodes to a CHARACTER, and a character cannot
+    // open a tag. Text authored as `&lt;script&gt;` is Carve text, not an
+    // entity, so its `&` is escaped and a reader shows what the author wrote
+    // (PART 11 section 8e); a bare `&` stays bare (carve#1071).
+    expect(md('a &lt;script&gt; b')).toBe('a \\&lt;script\\&gt; b')
+    expect(md('a & b')).toBe('a & b')
     // A literal tag in text IS the hazard, and the backslash is what stops it:
     // measured through a CommonMark reader, `a \\<script>x\\</script> b` renders
     // the brackets as text and opens nothing.

@@ -173,9 +173,13 @@ const DECLARED_UNIMPLEMENTED: Record<string, string> = {}
  *    caught up on fails and is deleted in the commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; expected: string }>([
-  // Empty: the pin moved past its one entry (`28-tabs-panel-title`), and the
-  // rule above is that such an entry is DELETED in the commit that moves the
-  // pin rather than left to rot.
+  [
+    '37-crossref-label-typography-source-markdown',
+    {
+      reason: 'CARVE-P11-038 writes no heading suffix and links a heading by its GFM slug',
+      expected: '# The \"quoted\" -- heading\n\nSee [The \"quoted\" -- heading](#the-quoted----heading)',
+    },
+  ],
 ])
 
 /*

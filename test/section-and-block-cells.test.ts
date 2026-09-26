@@ -85,7 +85,8 @@ describe('interchange sections and block-content cells', () => {
         }] }],
       }],
     } as never)
-    expect(renderMarkdown(doc)).toContain('&lt;script&gt;')
+    // Written as escaped text, so a reader shows the tag and never runs it.
+    expect(renderMarkdown(doc)).toContain('\\<script>alert(1)\\</script>')
   })
 
   it('keeps inline references when flattening block cells', () => {
@@ -116,7 +117,9 @@ describe('interchange sections and block-content cells', () => {
     ] } as never
     const markdown = renderMarkdown(doc)
     const carve = renderCarveWithReport(doc).value
-    expect(markdown.split('\n').filter((line) => line.startsWith('|'))).toHaveLength(1)
+    // The empty header row and its delimiter, then the one body row (PART 11
+    // section 10n).
+    expect(markdown.split('\n').filter((line) => line.startsWith('|'))).toHaveLength(3)
     expect(carve.split('\n').filter((line) => line.startsWith('|'))).toHaveLength(1)
     expect(parse(carve).children[0]?.type).toBe('table')
   })

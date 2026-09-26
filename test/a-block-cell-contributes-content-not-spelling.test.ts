@@ -60,8 +60,10 @@ describe('a block cell contributes content, not spelling', () => {
   // The two kinds whose content no inline node holds keep the target's own
   // spelling: the cell is the only place the Markdown output carries it, and
   // carve#589 refused dropping a definition on this target.
+  // PART 12 §27: raw HTML contributes its payload as escaped text, as in
+  // carve-rs and carve-php.
   it('keeps a raw block under the target rule for raw HTML', () => {
-    expect(bodyRow([{ type: 'raw_block', format: 'html', content: '<b>raw</b>\n' }])).toBe('| &lt;b&gt;raw&lt;/b&gt; |')
+    expect(bodyRow([{ type: 'raw_block', format: 'html', content: '<b>raw</b>\n' }])).toBe('| \\<b>raw\\</b> |')
   })
 
   it('keeps an abbreviation definition', () => {

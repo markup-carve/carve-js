@@ -77,7 +77,7 @@ describe('a crossref serializes as a heading_ref', () => {
       '<p>See <a href="#Intro">Intro</a> and &lt;/#Nope&gt;.</p>',
     )
     expect(carveToMarkdown(source).trim()).toBe(
-      '# Intro {#Intro}\n\nSee [Intro](#Intro) and </#Nope>.',
+      '# Intro\n\nSee [Intro](#intro) and </#Nope>.',
     )
   })
 
@@ -89,11 +89,11 @@ describe('a crossref serializes as a heading_ref', () => {
     expect(carveToMarkdown('# H\n\n[see </#H>](/outer)\n')).toBe('# H\n\n[see H](/outer)\n')
   })
 
-  it('still anchors a heading a footnote body references', () => {
+  it('still links a heading a footnote body references', () => {
     // A note body renders in the endnotes, outside every anchor, so a crossref
-    // there IS a reference in the output.
+    // there IS a reference in the output, written with the GFM slug.
     const markdown = carveToMarkdown('# H\n\nText[^a]\n\n[^a]: see </#H>\n')
-    expect(markdown).toContain('# H {#H}')
+    expect(markdown).toContain('[^a]: see [H](#h)')
   })
 
   it('does not nest an anchor inside a link, and keeps the node anyway', () => {

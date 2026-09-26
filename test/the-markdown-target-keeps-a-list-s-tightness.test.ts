@@ -119,13 +119,17 @@ describe("the Markdown target keeps a list's tightness", () => {
       expect(glued('- a\n  ---\n')).toContain('<h2>a</h2>')
     })
 
-    it('keeps it above an empty bullet, a setext underline of its own', () => {
-      expect(readBack('- a\n+\n-\n').markdown).toBe('- a\n\n  -\n')
+    it('keeps it above a lone dash, a setext underline of its own', () => {
+      // The dash is paragraph text, so PART 11 section 8g T3 escapes it; the
+      // separator still keeps it off the line above.
+      expect(readBack('- a\n+\n-\n').markdown).toBe('- a\n\n  \\-\n')
       expect(glued('- a\n  -\n')).toContain('<h2>a</h2>')
     })
 
-    it('keeps it above a headerless table row, which is paragraph continuation text', () => {
-      expect(readBack('- item\n  | a | b |\n').markdown).toBe('- item\n\n  | a | b |\n')
+    it('gives a headerless table the header row that makes it a table', () => {
+      // PART 11 section 10n: with its empty header row the table opens under the
+      // item text like any other table.
+      expect(readBack('- item\n  | a | b |\n').markdown).toBe('- item\n  |  |  |\n  | --- | --- |\n  | a | b |\n')
       expect(glued('- item\n  | a | b |\n')).toContain('item\n| a | b |')
     })
 
