@@ -10,7 +10,7 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { tableSectionAttributesDropped, rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -340,7 +340,6 @@ function renderDefinitionList(items: DefinitionItem[], ctx: AnsiContext, trailin
 }
 
 function renderTable(node: Table, ctx: AnsiContext): string {
-  tableSectionAttributesDropped(ctx.options, node, 'ansi')
   // Use the table's true column count (max cells across rows) so a row with
   // rowspan/colspan filler cells still emits every column and stays aligned
   // with the borders (matches the HTML/Markdown renderers and carve-php/rs).

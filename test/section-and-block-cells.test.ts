@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyProfile, AstJsonSchemaError, diffAst, fromAstJson, Profile, renderAnsi, renderCarveWithReport,
+  applyProfile, AstJsonSchemaError, diffAst, fromAstJson, Profile, renderAnsi, renderCarve,
+  renderCarveWithConversionReport, renderCarveWithReport,
   parse, renderHtml, renderMarkdown, renderPlainText, resolve, toAstJson,
 } from '../src/index.js'
 import { collapseLoneImageParagraphs } from '../src/heading-ids.js'
@@ -41,10 +42,15 @@ describe('interchange sections and block-content cells', () => {
     expect(renderAnsi(doc)).toContain('First Second')
   })
 
-  it('reports source structures Carve cannot spell', () => {
+  it('reports source structures Carve cannot spell on the diagnostics channel, not as render losses', () => {
     const report = renderCarveWithReport(fromAstJson(payload() as never))
     expect(report.value).toContain('First Second')
-    expect(report.losses.map((loss) => loss.code)).toEqual(['section-flattened', 'table-cell-blocks-flattened'])
+    expect(report.losses).toEqual([])
+    const { report: diagnostics } = renderCarveWithConversionReport(fromAstJson(payload() as never), renderCarve)
+    expect(diagnostics.diagnostics.map((entry) => [entry.code, entry.node, entry.field])).toEqual([
+      ['structure-unspellable', 'section', undefined],
+      ['field-unspellable', 'table_cell', 'blocks'],
+    ])
   })
 
   it('lets profiles deny sections and visit blocks inside cells', () => {

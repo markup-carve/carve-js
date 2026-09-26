@@ -21,7 +21,7 @@ import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
-import { tableSectionAttributesDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { isDangerousAttrName, renderedAttrValue } from './render-html.js'
 
@@ -597,7 +597,6 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
 }
 
 function renderTable(node: Table, ctx: MarkdownContext): string {
-  tableSectionAttributesDropped(ctx.options, node, 'markdown')
   let header: string | undefined
   let headerColumns = 0
   const rows: string[] = []
@@ -605,11 +604,6 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   for (const row of node.rows) {
     const cells = row.cells.map((cell) => {
       if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
-      ctx.options.onRenderLoss?.({
-        code: 'table-cell-blocks-flattened', target: 'markdown', nodeType: 'block',
-        message: 'Flattened block content inside a table cell for Markdown',
-        ...(cell.pos ? { pos: cell.pos } : {}),
-      })
       return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
     })
     const rendered = `| ${cells.join(' | ')} |`
