@@ -103,9 +103,11 @@ describe('the list-table import option', () => {
     expect(codes(htmlToAst(html, on).report)).toContain('structure-unspellable')
   })
 
-  it('publishes the admonition on the AST exit too', () => {
+  it('publishes the admonition on the AST exit too, with the cell text unescaped', () => {
     const [block] = toAstJson(htmlToAst(steps, on).value).children
     expect(block).toMatchObject({ type: 'admonition', kind: 'list-table', attrs: { keyValues: { 'header-rows': '1' } } })
+    expect(JSON.stringify(block)).not.toContain('escaped_text')
+    expect(JSON.stringify(block)).not.toContain('"order"')
   })
 
   it('is spelled --list-table on the CLI', async () => {
