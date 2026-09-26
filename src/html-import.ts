@@ -4726,6 +4726,12 @@ class Importer {
       )
       return []
     }
+    // A pipe-table row is one line, so a line break has no spelling in a cell
+    // (carve#2372).
+    if (this.cellDepth > 0 && /[\r\n]/.test(content)) {
+      this.add('element-dropped', 'Dropped an HTML comment in a table cell: its text holds a line break, and a table row is one line', 'warning', path, node)
+      return []
+    }
     return [{ type: 'comment', block: false, delimited: true, content }]
   }
 
