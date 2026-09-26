@@ -3955,8 +3955,13 @@ function escapeLiteralDestinations(text: string, ranges: LiteralRange[]): string
     if (close !== undefined && destinations.has(close + 1)) paired.add(close + 1)
   }
   const selected: number[] = []
+  const sources = new Map<Text, string>()
   for (const range of ranges) {
-    const source = cleanEscapedText(range.node).replace(UNWRITABLE_CONTROLS, '')
+    let source = sources.get(range.node)
+    if (source === undefined) {
+      source = cleanEscapedText(range.node).replace(UNWRITABLE_CONTROLS, '')
+      sources.set(range.node, source)
+    }
     let sourceOffset = (range.sourceStart ?? 0) - 1
     for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
       sourceOffset = source.indexOf('(', sourceOffset + 1)
