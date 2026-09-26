@@ -867,6 +867,18 @@ const pairs = readdirSync(corpusDir)
   .map((f) => basename(f, '.crv'))
   .sort()
 
+// A `.crv` with no `.html` used to become `it.skip`, so deleting a golden half
+// left the suite green and the document uncompared. The population guard below
+// cannot see it either: it counts `.crv` files, not complete pairs. carve-rs
+// panics here; this throw is the same refusal.
+const unpaired = pairs.filter((name) => !existsSync(resolve(corpusDir, `${name}.html`)))
+if (unpaired.length > 0) {
+  throw new Error(
+    `Corpus pair is missing its .html half, so it would go uncompared: ${unpaired.join(', ')}.\n` +
+      `Restore the golden, or delete the .crv too - the spec generator writes both halves.`,
+  )
+}
+
 /*
  * AN ENTRY THAT NAMES NOTHING IS NOT A PASS.
  *
@@ -905,7 +917,6 @@ describe('IMPLEMENTED', () => {
   it('names only corpus categories that exist', () => {
     const named = new Set<string>()
     for (const name of pairs) {
-      if (!existsSync(resolve(corpusDir, `${name}.html`))) continue
       named.add(baseSlug(name))
       named.add(name.replace(/^\d+-/, ''))
     }
@@ -933,7 +944,6 @@ describe('spec corpus coverage guard', () => {
   it('every corpus base category is in IMPLEMENTED', () => {
     const categories = new Set<string>()
     for (const name of pairs) {
-      if (!existsSync(resolve(corpusDir, `${name}.html`))) continue
       categories.add(baseSlug(name))
     }
     const missing = [...categories]
@@ -950,11 +960,6 @@ describe('spec corpus', () => {
   for (const name of pairs) {
     const crvPath = resolve(corpusDir, `${name}.crv`)
     const htmlPath = resolve(corpusDir, `${name}.html`)
-
-    if (!existsSync(htmlPath)) {
-      it.skip(`${name} (missing .html pair)`, () => {})
-      continue
-    }
 
     const source = readFileSync(crvPath, 'utf8')
     const expected = readFileSync(htmlPath, 'utf8')
