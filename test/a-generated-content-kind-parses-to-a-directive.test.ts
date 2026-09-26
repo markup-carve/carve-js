@@ -18,6 +18,7 @@ import {
   toAstJson,
   fromAstJson,
   GENERATED_CONTENT_KINDS,
+  AstJsonSchemaError,
   type Directive,
   type IncludeDirective,
 } from '../src/index.js'
@@ -55,6 +56,16 @@ describe('a generated-content kind parses to a directive', () => {
     const back = fromAstJson(JSON.parse(JSON.stringify(toAstJson(doc))))
 
     expect(back.children.map((c) => c.type)).toEqual(['directive'])
+  })
+
+  it.each(kinds)('publishes an empty %s body as children: [] on the wire', (kind) => {
+    const wire = JSON.parse(JSON.stringify(toAstJson(parse(`::: ${kind}\n:::\n`))))
+    expect(wire.children[0]).toHaveProperty('children', [])
+    expect(toAstJson(fromAstJson(wire)).children[0]).toHaveProperty('children', [])
+
+    delete wire.children[0].children
+    expect(() => fromAstJson(wire)).toThrow(AstJsonSchemaError)
+    expect(() => fromAstJson(wire)).toThrow('required property "children" is missing')
   })
 
   it('publishes the quoted title the opener spells', () => {
