@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseFragment } from 'parse5'
-import { AstJsonPartitionError, HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, fromAstJson, parse, renderHtml, semanticSpan, toAstJson } from '../src/index.js'
+import { AstJsonPartitionError, HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, fromAstJson, parse, renderCarve, renderHtml, semanticSpan, toAstJson } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -429,22 +429,25 @@ describe('definition lists on import', () => {
     expect(carve('<dl id="glossary" class="compact"><dt>T</dt><dd>D</dd></dl>')).toBe('{#glossary .compact}\n:: T\n: D')
   })
 
-  it('reports a definition with no term only when a writer has to spell it', () => {
-    const html = '<dl><dd>A description of nothing.</dd></dl>'
+  it('writes a description before the first term as blocks ahead of the list, in both exits', () => {
+    // `: text` with no term re-reads as a paragraph, so the content is kept as
+    // blocks and the role is declared (markup-carve/carve#2384).
+    const html = '<dl><dd>A description of nothing.</dd><dt>t</dt><dd>d</dd></dl>'
     expect(htmlToAst(html).value.children).toMatchObject([
-      { type: 'definition_list', items: [{ terms: [], definitions: [[{ type: 'paragraph' }]] }] },
+      { type: 'paragraph' },
+      { type: 'definition_list', items: [{ definitions: [[{ type: 'paragraph' }]] }] },
     ])
-    expect(htmlToAst(html).report.diagnostics).toEqual([])
-    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
-      code: 'structure-unspellable',
-      fidelity: 'dropped',
-      confidence: 'exact',
-      severity: 'warning',
-      message: expect.stringContaining('<dd> with no <dt>'),
-      path: '/dl[1]/dd[1]',
-    }))
-    // The diagnostic states what actually happens to the written source.
-    expect(carveToHtml(carve(html))).toBe('<p>: A description of nothing.</p>')
+    for (const report of [htmlToAst(html).report, htmlToCarve(html).report]) {
+      expect(report.diagnostics).toContainEqual(expect.objectContaining({
+        code: 'element-unwrapped',
+        severity: 'warning',
+        message: expect.stringContaining('<dd> with no <dt>'),
+        path: '/dl[1]/dd[1]',
+      }))
+    }
+    const source = htmlToCarve(html).value
+    expect(source).toBe('A description of nothing.\n\n:: t\n: d\n')
+    expect(renderCarve(parse(source))).toBe(source)
   })
 
   it('reports an empty term, which the writer spells as a line that is not one', () => {
