@@ -26,6 +26,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - The `RenderLoss` code enum closes at `raw-format-dropped` and `ruby-flattened`. A dropped table-section attributes field, a flattened table cell's blocks and a dropped math label number report `field-unspellable` on the PART 11 §1d conversion-diagnostics channel, a flattened section reports `structure-unspellable` there, and `carve render --allow-loss` accepts two code names where it accepted six (#2111; markup-carve/carve#2252).
 - Escaped spaces and preserved line-block columns are `non_breaking_space` nodes, and U+E000 is literal content in every field. A stored tree carrying U+E000 where a generated space belongs is read as authored text and reaches HTML raw, with no error and no version signal, because the AST contract stays `1.0`. Reparsing the source is the only remedy (#2100; markup-carve/carve#2337).
 - AST ingest rejects a `directive` without `children`, and an empty directive publishes `children: []` (#2097; markup-carve/carve#2333).
+- `renderCarve`'s minimal form escapes a lone bracket inside span, link or inline note content, and drops the idle escapes the narrowing search used to leave behind, so the bytes move for documents that already round-tripped (#2118; markup-carve/carve#2358).
+- The Markdown writer separates the blocks of a `table_cell.blocks` with one space instead of joining them with `<br>`, over CARVE-P12-049, so a cell that already rendered emits different bytes (#2119, #2126).
 
 ### Fixes
 
@@ -80,6 +82,11 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - A position walk keeps an authored attribute named `pos`, both where positions are remapped and where `positions: false` removes them (#2110).
 - The Carve writer escapes the opening destination parenthesis in link-shaped text, so importing `<p>[a](b)</p>` writes `[a]\(b)` rather than `\[a](b)` (#2114; markup-carve/carve#2357).
 - The Markdown writer escapes a `>` standing at a paragraph line's content position, which every CommonMark reader otherwise read as a block quote; a mid-line `>` stays bare and an authored escape keeps its bytes (#2113, #2116).
+- The destination-parenthesis escape reaches a bracket pair spanning inline nodes, so a link-shaped run around emphasis writes `[/a/]\(b)`, and an unclosed destination is no longer rescanned to the end of the input (#2115; markup-carve/carve#2359).
+- The HTML importer leaves a link's or span's edge whitespace outside it (#2120; markup-carve/carve#2365).
+- The HTML importer reads a `<math>` with no TeX as its text where its tokens are linear, with the space an `mspace` stands for, rather than dropping the formula, and imports a formula beside its hidden-MathML fallback image once (#2120, #2122; markup-carve/carve#2361).
+- The Markdown writer keeps a link whose fragment names no heading, which collapsed to its label, and writes a hard break inside a table cell as `<br>`, where the backslash-newline spelling ended the GFM row (#2121; markup-carve/carve#2363).
+- The HTML importer drops a `<ul>` or `<ol>` with no item instead of writing an attribute line with no block under it, with one `element-dropped` row covering its attributes (#2127; markup-carve/carve#2367).
 
 ### Improvements
 
@@ -100,6 +107,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Table heads, bodies and feet keep their attributes through AST exchange and HTML import, rendered on `thead`, `tbody` and `tfoot`, with the source, Markdown, plain-text and ANSI targets reporting what they cannot represent (#2103; markup-carve/carve#2339).
 - Annotation offsets use a fixed codepoint projection independent of JSON key order, over image alt text, math, breaks and generated spaces (#2100).
 - The escape narrowing search probes a pruned window around the units it relaxes instead of re-rendering the whole document, and reaches block lists nested in untyped items such as a definition list's descriptions; the inline writer also stops flattening its growing output before every node. Re-parsed source on the largest html-to-markdown corpus pages falls from 194-218 documents' worth to 16-45, with byte-identical Carve, diagnostics and Markdown output (#2109, #2112).
+- The minimal form pairs brackets once per inline scope, so the escape narrowing search settles sooner: re-parsed source over the ten html-to-markdown benchmark pages falls from 42.3 MB to 16.4 MB (#2118).
 
 ## [0.1.7] - 2026-09-18
 
