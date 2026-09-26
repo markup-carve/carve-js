@@ -4944,7 +4944,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       const remap = (nodes: InlineNode[]): void => {
         for (const node of nodes) {
           const pos = node.pos
-          if (pos) {
+          if (pos && typeof pos === 'object' && typeof pos.startLine === 'number' && typeof pos.endLine === 'number') {
             const first = byLine.get(pos.startLine)
             const last = byLine.get(pos.endLine)
             const start = first && pos.startColumn !== undefined
@@ -4968,7 +4968,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
             }
           }
           for (const [key, value] of Object.entries(node)) {
-            if (key !== 'pos' && value && typeof value === 'object') {
+            if (key !== 'pos' && key !== 'attrs' && value && typeof value === 'object') {
               remap((Array.isArray(value) ? value : [value]) as InlineNode[])
             }
           }

@@ -65,3 +65,10 @@ it('keeps leading generated columns inside the paragraph', () => {
   expect(paragraph.pos.startOffset).toBe(10)
   expect(paragraph.pos.startColumn).toBe(3)
 })
+
+it('preserves attributes named pos while remapping node positions', () => {
+  const source = '::: |\n\t[word]{pos="x"}\n:::\n'
+  const span = nodes(parse(source)).find((node) => node.type === 'span')
+  expect(span.attrs.keyValues).toEqual({ pos: 'x' })
+  expect(source.slice(span.pos.startOffset, span.pos.endOffset)).toBe('[word]{pos="x"}')
+})
