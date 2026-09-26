@@ -2426,8 +2426,8 @@ function emitDirective(raw: string): string {
   return raw
 }
 
-function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
-  const overrides = new Map<number, string>()
+function directiveOverrides(nodes: InlineNode[]): Map<number, { text: string; ranges: LiteralRange[] }> {
+  const overrides = new Map<number, { text: string; ranges: LiteralRange[] }>()
   let i = 0
   while (i < nodes.length) {
     if (directiveRunText(nodes[i]!) === null) {
@@ -2452,9 +2452,22 @@ function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
         const covering = spans.filter((s) => s.start < offset && s.end > start)
         if (covering.length === 0) continue
         let out = ''
+        const ranges: LiteralRange[] = []
+        const node = nodes[i + k]!
+        const appendLiteral = (from: number, to: number): void => {
+          const previous = escapeUnit
+          escapeUnit = node
+          let piece: string
+          try { piece = escapeText(text.slice(from, to), false, false, from) }
+          finally { escapeUnit = previous }
+          if (node.type === 'text' && piece.includes('(')) {
+            ranges.push({ start: out.length, end: out.length + piece.length, node, sourceStart: from })
+          }
+          out += piece
+        }
         let cursor = start
         for (const span of covering) {
-          if (span.start > cursor) out += escapeText(text.slice(cursor - start, span.start - start))
+          if (span.start > cursor) appendLiteral(cursor - start, span.start - start)
           // The whole directive is emitted once, by the node where it STARTS.
           // A later node that the same span merely runs THROUGH contributes
           // nothing, which is what lets the emitted form differ in length
@@ -2462,8 +2475,8 @@ function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
           if (span.start >= start) out += emitDirective(span.raw)
           cursor = Math.min(span.end, offset)
         }
-        out += escapeText(text.slice(cursor - start))
-        overrides.set(i + k, out)
+        appendLiteral(cursor - start, text.length)
+        overrides.set(i + k, { text: out, ranges })
       }
     }
     i = end
@@ -2518,7 +2531,8 @@ function renderInlines(
     const overrides = directiveOverrides(nodes)
     nodes.forEach((node, idx) => {
       lastLiteralRanges = []
-      let piece = overrides.get(idx) ?? renderInline(
+      const override = overrides.get(idx)
+      let piece = override?.text ?? renderInline(
         node,
         ctx,
         // A span leaves no boundary character of its own, so the one it WROTE
@@ -2576,8 +2590,8 @@ function renderInlines(
         lineTail = (lineTail + EMPTY_COMMENT).slice(-2)
       }
 
-      if (escapeMode === 'minimal' && !overrides.has(idx)) {
-        for (const range of lastLiteralRanges) {
+      if (escapeMode === 'minimal') {
+        for (const range of override?.ranges ?? lastLiteralRanges) {
           literalRanges.push({ ...range, start: out.length + range.start, end: out.length + range.end })
         }
       }
@@ -3926,7 +3940,7 @@ const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 const DIRECTIVE_UNSAFE = new RegExp(UNWRITABLE_CONTROLS.source)
 
 let destinationParensByUnit = new WeakMap<object, Set<number>>()
-interface LiteralRange { start: number; end: number; node: Text }
+interface LiteralRange { start: number; end: number; node: Text; sourceStart?: number }
 let lastLiteralRanges: LiteralRange[] = []
 let inlineChildProjections: Array<{ text: string; ranges: LiteralRange[] }> = []
 
@@ -3943,7 +3957,7 @@ function escapeLiteralDestinations(text: string, ranges: LiteralRange[]): string
   const selected: number[] = []
   for (const range of ranges) {
     const source = cleanEscapedText(range.node).replace(UNWRITABLE_CONTROLS, '')
-    let sourceOffset = -1
+    let sourceOffset = (range.sourceStart ?? 0) - 1
     for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
       sourceOffset = source.indexOf('(', sourceOffset + 1)
       if (!paired.has(i) || precededByOddBackslashRun(text, i)) continue
@@ -3962,7 +3976,7 @@ function escapeLiteralDestinations(text: string, ranges: LiteralRange[]): string
   return out + text.slice(cursor)
 }
 
-function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
+function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false, sourceOffset = 0): string {
   const mode = escapeModeHere()
   text = text.replace(UNWRITABLE_CONTROLS, '')
   const destinationParens = escapeUnit == null ? undefined : destinationParensByUnit.get(escapeUnit)
@@ -3970,7 +3984,7 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
   const call = mode === 'conservative' ? nextEscapeCallIndex() : 0
   let out = text
     .replace(escapes, (char, offset: number, subject: string) => {
-      if (destinationParens?.has(offset)) return '\\('
+      if (destinationParens?.has(sourceOffset + offset)) return '\\('
       if (mode === 'minimal' && char === '(') return char
       // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
       // search has escalated, each candidate site is offered back on its own,
