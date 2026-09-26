@@ -92,7 +92,7 @@ export const WIRE_RECORD_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "pos": ["endColumn", "endLine", "endOffset", "file", "startColumn", "startLine", "startOffset"],
   "rubyPair": ["annotation", "base"],
   "table.columns": ["align", "valign", "width"],
-  "table.rowGroups": ["bodies", "footRows", "headRows"],
+  "table.rowGroups": ["bodies", "footAttrs", "footRows", "headAttrs", "headRows"],
   "table.rowGroups.bodies": ["attrs", "bodyRows", "headRows", "rowHeadColumns"],
 }
 
@@ -368,7 +368,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "symbol": { "attrs": "object", "name": "string", "pos": "object" },
   "table": { "attrs": "object", "caption": "array", "columns": "array", "pos": "object", "rowGroups": "object", "rows": "array", "shortCaption": "array" },
   "table.columns": { "align": "enum:left\u0000right\u0000center", "valign": "enum:top\u0000middle\u0000bottom" },
-  "table.rowGroups": { "bodies": "array", "footRows": "integer>=0", "headRows": "integer>=0" },
+  "table.rowGroups": { "bodies": "array", "footAttrs": "object", "footRows": "integer>=0", "headAttrs": "object", "headRows": "integer>=0" },
   "table.rowGroups.bodies": { "attrs": "object", "bodyRows": "integer>=0", "headRows": "integer>=0", "rowHeadColumns": "integer>=0" },
   "table_cell": { "align": "enum:left\u0000right\u0000center", "attrs": "object", "blocks": "array", "children": "array", "colspan": "integer", "header": "boolean", "pos": "object", "rowspan": "integer", "span": "enum:rowspan\u0000colspan", "valign": "enum:top\u0000middle\u0000bottom" },
   "table_row": { "attrs": "object", "cells": "array", "pos": "object" },
@@ -524,7 +524,7 @@ export const WIRE_NESTED_RECORDS: Readonly<
   "superscript": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
   "symbol": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
   "table": { "attrs": { record: "attrs", array: false }, "columns": { record: "table.columns", array: true }, "pos": { record: "pos", array: false }, "rowGroups": { record: "table.rowGroups", array: false } },
-  "table.rowGroups": { "bodies": { record: "table.rowGroups.bodies", array: true } },
+  "table.rowGroups": { "bodies": { record: "table.rowGroups.bodies", array: true }, "footAttrs": { record: "attrs", array: false }, "headAttrs": { record: "attrs", array: false } },
   "table.rowGroups.bodies": { "attrs": { record: "attrs", array: false } },
   "table_cell": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
   "table_row": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },

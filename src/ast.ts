@@ -259,7 +259,7 @@ export interface TableBodyGroup {
  * every renderer already derives - the leading run of header rows as the head,
  * everything after it as one body, no foot, no row-head columns - so a table
  * that carries it says something that derivation cannot. HTML, plain and ANSI
- * output ignore it.
+ * output use its row order.
  */
 export interface TableRowGroups {
   /**
@@ -272,6 +272,8 @@ export interface TableRowGroups {
   bodies: TableBodyGroup[]
   /** Rows at the end of `rows` forming the table foot. */
   footRows: number
+  headAttrs?: Attrs
+  footAttrs?: Attrs
 }
 
 export interface Table extends BaseNode {

@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Added
+
+- Table heads and feet retain attributes through AST exchange and HTML import. HTML applies section attributes to `thead`, `tbody`, and `tfoot`; source and text targets report unsupported attributes. (markup-carve/carve#2339)
+
 ### Breaking
 
 - AST ingest rejects a `directive` without `children`. An empty directive publishes `children: []` (markup-carve/carve#2333).
