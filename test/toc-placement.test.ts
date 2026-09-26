@@ -45,8 +45,10 @@ describe('::: toc placement directive', () => {
   })
 
   it('carries the author {#id .class} onto <nav> but strips depth/from/to', () => {
+    // Source order: the id was written first, so it stays first, and the `toc`
+    // class merges into the author's own class slot (markup-carve/carve#2328).
     const out = h('# A\n\n{#nav .side depth=1}\n::: toc\n:::\n\n## B\n')
-    expect(out).toContain('<nav class="toc side" id="nav" aria-label="Table of contents">')
+    expect(out).toContain('<nav id="nav" class="toc side" aria-label="Table of contents">')
     expect(out).not.toContain('depth=')
   })
 

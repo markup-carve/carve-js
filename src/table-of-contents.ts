@@ -289,13 +289,20 @@ function authoredAttr(attrs: Attrs | undefined, name: string): boolean {
   return Object.keys(attrs?.keyValues ?? {}).some((k) => k.toLowerCase() === name)
 }
 
-/** Build the `<nav>`'s attributes: force a leading `toc` class, carry the
- *  author's `{#id .class}`, name the landmark, and drop the directive-only
- *  `depth`/`from`/`to` keys so they never render as HTML attributes. */
+/** Build the `<nav>`'s attributes: merge the `toc` class into the author's
+ *  class slot, carry the author's own attributes in source order, name the
+ *  landmark, and drop the directive-only `depth`/`from`/`to` keys so they never
+ *  render as HTML attributes. */
 function navAttrs(attrs: Attrs | undefined, navLabel: string, titleId?: string): Attrs {
-  // `toc` leads; drop any author-supplied `toc` so `{.toc}` never doubles it.
+  // `toc` leads the class VALUE; drop any author-supplied `toc` so `{.toc}`
+  // never doubles it.
   const a: Attrs = { classes: ['toc', ...(attrs?.classes ?? []).filter((c) => c !== 'toc')] }
   if (attrs?.id !== undefined) a.id = attrs.id
+  // The structural class goes after every authored attribute, never ahead of
+  // them (markup-carve/carve#2328): carrying the source order puts the merged
+  // class at the author's own class slot, and leaves the renderer to append it
+  // after the ordered slots when the author wrote no class at all.
+  if (attrs?.order) a.order = attrs.order.filter((slot) => !RESERVED_TOC_ATTRS.has(slot))
   const kept: Record<string, string> = {}
   const kv = attrs?.keyValues
   if (kv) {
