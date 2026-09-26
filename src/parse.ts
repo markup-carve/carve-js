@@ -1261,7 +1261,9 @@ function dropPositions(doc: Document): void {
     }
     const record = value as Record<string, unknown>
     for (const field of POSITION_FIELDS) delete record[field]
-    for (const key of Object.keys(record)) walk(record[key])
+    for (const key of Object.keys(record)) {
+      if (key !== 'attrs') walk(record[key])
+    }
   }
   walk(doc)
 }
@@ -1360,7 +1362,9 @@ function toCodepointPositions(doc: Document, source: string): void {
       convert(record as unknown as Position)
       return
     }
-    for (const key of Object.keys(record)) walk(record[key])
+    for (const key of Object.keys(record)) {
+      if (key !== 'attrs') walk(record[key])
+    }
   }
   walk(doc)
 }
@@ -4546,7 +4550,9 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
     }
     const record = value as Record<string, unknown>
     delete record['pos']
-    for (const key of Object.keys(record)) walk(record[key])
+    for (const key of Object.keys(record)) {
+      if (key !== 'attrs') walk(record[key])
+    }
   }
   walk(nodes)
   return nodes

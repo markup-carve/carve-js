@@ -72,3 +72,11 @@ it('preserves attributes named pos while remapping node positions', () => {
   expect(span.attrs.keyValues).toEqual({ pos: 'x' })
   expect(source.slice(span.pos.startOffset, span.pos.endOffset)).toBe('[word]{pos="x"}')
 })
+
+for (const source of ['[word]{pos="x"}\n', '::: |\n\t[word]{pos="x"}\n:::\n']) {
+  it(`preserves authored pos attributes when positions are disabled: ${JSON.stringify(source)}`, () => {
+    const span = nodes(parse(source, { positions: false })).find((node) => node.type === 'span')
+    expect(span.attrs.keyValues).toEqual({ pos: 'x' })
+    expect(span.pos).toBeUndefined()
+  })
+}
