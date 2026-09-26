@@ -223,6 +223,58 @@ interface P5Node {
   parentNode?: P5Node
 }
 
+const HTML_SPACE = /[\t\n\f\r ]+/
+
+function codeLanguage(pre: P5Node, code: P5Node | undefined, wrappers: WeakMap<P5Node, P5Node | null>): string | undefined {
+  const attr = (node: P5Node, name: string): string => node.attrs?.find((a) => a.name === name)?.value ?? ''
+  const classes = (node: P5Node): string[] => attr(node, 'class').split(HTML_SPACE)
+  const valid = (value: string): boolean => value.length > 0 && !/[^a-zA-Z0-9_+#./-]/.test(value)
+  const prefixed = (tokens: string[], prefix: string): string | undefined =>
+    tokens.find((token) =>
+      token.startsWith(prefix)
+      && !(prefix === 'highlight-' && token.startsWith('highlight-source-'))
+      && valid(token.slice(prefix.length)),
+    )?.slice(prefix.length)
+  for (const node of code ? [code, pre] : [pre]) {
+    const tokens = classes(node)
+    const language = prefixed(tokens, 'language-') ?? prefixed(tokens, 'lang-')
+    if (language !== undefined) return language
+    const data = attr(node, 'data-lang').replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '')
+    if (valid(data)) return data
+    if (node === pre) {
+      for (const match of attr(node, 'class').matchAll(/(?=(?:^|[\t\n\f\r ;])brush:[\t\n\f\r ]*([^\t\n\f\r ;]+))/g)) {
+        if (valid(match[1]!)) return match[1]
+      }
+    }
+  }
+  // Lookup does not consume wrapper attributes or change their import policy.
+  const wraps = (parent: P5Node | undefined, child: P5Node): parent is P5Node => {
+    if (parent?.tagName !== 'div') return false
+    if (!wrappers.has(parent)) {
+      let element: P5Node | null = null
+      const eligible = (parent.childNodes ?? []).every((node) => {
+        if (node.tagName !== undefined) {
+          if (element !== null) return false
+          element = node
+          return true
+        }
+        return node.nodeName === '#comment'
+          || (node.nodeName === '#text' && !/[^\t\n\f\r ]/.test(node.value ?? ''))
+      })
+      wrappers.set(parent, eligible ? element : null)
+    }
+    return wrappers.get(parent) === child
+  }
+  const parent = pre.parentNode
+  if (!wraps(parent, pre)) return undefined
+  const tokens = classes(parent)
+  const direct = (tokens.includes('highlight') ? prefixed(tokens, 'highlight-source-') : undefined)
+    ?? (tokens.includes('mw-highlight') ? prefixed(tokens, 'mw-highlight-lang-') : undefined)
+  if (direct !== undefined) return direct
+  const outer = parent.parentNode
+  return tokens.includes('highlight') && wraps(outer, parent) ? prefixed(classes(outer), 'highlight-') : undefined
+}
+
 /** A `<template>` holds its children in `content`, and they serialize too. */
 function serializedChildren(node: P5Node): P5Node[] {
   return (node as { content?: P5Node }).content?.childNodes ?? node.childNodes ?? []
@@ -927,6 +979,7 @@ class Importer {
    */
   private readonly cellAlignment = new Map<P5Node, { align?: string; valign?: string }>()
 
+  private readonly codeLanguageWrappers = new WeakMap<P5Node, P5Node | null>()
   private readonly documentOrder = new Map<P5Node, number>()
 
   /** The report, in the order docs/html-import.md states. */
@@ -2376,8 +2429,7 @@ class Importer {
     if (tag === 'pre') {
       const code = node.childNodes?.find((n) => n.tagName === 'code')
       const source = code ?? node
-      const className = this.attr(source, 'class') ?? ''
-      const lang = className.split(/\s+/).find((c) => c.startsWith('language-'))?.slice(9)
+      const lang = codeLanguage(node, code, this.codeLanguageWrappers)
       // Rendered code blocks conventionally carry one newline before </code>.
       // It separates payload from markup; it is not an additional blank source
       // line. Remove exactly one so a real trailing blank line (two newlines)
