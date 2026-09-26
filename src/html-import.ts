@@ -365,6 +365,56 @@ function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean 
 }
 
 /**
+ * A link's or span's edge whitespace stands outside it, as one space that
+ * merges with whitespace already there (carve#2361). Whitespace-only content
+ * stays, and so does U+00A0, which is content rather than layout.
+ */
+function hoistEdgeSpace(nodes: InlineNode[]): InlineNode[] {
+  const out: InlineNode[] = []
+  let owed = false
+  // Through nested inlines: a strong ending in a space already has one there.
+  const blankEdge = (node: InlineNode | undefined, side: 'start' | 'end'): boolean => {
+    if (node === undefined || textEdge(node, side)) return node !== undefined
+    const children = 'children' in node && Array.isArray(node.children) ? (node.children as InlineNode[]) : undefined
+    return children !== undefined && blankEdge(side === 'start' ? children[0] : children.at(-1), side)
+  }
+  const pay = (next: InlineNode | undefined) => {
+    if (owed && !blankEdge(next, 'start')) out.push({ type: 'text', value: ' ' })
+    owed = false
+  }
+  for (const node of nodes) {
+    if ((node.type !== 'link' && node.type !== 'span') || !node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
+      pay(node)
+      out.push(node)
+      continue
+    }
+    const children = [...node.children]
+    const lead = textEdge(children[0], 'start')
+    if (lead) {
+      const value = (children[0] as { value: string }).value.replace(/^[ \t]+/, '')
+      if (value === '') children.shift()
+      else children[0] = { ...(children[0] as object), value } as InlineNode
+    }
+    const trail = textEdge(children.at(-1), 'end')
+    if (trail) {
+      const value = (children.at(-1) as { value: string }).value.replace(/[ \t]+$/, '')
+      if (value === '') children.pop()
+      else children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
+    }
+    if (lead) owed = true
+    if (owed && !blankEdge(out.at(-1), 'end')) out.push({ type: 'text', value: ' ' })
+    owed = false
+    // In place: `inlineOrigins` is keyed by node identity.
+    if (lead || trail) node.children = children
+    out.push(node)
+    owed = trail
+  }
+  pay(undefined)
+
+  return out
+}
+
+/**
  * A line's leading whitespace, dropped after a hard break.
  *
  * Only text DIRECTLY after the break starts the line. After a break that ends
@@ -524,6 +574,97 @@ const SEMANTIC_SPAN_VALUE_SOURCE = new Map([['abbr', 'title'], ['dfn', 'title'],
  * equation.
  */
 const TEX_ANNOTATION_ENCODINGS = new Set(['application/x-tex', 'text/x-tex', 'latex'])
+
+/** MathML whose text reads in order: no element here lays its children out. */
+const LINEAR_MATH_CONTAINERS = new Set(['mrow', 'mstyle', 'mpadded'])
+const LINEAR_MATH_TOKENS = new Set(['mi', 'mn', 'mo', 'mtext'])
+
+const isBlankOrComment = (node: P5Node): boolean =>
+  node.nodeName === '#comment' || (node.nodeName === '#text' && /^[ \t\n\r\f]*$/.test(node.value ?? ''))
+
+/**
+ * The text of a `<math>` with no TeX, when flattening cannot change its value
+ * (carve#2361): tokens in order, inside grouping elements only. A fraction or a
+ * script would flatten into a different number, so any other element refuses.
+ */
+function linearMathText(math: P5Node): string | undefined {
+  let text = ''
+  const read = (nodes: P5Node[]): boolean => {
+    for (const node of nodes) {
+      if (isBlankOrComment(node)) continue
+      const tag = node.tagName
+      if (tag === 'semantics') {
+        const first = (node.childNodes ?? []).find((child) => !isBlankOrComment(child))
+        if (!first || !read([first])) return false
+      } else if (tag !== undefined && LINEAR_MATH_CONTAINERS.has(tag)) {
+        if (!read(node.childNodes ?? [])) return false
+      } else if (tag !== undefined && LINEAR_MATH_TOKENS.has(tag)) {
+        const children = node.childNodes ?? []
+        if (children.some((child) => child.nodeName !== '#text')) return false
+        text += children.map((child) => child.value ?? '').join('').replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
+      } else if (tag !== 'mspace') {
+        return false
+      }
+    }
+    return true
+  }
+  return read(math.childNodes ?? []) && text !== '' ? text : undefined
+}
+
+/** The effective inline `display` is `none`: the last declaration wins, an `!important` one first. */
+const hidden = (node: P5Node | undefined): boolean => {
+  let display: string | undefined
+  let important = false
+  for (const declaration of (node?.attrs?.find((a) => a.name.toLowerCase() === 'style')?.value ?? '').split(';')) {
+    const colon = declaration.indexOf(':')
+    if (colon < 0 || declaration.slice(0, colon).trim().toLowerCase() !== 'display') continue
+    const value = declaration.slice(colon + 1).toLowerCase()
+    const isImportant = /!\s*important\s*$/.test(value)
+    if (important && !isImportant) continue
+    display = value.replace(/!\s*important\s*$/, '').trim()
+    important = isImportant
+  }
+  return display === 'none'
+}
+
+/** Sibling positions, built once per parent so a run of formulas stays linear. */
+const siblingIndex = new WeakMap<P5Node, Map<P5Node, number>>()
+const indexIn = (parent: P5Node, node: P5Node): number => {
+  const children = parent.childNodes ?? []
+  let index = siblingIndex.get(parent)?.get(node)
+  if (index === undefined || children[index] !== node) {
+    const positions = new Map(children.map((child, at) => [child, at]))
+    siblingIndex.set(parent, positions)
+    index = positions.get(node)
+  }
+  return index ?? -1
+}
+
+/** A `<math>` hidden by `display: none`, on itself or on the `<span>` holding only it. */
+function mathIsHidden(math: P5Node): boolean {
+  const wrapper = math.parentNode
+  return hidden(math) || (wrapper?.tagName === 'span' && hidden(wrapper) && (wrapper.childNodes ?? []).every((child) => child === math || isBlankOrComment(child)))
+}
+
+/**
+ * The `<img>` that renders a formula for a reader without MathML: the next
+ * element after the `<math>`, or after a `<span>` holding nothing but it.
+ */
+function fallbackImage(math: P5Node): P5Node | undefined {
+  const next = (node: P5Node): P5Node | undefined => {
+    const parent = node.parentNode
+    if (!parent) return undefined
+    const siblings = parent.childNodes ?? []
+    for (let index = indexIn(parent, node) + 1; index < siblings.length; index += 1) {
+      if (!isBlankOrComment(siblings[index]!)) return siblings[index]
+    }
+    return undefined
+  }
+  let found = next(math)
+  const wrapper = math.parentNode
+  if (found === undefined && wrapper?.tagName === 'span' && wrapper.childNodes?.every((child) => child === math || isBlankOrComment(child))) found = next(wrapper)
+  return found?.tagName === 'img' ? found : undefined
+}
 
 /**
  * The `data-` names that are A SERIALIZER'S PROTOCOL, not an author's content.
@@ -812,6 +953,8 @@ class Importer {
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
   /** The element each inline node came from, for `unwrapUnspellable`. */
   private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
+  /** Fallback images of formulas that imported as math, dropped where they stand. */
+  private readonly formulaImages = new Set<P5Node>()
   /** The `<tr>` each row came from, for `dropUnspellableRow`. */
   private readonly rowOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** The element each hard break came from, for `dropHardBreaksInTableCells`. */
@@ -3882,7 +4025,7 @@ class Importer {
       if (produced.length > 0) previousWasBlock = isFlattenedBlock(node)
     })
     const merged: InlineNode[] = []
-    for (const node of out) {
+    for (const node of hoistEdgeSpace(out)) {
       const last = merged.at(-1)
       if (node.type === 'text' && last?.type === 'text') last.value += node.value
       else merged.push(node)
@@ -3929,6 +4072,10 @@ class Importer {
       this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
+    if (this.formulaImages.has(node)) {
+      this.add('element-dropped', 'Dropped <img>: the fallback image of a formula imported as math', 'info', path, node)
+      return []
+    }
     // Not in `roundtrip`, which raw-preserves what Carve CANNOT express. The
     // seven semantic elements are mapped in every mode because their spelling
     // renders back as the element itself; the marks do not - a `<q>` becomes
@@ -3959,6 +4106,11 @@ class Importer {
         // are not preserved separately - they are inside this one raw span.
         this.keepRaw(node, path, 'Preserved unsupported <math> element as raw HTML')
         return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
+      }
+      const text = this.mode === 'roundtrip' ? undefined : linearMathText(node)
+      if (text !== undefined) {
+        this.add('element-unwrapped', 'Imported <math> as its text: no TeX annotation and no alttext, and its tokens read in order', 'warning', path, node)
+        return [{ type: 'text', value: text }]
       }
       this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
       return []
@@ -4343,8 +4495,14 @@ class Importer {
 
   private mathml(node: P5Node, path: string): InlineNode | undefined {
     const annotated = this.texAnnotation(node)
-    const content = (annotated ?? this.attr(node, 'alttext') ?? '').trim()
+    const alttext = this.attr(node, 'alttext')?.trim() || undefined
+    const image = fallbackImage(node)
+    const imageAlt = image && this.attr(image, 'alt')?.trim()
+    // Adjacency alone is no evidence: the alt stands in for the formula only
+    // where the page hid the MathML so the image renders instead.
+    const content = (annotated ?? alttext ?? (mathIsHidden(node) ? imageAlt : undefined) ?? '').trim()
     if (content === '') return undefined
+    if (image && imageAlt === content) this.formulaImages.add(image)
     // After the tier is settled, so a dropped element does not also report
     // attributes on its way out: the `element-dropped` warning covers it.
     const attrs = this.attrs(node, path)
@@ -4352,8 +4510,10 @@ class Importer {
     // annotation that held only whitespace falls through to `alttext`, and
     // reading the presence of the element would make that fall-through the one
     // tier-2 read that says nothing.
-    if (annotated === undefined) {
+    if (annotated === undefined && alttext !== undefined) {
       this.add('encoding-assumed', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path, node)
+    } else if (annotated === undefined) {
+      this.add('encoding-assumed', "Read <math> through its fallback image's alt: nothing declares the encoding of alt, so TeX is assumed", 'info', path, node)
     }
     return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
   }

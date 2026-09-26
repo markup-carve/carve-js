@@ -16,7 +16,7 @@ describe('the HTML importer and a <br> in a table cell', () => {
     ['a break inside a link', '<table><tr><td><a href="u">a<br>b</a></td></tr></table>', '| [a b](u) |\n'],
     ['a break before a strong', '<table><tr><td>x<br><strong>y</strong></td></tr></table>', '| x *y* |\n'],
     ['a break before a code span', '<table><tr><td>x<br><code>c</code></td></tr></table>', '| x `c` |\n'],
-    ['a break before a span opening with a space', '<table><tr><td>x<br><span class="k"> y</span></td></tr></table>', '| x[ y]{.k} |\n'],
+    ['a break before a span opening with a space', '<table><tr><td>x<br><span class="k"> y</span></td></tr></table>', '| x [y]{.k} |\n'],
     ['a break in a header cell', '<table><tr><th>x<br>y</th></tr><tr><td>d</td></tr></table>', '|= x y |\n| d |\n'],
   ])('keeps the table for %s', (_, html, carve) => {
     const result = htmlToCarve(html)

@@ -22,11 +22,25 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>()
-// The map is empty right now. Its one entry was `endnotes-section-not-last`,
-// whose golden recorded the `admonition` every engine wrote before
-// `CARVE-P12-057` split the kind out; upstream re-cut it and the entry went
-// out with the bump that reached it (markup-carve/carve#2243).
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
+  [
+    'security',
+    {
+      reason: "markup-carve/carve#2361: a span's edge whitespace stands outside it",
+      carve: 'safe [text]{title=lost}\n',
+      ast: {
+        type: 'document',
+        children: [{
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: 'safe ' },
+            { type: 'span', children: [{ type: 'text', value: 'text' }], attrs: { keyValues: { title: 'lost' } } },
+          ],
+        }],
+      },
+    },
+  ],
+])
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.
