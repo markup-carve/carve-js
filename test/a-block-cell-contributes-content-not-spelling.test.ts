@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromAstJson, renderAnsi, renderMarkdown, renderPlainText } from '../src/index.js'
+import { fromAstJson, renderAnsi, renderCarve, renderMarkdown, renderPlainText } from '../src/index.js'
 
 // carve-js#2125. PART 12 §27 (CARVE-P12-049): a block in `table_cell.blocks`
 // contributes its inline content and no markers, and a code block contributes
@@ -76,5 +76,69 @@ describe('a block cell contributes content, not spelling', () => {
     expect(renderMarkdown(doc)).toContain('| first second |')
     expect(renderPlainText(doc)).toContain('first second')
     expect(renderAnsi(doc)).toContain('first')
+  })
+})
+
+/*
+ * The Carve target had the same fallback arm (carve-js#2132). PART 11 §1b lets
+ * the flatten invent no character, and `conversion-diagnostics` already reports
+ * the whole `blocks` field as `field-unspellable` on this target, so a kind with
+ * no inline content contributes nothing rather than a spelling.
+ *
+ * The rows below carry a second cell because `renderCarve` refuses a row whose
+ * every cell is blank, which a one-cell row would become.
+ */
+describe('a block cell contributes no invented spelling to Carve', () => {
+  const pair = (blocks: unknown[]) => fromAstJson({
+    type: 'document',
+    srcByteLength: 0,
+    children: [{
+      type: 'table',
+      rows: [
+        { type: 'table_row', cells: [
+          { type: 'table_cell', header: true, children: [{ type: 'text', value: 'H' }] },
+          { type: 'table_cell', header: true, children: [{ type: 'text', value: 'I' }] },
+        ] },
+        { type: 'table_row', cells: [
+          { type: 'table_cell', header: false, blocks },
+          { type: 'table_cell', header: false, children: [{ type: 'text', value: 'z' }] },
+        ] },
+      ],
+    }],
+  } as never)
+  const bodyRow = (blocks: unknown[]) => renderCarve(pair(blocks)).split('\n')[1]
+
+  it('contributes nothing for a thematic break', () => {
+    expect(bodyRow([{ type: 'thematic_break' }])).toBe('| | z |')
+  })
+
+  it('contributes nothing for an abbreviation definition', () => {
+    expect(bodyRow([{ type: 'abbreviation_def', abbr: 'HTML', expansion: 'HyperText Markup Language' }]))
+      .toBe('| | z |')
+  })
+
+  it.each([
+    ['a raw block', { type: 'raw_block', format: 'html', content: '<b>x</b>\n' }],
+    ['a comment', { type: 'comment', block: true, content: ' a remark ' }],
+    ['a link reference definition', { type: 'link_reference_definition', label: 'ref', href: 'https://example.com' }],
+    ['a citation definition', { type: 'citation_definition', key: 'k1', children: [{ type: 'text', value: 'A cited work' }] }],
+  ])('keeps contributing nothing for %s', (_name, block) => {
+    expect(bodyRow([block])).toBe('| | z |')
+  })
+
+  // A kind contributing nothing must not leave a separator behind either: the
+  // one-space join is between the blocks that DID contribute.
+  it('puts one space between the blocks that contribute', () => {
+    const around = (middle: unknown) => bodyRow([
+      { type: 'paragraph', children: [{ type: 'text', value: 'one' }] },
+      middle,
+      { type: 'paragraph', children: [{ type: 'text', value: 'two' }] },
+    ])
+    expect(around({ type: 'thematic_break' })).toBe('| one two | z |')
+    expect(around({ type: 'raw_block', format: 'html', content: '<b>x</b>\n' })).toBe('| one two | z |')
+  })
+
+  it('still contributes a code block payload as a code span', () => {
+    expect(bodyRow([{ type: 'code_block', content: 'x = 1\n', lang: 'js' }])).toBe('| `x = 1 ` | z |')
   })
 })

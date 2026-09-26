@@ -33,7 +33,6 @@ import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
-import { renderPlainText } from './render-plain.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
@@ -2149,9 +2148,25 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
       case 'code_block':
         add([{ type: 'code', value: block.content }])
         break
-      default:
-        add([{ type: 'text', value: renderPlainText({ type: 'document', children: [block] }).trim() }])
+      case 'thematic_break':
+      case 'raw_block':
+      case 'abbreviation_def':
+      case 'link_reference_definition':
+      case 'citation_definition':
+      case 'comment':
+        // No inline content to contribute, and PART 11 §1b lets this flatten
+        // invent no character. The plain target's spelling reached the cell as
+        // text, which wrote `\-\-\-` for a break and an abbreviation
+        // definition's whole line (carve-js#2132). `table_cell.blocks` is
+        // already reported `field-unspellable` on this target, so the loss is
+        // declared rather than papered over with a marker.
         break
+      default: {
+        // Exhaustive on purpose: a new block kind must decide what it
+        // contributes rather than fall through to its own source spelling.
+        const exhaustive: never = block
+        throw new Error(`renderCarve: unknown block in a table cell ${(exhaustive as { type: string }).type}`)
+      }
     }
   }
   return chunks.flatMap((chunk, index) => index === 0 ? chunk : [{ type: 'text', value: ' ' } as InlineNode, ...chunk])
