@@ -588,9 +588,42 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
         else if (block.target.type === 'table') descend([block.target])
         else descend([block.target])
         break
-      default:
+      case 'image':
+        // An image IS inline content, so the cell takes the inline spelling.
+        // Rendering the block and escaping it as text wrote `![a\](u)`, whose
+        // escaped bracket is no longer an image (carve-js#2125).
+        parts.push(renderInlines([block], ctx))
+        break
+      case 'code_block':
+        // PART 12 §27 (CARVE-P12-049): a code block contributes its PAYLOAD.
+        // The fence, the info string, the quoted header and the bracketed label
+        // are its spelling, and the cell takes none of them. HTML shows the
+        // same: the payload is the `<pre>`'s text, the header rides as an
+        // attribute.
+        parts.push(renderInlines([{ type: 'text', value: block.content }], ctx))
+        break
+      case 'thematic_break':
+        // No inline content to contribute, and §27 admits no markers: `---` in
+        // the cell was block decoration, not content.
+        break
+      case 'raw_block':
+      case 'abbreviation_def':
+        // The one pair whose content no inline node holds. Each keeps the
+        // target's own spelling, because dropping it would lose the only place
+        // the Markdown output carries it (carve#589 for the definition).
         parts.push(renderInlines([{ type: 'text', value: renderBlock(block, ctx).trim() }], ctx))
         break
+      case 'link_reference_definition':
+      case 'citation_definition':
+      case 'comment':
+        // Each renders nothing on this target at block level, in the cell too.
+        break
+      default: {
+        // Exhaustive on purpose: a new block kind must decide what it
+        // contributes rather than fall through to its own source spelling.
+        const t: never = block
+        throw new Error(`renderMarkdown: unknown block in a table cell ${(t as { type: string }).type}`)
+      }
     }
   }
   // ONE SPACE between blocks, not `<br>` (PART 12 §27, CARVE-P12-049): the cell

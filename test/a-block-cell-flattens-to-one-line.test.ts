@@ -45,8 +45,8 @@ describe('a block-bearing table cell flattens to one line', () => {
   })
 
   // The clause also says a code block contributes its payload with each newline
-  // becoming one space. The newlines do become spaces; the fence still leaks
-  // into the cell, which is carve-js#2125 and not this change.
+  // becoming one space. carve-js#2125 took the fence out of the cell; this pins
+  // the newline half of the same sentence.
   it("turns a code block's newlines into spaces", () => {
     const rendered = renderMarkdown(table([{ type: 'code_block', content: 'first\nsecond\n' }]))
     expect(rendered).toContain('first second')
