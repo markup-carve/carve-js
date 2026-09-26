@@ -14,6 +14,7 @@ vi.mock('../src/parse.js', async (importOriginal) => {
 
 const { carveToCarve, carveToHtml, htmlToCarve, renderCarve, RenderDepthError } = await import('../src/index.js')
 const { expectScansLinearly, perfIt } = await import('./helpers/scaling.js')
+const { collectLoneBrackets } = await import('../src/bracket-escapes.js')
 
 const roundTrips = (html: string, expected: string): void => {
   const out = htmlToCarve(html).value
@@ -94,5 +95,47 @@ describe('PART 11 §5 destination parens across nodes', () => {
         smallRepeats: 2000,
       })
     }
+  })
+})
+
+describe('PART 11 §5 a run holding an empty code span', () => {
+  const text = (value: string) => ({ type: 'text' as const, value })
+  const code = { type: 'code' as const, value: '' }
+  const selected = (children: unknown[]) => {
+    const lone = new WeakMap<object, Set<number>>()
+    const leftToSearch = new WeakSet<object>()
+    const span = { type: 'span', children }
+    collectLoneBrackets([span] as never, false, lone, leftToSearch)
+    return (children as object[]).flatMap((node) => {
+      const texts = 'children' in node ? (node as { children: object[] }).children : [node]
+      return texts.map((t) => ({ lone: [...(lone.get(t) ?? [])], searched: leftToSearch.has(t) }))
+    })
+  }
+
+  it('selects no bracket before or after the span', () => {
+    expect(selected([text('a [ b '), code, text(' c ] d ]')])).toEqual([
+      { lone: [], searched: true },
+      { lone: [], searched: false },
+      { lone: [], searched: true },
+    ])
+  })
+
+  it('selects no bracket when the span sits inside emphasis', () => {
+    const emphasis = { type: 'emphasis', children: [text('c '), code] }
+    expect(selected([text('a [ b '), emphasis, text(' d ]')])).toEqual([
+      { lone: [], searched: true },
+      { lone: [], searched: true },
+      { lone: [], searched: false },
+      { lone: [], searched: true },
+    ])
+  })
+
+  it('leaves the destination paren before the span to the search', () => {
+    roundTrips('<p>x [a](b) y <code></code></p>', 'x \\[a](b) y ``')
+    roundTrips('<p>x [a](b) y <em>z <code></code></em></p>', 'x \\[a](b) y {/z ``/}')
+  })
+
+  it('keeps both halves in a nested construct, a run of its own', () => {
+    roundTrips('<p><span class="c">a ] b</span> <code></code></p>', '[a \\] b]{.c} ``')
   })
 })
