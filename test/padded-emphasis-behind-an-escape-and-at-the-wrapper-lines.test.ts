@@ -108,7 +108,7 @@ describe('root 2: the wrapper lines go through the same repair', () => {
   })
 
   it('keeps a definition term behind the escape readable as strong', () => {
-    expect(carveToMarkdown(':: \\ t\n: d\n')).toBe(' **t**\n: d\n')
+    expect(carveToMarkdown(':: \\ t\n: d\n')).toBe(' **t**\n\nd\n')
   })
 
   it('keeps a figure-group caption behind the escape readable as strong', () => {
@@ -132,7 +132,7 @@ describe('root 2: the wrapper lines go through the same repair', () => {
   })
 
   it('leaves an unpadded definition term exactly as it was', () => {
-    expect(carveToMarkdown(':: t\n: d\n')).toBe('**t**\n: d\n')
+    expect(carveToMarkdown(':: t\n: d\n')).toBe('**t**\n\nd\n')
   })
 
   it('leaves unpadded figure captions exactly as they were', () => {
@@ -149,7 +149,7 @@ describe('root 2: the wrapper lines go through the same repair', () => {
  */
 describe('a trailing hard break keeps its backslash', () => {
   it('does not split the backslash from its newline in a definition term', () => {
-    expect(carveToMarkdown(':: \\ t\\ \n: d\n')).toBe(' **t**\\\n\n: d\n')
+    expect(carveToMarkdown(':: \\ t\\ \n: d\n')).toBe(' **t**\\\n\nd\n')
   })
 
   it('leaves no stray delimiter behind the backslash', () => {

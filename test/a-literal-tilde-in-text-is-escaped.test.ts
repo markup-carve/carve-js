@@ -33,7 +33,7 @@ describe('a literal tilde in text is escaped', () => {
   })
 
   it('escapes a tilde in a table cell, which is text like any other', () => {
-    expect(carveToMarkdown('| a~~b |\n')).toBe('| a\\~\\~b |\n')
+    expect(carveToMarkdown('| a~~b |\n')).toBe('|  |\n| --- |\n| a\\~\\~b |\n')
   })
 })
 

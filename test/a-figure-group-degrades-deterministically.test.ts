@@ -45,14 +45,14 @@ describe('a figure group degrades deterministically', () => {
     )
   })
 
-  it('Markdown: a heading inside a group is a crossref target with an anchor', () => {
+  it('Markdown: a heading inside a group is a crossref target', () => {
     // The prepass that indexes heading ids has to DESCEND into the group, or
     // a `</#...>` to a heading inside one degrades to plain text while the
     // heading loses its anchor stamp (carve-php / carve-rs parity).
     const src =
       'See </#inner-heading>.\n\n::: figure\n## Inner heading\n\n![x](x.png)\n^ (a) x\n:::\n^ Figure #: G\n'
     expect(carveToMarkdown(src)).toBe(
-      'See [Inner heading](#Inner-heading).\n\n## Inner heading {#Inner-heading}\n\n![x](x.png)\n\n*(a) x*\n\n**Figure 1: G**\n',
+      'See [Inner heading](#inner-heading).\n\n## Inner heading\n\n![x](x.png)\n\n*(a) x*\n\n**Figure 1: G**\n',
     )
   })
 

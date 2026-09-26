@@ -23,6 +23,7 @@ import { isUnresolvedReference, referenceSourceText } from './unresolved-referen
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
+import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue } from './render-html.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -73,47 +74,24 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   // Choose the escape carriers before anything is rendered, so every pass that
   // introduces one and every pass that resolves one agrees on them.
   chooseCarriers(ast)
-  const headingIds = new Set<string>()
-  const referencedHeadingIds = new Set<string>()
-
-  // Footnote definition bodies are rendered as block content too, so both
-  // prepasses have to see them. Without this, a heading referenced ONLY from a
-  // footnote lost its `{#id}` suffix while the reference still rendered as a
-  // link, leaving a dangling anchor in the Markdown output (carve#352).
-  const allBlocks = [...ast.children, ...Object.values(ast.footnoteDefs ?? {}).flat()]
-
-  walkBlocks(allBlocks, (node) => {
-    if (node.type === 'heading' && node.attrs?.id) headingIds.add(node.attrs.id)
-  })
-  walkBlocks(allBlocks, (_node, inlines) => {
-    if (!inlines) return
-    walkInlines(inlines, (node, insideLink) => {
-      // A crossref is its own node type (PART 12 §3a), so a scan that only
-      // looked at links stopped seeing `</#id>` references - and the heading
-      // lost the `{#id}` anchor its own reference still pointed at.
-      //
-      // A crossref INSIDE a link renders as its display text, not as a link
-      // (anchors do not nest), so it is not a reference in the output and must
-      // not pull an anchor onto the heading. Counting it left `# H {#H}` in a
-      // document whose only `</#H>` had rendered as the word `H` - a dangling
-      // anchor, which is the same defect carve#352 fixed from the other side.
-      if (insideLink) return
-      const href = node.type === 'link' || node.type === 'heading_ref' ? node.href : undefined
-      if (href === undefined) return
-      const id = fragmentId(href)
-      if (id && headingIds.has(id)) referencedHeadingIds.add(id)
-    })
-  })
+  const smartTypography: SmartTypographyMode =
+    opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph'
+  // PART 11 section 11: GFM has no heading-id syntax, so a heading is linked by
+  // the slug a GFM reader derives from its written text.
+  const headingSlugs = gfmHeadingSlugs(
+    [...ast.children, ...footnoteDefsInSourceOrder(ast).map(([, blocks]) => blocks).flat()],
+    smartTypography,
+  )
 
   const ctx: MarkdownContext = {
     options: opts,
-    headingIds,
-    referencedHeadingIds,
+    headingSlugs,
+    lastList: undefined,
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
     abbrBudget: budgetForDocument(ast),
-    smartTypography: opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph',
+    smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
@@ -123,8 +101,10 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
 
 interface MarkdownContext {
   options: MarkdownRenderOptions
-  headingIds: Set<string>
-  referencedHeadingIds: Set<string>
+  /** Carve heading id -> the GFM slug of the heading the target writes. */
+  headingSlugs: Map<string, string>
+  /** The list written last in the current container, if nothing followed it. */
+  lastList: { ordered: boolean; mark: string } | undefined
   listDepth: number
   blockDepth: number
   inlineDepth: number
@@ -187,9 +167,47 @@ function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
-    return blocks.map((b) => renderBlock(b, ctx)).join('')
+    let out = ''
+    for (const b of blocks) out += renderTracked(b, ctx)
+    return out
   } finally {
     ctx.blockDepth--
+  }
+}
+
+/**
+ * Two lists of one kind written back to back are one list to a Markdown
+ * reader, so the second takes the other marker of its kind (PART 11 section
+ * 10o). "Back to back" is decided on the output: a block that writes nothing
+ * does not separate them, and neither does a wrapper this target writes no
+ * marker for, so the last list written is tracked on the context.
+ */
+const UNMARKED_WRAPPERS = new Set(['section', 'div', 'line_block', 'admonition', 'directive', 'definition_list'])
+
+function renderTracked(block: BlockNode, ctx: MarkdownContext): string {
+  if (block.type !== 'list') {
+    const rendered = renderBlock(block, ctx)
+    if (rendered !== '' && !UNMARKED_WRAPPERS.has(block.type)) ctx.lastList = undefined
+    return rendered
+  }
+  let mark = block.ordered ? (block.delim === ')' ? ')' : '.') : (block.bulletChar ?? '-')
+  const previous = ctx.lastList
+  if (previous !== undefined && previous.ordered === block.ordered && previous.mark === mark) {
+    mark = block.ordered ? (mark === '.' ? ')' : '.') : mark === '-' ? '*' : '-'
+  }
+  const rendered = renderList(block, ctx, mark)
+  if (rendered !== '') ctx.lastList = { ordered: block.ordered, mark }
+  return rendered
+}
+
+/** Render inside a container that prefixes its lines, which starts a fresh run of lists. */
+function inOwnContainer<T>(ctx: MarkdownContext, render: () => T): T {
+  const outer = ctx.lastList
+  ctx.lastList = undefined
+  try {
+    return render()
+  } finally {
+    ctx.lastList = outer
   }
 }
 
@@ -244,13 +262,11 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
       // newline that the HTML target kept.
       const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r]*\n[ \t\r]*/g, ' '))
-      const id = node.attrs?.id
-      const suffix = id && ctx.referencedHeadingIds.has(id) ? ` {#${id}}` : ''
-      const line = escapeTrailingAtxRun(`${text}${suffix}`)
+      const line = escapeTrailingAtxRun(text)
       return `${withMarker(`${'#'.repeat(node.level)} `, line)}\n\n`
     }
     case 'paragraph':
-      return `${protectParagraphListMarkers(renderInlines(node.children, ctx))}\n\n`
+      return `${protectParagraphListMarkers(trimParagraphLines(renderInlines(node.children, ctx)))}\n\n`
     case 'code_block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
@@ -265,7 +281,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
-      const lines = containerContent(() => renderBlocks(node.children, ctx)).split('\n')
+      const lines = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx))).split('\n')
       return `${lines.map((line) => withMarker('> ', line)).join('\n')}\n\n`
     }
     case 'list':
@@ -279,6 +295,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Markdown has no admonition; preserve the title (otherwise lost) as a
       // leading bold line, then an unconsumed grouping [label] (also bold, the
       // caption floor; title first when both are present), then the body.
+      const hasLead = (node.title !== undefined && node.title.length > 0) || Boolean(node.label)
+      if (hasLead) ctx.lastList = undefined
       const body = renderBlocks(node.children, ctx)
       const title =
         node.title !== undefined ? renderInlines(unwrapStrong(node.title), ctx) : ''
@@ -292,13 +310,14 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${labelLine}${body}`
     }
     case 'div':
+      if (node.label) ctx.lastList = undefined
       return node.label
         ? `${wrapperLine(escapeText(node.label), '**', 'strong')}${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
     case 'line_block':
       return renderBlocks(node.children, ctx)
     case 'definition_list':
-      return renderDefinitionList(node.items, ctx, true)
+      return renderDefinitionList(node.items, ctx)
     case 'figure':
       return renderFigure(node, ctx)
     case 'figure_group': {
@@ -358,7 +377,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   }
 }
 
-function renderList(node: List, ctx: MarkdownContext): string {
+function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
   ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
@@ -366,14 +385,14 @@ function renderList(node: List, ctx: MarkdownContext): string {
   // SEPARATES two adjacent lists in CommonMark, so emitting `-` for a `*` list
   // merges lists the source kept apart - the same section 11 rule the AST
   // records `bulletChar` for and `renderCarve` already honors (carve#352).
-  const bullet = node.bulletChar ?? '-'
+  const bullet = mark ?? node.bulletChar ?? '-'
   // The authored ordered-list delimiter, for the same reason as the bullet above:
   // in CommonMark a change of delimiter SEPARATES two adjacent lists, so emitting
   // `1.` for a `1)` list merges lists the source kept apart. Measured against
   // commonmark.js - `1. a` followed by `1) c` gives two `<ol>` elements, the same
   // input with one delimiter gives one. The AST records `delim` and `renderCarve`
   // already reproduces it (carve#352, corpus 31).
-  const delim = node.delim === ')' ? ')' : '.'
+  const delim = mark ?? (node.delim === ')' ? ')' : '.')
   let first = true
   for (const item of node.items) {
     // A loose list is loose in CommonMark because blank lines separate its
@@ -397,7 +416,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
       prefix = `${bullet} `
       pad = prefix.length
     }
-    const content = containerContent(() => renderListItem(item, node.tight, ctx))
+    const content = containerContent(() => inOwnContainer(ctx, () => renderListItem(item, node.tight, ctx)))
     const lines = content.split('\n')
     // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
     // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
@@ -514,7 +533,7 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
     let above: BlockNode | undefined
     let aboveRendered = ''
     for (const child of item.children) {
-      const rendered = renderBlock(child, ctx)
+      const rendered = renderTracked(child, ctx)
       // A blank between a tight item's blocks makes the item loose in
       // CommonMark, so drop the separator the block above left wherever the
       // child below opens a construct of its own under it.
@@ -535,14 +554,21 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
   }
 }
 
-function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, trailingBlank: boolean): string {
+/**
+ * GFM has no definition list and reads a `: ` marker as text, so each entry is
+ * its terms as strong paragraphs followed by its descriptions' blocks (PART 11
+ * section 10p).
+ */
+function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): string {
   let out = ''
   for (const item of items) {
-    for (const term of item.terms) out += wrapperLine(renderInlines(term, ctx), '**', 'strong', '\n')
-    for (const def of item.definitions)
-      out += `${withMarker(': ', containerContent(() => renderBlocks(def, ctx)))}\n`
+    for (const term of item.terms) {
+      out += wrapperLine(renderInlines(term, ctx), '**', 'strong')
+      ctx.lastList = undefined
+    }
+    for (const def of item.definitions) out += renderBlocks(def, ctx)
   }
-  return trailingBlank ? `${out}\n` : out
+  return out
 }
 
 function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0): string {
@@ -607,6 +633,14 @@ function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext, depth = 0):
         // the cell was block decoration, not content.
         break
       case 'raw_block':
+        // Raw HTML is text here (PART 12 §27): the escaping keeps it inert
+        // without spelling it as entities a reader would show verbatim.
+        if (block.format === 'html') {
+          parts.push(renderInlines([{ type: 'text', value: stripControls(block.content) }], ctx))
+          break
+        }
+        parts.push(renderInlines([{ type: 'text', value: renderBlock(block, ctx).trim() }], ctx))
+        break
       case 'abbreviation_def':
         // The one pair whose content no inline node holds. Each keeps the
         // target's own spelling, because dropping it would lose the only place
@@ -639,10 +673,12 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
     const cells = row.cells.map((cell) =>
-      withinTableCell(() => {
-        if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
-        return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
-      }),
+      escapeCellPipes(
+        withinTableCell(() => {
+          if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
+          return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
+        }),
+      ),
     )
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) {
@@ -685,6 +721,12 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     }
   }
   let out = ''
+  if (header === undefined) {
+    // GFM reads a pipe table only below a header row, so a headerless table
+    // gets an empty one as wide as its widest row (PART 11 section 10n).
+    headerColumns = Math.max(0, ...node.rows.map((row) => row.cells.length))
+    if (headerColumns > 0) header = `| ${Array.from({ length: headerColumns }, () => '').join(' | ')} |`
+  }
   if (header !== undefined) {
     out += `${header}\n`
     // The delimiter promotes the header row, so its width must match that row,
@@ -706,6 +748,16 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     out += `\n${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
   }
   return `${out}\n`
+}
+
+/**
+ * GFM splits a row on every unescaped `|` before it reads any inline, a code
+ * span included, and reads `\|` back as `|` there (PART 11 section 8h).
+ */
+function escapeCellPipes(cell: string): string {
+  return cell.replace(/(\\*)\|/g, (match, backslashes: string) =>
+    backslashes.length % 2 === 0 ? `${backslashes}\\|` : match,
+  )
 }
 
 function renderFigure(node: Figure, ctx: MarkdownContext): string {
@@ -751,7 +803,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   for (const [label, blocks] of footnoteDefsInSourceOrder(ast)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
-    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(() => outsideLink(() => renderBlocks(blocks, ctx))))}\n`
+    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(() => inOwnContainer(ctx, () => outsideLink(() => renderBlocks(blocks, ctx)))))}\n`
   }
   return out
 }
@@ -991,11 +1043,12 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // words it resolved to - the same rule `renderLink` applies to an
       // ordinary `#fragment` link.
       const crossrefId = fragmentId(node.href)
-      if (insideLink || !crossrefId || !ctx.headingIds.has(crossrefId)) return crossrefText
+      const crossrefSlug = crossrefId === undefined ? undefined : ctx.headingSlugs.get(crossrefId)
+      if (insideLink || crossrefSlug === undefined) return crossrefText
       // Resolved: the Markdown link this crossref always rendered as. The
       // authored `</#target>` stays in the tree (PART 12 §3a); only this
       // target's OUTPUT resolves it.
-      return `[${crossrefText}](${markdownFragmentDestination(crossrefId)})`
+      return `[${crossrefText}](#${crossrefSlug})`
     }
     case 'caption_number':
       // An unnumbered placeholder is a literal `#`, and M1f decides it like one.
@@ -1068,8 +1121,8 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   // A fragment that names no heading is still the author's destination, so the
   // link is kept (PART 11 section 11a).
   const id = fragmentId(node.href)
-  const destination =
-    id && ctx.headingIds.has(id) ? markdownFragmentDestination(id) : markdownDestination(node.href)
+  const slug = id === undefined ? undefined : ctx.headingSlugs.get(id)
+  const destination = slug !== undefined ? `#${slug}` : markdownDestination(node.href)
   return node.title === undefined
     ? `[${text}](${destination})`
     : `[${text}](${destination} "${escapeMdTitle(node.title)}")`
@@ -1138,9 +1191,78 @@ function renderCode(content: string): string {
     : `${fence}${content}${fence}`
 }
 
-function markdownFragmentDestination(id: string): string {
-  if (!/[\s()<>]/.test(id)) return `#${id}`
-  return `<#${id.replace(/[\\<>]/g, (ch) => `\\${ch}`)}>`
+/**
+ * The GFM slug of every heading this target writes, keyed by the Carve id the
+ * document assigned it (PART 11 section 11, G1-G5). The walk follows the
+ * written order and skips table cells, which flatten their headings.
+ */
+function gfmHeadingSlugs(blocks: BlockNode[], typography: SmartTypographyMode): Map<string, string> {
+  const slugs = new Map<string, string>()
+  const counts = new Map<string, number>()
+  const taken = new Set<string>()
+  const visit = (nodes: BlockNode[], depth: number): void => {
+    if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
+    for (const block of nodes) {
+      switch (block.type) {
+        case 'heading': {
+          const base = gfmSlugBase(inlineText(writtenTypography(block.children, typography)))
+          let slug = base
+          if (taken.has(slug)) {
+            let count = counts.get(base) ?? 0
+            do {
+              count++
+              slug = `${base}-${count}`
+            } while (taken.has(slug))
+            counts.set(base, count)
+          }
+          taken.add(slug)
+          const id = block.attrs?.id
+          if (id !== undefined && !slugs.has(id)) slugs.set(id, slug)
+          break
+        }
+        case 'block_quote':
+        case 'admonition':
+        case 'directive':
+        case 'div':
+        case 'section':
+        case 'line_block':
+        case 'figure_group':
+          visit(block.children, depth + 1)
+          break
+        case 'list':
+          for (const item of block.items) visit(item.children, depth + 1)
+          break
+        case 'definition_list':
+          for (const item of block.items) for (const def of item.definitions) visit(def, depth + 1)
+          break
+        case 'figure':
+          if (block.target.type === 'block_quote') visit(block.target.children, depth + 1)
+          break
+        default:
+          break
+      }
+    }
+  }
+  visit(blocks, 0)
+  return slugs
+}
+
+/** G1-G4: the text a GFM reader slugs, lowercased, stripped and hyphenated. */
+function gfmSlugBase(text: string): string {
+  return text
+    .normalize('NFC')
+    .replace(/^[ \t\n]+|[ \t\n]+$/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
+    .replace(/ /g, '-')
+}
+
+/** A heading's inlines with smart punctuation spelled the way this target writes it. */
+function writtenTypography(nodes: InlineNode[], typography: SmartTypographyMode): InlineNode[] {
+  if (typography !== 'source') return nodes
+  return JSON.parse(JSON.stringify(nodes), (_key, value) =>
+    value && value.type === 'smart_punctuation' ? { type: 'text', value: value.value } : value,
+  ) as InlineNode[]
 }
 
 /**
@@ -1291,7 +1413,40 @@ function escapeText(text: string): string {
   //
   // AFTER the metacharacter pass, so the backslash this inserts is not itself
   // escaped by it.
-  return text.replace(/<(?=[A-Za-z/!?])/g, '\\<')
+  //
+  // PART 11 section 8d: the decision reads the EMITTED line, so a character
+  // whose deciding neighbors run past the end of this text is left as a
+  // carrier for `resolveContextEscapes`. Deciding everything else here keeps
+  // the carriers rare, which matters on long runs of `!` or `&`.
+  const hash = `[#${AUTHORED_SENTINEL['#']}]`
+  text = text
+    .replace(/<(?=[A-Za-z/!?])/g, '\\<')
+    .replace(new RegExp(`&(?=${hash}[0-9]{1,7};|${hash}[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]*;)`, 'g'), '\\&')
+    .replace(/<$/, CONTEXT_SENTINEL['<']!)
+    .replace(/!$/, CONTEXT_SENTINEL['!']!)
+  const openReference = new RegExp(`&((?:${hash}(?:[0-9]{0,7}|[xX][0-9a-fA-F]{0,6})|[A-Za-z][A-Za-z0-9]*)?)$`)
+
+  return text.replace(openReference, `${CONTEXT_SENTINEL['&']}$1`)
+}
+
+/**
+ * No space or tab at either edge of a paragraph line (PART 11 section 10m): four
+ * leading columns open an indented code block and two trailing spaces make a
+ * hard break. A trailing hard-break backslash stays the line's last character,
+ * and a line left empty is dropped, since it would end the paragraph.
+ */
+function trimParagraphLines(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '')
+      const run = /\\+$/.exec(trimmed)?.[0] ?? ''
+      if (run.length % 2 === 0) return trimmed
+
+      return `${trimmed.slice(0, -1).replace(/[ \t]+$/, '')}\\`
+    })
+    .filter((line, i, lines) => line !== '' || i === 0 || i === lines.length - 1)
+    .join('\n')
 }
 
 /**
@@ -1309,6 +1464,7 @@ function protectParagraphListMarkers(text: string): string {
         .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
         .replace(/^([ \t]{0,3}\d{1,9})([.)])(?=[ \t])/, '$1\\$2')
         .replace(/^([ \t]{0,3})>/, '$1\\>')
+      line = protectBlockShapes(line, lineIndex === 0)
       lines[lineIndex] = line
     }
 
@@ -1330,6 +1486,32 @@ function protectParagraphListMarkers(text: string): string {
   }
 
   return lines.join('\n')
+}
+
+/**
+ * PART 11 section 8g: a paragraph line must not read as a thematic break (T1),
+ * a setext underline (T2, below the first line) or an empty list item (T3, on
+ * the first line). `_` and `#` are still carriers here, so they are read as the
+ * characters they stand for.
+ */
+function protectBlockShapes(line: string, first: boolean): string {
+  const view = line.replace(RE_ANY_SENTINEL, sentinelCharacter)
+  const match = /^([ \t]{0,3})(\S)/.exec(view)
+  if (!match) return line
+  const at = match[1]!.length
+  const content = view.slice(at)
+  const thematic = /^([-_*])(?:[ \t]*\1){2,}[ \t]*$/.test(content)
+  const setext = !first && /^(?:=+|-+)[ \t]*$/.test(content)
+  if (thematic || setext) return `${line.slice(0, at)}\\${sentinelCharacter(line[at]!)}${line.slice(at + 1)}`
+  if (first) {
+    const bare = /^(?:([-+])|\d{1,9}([.)]))[ \t]*$/.exec(content)
+    if (bare) {
+      const escapeAt = bare[1] !== undefined ? at : at + content.search(/[.)]/)
+
+      return `${line.slice(0, escapeAt)}\\${line.slice(escapeAt)}`
+    }
+  }
+  return line
 }
 
 /**
@@ -1493,19 +1675,44 @@ let HAS_UNDECIDED_HASH = /(?!)/
  * NOT the same run: the two never overlap in time, and one shared run would make
  * a slot added on either side a renumbering on the other (see sentinel-run.ts).
  */
+/**
+ * Carriers for the escapes decided by the characters that FOLLOW on the emitted
+ * line, whichever node writes them (PART 11 section 8d): `<` before a tag or
+ * autolink opener (M1e), `&` completing a character reference (section 8e) and
+ * `!` before a link opener the writer emits (section 8f).
+ */
+let CONTEXT_SENTINEL: Record<string, string> = {}
+let CONTEXT_CHARACTER: Record<string, string> = {}
+let RE_CONTEXT_SENTINEL = /(?!)/g
+let HAS_CONTEXT_SENTINEL = /(?!)/
+let RE_ANY_SENTINEL = /(?!)/g
+
 const CARRIER_BASE = 0xe004
-const CARRIER_COUNT = 4
+const CARRIER_COUNT = 7
 
 function setCarriers(run: string[]): void {
-  const [underscore, bracket, undecidedHash, keptHash] = run as [string, string, string, string]
+  const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang] = run as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ]
+  CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang }
+  CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!' }
+  RE_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}]`, 'g')
+  HAS_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}]`)
+  RE_ANY_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`, 'g')
 
   NARROWED_SENTINEL = { _: underscore, '[': bracket }
   NARROWED_CHARACTER = { [underscore]: '_', [bracket]: '[' }
   AUTHORED_SENTINEL = { '#': undecidedHash }
   AUTHORED_KEPT = keptHash
   AUTHORED_CHARACTER = { [undecidedHash]: '#', [keptHash]: '#' }
-  RE_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`, 'g')
-  HAS_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`)
+  RE_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[3]}]`, 'g')
+  HAS_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[3]}]`)
   RE_UNDECIDED_HASH = new RegExp(undecidedHash, 'g')
   HAS_UNDECIDED_HASH = new RegExp(undecidedHash)
 }
@@ -1518,9 +1725,29 @@ function chooseCarriers(ast: Document): void {
 
 setCarriers(pickSentinelRun(new Set(), CARRIER_BASE, CARRIER_COUNT))
 
-/** The bare character a sentinel stands for, for both passes that build a line view. */
+/** The bare character a sentinel stands for, for every pass that builds a line view. */
 function sentinelCharacter(s: string): string {
-  return NARROWED_CHARACTER[s] ?? AUTHORED_CHARACTER[s]!
+  return NARROWED_CHARACTER[s] ?? AUTHORED_CHARACTER[s] ?? CONTEXT_CHARACTER[s] ?? s
+}
+
+
+const CHARACTER_REFERENCE = /^&(?:#[0-9]{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]*;)/
+
+function resolveContextEscapes(text: string): string {
+  if (!HAS_CONTEXT_SENTINEL.test(text)) return text
+  const line = text.replace(RE_ANY_SENTINEL, sentinelCharacter)
+
+  return text.replace(RE_CONTEXT_SENTINEL, (s, offset: number) => {
+    const ch = CONTEXT_CHARACTER[s]!
+    let keep: boolean
+    if (ch === '<') keep = /[A-Za-z/!?]/.test(line[offset + 1] ?? '')
+    else if (ch === '&') keep = CHARACTER_REFERENCE.test(line.slice(offset, offset + 40))
+    // A `[` still standing in the output is markup: a text bracket is a carrier
+    // here and an authored one is behind its backslash.
+    else keep = text[offset + 1] === '['
+
+    return keep ? `\\${ch}` : ch
+  })
 }
 
 /**
@@ -1860,117 +2087,7 @@ function normalize(text: string): string {
   // placeholder-derived leading indentation survives.
   const collapsed = `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`
 
-  return resolveNarrowedEscapes(collapsed)
-}
-
-/**
- * Bounded by `MAX_RENDER_DEPTH`, like the render pass it runs ahead of: §25
- * requires the resolve passes to be bounded too, and a pre-pass that overflows
- * the host stack refuses nothing (carve#526).
- */
-function walkBlocks(
-  blocks: BlockNode[],
-  visit: (node: BlockNode, inlines?: InlineNode[]) => void,
-  depth = 0,
-): void {
-  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
-  for (const block of blocks) {
-    visit(block)
-    switch (block.type) {
-      case 'heading':
-      case 'paragraph':
-        visit(block, block.children)
-        break
-      case 'block_quote':
-      case 'admonition':
-      case 'directive':
-      case 'div':
-      case 'section':
-      case 'line_block':
-        walkBlocks(block.children, visit, depth + 1)
-        break
-      case 'list':
-        for (const item of block.items) walkBlocks(item.children, visit, depth + 1)
-        break
-      case 'definition_list':
-        for (const item of block.items) {
-          for (const term of item.terms) visit(block, term)
-          for (const def of item.definitions) walkBlocks(def, visit, depth + 1)
-        }
-        break
-      case 'table':
-        if (block.caption) visit(block, block.caption)
-        for (const row of block.rows) for (const cell of row.cells) {
-          if (cell.blocks) walkBlocks(cell.blocks, visit, depth + 1)
-          else visit(block, cell.children)
-        }
-        break
-      case 'figure':
-        visit(block, block.caption)
-        if (block.target.type === 'block_quote') walkBlocks(block.target.children, visit, depth + 1)
-        else if (block.target.type === 'table') walkBlocks([block.target], visit, depth + 1)
-        break
-      case 'figure_group':
-        // The prepass feeds the heading-id index and the reference scan; a
-        // heading inside a composite figure is a crossref target like any
-        // other, and the group caption carries references of its own.
-        if (block.caption) visit(block, block.caption)
-        walkBlocks(block.children, visit, depth + 1)
-        break
-      default:
-        break
-    }
-  }
-}
-
-function walkInlines(
-  nodes: InlineNode[],
-  visit: (node: InlineNode, insideLink: boolean) => void,
-  depth = 0,
-  insideLink = false,
-): void {
-  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
-  for (const node of nodes) {
-    visit(node, insideLink)
-    switch (node.type) {
-      case 'emphasis':
-      case 'strong':
-      case 'underline':
-      case 'strike':
-      case 'superscript':
-      case 'subscript':
-      case 'highlight':
-      case 'link':
-      case 'span':
-      case 'small_caps':
-      case 'insert':
-      case 'delete':
-        // A link's own label is inside a link; everything else inherits.
-        walkInlines(node.children, visit, depth + 1, insideLink || node.type === 'link')
-        break
-      case 'ruby':
-        for (const pair of node.pairs) {
-          walkInlines(pair.base, visit, depth + 1, insideLink)
-          walkInlines(pair.annotation, visit, depth + 1, insideLink)
-        }
-        break
-      case 'inline_extension':
-        walkInlines(node.content, visit, depth + 1, insideLink)
-        break
-      case 'footnote_ref':
-      case 'inline_footnote':
-        // A note body renders in the endnotes, outside any anchor, so a
-        // reference in it IS a reference in the output.
-        if (node.inline) walkInlines(node.inline, visit, depth + 1, false)
-        break
-      case 'substitution':
-        walkInlines(node.old, visit, depth + 1, insideLink)
-        walkInlines(node.new, visit, depth + 1, insideLink)
-        break
-      default:
-        break
-    }
-  }
+  return resolveNarrowedEscapes(resolveContextEscapes(collapsed))
 }
 
 /**
@@ -2043,8 +2160,7 @@ const firstCharacter = (s: string): string =>
  * test therefore has to ask about the character the reader will see, not the
  * carrier that is standing in for it until `resolveNarrowedEscapes` runs.
  */
-const flankCharacter = (ch: string): string =>
-  ch !== '' && HAS_NARROWED_SENTINEL.test(ch) ? sentinelCharacter(ch) : ch
+const flankCharacter = (ch: string): string => (ch === '' ? ch : sentinelCharacter(ch))
 
 /**
  * One side of CommonMark 6.2, and it really is ONE side: left-flanking and

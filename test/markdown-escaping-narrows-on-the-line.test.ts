@@ -43,7 +43,8 @@ describe("the Markdown target's escaping narrows on the line", () => {
           } as BlockNode,
         ],
       }
-      expect(renderMarkdown(doc).trim()).toBe('para\n   \\- tail')
+      // PART 11 section 10m drops the indent, and M1c still escapes the marker.
+      expect(renderMarkdown(doc).trim()).toBe('para\n\\- tail')
       expect(md('- real')).toBe('- real')
     })
 

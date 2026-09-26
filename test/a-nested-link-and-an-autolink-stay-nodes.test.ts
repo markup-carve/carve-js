@@ -143,7 +143,7 @@ describe('a nested link and an autolink stay nodes', () => {
     // published a nested link until they did.
     const src = '{#h}\n# [a](/u) and <https://e.com>\n\nSee </#h>.\n'
     expect(carveToHtml(src)).toContain('<p>See <a href="#h">a and https://e.com</a>.</p>')
-    expect(carveToMarkdown(src)).toContain('See [a and https://e.com](#h).\n')
+    expect(carveToMarkdown(src)).toContain('See [a and https://e.com](#a-and-httpsecom).\n')
     expect(carveToPlainText(src)).toContain('See a and https://e.com.\n')
     // ANSI too. Without this row a mutant that dropped the link context from the
     // ANSI crossref arm alone passed every other assertion in this file.
