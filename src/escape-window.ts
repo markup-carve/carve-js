@@ -19,8 +19,8 @@ const SLICEABLE_TYPES: ReadonlySet<string> = new Set([
 ])
 
 interface Slot {
-  owner: Record<string, unknown>
-  key: string
+  owner: Record<string | number, unknown>
+  key: string | number
   array: unknown[]
 }
 
@@ -41,32 +41,28 @@ export class EscapeWindows {
   private readonly info = new Map<object, NodeInfo>()
 
   constructor(private readonly ast: Document) {
-    // Same traversal as `collectEscapeUnits`: iterative, `attrs` and `pos` skipped.
-    const stack: Array<{ value: unknown; parent: object | null; step: Step | undefined }> = [
-      { value: ast, parent: null, step: undefined },
-    ]
+    // Same reach as `collectEscapeUnits`: iterative, into nested arrays, `attrs`
+    // and `pos` skipped. Untyped objects (a definition list's items) are
+    // recorded too, so a path can pass through them.
+    type Frame = { value: unknown; parent: object | null; step?: Step | undefined; holder?: Slot['owner']; key?: string | number }
+    const stack: Frame[] = [{ value: ast, parent: null }]
     while (stack.length > 0) {
-      const { value, parent, step } = stack.pop()!
-      if (!value || typeof value !== 'object' || Array.isArray(value)) continue
-      const record = value as Record<string, unknown>
-      let owner = parent
-      if (typeof record['type'] === 'string') {
-        if (this.info.has(record)) continue
-        this.info.set(record, { parent, step })
-        owner = record
+      const { value, parent, step, holder, key } = stack.pop()!
+      if (!value || typeof value !== 'object') continue
+      if (Array.isArray(value)) {
+        const slot: Slot | undefined =
+          holder !== undefined && key !== undefined && isSliceable(value, holder, key) ? { owner: holder, key, array: value } : undefined
+        for (let i = value.length - 1; i >= 0; i--) {
+          stack.push({ value: value[i], parent, step: slot && { slot, index: i }, holder: value as unknown as Slot['owner'], key: i })
+        }
+        continue
       }
-      for (const key of Object.keys(record)) {
-        if (key === 'attrs' || key === 'pos') continue
-        const child = record[key]
-        if (!Array.isArray(child)) {
-          stack.push({ value: child, parent: owner, step: undefined })
-          continue
-        }
-        const sliceable = record['type'] !== undefined && child.length > 0 && child.every(isSliceable)
-        const slot: Slot = { owner: record, key, array: child }
-        for (let i = child.length - 1; i >= 0; i--) {
-          stack.push({ value: child[i], parent: owner, step: sliceable ? { slot, index: i } : undefined })
-        }
+      if (this.info.has(value)) continue
+      this.info.set(value, { parent, step })
+      const record = value as Record<string, unknown>
+      for (const name of Object.keys(record)) {
+        if (name === 'attrs' || name === 'pos') continue
+        stack.push({ value: record[name], parent: record, holder: record, key: name })
       }
     }
   }
@@ -136,6 +132,11 @@ export class EscapeWindows {
   }
 }
 
-function isSliceable(value: unknown): boolean {
-  return value !== null && typeof value === 'object' && SLICEABLE_TYPES.has((value as { type?: unknown }).type as string)
+/** Block lists, and a definition list's items: arrays a window may cut. */
+function isSliceable(array: unknown[], holder: Slot['owner'], key: string | number): boolean {
+  if (array.length === 0) return false
+  if (key === 'items' && (holder as { type?: unknown }).type === 'definition_list') return true
+  return array.every(
+    (value) => value !== null && typeof value === 'object' && SLICEABLE_TYPES.has((value as { type?: unknown }).type as string),
+  )
 }
