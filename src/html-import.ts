@@ -243,6 +243,18 @@ const BLOCK = new Set([
 ])
 
 /**
+ * The tags `inline()` maps or handles before its generic unwrap arm. Any other
+ * element is unsupported, and in block context it is unwrapped IN PLACE
+ * (markup-carve/carve#2341). The flattened-block spellings are left out too:
+ * their parents give them meaning, so a stray one is not an unknown element.
+ */
+const INLINE_HANDLED = new Set([
+  'q', 'math', 'ruby', 'em', 'i', 'strong', 'b', 'del', 'ins', 's', 'strike', 'u',
+  'mark', 'sub', 'sup', 'code', 'a', 'img', 'br', 'span', 'carve-footnote-ref',
+  'summary', 'input',
+])
+
+/**
  * The media wrappers whose children are FALLBACK CONTENT (ruling
  * markup-carve/carve#1749).
  */
@@ -1918,11 +1930,15 @@ class Importer {
      * `/p[3]` counts the siblings `/math[1]` did not.
      */
     let inlinePaths: string[] = []
+    // A node inside a spliced wrapper keeps the depth it really sits at.
+    let inlineDepths: number[] = []
     const flush = (): void => {
       const buffered = inlineBuffer
       const bufferedPaths = inlinePaths
+      const bufferedDepths = inlineDepths
       inlineBuffer = []
       inlinePaths = []
+      inlineDepths = []
       /*
        * A RUN THAT HOLDS NOTHING BUT COMMENTS IS A BLOCK COMMENT RUN, not a
        * paragraph carrying inline ones (markup-carve/carve#1709).
@@ -1955,18 +1971,26 @@ class Importer {
         })
         return
       }
-      const children = this.blockInlines(buffered, parentPath, depth + 1, bufferedPaths)
+      const children = this.blockInlines(buffered, parentPath, depth + 1, bufferedPaths, bufferedDepths)
       if (!this.visible(children)) return
       out.push(this.bareBlockImage(children) ?? { type: 'paragraph', children })
     }
-    nodes.forEach((node, index) => {
-      const path = paths?.[index] ?? this.childPath(parentPath, node, index)
+    for (const { node, path, level, splice } of this.spliceUnsupported(nodes, parentPath, paths)) {
+      if (splice) {
+        // The wrapper's children take its place in this stream, so an inline
+        // run around it stays one run and a block inside it stays a block.
+        this.enter(depth + level)
+        const unwrapped = this.reportUnsupportedElement(node, node.tagName!, path)
+        this.reportUnwrappedAttributes(node, this.attrs(node, path), node.tagName!, path, unwrapped)
+        continue
+      }
       if (isLayoutOnlyText(node)) {
         if (inlineBuffer.length) {
           inlineBuffer.push(node)
           inlinePaths.push(path)
+          inlineDepths.push(depth + level + 1)
         }
-        return
+        continue
       }
       /*
        * A MEDIA WRAPPER'S FALLBACK IS CONVERTED AS BLOCKS (ruling
@@ -1977,18 +2001,89 @@ class Importer {
        */
       if (node.tagName && MEDIA_FALLBACK.has(node.tagName) && this.mode !== 'roundtrip') {
         flush()
-        out.push(...this.mediaFallback(node, node.tagName, path, depth + 1))
-        return
+        out.push(...this.mediaFallback(node, node.tagName, path, depth + level + 1))
+        continue
       }
       if (!node.tagName || !BLOCK.has(node.tagName)) {
         inlineBuffer.push(node)
         inlinePaths.push(path)
-        return
+        inlineDepths.push(depth + level + 1)
+        continue
       }
       flush()
-      out.push(...this.block(node, path, depth + 1))
-    })
+      out.push(...this.block(node, path, depth + level + 1))
+    }
     flush()
+    return out
+  }
+
+  /**
+   * `nodes` with every unsupported element that holds a block replaced by a
+   * marker entry followed by its own children, at any nesting.
+   *
+   * An element holding only inline content is left alone: `blocks()` buffers
+   * it and the inline arm unwraps it, which already keeps its content in place.
+   * Iterative, so a deep chain of wrappers cannot overflow the stack.
+   */
+  private spliceUnsupported(
+    nodes: P5Node[],
+    parentPath: string,
+    paths?: string[],
+  ): Array<{ node: P5Node; path: string; level: number; splice: boolean }> {
+    const out: Array<{ node: P5Node; path: string; level: number; splice: boolean }> = []
+    if (this.mode === 'roundtrip') {
+      nodes.forEach((node, index) => out.push({ node, path: paths?.[index] ?? this.childPath(parentPath, node, index), level: 0, splice: false }))
+      return out
+    }
+    const holdsBlock = new Map<P5Node, boolean>()
+    const spliceable = (node: P5Node): boolean => {
+      const tag = node.tagName
+      if (!tag || BLOCK.has(tag) || ACTIVE.has(tag) || MEDIA_FALLBACK.has(tag)) return false
+      if (INLINE_HANDLED.has(tag) || SEMANTIC_SPAN_TAGS.has(tag) || FLATTENED_BLOCK_EXTRA.has(tag)) return false
+      return true
+    }
+    // Post-order over the unsupported elements only, so each is weighed once.
+    const pending: Array<{ node: P5Node; expanded: boolean }> = nodes.filter(spliceable).map((node) => ({ node, expanded: false }))
+    while (pending.length) {
+      const top = pending[pending.length - 1]!
+      if (holdsBlock.has(top.node)) {
+        pending.pop()
+        continue
+      }
+      const children = top.node.childNodes ?? []
+      if (!top.expanded) {
+        top.expanded = true
+        for (const child of children) if (spliceable(child) && !holdsBlock.has(child)) pending.push({ node: child, expanded: false })
+        continue
+      }
+      pending.pop()
+      holdsBlock.set(
+        top.node,
+        children.some((child) => {
+          const tag = child.tagName
+          return tag !== undefined && (BLOCK.has(tag) || MEDIA_FALLBACK.has(tag) || holdsBlock.get(child) === true)
+        }),
+      )
+    }
+    const frames: Array<{ nodes: P5Node[]; parentPath: string; paths?: string[] | undefined; level: number; index: number }> = [
+      { nodes, parentPath, paths, level: 0, index: 0 },
+    ]
+    while (frames.length) {
+      const frame = frames[frames.length - 1]!
+      if (frame.index >= frame.nodes.length) {
+        frames.pop()
+        continue
+      }
+      const index = frame.index++
+      const node = frame.nodes[index]!
+      const path = frame.paths?.[index] ?? this.childPath(frame.parentPath, node, index)
+      if (holdsBlock.get(node) === true) {
+        out.push({ node, path, level: frame.level + 1, splice: true })
+        frames.push({ nodes: node.childNodes ?? [], parentPath: path, level: frame.level + 1, index: 0 })
+        continue
+      }
+      out.push({ node, path, level: frame.level, splice: false })
+    }
     return out
   }
 
@@ -2480,7 +2575,10 @@ class Importer {
     // HTML of a tight item with a sublist; the task-list checkbox `<input>` is
     // consumed into the `[x]` marker rather than imported, so it does not vote
     // either.
-    const tight = !listItems.some((li) => (li.childNodes ?? []).some((child) => child.tagName === 'p'))
+    // Seen through the unsupported wrappers `blocks()` splices away.
+    const tight = !listItems.some((li) =>
+      this.spliceUnsupported(li.childNodes ?? [], path).some((entry) => !entry.splice && entry.node.tagName === 'p'),
+    )
     const start = this.listStart(node, path, ordered)
     const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
     return [...before, list]
@@ -3727,7 +3825,7 @@ class Importer {
     return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: caption }] : [])]
   }
 
-  private inlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): InlineNode[] {
+  private inlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[], depths?: number[]): InlineNode[] {
     const out: InlineNode[] = []
     // A BLOCK BOUNDARY IN AN INLINE SLOT SURVIVES ONLY IN THE BYTES (PART 11
     // §1b). A caption holds inline content, so a `<figcaption>` carrying two
@@ -3741,7 +3839,7 @@ class Importer {
     let previousWasBlock = false
     nodes.forEach((node, index) => {
       const path = paths?.[index] ?? this.childPath(parentPath, node, index)
-      const produced = this.inline(node, path, depth)
+      const produced = this.inline(node, path, depths?.[index] ?? depth)
       for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) out.push({ type: 'text', value: ' ' })
@@ -3766,8 +3864,8 @@ class Importer {
    * a table cell, a caption, a term, a title - where the whitespace at the two
    * edges is not content and the re-parse will not keep it.
    */
-  private blockInlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): InlineNode[] {
-    return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths))
+  private blockInlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[], depths?: number[]): InlineNode[] {
+    return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths, depths))
   }
 
   private inline(node: P5Node, path: string, depth: number): InlineNode[] {
