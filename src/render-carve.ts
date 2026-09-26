@@ -3291,8 +3291,10 @@ function quoteAttrValue(value: string): string {
   // PART 7's four characters, not `\s`. With `\s` a value carrying a vertical
   // tab was quoted defensively, so the writer's own output no longer round-
   // tripped to the shorter spelling the parser accepts.
-  if (/^[^ \t\n\r"'{}]+$/.test(value)) return value
-  return `"${value.replace(/[\\"]/g, '\\$&')}"`
+  // A pipe is quoted and escaped: `\|` is the only pipe a table row's cell
+  // cut leaves in place ([CARVE-P2-019]).
+  if (/^[^ \t\n\r"'{}|]+$/.test(value)) return value
+  return `"${value.replace(/[\\"|]/g, '\\$&')}"`
 }
 
 /**
