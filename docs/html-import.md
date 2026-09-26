@@ -54,6 +54,22 @@ if (report.diagnostics.at(-1)?.code === 'diagnostics-truncated') {
 
 Raising `maxDiagnostics` and importing again is what gets the rest.
 
+## Tables whose cells hold blocks
+
+A pipe-table cell is one line, so by default a cell holding a list, a code
+block or several paragraphs is flattened to its text. `listTableForBlockCells:
+true` (CLI: `--list-table`) writes such a table as a `::: list-table` instead,
+whose cells are list items and keep their blocks. A table whose cells are all
+inline keeps the pipe form.
+
+```ts
+const { value } = htmlToCarve(html, { listTableForBlockCells: true })
+```
+
+It is off by default because ListTable is an optional extension: render the
+result with `listTable()` enabled, or the table shows as a nested list. The
+Markdown target writes a list table as a pipe table either way.
+
 ## What the importer does not model
 
 

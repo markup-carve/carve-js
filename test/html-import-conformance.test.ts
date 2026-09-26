@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { htmlToAst, htmlToCarve, toAstJson } from '../src/index.js'
@@ -90,8 +90,12 @@ describe('shared HTML import contract', () => {
       const expectedCarve = readFileSync(resolve(dir, 'expected.crv'), 'utf8')
       const expectedAst = JSON.parse(readFileSync(resolve(dir, 'expected.ast.json'), 'utf8'))
       const expectedReport = JSON.parse(readFileSync(resolve(dir, 'expected.report.json'), 'utf8'))
-      const ast = htmlToAst(html)
-      const carve = htmlToCarve(html)
+      // A fixture that needs a non-default import option names it in
+      // `options.json`, keyed by the JavaScript option names.
+      const optionsPath = resolve(dir, 'options.json')
+      const options = existsSync(optionsPath) ? JSON.parse(readFileSync(optionsPath, 'utf8')) : {}
+      const ast = htmlToAst(html, options)
+      const carve = htmlToCarve(html, options)
 
       const ahead = AHEAD_OF_PIN.get(fixture)
       if (ahead?.carve !== undefined) {

@@ -1,5 +1,6 @@
 import { parseFragment, serializeOuter } from 'parse5'
 import type {
+  Admonition,
   Attrs,
   BlockNode,
   DefinitionItem,
@@ -189,6 +190,13 @@ export interface HtmlImportOptions {
    * other construct matched as before. Omitting it changes nothing.
    */
   labels?: Partial<Record<LabelKey, string>>
+  /**
+   * Write a table whose cells hold blocks as `::: list-table` rather than
+   * flattening its cells (docs/html-import-contract.md, "A table whose cells
+   * hold blocks can be written as a list table"). Off by default: ListTable is
+   * a Tier-2 extension the reading processor has to enable.
+   */
+  listTableForBlockCells?: boolean
 }
 
 export interface HtmlImportResult<T> {
@@ -937,6 +945,7 @@ function restoreHoistedSectionId(
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
+  private readonly listTableForBlockCells: boolean
   /**
    * Every diagnostic, with what it takes to put it in the order the page
    * promises: `at` is the document position of the LOSING ELEMENT and `seq`
@@ -1101,6 +1110,7 @@ class Importer {
     this.maxNodes = options.maxNodes ?? 1_000_000
     this.maxDiagnostics = options.maxDiagnostics ?? 1_000
     this.labels = { ...LABEL_DEFAULTS, ...options.labels }
+    this.listTableForBlockCells = options.listTableForBlockCells === true
   }
 
   import(html: string): Document {
@@ -3569,6 +3579,8 @@ class Importer {
       remainingInGroup.set(row, (groupTotals.get(section) ?? 1) - index)
     }
 
+    const listForm = this.listTableForBlockCells && tr.some((row) => headerCells(row).some(holdsBlocks))
+    const ownAlignment = new Map<TableCell, Pick<TableCell, 'align' | 'valign'>>()
     const built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>> = tr.map((row, r) =>
       (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c) => {
         const cellPath = `${path}/tr[${r + 1}]/${cell.tagName}[${c + 1}]`
@@ -3633,34 +3645,52 @@ class Importer {
           if (Object.keys(cellAttrs.keyValues).length === 0) delete cellAttrs.keyValues
         }
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
-        this.cellDepth++
-        let children: InlineNode[]
-        try {
-          children = this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1)
-        } finally {
-          this.cellDepth--
+        let content: Pick<TableCell, 'children' | 'blocks'>
+        if (listForm) {
+          content = { children: [], blocks: this.blocks(cell.childNodes ?? [], cellPath, depth + 1) }
+        } else {
+          this.cellDepth++
+          try {
+            content = { children: this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1) }
+          } finally {
+            this.cellDepth--
+          }
         }
-        return {
-          cell: {
-            type: 'table_cell' as const,
-            header: cell.tagName === 'th',
-            children,
-            ...(alignment?.align ? { align: alignment.align as 'left' | 'right' | 'center' } : {}),
-            ...(alignment?.valign ? { valign: alignment.valign as 'top' | 'middle' | 'bottom' } : {}),
-            ...(kept ? { attrs: kept } : {}),
-          },
-          colspan,
-          rowspan,
+        const built: TableCell = {
+          type: 'table_cell' as const,
+          header: cell.tagName === 'th',
+          ...content,
+          ...(alignment?.align ? { align: alignment.align as 'left' | 'right' | 'center' } : {}),
+          ...(alignment?.valign ? { valign: alignment.valign as 'top' | 'middle' | 'bottom' } : {}),
+          ...(kept ? { attrs: kept } : {}),
         }
+        if (listForm) ownAlignment.set(built, { ...(built.align ? { align: built.align } : {}), ...(built.valign ? { valign: built.valign } : {}) })
+        return { cell: built, colspan, rowspan }
       }),
     )
     this.dropInheritedCellAlignment(built, leadingHeaderRows)
     // A `<tr>`'s own attributes have a slot - `table_row.attrs`, which the
     // writer spells on the closing pipe and every renderer emits on the `<tr>`
     // - and went in silence before this.
-    const rowAttrs = tr.map((row, r) => this.attrs(row, `${path}/tr[${r + 1}]`))
+    const rowAttrs = tr.map((row, r) => {
+      const own = this.attrs(row, `${path}/tr[${r + 1}]`)
+      // A list-table row is an outer item, and no renderer reads attributes there.
+      if (own && listForm) {
+        this.add('attribute-dropped', `Dropped ${this.attrNames(own).join(', ')} on <tr>: a list table row has no attribute slot`, 'info', `${path}/tr[${r + 1}]`, row)
+        return undefined
+      }
+      return own
+    })
     const rows = this.spanGrid(tr, built, rowAttrs, path, depth)
+    const unspellableBefore = this.unspellable.length
     const rowGroups = this.rowGroups(node, tr, rows, group, leadingHeaderRows, path, sectionAttrs)
+    // A list table has no slot for the grouping on either exit, so the AST exit
+    // reports what only the writing exit reports for a pipe table.
+    if (listForm && !this.writing) {
+      for (const { node: lost, path: lostPath, message } of this.unspellable.splice(unspellableBefore)) {
+        this.add('structure-unspellable', message, 'warning', lostPath, lost)
+      }
+    }
     // Whatever `rowGroups` did not place. A `<thead>` and a `<tfoot>` have no
     // slot at all - the field states the head and foot as COUNTS - and a
     // `<tbody>`'s attributes reach nothing when the field itself is not kept.
@@ -3703,6 +3733,15 @@ class Importer {
           'caption',
         )
       : undefined
+    if (listForm) {
+      // A list-table row is the list of its cells, so a row with none has no spelling.
+      const kept = rows.filter((row, r) => {
+        if (row.cells.length > 0) return true
+        this.add('structure-unspellable', 'Dropped a row with no cells: a list table row is the list of its cells', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
+        return false
+      })
+      return listTableOf(kept, ownAlignment, caption, attrs)
+    }
     return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
   }
 
@@ -5798,6 +5837,115 @@ function reachableObjects(root: unknown): Set<object> {
     for (const key of Object.keys(record)) stack.push(record[key])
   }
   return seen
+}
+
+/**
+ * A cell that holds blocks a pipe-table cell would flatten: a list, a code
+ * block, a quotation, a table, a definition list, or a second paragraph.
+ */
+function holdsBlocks(cell: P5Node): boolean {
+  let paragraphs = 0
+  // Iterative: the scan runs before the walk that enforces the depth limit.
+  const stack = [...(cell.childNodes ?? [])]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    const tag = node.tagName
+    if (tag === undefined) continue
+    if (tag === 'ul' || tag === 'ol' || tag === 'pre' || tag === 'blockquote' || tag === 'table' || tag === 'dl') return true
+    if (tag === 'p' && ++paragraphs > 1) return true
+    stack.push(...(node.childNodes ?? []))
+  }
+  return false
+}
+
+const SPAN_MARKER_ITEMS = { rowspan: '^', colspan: '<' } as const
+
+/**
+ * The pipe-table grid, written as the `::: list-table` it is equivalent to
+ * (docs/html-import-contract.md, "A table whose cells hold blocks can be
+ * written as a list table").
+ */
+function listTableOf(
+  rows: TableRow[],
+  ownAlignment: Map<TableCell, Pick<TableCell, 'align' | 'valign'>>,
+  caption: InlineNode[] | undefined,
+  attrs: Attrs | undefined,
+): Admonition {
+  // A placeholder is a header cell when the cell it continues is one.
+  const header: boolean[][] = []
+  rows.forEach((row, r) => {
+    header[r] = []
+    row.cells.forEach((cell, c) => {
+      header[r]![c] =
+        cell.span === 'rowspan' ? (header[r - 1]?.[c] ?? false)
+        : cell.span === 'colspan' ? (header[r]![c - 1] ?? false)
+        : cell.header
+    })
+  })
+  const leading = (r: number): number => {
+    let n = 0
+    while (n < rows[r]!.cells.length && header[r]![n]) n++
+    return n
+  }
+  let headerRows = 0
+  while (headerRows < rows.length && leading(headerRows) === rows[headerRows]!.cells.length) headerRows++
+  let headerCols = rows.length > headerRows ? Infinity : 0
+  for (let r = headerRows; r < rows.length; r++) headerCols = Math.min(headerCols, leading(r))
+
+  const items: ListItem[] = rows.map((row, r) => {
+    const cells: ListItem[] = row.cells.map((cell, c) => {
+      if (cell.span) {
+        return { type: 'list_item', children: [{ type: 'paragraph', children: [{ type: 'text', value: SPAN_MARKER_ITEMS[cell.span] }] }] }
+      }
+      let children = cell.blocks ?? []
+      const only = children.length === 1 ? children[0] : undefined
+      if (only?.type === 'paragraph' && !only.attrs && only.children.length === 1) {
+        const text = only.children[0]!
+        if (text.type === 'text' && !text.attrs && (text.value === '^' || text.value === '<')) {
+          children = [{ ...only, children: [{ type: 'escaped_text', value: text.value }] }]
+        }
+      }
+      const keyValues: Record<string, string> = { ...cell.attrs?.keyValues }
+      const order = cell.attrs?.order ? [...cell.attrs.order] : undefined
+      const put = (key: string, value: string | undefined): void => {
+        if (value === undefined || key in keyValues) return
+        keyValues[key] = value
+        order?.push(key)
+      }
+      if (cell.header && r >= headerRows && c >= headerCols) put('header', '')
+      const own = ownAlignment.get(cell)
+      put('align', own?.align)
+      put('valign', own?.valign)
+      const itemAttrs: Attrs = {
+        ...cell.attrs,
+        ...(Object.keys(keyValues).length > 0 ? { keyValues } : {}),
+        ...(order ? { order } : {}),
+      }
+      const hasAttrs = itemAttrs.id !== undefined || (itemAttrs.classes?.length ?? 0) > 0 || itemAttrs.keyValues !== undefined
+      return { type: 'list_item', children, ...(hasAttrs ? { attrs: itemAttrs } : {}) }
+    })
+    const tight = !cells.some((item) => item.children.length > 1)
+    return { type: 'list_item', children: [{ type: 'list', ordered: false, tight, items: cells }] }
+  })
+
+  const keyValues: Record<string, string> = { ...attrs?.keyValues }
+  const order = attrs?.order ? [...attrs.order] : undefined
+  const count = (key: string, n: number): void => {
+    if (n <= 0) return
+    keyValues[key] = String(n)
+    order?.push(key)
+  }
+  count('header-rows', headerRows)
+  count('header-cols', headerCols)
+  const tableAttrs: Attrs = { ...attrs, ...(Object.keys(keyValues).length > 0 ? { keyValues } : {}), ...(order ? { order } : {}) }
+  const hasAttrs = tableAttrs.id !== undefined || (tableAttrs.classes?.length ?? 0) > 0 || tableAttrs.keyValues !== undefined
+  return {
+    type: 'admonition',
+    kind: 'list-table',
+    ...(caption && caption.length > 0 ? { title: caption } : {}),
+    children: [{ type: 'list', ordered: false, tight: true, items }],
+    ...(hasAttrs ? { attrs: tableAttrs } : {}),
+  }
 }
 
 export function htmlToAst(html: string, options: HtmlImportOptions = {}): HtmlImportResult<Document> {
