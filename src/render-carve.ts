@@ -37,6 +37,7 @@ import { renderPlainText } from './render-plain.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
+import { collectLoneBrackets, type LoneBrackets } from './bracket-escapes.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
@@ -2506,6 +2507,7 @@ function renderInlines(
 ): string {
   const nodes = flattenRubyForCarve(sourceNodes)
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+  if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, loneBrackets)
   ctx.inlineDepth++
   try {
     let out = ''
@@ -3540,7 +3542,7 @@ function cleanEscapedText(node: Text): string {
   return node.value
 }
 
-const MINIMAL_ESCAPE_SITES = /[\\`"'(]/g
+const MINIMAL_ESCAPE_SITES = /[\\`"'[\](]/g
 const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 
 // Which set the writer is escaping right now. renderCarve renders the document
@@ -3607,6 +3609,9 @@ function escapeModeHere(): 'minimal' | 'conservative' {
  * in the same order.
  */
 const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
+
+/** §5's lone brackets, which both forms escape, by writing node and offset. */
+const loneBrackets: LoneBrackets = new WeakMap()
 
 /**
  * Which units the occurrence search numbers, so a key survives a re-render.
@@ -3995,12 +4000,17 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
   const mode = escapeModeHere()
   text = text.replace(UNWRITABLE_CONTROLS, '')
   const destinationParens = escapeUnit == null ? undefined : destinationParensByUnit.get(escapeUnit)
+  const lone = escapeUnit == null ? undefined : loneBrackets.get(escapeUnit)
   const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
   const call = mode === 'conservative' ? nextEscapeCallIndex() : 0
   let out = text
     .replace(escapes, (char, offset: number, subject: string) => {
       if (destinationParens?.has(sourceOffset + offset)) return '\\('
-      if (mode === 'minimal' && char === '(') return char
+      if (lone?.has(sourceOffset + offset)) {
+        lastOccurrenceRelaxed = false
+        return `\\${char}`
+      }
+      if (mode === 'minimal' && (char === '(' || char === '[' || char === ']')) return char
       // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
       // search has escalated, each candidate site is offered back on its own,
       // so the one occurrence that needed the escape no longer drags the rest

@@ -827,6 +827,9 @@ const IMPLEMENTED = new Set([
   // container body slot on carve-js#2038, the refused footnotes placement and
   // its lint finding on carve-js#2060.
   'a-footnotes-placement-marker-inside-a-container-does-not-place',
+  'a-core-directive-kind-class-leads-authored-attributes',
+  'a-footnotes-marker-renders-its-authored-blocks-before-the-placed-section',
+  'an-unplaced-footnotes-marker-keeps-its-authored-blocks-inside-the-div',
   'a-title-or-label-fills-the-container-body-slot',
   // Arrives with carve 34e9333 and already reads the ruled way: the comment
   // trailing-whitespace rule landed on carve-js#2080.
