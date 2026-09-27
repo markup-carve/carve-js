@@ -120,6 +120,24 @@ describe('a comment or a definition under a term', () => {
     )
   })
 
+  it.each([
+    ['bullet', '- :: c', '    '],
+    ['ordered', '1. :: c', '     '],
+    ['task', '- [x] :: c', '    '],
+    ['nested bullet', '- - :: c', '      '],
+    ['quoted bullet', '> - :: c', '>     '],
+    ['quote inside a bullet', '- > :: c', '  >   '],
+  ])('folds definitions under a term on its %s marker line', (_name, lead, indent) => {
+    const source = `[t][r] x[^n]\n\n${lead}\n${indent}[r]: /u\n${indent}[^n]: body\n`
+    const html = carveToHtml(source)
+    expect(html).toContain('<p>[t][r] x[^n]</p>')
+    expect(html).toContain('[r]: /u')
+    expect(html).toContain('[^n]: body')
+    const once = renderCarve(parse(source))
+    expect(carveToHtml(once)).toBe(html)
+    expect(renderCarve(parse(once))).toBe(once)
+  })
+
   it('keeps inline content from reaching across a folded comment', () => {
     expect(carveToHtml(':: a `code\n  %% note\n  end`\n')).toBe(
       '<dl>\n  <dt>a <code>code</code>\n\n  end<code></code></dt>\n</dl>',

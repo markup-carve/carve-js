@@ -7398,9 +7398,10 @@ class ParseSession {
       // registers nothing and opens no fence. A comment fence there still hides
       // its body, so it falls through to the comment branch below.
       if (commentFence === null && verse === null) {
-        const view = raw.replace(/^(?:[ \t]*>(?: |$))+/, '')
-        const rest = view.replace(/^[ \t]+/, '')
-        const col: number = term !== null || RE_DEFLIST_TERM.test(rest) ? indentColumns(view) : 0
+        const view = raw.slice(composed.column)
+        const marker = composed.peeled.find((entry) => !entry.quote)
+        const col = marker?.marker ?? composed.column
+        const rest = marker ? raw.slice(marker.marker) : view
         if (isBlankLine(view)) {
           term = null
         } else if (term && rawQuoteDepth === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
@@ -7420,7 +7421,18 @@ class ParseSession {
           ) {
             term = null
           }
-          if (RE_DEFLIST_TERM.test(rest)) term = { col, quotes: rawQuoteDepth }
+          const lastMarker = composed.peeled.at(-1)
+          const task = lastMarker && !lastMarker.quote ? RE_TASK.exec(raw.slice(lastMarker.marker)) : null
+          const termLead = task?.[3] ?? view
+          if (RE_DEFLIST_TERM.test(termLead) && composed.peeled.every((entry) => !entry.folds && !entry.behindQuote)) {
+            let termColumn = composed.column
+            for (const entry of composed.peeled) {
+              if (entry.quote) continue
+              const width = markerContentColumn(raw.slice(entry.marker))
+              if (width >= 0) termColumn -= entry.content - entry.marker - width
+            }
+            term = { col: termColumn, quotes: rawQuoteDepth }
+          }
         }
       }
       // A comment fence's closer is a leading `%` run of the SAME length;
@@ -9408,6 +9420,7 @@ class ParseSession {
         }
         const termInlines: InlineNode[] = []
         parts.forEach((part, index) => {
+          // Preserve each source line boundary, including either side of a comment.
           if (index > 0) termInlines.push({ type: 'soft_break' })
           if (!('lines' in part)) {
             termInlines.push(part)
@@ -10375,13 +10388,25 @@ class ParseSession {
         RE_ORDERED.test(content) ||
         RE_TASK.test(content) ||
         extractItemAttr(content) !== null
-      const authoredBlockBlanks = hasOverindentedBlockCandidate
+      // Include a marker-line term so its continuation is not rebased as a new block.
+      const leadIsTerm = RE_DEFLIST_TERM.test(content)
+      const rebaseLines = leadIsTerm ? [content, ...nested] : nested
+      const rebaseEligible = leadIsTerm
+        ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
+        : authoredBaseEligible
+      const rebasedBlanks = hasOverindentedBlockCandidate
         ? rebaseOverindentedBlocks(
-          nested,
-          authoredBaseEligible,
+          rebaseLines,
+          rebaseEligible,
           leadIsMarker ? markerContentColumn(content) : -1,
         )
         : new Set<number>()
+      if (leadIsTerm) {
+        for (let index = 0; index < nested.length; index++) nested[index] = rebaseLines[index + 1]!
+      }
+      const authoredBlockBlanks = leadIsTerm
+        ? new Set(Array.from(rebasedBlanks, (index) => index - 1))
+        : rebasedBlanks
 
       // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
       // not loosen the item on its own - it is not a second paragraph - but it
