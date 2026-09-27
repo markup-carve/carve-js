@@ -41,7 +41,7 @@ describe('the escape narrowing search', () => {
     const carve = htmlToCarve(glossary(300)).value
     // A deterministic parser-input budget catches loss of window reuse.
     // Changes to the search or output require remeasuring this bound.
-    expect(parsed.bytes / carve.length).toBeLessThan(11.5)
+    expect(parsed.bytes / carve.length).toBeLessThan(10.5)
   })
 
   it('keeps only the escapes each paragraph needs', () => {

@@ -176,7 +176,7 @@ export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): strin
   // decision here with the conservative form of the whole document. PART 11 §2b
   // says how far that fallback actually reaches: the smallest unit whose minimal
   // form fails, and §2's own test everywhere else.
-  return narrowEscalation(ast, conservative, conservativeTree)
+  return narrowEscalation(ast, conservative, conservativeTree, minimal, minimalTree)
 }
 
 function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
@@ -224,7 +224,13 @@ function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
  * instance - and the document-scoped form is returned rather than a narrowing
  * built on a state that is not what it claims.
  */
-function narrowEscalation(ast: Document, conservative: string, conservativeTree: string | null): string {
+function narrowEscalation(
+  ast: Document,
+  conservative: string,
+  conservativeTree: string | null,
+  minimal: string,
+  minimalTree: string | null,
+): string {
   // Null answers "cannot tell", exactly as it does for the minimal form: with
   // no tree to hold the narrowing against, there is nothing to narrow toward.
   if (conservativeTree === null) return conservative
@@ -286,7 +292,7 @@ function narrowEscalation(ast: Document, conservative: string, conservativeTree:
   // narrower, and no document's output can be wrong for it.
   const probe = windowedProbe(ast, conservative, conservativeTree, () => {
     escalatedUnits = escalated
-  }, renderSelectively)
+  }, renderSelectively, [[minimal, minimalTree]])
 
   const search = (local: boolean): string => {
     for (const unit of all) escalated.add(unit)
@@ -315,7 +321,7 @@ function narrowEscalation(ast: Document, conservative: string, conservativeTree:
   }
 
   best = search(true)
-  if (treeOf(best) !== conservativeTree) best = search(false)
+  if (probe.tree(best) !== conservativeTree) best = search(false)
 
   // PART 11 §2 TAKES THE DECISION PER OPENER OCCURRENCE, and a unit is still
   // ONE KNOB: a unit that fails is written conservatively IN FULL, so every
@@ -328,6 +334,8 @@ function narrowEscalation(ast: Document, conservative: string, conservativeTree:
 interface EscapeProbe {
   /** Apply a relaxation and keep it when the tree still holds; undo it otherwise. */
   keeps(local: boolean, units: Iterable<object>, apply: () => void, undo: () => void): boolean
+  /** `treeOf`, answered from the sources this search parsed most recently. */
+  tree(src: string): string | null
 }
 
 /**
@@ -343,6 +351,7 @@ function windowedProbe(
   conservativeTree: string,
   enter: () => void,
   renderAll: () => string,
+  seeds: Array<[string, string | null]>,
 ): EscapeProbe {
   // A document whose break spelling needs the frontmatter fallback renders
   // differently from its pruned windows, so it keeps the document-wide probe.
@@ -356,39 +365,40 @@ function windowedProbe(
         escalatedUnits = null
       }
     })
-  // Keep the latest two window parses across a probe and its successor.
-  // Failed relaxations often revisit the same source; the cache is local to
-  // this escape narrowing and never retains more than two windows.
-  const windowTrees = new Map<string, string | null>()
-  const windowTree = (source: string): string | null => {
-    if (windowTrees.has(source)) {
-      const tree = windowTrees.get(source)!
-      windowTrees.delete(source)
-      windowTrees.set(source, tree)
-      return tree
+  // Failed relaxations often revisit the same source, and the first
+  // whole-document probe renders the minimal form the caller already parsed.
+  // Local to this narrowing; it never holds more than four sources.
+  const trees = new Map<string, string | null>([...seeds, [conservative, conservativeTree]])
+  const tree = (source: string): string | null => {
+    if (trees.has(source)) {
+      const known = trees.get(source)!
+      trees.delete(source)
+      trees.set(source, known)
+      return known
     }
-    const tree = treeOf(source)
-    windowTrees.set(source, tree)
-    if (windowTrees.size > 2) windowTrees.delete(windowTrees.keys().next().value!)
-    return tree
+    const fresh = treeOf(source)
+    trees.set(source, fresh)
+    if (trees.size > 4) trees.delete(trees.keys().next().value!)
+    return fresh
   }
   return {
+    tree,
     keeps(local, units, apply, undo) {
       if (local && windows === undefined) windows = new EscapeWindows(ast)
       const window = local && windows ? windows.windowFor(units) : null
       const before = window === null ? null : renderWindow(window)
       // A window near the document's size saves nothing over the whole-document probe.
-      const beforeTree = before === null || before.length * 2 > conservative.length ? null : windowTree(before)
+      const beforeTree = before === null || before.length * 2 > conservative.length ? null : tree(before)
       apply()
       if (beforeTree !== null) {
         const after = renderWindow(window!)
         if (after !== null) {
-          if (windowTree(after) === beforeTree) return true
+          if (tree(after) === beforeTree) return true
           undo()
           return false
         }
       }
-      if (treeOf(renderAll()) === conservativeTree) return true
+      if (tree(renderAll()) === conservativeTree) return true
       undo()
       return false
     },
@@ -499,7 +509,7 @@ function narrowOccurrences(
       return renderSelectively()
     }
     const best = search(true)
-    return treeOf(best) === conservativeTree ? best : search(false)
+    return probe.tree(best) === conservativeTree ? best : search(false)
   } finally {
     unitNumbers = null
     relaxedOccurrences = null

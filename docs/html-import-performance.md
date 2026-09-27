@@ -1,8 +1,8 @@
 # HTML import measurements for #2154
 
-Reusing the two most recent escape-window parses reduces parser input by 17.3%
-on Wikipedia and 7.5% on Wikibooks against current main, with identical output
-hashes. Wikibooks remains 1.6% above its pre-#2118 parser input. These
+Reusing recent escape-search parses reduces parser input by 24.6% on Wikipedia
+and 14.3% on Wikibooks against `15edf0431`, with identical output hashes.
+Wikibooks is now 5.9% below its pre-#2118 parser input. These
 measurements do not establish a wall-clock regression. The host had competing
 workloads, so this report uses parser-input counts to compare revisions.
 
@@ -36,10 +36,12 @@ count. HTML parsing by parse5 is outside these counters.
 | Wikipedia | After #2118 | 370 | 4,223,033 |
 | Wikipedia | Current main | 304 | 3,470,807 |
 | Wikipedia | With window cache | 194 | 2,870,288 |
+| Wikipedia | With seeded cache | 181 | 2,618,461 |
 | Wikibooks | Before #2118 | 401 | 2,189,599 |
 | Wikibooks | After #2118 | 385 | 2,421,239 |
 | Wikibooks | Current main | 385 | 2,403,164 |
 | Wikibooks | With window cache | 280 | 2,224,106 |
+| Wikibooks | With seeded cache | 258 | 2,060,609 |
 
 Current Wikipedia input is 33.9% below the pre-#2118 revision. Wikibooks is
 9.8% above it. The exact totals differ from the original issue's measurements;
@@ -47,11 +49,11 @@ these comparisons use the same pinned files and counter for all three revisions.
 
 ## Where Wikibooks spends the extra input
 
-| Search phase | Before #2118 bytes | After #2118 bytes | Current bytes | With cache bytes |
-| --- | ---: | ---: | ---: | ---: |
-| Whole-unit relaxation | 1,156,236 | 1,083,918 | 1,072,385 | 952,005 |
-| Individual-escape relaxation | 766,403 | 1,070,209 | 1,067,013 | 1,008,335 |
-| Outside either search | 266,960 | 267,112 | 263,766 | 263,766 |
+| Search phase | Before #2118 bytes | After #2118 bytes | Current bytes | With cache bytes | Seeded cache bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Whole-unit relaxation | 1,156,236 | 1,083,918 | 1,072,385 | 952,005 | 796,463 |
+| Individual-escape relaxation | 766,403 | 1,070,209 | 1,067,013 | 1,008,335 | 1,000,380 |
+| Outside either search | 266,960 | 267,112 | 263,766 | 263,766 | 263,766 |
 
 The increase comes from individual-escape relaxation. Immediately after #2118,
 that phase uses 303,806 more bytes even though its parser calls fall from 192
@@ -73,14 +75,18 @@ cannot be attributed to it from parser-byte counts alone.
 ## Reusing window parses
 
 A failed relaxation often leaves the next probe with a window it has already
-parsed. `windowedProbe` now keeps the two most recent source-to-tree results,
-including failed parses. Exact source equality is required for reuse. The
-cache belongs to one escape search, has at most two entries, and does not
-cache full-document probes or skip the final full-document verification.
+parsed, and the first whole-document probe relaxes every unit, which renders
+the minimal form the caller parsed before the search began. `windowedProbe`
+keeps the four most recent source-to-tree results, including failed parses,
+seeded with the minimal and conservative forms. It answers window probes,
+whole-document probes and each search's final verification. Exact source
+equality is required for reuse, and the tree is a pure function of the source,
+so a hit returns what a fresh parse would. The cache belongs to one escape
+search.
 
-Both benchmark output hashes match current main. The definition-list cost
-regression falls from 11.74 to 11.33 document lengths of parser input and now
-requires less than 11.5. This measures parser work without a timing threshold.
+Both benchmark output hashes match `15edf0431`. The definition-list cost
+regression falls from 11.74 to 10.20 document lengths of parser input and now
+requires less than 10.5. This measures parser work without a timing threshold.
 
 ## Reproduce
 
@@ -103,9 +109,9 @@ Omit `CARVE_MEASURE_SAMPLES=0` for five uninstrumented timing samples after a
 warmup. Run revisions sequentially on an idle host before drawing timing
 conclusions. No wall-clock speedup is claimed from this run.
 
-The cache offsets most of the total Wikibooks increase without changing search
-decisions. It does not remove the occurrence-phase increase introduced by #2118:
-that phase still parses more input than before #2118, while savings in whole-unit
-relaxation bring the total closer to the old baseline. Renderer work still needs
+The cache brings the Wikibooks total below its pre-#2118 baseline without
+changing search decisions. It does not remove the occurrence-phase increase
+introduced by #2118: that phase still parses more input than before #2118, and
+the savings come from whole-unit relaxation. Renderer work still needs
 separate measurement before attributing the historical wall-clock increase to
 a particular pass.
