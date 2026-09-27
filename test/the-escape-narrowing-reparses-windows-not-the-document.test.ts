@@ -39,7 +39,8 @@ describe('the escape narrowing search', () => {
   it('windows the descriptions of a definition list', () => {
     parsed.bytes = 0
     const carve = htmlToCarve(glossary(300)).value
-    // Reusing window parses lowers this from 11.74 to 11.33 document lengths.
+    // A deterministic parser-input budget catches loss of window reuse.
+    // Changes to the search or output require remeasuring this bound.
     expect(parsed.bytes / carve.length).toBeLessThan(11.5)
   })
 

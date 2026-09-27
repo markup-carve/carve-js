@@ -358,7 +358,7 @@ function windowedProbe(
     })
   // Keep the latest two window parses across a probe and its successor.
   // Failed relaxations often revisit the same source; the cache is local to
-  // this search and never retains more than two windows.
+  // this escape narrowing and never retains more than two windows.
   const windowTrees = new Map<string, string | null>()
   const windowTree = (source: string): string | null => {
     if (windowTrees.has(source)) {

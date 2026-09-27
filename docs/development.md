@@ -38,6 +38,11 @@ carve-js/
 └── tsconfig.json
 ```
 
+## HTML import performance
+
+See [HTML import measurements](html-import-performance.md) for the #2154
+investigation and a script that measures parser input separately from timing.
+
 ---
 
 [Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)

@@ -24,88 +24,6 @@
         "codeUnits": 374179
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 188216
-      },
-      {
-        "phase": "units",
-        "bytes": 188183
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 187913
-      },
-      {
-        "phase": "other",
-        "bytes": 187245
-      },
-      {
-        "phase": "units",
-        "bytes": 187245
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 187245
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 93265
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 92811
-      },
-      {
-        "phase": "units",
-        "bytes": 91477
-      },
-      {
-        "phase": "units",
-        "bytes": 90970
-      },
-      {
-        "phase": "units",
-        "bytes": 65021
-      },
-      {
-        "phase": "units",
-        "bytes": 64840
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 53170
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 52943
-      },
-      {
-        "phase": "units",
-        "bytes": 43886
-      },
-      {
-        "phase": "units",
-        "bytes": 43839
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 42136
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 41909
-      },
-      {
-        "phase": "units",
-        "bytes": 33505
-      },
-      {
-        "phase": "units",
-        "bytes": 33371
-      }
-    ],
     "outputBytes": 187913,
     "outputSha256": "855c0db74e0aa3d2df769a344a90eff993f8087ee37b141be69b2c28ccc6e95b",
     "milliseconds": [],
@@ -137,88 +55,6 @@
         "codeUnits": 265168
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 134151
-      },
-      {
-        "phase": "units",
-        "bytes": 134070
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 134001
-      },
-      {
-        "phase": "units",
-        "bytes": 133461
-      },
-      {
-        "phase": "other",
-        "bytes": 132809
-      },
-      {
-        "phase": "units",
-        "bytes": 132809
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 132809
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 54242
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 53627
-      },
-      {
-        "phase": "units",
-        "bytes": 51709
-      },
-      {
-        "phase": "units",
-        "bytes": 51416
-      },
-      {
-        "phase": "units",
-        "bytes": 38739
-      },
-      {
-        "phase": "units",
-        "bytes": 38684
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 32309
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 32001
-      },
-      {
-        "phase": "units",
-        "bytes": 28191
-      },
-      {
-        "phase": "units",
-        "bytes": 28174
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 22700
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 22547
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 15615
-      }
-    ],
     "outputBytes": 134001,
     "outputSha256": "fe4a151cf934371336d2f58ec5a36d50feb8fae0f0474542b9ce55001f9fb9f7",
     "milliseconds": [],
@@ -250,88 +86,6 @@
         "codeUnits": 374353
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 188216
-      },
-      {
-        "phase": "units",
-        "bytes": 187700
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 187447
-      },
-      {
-        "phase": "units",
-        "bytes": 187443
-      },
-      {
-        "phase": "other",
-        "bytes": 187419
-      },
-      {
-        "phase": "units",
-        "bytes": 187419
-      },
-      {
-        "phase": "units",
-        "bytes": 91477
-      },
-      {
-        "phase": "units",
-        "bytes": 91122
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 75978
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 75697
-      },
-      {
-        "phase": "units",
-        "bytes": 65021
-      },
-      {
-        "phase": "units",
-        "bytes": 64918
-      },
-      {
-        "phase": "units",
-        "bytes": 52371
-      },
-      {
-        "phase": "units",
-        "bytes": 52101
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 44023
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 43875
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 33504
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 33371
-      },
-      {
-        "phase": "units",
-        "bytes": 32016
-      },
-      {
-        "phase": "units",
-        "bytes": 31764
-      }
-    ],
     "outputBytes": 187447,
     "outputSha256": "a1dfd89542adeb8fa25df44cfba5e6533928473e03ea02774a1401790e4c3afe",
     "milliseconds": [],
@@ -363,88 +117,6 @@
         "codeUnits": 265320
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 134151
-      },
-      {
-        "phase": "units",
-        "bytes": 133762
-      },
-      {
-        "phase": "units",
-        "bytes": 133527
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 133232
-      },
-      {
-        "phase": "other",
-        "bytes": 132961
-      },
-      {
-        "phase": "units",
-        "bytes": 132961
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 132961
-      },
-      {
-        "phase": "units",
-        "bytes": 51709
-      },
-      {
-        "phase": "units",
-        "bytes": 51440
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 44417
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 44022
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 41416
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 41010
-      },
-      {
-        "phase": "units",
-        "bytes": 38739
-      },
-      {
-        "phase": "units",
-        "bytes": 38690
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 28924
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 28726
-      },
-      {
-        "phase": "units",
-        "bytes": 22319
-      },
-      {
-        "phase": "units",
-        "bytes": 21964
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 17355
-      }
-    ],
     "outputBytes": 133232,
     "outputSha256": "06ab323323daaf999c565be21d0421ac1b0227fc19249eab5b97c4653d8816a8",
     "milliseconds": [],
@@ -457,112 +129,30 @@
     "inputSha256": "d997f43b5ee08f1f9edf284548a8229f085f521487917ce79e05a346e4b53d3b",
     "inputBytes": 318128,
     "parseCalls": 304,
-    "parsedBytes": 3470827,
-    "parsedCodeUnits": 3462879,
+    "parsedBytes": 3470807,
+    "parsedCodeUnits": 3462859,
     "phases": {
       "occurrences": {
         "calls": 97,
-        "bytes": 675436,
-        "codeUnits": 674203
+        "bytes": 675434,
+        "codeUnits": 674201
       },
       "units": {
         "calls": 205,
-        "bytes": 2421250,
-        "codeUnits": 2415817
+        "bytes": 2421236,
+        "codeUnits": 2415803
       },
       "other": {
         "calls": 2,
-        "bytes": 374141,
-        "codeUnits": 372859
+        "bytes": 374137,
+        "codeUnits": 372855
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 187469
-      },
-      {
-        "phase": "units",
-        "bytes": 186711
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 186699
-      },
-      {
-        "phase": "units",
-        "bytes": 186689
-      },
-      {
-        "phase": "other",
-        "bytes": 186672
-      },
-      {
-        "phase": "units",
-        "bytes": 186672
-      },
-      {
-        "phase": "units",
-        "bytes": 90775
-      },
-      {
-        "phase": "units",
-        "bytes": 90424
-      },
-      {
-        "phase": "units",
-        "bytes": 64479
-      },
-      {
-        "phase": "units",
-        "bytes": 64376
-      },
-      {
-        "phase": "units",
-        "bytes": 52219
-      },
-      {
-        "phase": "units",
-        "bytes": 51945
-      },
-      {
-        "phase": "units",
-        "bytes": 50370
-      },
-      {
-        "phase": "units",
-        "bytes": 50198
-      },
-      {
-        "phase": "units",
-        "bytes": 31881
-      },
-      {
-        "phase": "units",
-        "bytes": 31633
-      },
-      {
-        "phase": "units",
-        "bytes": 28664
-      },
-      {
-        "phase": "units",
-        "bytes": 28518
-      },
-      {
-        "phase": "units",
-        "bytes": 26451
-      },
-      {
-        "phase": "units",
-        "bytes": 26323
-      }
-    ],
-    "outputBytes": 186699,
-    "outputSha256": "d8ab851e480e4a17b90d3ad6c7b2fde7db5a72b6623fbace2b313dd4cf02f6c5",
+    "outputBytes": 186697,
+    "outputSha256": "903bdf3fe7ff91c932a37ef24a167b71d38e37af1b3660aed86fa0a1a6788243",
     "milliseconds": [],
     "medianMs": null,
-    "revision": "b80371791"
+    "revision": "15edf0431"
   },
   {
     "node": "v22.22.2",
@@ -589,93 +179,11 @@
         "codeUnits": 261974
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 132478
-      },
-      {
-        "phase": "units",
-        "bytes": 132089
-      },
-      {
-        "phase": "units",
-        "bytes": 131854
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 131559
-      },
-      {
-        "phase": "other",
-        "bytes": 131288
-      },
-      {
-        "phase": "units",
-        "bytes": 131288
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 131288
-      },
-      {
-        "phase": "units",
-        "bytes": 50076
-      },
-      {
-        "phase": "units",
-        "bytes": 49807
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 44435
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 44040
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 41431
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 41025
-      },
-      {
-        "phase": "units",
-        "bytes": 37103
-      },
-      {
-        "phase": "units",
-        "bytes": 37054
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 28924
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 28726
-      },
-      {
-        "phase": "units",
-        "bytes": 22319
-      },
-      {
-        "phase": "units",
-        "bytes": 21964
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 17373
-      }
-    ],
     "outputBytes": 131559,
     "outputSha256": "1c981cc092bf2d91d8961aaa4fb2035c81eae6208179a2c16ce6a6d491de3bea",
     "milliseconds": [],
     "medianMs": null,
-    "revision": "b80371791"
+    "revision": "15edf0431"
   },
   {
     "node": "v22.22.2",
@@ -683,112 +191,30 @@
     "inputSha256": "d997f43b5ee08f1f9edf284548a8229f085f521487917ce79e05a346e4b53d3b",
     "inputBytes": 318128,
     "parseCalls": 194,
-    "parsedBytes": 2870308,
-    "parsedCodeUnits": 2862564,
+    "parsedBytes": 2870288,
+    "parsedCodeUnits": 2862544,
     "phases": {
       "occurrences": {
         "calls": 63,
-        "bytes": 519015,
-        "codeUnits": 517898
+        "bytes": 519013,
+        "codeUnits": 517896
       },
       "units": {
         "calls": 129,
-        "bytes": 1977152,
-        "codeUnits": 1971807
+        "bytes": 1977138,
+        "codeUnits": 1971793
       },
       "other": {
         "calls": 2,
-        "bytes": 374141,
-        "codeUnits": 372859
+        "bytes": 374137,
+        "codeUnits": 372855
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 187469
-      },
-      {
-        "phase": "units",
-        "bytes": 186711
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 186699
-      },
-      {
-        "phase": "units",
-        "bytes": 186689
-      },
-      {
-        "phase": "other",
-        "bytes": 186672
-      },
-      {
-        "phase": "units",
-        "bytes": 186672
-      },
-      {
-        "phase": "units",
-        "bytes": 90775
-      },
-      {
-        "phase": "units",
-        "bytes": 90424
-      },
-      {
-        "phase": "units",
-        "bytes": 64479
-      },
-      {
-        "phase": "units",
-        "bytes": 64376
-      },
-      {
-        "phase": "units",
-        "bytes": 52219
-      },
-      {
-        "phase": "units",
-        "bytes": 51945
-      },
-      {
-        "phase": "units",
-        "bytes": 50370
-      },
-      {
-        "phase": "units",
-        "bytes": 50198
-      },
-      {
-        "phase": "units",
-        "bytes": 31881
-      },
-      {
-        "phase": "units",
-        "bytes": 31633
-      },
-      {
-        "phase": "units",
-        "bytes": 28664
-      },
-      {
-        "phase": "units",
-        "bytes": 28518
-      },
-      {
-        "phase": "units",
-        "bytes": 26451
-      },
-      {
-        "phase": "units",
-        "bytes": 26323
-      }
-    ],
-    "outputBytes": 186699,
-    "outputSha256": "d8ab851e480e4a17b90d3ad6c7b2fde7db5a72b6623fbace2b313dd4cf02f6c5",
+    "outputBytes": 186697,
+    "outputSha256": "903bdf3fe7ff91c932a37ef24a167b71d38e37af1b3660aed86fa0a1a6788243",
     "milliseconds": [],
     "medianMs": null,
-    "revision": "b80371791 + two-entry window cache"
+    "revision": "15edf0431 + two-entry window cache"
   },
   {
     "node": "v22.22.2",
@@ -815,92 +241,10 @@
         "codeUnits": 261974
       }
     },
-    "largestParses": [
-      {
-        "phase": "other",
-        "bytes": 132478
-      },
-      {
-        "phase": "units",
-        "bytes": 132089
-      },
-      {
-        "phase": "units",
-        "bytes": 131854
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 131559
-      },
-      {
-        "phase": "other",
-        "bytes": 131288
-      },
-      {
-        "phase": "units",
-        "bytes": 131288
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 131288
-      },
-      {
-        "phase": "units",
-        "bytes": 50076
-      },
-      {
-        "phase": "units",
-        "bytes": 49807
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 44435
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 44040
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 41431
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 41025
-      },
-      {
-        "phase": "units",
-        "bytes": 37103
-      },
-      {
-        "phase": "units",
-        "bytes": 37054
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 28924
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 28726
-      },
-      {
-        "phase": "units",
-        "bytes": 22319
-      },
-      {
-        "phase": "units",
-        "bytes": 21964
-      },
-      {
-        "phase": "occurrences",
-        "bytes": 17373
-      }
-    ],
     "outputBytes": 131559,
     "outputSha256": "1c981cc092bf2d91d8961aaa4fb2035c81eae6208179a2c16ce6a6d491de3bea",
     "milliseconds": [],
     "medianMs": null,
-    "revision": "b80371791 + two-entry window cache"
+    "revision": "15edf0431 + two-entry window cache"
   }
 ]

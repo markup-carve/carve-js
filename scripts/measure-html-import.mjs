@@ -18,6 +18,10 @@ try {
   await cp(join(root, 'dist'), join(temporary, 'dist'), { recursive: true })
   await writeFile(join(temporary, 'package.json'), '{"type":"module"}\n')
   await symlink(join(root, 'node_modules'), join(temporary, 'node_modules'), 'dir')
+  const renderer = await readFile(join(temporary, 'dist', 'render-carve.js'), 'utf8')
+  for (const name of ['narrowOccurrences', 'narrowEscalation']) {
+    if (!renderer.includes(`function ${name}(`)) throw new Error(`Cannot identify ${name}; use an unminified tsc build`)
+  }
   const parserPath = join(temporary, 'dist', 'parse.js')
   const parser = await readFile(parserPath, 'utf8')
   const entry = 'export function parse(source, opts = {}) {'
@@ -37,13 +41,12 @@ try {
     measurement.phases[phase].calls++;
     measurement.phases[phase].bytes += bytes;
     measurement.phases[phase].codeUnits += source.length;
-    measurement.sizes.push({ phase, bytes });
   `))
   const measured = await import(pathToFileURL(join(temporary, 'dist', 'index.js')).href)
   const ordinary = await import(pathToFileURL(join(root, 'dist', 'index.js')).href)
   for (const page of pages) {
     const html = await readFile(page, 'utf8')
-    globalThis.__carveParseMeasurement = { calls: 0, bytes: 0, codeUnits: 0, sizes: [], phases: Object.fromEntries(['occurrences', 'units', 'other'].map(phase => [phase, { calls: 0, bytes: 0, codeUnits: 0 }])) }
+    globalThis.__carveParseMeasurement = { calls: 0, bytes: 0, codeUnits: 0, phases: Object.fromEntries(['occurrences', 'units', 'other'].map(phase => [phase, { calls: 0, bytes: 0, codeUnits: 0 }])) }
     const result = measured.htmlToCarve(html)
     const counts = { ...globalThis.__carveParseMeasurement }
     const warmup = ordinary.htmlToCarve(html)
@@ -55,12 +58,14 @@ try {
       milliseconds.push(performance.now() - start)
       if (timed.value !== result.value) throw new Error('Output changed between samples')
     }
+    const sorted = [...milliseconds].sort((a, b) => a - b)
+    const middle = Math.floor(samples / 2)
+    const medianMs = samples === 0 ? null : samples % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
     console.log(JSON.stringify({
       engineRoot: root, node: process.version, page: resolve(page), inputSha256: hash(html), inputBytes: Buffer.byteLength(html),
       parseCalls: counts.calls, parsedBytes: counts.bytes, parsedCodeUnits: counts.codeUnits, phases: counts.phases,
-      largestParses: counts.sizes.sort((a, b) => b.bytes - a.bytes).slice(0, 20),
       outputBytes: Buffer.byteLength(result.value), outputSha256: hash(result.value),
-      milliseconds, medianMs: [...milliseconds].sort((a, b) => a - b)[Math.floor(samples / 2)] ?? null,
+      milliseconds, medianMs,
     }))
   }
 } finally {
