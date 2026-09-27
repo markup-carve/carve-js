@@ -313,7 +313,7 @@ describe('an import keeps the attributes the language can hold', () => {
       expect.objectContaining({
         code: 'attribute-dropped',
         severity: 'warning',
-        message: 'Dropped kbd on <kbd>: the name is this span\'s own semantic marker',
+        message: 'Dropped kbd on <kbd>: the semantic span\'s marker owns that key',
       }),
     ])
     // A different name on the same element is still carried.
