@@ -13,6 +13,9 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 - HTML import recognizes explicit code-language hints on code blocks and Sphinx, GitHub and MediaWiki wrappers, with validated tokens and deterministic fallback (markup-carve/carve#2387).
 
+### Fixed
+
+- AST JSON ingest handles lists with hundreds of thousands of items, and export handles equally wide block lists, without overflowing the JavaScript argument stack (#2153).
 
 ## [0.1.8] - 2026-09-25
 

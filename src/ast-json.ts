@@ -424,7 +424,7 @@ export function toAstJson(doc: Document): AstJsonDocument {
     children.push(node)
   }
 
-  children.push(...definitionListsToWire(doc.children))
+  for (const child of definitionListsToWire(doc.children)) children.push(child)
 
   for (const [label, body] of Object.entries(doc.footnoteDefs ?? {})) {
     const node: FootnoteDefNode = {
@@ -1626,7 +1626,10 @@ function hasPublishedMathNumber(blocks: unknown): boolean {
   while (stack.length > 0) {
     const value = stack.pop()
     if (!value || typeof value !== 'object') continue
-    if (Array.isArray(value)) { stack.push(...value); continue }
+    if (Array.isArray(value)) {
+      for (const child of value) stack.push(child)
+      continue
+    }
     const node = value as Record<string, unknown>
     if (node.type === 'math' && node.number !== undefined) return true
     for (const [key, child] of Object.entries(node)) {
