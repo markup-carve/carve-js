@@ -4796,7 +4796,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     }
     readBoundaries(parsed)
     if (!anchorable) stripPositions(parsed)
-    else if (!unchangedColumns) {
+    else if (!unchangedColumns || lines.some((line) => lexer.lineStartColumn(line.lineIndex) < 1)) {
       const byLine = new Map(lines.map((line) => [lexer.lineNumber(line.lineIndex), line]))
       const remap = (nodes: InlineNode[]): void => {
         for (const node of nodes) {
@@ -4815,7 +4815,8 @@ function parseLineBlock(lexer: Lexer): LineBlock {
               sourceStart !== undefined && sourceLast !== undefined &&
               sourceLast - sourceStart === end - start - 1 &&
               first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined))
-            if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText) {
+            if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText ||
+              lexer.lineStartColumn(first.lineIndex) + sourceStart < 1) {
               delete node.pos
             } else {
               pos.startColumn = lexer.lineStartColumn(first.lineIndex) + sourceStart
