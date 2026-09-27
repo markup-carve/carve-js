@@ -841,6 +841,10 @@ const IMPLEMENTED = new Set([
   // Arrives with carve cd289cf4 and all twenty-five documents already render
   // byte-exact: the term-folded comment span landed on carve-js#2202.
   'a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth',
+  // Arrives with carve 5315967c and all four documents already render
+  // byte-exact: the residue measured from the fence opener landed on
+  // carve-js#2201.
+  'a-verbatim-line-keeps-what-sits-past-its-fence-opener-not-past-its-container',
 ])
 
 /**

@@ -37,13 +37,32 @@ const KNOWN_REMAINING = new Set<string>([])
  * ASCII space and tab only. A trailing no-break space is content the author
  * wrote - it renders as `&nbsp;` - and JS `trim()` would treat U+00A0 as
  * whitespace, which corpus case 139 pins against.
+ *
+ * Verbatim content is exempt, which section 7 says outright and this sweep did
+ * not implement until corpus 505 reached the shape.
  */
 const offendingLines = (slug: string, out: string): string[] =>
   out
     .split('\n')
-    .map((line, i) => ({ line, site: `${slug}:${i + 1}` }))
+    .map((line, i) => ({ line, i, site: `${slug}:${i + 1}` }))
     .filter(({ line }) => line.length > 0 && line.replace(/[ \t]+/g, '') === '')
+    .filter(({ i }) => !carriesVerbatimContent(out, i))
     .map(({ site }) => site)
+
+/**
+ * Section 7's own exception, asked the way section 7 words it.
+ *
+ * The clause exempts spaces that are VERBATIM CONTENT because "emptying it would
+ * change the document", so the question is answered by emptying the line and
+ * re-rendering rather than by re-deriving which output lines sit inside a fence.
+ * A line carrying only a structural indent renders the same emptied, so that half
+ * of the clause still fails here.
+ */
+const carriesVerbatimContent = (out: string, index: number): boolean => {
+  const lines = out.split('\n')
+  lines[index] = ''
+  return carveToHtml(out) !== carveToHtml(lines.join('\n'))
+}
 
 /*
  * A SITE THAT NAMES NO CORPUS FILE IS NOT AN EXEMPTION.
@@ -130,6 +149,17 @@ describe('the writer never emits a whitespace-only line', () => {
     // Three spaces inside a code block are data, not layout.
     const src = '```\na\n   \nb\n```\n'
     expect(carveToCarve(src)).toBe(src)
+    expect(offendingLines('inline', src)).toEqual([])
+  })
+
+  /*
+   * The exemption must not swallow the rule. A whitespace-only line outside
+   * verbatim content renders the same emptied, so it is still reported -
+   * otherwise scoping section 7 would leave a sweep that cannot fire.
+   */
+  it('still reports a whitespace-only line outside verbatim content', () => {
+    expect(offendingLines('inline', 'a\n   \nb\n')).toEqual(['inline:2'])
+    expect(offendingLines('inline', '- one\n\n  \n- two\n')).toEqual(['inline:3'])
   })
 
   it('leaves trailing whitespace on a line that has content alone', () => {
