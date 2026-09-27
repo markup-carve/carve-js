@@ -7398,13 +7398,14 @@ class ParseSession {
       // registers nothing and opens no fence. A comment fence there still hides
       // its body, so it falls through to the comment branch below.
       if (commentFence === null && verse === null) {
+        const quotes = composed.peeled.filter((entry) => entry.quote).length
         const view = raw.slice(composed.column)
         const marker = composed.peeled.find((entry) => !entry.quote)
         const col = marker?.marker ?? composed.column
         const rest = marker ? raw.slice(marker.marker) : view
         if (isBlankLine(view)) {
           term = null
-        } else if (term && rawQuoteDepth === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
+        } else if (term && quotes === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
           if (commentFenceRun(rest) === undefined) {
             if (matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
             paraState = 'yes'
@@ -7413,7 +7414,7 @@ class ParseSession {
         } else {
           if (
             term &&
-            (rawQuoteDepth !== term.quotes ||
+            (quotes !== term.quotes ||
               prepassOpensBlock(rest) ||
               RE_DEFLIST_DEF.test(rest) ||
               isLinkDefLine(rest) ||
@@ -7431,7 +7432,7 @@ class ParseSession {
               const width = markerContentColumn(raw.slice(entry.marker))
               if (width >= 0) termColumn -= entry.content - entry.marker - width
             }
-            term = { col: termColumn, quotes: rawQuoteDepth }
+            term = { col: termColumn, quotes: quotes }
           }
         }
       }
