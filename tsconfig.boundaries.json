@@ -4,5 +4,14 @@
     "noEmit": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src/source-positions.ts", "src/own-property.ts", "src/html-import-dom.ts"]
+  "include": [
+    "src/source-positions.ts",
+    "src/own-property.ts",
+    "src/html-import-dom.ts",
+    "src/attribute-merge.ts",
+    "src/inline-resolution.ts",
+    "src/inline-children.ts",
+    "src/unresolved-reference.ts",
+    "src/block-children.ts"
+  ]
 }

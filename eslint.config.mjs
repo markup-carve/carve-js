@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 import tseslint from 'typescript-eslint'
 
 export default [{
-  files: ['src/html-import-dom.ts', 'src/own-property.ts', 'src/source-positions.ts'],
+  files: ['src/html-import-dom.ts', 'src/own-property.ts', 'src/source-positions.ts', 'src/attribute-merge.ts', 'src/inline-resolution.ts', 'src/inline-children.ts', 'src/unresolved-reference.ts', 'src/block-children.ts'],
   languageOptions: {
     parser: tseslint.parser,
     parserOptions: {

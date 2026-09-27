@@ -1,3 +1,4 @@
+import { forEachChildBlockList, withClonedChildBlockLists } from './block-children.js'
 /*
  * Heading identifier generation + cross-reference resolution.
  *
@@ -1214,76 +1215,11 @@ function collapsedBlocks(blocks: BlockNode[]): BlockNode[] {
 
 /**
  * The container recursion, as one function so the scan and the rewrite cannot
- * disagree about it. Mirrors the `switch` at the foot of `promoteBlockImages`:
- * the same six container shapes, because these are the two halves of one rule.
+ * disagree about it. Both use the exhaustive block-child helper and leave
+ * verse lines unchanged.
  */
 function pushChildBlockLists(b: BlockNode, out: BlockNode[][]): void {
-  switch (b.type) {
-    case 'block_quote':
-    case 'admonition':
-    case 'directive':
-    case 'div':
-    case 'figure_group':
-    case 'section':
-      out.push(b.children)
-      break
-    case 'list':
-      for (const item of b.items) out.push(item.children)
-      break
-    case 'definition_list':
-      for (const it of b.items) for (const d of it.definitions) out.push(d)
-      break
-    case 'table':
-      for (const row of b.rows) for (const cell of row.cells) {
-        if (cell.blocks) out.push(cell.blocks)
-      }
-      break
-    case 'figure':
-      if (b.target.type === 'block_quote') out.push(b.target.children)
-      else if (b.target.type === 'table') pushChildBlockLists(b.target, out)
-      break
-    default:
-      break
-  }
-}
-
-/**
- * A shallow copy of `b` whose child block lists are fresh arrays, or `b` itself
- * when it holds none. The copies are what makes the rewrite above safe to do in
- * place without touching the caller's tree.
- */
-function withClonedChildBlockLists(b: BlockNode): BlockNode {
-  switch (b.type) {
-    case 'block_quote':
-    case 'admonition':
-    case 'directive':
-    case 'div':
-    case 'figure_group':
-    case 'section':
-      return { ...b, children: b.children.slice() }
-    case 'list':
-      return { ...b, items: b.items.map((item) => ({ ...item, children: item.children.slice() })) }
-    case 'definition_list':
-      return {
-        ...b,
-        items: b.items.map((it) => ({ ...it, definitions: it.definitions.map((d) => d.slice()) })),
-      }
-    case 'table':
-      return {
-        ...b,
-        rows: b.rows.map((row) => ({
-          ...row,
-          cells: row.cells.map((cell) => cell.blocks ? { ...cell, blocks: cell.blocks.slice() } : cell),
-        })),
-      }
-    case 'figure':
-      if (b.target.type === 'block_quote' || b.target.type === 'table') {
-        return { ...b, target: withClonedChildBlockLists(b.target) as typeof b.target }
-      }
-      return b
-    default:
-      return b
-  }
+  if (b.type !== 'line_block') forEachChildBlockList(b, (children) => out.push(children))
 }
 
 export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): void {
@@ -1394,32 +1330,9 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       if (promoted) para.blockImage = true
       else delete para.blockImage
     }
-    switch (b.type) {
-      case 'block_quote':
-      case 'admonition':
-      case 'directive':
-      case 'div':
-      case 'figure_group':
-      case 'section':
-        promoteBlockImages(b.children, figuresOnly)
-        break
-      case 'list':
-        for (const item of b.items) promoteBlockImages(item.children, figuresOnly)
-        break
-      case 'definition_list':
-        for (const it of b.items) for (const d of it.definitions) promoteBlockImages(d, figuresOnly)
-        break
-      case 'table':
-        for (const row of b.rows) for (const cell of row.cells) {
-          if (cell.blocks) promoteBlockImages(cell.blocks, figuresOnly)
-        }
-        break
-      case 'figure':
-        if (b.target.type === 'block_quote') promoteBlockImages(b.target.children, figuresOnly)
-        else if (b.target.type === 'table') promoteBlockImages([b.target], figuresOnly)
-        break
-      default:
-        break
+    // Verse lines keep their inline image spelling.
+    if (b.type !== 'line_block') {
+      forEachChildBlockList(b, (children) => promoteBlockImages(children, figuresOnly))
     }
   }
 }
