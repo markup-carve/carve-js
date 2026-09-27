@@ -177,6 +177,11 @@ describe('a comment beside an element that imports to nothing', () => {
     expect(result.report.diagnostics.filter((d) => d.code === 'element-dropped')).toEqual([])
   })
 
+  it('probes an element with many children', () => {
+    const html = '<!--c--><span>' + '<span></span>'.repeat(150000) + '</span>'
+    expect(() => htmlToCarve(html)).not.toThrow()
+  })
+
   it('keeps the diagnostic cap after a probe finds content', () => {
     const html = '<!--c--><span id="s" style="text-align:left"></span><p onclick="x()">a</p><p onclick="y()">b</p>'
     const { report } = htmlToCarve(html, { mode: 'roundtrip', maxDiagnostics: 1 })

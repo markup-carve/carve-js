@@ -667,7 +667,7 @@ function holdsNoText(root: P5Node): boolean {
   while (stack.length) {
     const node = stack.pop()!
     if (node.nodeName === '#text' && !/^[ \t\n\r\f]*$/.test(node.value ?? '')) return false
-    stack.push(...(node.childNodes ?? []))
+    for (const child of node.childNodes ?? []) stack.push(child)
   }
   return true
 }
