@@ -36,7 +36,8 @@ import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
-import { collectLoneBrackets, type LeftToSearch, type LoneBrackets } from './bracket-escapes.js'
+import { utf8ByteLength } from './abbr-budget.js'
+import { collectLoneBrackets, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
@@ -297,6 +298,7 @@ function narrowEscalation(
   const search = (local: boolean): string => {
     for (const unit of all) escalated.add(unit)
     let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
+    const spent = probe.allowance()
 
     /** Hand `group` its minimal form, keeping it only if the document still holds. */
     const relaxAll = (group: object[]): boolean => {
@@ -310,7 +312,7 @@ function narrowEscalation(
     }
 
     const relax = (group: object[]): void => {
-      if (group.length === 0 || budget <= 0 || relaxAll(group) || group.length === 1) return
+      if (group.length === 0 || (budget <= 0 && spent()) || relaxAll(group) || group.length === 1) return
       const half = group.length >> 1
       relax(group.slice(0, half))
       relax(group.slice(half))
@@ -331,9 +333,19 @@ function narrowEscalation(
   return narrowOccurrences(units, best, conservativeTree, renderSelectively, probe)
 }
 
+/**
+ * How many documents' worth of source one narrowing search may re-parse beyond
+ * its probe count. Windowed probes are cheap, so this lets a large document
+ * with many independent failing units finish the search, while the total stays
+ * linear in the document.
+ */
+const ESCAPE_SEARCH_PARSE_FACTOR = 16
+
 interface EscapeProbe {
   /** Apply a relaxation and keep it when the tree still holds; undo it otherwise. */
   keeps(local: boolean, units: Iterable<object>, apply: () => void, undo: () => void): boolean
+  /** A fresh parse allowance for one search: true once its probes have re-parsed it all. */
+  allowance(): () => boolean
   /** `treeOf`, answered from the sources this search parsed most recently. */
   tree(src: string): string | null
 }
@@ -381,8 +393,16 @@ function windowedProbe(
     if (trees.size > 4) trees.delete(trees.keys().next().value!)
     return fresh
   }
+  // Bytes of source the probes have rendered for re-parsing, cached or not, so
+  // the charge is a property of the search rather than of this engine's cache.
+  let charged = 0
+  const limit = ESCAPE_SEARCH_PARSE_FACTOR * utf8ByteLength(conservative)
   return {
     tree,
+    allowance() {
+      const start = charged
+      return () => charged - start >= limit
+    },
     keeps(local, units, apply, undo) {
       if (local && windows === undefined) windows = new EscapeWindows(ast)
       const window = local && windows ? windows.windowFor(units) : null
@@ -393,12 +413,15 @@ function windowedProbe(
       if (beforeTree !== null) {
         const after = renderWindow(window!)
         if (after !== null) {
+          charged += utf8ByteLength(before!) + utf8ByteLength(after)
           if (tree(after) === beforeTree) return true
           undo()
           return false
         }
       }
-      if (tree(renderAll()) === conservativeTree) return true
+      const candidate = renderAll()
+      charged += utf8ByteLength(candidate)
+      if (tree(candidate) === conservativeTree) return true
       undo()
       return false
     },
@@ -459,6 +482,7 @@ function narrowOccurrences(
 
     const unitOf = (key: string): object => units[Number(key.slice(0, key.indexOf(':')))]!
     let budget = 0
+    let spent = (): boolean => true
 
     /** Hand `group` its bare form, keeping it only if the document still holds. */
     const relaxAll = (group: string[], local: boolean): boolean => {
@@ -472,7 +496,7 @@ function narrowOccurrences(
     }
 
     const relax = (group: string[], local: boolean): void => {
-      if (group.length === 0 || budget <= 0 || relaxAll(group, local) || group.length === 1) return
+      if (group.length === 0 || (budget <= 0 && spent()) || relaxAll(group, local) || group.length === 1) return
       const half = group.length >> 1
       relax(group.slice(0, half), local)
       relax(group.slice(half), local)
@@ -490,6 +514,7 @@ function narrowOccurrences(
     const search = (local: boolean): string => {
       relaxed.clear()
       budget = 8 * Math.ceil(Math.log2(occurrences.length + 1)) + 8
+      spent = probe.allowance()
       relax(order, local)
       // AND THEN ONE SWEEP OF WHAT IS LEFT, because the halving is not a
       // FIXPOINT. Relaxing occurrences is not monotone: an occurrence rejected
@@ -502,7 +527,7 @@ function narrowOccurrences(
       // accepted, and spends the same budget - so where the budget is already
       // gone it costs nothing, which is the pathological document.
       for (const key of order) {
-        if (budget <= 0) break
+        if (budget <= 0 && spent()) break
         if (relaxed.has(key)) continue
         relaxAll([key], local)
       }
@@ -2559,7 +2584,7 @@ function renderInlines(
 ): string {
   const nodes = flattenRubyForCarve(sourceNodes)
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-  if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, loneBrackets, leftToSearch)
+  if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, loneBrackets, leftToSearch, pairedClosers)
   ctx.inlineDepth++
   try {
     let out = ''
@@ -3671,6 +3696,14 @@ const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
 /** §5's lone brackets, which both forms escape, by writing node and offset. */
 const loneBrackets: LoneBrackets = new WeakMap()
 const leftToSearch: LeftToSearch = new WeakSet()
+const pairedClosers: PairedClosers = new WeakMap()
+
+/**
+ * Whether each paired `[` was last written escaped, for its closer. The two
+ * sit in different units whenever a nested construct separates them, and as
+ * separate knobs neither could be relaxed alone, so the search kept both.
+ */
+const escapedOpeners = new WeakMap<object, Map<number, boolean>>()
 
 /**
  * Which units the occurrence search numbers, so a key survives a re-render.
@@ -4064,44 +4097,62 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
   text = text.replace(UNWRITABLE_CONTROLS, '')
   const destinationParens = escapeUnit == null ? undefined : destinationParensByUnit.get(escapeUnit)
   const lone = escapeUnit == null ? undefined : loneBrackets.get(escapeUnit)
+  const closers = escapeUnit == null ? undefined : pairedClosers.get(escapeUnit)
+  const unit = escapeUnit
   const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
   const call = mode === 'conservative' ? nextEscapeCallIndex() : 0
+  const decide = (char: string, offset: number, subject: string): string => {
+    if (destinationParens?.has(sourceOffset + offset)) return '\\('
+    if (lone?.has(sourceOffset + offset)) {
+      lastOccurrenceRelaxed = false
+      return `\\${char}`
+    }
+    // A paired closer follows its opener, which may sit in another unit.
+    const opener = char === ']' ? closers?.get(sourceOffset + offset) : undefined
+    if (opener !== undefined) {
+      const escaped = escapedOpeners.get(opener.owner)?.get(opener.offset) ?? false
+      lastOccurrenceRelaxed = !escaped
+      return escaped ? '\\]' : ']'
+    }
+    if (mode === 'minimal' && (char === '(' || char === '[' || char === ']')) return char
+    // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
+    // search has escalated, each candidate site is offered back on its own,
+    // so the one occurrence that needed the escape no longer drags the rest
+    // of the unit with it. The unconditional set is not a candidate and is
+    // never offered.
+    if (
+      mode === 'conservative' &&
+      !NOT_OFFERED_PER_OCCURRENCE.includes(char) &&
+      occurrenceIsRelaxed(call, offset, offset > 0 && subject[offset - 1] === char)
+    ) {
+      return char
+    }
+    // A COLON at the start of a line opens a structure - `::` a definition
+    // term, `:::` a fence - and PART 11 §2 escapes a character only where
+    // omitting it would change the re-parse. Mid-line the colon is left to
+    // the symbol pass below, which is the one channel it still opens there.
+    if (char === ':' && !opensLine(subject, offset)) return ':'
+    if (char !== '^') return `\\${char}`
+    const next = text[offset + 1] ?? ''
+    // A TAB after the marker is not a caption opener: PART 10 §231 leaves
+    // that line as prose, which is why the corpus renders `^<TAB>Figure 1`
+    // as a paragraph. Escaping it wrote `\^` where carve-php and carve-rs
+    // write the caret bare, and an escape that guards a channel the
+    // character cannot open is exactly what corpus 304 refuses.
+    const opensCaption = captionCanOpen && offset === 0 && next === ' '
+    // Before a `}` the brace takes the escape, and `^\}` closes nothing (PART 11 §2).
+    const opensInline = next === '[' || (text[offset - 1] ?? '') === '{'
+    return opensCaption || opensInline ? '\\^' : '^'
+  }
   let out = text
     .replace(escapes, (char, offset: number, subject: string) => {
-      if (destinationParens?.has(sourceOffset + offset)) return '\\('
-      if (lone?.has(sourceOffset + offset)) {
-        lastOccurrenceRelaxed = false
-        return `\\${char}`
+      const written = decide(char, offset, subject)
+      if (char === '[' && unit !== null) {
+        let decisions = escapedOpeners.get(unit)
+        if (decisions === undefined) escapedOpeners.set(unit, (decisions = new Map()))
+        decisions.set(sourceOffset + offset, written !== char)
       }
-      if (mode === 'minimal' && (char === '(' || char === '[' || char === ']')) return char
-      // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
-      // search has escalated, each candidate site is offered back on its own,
-      // so the one occurrence that needed the escape no longer drags the rest
-      // of the unit with it. The unconditional set is not a candidate and is
-      // never offered.
-      if (
-        mode === 'conservative' &&
-        !NOT_OFFERED_PER_OCCURRENCE.includes(char) &&
-        occurrenceIsRelaxed(call, offset, offset > 0 && subject[offset - 1] === char)
-      ) {
-        return char
-      }
-      // A COLON at the start of a line opens a structure - `::` a definition
-      // term, `:::` a fence - and PART 11 §2 escapes a character only where
-      // omitting it would change the re-parse. Mid-line the colon is left to
-      // the symbol pass below, which is the one channel it still opens there.
-      if (char === ':' && !opensLine(subject, offset)) return ':'
-      if (char !== '^') return `\\${char}`
-      const next = text[offset + 1] ?? ''
-      // A TAB after the marker is not a caption opener: PART 10 §231 leaves
-      // that line as prose, which is why the corpus renders `^<TAB>Figure 1`
-      // as a paragraph. Escaping it wrote `\^` where carve-php and carve-rs
-      // write the caret bare, and an escape that guards a channel the
-      // character cannot open is exactly what corpus 304 refuses.
-      const opensCaption = captionCanOpen && offset === 0 && next === ' '
-      // Before a `}` the brace takes the escape, and `^\}` closes nothing (PART 11 §2).
-      const opensInline = next === '[' || (text[offset - 1] ?? '') === '{'
-      return opensCaption || opensInline ? '\\^' : '^'
+      return written
     })
   // The caption-opening caret is escaped in EVERY mode, not only when `^` is
   // in the candidate class: after a caption host (a figure group, an image, a
