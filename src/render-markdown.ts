@@ -27,7 +27,7 @@ import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
-import { isDangerousAttrName, renderedAttrValue } from './render-html.js'
+import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -53,7 +53,7 @@ function renderHtmlAttrs(attrs: Attrs | undefined): string {
   if (!attrs) return ''
   const entries: Array<[string, string]> = []
   if (attrs.id !== undefined) entries.push(['id', attrs.id])
-  if (attrs.classes?.length) entries.push(['class', [...new Set(attrs.classes)].join(' ')])
+  if (attrs.classes?.length) entries.push(['class', renderedClasses(attrs.classes).join(' ')])
   for (const [name, value] of Object.entries(attrs.keyValues ?? {})) {
     if (isDangerousAttrName(name) || !/^[A-Za-z_:][A-Za-z0-9_.:-]*$/.test(name)) continue
     entries.push([name, renderedAttrValue(name, value)])
