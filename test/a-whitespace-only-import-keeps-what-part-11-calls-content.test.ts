@@ -68,11 +68,12 @@ describe('PART 11 §7: what a whitespace-only import keeps', () => {
     expect(htmlToCarve(html).report.diagnostics.map((row) => row.path)).toEqual(['/p[4]', '/p[6]'])
   })
 
-  it('leaves a genuinely empty block alone', () => {
-    // §7 weighs the characters a block HOLDS, and this one holds none - there
-    // is nothing for the clause to call layout. Named so the boundary of the
-    // change is a decision rather than an accident.
-    expect(htmlToAst('<p></p>').value.children).toEqual([{ type: 'paragraph', children: [] }])
+  it('drops a genuinely empty block from the tree without a row', () => {
+    // The writer writes nothing for it, so the tree drops it too
+    // (markup-carve/carve#2423). It carries nothing, so nothing is reported.
+    const result = htmlToAst('<p></p>')
+    expect(result.value.children).toEqual([])
+    expect(result.report.diagnostics).toEqual([])
   })
 })
 
