@@ -7917,6 +7917,9 @@ function parseList(lexer: Lexer): List {
     let bodyHasBelowColumnLine = false
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
+    // What each buffered blank leaves past the content column. Inside an open
+    // fence a line of spaces is body, so its residue is content (CARVE-P11-016).
+    let pendingBlankTexts: string[] = []
     // Indices in `nested` that hold a `+`-injected blank separator. These keep
     // the attached block parsing standalone but never loosen the list (Bug B).
     const plusSeparators = new Set<number>()
@@ -7996,6 +7999,7 @@ function parseList(lexer: Lexer): List {
       if (isBlankLine(l)) {
         pendingBlanks++
         pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
+        pendingBlankTexts.push(insideOpenFence(lazyState) ? sliceColumns(l, contentCol, true) : '')
         lexer.consume()
         continue
       }
@@ -8009,6 +8013,7 @@ function parseList(lexer: Lexer): List {
         lexer.consume()
         pendingBlanks = 0
         pendingBlankLineNumbers = []
+        pendingBlankTexts = []
         // Mark this blank as a `+`-injected separator: it lets the attached
         // block parse on its own but must NOT loosen the list (Bug B). A real
         // internal blank before a plain paragraph still loosens; a `+` one
@@ -8115,12 +8120,13 @@ function parseList(lexer: Lexer): List {
         const placed = sliceColumns(l, contentCol, true)
         if (!RE_ADMONITION_CLOSE.test(placed)) bodyHasContentColumnLine = true
         for (let k = 0; k < pendingBlanks; k++) {
-          nested.push('')
+          nested.push(pendingBlankTexts[k] ?? '')
           nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
           trackItemLazyState('', lazyState)
         }
         pendingBlanks = 0
         pendingBlankLineNumbers = []
+        pendingBlankTexts = []
         const isMarker =
           !insideOpenFence(lazyState) &&
           !insideOpenQuoteParagraph(lazyState) &&
@@ -8364,7 +8370,7 @@ function parseList(lexer: Lexer): List {
     // and the item's end position (markup-carve/carve-js#988).
     if (pendingBlanks > 0 && (lazyState.inFence || lazyState.inComment)) {
       for (let k = 0; k < pendingBlanks; k++) {
-        nested.push('')
+        nested.push(pendingBlankTexts[k] ?? '')
         nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
       }
       // `pendingBlanks` is NOT cleared. The loose-list test below reads it to
