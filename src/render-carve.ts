@@ -1303,12 +1303,10 @@ function isLanguageTag(value: string): boolean {
 }
 
 function quoteAttrValue(value: string): string {
-  // A value may stay UNQUOTED when it holds no `whitespace` and no delimiter --
-  // PART 7's four characters, not `\s`. With `\s` a value carrying a vertical
-  // tab was quoted defensively, so the writer's own output no longer round-
-  // tripped to the shorter spelling the parser accepts.
-  // A pipe is quoted and escaped: `\|` is the only pipe a table row's cell
-  // cut leaves in place ([CARVE-P2-019]).
+  // Unquoted values exclude ASCII whitespace, quotes, pipes and backslashes.
+  // Keep braces quoted too. Non-ASCII whitespace remains valid unquoted text.
+  // Quoted backslashes are doubled; pipes are escaped so table cell splitting
+  // leaves them inside the value (CARVE-P2-019).
   if (/^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
   return `"${value.replace(/[\\"|]/g, '\\$&')}"`
 }

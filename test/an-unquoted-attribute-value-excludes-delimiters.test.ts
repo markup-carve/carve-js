@@ -19,6 +19,18 @@ describe('unquoted attribute value boundaries (#2191)', () => {
     },
   )
 
+  it.each([
+    '-{k=a|b} item\n',
+    '[l]: /u {k=a|b}\n\n[l]\n',
+    '| x |{k=a\\b}\n',
+    '{.ok\n k=a\\b}\n\nparagraph\n',
+  ])('refuses invalid values through container-specific paths: %s', (source) => {
+    const html = carveToHtml(source)
+    expect(html).not.toMatch(/<[^>]+ k=/)
+    expect(html).toContain('k=')
+    expect(carveToHtml(renderCarve(parse(source)))).toBe(html)
+  })
+
   it.each(['w-1/2', 'a+b', 'a%b', 'a(b', 'a#b', 'a=b', 'a{b', 'a\vb', 'a\fb', 'a\u00a0b'])(
     'accepts the widened unquoted character set: %s',
     (value) => {

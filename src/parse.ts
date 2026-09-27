@@ -6113,10 +6113,8 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
       while (i < n && isIdentPart(text[i]!)) i++
       if (text[i] === '=') {
         const v = text[i + 1]
-        // `key=` with an EMPTY value (EOF, `}`, or any whitespace follows) leaves
-        // a dangling `=` and is invalid — a bare value is `\S+` (>=1 non-space)
-        // and a quoted value starts with `"`/`'`. Otherwise (quoted or bare value)
-        // defer to the regex (a valid bare value is consumed whole -> linear).
+        // An empty value leaves a dangling `=`. For any other candidate,
+        // defer to the value regex, which checks quoting and delimiters.
         if (v === undefined || v === '}' || isCarveWhitespace(v)) {
           return true
         }
