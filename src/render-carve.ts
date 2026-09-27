@@ -298,7 +298,7 @@ function narrowEscalation(
   const search = (local: boolean): string => {
     for (const unit of all) escalated.add(unit)
     let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
-    const spent = probe.allowance()
+    const spent = probe.allowance(budget)
 
     /** Hand `group` its minimal form, keeping it only if the document still holds. */
     const relaxAll = (group: object[]): boolean => {
@@ -312,7 +312,7 @@ function narrowEscalation(
     }
 
     const relax = (group: object[]): void => {
-      if (group.length === 0 || (budget <= 0 && spent()) || relaxAll(group) || group.length === 1) return
+      if (group.length === 0 || spent(budget) || relaxAll(group) || group.length === 1) return
       const half = group.length >> 1
       relax(group.slice(0, half))
       relax(group.slice(half))
@@ -341,11 +341,21 @@ function narrowEscalation(
  */
 const ESCAPE_SEARCH_PARSE_FACTOR = 16
 
+/**
+ * How many times its probe count a search may probe at most. A probe still
+ * walks structures sized by the document, so the count stays logarithmic.
+ */
+const ESCAPE_SEARCH_PROBE_FACTOR = 4
+
 interface EscapeProbe {
   /** Apply a relaxation and keep it when the tree still holds; undo it otherwise. */
   keeps(local: boolean, units: Iterable<object>, apply: () => void, undo: () => void): boolean
-  /** A fresh parse allowance for one search: true once its probes have re-parsed it all. */
-  allowance(): () => boolean
+  /**
+   * A fresh allowance for one search whose probe count is `count`: true once
+   * that count is spent and either its probes have re-parsed the allowance or
+   * the search has probed ESCAPE_SEARCH_PROBE_FACTOR times the count.
+   */
+  allowance(count: number): (budget: number) => boolean
   /** `treeOf`, answered from the sources this search parsed most recently. */
   tree(src: string): string | null
 }
@@ -399,9 +409,10 @@ function windowedProbe(
   const limit = ESCAPE_SEARCH_PARSE_FACTOR * utf8ByteLength(conservative)
   return {
     tree,
-    allowance() {
+    allowance(count) {
       const start = charged
-      return () => charged - start >= limit
+      const floor = -(ESCAPE_SEARCH_PROBE_FACTOR - 1) * count
+      return (budget) => budget <= 0 && (charged - start >= limit || budget <= floor)
     },
     keeps(local, units, apply, undo) {
       if (local && windows === undefined) windows = new EscapeWindows(ast)
@@ -482,7 +493,7 @@ function narrowOccurrences(
 
     const unitOf = (key: string): object => units[Number(key.slice(0, key.indexOf(':')))]!
     let budget = 0
-    let spent = (): boolean => true
+    let spent = (_budget: number): boolean => true
 
     /** Hand `group` its bare form, keeping it only if the document still holds. */
     const relaxAll = (group: string[], local: boolean): boolean => {
@@ -496,7 +507,7 @@ function narrowOccurrences(
     }
 
     const relax = (group: string[], local: boolean): void => {
-      if (group.length === 0 || (budget <= 0 && spent()) || relaxAll(group, local) || group.length === 1) return
+      if (group.length === 0 || spent(budget) || relaxAll(group, local) || group.length === 1) return
       const half = group.length >> 1
       relax(group.slice(0, half), local)
       relax(group.slice(half), local)
@@ -514,7 +525,7 @@ function narrowOccurrences(
     const search = (local: boolean): string => {
       relaxed.clear()
       budget = 8 * Math.ceil(Math.log2(occurrences.length + 1)) + 8
-      spent = probe.allowance()
+      spent = probe.allowance(budget)
       relax(order, local)
       // AND THEN ONE SWEEP OF WHAT IS LEFT, because the halving is not a
       // FIXPOINT. Relaxing occurrences is not monotone: an occurrence rejected
@@ -527,7 +538,7 @@ function narrowOccurrences(
       // accepted, and spends the same budget - so where the budget is already
       // gone it costs nothing, which is the pathological document.
       for (const key of order) {
-        if (budget <= 0 && spent()) break
+        if (spent(budget)) break
         if (relaxed.has(key)) continue
         relaxAll([key], local)
       }
