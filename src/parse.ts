@@ -3821,6 +3821,64 @@ function insideOpenFence(state: ItemLazyState): boolean {
   return state.inFence || state.inComment || state.divDepth > 0
 }
 
+/** An `ItemLazyState` that has seen nothing, for a collector that only reads fences. */
+function verbatimOnlyLazyState(): ItemLazyState {
+  return {
+    inFence: false,
+    fenceClose: null,
+    inComment: false,
+    commentLen: 0,
+    lazyFoldableBeforeComment: false,
+    openedCommentAtColumn: false,
+    invisibleAtColumn: false,
+    commentAtColumn: false,
+    inFootnoteBody: false,
+    absorbingFence: false,
+    divDepth: 0,
+    lazyFoldable: false,
+    inTable: false,
+    quoteInner: null,
+    inDefList: false,
+    attrRun: null,
+  }
+}
+
+/**
+ * Give back what a buffered blank leaves inside an open verbatim region.
+ *
+ * A collector buffers a blank as `''`, which is right for a separator and wrong
+ * for a line of spaces inside a fence: CARVE-P11-016 keeps that content.
+ *
+ * The pass runs AFTER the rebase, and it has to. `trackItemLazyState` reads a
+ * fence FLUSH, and the rebase is what brings an authored base flush - asked
+ * during collection, a body written past its minimum column never showed the
+ * tracker a fence at all. The residue is measured past the OPENER's own source
+ * column, because that is the column the code block's content is measured past.
+ */
+function restoreVerbatimBlanks(
+  lines: string[],
+  sourceLines: readonly (string | undefined)[],
+  buffered: ReadonlySet<number>,
+  openerColumn: (index: number) => number,
+): void {
+  if (buffered.size === 0) return
+  const state = verbatimOnlyLazyState()
+  let column = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (buffered.has(i)) {
+      const source = sourceLines[i]
+      if (source !== undefined && column >= 0 && insideOpenFence(state)) {
+        lines[i] = sliceColumns(source, column, true)
+      }
+      trackItemLazyState(lines[i]!, state)
+      continue
+    }
+    const wasOpen = insideOpenFence(state)
+    trackItemLazyState(lines[i]!, state)
+    if (!wasOpen && insideOpenFence(state)) column = openerColumn(i)
+  }
+}
+
 /**
  * Does the item currently end on a BLOCK QUOTE WITH AN OPEN PARAGRAPH?
  */
@@ -8264,13 +8322,23 @@ class ParseSession {
     const label = m[1]!
     const bodyLines = [m[2]!]
     const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
+    // The source line each collected line came from, and which of them were
+    // buffered blanks. `restoreVerbatimBlanks` reads both after the rebase.
+    const bodySourceLines: (string | undefined)[] = [defLineRaw]
+    const bufferedBlanks = new Set<number>()
+    // The def line's own content starts past its marker, which is ASCII, so the
+    // prefix length is its column width.
+    const defContentColumn =
+      markerColumn + (defLineRaw.replace(/^[ \t]+/, '').length - m[2]!.length)
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
+    let pendingBlankSources: string[] = []
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) {
         pendingBlanks++
         pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
+        pendingBlankSources.push(ln)
         lexer.consume()
         continue
       }
@@ -8284,6 +8352,7 @@ class ParseSession {
         lexer.consume()
         pendingBlanks = 0
         pendingBlankLineNumbers = []
+        pendingBlankSources = []
         // ...AND THE NOTE ENDS WHERE A COMMENT ENDS IT. The gate below decides
         // whether this `+` is a marker at all; when it is not, the line is an
         // ordinary invisible line at document column 0, and a footnote body ends
@@ -8300,7 +8369,11 @@ class ParseSession {
         if (attached.length > 0) {
           bodyLines.push('')
           bodyLineNumbers.push(plusLineNumber)
-          for (const a of attached) bodyLines.push(a)
+          bodySourceLines.push(undefined)
+          for (const a of attached) {
+            bodyLines.push(a)
+            bodySourceLines.push(a)
+          }
           bodyLineNumbers.push(...attachedLineNumbers)
         }
         continue
@@ -8314,13 +8387,17 @@ class ParseSession {
       // the document body, so the split moved content between blocks.
       if (indentColumns(ln, bodyColumn) >= bodyColumn) {
         for (let k = 0; k < pendingBlanks; k++) {
+          bufferedBlanks.add(bodyLines.length)
           bodyLines.push('')
           bodyLineNumbers.push(pendingBlankLineNumbers[k]!)
+          bodySourceLines.push(pendingBlankSources[k])
         }
         pendingBlanks = 0
         pendingBlankLineNumbers = []
+        pendingBlankSources = []
         bodyLines.push(sliceColumns(ln, bodyColumn, true))
         bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+        bodySourceLines.push(ln)
         lexer.consume()
       } else {
         break
@@ -8331,6 +8408,9 @@ class ParseSession {
       // its authored column as a local base (carve#1729). The collector has
       // already removed the fixed two-column body margin.
       rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
+      restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
+        index === 0 ? defContentColumn : indentColumns(bodySourceLines[index] ?? ''),
+      )
       const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.inFootnoteBody = true
