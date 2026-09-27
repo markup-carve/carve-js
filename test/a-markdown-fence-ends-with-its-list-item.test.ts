@@ -25,9 +25,9 @@ describe('a Markdown fence in a list item', () => {
     expect(markdownToCarve('- x\n\n  ```\n  code\n# *h*')).toBe('{loose}\n- x\n\n  ```\n  code\n  ```\n\n# /h/')
   })
 
-  // Left open: closed, the item would read tight where GFM reads it loose.
+  // The explicit attribute preserves Markdown looseness now that the fence blank stays tight.
   it('stays open across a blank line to a line at the content column', () => {
-    expect(markdownToCarve('- x\n\n  ```\n  code\n\n  *still*')).toBe('- x\n\n  ```\n  code\n\n  *still*')
+    expect(markdownToCarve('- x\n\n  ```\n  code\n\n  *still*')).toBe('{loose}\n- x\n\n  ```\n  code\n\n  *still*')
   })
 
   it('runs to the end of the document', () => {

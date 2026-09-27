@@ -5573,10 +5573,17 @@ function rebaseOverindentedBlocks(
       const stack = [colon]
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
-        if (!isBlankLine(candidate) && indentColumns(candidate, base) < base) break
         end = j
         if (isBlankLine(candidate)) continue
-        const local = sliceColumns(candidate, base, true)
+        const column = indentColumns(candidate, base)
+        // A below-base run is payload unless it closes at the container's own column.
+        if (column < base) {
+          const closesAtColumn =
+            column === 0 &&
+            RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length === stack[stack.length - 1]
+          if (!closesAtColumn) continue
+        }
+        const local = column === 0 ? candidate : sliceColumns(candidate, base, true)
         const run = RE_ADMONITION_CLOSE.exec(local)
         if (!run) continue
         const width = run[1]!.length
@@ -10479,13 +10486,19 @@ class ParseSession {
       // A blank line INSIDE a fenced block is that block's content, not an
       // interior block separator, so it must not loosen the item (carve#326 case
       // C; matches carve-rs / carve-php). Precompute which lines fall inside a
-      // CLOSED fence in a single pass, then skip those blanks in the scan below.
-      // Only a fence with a matching closer forms a block; an UNCLOSED opener is
-      // inline verbatim inside a paragraph, so a following blank still loosens
-      // (matches carve-rs). The opener may be the item's lead (a marker-line
-      // fence, `- ``` `, which is not in `nested`), so the pass prepends `content`
-      // and a `nested[k]` corresponds to `fenceLines[k + 1]`. Marking closed
-      // ranges is O(n) total (ranges never overlap), keeping the scan linear.
+      // fence in a single pass, then skip those blanks in the scan below. The
+      // opener may be the item's lead (a marker-line fence, `- ``` `, which is not
+      // in `nested`), so the pass prepends `content` and a `nested[k]` corresponds
+      // to `fenceLines[k + 1]`. Marking ranges is O(n) total (ranges never
+      // overlap), keeping the scan linear.
+      //
+      // §10'S CLOSER LOOKAHEAD IS CONDITIONAL ON AN OPEN PARAGRAPH, and this pass
+      // applied it unconditionally, so it refused to latch an unterminated opener
+      // the block parser had accepted as a block and read the blank inside that
+      // block as an interior separator (carve-js#2210). §17 L1 and L1a ask for a
+      // second PARAGRAPH, and a paragraph plus one code block holds none.
+      // `fenceState` runs the block tracker's own state machine over these lines
+      // so the two agree about when an opener latches.
       //
       // ALL THREE FENCE KINDS. This knew only the code fence, which is the same
       // one-kind-of-three defect corpus category 279 pins for the collectors -
@@ -10501,19 +10514,18 @@ class ParseSession {
       // keeping the whole pass linear (ranges never overlap).
       const fenceLines = [content, ...nested]
       const inFence: boolean[] = new Array(fenceLines.length).fill(false)
-      // AN OPENER WITH NO CLOSER AHEAD OPENS NOTHING, so it must not latch this
-      // pass either. Without the check an unterminated `%%%` swallowed every
+      // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
+      // must not latch this pass either: an unterminated `%%%` swallowed every
       // later line and a genuinely CLOSED code fence below it went unmarked, so a
-      // blank inside that code loosened the item - the divergence from what the
-      // block parser does with the same lines.
+      // blank inside that code loosened the item.
       const closers = buildCloserIndex(fenceLines)
       // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
       // `:::` container that IS the item's first block is the item's own body:
       // the blank line between two of its blocks is the only blank line the item
-      // has, and §17 L1 reads it. That is already what happens when the closer is
-      // MISSING - an unterminated opener latches nothing below, so the blank is
-      // seen and the list is loose - and writing the closer is a spelling change,
-      // so it must not move the tightness. Marking the range made
+      // has, and §17 L1 reads it. Writing the closer is a spelling change, so it
+      // must not move the tightness - which is why the `firstContentIdx` test
+      // below exempts the lead container rather than reading the closer.
+      // Marking the range made
       //
       //     - ::: d
       //       b
@@ -10538,6 +10550,7 @@ class ParseSession {
       // the transition through zero writes a range: nesting a hundred containers
       // inside an item marks the outermost span once rather than once per level,
       // which is the same bound the openIdx it replaces had.
+      const fenceState = verbatimOnlyLazyState()
       const firstContentIdx = fenceLines.findIndex((l) => l.trim() !== '')
       const open: Array<{
         kind: 'code' | 'comment' | 'colon'
@@ -10561,6 +10574,14 @@ class ParseSession {
       }
       for (let k = 0; k < fenceLines.length; k++) {
         const line = fenceLines[k]!
+        const paragraphOpen = fenceState.lazyFoldable
+        trackItemLazyState(
+          line,
+          fenceState,
+          (marker) => codeCloserPossible(closers, marker, k),
+          true,
+          (run) => exactCloserPossible(closers.comment, run, k),
+        )
         const inner = open[open.length - 1]
         if (inner !== undefined && inner.kind !== 'colon') {
           const closed =
@@ -10593,7 +10614,7 @@ class ParseSession {
         let opened: { kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number } | null =
           null
         if (marker !== null) {
-          if (codeCloserPossible(closers, marker, k))
+          if (!paragraphOpen || codeCloserPossible(closers, marker, k))
             opened = { kind: 'code', close: fenceCloseRe(marker), len: marker.length }
         } else {
           const run = commentFenceRun(line)
