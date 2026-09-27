@@ -169,15 +169,13 @@ describe('a figure caption and a table caption both survive the import', () => {
     }
   })
 
-  it('writes the detached caption directly after the table it captioned', () => {
-    // A figure's caption stays with its TARGET, so a body block the figure also
-    // held follows both. Appending it to the end put that block between the
-    // table and its own caption, and the row promises a paragraph after the
-    // table.
+  it('writes the caption where it stood when a second body block unwraps the figure', () => {
+    // A figure holding two body blocks is not rebuilt, so this never reaches the
+    // double-caption arm: the figure unwraps and its caption keeps its position.
     const withBody =
       '<figure id="f"><table><caption>T</caption><tr><td>a</td></tr></table>' +
       '<figcaption>Cap</figcaption><p>Next</p></figure>'
-    expect(htmlToCarve(withBody, { mode: 'safe' }).value).toBe('{#f}\n| a |\n^ T\n\nCap\n\nNext\n')
+    expect(htmlToCarve(withBody, { mode: 'safe' }).value).toBe('| a |\n^ T\n\nCap\n\nNext\n')
   })
 
   /*
@@ -197,5 +195,22 @@ describe('a figure caption and a table caption both survive the import', () => {
       expect(result.report.diagnostics).toEqual([])
       expect(carveToHtml(result.value)).toContain('<figcaption>FigCap</figcaption>')
     }
+  })
+})
+
+// One caption line captions one block, so a figure with a second body block is
+// unwrapped in every mode and kept raw in roundtrip, as carve-rs and carve-php do.
+describe('a figure holding two body blocks', () => {
+  const html = '<figure id="f"><blockquote id="g"><p>q</p></blockquote><p>x</p><figcaption>c</figcaption></figure>'
+
+  it('unwraps with the caption where it stood and no shared-line row', () => {
+    const result = htmlToCarve(html, { mode: 'safe' })
+    expect(result.value).toBe('{#g}\n> q\n\nx\n\nc\n')
+    expect(result.report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'attribute-dropped'])
+  })
+
+  it('is kept raw in roundtrip', () => {
+    const result = htmlToCarve(html, { mode: 'roundtrip' })
+    expect(result.report.diagnostics.map((d) => d.code)).toEqual(['raw-preserved'])
   })
 })

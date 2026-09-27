@@ -4053,16 +4053,20 @@ class Importer {
     const captionAt = children.findIndex((n) => n.tagName === 'figcaption')
     const captionNode = captionAt < 0 ? undefined : children[captionAt]
     const captionPath = `${path}/figcaption[${captionAt + 1}]`
-    const bodyPaths: string[] = []
-    const body: P5Node[] = []
+    // Split at the caption, so an unwrapped figure can put it back where it was.
+    const halves: { body: P5Node[]; paths: string[] }[] = [{ body: [], paths: [] }, { body: [], paths: [] }]
     children.forEach((child, index) => {
       if (child === captionNode) return
-      body.push(child)
-      bodyPaths.push(this.childPath(path, child, index))
+      const half = halves[captionAt >= 0 && index > captionAt ? 1 : 0]!
+      half.body.push(child)
+      half.paths.push(this.childPath(path, child, index))
     })
     const before = this.mark()
-    const targets = this.blocks(body, path, depth + 1, bodyPaths)
-    const target = this.captionHost(targets[0])
+    const ahead = this.blocks(halves[0]!.body, path, depth + 1, halves[0]!.paths)
+    const targets = [...ahead, ...this.blocks(halves[1]!.body, path, depth + 1, halves[1]!.paths)]
+    // One caption line captions one block: a second body block would have to
+    // move past the caption, so such a figure is not rebuilt (as in carve-rs).
+    const target = targets.length === 1 ? this.captionHost(targets[0]) : undefined
     const captionable = target !== undefined && FIGURE_REBUILDS.has(target.type)
     const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
     /*
@@ -4200,7 +4204,8 @@ class Importer {
      */
     this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
     this.reportUnwrappedAttributes(node, attrs, 'figure', path)
-    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: caption }] : [])]
+    if (!captionNode) return targets
+    return [...ahead, { type: 'paragraph' as const, children: caption }, ...targets.slice(ahead.length)]
   }
 
   private inlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[], depths?: number[]): InlineNode[] {
