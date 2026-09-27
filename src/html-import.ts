@@ -455,7 +455,7 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
       continue
     }
     // Nested links and spans have already hoisted their children.
-    node.children = hoistEdgeSpace(node.children, true)
+    node.children = dropSpaceAfterHardBreak(hoistEdgeSpace(node.children, true))
     if (!node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
       pay(node)
       out.push(node)

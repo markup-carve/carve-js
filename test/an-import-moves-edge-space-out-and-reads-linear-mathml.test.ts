@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { htmlToCarve } from '../src/index.js'
+import { htmlToCarve, parse, renderCarve } from '../src/index.js'
 
 // markup-carve/carve#2361.
 describe('a link or span keeps its edge whitespace outside it', () => {
@@ -26,9 +26,13 @@ describe('a link or span keeps its edge whitespace outside it', () => {
     ['a padded nested span', '<p>a<a href="/s"><span id="s"><b> x </b></span></a>b</p>', 'a [[*x*]{#s}](/s) b\n'],
     ['an image inside formatting', '<p>a<a href="/s"><b> <img src="i.png" alt="i"> </b></a>b</p>', 'a [*![i](i.png)*](/s) b\n'],
     ['a link inside standalone formatting', '<p>a<b><a href="/s"><i> x </i></a></b>b</p>', 'a{* [/x/](/s) *}b\n'],
+    ["formatting after a hard break", "<p>a<a href=\"/s\">x<br><b> y</b></a>b</p>", "a[x\\\n*y*](/s)b\n"],
+    ["a tab after a hard break", "<p>a<a href=\"/s\">x<br><b>\ty</b></a>b</p>", "a[x\\\n*y*](/s)b\n"],
+    ["span formatting after a hard break", "<p>a<span id=\"k\">x<br><i> y</i></span>b</p>", "a[x\\\n/y/]{#k}b\n"],
   ])('moves it out at %s', (_, html, carve) => {
     const result = htmlToCarve(html)
     expect(result.value).toBe(carve)
+    expect(renderCarve(parse(result.value))).toBe(result.value)
     expect(result.report.diagnostics).toEqual([])
   })
 
