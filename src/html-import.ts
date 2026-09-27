@@ -395,8 +395,9 @@ function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
   const first = after[0]
   if (last === undefined || first === undefined) return false
   if (last.type === 'hard_break' || first.type === 'hard_break') return false
-  if (last.type === 'text' && /\s$/.test(last.value)) return false
-  if (first.type === 'text' && /^\s/.test(first.value)) return false
+  // ASCII layout only: U+00A0 is content, so it is a side and not a separator.
+  if (last.type === 'text' && /[ \t\n\r\f]$/.test(last.value)) return false
+  if (first.type === 'text' && /^[ \t\n\r\f]/.test(first.value)) return false
 
   return true
 }
