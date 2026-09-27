@@ -1,3 +1,4 @@
+import { paragraph as requireParagraph } from './helpers/ast.js'
 import { describe, it, expect } from 'vitest'
 import { slugify, inlineText, resolveHeadingIds } from '../src/heading-ids.js'
 import { parse, carveToHtml } from '../src/index.js'
@@ -157,12 +158,14 @@ describe('resolveHeadingIds', () => {
     const doc = parse(`{#target}\n${heading}\n\n${refs}`)
     resolveHeadingIds(doc)
     const elapsed = performance.now() - start
-    const para = doc.children[1]
+    const para = requireParagraph(doc.children[1])
 
     expect(elapsed).toBeLessThan(1000)
     expect(para.type).toBe('paragraph')
     expect(para.children[0]?.type).toBe('heading_ref')
-    expect(para.children[0]?.href).toBe('#target')
+    const ref = para.children[0]
+    if (ref.type !== 'heading_ref') throw new Error('Expected heading reference')
+    expect(ref.href).toBe('#target')
   })
 
   it('clones target text one level for refs that precede the target', () => {

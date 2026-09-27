@@ -132,7 +132,7 @@ describe('three-way structural merge', () => {
     const ours = carveToAstJson('Base.\n\nAdded.\n')
     const theirs = JSON.parse(JSON.stringify(ours)) as typeof ours
     const added = theirs.children[1] as unknown as Record<string, unknown>
-    theirs.children[1] = Object.fromEntries(Object.entries(added).reverse()) as typeof theirs.children[number]
+    theirs.children[1] = Object.fromEntries(Object.entries(added).reverse()) as unknown as typeof theirs.children[number]
     const result = mergeAst(base, ours, theirs)
     expect(result.ok).toBe(true)
     if (result.ok) expect(JSON.stringify(result.ast).match(/Added\./g)).toHaveLength(1)

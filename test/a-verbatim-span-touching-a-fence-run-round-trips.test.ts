@@ -1,3 +1,4 @@
+import { paragraph as requireParagraph } from './helpers/ast.js'
 import { describe, expect, it } from 'vitest'
 
 import { carveToCarve, carveToHtml, parse, renderCarve } from '../src/index.js'
@@ -75,7 +76,7 @@ describe('a verbatim span touching a fence run round-trips', () => {
 
   describe('the value the writer has to spell', () => {
     const lastCode = (src: string) => {
-      const inlines = parse(src).children[0]?.children ?? []
+      const inlines = requireParagraph(parse(src).children[0]).children
       return inlines.find((node) => node.type === 'code')?.value
     }
 

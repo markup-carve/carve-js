@@ -30,15 +30,15 @@ describe('a resolved crossref', () => {
   it('keeps its own span', () => {
     const link = linkOf('# Getting Started\n\nSee </#getting-started>.\n')
     expect(link.pos).toBeDefined()
-    expect(link.pos!.startOffset).toBe(23)
+    expect(link.pos!.startOffset!).toBe(23)
   })
 
   it('does not give its cloned children the heading\'s positions', () => {
     const link = linkOf('# Getting Started\n\nSee </#getting-started>.\n')
     for (const child of link.resolvedText ?? []) {
       if (child.pos === undefined) continue
-      expect(child.pos.startOffset).toBeGreaterThanOrEqual(link.pos!.startOffset)
-      expect(child.pos.endOffset).toBeLessThanOrEqual(link.pos!.endOffset)
+      expect(child.pos.startOffset).toBeGreaterThanOrEqual(link.pos!.startOffset!)
+      expect(child.pos.endOffset).toBeLessThanOrEqual(link.pos!.endOffset!)
     }
   })
 
@@ -55,8 +55,8 @@ describe('a resolved crossref', () => {
         if (node && typeof node === 'object') {
           if ('pos' in node && node.pos !== undefined) {
             const pos = node.pos as { startOffset: number; endOffset: number }
-            expect(pos.startOffset).toBeGreaterThanOrEqual(link.pos!.startOffset)
-            expect(pos.endOffset).toBeLessThanOrEqual(link.pos!.endOffset)
+            expect(pos.startOffset).toBeGreaterThanOrEqual(link.pos!.startOffset!)
+            expect(pos.endOffset).toBeLessThanOrEqual(link.pos!.endOffset!)
           }
           if (Array.isArray(node.children)) walk(node.children)
         }

@@ -213,7 +213,7 @@ describe('the canonical writer respects the render depth cap', () => {
   const divs = (depth: number): Document => {
     let node: BlockNode = { type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x' }] }] }
     for (let i = 0; i < depth; i++) node = { type: 'div', children: [node] }
-    return { type: 'doc', children: [node], footnoteDefs: {} }
+    return { type: 'document', children: [node], footnoteDefs: {} }
   }
 
   perfIt('refuses a tree past MAX_RENDER_DEPTH instead of writing a truncated one', () => {

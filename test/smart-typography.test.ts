@@ -102,7 +102,7 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
 })
 
 describe('= opens a quote; empty link destination is literal', () => {
-  const h2 = (x) => carveToHtml(x)
+  const h2 = (x: string) => carveToHtml(x)
   it('opens a quote after = (attribute-like text)', () => {
     expect(h2('="x"')).toBe('<p>=“x”</p>')
     expect(h2('a="b"')).toBe('<p>a=“b”</p>')

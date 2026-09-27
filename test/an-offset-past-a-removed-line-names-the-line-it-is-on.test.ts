@@ -176,7 +176,7 @@ describe('an offset past a line the block layer removed names the line it is on'
   it('leaves the comment marker outside the span it removed the line for', () => {
     const pos = spanOf(parse(verse), [0, 0, 0])
     expect(verse.slice(pos.startOffset, pos.endOffset)).toBe('`\n')
-    expect(verse.slice(pos.endOffset, pos.endOffset + 2)).toBe('%%')
+    expect(verse.slice(pos.endOffset, pos.endOffset! + 2)).toBe('%%')
   })
 
   it('holds when the run carries text and when two comment lines end the stanza', () => {

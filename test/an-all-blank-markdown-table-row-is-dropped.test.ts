@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { markdownToCarve, migrateMarkdown, parse } from '../src/index.js'
-import type { Document, Node, Table } from '../src/index.js'
+import type { Document, BlockNode, ListItem, Table } from '../src/index.js'
 
 // A GFM body row whose every cell is blank has no Carve spelling
 // (markup-carve/carve#1954): written out as `| | |` the parser reads a
@@ -8,10 +8,10 @@ import type { Document, Node, Table } from '../src/index.js'
 // reports the loss rather than inventing a cell (carve-js#1919).
 
 /** Each block's type, with a table's row count and a container's contents. */
-const shape = (node: Node): string => {
+const shape = (node: BlockNode | ListItem): string => {
   if (node.type === 'table') return `table(${(node as Table).rows.length})`
   const children =
-    (node as { children?: Node[] }).children ?? (node as { items?: Node[] }).items
+    (node as { children?: BlockNode[] }).children ?? (node as { items?: BlockNode[] }).items
   if (!children) return node.type
   const inner = children.map(shape).join(',')
   return node.type === 'list_item' ? inner : `${node.type}[${inner}]`

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyProfile, AstJsonSchemaError, diffAst, fromAstJson, Profile, renderAnsi, renderCarve,
+  applyProfile, AstJsonSchemaError, diffAst, fromAstJson, Profile, renderAnsi,
   renderCarveWithConversionReport, renderCarveWithReport,
   parse, renderHtml, renderMarkdown, renderPlainText, resolve, toAstJson,
 } from '../src/index.js'
@@ -27,7 +27,7 @@ describe('interchange sections and block-content cells', () => {
     const tree = payload()
     expect(toAstJson(fromAstJson(tree as never))).toEqual(tree)
     const changed = payload()
-    changed.children[0].children[1].rows[0].cells[0].blocks[1].children[0].value = 'Third'
+    changed.children[0].children[1].rows![0].cells[0].blocks[1].children[0].value = 'Third'
     expect(diffAst(tree as never, changed as never).some((change) => JSON.stringify(change).includes('blocks'))).toBe(true)
   })
 
@@ -46,7 +46,7 @@ describe('interchange sections and block-content cells', () => {
     const report = renderCarveWithReport(fromAstJson(payload() as never))
     expect(report.value).toContain('First Second')
     expect(report.losses).toEqual([])
-    const { report: diagnostics } = renderCarveWithConversionReport(fromAstJson(payload() as never), renderCarve)
+    const { report: diagnostics } = renderCarveWithConversionReport(fromAstJson(payload() as never))
     expect(diagnostics.diagnostics.map((entry) => [entry.code, entry.node, entry.field])).toEqual([
       ['structure-unspellable', 'section', undefined],
       ['field-unspellable', 'table_cell', 'blocks'],
@@ -128,7 +128,7 @@ describe('interchange sections and block-content cells', () => {
       type: 'table_row', cells: [{ type: 'table_cell', header: false, blocks: [{
         type: 'paragraph', children: [{ type: 'image', src: '/a.png', alt: 'A' }],
       }] }],
-    }] }] } as never
+    }] }] } satisfies import('../src/ast.js').Document
     const collapsed = collapseLoneImageParagraphs(doc)
     expect((collapsed.children[0] as never as { rows: { cells: { blocks: { type: string }[] }[] }[] }).rows[0]!.cells[0]!.blocks[0]!.type).toBe('image')
     expect((doc.children[0] as never as { rows: { cells: { blocks: { type: string }[] }[] }[] }).rows[0]!.cells[0]!.blocks[0]!.type).toBe('paragraph')
@@ -141,8 +141,8 @@ describe('interchange sections and block-content cells', () => {
     { blocks: 'text' },
   ])('rejects a cell without exactly one content array: %j', (content) => {
     const tree = payload() as Record<string, any>
-    Object.assign(tree.children[0].children[1].rows[0].cells[0], content)
-    if (!('blocks' in content)) delete tree.children[0].children[1].rows[0].cells[0].blocks
+    Object.assign(tree.children[0].children[1].rows![0].cells[0], content)
+    if (!('blocks' in content)) delete tree.children[0].children[1].rows![0].cells[0].blocks
     expect(() => fromAstJson(tree as never)).toThrow(AstJsonSchemaError)
   })
 

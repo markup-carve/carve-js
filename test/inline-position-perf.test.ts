@@ -1,3 +1,4 @@
+import { paragraph as requireParagraph } from './helpers/ast.js'
 import { describe, it, expect } from 'vitest'
 import { parse } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
@@ -37,9 +38,9 @@ describe('inline position mapping (perf + correctness)', () => {
 
   it('keeps correct line/column across soft breaks', () => {
     const doc = parse('para line one\nline two *b* end')
-    const para = doc.children[0]!
+    const para = requireParagraph(doc.children[0])
     expect(para.type).toBe('paragraph')
-    const strong = para.children!.find((c) => c.type === 'bold' || c.type === 'strong')!
+    const strong = para.children!.find((c) => c.type === 'strong')!
     // `*b*` sits on the second line: starts at column 10, line 2.
     expect(strong.pos!.startLine).toBe(2)
     expect(strong.pos!.startColumn).toBe(10)
@@ -48,8 +49,8 @@ describe('inline position mapping (perf + correctness)', () => {
 
   it('column continues from the source start column on the first line', () => {
     const doc = parse('ab *em* cd')
-    const para = doc.children[0]!
-    const strong = para.children!.find((c) => c.type === 'bold' || c.type === 'strong')!
+    const para = requireParagraph(doc.children[0])
+    const strong = para.children!.find((c) => c.type === 'strong')!
     expect(strong.pos!.startLine).toBe(1)
     expect(strong.pos!.startColumn).toBe(4)
   })

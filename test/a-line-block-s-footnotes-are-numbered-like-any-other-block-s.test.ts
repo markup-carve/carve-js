@@ -119,8 +119,8 @@ describe("a line block's footnotes are numbered like any other block's", () => {
     // `carveToAstJson` caller publishes.
     const doc = resolve(parse('::: |\na ^[note text] b\n:::\n'))
     const lineBlock = doc.children.find((n) => n.type === 'line_block')!
-    const para = (lineBlock as { children: Array<Record<string, unknown>> }).children[0]!
-    const note = (para as { children: Array<Record<string, unknown>> }).children.find(
+    const para = (lineBlock as unknown as { children: Array<Record<string, unknown>> }).children[0]!
+    const note = (para as unknown as { children: Array<Record<string, unknown>> }).children.find(
       (n) => n.type === 'inline_footnote',
     )
     expect(note).toBeDefined()

@@ -72,6 +72,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Packed package consumer
+        run: npm run test:package
+
   browser-bundle:
     name: browser bundle parity
 

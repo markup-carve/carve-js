@@ -6,7 +6,7 @@ import { carveToCarve, parse } from '../src/index.js'
 // normalizing either way would rewrite documents nobody asked to change.
 
 const quoteOf = (source: string): Record<string, unknown> =>
-  (parse(source) as { children: Record<string, unknown>[] }).children[0]!
+  (parse(source) as unknown as { children: Record<string, unknown>[] }).children[0]!
 
 describe('the spelling a block quote was authored in', () => {
   it('is recorded on a fenced quote', () => {

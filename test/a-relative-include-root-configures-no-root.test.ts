@@ -33,7 +33,7 @@ function expandFrom(cwd: string, rootSpec: string) {
     } catch {
       resolver = undefined
     }
-    const result = expandIncludes(parse(SOURCE, { positions: true }), SOURCE, { resolve: resolver })
+    const result = expandIncludes(parse(SOURCE, { positions: true }), SOURCE, resolver === undefined ? {} : { resolve: resolver })
     return { ...result, html: renderHtml(resolve(result.doc)) }
   } finally {
     process.chdir(previous)
@@ -116,7 +116,7 @@ describe('a relative include root configures no root', () => {
       process.chdir(base)
       try {
         const resolver = fileSystemResolver(process.cwd())
-        const result = expandIncludes(parse(SOURCE, { positions: true }), SOURCE, { resolve: resolver })
+        const result = expandIncludes(parse(SOURCE, { positions: true }), SOURCE, resolver === undefined ? {} : { resolve: resolver })
 
         expect(renderHtml(resolve(result.doc))).toContain(CHILD_MARKER)
       } finally {

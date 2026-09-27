@@ -97,7 +97,7 @@ export function expectScansLinearly(
   expectBuiltInputScansLinearly(
     convert,
     (repeats) => prefix + fragment.repeat(repeats) + suffix,
-    { label: options.label ?? fragment, smallRepeats: options.smallRepeats },
+    { label: options.label ?? fragment, ...(options.smallRepeats === undefined ? {} : { smallRepeats: options.smallRepeats }) },
   )
 }
 

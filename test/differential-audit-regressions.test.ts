@@ -1,3 +1,4 @@
+import { paragraph as requireParagraph } from './helpers/ast.js'
 import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToHtml } from '../src/index.js'
 
@@ -64,10 +65,12 @@ describe('differential audit regressions', () => {
 
   it('anchors a line-block hard break to the source line when tabs expand', () => {
     const ast = carveToAstJson('::: |\nwide\t\tgap\nnext\n:::\n')
-    const hardBreak = ast.children[0].children[0].children.find((n: any) => n.type === 'hard_break')
+    const lineBlock = ast.children[0]
+    if (lineBlock.type !== 'line_block') throw new Error('Expected line block')
+    const hardBreak = requireParagraph(lineBlock.children[0]).children.find((n) => n.type === 'hard_break')!
     expect(hardBreak.type).toBe('hard_break')
-    expect(hardBreak.pos.startOffset).toBe(15)
-    expect(hardBreak.pos.endOffset).toBe(16)
+    expect(hardBreak.pos!.startOffset).toBe(15)
+    expect(hardBreak.pos!.endOffset).toBe(16)
   })
 
   it('uses visible autolink text and image alt text in heading keys', () => {

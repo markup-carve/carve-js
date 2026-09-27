@@ -36,7 +36,7 @@ import type { Document } from '../src/ast.js'
 // A block's children live under `children`, `items` or `blocks` depending on the
 // node, so the walk asks for whichever one this node carries.
 const kids = (node: unknown): unknown[] => {
-  const record = node as Record<string, unknown>
+  const record = node as unknown as Record<string, unknown>
   for (const slot of ['children', 'items', 'blocks']) {
     if (Array.isArray(record[slot])) return record[slot] as unknown[]
   }
@@ -59,7 +59,7 @@ const rawRefs = (src: string): string[] => {
   const found: string[] = []
   const walk = (x: unknown): void => {
     if (x === null || typeof x !== 'object') return
-    const record = x as Record<string, unknown>
+    const record = x as unknown as Record<string, unknown>
     if (typeof record.rawRef === 'string') found.push(record.rawRef)
     for (const key of Object.keys(record)) walk(record[key])
   }
@@ -86,7 +86,7 @@ describe("a line block's nested inline keeps its own source", () => {
 
     it('the nested spans nest, so no two nodes claim one byte', () => {
       const src = '::: |\n*a\n%% secret\nc*\n:::\n'
-      const strong = inlines(parse(src), [0])[0] as {
+      const strong = inlines(parse(src), [0])[0] as unknown as {
         pos: { startOffset: number; endOffset: number }
         children: { pos?: { startOffset: number; endOffset: number } }[]
       }

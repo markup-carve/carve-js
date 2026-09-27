@@ -219,7 +219,7 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
 
   it('caps recursive rendering depth in non-HTML renderers', () => {
     const nest = (depth: number): Document => {
-      let content: Document['children'][number]['children'] = [{ type: 'text', value: 'x' }]
+      let content: import('../src/index.js').InlineNode[] = [{ type: 'text', value: 'x' }]
       for (let i = 0; i < depth; i++) content = [{ type: 'span', children: content }]
       return { type: 'document', children: [{ type: 'paragraph', children: content }] }
     }

@@ -138,15 +138,15 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
       matchBlock(lines, start) {
         if (lines[start] !== '@@@nest') return null
         return {
-          node: { type: 'inline_extension', name: 'nest', content: [] },
+          node: { type: 'directive', kind: 'nest', children: [] },
           linesConsumed: 1,
         }
       },
       blockRenderers: {
         // Render a whole sub-document via renderHtml() while the outer render
         // is mid-flight - the scenario that previously nulled the tracker.
-        // Keyed by node type ('inline_extension'), per the render-html dispatch.
-        inline_extension: () => {
+        // Keyed by node type, per the render-html dispatch.
+        directive: () => {
           nestedCalled = true
           return renderHtml(resolve(parse('Inner doc.')))
         },

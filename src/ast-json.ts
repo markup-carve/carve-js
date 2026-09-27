@@ -1424,20 +1424,23 @@ function normalizeIngestedValues<T>(node: T): T {
   return (out ?? record) as T
 }
 
-export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): Document {
+export function fromAstJson(input: unknown, payloadByteLength?: number): Document {
   // A STRING is the mistake the name invites - `fromAstJson` reads as "from AST
   // JSON", carve-php spells the same entry point `decodeJson`, and carve-rs's
   // CLI flag is `--from-json`; all three of those take text. This one takes the
   // parsed tree. Without this arm the string falls through to the root check and
   // is reported as `AST root type undefined is not "document"`, which sends the
   // caller looking at their document instead of at their call (carve-js#703).
-  if (typeof json === 'string') {
+  if (typeof input === 'string') {
     throw new TypeError(
       'fromAstJson takes a parsed AST object, not a JSON string; call JSON.parse first',
     )
   }
   // Checked BEFORE the depth walk: a foreign payload should be turned away for
   // being foreign, not for however deep it happens to be.
+  const json = typeof input === 'object' && input !== null
+    ? input as Record<string, unknown>
+    : undefined
   if (json?.type !== 'document') throw new AstJsonRootError(json?.type)
   // PART 12 §12(a), and before the depth walk for the same reason the root type
   // is: a payload that is not this format should be turned away for that, not
@@ -1476,7 +1479,8 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // throws at an unknown field WITHOUT descending into it, so a payload naming
   // one over a deeply nested object would be walked in full here before the
   // cheap refusal ever ran.
-  const tree = normalizeIngestedValues(json)
+  // The schema checks above establish the wire shape before this conversion.
+  const tree = normalizeIngestedValues(json as unknown as AstJsonDocument)
 
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
@@ -1600,7 +1604,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
  * than V8's maximum string length, which is exactly the case that must not be
  * handed a budget sized from its own claim.
  */
-function measurePayload(json: AstJsonDocument): number {
+function measurePayload(json: unknown): number {
   try {
     return utf8ByteLength(JSON.stringify(json))
   } catch {

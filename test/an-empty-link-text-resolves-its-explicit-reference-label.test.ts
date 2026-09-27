@@ -55,7 +55,7 @@ const inlines = (
   opts?: Parameters<typeof parse>[1],
 ): Array<Record<string, unknown>> => {
   const para = parse(src, opts).children.find((n) => n.type === 'paragraph')
-  return (para as { children: Array<Record<string, unknown>> }).children
+  return (para as unknown as { children: Array<Record<string, unknown>> }).children
 }
 
 describe('an empty link text resolves its explicit reference label', () => {

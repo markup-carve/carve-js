@@ -67,7 +67,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
   })
 
   it('carries no root field beyond the three, even with both present', () => {
-    const json = toAstJson(parse('---\na: 1\n---\n\nP[^x]\n\n[^x]: d\n')) as Record<string, unknown>
+    const json = toAstJson(parse('---\na: 1\n---\n\nP[^x]\n\n[^x]: d\n')) as unknown as Record<string, unknown>
     expect(json.frontmatter).toBeUndefined()
     expect(json.footnoteDefs).toBeUndefined()
   })
@@ -114,7 +114,7 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     // the tree nodes in the exchange shape and on the root in the runtime one.
     expect(doc.frontmatter?.pos).toBeDefined()
     expect(doc.footnoteDefPos?.x).toBeDefined()
-    expect(doc.children.every((c) => c.type !== 'frontmatter' && c.type !== 'footnote')).toBe(true)
+    expect(doc.children.every((c) => !['frontmatter', 'footnote'].includes(c.type))).toBe(true)
   })
 
   it('REFUSES a footnote definition spelled `id`', () => {
@@ -227,7 +227,7 @@ describe('definition lists on the wire (PART 12)', () => {
     // carve-rs published three entries split differently - and all three
     // engines rendered the same <dl>. The wire carries what the renderers
     // agree on.
-    const list = carveToAstJson(source).children[0] as {
+    const list = carveToAstJson(source).children[0] as unknown as {
       type: string
       items: { type: string }[]
     }
@@ -246,7 +246,7 @@ describe('definition lists on the wire (PART 12)', () => {
   it('gives a term a position, which a plain object could not carry', () => {
     // §4's point: a term is content an editor navigates to and a language
     // server renames. PART 12 §4 includes the term marker that opens it.
-    const list = carveToAstJson(source).children[0] as {
+    const list = carveToAstJson(source).children[0] as unknown as {
       items: { type: string; pos?: { startLine: number; startColumn: number } }[]
     }
 
@@ -258,7 +258,7 @@ describe('definition lists on the wire (PART 12)', () => {
     // §6. The grouping rule is the renderer's: a run of terms opens an entry,
     // the descriptions after it belong to it.
     const json = carveToAstJson(source)
-    const doc = fromAstJson(JSON.parse(JSON.stringify(json))) as {
+    const doc = fromAstJson(JSON.parse(JSON.stringify(json))) as unknown as {
       children: { items: { terms: unknown[]; definitions: unknown[] }[] }[]
     }
 
@@ -295,7 +295,7 @@ describe('definition lists on the wire (PART 12)', () => {
           ],
         } as never,
       ],
-    }) as { children: { items: { terms: unknown[] }[] }[] }
+    }) as unknown as { children: { items: { terms: unknown[] }[] }[] }
 
     expect(doc.children[0]?.items[0]?.terms).toHaveLength(1)
   })
@@ -319,14 +319,14 @@ describe('author-choice list fields on the wire (PART 12)', () => {
     // to be stripped here only because the schema had no field to hold it.
     const wire = carveToAstJson('. a\n. b\n')
 
-    expect((wire.children[0] as Record<string, unknown>).bareMarker).toBe(true)
+    expect((wire.children[0] as unknown as Record<string, unknown>).bareMarker).toBe(true)
   })
 
   it('omits it when the author numbered the list', () => {
     // Absent at the default, exactly like `delim` and `bulletChar`.
     const wire = carveToAstJson('1. a\n2. b\n')
 
-    expect((wire.children[0] as Record<string, unknown>).bareMarker).toBeUndefined()
+    expect((wire.children[0] as unknown as Record<string, unknown>).bareMarker).toBeUndefined()
   })
 
   it('still records it on the runtime tree, so fmt keeps the spelling', () => {
@@ -342,5 +342,17 @@ describe('author-choice list fields on the wire (PART 12)', () => {
     const back = fromAstJson(carveToAstJson('. a\n. b\n'))
 
     expect(renderCarve(back)).toBe('. a\n. b\n')
+  })
+})
+
+
+describe('unknown input at the AST boundary', () => {
+  it.each([null, undefined, false, 1, [], 'document'])('refuses %j at the decoder', (input: unknown) => {
+    expect(() => fromAstJson(input)).toThrow()
+  })
+
+  it('validates an unknown object before decoding', () => {
+    const input: unknown = { type: 'document', srcByteLength: 0, children: [] }
+    expect(fromAstJson(input).children).toEqual([])
   })
 })

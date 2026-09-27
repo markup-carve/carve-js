@@ -10,7 +10,6 @@ import {
   Profile,
   renderHtml,
   canonicalType,
-  CANONICAL_INLINE_TYPES,
   type Document,
 } from '../src/index.js'
 
@@ -55,7 +54,7 @@ describe('inline literal (!`…`, grammar PART 9 §27)', () => {
 
   it('parses to a literal-inline node carrying verbatim content', () => {
     const doc = parse('!`/kaet/`{.ipa}')
-    const para = doc.children[0] as { children: Array<Record<string, unknown>> }
+    const para = doc.children[0] as unknown as { children: Array<Record<string, unknown>> }
     const node = para.children[0]!
     expect(node['type']).toBe('literal_inline')
     expect(node['content']).toBe('/kaet/')

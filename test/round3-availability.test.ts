@@ -10,7 +10,7 @@ import { perfIt } from './helpers/scaling.js'
 // or real-world-malformed input.
 
 const hb = (s: string, bib: unknown[]) =>
-  carveToHtml(s, { extensions: [citations({ bibliography: bib })] }).trim()
+  carveToHtml(s, { extensions: [citations({ bibliography: bib as import('../src/citations.js').CslEntry[] })] }).trim()
 
 describe('Fix 1: bibliography tolerates a non-array `author`', () => {
   // Real-world CSL-JSON often has `author` as a string/number/object. The old

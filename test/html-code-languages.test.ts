@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { htmlToAst, htmlToCarve, parse, renderCarve } from '../src/index.js'
 
 const cases = JSON.parse(readFileSync(new URL('../spec/tests/html-code-language-cases.json', import.meta.url), 'utf8')) as Array<{ name: string; html: string; languages: Array<string | null> }>
-function blocks(value: unknown): Array<{ lang?: string; content: string }> {
+function blocks(value: unknown): Array<{ lang: string | undefined; content: string }> {
   if (Array.isArray(value)) return value.flatMap(blocks)
   if (!value || typeof value !== 'object') return []
   const node = value as Record<string, unknown>

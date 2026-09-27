@@ -191,7 +191,7 @@ const SMITH = {
   issued: { 'date-parts': [[2020]] },
   title: 'A Study',
 }
-const hb = (s: string, bib: unknown[]) =>
+const hb = (s: string, bib: import('../src/citations.js').CslEntry[]) =>
   carveToHtml(s, { extensions: [citations({ bibliography: bib })] }).trim()
 
 describe('bibliography: external CSL-JSON resolution', () => {

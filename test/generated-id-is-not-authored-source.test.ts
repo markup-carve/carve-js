@@ -27,7 +27,7 @@ describe('a generated id is not authored source', () => {
     // Both halves in one place: the field is on the wire (§5) AND absent from
     // the source (PART 11). Dropping the field to fix the writer would pass a
     // test that only checked the source.
-    const heading = carveToAstJson('# Welcome\n').children[0] as Record<string, unknown>
+    const heading = carveToAstJson('# Welcome\n').children[0] as unknown as Record<string, unknown>
     expect(heading.attrs).toEqual({ id: 'Welcome' })
   })
 

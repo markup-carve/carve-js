@@ -8,7 +8,7 @@ describe('cross-references inside a line block', () => {
     expect(carveToHtml(source)).toContain('<p><a href="#H">H</a></p>')
 
     const ast = carveToAstJson(source)
-    const lineBlock = ast.children[1] as Record<string, unknown>
+    const lineBlock = ast.children[1] as unknown as Record<string, unknown>
     const paragraph = (lineBlock.children as Array<Record<string, unknown>>)[0]!
     const reference = (paragraph.children as Array<Record<string, unknown>>)[0]!
     expect(reference).toMatchObject({ type: 'heading_ref', target: 'h', href: '#H' })

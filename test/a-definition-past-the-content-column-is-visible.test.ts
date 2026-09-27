@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parse, toAstJson } from '../src/index.js'
 
 const listTight = (source: string): boolean | undefined => {
-  const children = (toAstJson(parse(source)).children ?? []) as Array<Record<string, unknown>>
+  const children = toAstJson(parse(source)).children
   return children.find((child) => child.type === 'list')?.tight as boolean | undefined
 }
 

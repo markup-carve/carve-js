@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-// @ts-expect-error - the executable spec ships plain ESM with no types.
 import { checkContainment, checkOpeningMarkup } from '../spec/scripts/spec/ast-positions.mjs'
 
 import { carveToAstJson } from '../src/index.js'
