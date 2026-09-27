@@ -6731,6 +6731,15 @@ export function parseAttrs(src: string): Attrs {
         // carve-php; `{#i id=j}` -> `id="j"`.
         attrs.id = val
         note('#id')
+      } else if (m[3] === 'class') {
+        // `class=x` is the SAME attribute as `.x` (CARVE-P4-007): it APPENDS to
+        // the class slot in source order instead of emitting a second
+        // `class="…"` (invalid HTML), the id branch's reasoning one slot over.
+        // The two spellings are not interchangeable in SOURCE - `.` reads an
+        // `explicit_identifier`, so `-col` and `w-1/2` are classes only the
+        // key-value form can spell (markup-carve/carve#2435).
+        attrs.classes = [...(attrs.classes ?? []), val]
+        note('.class')
       } else {
         attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
         note(m[3])
@@ -6751,6 +6760,13 @@ export function parseAttrs(src: string): Attrs {
         // enters keyValues and no duplicate `id` attribute can be produced.
         attrs.id = ''
         note('#id')
+      } else if (m[8] === 'class') {
+        // A bare boolean `class` has the same empty-string value as `class=""`
+        // (PART 4), so it feeds the class slot too - left in keyValues the two
+        // spellings of one documented value would build different trees and the
+        // duplicate `class` attribute would survive.
+        attrs.classes = [...(attrs.classes ?? []), '']
+        note('.class')
       } else {
         // Boolean attribute: a bare word with no value.
         attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[8]]: '' }

@@ -1248,7 +1248,16 @@ function renderAttrs(attrs: Attrs | undefined): string {
     else parts.push(`#${escapeAttrNameValue(attrs.id)}`)
   }
   const emitClasses = () => {
-    for (const cls of attrs.classes ?? []) parts.push(`.${escapeAttrNameValue(cls)}`)
+    for (const cls of attrs.classes ?? []) {
+      // `.` reads an `explicit_identifier`, so a class it cannot spell is
+      // written as the key-value form that can (markup-carve/carve#2435).
+      // ALWAYS QUOTED: `unquoted_value` is `(letter | digit | '-' | '_' | '.' |
+      // ':')+` and cannot hold `w-1/2`. Writing `.` regardless emitted source
+      // its own parser reads as a PARAGRAPH - `{.-2col}` came back as text plus
+      // a class-less element, losing the class.
+      if (isExplicitIdOrClassIdentifier(cls)) parts.push(`.${escapeAttrNameValue(cls)}`)
+      else parts.push(`class="${cls.replace(/[\\"|]/g, '\\$&')}"`)
+    }
   }
   const emitKey = (key: string) => {
     if (kv[key] === undefined) return
