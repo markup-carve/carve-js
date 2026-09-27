@@ -15,6 +15,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Unfinished code fences in nested list items retain every trailing blank line when the item ends.
+
 - Attribute blocks reject unquoted values containing pipes, backslashes or quotes. Formatting quotes and escapes backslashes so attribute values survive reparsing (#2191).
 
 - Comments and definitions indented past a definition term stay in the term. Terms on list-marker lines follow the same folding rule, and headings under their descriptions stay inside the description (markup-carve/carve#2411, #2185).

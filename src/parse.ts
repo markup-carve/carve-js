@@ -5383,6 +5383,7 @@ function rebaseOverindentedBlocks(
   // host still rebases an over-indented note so it registers (corpus 447).
   hostIsFootnoteBody = false,
   onCodeBodyLine?: (index: number) => void,
+  onUnclosedCodeFence?: () => void,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   // One index for the whole pass; a dedent only moves leading whitespace.
@@ -5537,6 +5538,7 @@ function rebaseOverindentedBlocks(
       // A closing run BELOW the base reaches neither column, so it is payload and
       // the scan carries on past it; only a run AT the base or at the container's
       // own column closes (CARVE-P0-004, markup-carve/carve-js#2205).
+      let closed = false
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         end = j
@@ -5544,11 +5546,18 @@ function rebaseOverindentedBlocks(
         if (isBlankLine(candidate)) continue
         const column = indentColumns(candidate, base)
         if (column < base) {
-          if (column === 0 && close.test(candidate)) break
+          if (column === 0 && close.test(candidate)) {
+            closed = true
+            break
+          }
           continue
         }
-        if (close.test(sliceColumns(candidate, base, true))) break
+        if (close.test(sliceColumns(candidate, base, true))) {
+          closed = true
+          break
+        }
       }
+      if (!closed) onUnclosedCodeFence?.()
     } else if (comment !== undefined) {
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
@@ -10360,6 +10369,7 @@ class ParseSession {
       const rebaseEligible = leadIsTerm
         ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
         : authoredBaseEligible
+      let authoredCodeFenceOpen = false
       const rebasedBlanks = hasOverindentedBlockCandidate
         ? rebaseOverindentedBlocks(
           rebaseLines,
@@ -10368,6 +10378,7 @@ class ParseSession {
           false,
           false,
           (index) => subListMarkers.delete(leadIsTerm ? index - 1 : index),
+          () => { authoredCodeFenceOpen = true },
         )
         : new Set<number>()
       if (leadIsTerm) {
@@ -10408,10 +10419,11 @@ class ParseSession {
       // flushed only when a later line reaches the content column, so a fence
       // running to the end of the item never received them.
       //
-      // Only while a fence or comment is open: with nothing open the trailing
-      // blanks really are spacing, and flushing them would change list tightness
-      // and the item's end position (markup-carve/carve-js#988).
-      if (pendingBlanks > 0 && (lazyState.inFence || lazyState.inComment)) {
+      // A child item receives the run too: its parser owns any fence hidden
+      // from this item's tracker. Other trailing blanks remain spacing.
+      if (pendingBlanks > 0 && (
+        lazyState.inFence || lazyState.inComment || authoredCodeFenceOpen || firstBlockIdx >= 0 || leadIsMarker
+      )) {
         for (let k = 0; k < pendingBlanks; k++) {
           bufferedBlanks.add(nested.length + 1)
           nestedSourceLines.push(pendingBlankTexts[k])
