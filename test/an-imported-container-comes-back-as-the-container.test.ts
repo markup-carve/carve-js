@@ -132,11 +132,23 @@ describe('an imported container comes back as the container', () => {
    * that shape cannot be the fence word: written there it would read back as a
    * paragraph, and the element would lose both its class and its structure.
    * Such a div keeps the generic node, where the class survives as a class.
+   *
+   * `.` reads the same shape the fence word does, so the ATTRIBUTE spelling has
+   * to move with the guard: `{.-2col}` re-read as a paragraph holding its own
+   * markup plus a class-less `<div>`. The key-value form is the one spelling
+   * this class has (markup-carve/carve#2435).
    */
   it('keeps a class a fence opener cannot spell as a class', () => {
     const result = htmlToCarve('<div class="-2col"><p>x</p></div>')
-    expect(result.value).toBe('{.-2col}\n:::\nx\n:::\n')
+    expect(result.value).toBe('{class="-2col"}\n:::\nx\n:::\n')
     expect(kinds(htmlToAst('<div class="-2col"><p>x</p></div>').value)).toContain('div')
+  })
+
+  it('writes that class as source that re-reads as the same div', () => {
+    const written = htmlToCarve('<div class="-2col"><p>x</p></div>').value
+    expect(carveToHtml(written)).toBe('<div class="-2col">\n  <p>x</p>\n</div>')
+    // The `.` spelling could not satisfy this: `{.-2col}` is a paragraph.
+    expect(renderCarve(parse(written))).toBe(written)
   })
 
   it('leaves an aside that is not a callout unwrapped', () => {
