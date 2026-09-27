@@ -9482,7 +9482,15 @@ class ParseSession {
                 ? parseCommentBlock(lexer)
                 : { type: 'comment', block: false, content: commentLineContent(lexer.consume()) }
             const span = lexer.hasDocumentOffsets ? lineRange(lexer, first, lexer.pos - 1) : undefined
-            if (span) comment.pos = span
+            if (span) {
+              // A LEAF BEGINS AT ITS MARKUP (carve#1928). `lineRange` starts at the
+              // line, and here that is the term's indent, which places nothing -
+              // the shift `attachBlockPos` applies on the ordinary comment path.
+              const lead = leadingWhitespace(next)
+              span.startColumn = (span.startColumn ?? 1) + lead
+              span.startOffset = (span.startOffset ?? 0) + lead
+              comment.pos = span
+            }
             parts.push(comment)
             continue
           }

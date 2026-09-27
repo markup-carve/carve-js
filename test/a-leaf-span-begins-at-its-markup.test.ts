@@ -28,7 +28,7 @@ const nodesOf = (src: string, type: string): { pos: Pos }[] => {
   const walk = (n: any): void => {
     if (!n || typeof n !== 'object') return
     if (n.type === type && n.pos) out.push(n)
-    for (const k of ['children', 'items', 'definitions']) {
+    for (const k of ['children', 'items', 'definitions', 'terms']) {
       const v = n[k]
       if (Array.isArray(v)) v.forEach((c: any) => (Array.isArray(c) ? c.forEach(walk) : walk(c)))
     }
@@ -100,5 +100,51 @@ describe('a leaf span begins at its markup', () => {
     const src = '- a\n %%% n\n x\n %%%\n tail\n'
     const [c] = nodesOf(src, 'comment')
     expect(src.slice(c!.pos.startOffset, c!.pos.endOffset)).toBe('%%% n\n x\n %%%')
+  })
+})
+
+/*
+ * A COMMENT FOLDED INTO A DEFINITION TERM IS STILL A LEAF
+ * (markup-carve/carve-js#2200).
+ *
+ * The fold arrived with carve-js#2185, which held the comment in the term's
+ * inline content and spanned it with the term collector's own line-range
+ * helper. That helper starts at the LINE, so the span opened on the term's
+ * indent - the shift `attachBlockPos` applies on every other comment path was
+ * simply absent from this one. carve-rs and carve-php begin at the `%%`, and on
+ * every shape below their spans are byte-identical to what these assert.
+ */
+describe('a comment folded into a definition term begins at its markup', () => {
+  it('the reported document starts on the percent, not on the term indent', () => {
+    const src = ':: c\n  %% note\n  more\n'
+    const [c] = nodesOf(src, 'comment')
+    expect(c).toBeDefined()
+    expect([...src][c!.pos.startOffset]).toBe('%')
+    // The numbers the ticket names, so a regression cannot pass by moving both.
+    expect(c!.pos.startColumn).toBe(3)
+    expect(c!.pos.startOffset).toBe(7)
+  })
+
+  it('follows the indent instead of one hard-coded column', () => {
+    for (const [src, column, offset] of [
+      [':: c\n  %% note\n  more\n', 3, 7],
+      [':: c\n      %% note\n      more\n', 7, 11],
+      [':: c\n\t%% note\n', 2, 6],
+    ] as const) {
+      const [c] = nodesOf(src, 'comment')
+      expect(c, src).toBeDefined()
+      expect([...src][c!.pos.startOffset], src).toBe('%')
+      expect(c!.pos.startColumn, src).toBe(column)
+      expect(c!.pos.startOffset, src).toBe(offset)
+    }
+  })
+
+  it('a folded comment fence moves its start without dragging its end', () => {
+    const src = ':: c\n    %%%\n    body\n    %%%\n    more\n'
+    const [c] = nodesOf(src, 'comment')
+    expect(c).toBeDefined()
+    expect(c!.pos.startColumn).toBe(5)
+    expect(c!.pos.startOffset).toBe(9)
+    expect(src.slice(c!.pos.startOffset, c!.pos.endOffset)).toBe('%%%\n    body\n    %%%')
   })
 })
