@@ -39,7 +39,8 @@ describe('the escape narrowing search', () => {
   it('windows the descriptions of a definition list', () => {
     parsed.bytes = 0
     const carve = htmlToCarve(glossary(300)).value
-    expect(parsed.bytes / carve.length).toBeLessThan(40)
+    // Reusing window parses lowers this from 11.74 to 11.33 document lengths.
+    expect(parsed.bytes / carve.length).toBeLessThan(11.5)
   })
 
   it('keeps only the escapes each paragraph needs', () => {
