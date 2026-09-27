@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { htmlToCarve } from '../src/index.js'
+import { htmlToCarve, parse, renderCarve } from '../src/index.js'
 
 // markup-carve/carve#2361.
 describe('a link or span keeps its edge whitespace outside it', () => {
@@ -12,16 +12,50 @@ describe('a link or span keeps its edge whitespace outside it', () => {
     ['an image at the edge', '<p>b<a href="/i"> <img src="i.png" alt="i"> </a>c</p>', 'b [![i](i.png)](/i) c\n'],
     ['a span', '<p>a<span id="k"> key </span>b</p>', 'a [key]{#k} b\n'],
     ['a span inside a link', '<p>a<a href="/n"><span class="c"> n </span></a>b</p>', 'a [[n]{.c}](/n) b\n'],
+    ['nested strong with surrounding spaces', '<p>a <a href="/s"><b> x </b></a> b</p>', 'a [*x*](/s) b\n'],
+    ['nested strong without surrounding spaces', '<p>a<a href="/s"><b> x </b></a>b</p>', 'a [*x*](/s) b\n'],
+    ['nested strong at block edges', '<p><a href="/s"><b> x </b></a></p>', '[*x*](/s)\n'],
+    ['formatting inside a span', '<p>a<span id="s"><b> x </b></span>b</p>', 'a [*x*]{#s} b\n'],
+    ['nested formatting', '<p>a<a href="/s"><b><i> x </i></b></a>b</p>', 'a [*/x/*](/s) b\n'],
+    ['internal formatting space', '<p>a<a href="/s">y<b> x </b>z</a>b</p>', 'a[y *x* z](/s)b\n'],
+    ['insertion', '<p>a<a href="/s"><ins> x </ins></a>b</p>', 'a [{+x+}](/s) b\n'],
+    ['deletion', '<p>a<a href="/s"><del> x </del></a>b</p>', 'a [{-x-}](/s) b\n'],
+    ['formatting with a no-break space', '<p>a<a href="/s"><b>&nbsp;x&nbsp;</b></a>b</p>', 'a[* x *](/s)b\n'],
+    ['code keeps its spaces', '<p>a<a href="/s"><code> x </code></a>b</p>', 'a[`  x  `](/s)b\n'],
+    ['whitespace-only formatting', '<p>a<a href="/s">x<b> </b>y</a>b</p>', 'a[x{* *}y](/s)b\n'],
+    ['a padded nested span', '<p>a<a href="/s"><span id="s"><b> x </b></span></a>b</p>', 'a [[*x*]{#s}](/s) b\n'],
+    ['an image inside formatting', '<p>a<a href="/s"><b> <img src="i.png" alt="i"> </b></a>b</p>', 'a [*![i](i.png)*](/s) b\n'],
+    ['a link inside standalone formatting', '<p>a<b><a href="/s"><i> x </i></a></b>b</p>', 'a{* [/x/](/s) *}b\n'],
+    ["formatting after a hard break", "<p>a<a href=\"/s\">x<br><b> y</b></a>b</p>", "a[x\\\n*y*](/s)b\n"],
+    ["a tab after a hard break", "<p>a<a href=\"/s\">x<br><b>\ty</b></a>b</p>", "a[x\\\n*y*](/s)b\n"],
+    ["span formatting after a hard break", "<p>a<span id=\"k\">x<br><i> y</i></span>b</p>", "a[x\\\n/y/]{#k}b\n"],
   ])('moves it out at %s', (_, html, carve) => {
     const result = htmlToCarve(html)
     expect(result.value).toBe(carve)
+    expect(renderCarve(parse(result.value))).toBe(result.value)
     expect(result.report.diagnostics).toEqual([])
+  })
+
+  it('keeps math inside formatting and attributes its diagnostic to the authored node', () => {
+    const result = htmlToCarve('<p>a<a href="/s"><b> <math alttext="x"></math> </b></a>b</p>')
+    expect(result.value).toBe('a [*$`x`*](/s) b\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'encoding-assumed', path: '/p[1]/a[2]/b[1]/math[2]' }),
+    ])
+  })
+
+  it('attributes an unspellable nested insertion to its authored node', () => {
+    const result = htmlToCarve('<p>a<a href="/s"><ins><ins> x </ins></ins></a>b</p>')
+    expect(result.value).toBe('a [{+x+}](/s) b\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'structure-unspellable', path: '/p[1]/a[2]/ins[1]/ins[1]' }),
+    ])
   })
 
   it.each([
     ['whitespace-only content', '<p>a <a href="/w"> </a> b</p>', 'a [ ](/w) b\n'],
     ['a no-break space', '<p>a <a href="/n"> nb </a> b</p>', 'a [ nb ](/n) b\n'],
-    ['the inside of a strong', '<p>a <a href="/s"><b> x </b></a> b</p>', 'a [{* x *}](/s) b\n'],
+    ['standalone formatting', '<p>a<b> x </b>b</p>', 'a{* x *}b\n'],
   ])('leaves %s alone', (_, html, carve) => {
     expect(htmlToCarve(html).value).toBe(carve)
   })

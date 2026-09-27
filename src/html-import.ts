@@ -429,7 +429,7 @@ function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean 
  * merges with whitespace already there (carve#2361). Whitespace-only content
  * stays, and so does U+00A0, which is content rather than layout.
  */
-function hoistEdgeSpace(nodes: InlineNode[]): InlineNode[] {
+function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNode[] {
   const out: InlineNode[] = []
   let owed = false
   // Through nested inlines: a strong ending in a space already has one there.
@@ -443,23 +443,42 @@ function hoistEdgeSpace(nodes: InlineNode[]): InlineNode[] {
     owed = false
   }
   for (const node of nodes) {
-    if ((node.type !== 'link' && node.type !== 'span') || !node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
+    const linkOrSpan = !withinLinkOrSpan && (node.type === 'link' || node.type === 'span')
+    const formatting = withinLinkOrSpan && (
+      node.type === 'strong' || node.type === 'emphasis' || node.type === 'underline'
+      || node.type === 'strike' || node.type === 'highlight' || node.type === 'insert'
+      || node.type === 'delete' || node.type === 'superscript' || node.type === 'subscript'
+    )
+    if (!(linkOrSpan || formatting) || !('children' in node)) {
+      pay(node)
+      out.push(node)
+      continue
+    }
+    // Nested links and spans have already hoisted their children.
+    node.children = dropSpaceAfterHardBreak(hoistEdgeSpace(node.children, true))
+    if (!node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
       pay(node)
       out.push(node)
       continue
     }
     const children = [...node.children]
     const lead = textEdge(children[0], 'start')
-    if (lead) {
+    while (textEdge(children[0], 'start')) {
       const value = (children[0] as { value: string }).value.replace(/^[ \t]+/, '')
       if (value === '') children.shift()
-      else children[0] = { ...(children[0] as object), value } as InlineNode
+      else {
+        children[0] = { ...(children[0] as object), value } as InlineNode
+        break
+      }
     }
     const trail = textEdge(children.at(-1), 'end')
-    if (trail) {
+    while (textEdge(children.at(-1), 'end')) {
       const value = (children.at(-1) as { value: string }).value.replace(/[ \t]+$/, '')
       if (value === '') children.pop()
-      else children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
+      else {
+        children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
+        break
+      }
     }
     if (lead) owed = true
     if (owed && !blankEdge(out.at(-1), 'end')) out.push({ type: 'text', value: ' ' })
