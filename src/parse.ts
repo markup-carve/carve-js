@@ -9930,9 +9930,15 @@ function rebaseOverindentedBlocks(
       // mistake and swallowed below-description content.  Ownership belongs to
       // the innermost open body, so keep its exact column band here.
       let descriptionColumn: number | null = null
+      // A term has no content column of its own, so a line past the list's
+      // base folds into an open term as text and is never an authored block
+      // (carve#2411). List markers still interrupt it (§24 C4), and comments
+      // and link and footnote definitions keep their §10 I5 reading.
+      let termOpen = RE_DEFLIST_TERM.test(opener)
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate)) {
+          termOpen = false
           let k = j + 1
           while (k < lines.length && isBlankLine(lines[k]!)) k++
           if (k >= lines.length) break
@@ -9952,9 +9958,22 @@ function rebaseOverindentedBlocks(
         const description = column === base ? RE_DEFLIST_DEF.exec(local) : null
         if (column === base && (RE_DEFLIST_TERM.test(local) || description !== null)) {
           end = j
+          termOpen = description === null
           if (description) descriptionColumn = base + 1 + description[1]!.length
           continue
         }
+        if (
+          termOpen &&
+          column > base &&
+          markerContentColumn(local) < 0 &&
+          !isLinkDefLine(sliceColumns(candidate, column, true)) &&
+          !RE_FOOTNOTE_DEF.test(sliceColumns(candidate, column, true)) &&
+          !sliceColumns(candidate, column, true).startsWith('%%')
+        ) {
+          end = j
+          continue
+        }
+        termOpen = false
         if (descriptionColumn !== null && column >= descriptionColumn) {
           end = j
           continue
