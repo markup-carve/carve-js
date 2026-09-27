@@ -15,8 +15,8 @@ it.each(['\n', '\r\n', '\r'])('positions the line endings beside folded term com
   expect(breaks).toHaveLength(2)
   for (const node of breaks) {
     expect(node.pos).toBeDefined()
-    expect(Array.from(source).slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(eol)
-    expect(node.pos.endColumn).toBe(1)
+    expect(Array.from(source).slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(eol + (node.pos.startLine === 1 ? '>   ' : '> '))
+    expect(node.pos.endColumn).toBe(node.pos.startLine === 1 ? 5 : 3)
     expect(node.pos.endLine).toBe(node.pos.startLine + 1)
   }
 })
