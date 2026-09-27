@@ -1117,6 +1117,8 @@ class Importer {
   private quoteDepth = 0
   private cellDepth = 0
   private headingDepth = 0
+  private codeSpanDepth = 0
+  private separatorsInserted = 0
   /**
    * The id PART 9 §16a's counter derives for each `<p class="admonition-title">`,
    * keyed by the node, so the drop is an equality match on the value the
@@ -2384,11 +2386,25 @@ class Importer {
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
       this.headingDepth++
-      let children: InlineNode[]
+      let raw: InlineNode[]
       try {
-        children = this.blockInlines(domChildren(node) ?? [], path, depth + 1)
+        raw = this.inlines(domChildren(node) ?? [], path, depth + 1)
       } finally {
         this.headingDepth--
+      }
+      const children = trimBlockEdges(raw)
+      // Carve spells no empty heading; even without attributes, dropping it loses its level.
+      if (children.length === 0) {
+        this.add(
+          'element-dropped',
+          raw.length > 0
+            ? `Dropped whitespace-only <${tag}> holding no content character`
+            : `Dropped <${tag}> holding no content`,
+          'warning',
+          path,
+          node,
+        )
+        return []
       }
       let held = attrs
       if (held?.id !== undefined) {
@@ -3156,7 +3172,7 @@ class Importer {
    */
   private reportUnsupportedElement(node: P5Node, tag: string, path: string): boolean {
     if (this.hasContentToUnwrap(node)) {
-      this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
+      this.add('element-unwrapped', this.codeSpanDepth > 0 ? `Unwrapped <${tag}> inside <code>` : `Unwrapped unsupported <${tag}> element`, 'info', path, node)
 
       return true
     }
@@ -4243,7 +4259,10 @@ class Importer {
       const produced = this.inline(node, path, depths?.[index] ?? depth)
       for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
-      if (atBoundary && needsSeparator(out, produced)) out.push({ type: 'text', value: ' ' })
+      if (atBoundary && needsSeparator(out, produced)) {
+        out.push({ type: 'text', value: ' ' })
+        this.separatorsInserted++
+      }
       // The separator is ONE space, merging with layout already on both sides.
       const first = produced[0]
       if (atBoundary && first?.type === 'text' && textEdge(out.at(-1), 'end')) {
@@ -4274,6 +4293,27 @@ class Importer {
    */
   private blockInlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[], depths?: number[]): InlineNode[] {
     return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths, depths))
+  }
+
+  private codeSpan(node: P5Node, path: string, depth: number): InlineNode[] {
+    const before = this.separatorsInserted
+    this.codeSpanDepth++
+    try {
+      this.inlines(domChildren(node) ?? [], path, depth + 1)
+    } finally {
+      this.codeSpanDepth--
+    }
+    const attrs = this.attrs(node, path)
+    if (this.separatorsInserted > before) {
+      this.add('structure-unspellable', "A code span's value cannot hold the block boundary inside <code>", 'warning', path, node)
+    }
+    const value = this.text(node)
+    if (this.cellDepth > 0 && /[\r\n]/.test(value)) {
+      this.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
+    }
+    const code: InlineNode = { type: 'code', value: this.cellDepth > 0 ? value.replace(/\r\n?|\n/g, ' ') : value, ...(attrs ? { attrs } : {}) }
+    if (code.value === '') this.emptyCodeSpans.set(code, { node, path })
+    return [code]
   }
 
   private inline(node: P5Node, path: string, depth: number): InlineNode[] {
@@ -4349,6 +4389,7 @@ class Importer {
       return []
     }
     if (tag === 'ruby') return this.ruby(node, path, depth)
+    if (tag === 'code') return this.codeSpan(node, path, depth)
     const beforeWalk = this.mark()
     const children = this.inlines(domChildren(node) ?? [], path, depth + 1)
     const walked = this.mark()
@@ -4381,15 +4422,6 @@ class Importer {
     if (tag === 'mark') return [{ type: 'highlight', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sup') return [{ type: 'superscript', children, ...(attrs ? { attrs } : {}) }]
-    if (tag === 'code') {
-      const value = this.text(node)
-      if (this.cellDepth > 0 && /[\r\n]/.test(value)) {
-        this.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
-      }
-      const code: InlineNode = { type: 'code', value: this.cellDepth > 0 ? value.replace(/\r\n?|\n/g, ' ') : value, ...(attrs ? { attrs } : {}) }
-      if (code.value === '') this.emptyCodeSpans.set(code, { node, path })
-      return [code]
-    }
     if (tag === 'a') {
       // A DESTINATION CARVE CANNOT CARRY IS NOT A DESTINATION
       // (`spec/docs/html-import.md`). Carve spells a link's destination in one
