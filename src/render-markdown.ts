@@ -1345,6 +1345,24 @@ function escapeUnresolvedCrossrefs(value: string): string {
   return out + escapeText(value.slice(last))
 }
 
+/**
+ * Carriers for the `:` and `.` that may open a GFM autolink (PART 11 section
+ * 8i). The line decides; a character whose own node already rules the form out
+ * stays bare, which keeps the carriers rare. GFM links nothing in link text.
+ */
+function autolinkCarriers(text: string): string {
+  return text.replace(/[:.]/g, (ch, i: number) => {
+    if (ch === ':') {
+      const after = text.slice(i + 1, i + 3)
+      const before = text.slice(Math.max(0, i - 5), i)
+      const possible = '//'.startsWith(after) && (i < 5 || /(?:https?|ftp)$/i.test(before))
+      return possible ? CONTEXT_SENTINEL[':']! : ch
+    }
+    const before = text.slice(Math.max(0, i - 3), i)
+    return 'www'.endsWith(before) && (i >= 3 || before.length === i) ? CONTEXT_SENTINEL['.']! : ch
+  })
+}
+
 function escapeText(text: string): string {
   text = stripControls(text)
   // Neutralize embedded HTML so Markdown re-rendered to HTML cannot execute it:
@@ -1414,6 +1432,7 @@ function escapeText(text: string): string {
     .replace(/<$/, CONTEXT_SENTINEL['<']!)
     .replace(/!$/, CONTEXT_SENTINEL['!']!)
   const openReference = new RegExp(`&((?:${hash}(?:[0-9]{0,7}|[xX][0-9a-fA-F]{0,6})|[A-Za-z][A-Za-z0-9]*)?)$`)
+  if (!insideLink) text = autolinkCarriers(text)
 
   return text.replace(openReference, `${CONTEXT_SENTINEL['&']}$1`)
 }
@@ -1677,10 +1696,12 @@ let HAS_CONTEXT_SENTINEL = /(?!)/
 let RE_ANY_SENTINEL = /(?!)/g
 
 const CARRIER_BASE = 0xe004
-const CARRIER_COUNT = 7
+const CARRIER_COUNT = 9
 
 function setCarriers(run: string[]): void {
-  const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang] = run as [
+  const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang, colon, dot] = run as [
+    string,
+    string,
     string,
     string,
     string,
@@ -1689,10 +1710,10 @@ function setCarriers(run: string[]): void {
     string,
     string,
   ]
-  CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang }
-  CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!' }
-  RE_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}]`, 'g')
-  HAS_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}]`)
+  CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang, ':': colon, '.': dot }
+  CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!', [colon]: ':', [dot]: '.' }
+  RE_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}]`, 'g')
+  HAS_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}]`)
   RE_ANY_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`, 'g')
 
   NARROWED_SENTINEL = { _: underscore, '[': bracket }
@@ -1731,12 +1752,30 @@ function resolveContextEscapes(text: string): string {
     let keep: boolean
     if (ch === '<') keep = /[A-Za-z/!?]/.test(line[offset + 1] ?? '')
     else if (ch === '&') keep = CHARACTER_REFERENCE.test(line.slice(offset, offset + 40))
+    else if (ch === ':') keep = opensSchemeAutolink(line, offset)
+    else if (ch === '.') keep = opensWwwAutolink(line, offset)
     // A `[` still standing in the output is markup: a text bracket is a carrier
     // here and an authored one is behind its backslash.
     else keep = text[offset + 1] === '['
 
     return keep ? `\\${ch}` : ch
   })
+}
+
+/** PART 11 section 8i U1: the `:` of `http://`, `https://` or `ftp://` not after an ASCII letter. */
+function opensSchemeAutolink(line: string, offset: number): boolean {
+  if (line.slice(offset + 1, offset + 3) !== '//') return false
+  const scheme = /(?:https?|ftp)$/i.exec(line.slice(Math.max(0, offset - 5), offset))
+  if (!scheme) return false
+
+  return !/[A-Za-z]/.test(line[offset - scheme[0].length - 1] ?? '')
+}
+
+/** PART 11 section 8i U2: the `.` of `www.` not after an ASCII letter or digit. */
+function opensWwwAutolink(line: string, offset: number): boolean {
+  if (line.slice(Math.max(0, offset - 3), offset) !== 'www') return false
+
+  return !/[A-Za-z0-9]/.test(line[offset - 4] ?? '')
 }
 
 /**
