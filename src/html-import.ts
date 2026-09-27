@@ -2430,6 +2430,12 @@ class Importer {
         )
         return []
       }
+      // An empty paragraph has no spelling, and its attribute line alone would
+      // attach to the next block, so it is dropped with one row covering them.
+      if (children.length === 0 && attrs) {
+        this.add('element-dropped', `Dropped <${tag}> holding no content`, 'warning', path, node)
+        return []
+      }
       const paragraph: BlockNode = { type: 'paragraph', children, ...(attrs ? { attrs } : {}) }
       /*
        * CARVE SOURCE CANNOT SPELL THIS PARAGRAPH, so a writer loses it and
