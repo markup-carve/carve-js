@@ -5543,11 +5543,19 @@ function rebaseOverindentedBlocks(
     if (code) {
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
       const close = fenceCloseRe(marker)
+      // A closing run BELOW the base reaches neither column, so it is payload and
+      // the scan carries on past it; only a run AT the base or at the container's
+      // own column closes (CARVE-P0-004, markup-carve/carve-js#2205).
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
-        if (!isBlankLine(candidate) && indentColumns(candidate, base) < base) break
         end = j
-        if (!isBlankLine(candidate) && close.test(sliceColumns(candidate, base, true))) break
+        if (isBlankLine(candidate)) continue
+        const column = indentColumns(candidate, base)
+        if (column < base) {
+          if (column === 0 && close.test(candidate)) break
+          continue
+        }
+        if (close.test(sliceColumns(candidate, base, true))) break
       }
     } else if (comment !== undefined) {
       for (let j = i + 1; j < lines.length; j++) {
@@ -5652,7 +5660,8 @@ function rebaseOverindentedBlocks(
     const keepsAuthoredColumn = hostIsFootnoteBody && RE_FOOTNOTE_DEF.test(opener) && base > 0
     if (!keepsAuthoredColumn) {
       for (let j = i; j <= end; j++) {
-        if (!isBlankLine(lines[j]!)) {
+        // A payload line below the base keeps the residue the collector left it.
+        if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base) {
           lines[j] = sliceColumns(lines[j]!, base, true)
         }
       }
