@@ -246,5 +246,67 @@
     "milliseconds": [],
     "medianMs": null,
     "revision": "15edf0431 + two-entry window cache"
+  },
+  {
+    "node": "v22.22.2",
+    "page": "01-wikipedia-markdown",
+    "inputSha256": "d997f43b5ee08f1f9edf284548a8229f085f521487917ce79e05a346e4b53d3b",
+    "inputBytes": 318128,
+    "parseCalls": 181,
+    "parsedBytes": 2618461,
+    "parsedCodeUnits": 2611374,
+    "phases": {
+      "occurrences": {
+        "calls": 59,
+        "bytes": 505392,
+        "codeUnits": 504287
+      },
+      "units": {
+        "calls": 120,
+        "bytes": 1738932,
+        "codeUnits": 1734232
+      },
+      "other": {
+        "calls": 2,
+        "bytes": 374137,
+        "codeUnits": 372855
+      }
+    },
+    "outputBytes": 186697,
+    "outputSha256": "903bdf3fe7ff91c932a37ef24a167b71d38e37af1b3660aed86fa0a1a6788243",
+    "milliseconds": [],
+    "medianMs": null,
+    "revision": "3a417a7 + four-entry seeded cache"
+  },
+  {
+    "node": "v22.22.2",
+    "page": "02-wikibooks-latex-mathematics",
+    "inputSha256": "4e718ffc5e25e526dcb38bca3ca69bba24a8f962f7f3586bf99a1ee1155c59cf",
+    "inputBytes": 348838,
+    "parseCalls": 258,
+    "parsedBytes": 2060609,
+    "parsedCodeUnits": 2044356,
+    "phases": {
+      "occurrences": {
+        "calls": 136,
+        "bytes": 1000380,
+        "codeUnits": 988817
+      },
+      "units": {
+        "calls": 120,
+        "bytes": 796463,
+        "codeUnits": 793565
+      },
+      "other": {
+        "calls": 2,
+        "bytes": 263766,
+        "codeUnits": 261974
+      }
+    },
+    "outputBytes": 131559,
+    "outputSha256": "1c981cc092bf2d91d8961aaa4fb2035c81eae6208179a2c16ce6a6d491de3bea",
+    "milliseconds": [],
+    "medianMs": null,
+    "revision": "3a417a7 + four-entry seeded cache"
   }
 ]
