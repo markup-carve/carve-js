@@ -2452,6 +2452,8 @@ class Importer {
         this.add('element-dropped', `Dropped <${tag}> holding no content`, 'warning', path, node)
         return []
       }
+      // A bare one carries nothing, and the writer writes nothing for it.
+      if (children.length === 0) return []
       const paragraph: BlockNode = { type: 'paragraph', children, ...(attrs ? { attrs } : {}) }
       /*
        * CARVE SOURCE CANNOT SPELL THIS PARAGRAPH, so a writer loses it and

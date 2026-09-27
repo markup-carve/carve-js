@@ -42,4 +42,8 @@ describe('the writer and a hard break at the edge of a construct in a table cell
     expect(htmlToCarve('<table><tr><td><br></td><td>c</td></tr></table>').value).toBe('| | c |\n')
     expect(htmlToCarve('<table><tr><td>a</td><td><br>x<br></td></tr></table>').value).toBe('| a | x |\n')
   })
+
+  it('drops the layout before a direct-child break at the cell edge too', () => {
+    expect(htmlToCarve('<table><tr><td>x <br> </td><td>y</td></tr></table>').value).toBe('| x | y |\n')
+  })
 })
