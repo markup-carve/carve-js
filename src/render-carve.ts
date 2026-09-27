@@ -127,57 +127,7 @@ interface CarveContext {
  * @throws {SourceUnspellableError} when a node's content has no Carve spelling.
  */
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
-  destinationParensByUnit = new WeakMap()
-  reportRubyLosses(ast, opts)
-  ast = withCellHardBreaksFlattened(ast)
-  ast = withTextAsOneRun(ast)
-  // PART 11 section 4: emit the minimal-escape form when dropping the candidate
-  // escapes changes nothing, and fall back to the conservative form when it
-  // does. The check is the parser's, not a table's, so the writer cannot drift
-  // as the grammar grows.
-  // Choose the verbatim sentinels before anything is rendered, so both escape
-  // passes below agree on them.
-  sentinels = pickSentinelRun(occupiedPrivateUse(ast), SENTINEL_BASE, SENTINEL_COUNT)
-  redundantIds = findRedundantHeadingIds(ast)
-  unspellableEmptyCodeSpans = findUnspellableEmptyCodeSpans(ast)
-  // The two "written in place" sets are NOT reset here: they are per-PASS, and
-  // renderWithEscapes owns them. Resetting them here as well would be the same
-  // rule in two places, and the pass-scoped one is the one that has to hold.
-  definitionsByLine = new Map()
-  for (const child of ast.children) {
-    if (child.type !== 'link_reference_definition') continue
-    const line = child.pos?.startLine
-    // First writer wins for a line, which cannot normally collide: two
-    // definitions on one line is not a shape the parser produces.
-    if (line !== undefined && !definitionsByLine.has(line)) definitionsByLine.set(line, child)
-  }
-  footnoteDefsByLine = new Map()
-  documentFootnoteDefs = ast.footnoteDefs
-  for (const [label, pos] of Object.entries(ast.footnoteDefPos ?? {})) {
-    const line = pos?.startLine
-    if (line !== undefined && !footnoteDefsByLine.has(line)) footnoteDefsByLine.set(line, label)
-  }
-  // The two escape passes each render the WHOLE tree, and the write-back sets
-  // below record what a pass has already emitted - so they have to start empty
-  // for each one. Shared across both, the first pass consumed every in-place
-  // definition and the second omitted them, and which output was returned then
-  // decided whether the document kept its definitions (carve-js#754).
-  const minimal = withFreshWriteBackState(() => renderWithEscapes(ast, 'minimal'))
-  const conservative = withFreshWriteBackState(() => renderWithEscapes(ast, 'conservative'))
-  if (minimal === conservative) return minimal
-  const minimalTree = treeOf(minimal)
-  if (minimalTree !== null && minimalTree === stableJson(ast)) return minimal
-  // ONE parse of the conservative form as well, for the same reason as the
-  // minimal one above: the redundancy check and the narrowing below both need
-  // it, and parsing it in each made every narrowed document pay a second full
-  // parse of its own output for an answer it already had.
-  const conservativeTree = treeOf(conservative)
-  if (escapingIsRedundant(minimalTree, conservativeTree)) return minimal
-  // The minimal form of the WHOLE document does not hold, which used to end the
-  // decision here with the conservative form of the whole document. PART 11 §2b
-  // says how far that fallback actually reaches: the smallest unit whose minimal
-  // form fails, and §2's own test everywhere else.
-  return narrowEscalation(ast, conservative, conservativeTree, minimal, minimalTree)
+  return new CarveRenderSession().renderCarve(ast, opts)
 }
 
 function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
@@ -198,139 +148,6 @@ function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
       if (key !== 'attrs' && key !== 'pos') stack.push(child)
     }
   }
-}
-
-/**
- * The conservative form of the units that need it, and the minimal form of
- * every other unit (PART 11 §2b).
- *
- * WHY THIS IS A SEARCH AND NOT A LOOKUP. The comparison stays document-scoped -
- * §4's argument holds, a unit re-parsed alone has lost the document's link
- * reference and footnote definitions - so what a failure reports is THAT the
- * document changed, never WHERE. The unit is found by trying: start from the
- * conservative form, which is known to hold, and hand each unit back its
- * minimal form only while the whole document still re-parses to the same tree.
- * Every state this walks through is verified, and the one returned is the last
- * that passed.
- *
- * HALVED RATHER THAN SWEPT, because a document is mostly units that need
- * nothing. A group is offered its minimal form all at once and only split when
- * that fails, so a document with one failing unit costs about log(n) renders
- * instead of n, and the `- x` ladder the escaper's scaling guards watch does not
- * become quadratic when one paragraph in it needs an escape.
- *
- * THE FIRST RENDER IS A CONTROL. With every unit escalated this must reproduce
- * `conservative` byte for byte; if it does not, the selection is deciding
- * something other than the escape mode - a unit the walk did not reach, for
- * instance - and the document-scoped form is returned rather than a narrowing
- * built on a state that is not what it claims.
- */
-function narrowEscalation(
-  ast: Document,
-  conservative: string,
-  conservativeTree: string | null,
-  minimal: string,
-  minimalTree: string | null,
-): string {
-  // Null answers "cannot tell", exactly as it does for the minimal form: with
-  // no tree to hold the narrowing against, there is nothing to narrow toward.
-  if (conservativeTree === null) return conservative
-
-  const all = collectEscapeUnits(ast)
-  if (all.length === 0) return conservative
-  const escalated = new Set<object>(all)
-
-  const renderSelectively = (): string => {
-    escalatedUnits = escalated
-    try {
-      return withFreshWriteBackState(() => renderWithEscapes(ast, 'conservative'))
-    } finally {
-      escalatedUnits = null
-    }
-  }
-
-  // THE CONTROL RENDER LOGS WHICH UNITS THE WRITER ACTUALLY ASKS ABOUT, so the
-  // search below can skip the ones it cannot move. `collectEscapeUnits` is a
-  // generic walk over every node that COULD carry an escaped character; the
-  // units that DO are whatever the writer's own escape arms charge a character
-  // to, and only those read `escalatedUnits`. A unit the writer never asks about
-  // renders the same bytes in or out of the set, so offering it its minimal form
-  // is a render and a parse spent to learn nothing.
-  //
-  // Deep nesting produces many units the writer never asks about. Probing each
-  // would re-render and re-parse output that grows with nesting depth.
-  //
-  // Logging it rather than predicting it is the same choice `collectEscapeUnits`
-  // makes and for the same reason: the set is whatever the arms visit, so an arm
-  // that grows a new escape cannot fall out of the search. And a unit wrongly
-  // left out cannot produce wrong output - every state the search returns is
-  // re-parsed against `conservativeTree` below, exactly as before.
-  let best: string
-  const asked = new Set<object>()
-  askedUnits = asked
-  try {
-    best = renderSelectively()
-  } finally {
-    askedUnits = null
-  }
-  if (best !== conservative) return conservative
-  const units = all.filter((unit) => asked.has(unit))
-  // No guard for an EMPTY `units`: `relax` returns on an empty group, and a
-  // check here would be one no corpus document can reach - the control render
-  // asks about a unit for every byte the two forms differ in, and they differ
-  // or this is not running.
-
-  // THE SEARCH IS BOUNDED, because its cost is proportional to how many units
-  // FAIL. A group holding no failing unit is relaxed in one render, so a
-  // document with a handful of them costs about log(n) renders - but one where
-  // nearly every unit fails drives the halving to its leaves and pays a render
-  // and a parse per unit, which is quadratic in the document.
-  //
-  // Such a document gains almost nothing from narrowing: it IS the conservative
-  // form, arrived at because every block needed it. So the search stops when the
-  // budget runs out and returns the state it has reached, which is verified like
-  // every other - the escalation is wider than §2b's minimum there, never
-  // narrower, and no document's output can be wrong for it.
-  const probe = windowedProbe(ast, conservative, conservativeTree, () => {
-    escalatedUnits = escalated
-  }, renderSelectively, [[minimal, minimalTree]])
-
-  const search = (local: boolean): string => {
-    for (const unit of all) escalated.add(unit)
-    let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
-    const spent = probe.allowance(budget)
-
-    /** Hand `group` its minimal form, keeping it only if the document still holds. */
-    const relaxAll = (group: object[]): boolean => {
-      budget -= 1
-      return probe.keeps(
-        local,
-        group,
-        () => { for (const unit of group) escalated.delete(unit) },
-        () => { for (const unit of group) escalated.add(unit) },
-      )
-    }
-
-    const relax = (group: object[]): void => {
-      if (group.length === 0 || spent(budget) || relaxAll(group) || group.length === 1) return
-      const half = group.length >> 1
-      relax(group.slice(0, half))
-      relax(group.slice(half))
-    }
-
-    relax(units)
-    return renderSelectively()
-  }
-
-  best = search(true)
-  if (probe.tree(best) !== conservativeTree) best = search(false)
-
-  // PART 11 §2 TAKES THE DECISION PER OPENER OCCURRENCE, and a unit is still
-  // ONE KNOB: a unit that fails is written conservatively IN FULL, so every
-  // candidate character beside the one that needed it is escaped for nothing -
-  // `\\{\\.note\\}` where §2 wants `\\{.note}`. §2b bounds how far the fallback
-  // reaches; this is what is left inside the bound (markup-carve/carve#1533).
-  return narrowOccurrences(units, best, conservativeTree, renderSelectively, probe)
 }
 
 /**
@@ -358,200 +175,6 @@ interface EscapeProbe {
   allowance(count: number): (budget: number) => boolean
   /** `treeOf`, answered from the sources this search parsed most recently. */
   tree(src: string): string | null
-}
-
-/**
- * The narrowing searches' oracle. With `local`, a probe renders and re-parses
- * only the blocks around the relaxed units (`EscapeWindows`) and compares that
- * window before and after, which keeps each probe proportional to the window
- * instead of the document. Every search re-verifies its final state against
- * the whole document and repeats itself with `local` off when it does not hold.
- */
-function windowedProbe(
-  ast: Document,
-  conservative: string,
-  conservativeTree: string,
-  enter: () => void,
-  renderAll: () => string,
-  seeds: Array<[string, string | null]>,
-): EscapeProbe {
-  // A document whose break spelling needs the frontmatter fallback renders
-  // differently from its pruned windows, so it keeps the document-wide probe.
-  let windows: EscapeWindows | null | undefined = !ast.frontmatter && opensFrontmatter(conservative) ? null : undefined
-  const renderWindow = (window: EscapeWindow): string | null =>
-    windows!.renderPruned(window, (doc) => {
-      enter()
-      try {
-        return withFreshWriteBackState(() => renderOnePass(doc, 'conservative'))
-      } finally {
-        escalatedUnits = null
-      }
-    })
-  // Failed relaxations often revisit the same source, and the first
-  // whole-document probe renders the minimal form the caller already parsed.
-  // Local to this narrowing; it never holds more than four sources.
-  const trees = new Map<string, string | null>([...seeds, [conservative, conservativeTree]])
-  const tree = (source: string): string | null => {
-    if (trees.has(source)) {
-      const known = trees.get(source)!
-      trees.delete(source)
-      trees.set(source, known)
-      return known
-    }
-    const fresh = treeOf(source)
-    trees.set(source, fresh)
-    if (trees.size > 4) trees.delete(trees.keys().next().value!)
-    return fresh
-  }
-  // Bytes of source the probes have rendered for re-parsing, cached or not, so
-  // the charge is a property of the search rather than of this engine's cache.
-  let charged = 0
-  const limit = ESCAPE_SEARCH_PARSE_FACTOR * utf8ByteLength(conservative)
-  return {
-    tree,
-    allowance(count) {
-      const start = charged
-      const floor = -(ESCAPE_SEARCH_PROBE_FACTOR - 1) * count
-      return (budget) => budget <= 0 && (charged - start >= limit || budget <= floor)
-    },
-    keeps(local, units, apply, undo) {
-      if (local && windows === undefined) windows = new EscapeWindows(ast)
-      const window = local && windows ? windows.windowFor(units) : null
-      const before = window === null ? null : renderWindow(window)
-      // A window near the document's size saves nothing over the whole-document probe.
-      const beforeTree = before === null || before.length * 2 > conservative.length ? null : tree(before)
-      apply()
-      if (beforeTree !== null) {
-        const after = renderWindow(window!)
-        if (after !== null) {
-          charged += utf8ByteLength(before!) + utf8ByteLength(after)
-          if (tree(after) === beforeTree) return true
-          undo()
-          return false
-        }
-      }
-      const candidate = renderAll()
-      charged += utf8ByteLength(candidate)
-      if (tree(candidate) === conservativeTree) return true
-      undo()
-      return false
-    },
-  }
-}
-
-/**
- * The candidate escapes an escalated unit can still hand back, one occurrence
- * at a time (PART 11 §2).
- *
- * SAME SEARCH, ONE LEVEL FINER. The comparison is still document-scoped, so a
- * failure still reports THAT the document changed and never WHERE; the
- * occurrence is found by trying, and every state returned is one that re-parsed
- * to the tree the conservative form parses to.
- *
- * THE OCCURRENCES ARE LOGGED, NOT PREDICTED. A candidate site is whatever the
- * writer's own escape arms visit, so they are collected by rendering once with
- * the log switched on rather than by a second enumeration here that could drift
- * from the one that emits. A key is `unit:ordinal` within the unit, which is
- * stable across the search because relaxing one occurrence changes the bytes
- * and not the sites: the arms walk the node's own text, which no relaxation
- * touches.
- *
- * THE FIRST RENDER IS A CONTROL, as it is one level up. With nothing relaxed
- * this must reproduce the state the unit search settled on byte for byte; if
- * logging changed what was written, the unit-scoped answer is returned rather
- * than a narrowing built on a pass that is not the pass being measured.
- *
- * BOUNDED THE SAME WAY AND FOR THE SAME REASON. A group holding no failing
- * occurrence is relaxed in one render, so a document with a handful of them
- * costs about log(n) renders - but a document where every occurrence is load
- * bearing drives the halving to its leaves and pays a render and a parse per
- * occurrence, which is a render of the whole document per escaped character.
- * A file of indented `## H` paragraphs is exactly that, and it is ordinary
- * input rather than an adversarial one. The budget is the unit search's,
- * measured over the occurrence count, and the OUTPUT is unchanged where it
- * binds: those occurrences are the opener runs §2 requires escaped in full.
- */
-function narrowOccurrences(
-  units: object[],
-  unitScoped: string,
-  conservativeTree: string,
-  renderSelectively: () => string,
-  probe: EscapeProbe,
-): string {
-  const numbers = new Map<object, number>()
-  units.forEach((unit, index) => numbers.set(unit, index))
-  const occurrences: string[] = []
-  const relaxed = new Set<string>()
-
-  unitNumbers = numbers
-  relaxedOccurrences = relaxed
-  occurrenceLog = occurrences
-  try {
-    const control = renderSelectively()
-    occurrenceLog = null
-    if (control !== unitScoped || occurrences.length === 0) return unitScoped
-
-    const unitOf = (key: string): object => units[Number(key.slice(0, key.indexOf(':')))]!
-    let budget = 0
-    let spent = (_budget: number): boolean => true
-
-    /** Hand `group` its bare form, keeping it only if the document still holds. */
-    const relaxAll = (group: string[], local: boolean): boolean => {
-      budget -= 1
-      return probe.keeps(
-        local,
-        group.map(unitOf),
-        () => { for (const key of group) relaxed.add(key) },
-        () => { for (const key of group) relaxed.delete(key) },
-      )
-    }
-
-    const relax = (group: string[], local: boolean): void => {
-      if (group.length === 0 || spent(budget) || relaxAll(group, local) || group.length === 1) return
-      const half = group.length >> 1
-      relax(group.slice(0, half), local)
-      relax(group.slice(half), local)
-    }
-
-    // OFFERED FROM THE END OF THE DOCUMENT BACKWARDS, which is what makes the
-    // escape that survives the OPENER's. §2 asks whether omitting the escapes
-    // on an occurrence would let the construct FORM, and a construct forms at
-    // its opener - so with the opener still escaped every later candidate in
-    // the same line is free, while relaxing the opener first leaves the escape
-    // on a closer that was never load bearing (`{.note \\}` where §2 wants
-    // `\\{.note}`). Both spellings re-parse to the same tree, so only the order
-    // separates them.
-    const order = occurrences.slice().reverse()
-    const search = (local: boolean): string => {
-      relaxed.clear()
-      budget = 8 * Math.ceil(Math.log2(occurrences.length + 1)) + 8
-      spent = probe.allowance(budget)
-      relax(order, local)
-      // AND THEN ONE SWEEP OF WHAT IS LEFT, because the halving is not a
-      // FIXPOINT. Relaxing occurrences is not monotone: an occurrence rejected
-      // while a neighbour was still escaped can be free once that neighbour is
-      // relaxed, and the halving never revisits a group it has descended past.
-      // Corpus 160 is the case - the closing `:::` line cannot go bare while the
-      // OPENING one is escaped, because then it is the only fence marker on the
-      // page, and it can once the opener is bare. The sweep offers every
-      // still-escalated occurrence once more, on top of everything the halving
-      // accepted, and spends the same budget - so where the budget is already
-      // gone it costs nothing, which is the pathological document.
-      for (const key of order) {
-        if (spent(budget)) break
-        if (relaxed.has(key)) continue
-        relaxAll([key], local)
-      }
-      return renderSelectively()
-    }
-    const best = search(true)
-    return probe.tree(best) === conservativeTree ? best : search(false)
-  } finally {
-    unitNumbers = null
-    relaxedOccurrences = null
-    occurrenceLog = null
-    escapeCallIndexes = null
-  }
 }
 
 /**
@@ -669,83 +292,6 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
   }
 
   return out
-}
-
-/**
- * The spelling a `thematic_break` is written with.
- *
- * The document-wide fallback spelling for a break that would otherwise open
- * manufactured frontmatter. PART 11 section 1 requires
- * `to_html(fmt(x)) == to_html(x)`.
- */
-let thematicBreakMarker: string | null = null
-
-/**
- * Render, and fall back to a break spelling that cannot be read as frontmatter
- * when the finished bytes would be.
- */
-function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
-  const canonicalForm = renderOnePass(ast, mode)
-  // The `ast.frontmatter` arm is a COST GATE, not a correctness one, and saying
-  // so is the honest reading: a document that really carries frontmatter has it
-  // written by `renderFrontmatter`, whose closer is not a break, so the fallback
-  // pass would open frontmatter too and the canonical form would be returned
-  // anyway. Removing the arm changes no output, only the number of renders paid
-  // by every document with frontmatter. Verified by mutation.
-  if (ast.frontmatter || !opensFrontmatter(canonicalForm)) return canonicalForm
-  const previousMarker = thematicBreakMarker
-  thematicBreakMarker = '***'
-  try {
-    const fallback = renderOnePass(ast, mode)
-    return opensFrontmatter(fallback) ? canonicalForm : fallback
-  } finally {
-    thematicBreakMarker = previousMarker
-  }
-}
-
-function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string {
-  const previous = escapeMode
-  escapeMode = mode
-  writtenBraced = new WeakSet()
-  openEmphasisKinds = new Set()
-  bracedForScope = new WeakSet()
-  // "Already written on a description line" is true of THIS PASS, not of the
-  // document. renderCarve runs this function twice and picks between the two
-  // forms (PART 11 §4), so a set that survives the first pass tells the second
-  // one that every definition is already placed: the description emits a bare
-  // `:` and the document-level arm - which returns '' for a marked node - emits
-  // nothing either, deleting the definition outright. Whenever the conservative
-  // form then wins, `to_html(fmt(x)) == to_html(x)` fails by turning a resolved
-  // reference back into literal text (markup-carve/carve#805).
-  definitionsWrittenInPlace = new WeakSet()
-  footnotesWrittenInPlace = new Set()
-  // The LOG and the call indexes are per PASS: `renderWithEscapes` can render
-  // twice for the frontmatter fallback, and keeping either would count the
-  // second pass's runs on from the end of the first.
-  if (unitNumbers !== null) {
-    escapeCallIndexes = new Map()
-    if (occurrenceLog !== null) occurrenceLog.length = 0
-  }
-  try {
-    const ctx: CarveContext = {
-      blockDepth: 0,
-      inlineDepth: 0,
-      listDepth: 0,
-      lineBlockDepth: 0,
-      inlineNoteDepth: 0,
-      colonFenceDepth: 0,
-      afterCaptionHost: false,
-      paragraphStartsAfterCaptionHost: false,
-      atAnAuthoredBodyColumn: false,
-    }
-    const parts: string[] = []
-    if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
-    const body = renderDocumentBody(ast, ctx)
-    if (body) parts.push(body)
-    return normalize(parts.join('\n\n'))
-  } finally {
-    escapeMode = previous
-  }
 }
 
 /**
@@ -877,64 +423,6 @@ function taskMarker(item: ListItem): string {
   return `[${item.taskState ?? (item.checked ? 'x' : ' ')}]`
 }
 
-function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-  ctx.blockDepth++
-  const previousHost = ctx.afterCaptionHost
-  const previousParagraphStart = ctx.paragraphStartsAfterCaptionHost
-  ctx.afterCaptionHost = false
-  try {
-    const parts: string[] = []
-    let previousList: List | null = null
-    let listSeparated = false
-    let previousBlock: BlockNode | null = null
-    for (const block of blocks) {
-      ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
-      const rendered = renderBlock(block, ctx)
-      ctx.afterCaptionHost = hostsCaption(block)
-      if (block.type === 'list') {
-        listSeparated = previousList !== null && listsWouldMerge(previousList, block)
-        previousList = block
-      } else if (spellsSomething(rendered)) {
-        previousList = null
-        listSeparated = false
-      }
-      // A block that spells nothing contributes nothing - not even the blank
-      // line a part of its own would open. As far as the page is concerned it
-      // is the empty paragraph above it (PART 11 §10j).
-      if (spellsSomething(rendered)) {
-        const text = rendered
-        // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
-        // lines are one paragraph in the source and N nodes in the tree since
-        // PART 12 §18, so the default block separator would open a blank line
-        // between lines the author wrote adjacent - and PART 11 §6 binds the
-        // writer to the author's layout. Adjacency is read from `pos`, so a
-        // blank line the author DID write survives, and a tree with no
-        // positions falls back to the separator every other block gets.
-        if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
-          parts[parts.length - 1] += `\n${text}`
-        } else if (listSeparated && parts.length > 0) {
-          // §11 N1a's boundary, written as a SENTINEL rather than as four
-          // literal newlines. `normalize` squeezes every run of three or more
-          // newlines to two - correct for a decorative run, which the rule says
-          // to normalize away, and fatal for this one, which the rule says to
-          // keep. The squeeze cannot tell them apart from the text; only the
-          // writer knows, so the writer says so and `normalize` restores it.
-          parts[parts.length - 1] += `\n${boundaryTag()}${text}`
-        } else {
-          parts.push(text)
-        }
-        previousBlock = block
-      }
-    }
-    return parts.join('\n\n')
-  } finally {
-    ctx.afterCaptionHost = previousHost
-    ctx.paragraphStartsAfterCaptionHost = previousParagraphStart
-    ctx.blockDepth--
-  }
-}
-
 /** Whether two adjacent blocks were written on consecutive source lines, with
  *  no blank line between them - true only for the bibliography definition,
  *  whose line-per-node shape is the one the parser splits out of a paragraph. */
@@ -988,284 +476,6 @@ function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
     return undefined
   }
   return next
-}
-
-/**
- * Render one block, recording it as the escape unit its own arm writes with.
- *
- * PART 11 §2b bounds an escalation to the smallest unit that fails, so the
- * escape pass has to know which unit each escaped character belongs to. The
- * unit is the node whose render arm is running: a text node for a run of
- * prose, the block itself for the strings a block writes directly.
- */
-function renderBlock(node: BlockNode, ctx: CarveContext): string {
-  const previous = escapeUnit
-  escapeUnit = node as unknown as object
-  // THE FLAG DESCRIBES THIS NODE, NOT ITS SUBTREE. A host sets it once and
-  // `renderBlocks` walks several children with it still set, so it is read here
-  // and cleared for whatever this node renders inside itself - a definition
-  // list inside a blockquote inside a footnote body is at the QUOTE's column,
-  // not the body's - and restored so the next sibling still sees it.
-  const atAnAuthoredBodyColumn = ctx.atAnAuthoredBodyColumn
-  ctx.atAnAuthoredBodyColumn = false
-  try {
-    return renderBlockBody(node, ctx, atAnAuthoredBodyColumn)
-  } finally {
-    escapeUnit = previous
-    ctx.atAnAuthoredBodyColumn = atAnAuthoredBodyColumn
-  }
-}
-
-function renderBlockBody(
-  node: BlockNode,
-  ctx: CarveContext,
-  atAnAuthoredBodyColumn = false,
-): string {
-  const attrs = renderBlockAttrs(node.attrs)
-  const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
-  switch (node.type) {
-    case 'section':
-      return renderHostedBlocks(node.children, ctx)
-    case 'heading': {
-      // A heading is SINGLE-LINE (PART 2), so its text must not contain a
-      // newline: emitting one would end the heading and silently re-parse the
-      // remainder as a following block. No parse can build such a heading, but
-      // an ingested AST can - PART 12 lets any inline sit in a heading, break
-      // nodes included - so a break collapses to a single space here rather
-      // than corrupting the document it is written back to.
-      //
-      // Only an ODD run of backslashes before the newline is a hard break's
-      // marker; an even run is literal backslashes that happen to end the line,
-      // and dropping one there would eat the escape and swallow the space.
-      const text = trimHeadingText(
-        trimHeadingText(renderInlines(node.children, ctx)).replace(
-          /(\\*)\n[ \t]*/g,
-          (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ',
-        ),
-      )
-      // A generated id that a fresh parse would re-derive is not written back:
-      // it is a resolution result, not the author's source (carve-js#741). One
-      // the parse would NOT re-derive - an ingested tree whose text was edited -
-      // is written, because the id lives nowhere else.
-      const headingBody = `${'#'.repeat(node.level)} ${text}`
-      if (redundantIds.has(node as unknown as object)) {
-        const withoutId = renderBlockAttrs(withoutIdSlot(node.attrs))
-
-        return withoutId ? `${withoutId}\n${headingBody}` : headingBody
-      }
-
-      return withAttrs(headingBody)
-    }
-    case 'paragraph': {
-      const text = guardThematicBreakLines(
-        renderInlines(
-          node.children,
-          ctx,
-          attrs === '' && ctx.paragraphStartsAfterCaptionHost,
-          ctx.lineBlockDepth > 0,
-        ),
-      )
-      // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
-      // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
-      // return one stanza as two; a comment-only line is the one construct that
-      // leaves an empty verse line instead of rewriting it, and the block layer
-      // removes it before the inline run exists - so `%%` re-reads to exactly
-      // the empty line it was written for.
-      //
-      // It reaches here from a verbatim run that swallowed such a line: the run
-      // keeps the emptied line as a NEWLINE in its value, and that newline has
-      // to come back out as an empty line. §7c already spells the OTHER source
-      // of one, the empty-content `hard_break`, with a backslash, so no line
-      // arriving here is a break.
-      //
-      // A line block's children are its stanzas, so the guard is the whole
-      // scope: every empty line in this string is interior to one stanza.
-      //
-      // The lookahead is what keeps the LAST newline out of it. §7c writes the
-      // trailing `hard_break` of a last body line as `\` plus the newline it
-      // consumes, so the stanza ends in one - and the position after it is the
-      // closing fence, not an empty verse line.
-      if (ctx.lineBlockDepth > 0) {
-        return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
-      }
-
-      return withAttrs(text)
-    }
-    case 'code_block': {
-      const fence = safeFence(node.content, 3)
-      const info = codeFenceInfo(node.lang, node.header, node.label)
-      // The opener's quoted title is resolved onto `attrs.title` at parse time
-      // so it reaches every consumer, but the fence carries it too - emitting
-      // both says it twice (`{title=x}` AND `\`\`\` lang "x"`), which is longer
-      // than the author wrote and re-parses with an attribute ORDER the source
-      // never had (issue 369). The fence is the authored spelling, so it wins.
-      const attrsWithoutTitle =
-        node.header !== undefined && node.attrs?.keyValues?.['title'] === node.header
-          ? renderBlockAttrs(withoutKey(node.attrs, 'title'))
-          : attrs
-      const body = `${fence}${info}\n${protectVerbatim(node.content)}\n${fence}`
-      return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
-    }
-    case 'block_quote': {
-      // Written back in the spelling it was read in (markup-carve/carve#1718).
-      // Choosing structurally instead - the fence whenever the quote holds a
-      // non-paragraph block - changes authored multi-block quotes, so the node
-      // carries the author's choice rather than the writer inferring one.
-      if (node.fenced) {
-        const fence = colonFenceFor(ctx)
-        const body = renderColonFenceBody(node.children, ctx)
-        return withAttrs(`${fence} >\n${body}\n${fence}`)
-      }
-      const inner = renderHostedBlocks(node.children, ctx)
-      const body = inner
-        .split('\n')
-        .map((line) => (line === '' ? '>' : `> ${line}`))
-        .join('\n')
-      return withAttrs(body)
-    }
-    case 'list':
-      return withLooseAttrs(node, attrs, renderList(node, ctx))
-    case 'thematic_break':
-      return withAttrs(thematicBreakSpelling(node.marker, thematicBreakMarker))
-    case 'table':
-      return renderTableWithColumns(node, ctx)
-    case 'directive': {
-      const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
-      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
-      const fence = colonFenceFor(ctx)
-      const body = renderColonFenceBody(node.children, ctx)
-      return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
-    }
-    case 'admonition': {
-      // The quoted title is re-parsed as a quoted_title token (which admits
-      // no escapes and cannot contain a quote), so the inline serialization
-      // must be emitted verbatim: wrapping it in escapeQuoted doubles the
-      // backslashes renderInlines already produced and compounds on every
-      // fmt pass (issue 295).
-      const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
-      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
-      const fence = colonFenceFor(ctx)
-      const body = renderColonFenceBody(node.children, ctx)
-      return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
-    }
-    case 'line_block': {
-      // `::: |` is the line-block opener (PART 3, line_block_open). Emitting a
-      // bare `:::` and tagging the node with a `.line-block` class instead
-      // re-parsed as an ordinary div, so the node type changed across a format
-      // round trip and `parse(fmt(x)) == parse(x)` did not hold (issue 359).
-      //
-      // Inside the fence every newline IS a hard break (PART 3,
-      // line_block_body), so the explicit backslash the inline writer emits for
-      // a hard_break would double it on re-parse.
-      const fence = colonFenceFor(ctx)
-      ctx.lineBlockDepth++
-      ctx.colonFenceDepth++
-      let body: string
-      try {
-        body = renderBlocks(node.children, ctx)
-      } finally {
-        ctx.colonFenceDepth--
-        ctx.lineBlockDepth--
-      }
-      // A BODY THAT ALREADY ENDS ITS LINE DOES NOT GET A SECOND NEWLINE. The
-      // last body line can end in a `hard_break`, which under §7c is written
-      // `\` plus the newline it consumes (PART 3); adding the closer's newline
-      // on top of that leaves a BLANK line before the fence, which ends the
-      // stanza and takes the trailing `<br>` - and the space it was holding -
-      // with it (markup-carve/carve#1334).
-      const layout = lineBlockLayoutWhitespace(body)
-      return withAttrs(fence + ' |\n' + layout + (layout.endsWith('\n') ? '' : '\n') + fence)
-    }
-    case 'div': {
-      // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
-      // sugar: that sugar forces hard breaks, but a plain div carrying a
-      // `.hardbreaks` class keeps soft breaks. The two are indistinguishable by
-      // attrs - only the child break nodes differ - so we let those break nodes
-      // serialize themselves, which round-trips both. (A line block is its own
-      // node type and is handled above.)
-      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
-      const fence = colonFenceFor(ctx)
-      const body = renderColonFenceBody(node.children, ctx)
-      return withAttrs(`${fence}${label}\n${body}\n${fence}`)
-    }
-    case 'definition_list':
-      // THE ATTRIBUTE LINE MOVES WITH THE LIST. It is part of how this block is
-      // spelled, so raising the body alone would leave `{loose}` at the body
-      // minimum with the `::` line a column past it - a shape no author writes
-      // and one the rebase then has to reconcile a line at a time.
-      return atARaisedBase(
-        withLooseAttrs(node, attrs, renderDefinitionList(node.items, ctx)),
-        atAnAuthoredBodyColumn,
-      )
-    case 'figure':
-      return withAttrs(renderFigure(node, ctx))
-    case 'figure_group': {
-      // The canonical spelling is the authored form (PART 9 §4c): a bare
-      // `::: figure` fence, the children as an ordinary fence body, and the
-      // group caption as a `^ ` line after the CLOSING fence - unescaped,
-      // because the writer knows the closer hosts it. The `#` placeholder is
-      // written back by the caption_number arm like every numbered caption.
-      const fence = colonFenceFor(ctx)
-      const body = renderColonFenceBody(node.children, ctx)
-      const caption = node.caption !== undefined ? captionLine(node.caption, ctx) : ''
-      return withAttrs(`${fence} figure\n${body}\n${fence}${caption}`)
-    }
-    case 'image':
-      return renderImage(node)
-    case 'raw_block': {
-      const fence = safeFence(node.content, 3)
-      const content = protectVerbatim(node.content)
-      // Empty content means zero payload lines, while an all-newline content
-      // value records exactly that many blank payload lines. In both cases an
-      // extra separator before the closer would change the AST on every
-      // format pass. Non-blank content still needs the ordinary closing-line
-      // separator (including content with a trailing blank line).
-      const closerSeparator = node.content === '' || /^\n+$/.test(node.content) ? '' : '\n'
-      return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
-    }
-    case 'abbreviation_def':
-      return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
-    case 'link_reference_definition': {
-      // PART 12 §10 gave this a node precisely so the writer can put the line
-      // back. Before that there was nowhere to write it from, which is why every
-      // resolved reference was INLINED instead (carve-js#690).
-      //
-      // Unless a definition list already wrote it on its own description line,
-      // where the author put it - writing it twice would define it twice.
-      if (definitionsWrittenInPlace.has(node as unknown as object)) return ''
-      const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
-      const attrs = renderAttrs(node.attrs)
-      // The href is re-escaped the way the inline tail's is: the reader
-      // resolves `\(`, `\)` and `\\`, so writing the resolved value bare would
-      // hand back a line whose parentheses no longer balance.
-      return `[${node.label}]: ${escapeDestinationEscapes(node.href)}${title}${attrs === '' ? '' : ` ${attrs}`}`
-    }
-    case 'citation_definition': {
-      // PART 12 §18 gave the bibliography line a node for the same reason §10
-      // gave one to the reference definition: so the writer can put the line
-      // back. The metadata block leads the entry, where the author wrote it.
-      const metadata = renderCitationMetadata(node.attrs)
-      const entry = renderInlines(node.children, ctx)
-      const tail = [metadata, entry].filter((part) => part !== '').join(' ')
-      return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
-    }
-    case 'comment':
-      // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
-      // inline one (carve#581) in joining a percent-leading content onto the
-      // marker. At block level the comment-LINE marker is exactly `%%`; a run
-      // of three or more is a comment FENCE (PART 9 §28), so `%%` + `%` is a
-      // different construct that pairs with any later same-width run and
-      // swallows everything between (markup-carve/carve-js#1674).
-      return node.block
-        ? renderBlockComment(node.content)
-        : node.delimited
-          ? `{% ${node.content} %}`
-          : `%% ${node.content}`
-    default: {
-      const t: never = node
-      throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
-    }
-  }
 }
 
 /**
@@ -1324,159 +534,6 @@ function needsLooseKey(node: List | DefinitionList, body: string): boolean {
   return node.loose === true
 }
 
-function renderTableWithColumns(node: Table, ctx: CarveContext): string {
-  if (!node.columns?.length) {
-    const attrs = renderBlockAttrs(node.attrs)
-    const body = renderTable(node, ctx)
-    return attrs ? `${attrs}\n${body}` : body
-  }
-  const keyValues = { ...(node.attrs?.keyValues ?? {}) }
-  const join = (field: 'align' | 'valign', key: string) => {
-    if (keyValues[key] === undefined && node.columns!.some((column) => column[field] !== undefined)) {
-      keyValues[key] = node.columns!.map((column) => column[field] ?? '').join(',')
-    }
-  }
-  join('align', 'aligns')
-  join('valign', 'valigns')
-  if (keyValues.widths === undefined && node.columns.some((column) => column.width !== undefined)) {
-    keyValues.widths = node.columns.map((column) => column.width === undefined ? '' : String(column.width * 100)).join(',')
-  }
-  const attrs = renderBlockAttrs({ ...(node.attrs ?? {}), keyValues })
-  return `${attrs}\n${renderTable(node, ctx)}`
-}
-
-function renderList(node: List, ctx: CarveContext): string {
-  ctx.listDepth++
-  try {
-    let out = ''
-    let counter = node.start ?? 1
-    // The marker is semantic (§11: a different bullet char / ordered delim
-    // starts a new list), so emit it as authored - normalizing would merge
-    // adjacent sibling lists on re-parse (carve issue 286).
-    const delim = node.delim ?? '.'
-    const bullet = node.bulletChar ?? '-'
-    // The bare dot is written back only where the author wrote one (carve#315).
-    // PART 11 §6: `fmt` does not respell a construct to a synonym, because the
-    // choice is the author's and the AST records it - the same rule, and the
-    // same remedy, as the combined bold-italic form. `bareMarker` is that
-    // record; picking a canonical spelling instead would rewrite every
-    // `1.`/`2.`/`3.` list in existing documents on the next format.
-    //
-    // The other three conditions are belt and braces for a hand-built tree: a
-    // bare dot cannot carry a start, a dialect or the `)` delimiter, so a mark
-    // that contradicts one of them is ignored rather than written as source
-    // that reads back differently.
-    const bareDot =
-      node.ordered &&
-      node.bareMarker === true &&
-      delim === '.' &&
-      node.olType === undefined &&
-      (node.start ?? 1) === 1
-    node.items.forEach((item, idx) => {
-      const indent = ''
-      let prefix: string
-      if (node.ordered) {
-        prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim} `
-        counter++
-      } else if (item.checked !== undefined) {
-        prefix = `${bullet} ${taskMarker(item)} `
-      } else {
-        prefix = `${bullet} `
-      }
-      const continuationWidth = node.ordered ? prefix.length : 2
-      const itemAttrs = renderAttrs(item.attrs)
-      if (itemAttrs) {
-        prefix = node.ordered
-          ? `${prefix.trimEnd()}${itemAttrs} `
-          : `${bullet}${itemAttrs}${item.checked !== undefined ? ` ${taskMarker(item)} ` : ' '}`
-      }
-      let content = trimNonNbsp(renderListItem(item, ctx, node.tight))
-      const lines = content ? content.split('\n') : ['']
-      // THE FIRST LINE CARRIES THE TAG TOO - only the loop below used to take it
-      // off. An item whose FIRST child goes to the marker column opens with the
-      // continuation marker, so the tag shipped as a literal private-use
-      // character and the item came back holding it (carve-js#1681). Nothing to
-      // strip it TO here: the item's own marker already owns this line, and
-      // `- +` is where §17 L3 puts the marker for an item with nothing before it.
-      const first = (lines.shift() ?? '').replace(markerColumnTag(), '')
-      out += `${indent}${prefix}${first || '+'}\n`
-      const continuation = ' '.repeat(continuationWidth)
-      // An EMPTY continuation line stays empty. Indenting it produces a line of
-      // nothing but spaces, which the writer must never emit - the blank line
-      // inside a fenced block in a list item was the one place it did (corpus
-      // 75-list-nesting-and-looseness-5). The content is unchanged either way,
-      // since the reader strips the item's columns back off.
-      for (const line of lines) {
-        if (line.startsWith(markerColumnTag())) {
-          // The continuation marker and the block it attaches sit at the ITEM's
-          // marker column, not at its content column: §17 L3 puts the marker at
-          // "the current container's MARKER COLUMN" and attaches the following
-          // block "with no marker prefix or indentation". Indenting either into
-          // the item is what made the attached paragraph fold (carve#861).
-          out += `${indent}${line.slice(markerColumnTag().length)}\n`
-          continue
-        }
-        out += line ? `${indent}${continuation}${line}\n` : '\n'
-      }
-      if (!node.tight && idx < node.items.length - 1) out += '\n'
-    })
-    return trimEndNonNbsp(out)
-  } finally {
-    ctx.listDepth--
-  }
-}
-
-/**
- * A hoisted definition that sat BETWEEN two of a container's blocks, written
- * back into the gap it came from.
- *
- * A definition collected out of a list item renders nothing, but it still
- * SEPARATES the blocks around it: `- a` / `  [^f]: x` / `  more` is an item
- * holding two paragraphs, and writing the definition at document level instead
- * leaves `- a` / `  more`, which re-reads as one paragraph with a soft break.
- * The document changes, not just its spelling (carve-js#754, corpus 228).
- *
- * The gap is derivable from the blocks' own positions: a definition whose line
- * falls after one block ends and before the next begins was written there. This
- * is the same repair markup-carve/carve#805 needed for a definition-list
- * description, stated for any pair of siblings rather than for one container.
- */
-/** Run one render pass with the in-place write-back bookkeeping reset. */
-function withFreshWriteBackState<T>(render: () => T): T {
-  definitionsWrittenInPlace = new WeakSet()
-  footnotesWrittenInPlace = new Set()
-  return render()
-}
-
-function definitionInGap(
-  before: BlockNode,
-  after: BlockNode,
-  ctx: CarveContext,
-): string | undefined {
-  const from = before.pos?.endLine
-  const to = after.pos?.startLine
-  if (from === undefined || to === undefined) return undefined
-  for (const [line, node] of definitionsByLine) {
-    if (line > from && line < to && !definitionsWrittenInPlace.has(node as unknown as object)) {
-      const written = renderBlock(node, ctx)
-      definitionsWrittenInPlace.add(node as unknown as object)
-      return written
-    }
-  }
-  // A footnote definition lives in a root map rather than in `children`, so it
-  // is tracked by label - the same split the description write-back has.
-  for (const [line, label] of footnoteDefsByLine) {
-    if (line > from && line < to && !footnotesWrittenInPlace.has(label)) {
-      const blocks = ownValue(documentFootnoteDefs, label)
-      if (blocks === undefined) continue
-      const written = renderOneFootnoteDef(label, blocks, ctx)
-      footnotesWrittenInPlace.add(label)
-      return written
-    }
-  }
-  return undefined
-}
-
 /**
  * Mark every line of `text` to be written at the ITEM's marker column.
  *
@@ -1523,26 +580,9 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   ]).has(left.type)
 }
 
-/**
- * The tag that says a written line belongs at the item's MARKER column.
- *
- * The sixth slot of the picked run, not a code point of its own: `renderList`
- * strips it back off BY POSITION, so a fixed one is eaten off a continuation
- * line the AUTHOR opened with it, taking the item's content column with it
- * (carve-js#1280).
- */
-function markerColumnTag(): string {
-  return sentinels[SENTINEL_COUNT - 1]!
-}
-
 /** Whether rendered text contains a character a re-parse can see. */
 function spellsSomething(rendered: string): boolean {
   return /[^ \t\n\r]/.test(rendered)
-}
-
-/** Mark the next line for §11 N1a's boundary. `normalize` expands it with the container prefix. */
-function boundaryTag(): string {
-  return sentinels[4]!
 }
 
 /**
@@ -1645,189 +685,6 @@ function needsABlankLineAbove(
   if (previousEmitted.type === 'block_quote') return true
 
   return aSubListAlreadyOpened && LEAVES_A_PARAGRAPH_OPEN.has(previousEmitted.type)
-}
-
-function atMarkerColumn(text: string): string {
-  const tag = markerColumnTag()
-
-  return text
-    .split('\n')
-    .map((line) => tag + line)
-    .join('\n')
-}
-
-function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
-  // A list item is a prefix/indent host: its fences start over at `:::`.
-  const outerFenceDepth = ctx.colonFenceDepth
-  ctx.colonFenceDepth = 0
-  try {
-    return atAnAuthoredBodyColumn(ctx, () => renderListItemBody(item, ctx, tight))
-  } finally {
-    ctx.colonFenceDepth = outerFenceDepth
-  }
-}
-
-function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
-  // A definition collected from the ONLY line of an item leaves no child
-  // behind.  Do not spell that empty item with `+`: at nested marker depth the
-  // marker attaches the outer item's following block to the empty INNER item.
-  // The definition's retained source position is the only record of what
-  // occupied the item, so put it back there just as definitionInGap puts one
-  // back between two surviving children.
-  if (ctx.listDepth > 1 && item.children.length === 0) {
-    const from = item.pos?.startLine
-    const to = item.pos?.endLine
-    if (from !== undefined && to !== undefined) {
-      for (const [line, definition] of definitionsByLine) {
-        if (
-          line >= from &&
-          line <= to &&
-          !definitionsWrittenInPlace.has(definition as unknown as object)
-        ) {
-          const written = renderBlock(definition, ctx)
-          definitionsWrittenInPlace.add(definition as unknown as object)
-          return written
-        }
-      }
-      for (const [line, label] of footnoteDefsByLine) {
-        if (line < from || line > to || footnotesWrittenInPlace.has(label)) continue
-        const blocks = ownValue(documentFootnoteDefs, label)
-        if (blocks === undefined) continue
-        const written = renderOneFootnoteDef(label, blocks, ctx)
-        footnotesWrittenInPlace.add(label)
-        return written
-      }
-    }
-  }
-  // A loose item separates its blocks with a blank line; a tight item joins
-  // them with a single newline so the re-parse stays tight. Using the generic
-  // blank-line join here would loosen a tight item that has more than one child
-  // (e.g. text after a fenced block), breaking toHtml(fmt(x)) == toHtml(x).
-  if (!tight) return renderBlocks(item.children, ctx)
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-  ctx.blockDepth++
-  try {
-    const parts: string[] = []
-    // Whether any child so far was written at the item's MARKER column, which
-    // is column 0. Everything after it has to sit there too - see below - so
-    // this only ever latches on. Clearing it again was a store that could not
-    // change an outcome: no mutation of it failed a test, which is the shape
-    // this repository keeps finding under a check that cannot fail.
-    let previousAtMarkerColumn = false
-    // The last child that actually WROTE something, which is what the block
-    // below it is read against. `item.children[i - 1]` is not that: a definition
-    // hoisted out of the item renders nothing and still sits in `children`.
-    let previousEmitted: BlockNode | null = null
-    // Whether a sub-list has already opened at this item's content column - the
-    // condition under which a later bullet written there joins it instead of
-    // opening below the paragraph above it. See `needsABlankLineAbove`.
-    let aSubListAlreadyOpened = false
-    item.children.forEach((b, i) => {
-      const previous = item.children[i - 1]
-      const next = item.children[i + 1]
-      // A definition written back BETWEEN the two blocks already ends the
-      // paragraph above it, so the marker below is not needed - and emitting it
-      // anyway changes the canonical form of corpus 228, whose whole point is
-      // that a line at the definition's own column forms its own tight block.
-      let separated = false
-      if (previous !== undefined) {
-        const written = definitionInGap(previous, b, ctx)
-        if (written !== undefined && written.length > 0) {
-          parts.push(written)
-          separated = true
-        }
-      }
-      let rendered = renderBlock(b, ctx)
-      if (rendered.length === 0) return
-      // `guardThematicBreakLines` protects a paragraph continuation that is
-      // semantically an em dash by giving it one leading space.  Inside a list
-      // the ordinary continuation prefix would add the item content column to
-      // that guard.  Since #1705, that combined indentation is an authored
-      // block base and the guarded text would reparse as a real thematic break.
-      // Keep guarded continuation lines at the item's marker column; the one
-      // authored space remains below the content column and therefore remains
-      // lazy paragraph text.
-      if (b.type === 'paragraph' && rendered.includes('\n ')) {
-        rendered = rendered.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${markerColumnTag()} `)
-      }
-      if (b.type === 'list') {
-        if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
-          parts.push(`${boundaryTag()}${rendered}`)
-        } else if (
-          !separated &&
-          needsABlankLineAbove(previousEmitted, previousAtMarkerColumn, aSubListAlreadyOpened)
-        ) {
-          parts.push('', rendered)
-        } else {
-          parts.push(rendered)
-        }
-        // Back at the content column, so a child below this one is read against
-        // the list rather than against whatever stood at column 0 above it.
-        previousAtMarkerColumn = false
-        aSubListAlreadyOpened = true
-        previousEmitted = b
-        return
-      }
-      if (
-        previousAtMarkerColumn ||
-        (next !== undefined && adjacentBlocksMerge(b, next)) ||
-        (!separated &&
-          previousEmitted !== null &&
-          anOpenParagraphReachesDown(previousEmitted) &&
-          FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
-          !opensWithAnAttributeLine(rendered))
-      ) {
-        // PART 11 §7e: a block that OPENS the item is written on the marker
-        // line, with the `+` on the line below it. The latch still goes up, so
-        // the block under it lands at the marker column behind its own marker.
-        if (parts.length === 0) parts.push(rendered)
-        else parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
-        previousAtMarkerColumn = true
-        previousEmitted = b
-        return
-      }
-      // A LINE COMMENT WRITTEN AT THE ITEM'S CONTENT COLUMN IS READ AGAINST THE
-      // SUB-LIST ABOVE IT: that column is the sub-list's MARKER column, and a
-      // `%%` line there joins the sub-list's last item instead of opening a
-      // block of the hosting item. The comment comes back one level in, and the
-      // next writer pass spells it at the deeper column - so the source keeps
-      // moving right while the HTML never changes (carve-js#1676). The blank
-      // line closes the sub-list; it does not loosen the item, because a
-      // comment spells no paragraph for the blank line to part.
-      //
-      // ONLY BELOW A LIST, and only for the LINE form. A comment below a
-      // paragraph, quote, definition list or fence already opens its own block
-      // at that column, and a `%%%` fence opener closes the sub-list on its own.
-      if (b.type === 'comment' && !b.block && !separated && previousEmitted?.type === 'list') {
-        parts.push('', rendered)
-        previousEmitted = b
-        return
-      }
-      // AN EMPTY LAST ITEM IN THE SUB-LIST ABOVE claims this column: the
-      // sub-list's marker column IS the hosting item's content column, and the
-      // `+` spelling the empty item takes the quote written there into itself
-      // (carve-js#1681). The blank line closes the sub-list and costs the item no
-      // paragraph, so the list stays tight.
-      //
-      // BOUNDED TO A QUOTE, and the bound is measured. Of the thirteen block
-      // kinds swept below an empty item only the quote is taken; a PARAGRAPH must
-      // not get the separator at all, since the blank line would part it and turn
-      // the tight item loose.
-      if (b.type === 'block_quote' && !separated && previousEmitted?.type === 'list') {
-        const last = previousEmitted.items[previousEmitted.items.length - 1]
-        if (last !== undefined && last.children.length === 0) {
-          parts.push('', rendered)
-          previousEmitted = b
-          return
-        }
-      }
-      parts.push(rendered)
-      previousEmitted = b
-    })
-    return parts.join('\n')
-  } finally {
-    ctx.blockDepth--
-  }
 }
 
 function orderedMarker(n: number, type: List['olType']): string {
@@ -1965,86 +822,6 @@ const DEFINITION_BODY_INDENT = '  '
  */
 const EMPTY_BODY_SENTINEL = '{empty}'
 
-function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
-  const out: string[] = []
-  // Every entry writes its own description line, so consecutive `::` lines
-  // never end up sharing one: the list writes back with the grouping it
-  // parsed from.
-  for (const item of items) {
-    for (const term of item.terms) {
-      // A term keeps each continuation line's indent, so a verbatim span in
-      // one can hold a line that starts with whitespace (carve#2411).
-      const outer = termKeepsLineIndent
-      termKeepsLineIndent = true
-      try {
-        out.push(`:: ${renderInlines(term, ctx)}`)
-      } finally {
-        termKeepsLineIndent = outer
-      }
-    }
-    item.definitions.forEach((def, index) => {
-      // An EMPTY description whose line carries a hoisted definition is one the
-      // author wrote the definition on: write it back there. Without this the
-      // line came out as a bare `:`, which re-parses into the term above it -
-      // the failure markup-carve/carve#805 describes.
-      if (def.length === 0) {
-        const line = item.definitionLines?.[index]
-        const definition = line === undefined ? undefined : definitionsByLine.get(line)
-        if (definition !== undefined) {
-          // Render BEFORE marking it: the document-level arm returns '' for a
-          // node in this set, so marking first renders the line away.
-          const written = renderBlock(definition, ctx)
-          definitionsWrittenInPlace.add(definition as unknown as object)
-          out.push(`: ${written}`)
-          return
-        }
-        const label = line === undefined ? undefined : footnoteDefsByLine.get(line)
-        const blocks = label === undefined ? undefined : ownValue(documentFootnoteDefs, label)
-        if (label !== undefined && blocks !== undefined) {
-          const written = renderOneFootnoteDef(label, blocks, ctx)
-          footnotesWrittenInPlace.add(label)
-          // A footnote body can be multi-line; its continuation lines carry the
-          // body's own two-column indent and sit under the description.
-          const [first, ...rest] = written.split('\n')
-          out.push(`: ${first}`)
-          for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
-          return
-        }
-      }
-      /*
-       * A DESCRIPTION THAT WRITES NOTHING TAKES THE SENTINEL `{empty}`
-       * (PART 11 §7b, markup-carve/carve#1827) - the same body the footnote
-       * definition one construct over is written with.
-       *
-       * THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description is
-       * empty". An HTML import, an ingested AST and `fmt` over parsed source
-       * arrive with a different tree for the same shape, and only the written
-       * result is common to them: a `<dd>` holding an invisible paragraph or a
-       * list with no items writes nothing too, and takes the sentinel alike.
-       *
-       * The sentinel needs no lookahead. It is empty whether a blank line
-       * follows it, a flush-left paragraph does, or nothing does.
-       *
-       * `: \{empty}` and `: {empty} x` are content, not sentinels - the first
-       * escapes the brace and the second is not a block-attribute line - so
-       * both keep writing their own text.
-       */
-      const written = trimNonNbsp(
-        atAnAuthoredBodyColumn(ctx, () => renderHostedBlocks(def, ctx)),
-      )
-      if (written === '') {
-        out.push(`: ${EMPTY_BODY_SENTINEL}`)
-
-        return
-      }
-      const lines = written.split('\n')
-      out.push(`: ${lines.shift() ?? ''}`)
-      for (const line of lines) out.push(`${DEFINITION_BODY_INDENT}${line}`)
-    })
-  }
-  return out.join('\n')
-}
-
 /**
  * A colon fence closes on an EXACT length match (PART 9 §12), so a fence's
  * width is simply how deep it sits: the outermost container is `:::` and each
@@ -2062,15 +839,6 @@ function colonFenceFor(ctx: CarveContext): string {
   return ':'.repeat(3 + ctx.colonFenceDepth)
 }
 
-function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
-  ctx.colonFenceDepth++
-  try {
-    return renderBlocks(children, ctx)
-  } finally {
-    ctx.colonFenceDepth--
-  }
-}
-
 /**
  * Render a body that gives a definition entry its own authored base - a
  * footnote body or a definition description - so a definition list among its
@@ -2084,70 +852,6 @@ function atAnAuthoredBodyColumn<T>(ctx: CarveContext, render: () => T): T {
   } finally {
     ctx.atAnAuthoredBodyColumn = outer
   }
-}
-
-/**
- * Render blocks that a prefix/indent host owns (blockquote, list item,
- * definition body). Their fences start over at `:::` - see colonFenceFor.
- */
-function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
-  const outer = ctx.colonFenceDepth
-  ctx.colonFenceDepth = 0
-  try {
-    return renderBlocks(children, ctx)
-  } finally {
-    ctx.colonFenceDepth = outer
-  }
-}
-
-/**
- * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
- * per-cell `<`/`>`/`~` alignment markers.
- *
- * A colspan cell is always written plain (`| < |`), so a header row can keep
- * the native form when its span markers form a TRAILING run of COLSPANS after
- * at least one real header cell: each `<` absorbs into the `|=` header on its
- * left, and the row is still promoted by those `|=` markers
- * (`|= Engine |= Timing | < |`). Everything else needs a delimiter row: a
- * LEADING span has no `|=` anchor before it; a real cell AFTER a span
- * (`|~ H | < | < |< K |`) would have to be written `|=< K`, read as an aligned
- * header rather than the promoted data cell; and a trailing ROWSPAN (`^`) does
- * not absorb left, so a native `| ^ |` in the first row is not a header cell
- * and the row would fall out of `<thead>`.
- */
-function renderTable(node: Table, ctx: CarveContext): string {
-  const rows: string[] = []
-  const first = node.rows[0]
-  const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
-  const firstSpan = headerRow ? first!.cells.findIndex((c) => c.span !== undefined) : -1
-  const trailingColspansOnly = firstSpan >= 1 && first!.cells.slice(firstSpan).every((c) => c.span === 'colspan')
-  const needsDelimiter = firstSpan >= 0 && !trailingColspansOnly
-
-  node.rows.forEach((row, rowIndex) => {
-    const cells: string[] = []
-    for (const cell of row.cells) {
-      // In the delimiter form the promoted row is written as ordinary data
-      // cells - the row after it is what makes them headers.
-      const asHeader = !(needsDelimiter && rowIndex === 0)
-      cells.push(renderTableCell(cell, ctx, asHeader))
-    }
-    // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
-    // so no source spells one and the writer refuses the tree (carve-js#1822).
-    if (cells.every((cell) => cell === ' ' || cell === '= ')) {
-      throw new SourceUnspellableError(
-        'table_row',
-        'a table row whose every cell is blank has no Carve source spelling',
-        row,
-      )
-    }
-    rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
-  })
-  if (needsDelimiter) {
-    rows.splice(1, 0, `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
-  }
-  const caption = node.caption === undefined ? undefined : captionRow(node.caption, ctx)
-  if (caption !== undefined) rows.push(caption)
-  return rows.join('\n')
 }
 
 /**
@@ -2245,40 +949,6 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
   return chunks.flatMap((chunk, index) => index === 0 ? chunk : [{ type: 'text', value: ' ' } as InlineNode, ...chunk])
 }
 
-function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): string {
-  const attrs = renderAttrs(cell.attrs)
-  // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
-  // is also the left-alignment sigil, and the two readings differ: the
-  // executable spec reads `|<|` as alignment where all three engines read a
-  // colspan (markup-carve/carve#710). The padded form is unambiguous under either
-  // reading - `alignment_marker` is defined as glued, `colspan_marker` allows
-  // surrounding whitespace - so the writer should never emit the ambiguous one.
-  // `^` is not an alignment sigil and needs no disambiguation, but it takes the
-  // same shape so a row of span cells stays readable.
-  //
-  // With a cell attribute the block stays GLUED to the pipe, which is where the
-  // grammar puts it, and the space goes between it and the marker.
-  const spanMarker = cell.span === 'rowspan' ? '^' : '<'
-  if (cell.span === 'rowspan' || cell.span === 'colspan') {
-    return padCell(attrs, spanMarker)
-  }
-  const align = alignMarker(cell.align)
-  const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
-  const inheritedHorizontal = !align && valign ? '?' : ''
-  // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
-  // after the kind marker and after the alignment marker, so `|={.x} h |` is
-  // an attributed header cell. Writing the block ahead of the markers instead
-  // produced `|{.x}=h |`, which is the one shape the grammar cannot tell from
-  // a data cell whose content starts with `=` - and reads it as that, so an
-  // attributed header cell round-tripped into `<td class="x">=h</td>` and
-  // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
-  const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
-  const content = cell.blocks === undefined
-    ? renderInlines(cell.children ?? [], ctx)
-    : renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
-  return padCell(prefix, escapeSpanMarkerPayload(content, cell.attrs))
-}
-
 /**
  * Escape a cell payload that would otherwise re-read as a span marker.
  *
@@ -2294,78 +964,6 @@ export function escapeSpanMarkerPayload(payload: string, attrs?: Attrs): string 
 }
 
 /**
- * A caption line for a caption that spells something, and NOTHING otherwise.
- */
-function captionLine(caption: InlineNode[], ctx: CarveContext): string {
-  const row = captionRow(caption, ctx)
-
-  return row === undefined ? '' : `\n${row}`
-}
-
-/**
- * The same rule for the one caption slot that is not a `^ ` line UNDER a block:
- * a table's own caption, which is written as the last ROW of the table itself
- * (markup-carve/carve-js#1496).
- *
- * `renderTable` tested `node.caption` for truthiness and wrote the line
- * unconditionally, so a table carrying an empty caption run - which
- * `<table><caption></caption>` imports to, and which an AST ingest can hand in
- * directly - wrote a bare `^`. That is not a caption line: it re-reads as a
- * paragraph holding a literal caret, so the document came back saying something
- * the tree never said, with an empty report. Exactly the addition
- * markup-carve/carve-js#1423 removed for every FIGURE host; the table's own slot
- * was simply not covered.
- *
- * ONE PREDICATE FOR BOTH SLOTS, which is the point of extracting it: the near
- * miss is a second mechanism that agrees today and drifts on the next clause.
- * A caption holding a NO-BREAK SPACE spells something (PART 11 §7) and keeps its
- * line in both.
- */
-function captionRow(caption: InlineNode[], ctx: CarveContext): string | undefined {
-  const written = renderInlines(caption, ctx)
-
-  return trimNonNbsp(written) === '' ? undefined : `^ ${written}`
-}
-
-/**
- * THE TARGET KEEPS ITS OWN ATTRIBUTES (ruling markup-carve/carve#1721).
- */
-function renderFigure(node: Figure, ctx: CarveContext): string {
-  const target = node.target.type === 'image' ? renderImage(node.target) : renderBlock(node.target, ctx)
-  return `${target}${captionLine(node.caption, ctx)}`
-}
-
-/**
- * One footnote definition, marker and body.
- *
- * Extracted because a definition list writes one back on its own description
- * line (markup-carve/carve#805) and a second spelling of the body's indent rule
- * would be a rule with two implementations - the shape that has produced most of
- * this engine's cross-engine divergences.
- */
-
-function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
-  const rawBody = atAnAuthoredBodyColumn(ctx, () => renderBlocks(blocks, ctx))
-  const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
-  if (body === '') {
-    return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
-  }
-  const lines = body.split('\n')
-  const defLines = [`[^${writeFlatBracketRun(label)}]: ${lines.shift() ?? ''}`]
-  // TWO spaces, the body's own column (PART 9 §16). Three is not a longer
-  // spelling of the same thing: since carve#1752 a recognized opener there
-  // takes its own authored base, so the third column CHANGES what the body
-  // says. The executable spec reads it that way and carve#1763 pins it; the
-  // released carve-rs and carve-php still eject the payload, and the spec
-  // declares that lag rather than this writer working around it.
-  //
-  // So the body's blocks are written at two, and the ONE block whose payload
-  // needs the third column asks for it by itself - see `atARaisedBase`.
-  for (const line of lines) defLines.push(`  ${line}`)
-  return defLines.join('\n')
-}
-
-/**
  * Child kinds that are HOISTED definitions rather than body blocks.
  *
  * ONLY the collected kinds. §7 moves `link_reference_definition` and `footnote`
@@ -2378,83 +976,6 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
  * position to the end of the document.
  */
 const HOISTED_DEFINITION_TYPES = new Set(['link_reference_definition'])
-
-/**
- * The document's body, then its hoisted definitions in source-position order.
- *
- * §7 puts hoisted definitions after the body and orders them among themselves
- * by source position; this engine publishes them that way since carve#746, and
- * PART 11 §6 then binds the writer - "fmt does not reorder ... those are the
- * author's choices and the AST records them".
- *
- * The writer used to render `children` and append every footnote afterwards,
- * because the runtime keeps footnote bodies in a label-keyed map where their
- * position is not part of what it walks. A link definition hoisted from INSIDE
- * a footnote body therefore came out BEFORE the footnote containing it, though
- * the tree has the footnote first (carve-js#750).
- *
- * Positions order the definitions, and only when every one of them has a
- * position: a hand-built or `pos`-less tree has no order to honor, and there the
- * old behavior - children as they come, then the footnotes - is the only
- * defensible one.
- */
-function renderDocumentBody(ast: Document, ctx: CarveContext): string {
-  type Piece = { at: number | undefined; text: string }
-  const body: BlockNode[] = []
-  const hoisted: BlockNode[] = []
-
-  for (const child of ast.children) {
-    if (HOISTED_DEFINITION_TYPES.has(child.type)) {
-      hoisted.push(child)
-      continue
-    }
-    body.push(child)
-  }
-
-  // THE BODY IS RENDERED FIRST, whatever the output order. A definition written
-  // inside a definition-list description is emitted on that line and marked, and
-  // `renderBlock` then returns '' for it here (carve-js#748) - so rendering the
-  // definitions before the body wrote them twice.
-  const bodyText = renderBlocks(body, ctx)
-
-  const definitions: Piece[] = hoisted.map((child) => ({
-    at: (child as { pos?: { startOffset?: number } }).pos?.startOffset,
-    text: renderBlockAtTop(child, ctx),
-  }))
-
-  for (const [label, blocks] of Object.entries(ast.footnoteDefs ?? {})) {
-    // Unless a definition list already wrote it where the author put it.
-    if (footnotesWrittenInPlace.has(label)) continue
-    definitions.push({
-      at: ownValue(ast.footnoteDefPos, label)?.startOffset,
-      text: renderOneFootnoteDef(label, blocks, ctx),
-    })
-  }
-
-  const ordered = definitions.every((piece) => piece.at !== undefined)
-    ? definitions
-        .map((piece, index) => ({ piece, index }))
-        // STABLE: two definitions at the same offset keep the order they were
-        // collected in, which is the tree's.
-        .sort((a, b) => a.piece.at! - b.piece.at! || a.index - b.index)
-        .map(({ piece }) => piece)
-    : definitions
-
-  return [bodyText, ...ordered.map((piece) => piece.text)]
-    .filter((text) => text.length > 0)
-    .join('\n\n')
-}
-
-/** One top-level block, with the depth accounting `renderBlocks` does. */
-function renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-  ctx.blockDepth++
-  try {
-    return renderBlock(block, ctx)
-  } finally {
-    ctx.blockDepth--
-  }
-}
 
 /**
  * Source text of an inline node that the core produces while parsing an
@@ -2515,64 +1036,6 @@ function emitDirective(raw: string): string {
   return raw
 }
 
-function directiveOverrides(nodes: InlineNode[]): Map<number, { text: string; ranges: LiteralRange[] }> {
-  const overrides = new Map<number, { text: string; ranges: LiteralRange[] }>()
-  let i = 0
-  while (i < nodes.length) {
-    if (directiveRunText(nodes[i]!) === null) {
-      i++
-      continue
-    }
-    let end = i
-    while (end < nodes.length && directiveRunText(nodes[end]!) !== null) end++
-    const texts = nodes.slice(i, end).map((node) => directiveRunText(node)!)
-    const full = texts.join('')
-    // A control character would be stripped by escapeText but survives a
-    // verbatim emit, so such a run keeps the (already degenerate) old path.
-    // Fast path: a run with no "{{" cannot hold a directive, so the common
-    // (directive-free) document never pays for the scan.
-    const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full)
-    if (spans.length) {
-      let offset = 0
-      for (let k = 0; k < texts.length; k++) {
-        const text = texts[k]!
-        const start = offset
-        offset += text.length
-        const covering = spans.filter((s) => s.start < offset && s.end > start)
-        if (covering.length === 0) continue
-        let out = ''
-        const ranges: LiteralRange[] = []
-        const node = nodes[i + k]!
-        const appendLiteral = (from: number, to: number): void => {
-          const previous = escapeUnit
-          escapeUnit = node
-          let piece: string
-          try { piece = escapeText(text.slice(from, to), false, false, from) }
-          finally { escapeUnit = previous }
-          if (node.type === 'text' && piece.includes('(')) {
-            ranges.push({ start: out.length, end: out.length + piece.length, node, sourceStart: from })
-          }
-          out += piece
-        }
-        let cursor = start
-        for (const span of covering) {
-          if (span.start > cursor) appendLiteral(cursor - start, span.start - start)
-          // The whole directive is emitted once, by the node where it STARTS.
-          // A later node that the same span merely runs THROUGH contributes
-          // nothing, which is what lets the emitted form differ in length
-          // from the source it replaces (a rebuilt quoted path does).
-          if (span.start >= start) out += emitDirective(span.raw)
-          cursor = Math.min(span.end, offset)
-        }
-        appendLiteral(cursor - start, text.length)
-        overrides.set(i + k, { text: out, ranges })
-      }
-    }
-    i = end
-  }
-  return overrides
-}
-
 const OUT_TAIL_LENGTH = 256
 /**
  * A character `boundaryEscapeAt` and `separatesBacktickRuns` never read past
@@ -2581,425 +1044,8 @@ const OUT_TAIL_LENGTH = 256
  */
 const RE_BOUNDARY_STOP = /[^A-Za-z0-9_:\\-]/
 
-function renderInlines(
-  sourceNodes: InlineNode[],
-  ctx: CarveContext,
-  captionCanOpen = false,
-  /**
-   * These nodes are a line block's STANZA, so the newline after the last of
-   * them ends the stanza rather than a line inside it (PART 11 §7c). Set only
-   * by the paragraph arm: a nested inline container inside a line block is not
-   * a stanza, and its last node is not at a stanza boundary.
-   */
-  isStanza = false,
-): string {
-  const nodes = flattenRubyForCarve(sourceNodes)
-  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-  if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, loneBrackets, leftToSearch, pairedClosers)
-  ctx.inlineDepth++
-  try {
-    let out = ''
-    const literalRanges: LiteralRange[] = []
-    const noteCloses: number[] = []
-    let firstLine = true
-    let lineNodeCount = 0
-    let lineHostsCaption = false
-    // THE CURRENT OUTPUT LINE, CARRIED FORWARD instead of read back off `out`.
-    // The two decisions below are properties of the line written so far, and
-    // `out` is the wrong place to ask: it grows with every node, and probing a
-    // growing accumulator per node is the quadratic shape this engine's scaling
-    // guards exist to keep out. Two counters answer both questions in O(piece).
-    let lineLength = 0
-    /** The last up-to-two characters of the current output line. */
-    let lineTail = ''
-    // The end of `out`, for the boundary checks below: reading `out` itself
-    // flattens the growing string on every node, which is quadratic per line.
-    let outTail = ''
-    const written = (): { text: string; offset: number } =>
-      outTail.length < out.length && !RE_BOUNDARY_STOP.test(outTail.slice(0, -1))
-        ? { text: out, offset: 0 }
-        : { text: outTail, offset: out.length - outTail.length }
-    const overrides = directiveOverrides(nodes)
-    nodes.forEach((node, idx) => {
-      lastLiteralRanges = []
-      lastNoteCloses = []
-      const override = overrides.get(idx)
-      let piece = override?.text ?? renderInline(
-        node,
-        ctx,
-        // A span leaves no boundary character of its own, so the one it WROTE
-        // (its closer) is what the next opener sits against.
-        lastBoundary(nodes[idx - 1]) || lineTail.slice(-1),
-        firstBoundary(nodes[idx + 1]),
-        captionCanOpen,
-        opensBacktickRun(nodes[idx + 1]),
-        // A run of three or more backticks at block start is a code fence.
-        // A shorter run, or one after an inline opener, can start a code span.
-        idx === nodes.length - 1 && (out !== '' || ctx.inlineDepth > 1 || (node.type === 'code' && safeFence(node.value, 1).length < 3)),
-      )
-      // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
-      // live here and not in `renderInline`: the answer is a property of the
-      // output line, not of the neighbouring nodes. `lastBoundary` cannot stand
-      // in for it - after a code span it reports the span's last CONTENT
-      // character, not the backtick that actually ends the line.
-      const atLineStart = lineLength === 0
-
-      if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
-
-      if (
-        ctx.lineBlockDepth > 0 &&
-        node.type === 'hard_break' &&
-        piece === '\n' &&
-        nodes[idx - 1]?.type !== 'comment' &&
-        (atLineStart ||
-          /(?:^|[^ \t]) $/.test(lineTail) ||
-          (isStanza && idx === nodes.length - 1))
-      ) {
-        piece = '\\\n'
-      }
-
-      // The end of what is written can open a construct with the next node's
-      // start: `^[` an inline note, `:name[` an inline extension, `$` plus a
-      // backtick run or `$` math. The escape belongs to the previous node, so
-      // its form decides (PART 11 §2b).
-      const end = written()
-      const escapeAt = boundaryEscapeAt(end.text, piece)
-      if (escapeAt !== -1 && escapeModeOf(nodes[idx - 1]) === 'conservative') {
-        const at = end.offset + escapeAt
-        out = `${out.slice(0, at)}\\${out.slice(at)}`
-        outTail = out.slice(-OUT_TAIL_LENGTH)
-        lineLength += 1
-        lineTail = out.slice(-2)
-      }
-
-      refuseGluedName(node, nodes[idx - 1], outTail, piece)
-
-      if (separatesBacktickRuns(written().text, piece)) {
-        out += EMPTY_COMMENT
-        outTail = (outTail + EMPTY_COMMENT).slice(-OUT_TAIL_LENGTH)
-        lineLength += EMPTY_COMMENT.length
-        lineTail = (lineTail + EMPTY_COMMENT).slice(-2)
-      }
-
-      if (escapeMode === 'minimal') {
-        if (override === undefined) for (const close of lastNoteCloses) noteCloses.push(out.length + close)
-        for (const range of override?.ranges ?? lastLiteralRanges) {
-          literalRanges.push({ ...range, start: out.length + range.start, end: out.length + range.end })
-        }
-      }
-      out += piece
-      outTail = (outTail + piece).slice(-OUT_TAIL_LENGTH)
-      const lastNewline = piece.lastIndexOf('\n')
-      if (lastNewline === -1) {
-        lineLength += piece.length
-        lineTail = (lineTail + piece).slice(-2)
-      } else {
-        lineLength = piece.length - lastNewline - 1
-        lineTail = piece.slice(lastNewline + 1).slice(-2)
-      }
-      if (node.type === 'soft_break') {
-        captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
-        firstLine = false
-        lineNodeCount = 0
-        lineHostsCaption = false
-        return
-      }
-      lineNodeCount++
-      lineHostsCaption = lineNodeCount === 1 && inlineHostsCaption(node)
-      captionCanOpen = false
-    })
-    if (escapeMode === 'minimal') {
-      // A bracket or destination may cross a nested emphasis boundary. Keep
-      // its text-node ranges until the outer inline run is complete.
-      if (ctx.inlineDepth === 1) return escapeLiteralDestinations(out, literalRanges, new Set(noteCloses))
-      inlineChildProjections.push({ text: out, ranges: literalRanges, noteCloses })
-    }
-    return out
-  } finally {
-    ctx.inlineDepth--
-  }
-}
-
 function inlineHostsCaption(node: InlineNode): boolean {
   return (node.type === 'image' && node.src !== '') || (node.type === 'math' && node.display)
-}
-
-/** Render one inline node, recording it as its own escape unit (see `renderBlock`). */
-function renderInline(
-  node: InlineNode,
-  ctx: CarveContext,
-  prevChar = '',
-  nextChar = '',
-  captionCanOpen = false,
-  nextOpensBacktickRun = false,
-  mayRunToEndOfText = false,
-): string {
-  const previous = escapeUnit
-  const parentProjections = inlineChildProjections
-  inlineChildProjections = []
-  escapeUnit = node as unknown as object
-  try {
-    const result = renderInlineBody(
-      node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun, mayRunToEndOfText,
-    )
-    lastLiteralRanges = []
-    lastNoteCloses = []
-    if (escapeMode === 'minimal') {
-      if (node.type === 'text' && result.includes('(')) {
-        lastLiteralRanges.push({ start: 0, end: result.length, node })
-      } else {
-        let cursor = 0
-        for (const child of inlineChildProjections) {
-          if (child.ranges.length === 0 && child.noteCloses.length === 0) continue
-          const start = result.indexOf(child.text, cursor)
-          if (start === -1) continue
-          for (const close of child.noteCloses) lastNoteCloses.push(start + close)
-          for (const range of child.ranges) {
-            lastLiteralRanges.push({ ...range, start: start + range.start, end: start + range.end })
-          }
-          cursor = start + child.text.length
-        }
-      }
-    }
-    if (escapeMode === 'minimal' && (node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
-      const close = buildBracketMap(result, true)(result.indexOf('['))
-      if (close !== undefined) lastNoteCloses.push(close)
-    }
-    return result
-  } finally {
-    escapeUnit = previous
-    inlineChildProjections = parentProjections
-  }
-}
-
-function renderInlineBody(
-  node: InlineNode,
-  ctx: CarveContext,
-  prevChar = '',
-  nextChar = '',
-  captionCanOpen = false,
-  /**
-   * Whether the node AFTER this one is written starting with a backtick run.
-   *
-   * `firstBoundary` cannot answer it: for a code span it reports the span's
-   * first CONTENT character, not the backtick that actually starts the piece.
-   * §27 binds `!` to a FOLLOWING BACKTICK RUN, so a text node ending in `!`
-   * needs to know (carve-js#1175).
-   */
-  nextOpensBacktickRun = false,
-  /**
-   * Whether a verbatim span written here may run to the END of this inline
-   * text - nothing follows it, so an unclosed opener spells its content.
-   *
-   * The inline LOOP is the only place that knows: it needs both that this is
-   * the last node and that the text has already begun, since a backtick run
-   * opening the first line of a block is a code FENCE and not a span at all.
-   */
-  mayRunToEndOfText = false,
-): string {
-  // A stored tree may still carry a type this engine no longer emits; map it
-  // before dispatch so the switch below only ever sees current types.
-  node = normalizeLegacyInline(node)
-
-  const withAttrs = (body: string) => `${bracedOnce(node, body)}${renderAttrs(node.attrs)}`
-  // An empty brace pair is not a construct, and `{--}` is the braced en dash
-  // (markup-carve/carve#1608), so an empty mark has no spelling.
-  const marked = (children: InlineNode[]): string => {
-    const content = renderInlines(children, ctx)
-    if (content === '') {
-      throw new SourceUnspellableError(node.type, `an empty ${node.type} has no Carve source spelling`, node)
-    }
-    return content
-  }
-  const emphasisOf = (delim: string, children: InlineNode[]): string => {
-    const content = marked(children)
-    // An empty code span is written as an unclosed run, which swallows a bare
-    // closer; only the braced one ends it.
-    const last = children[children.length - 1]
-    return (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || bracedForScope.has(node)
-      ? renderForcedEmphasis(delim, content)
-      : renderEmphasis(delim, content, prevChar, nextChar)
-  }
-  // E3 pushes no second level of one kind while one is open, and the forced
-  // form is on the same stack, so a span of a kind already open has no
-  // spelling at all (markup-carve/carve#2078).
-  if (EMPHASIS_KINDS.has(node.type)) {
-    if (openEmphasisKinds.has(node.type)) {
-      throw new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
-    }
-    const outer = openEmphasisKinds
-    const children = (node as { children?: InlineNode[] }).children ?? []
-    const scoped = node.type === 'superscript' || node.type === 'subscript' || holdsOpenKind(children, outer)
-    if (scoped) bracedForScope.add(node)
-    openEmphasisKinds = scoped ? new Set([node.type]) : new Set([...outer, node.type])
-    try {
-      return renderInlineDispatch()
-    } finally {
-      openEmphasisKinds = outer
-    }
-  }
-
-  return renderInlineDispatch()
-
-  function renderInlineDispatch(): string {
-  switch (node.type) {
-    case 'text':
-      return escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
-    case 'escaped_text':
-      // The author escaped this character; the writer says so again. No
-      // minimal/conservative decision applies - the node IS the decision.
-      return '\\' + node.value
-    case 'emphasis':
-      return withAttrs(emphasisOf('/', node.children))
-    case 'strong': {
-      // The combined bold-italic form is a single production, and the nested
-      // spelling parses to the SAME strong-wrapping-emphasis tree - so the
-      // nesting does not record which one the author wrote and cannot be
-      // serialized back "literally". The comment here used to claim each
-      // spelling re-parses to the shape it came from; it does not, which is why
-      // the documented form was being rewritten into an undocumented one
-      // (carve#375). `boldItalic` carries the answer (PART 11 section 6).
-      const inner = node.children[0]
-      if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis' && !bracedForScope.has(node)) {
-        const content = renderInlines(inner.children, ctx)
-        // `/*` needs content that hugs it: `/* x*/` or `/**/` reparses as an
-        // emphasis holding literal stars, so fall back to the nested spelling.
-        if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content)) {
-          return withAttrs(`/*${content}*/`)
-        }
-      }
-      return withAttrs(emphasisOf('*', node.children))
-    }
-    case 'underline':
-      return withAttrs(emphasisOf('_', node.children))
-    case 'strike':
-      return withAttrs(emphasisOf('~', node.children))
-    case 'superscript':
-      return withAttrs(renderForcedEmphasis('^', marked(node.children)))
-    case 'subscript':
-      return withAttrs(renderForcedEmphasis(',', marked(node.children)))
-    case 'highlight':
-      return withAttrs(emphasisOf('=', node.children))
-    case 'code':
-      if (unspellableEmptyCodeSpans.has(node)) {
-        throw new SourceUnspellableError(
-          'code',
-          'a code span has no Carve source spelling where its open run does not end',
-        )
-      }
-      // The unclosed spelling is offered only when NOTHING is written after the
-      // span. An attribute block is written after it, so a code span carrying
-      // one keeps the closed form (and `raw_inline` and `literal_inline`, which
-      // both append to `renderCode`, never ask for it).
-      return withAttrs(renderCode(node.value, mayRunToEndOfText && renderAttrs(node.attrs) === ''))
-    case 'link':
-      return renderLink(node, ctx)
-    case 'image':
-      return renderImage(node)
-    case 'span':
-      return `[${escapeNoteReferenceLabel(renderInlines(node.children, ctx), ctx)}]${renderAttrs(node.attrs) || '{}'}`
-    case 'ruby': {
-      return renderInlines(flattenRubyForCarve([node]), ctx)
-    }
-    case 'small_caps': {
-      const content = renderInlines(node.children, ctx)
-      return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderAttrs(node.attrs)}` : content
-    }
-    case 'math':
-      return withAttrs(renderMath(node.display, node.content))
-    case 'raw_inline':
-      if (node.content === '') {
-        throw new SourceUnspellableError(
-          'raw_inline',
-          'an empty raw inline has no Carve source spelling',
-        )
-      }
-      return `${renderCode(node.content, false, 'raw_inline')}{=${escapeFormat(node.format)}}`
-    case 'literal_inline':
-      // §27: `!` prefix on a verbatim span. A trailing attribute block is the
-      // ordinary inline attribute block (same as a code span carries).
-      // renderCode widens the backtick fence when the content holds backticks.
-      return `!${renderCode(node.content, false, 'literal_inline')}${renderAttrs(node.attrs)}`
-    case 'symbol':
-      return withAttrs(`:${escapeSymbolName(node.name)}:`)
-    case 'autolink':
-      // Emit the raw autolink content verbatim (keeps a URI scheme like
-      // `mailto:`); fall back to the href for nodes without `text`.
-      return withAttrs(`<${escapeAutolinkHref(node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href))}>`)
-    case 'mention':
-    case 'tag':
-      // An attribute block after a mention or tag stays text (carve-php#2083).
-      if (renderAttrs(node.attrs) !== '') {
-        throw new SourceUnspellableError(node.type, `a ${node.type} carrying attributes has no Carve source spelling`)
-      }
-      return node.type === 'mention' ? `@${spellableName(node.user, 'mention')}` : `#${spellableName(node.name, 'tag')}`
-    case 'inline_extension':
-      return withAttrs(`:${escapeIdentifier(node.name)}[${renderInlines(node.content, ctx)}]`)
-    case 'abbreviation':
-      return escapeText(node.abbr)
-    case 'footnote_ref':
-    case 'inline_footnote':
-      return withAttrs(node.inline
-        ? `^[${renderInlines(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
-        : `[^${writeFlatBracketRun(node.id ?? '')}]`)
-    case 'non_breaking_space':
-      return renderAttrs(node.attrs) ? `[${sentinels[3]}]${renderAttrs(node.attrs)}` : sentinels[3]!
-    case 'soft_break':
-      return '\n'
-    case 'hard_break':
-      return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
-    case 'insert':
-      return withAttrs(`{+${marked(node.children)}+}`)
-    case 'delete':
-      return withAttrs(`{-${marked(node.children)}-}`)
-    case 'substitution':
-      return withAttrs(`{~${renderInlines(node.old, ctx)}~>${renderInlines(node.new, ctx)}~}`)
-    case 'critic_comment':
-      // The content is literal (PART 3 EDITORIAL COMMENT CONTENT IS LITERAL),
-      // so an escape reaches the reader as a backslash. A `}` has no spelling
-      // at all: the content production takes none (carve-js#1847).
-      if (node.text.includes('}')) {
-        throw new SourceUnspellableError('critic_comment', 'an editorial comment holding a closing brace has no Carve source spelling')
-      }
-      return `{#${node.text}#}`
-    case 'heading_ref':
-      return `</#${escapeCrossrefTarget(node.target)}>`
-    case 'caption_number':
-      return '#'
-    case 'citation_group': {
-      const integral = node.items[0]?.mode === 'integral'
-      if (node.items.some((item) => (item.mode === 'integral') !== integral)) {
-        throw new SourceUnspellableError(
-          'citation_group',
-          'a group with mixed per-item citation modes has no Carve source spelling',
-          node,
-        )
-      }
-      if (integral) return node.raw.startsWith('[+') ? node.raw : `[+${node.raw.slice(1)}`
-      return node.raw.startsWith('[+') ? `[${node.raw.slice(2)}` : node.raw
-    }
-    case 'comment':
-      if (node.delimited) return `{% ${node.content} %}`
-      // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
-      // joins the opener rather than being separated from it by a space: a
-      // comment whose content is `%` is written ` %%%`, not ` %% %`, which
-      // splits a three-character opener run into an opener plus a stray
-      // character - "a shape that happens to work rather than one that says
-      // what it means". Both re-parse to the same content, so the invariant
-      // never saw it; §1's `to_html(fmt(x)) == to_html(x)` is necessary, not
-      // sufficient. (carve#581, carve#544)
-      return node.content.startsWith('%')
-        ? ` %%${node.content}`
-        : ` %% ${node.content}`
-    case 'smart_punctuation':
-      // The whole point: reproduce the author's source run verbatim.
-      return node.value
-    default: {
-      const t: never = node
-      throw new Error(`renderCarve: unknown inline ${(t as { type: string }).type}`)
-    }
-  }
-  }
 }
 
 /** Replace interchange-only ruby structure before the ordinary writer decides escapes. */
@@ -3044,25 +1090,6 @@ function escapeNoteReferenceLabel(label: string, ctx: CarveContext): string {
   return /^\^[^\]\r\n]/.test(label) ? `\\${label}` : label
 }
 
-function renderLink(node: Link, ctx: CarveContext): string {
-  // An unresolved reference link (parse() left `ref` set with an empty href -
-  // no matching `[label]: url` def) round-trips via its verbatim source. resolve
-  // either matches it to a heading later or renders it literally; emitting the
-  // raw reference reproduces that exactly, where `[text]()` would not.
-  // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
-  // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
-  // no longer answers this question (carve#596).
-  if (node.ref !== undefined && node.rawRef !== undefined && !node.href) {
-    return node.rawRef
-  }
-  if (node.ref !== undefined && node.rawRef !== undefined) {
-    return node.rawRef
-  }
-  const text = escapeNoteReferenceLabel(renderInlines(node.children, ctx), ctx)
-  const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
-  return `[${text}](${escapeDestination(node.href)}${title})${renderAttrs(node.attrs)}`
-}
-
 function renderImage(node: Image): string {
   // An unresolved reference image round-trips via its verbatim source, exactly
   // like an unresolved reference link (renderLink); `![alt]()` would change the
@@ -3076,38 +1103,6 @@ function renderImage(node: Image): string {
   }
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
   return `![${escapeImageAlt(node.alt)}](${escapeDestination(node.src)}${title})${renderAttrs(node.attrs)}`
-}
-
-/**
- * THE CANONICAL OPENER SPELLS THE FORMAT OUT: `---yaml`, never a bare `---`
- * (markup-carve/carve#977, PART 11 §6b; markup-carve/carve#961).
- *
- * The writer used to drop the token for `yaml` alone. That was a special case
- * for ONE format in a writer that already spelled every other one out - `toml`,
- * `json` and any custom word all came back as `---toml` / `---json` - so the
- * ruling REMOVES a branch rather than adding one, and it is the spelling
- * carve-rs already produced.
- *
- * The two forms parse identically: a bare opener takes
- * `defaultFrontmatterFormat`, whose default is `yaml`. Writing the token is
- * what makes the round trip say what the AST holds - a document parsed with
- * `defaultFrontmatterFormat: 'toml'` and written back bare would have read as
- * `yaml` on the next pass, under the option's default.
- */
-function renderFrontmatter(frontmatter: { format: string; content: string }): string {
-  return `---${escapeFormat(frontmatter.format)}\n${protectVerbatim(frontmatter.content)}\n---`
-}
-
-function renderBlockComment(content: string): string {
-  let longest = 0
-  for (const match of content.matchAll(/%+/g)) longest = Math.max(longest, match[0].length)
-  const fence = '%'.repeat(Math.max(3, longest + 1))
-  return `${fence}\n${protectVerbatim(content)}\n${fence}`
-}
-
-function renderMath(display: boolean, content: string): string {
-  const code = renderCode(content, false, 'math')
-  return `${display ? '$$' : '$'}${code}`
 }
 
 // Superscript and subscript have no bare delimiter form -- always emit the
@@ -3207,63 +1202,6 @@ function unclosedVerbatimSpells(content: string): boolean {
   // and only ever falls back to what the writer emits today.)
   if (/\n[ \t]/.test(content)) return false
   return true
-}
-
-/**
- * Why NO Carve source reproduces this verbatim value, or `undefined` when one
- * does (carve-js#1344).
- */
-let termKeepsLineIndent = false
-
-function unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
-  if (/[ \t][\r\n]/.test(content)) {
-    return 'a line of the value ends in whitespace, which the block layer strips'
-  }
-  if (!termKeepsLineIndent && /[\r\n][ \t]/.test(content)) {
-    return 'a line of the value starts with whitespace, which the block layer strips'
-  }
-  if (needsPad && /[\r\n]$/.test(content)) {
-    return 'a padded value ending in a line terminator loses the pad'
-  }
-  return undefined
-}
-
-function renderCode(content: string, allowUnclosed = false, nodeType = 'code'): string {
-  // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
-  // much as it is inside a fence - and `normalize()` would otherwise rewrite it
-  // to `\ `, which inside backticks is a literal backslash and a space
-  // (carve-js#688). Same sentinel as protectVerbatim uses; `restoreVerbatim`
-  // puts the character back at the end of normalization. carve-rs already emits
-  // it as itself here.
-  const fence = safeFence(content, 1)
-  const needsPad =
-    content.startsWith('`') ||
-    content.endsWith('`') ||
-    (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
-  // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
-  // writer refuses it instead of emitting the nearest form (carve-js#1344).
-  // Same throw path as the empty `raw_inline`, and the same sentence: the
-  // writer's contract is that what it returns re-reads as what it was given,
-  // EXCEPT on the structural carve-outs `renderCarve`'s own docblock names
-  // (PART 11 §1b, §1c and §10j). None of them reaches here: every one is about
-  // the SHAPE a node sits in or the blocks it holds, and this test is on a
-  // node's own VALUE. That is why refusing is right here and wrong there -
-  // refusing an unspellable value loses nothing that had a spelling to begin
-  // with, while refusing a structural carve-out would fail an editor's round
-  // trip on a tree the renderer accepts.
-  const unspellable = unspellableVerbatimReason(content, needsPad)
-  if (unspellable !== undefined) throw new SourceUnspellableError(nodeType, unspellable)
-  // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
-  // the closed form has no spelling and the bare opener is the one that does
-  // (carve-js#1338). Only the caller knows whether the opener may run to the
-  // end of the text, so it says so.
-  if (needsPad && /^[\r\n]/.test(content) && allowUnclosed && unclosedVerbatimSpells(content)) {
-    return `${fence}${content}`
-  }
-  if (needsPad && /^[\r\n]/.test(content)) {
-    throw new SourceUnspellableError(nodeType, 'a leading newline loses its padding where the code span cannot run to the end')
-  }
-  return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 
 function codeFenceInfo(lang: string | undefined, header: string | undefined, label: string | undefined): string {
@@ -3457,10 +1395,6 @@ function isCarveBlank(text: string): boolean {
   return /^[ \t\n\r]*$/.test(text)
 }
 
-function lineBlockLayoutWhitespace(body: string): string {
-  return body.replace(new RegExp(`(?:^${sentinels[3]}+)|${sentinels[3]}{2,}`, 'gm'), (run) => sentinels[0].repeat(run.length))
-}
-
 /**
  * A written document never BEGINS with U+FEFF.
  *
@@ -3506,97 +1440,12 @@ function dropTrailingWs(line: string): string {
   return run === null ? line : line.slice(0, run.index)
 }
 
-function normalize(text: string): string {
-  const lines = trimNonNbspKeepingGuard(
-    text.replace(new RegExp(`${sentinels[3]}(?=[ \t]*(?:\n|$))`, 'g'), '\u00a0').replace(new RegExp(sentinels[3], 'g'), '\\ '),
-  ).split('\n')
-  const swept = lines.map((line) => {
-    // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
-    // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so
-    // three spaces inside a code block are out of reach and stay intact.
-    if (line.length > 0 && RE_WRITER_BLANK.test(line)) return ''
-    // Strip a line's trailing whitespace, on EVERY line (PART 2 NO TRAILING
-    // WHITESPACE; carve#926).
-    //
-    // This used to fire only where the line ENDED A BLOCK, because before a
-    // SOFT BREAK the parser kept the run, so stripping it there changed the
-    // rendered output and broke carveToHtml(fmt(x)) == carveToHtml(x). The
-    // parser is the half that moved: it drops the run at both positions now, so
-    // the restriction inverts - keeping the run is what breaks the invariant,
-    // for a hand-built tree that carries one. carve-rs#359 and carve#375 added
-    // the restriction for the old parser and it goes with it.
-    return dropTrailingWs(line)
-  })
-  // The squeeze runs FIRST, so a decorative run still normalizes; the boundary
-  // sentinel is not a newline yet and passes through it untouched.
-  const squeezed = swept.join('\n').replace(/\n{3,}/g, '\n\n')
-  // The boundary tag opens the line it sits on, and everything to its LEFT is
-  // the prefix its host had already put there - two columns of a list item's
-  // content, `> ` from a blockquote, both together when a list sits in a quote.
-  // The three blank lines have to carry that same prefix, minus its trailing
-  // whitespace, because that is how each host spells a blank line: a list item
-  // writes nothing, a blockquote writes `>`. Taking the prefix from the line
-  // rather than passing it down means no host has to know about the boundary.
-  //
-  // ONE TAG PER LINE, always: every site that writes one puts it directly after
-  // a newline, so the lazy prefix cannot run past a line it does not own.
-  const cleaned = trimNonNbspKeepingGuard(
-    squeezed.replace(new RegExp(`^(.*?)${sentinels[4]}`, 'gm'), (_match, prefix: string) => {
-      const blank = dropTrailingWs(prefix)
-      return `${blank}\n${blank}\n${blank}\n${prefix}`
-    }),
-  )
-
-  return `${guardLeadingBom(restoreVerbatim(cleaned))}\n`
-}
-
 /**
  * The writer-only sentinels, chosen per render from code points the DOCUMENT
  * does not contain.
  */
 const SENTINEL_BASE = 0xe001
 const SENTINEL_COUNT = 6
-let sentinels: string[] = pickSentinelRun(new Set(), SENTINEL_BASE, SENTINEL_COUNT)
-
-/**
- * Whole-document normalization (trailing-whitespace strip, blank-line
- * collapsing) must not reach inside verbatim content - code blocks, raw
- * blocks, frontmatter, and block comments reproduce their content
- * byte-exact (issue 340). Sentinel-encode the vulnerable bytes before the
- * content joins the document string; normalize() restores them at the end.
- * U+E000 is already the parser's NBSP marker; the first four slots of the picked
- * run extend the scheme.
- */
-function protectVerbatim(content: string): string {
-  const [sp, tab, blank] = sentinels
-
-  return content
-    // An authored U+E000 inside verbatim content is the CHARACTER, not an
-    // escape. `normalize()` rewrites every U+E000 to `\ `, which is right
-    // outside verbatim and wrong inside it - escapes do not resolve in a code
-    // block, so `\ ` there is a literal backslash and a space and
-    // toHtml(fmt(x)) != toHtml(x) (carve-js#688). Carrying it through
-    // normalization under its own sentinel keeps it out of that rewrite;
-    // `restoreVerbatim` puts the character back. carve-rs already emits it as
-    // itself.
-    .replace(/[ \t]+(?=\n|$)/g, (run) => run.replace(/ /g, sp).replace(/\t/g, tab))
-    .split('\n')
-    .map((line) => (line === '' ? blank : line))
-    .join('\n')
-}
-
-function restoreVerbatim(text: string): string {
-  return (
-    text
-      .replace(new RegExp(`^([ \\t>]*)${sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
-        dropTrailingWs(prefix),
-      )
-      .replace(new RegExp(sentinels[0], 'g'), ' ')
-      .replace(new RegExp(sentinels[1], 'g'), '\t')
-      .replace(new RegExp(sentinels[2], 'g'), '')
-      // Back to the character itself - see protectVerbatim.
-  )
-}
 
 function trimNonNbsp(text: string): string {
   return trimEndNonNbsp(trimStartNonNbsp(text))
@@ -3639,58 +1488,6 @@ function cleanEscapedText(node: Text): string {
 const MINIMAL_ESCAPE_SITES = /[\\`"'[\](]/g
 const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 
-// Which set the writer is escaping right now. renderCarve renders the document
-// minimally, checks that it re-parses to the same AST, and re-renders
-// conservatively only when it does not (PART 11 section 4).
-let escapeMode: 'minimal' | 'conservative' = 'conservative'
-
-/**
- * The units written in the conservative form, when the writer is deciding unit
- * by unit rather than document by document.
- *
- * Null means the whole pass follows `escapeMode`, which is what the two
- * exploratory renders in `renderCarve` do. Non-null is PART 11 §2b's pass: a
- * unit in the set is escaped in full, every other unit is emitted by §2's own
- * test, and for a character nothing needs that means bare.
- */
-let escalatedUnits: Set<object> | null = null
-
-/**
- * Where the writer records the unit a character it is escaping belongs to.
- *
- * Non-null only for `narrowEscalation`'s control render, which uses it to learn
- * which units the escape arms actually ask about - see the comment there. Null
- * everywhere else, so no other render pays for the bookkeeping.
- */
-let askedUnits: Set<object> | null = null
-
-/**
- * The node whose render arm is currently writing, and therefore the unit the
- * next escaped character belongs to.
- *
- * Set by `renderBlock` and `renderInline`, so a run of prose is charged to its
- * text node and the strings a block writes itself are charged to the block.
- */
-let escapeUnit: object | null = null
-
-/** The form another node's escapes take. */
-function escapeModeOf(unit: object | undefined): 'minimal' | 'conservative' {
-  const previous = escapeUnit
-  escapeUnit = unit ?? null
-  try {
-    return escapeModeHere()
-  } finally {
-    escapeUnit = previous
-  }
-}
-
-/** Which form the character being written now takes (PART 11 §2b). */
-function escapeModeHere(): 'minimal' | 'conservative' {
-  if (askedUnits !== null && escapeUnit !== null) askedUnits.add(escapeUnit)
-  if (escalatedUnits === null) return escapeMode
-  return escapeUnit !== null && escalatedUnits.has(escapeUnit) ? 'conservative' : 'minimal'
-}
-
 /**
  * The characters the occurrence search never offers back.
  *
@@ -3703,115 +1500,6 @@ function escapeModeHere(): 'minimal' | 'conservative' {
  * in the same order.
  */
 const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
-
-/** §5's lone brackets, which both forms escape, by writing node and offset. */
-const loneBrackets: LoneBrackets = new WeakMap()
-const leftToSearch: LeftToSearch = new WeakSet()
-const pairedClosers: PairedClosers = new WeakMap()
-
-/**
- * Whether each paired `[` was last written escaped, for its closer. The two
- * sit in different units whenever a nested construct separates them, and as
- * separate knobs neither could be relaxed alone, so the search kept both.
- */
-const escapedOpeners = new WeakMap<object, Map<number, boolean>>()
-
-/**
- * Which units the occurrence search numbers, so a key survives a re-render.
- *
- * Non-null only during that search. Everywhere else the whole unit follows
- * `escapeModeHere`, which is §2b's per-unit knob.
- */
-let unitNumbers: Map<object, number> | null = null
-
-/** The occurrences handed back their bare form by the search (PART 11 §2). */
-let relaxedOccurrences: Set<string> | null = null
-
-/** Where a pass records the occurrences it visited, in emission order. */
-let occurrenceLog: string[] | null = null
-
-/** The decision the last candidate site took, so a RUN can inherit it. */
-let lastOccurrenceRelaxed = false
-
-/**
- * How many escaped runs each unit has written in this pass.
- *
- * THE OFFSET ALONE IS NOT A KEY. A unit is the node whose arm wrote the
- * character, and a BLOCK's arm can write several runs - a table row's cells, a
- * fence title beside its info string - each with its own offsets starting at
- * zero. Two of them collide at offset 0 and the search would then relax both
- * sites or neither, which is the per-unit knob this whole change removes, one
- * level down.
- *
- * The count is stable across the search for the same reason the offsets are:
- * relaxing an occurrence changes which characters are emitted and never which
- * arms run, so a unit writes the same runs in the same order on every render.
- */
-let escapeCallIndexes: Map<object, number> | null = null
-
-/** The index of the run now being escaped, within its unit. */
-function nextEscapeCallIndex(): number {
-  if (escapeCallIndexes === null || escapeUnit === null) return 0
-  const index = escapeCallIndexes.get(escapeUnit) ?? 0
-  escapeCallIndexes.set(escapeUnit, index + 1)
-  return index
-}
-
-/**
- * Whether the search has handed the candidate at `offset` back its bare form.
- *
- * THE KEY IS THE POSITION, NOT AN ORDINAL, and that is what makes it survive a
- * re-render: relaxing an occurrence changes the emitted BYTES and never the
- * node's own text, so a site keeps the offset it had. An ordinal would have to
- * be counted at every site whether it was offered or not, and two engines whose
- * escape classes differ by one character would then number every later site
- * differently.
- *
- * THE OCCURRENCE IS THE RUN, WHICH IS §2's OWN UNIT. "THE UNIT IS THE OPENER,
- * NOT THE CHARACTER" - where a construct opens on a run of characters the whole
- * run is escaped, so `\\#\\# H` and never `\\## H`. A search that offered the
- * two hashes separately relaxes the second one, because with the first still
- * escaped no heading forms either way, and emits precisely the half-escaped run
- * §2 calls "a shape that happens to work rather than one that says what it
- * means". So a candidate repeating the character before it inherits that
- * character's decision instead of taking one, and the run is escaped or bare as
- * a whole.
- */
-function occurrenceIsRelaxed(call: number, offset: number, continuesRun: boolean): boolean {
-  if (unitNumbers === null || escapeUnit === null) return false
-  if (continuesRun) return lastOccurrenceRelaxed
-  const unit = unitNumbers.get(escapeUnit)
-  if (unit === undefined) return false
-  const key = `${unit}:${call}:${offset}`
-  occurrenceLog?.push(key)
-  lastOccurrenceRelaxed = relaxedOccurrences !== null && relaxedOccurrences.has(key)
-  return lastOccurrenceRelaxed
-}
-
-/**
- * Headings whose published id is the one a fresh parse would assign anyway.
- *
- * PART 12 §5 publishes a heading's slugged id, and PART 11 §1 writes the
- * document back - so the writer must not turn the first into source. An
- * AUTHORED id carries an `#id` slot and is written; a GENERATED one carries
- * none and is dropped, EXCEPT where dropping it would change the document: an
- * ingested tree whose heading text was edited carries an id the text no longer
- * slugs to, and there the id is the only place that information lives.
- *
- * "What a fresh parse would assign" is computed with the parser's own pass over
- * a copy with the ids removed, rather than a second dedup implementation here
- * that could drift from it (carve-js#741).
- */
-let redundantIds = new WeakSet<object>()
-
-/** The inline nodes this pass wrote with a braced opener. */
-let writtenBraced = new WeakSet<object>()
-
-/** The emphasis kinds open around the node being written. */
-let openEmphasisKinds = new Set<string>()
-
-/** Spans written braced so their content starts a scope of its own. */
-let bracedForScope = new WeakSet<object>()
 
 /**
  * Whether a descendant has a kind in `kinds`. A braced inline starts its own
@@ -3859,24 +1547,6 @@ function holdsUnboundedComment(nodes: readonly InlineNode[]): boolean {
 const EMPHASIS_KINDS = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript'])
 
 const BRACEABLE_TYPES = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
-
-/**
- * Records a braced emphasis, and refuses one holding a braced span of the same
- * kind with no braced span of another kind between them: E3 keeps that inner
- * `{*` literal (markup-carve/carve#2066, carve#2091).
- */
-function bracedOnce(node: InlineNode, body: string): string {
-  if (!BRACEABLE_TYPES.has(node.type) || !body.startsWith('{')) return body
-  const children = (node as { children?: InlineNode[] }).children ?? []
-  const inner = nearestOfType(children, node.type, writtenBraced).find((child) => writtenBraced.has(child))
-  if (inner !== undefined) {
-    throw new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
-  }
-  writtenBraced.add(node)
-  return body
-}
-
-let unspellableEmptyCodeSpans = new WeakSet<object>()
 
 const BRACED_INLINE_TYPES = new Set([
   'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete',
@@ -3982,34 +1652,6 @@ function runEndsAtEmptyCodeSpan(code: object, parents: WeakMap<object, Parent>):
 }
 
 /**
- * Hoisted definitions keyed by the SOURCE LINE they were written on, and the
- * ones a definition list has already written back.
- *
- * A definition collected from a definition list's description empties the `dd`
- * (spec markup-carve/carve#801), and an empty description has no source
- * spelling: the writer emitted a bare `:` line, which re-parses as a
- * continuation of the term, so `to_html(fmt(x)) == to_html(x)` failed on the
- * documents that rule added (markup-carve/carve#805).
- *
- * Nothing new is needed to fix it. The entry records `definitionLines`, the
- * definition node keeps the `pos` it was written at (PART 12 §4), and the two
- * name the SAME LINE - so the description can be written back with the
- * definition on it, exactly as the author had it, and the document-level pass
- * skips what a description already claimed.
- *
- * This is the same shape as the heading id: the tree already distinguishes
- * authored from derived, and the writer only had to ask (carve-php#901).
- */
-let definitionsByLine = new Map<number, BlockNode>()
-let definitionsWrittenInPlace = new WeakSet<object>()
-/** Footnote definitions live in a root map, not in `children`, so these are
- *  tracked by LABEL rather than by node identity. */
-let footnoteDefsByLine = new Map<number, string>()
-let footnotesWrittenInPlace = new Set<string>()
-/** The document's footnote bodies, so a description can write one back. */
-let documentFootnoteDefs: Record<string, BlockNode[]> | undefined
-
-/**
  * Protect a paragraph line that would re-parse as a thematic break.
  *
  * Source indentation is not in the AST, so an indented `---` - a paragraph
@@ -4059,170 +1701,7 @@ const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
  * copy: `UNWRITABLE_CONTROLS` carries /g, whose `test` is stateful.
  */
 const DIRECTIVE_UNSAFE = new RegExp(UNWRITABLE_CONTROLS.source)
-
-let destinationParensByUnit = new WeakMap<object, Set<number>>()
 interface LiteralRange { start: number; end: number; node: Text; sourceStart?: number }
-let lastLiteralRanges: LiteralRange[] = []
-let lastNoteCloses: number[] = []
-let inlineChildProjections: Array<{ text: string; ranges: LiteralRange[]; noteCloses: number[] }> = []
-
-/** Choose escapes from the emitted inline run, including intervening inline nodes. */
-function escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteCloses: Set<number>): string {
-  if (!text.includes('](') || ranges.length === 0) return text
-  const destinations = completeDestinationOpeners(text)
-  const bracketClose = buildBracketMap(text, true)
-  const paired = new Set<number>()
-  for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', i + 1)) {
-    const close = bracketClose(i)
-    if (close !== undefined && !noteCloses.has(close) && destinations.has(close + 1)) paired.add(close + 1)
-  }
-  const selected: number[] = []
-  const sources = new Map<Text, string>()
-  for (const range of ranges) {
-    let source = sources.get(range.node)
-    if (source === undefined) {
-      source = cleanEscapedText(range.node).replace(UNWRITABLE_CONTROLS, '')
-      sources.set(range.node, source)
-    }
-    let sourceOffset = (range.sourceStart ?? 0) - 1
-    for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
-      sourceOffset = source.indexOf('(', sourceOffset + 1)
-      if (!paired.has(i) || precededByOddBackslashRun(text, i) || leftToSearch.has(range.node)) continue
-      let forced = destinationParensByUnit.get(range.node)
-      if (forced === undefined) destinationParensByUnit.set(range.node, forced = new Set())
-      forced.add(sourceOffset)
-      selected.push(i)
-    }
-  }
-  let out = ''
-  let cursor = 0
-  for (const i of selected) {
-    out += text.slice(cursor, i) + '\\'
-    cursor = i
-  }
-  return out + text.slice(cursor)
-}
-
-function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false, sourceOffset = 0): string {
-  const mode = escapeModeHere()
-  text = text.replace(UNWRITABLE_CONTROLS, '')
-  const destinationParens = escapeUnit == null ? undefined : destinationParensByUnit.get(escapeUnit)
-  const lone = escapeUnit == null ? undefined : loneBrackets.get(escapeUnit)
-  const closers = escapeUnit == null ? undefined : pairedClosers.get(escapeUnit)
-  const unit = escapeUnit
-  const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
-  const call = mode === 'conservative' ? nextEscapeCallIndex() : 0
-  const decide = (char: string, offset: number, subject: string): string => {
-    if (destinationParens?.has(sourceOffset + offset)) return '\\('
-    if (lone?.has(sourceOffset + offset)) {
-      lastOccurrenceRelaxed = false
-      return `\\${char}`
-    }
-    // A paired closer follows its opener, which may sit in another unit.
-    const opener = char === ']' ? closers?.get(sourceOffset + offset) : undefined
-    if (opener !== undefined) {
-      const escaped = escapedOpeners.get(opener.owner)?.get(opener.offset) ?? false
-      lastOccurrenceRelaxed = !escaped
-      return escaped ? '\\]' : ']'
-    }
-    if (mode === 'minimal' && (char === '(' || char === '[' || char === ']')) return char
-    // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
-    // search has escalated, each candidate site is offered back on its own,
-    // so the one occurrence that needed the escape no longer drags the rest
-    // of the unit with it. The unconditional set is not a candidate and is
-    // never offered.
-    if (
-      mode === 'conservative' &&
-      !NOT_OFFERED_PER_OCCURRENCE.includes(char) &&
-      occurrenceIsRelaxed(call, offset, offset > 0 && subject[offset - 1] === char)
-    ) {
-      return char
-    }
-    // A COLON at the start of a line opens a structure - `::` a definition
-    // term, `:::` a fence - and PART 11 §2 escapes a character only where
-    // omitting it would change the re-parse. Mid-line the colon is left to
-    // the symbol pass below, which is the one channel it still opens there.
-    if (char === ':' && !opensLine(subject, offset)) return ':'
-    if (char !== '^') return `\\${char}`
-    const next = text[offset + 1] ?? ''
-    // A TAB after the marker is not a caption opener: PART 10 §231 leaves
-    // that line as prose, which is why the corpus renders `^<TAB>Figure 1`
-    // as a paragraph. Escaping it wrote `\^` where carve-php and carve-rs
-    // write the caret bare, and an escape that guards a channel the
-    // character cannot open is exactly what corpus 304 refuses.
-    const opensCaption = captionCanOpen && offset === 0 && next === ' '
-    // Before a `}` the brace takes the escape, and `^\}` closes nothing (PART 11 §2).
-    const opensInline = next === '[' || (text[offset - 1] ?? '') === '{'
-    return opensCaption || opensInline ? '\\^' : '^'
-  }
-  let out = text
-    .replace(escapes, (char, offset: number, subject: string) => {
-      const written = decide(char, offset, subject)
-      if (char === '[' && unit !== null) {
-        let decisions = escapedOpeners.get(unit)
-        if (decisions === undefined) escapedOpeners.set(unit, (decisions = new Map()))
-        decisions.set(sourceOffset + offset, written !== char)
-      }
-      return written
-    })
-  // The caption-opening caret is escaped in EVERY mode, not only when `^` is
-  // in the candidate class: after a caption host (a figure group, an image, a
-  // table...) an unescaped `^ ` line re-attaches as the caption on re-parse,
-  // so the minimal form always failed the redundancy check and the WHOLE
-  // document escalated to conservative escaping - `\(a\)` and `\#` where
-  // carve-php and carve-rs write the characters bare. One structural escape
-  // keeps the minimal pass winnable (cross-engine fmt parity, PART 11 §4).
-  if (
-    mode === 'minimal' &&
-    captionCanOpen &&
-    out.startsWith('^') &&
-    out[1] === ' '
-  ) {
-    out = '\\' + out
-  }
-  // A TRAILING `!` BEFORE A BACKTICK RUN is escaped in EVERY mode too, for the
-  // same reason and with the same shape. §27 makes `!` immediately before a
-  // verbatim run an INLINE LITERAL, and names this as the single case the
-  // construct reinterprets: "A literal `!` immediately before a backtick run is
-  // therefore written `\!`". So the escape is not optional - it is the only
-  // spelling of this tree - and leaving the minimal pass to discover that by
-  // failing its redundancy check escalated the WHOLE DOCUMENT to conservative
-  // escaping. `foo (bar) 50% a-b` in a document that also holds a `!` before a
-  // code span came out `foo \(bar\) 50\% a\-b`, which is the over-escaping PART
-  // 11 §4 forbids, while carve-rs wrote the whole line bare (carve-js#1175).
-  if (mode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
-    out = out.slice(0, -1) + '\\!'
-  }
-  // A SYMBOL-OPENING COLON is escaped in EVERY mode, for the reason the caption
-  // caret and the trailing `!` above are: it is not an optional escape. Under a
-  // configured symbol map `a :rocket: b` re-parses to a `symbol` node the text
-  // never held, so PART 11 section 2 requires the backslash - and the map is
-  // not the writer's to know, which is why the node is what decides and not the
-  // rendering. Leaving it to the minimal pass's redundancy check instead
-  // escalated the WHOLE document to conservative escaping, the over-escaping
-  // section 4 forbids, because `:` is not in the unconditional class.
-  //
-  // MID-LINE ONLY IS THE WRONG FRAME, so this pass does not ask where the colon
-  // sits: `symbolOpensAt` is the parser's own predicate, and it answers for a
-  // line-opening colon too. A `:name:` at column 0 was already escaped by the
-  // branch above, and the odd-backslash guard here is what keeps this pass from
-  // escaping it a second time.
-  //
-  // Only the OPENING colon is escaped, because only the opening colon opens
-  // anything: the closing one is preceded by a name character, so the
-  // predicate declines it and `a \:rocket: b` is the whole escape. A colon that
-  // closes no shortcode opens no symbol either, which is what leaves the
-  // corpus's `a : b : c` bare.
-  if (out.includes(':')) {
-    let scanned = ''
-    for (let i = 0; i < out.length; i += 1) {
-      if (out[i] === ':' && !precededByOddBackslashRun(out, i) && symbolOpensAt(out, i)) scanned += '\\'
-      scanned += out[i]
-    }
-    out = scanned
-  }
-  return out
-}
 
 /**
  * Is the character at this offset already escaped?
@@ -4756,5 +2235,2545 @@ function lastBoundary(node: InlineNode | undefined): string {
       return node.name[node.name.length - 1] ?? ''
     default:
       return ''
+  }
+}
+
+
+/** State owned by one synchronous source-render operation. */
+class CarveRenderSession {
+  renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+    this.destinationParensByUnit = new WeakMap()
+    reportRubyLosses(ast, opts)
+    ast = withCellHardBreaksFlattened(ast)
+    ast = withTextAsOneRun(ast)
+    // PART 11 section 4: emit the minimal-escape form when dropping the candidate
+    // escapes changes nothing, and fall back to the conservative form when it
+    // does. The check is the parser's, not a table's, so the writer cannot drift
+    // as the grammar grows.
+    // Choose the verbatim sentinels before anything is rendered, so both escape
+    // passes below agree on them.
+    this.sentinels = pickSentinelRun(occupiedPrivateUse(ast), SENTINEL_BASE, SENTINEL_COUNT)
+    this.redundantIds = findRedundantHeadingIds(ast)
+    this.unspellableEmptyCodeSpans = findUnspellableEmptyCodeSpans(ast)
+    // The two "written in place" sets are NOT reset here: they are per-PASS, and
+    // renderWithEscapes owns them. Resetting them here as well would be the same
+    // rule in two places, and the pass-scoped one is the one that has to hold.
+    this.definitionsByLine = new Map()
+    for (const child of ast.children) {
+      if (child.type !== 'link_reference_definition') continue
+      const line = child.pos?.startLine
+      // First writer wins for a line, which cannot normally collide: two
+      // definitions on one line is not a shape the parser produces.
+      if (line !== undefined && !this.definitionsByLine.has(line)) this.definitionsByLine.set(line, child)
+    }
+    this.footnoteDefsByLine = new Map()
+    this.documentFootnoteDefs = ast.footnoteDefs
+    for (const [label, pos] of Object.entries(ast.footnoteDefPos ?? {})) {
+      const line = pos?.startLine
+      if (line !== undefined && !this.footnoteDefsByLine.has(line)) this.footnoteDefsByLine.set(line, label)
+    }
+    // The two escape passes each render the WHOLE tree, and the write-back sets
+    // below record what a pass has already emitted - so they have to start empty
+    // for each one. Shared across both, the first pass consumed every in-place
+    // definition and the second omitted them, and which output was returned then
+    // decided whether the document kept its definitions (carve-js#754).
+    const minimal = this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'minimal'))
+    const conservative = this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'conservative'))
+    if (minimal === conservative) return minimal
+    const minimalTree = treeOf(minimal)
+    if (minimalTree !== null && minimalTree === stableJson(ast)) return minimal
+    // ONE parse of the conservative form as well, for the same reason as the
+    // minimal one above: the redundancy check and the narrowing below both need
+    // it, and parsing it in each made every narrowed document pay a second full
+    // parse of its own output for an answer it already had.
+    const conservativeTree = treeOf(conservative)
+    if (escapingIsRedundant(minimalTree, conservativeTree)) return minimal
+    // The minimal form of the WHOLE document does not hold, which used to end the
+    // decision here with the conservative form of the whole document. PART 11 §2b
+    // says how far that fallback actually reaches: the smallest unit whose minimal
+    // form fails, and §2's own test everywhere else.
+    return this.narrowEscalation(ast, conservative, conservativeTree, minimal, minimalTree)
+  }
+
+  /**
+   * The conservative form of the units that need it, and the minimal form of
+   * every other unit (PART 11 §2b).
+   *
+   * WHY THIS IS A SEARCH AND NOT A LOOKUP. The comparison stays document-scoped -
+   * §4's argument holds, a unit re-parsed alone has lost the document's link
+   * reference and footnote definitions - so what a failure reports is THAT the
+   * document changed, never WHERE. The unit is found by trying: start from the
+   * conservative form, which is known to hold, and hand each unit back its
+   * minimal form only while the whole document still re-parses to the same tree.
+   * Every state this walks through is verified, and the one returned is the last
+   * that passed.
+   *
+   * HALVED RATHER THAN SWEPT, because a document is mostly units that need
+   * nothing. A group is offered its minimal form all at once and only split when
+   * that fails, so a document with one failing unit costs about log(n) renders
+   * instead of n, and the `- x` ladder the escaper's scaling guards watch does not
+   * become quadratic when one paragraph in it needs an escape.
+   *
+   * THE FIRST RENDER IS A CONTROL. With every unit escalated this must reproduce
+   * `conservative` byte for byte; if it does not, the selection is deciding
+   * something other than the escape mode - a unit the walk did not reach, for
+   * instance - and the document-scoped form is returned rather than a narrowing
+   * built on a state that is not what it claims.
+   */
+  private narrowEscalation(
+    ast: Document,
+    conservative: string,
+    conservativeTree: string | null,
+    minimal: string,
+    minimalTree: string | null,
+  ): string {
+    // Null answers "cannot tell", exactly as it does for the minimal form: with
+    // no tree to hold the narrowing against, there is nothing to narrow toward.
+    if (conservativeTree === null) return conservative
+
+    const all = collectEscapeUnits(ast)
+    if (all.length === 0) return conservative
+    const escalated = new Set<object>(all)
+
+    const renderSelectively = (): string => {
+      this.escalatedUnits = escalated
+      try {
+        return this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'conservative'))
+      } finally {
+        this.escalatedUnits = null
+      }
+    }
+
+    // THE CONTROL RENDER LOGS WHICH UNITS THE WRITER ACTUALLY ASKS ABOUT, so the
+    // search below can skip the ones it cannot move. `collectEscapeUnits` is a
+    // generic walk over every node that COULD carry an escaped character; the
+    // units that DO are whatever the writer's own escape arms charge a character
+    // to, and only those read `escalatedUnits`. A unit the writer never asks about
+    // renders the same bytes in or out of the set, so offering it its minimal form
+    // is a render and a parse spent to learn nothing.
+    //
+    // Deep nesting produces many units the writer never asks about. Probing each
+    // would re-render and re-parse output that grows with nesting depth.
+    //
+    // Logging it rather than predicting it is the same choice `collectEscapeUnits`
+    // makes and for the same reason: the set is whatever the arms visit, so an arm
+    // that grows a new escape cannot fall out of the search. And a unit wrongly
+    // left out cannot produce wrong output - every state the search returns is
+    // re-parsed against `conservativeTree` below, exactly as before.
+    let best: string
+    const asked = new Set<object>()
+    this.askedUnits = asked
+    try {
+      best = renderSelectively()
+    } finally {
+      this.askedUnits = null
+    }
+    if (best !== conservative) return conservative
+    const units = all.filter((unit) => asked.has(unit))
+    // No guard for an EMPTY `units`: `relax` returns on an empty group, and a
+    // check here would be one no corpus document can reach - the control render
+    // asks about a unit for every byte the two forms differ in, and they differ
+    // or this is not running.
+
+    // THE SEARCH IS BOUNDED, because its cost is proportional to how many units
+    // FAIL. A group holding no failing unit is relaxed in one render, so a
+    // document with a handful of them costs about log(n) renders - but one where
+    // nearly every unit fails drives the halving to its leaves and pays a render
+    // and a parse per unit, which is quadratic in the document.
+    //
+    // Such a document gains almost nothing from narrowing: it IS the conservative
+    // form, arrived at because every block needed it. So the search stops when the
+    // budget runs out and returns the state it has reached, which is verified like
+    // every other - the escalation is wider than §2b's minimum there, never
+    // narrower, and no document's output can be wrong for it.
+    const probe = this.windowedProbe(ast, conservative, conservativeTree, () => {
+      this.escalatedUnits = escalated
+    }, renderSelectively, [[minimal, minimalTree]])
+
+    const search = (local: boolean): string => {
+      for (const unit of all) escalated.add(unit)
+      let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
+      const spent = probe.allowance(budget)
+
+      /** Hand `group` its minimal form, keeping it only if the document still holds. */
+      const relaxAll = (group: object[]): boolean => {
+        budget -= 1
+        return probe.keeps(
+          local,
+          group,
+          () => { for (const unit of group) escalated.delete(unit) },
+          () => { for (const unit of group) escalated.add(unit) },
+        )
+      }
+
+      const relax = (group: object[]): void => {
+        if (group.length === 0 || spent(budget) || relaxAll(group) || group.length === 1) return
+        const half = group.length >> 1
+        relax(group.slice(0, half))
+        relax(group.slice(half))
+      }
+
+      relax(units)
+      return renderSelectively()
+    }
+
+    best = search(true)
+    if (probe.tree(best) !== conservativeTree) best = search(false)
+
+    // PART 11 §2 TAKES THE DECISION PER OPENER OCCURRENCE, and a unit is still
+    // ONE KNOB: a unit that fails is written conservatively IN FULL, so every
+    // candidate character beside the one that needed it is escaped for nothing -
+    // `\\{\\.note\\}` where §2 wants `\\{.note}`. §2b bounds how far the fallback
+    // reaches; this is what is left inside the bound (markup-carve/carve#1533).
+    return this.narrowOccurrences(units, best, conservativeTree, renderSelectively, probe)
+  }
+
+  /**
+   * The narrowing searches' oracle. With `local`, a probe renders and re-parses
+   * only the blocks around the relaxed units (`EscapeWindows`) and compares that
+   * window before and after, which keeps each probe proportional to the window
+   * instead of the document. Every search re-verifies its final state against
+   * the whole document and repeats itself with `local` off when it does not hold.
+   */
+  private windowedProbe(
+    ast: Document,
+    conservative: string,
+    conservativeTree: string,
+    enter: () => void,
+    renderAll: () => string,
+    seeds: Array<[string, string | null]>,
+  ): EscapeProbe {
+    // A document whose break spelling needs the frontmatter fallback renders
+    // differently from its pruned windows, so it keeps the document-wide probe.
+    let windows: EscapeWindows | null | undefined = !ast.frontmatter && opensFrontmatter(conservative) ? null : undefined
+    const renderWindow = (window: EscapeWindow): string | null =>
+      windows!.renderPruned(window, (doc) => {
+        enter()
+        try {
+          return this.withFreshWriteBackState(() => this.renderOnePass(doc, 'conservative'))
+        } finally {
+          this.escalatedUnits = null
+        }
+      })
+    // Failed relaxations often revisit the same source, and the first
+    // whole-document probe renders the minimal form the caller already parsed.
+    // Local to this narrowing; it never holds more than four sources.
+    const trees = new Map<string, string | null>([...seeds, [conservative, conservativeTree]])
+    const tree = (source: string): string | null => {
+      if (trees.has(source)) {
+        const known = trees.get(source)!
+        trees.delete(source)
+        trees.set(source, known)
+        return known
+      }
+      const fresh = treeOf(source)
+      trees.set(source, fresh)
+      if (trees.size > 4) trees.delete(trees.keys().next().value!)
+      return fresh
+    }
+    // Bytes of source the probes have rendered for re-parsing, cached or not, so
+    // the charge is a property of the search rather than of this engine's cache.
+    let charged = 0
+    const limit = ESCAPE_SEARCH_PARSE_FACTOR * utf8ByteLength(conservative)
+    return {
+      tree,
+      allowance(count) {
+        const start = charged
+        const floor = -(ESCAPE_SEARCH_PROBE_FACTOR - 1) * count
+        return (budget) => budget <= 0 && (charged - start >= limit || budget <= floor)
+      },
+      keeps(local, units, apply, undo) {
+        if (local && windows === undefined) windows = new EscapeWindows(ast)
+        const window = local && windows ? windows.windowFor(units) : null
+        const before = window === null ? null : renderWindow(window)
+        // A window near the document's size saves nothing over the whole-document probe.
+        const beforeTree = before === null || before.length * 2 > conservative.length ? null : tree(before)
+        apply()
+        if (beforeTree !== null) {
+          const after = renderWindow(window!)
+          if (after !== null) {
+            charged += utf8ByteLength(before!) + utf8ByteLength(after)
+            if (tree(after) === beforeTree) return true
+            undo()
+            return false
+          }
+        }
+        const candidate = renderAll()
+        charged += utf8ByteLength(candidate)
+        if (tree(candidate) === conservativeTree) return true
+        undo()
+        return false
+      },
+    }
+  }
+
+  /**
+   * The candidate escapes an escalated unit can still hand back, one occurrence
+   * at a time (PART 11 §2).
+   *
+   * SAME SEARCH, ONE LEVEL FINER. The comparison is still document-scoped, so a
+   * failure still reports THAT the document changed and never WHERE; the
+   * occurrence is found by trying, and every state returned is one that re-parsed
+   * to the tree the conservative form parses to.
+   *
+   * THE OCCURRENCES ARE LOGGED, NOT PREDICTED. A candidate site is whatever the
+   * writer's own escape arms visit, so they are collected by rendering once with
+   * the log switched on rather than by a second enumeration here that could drift
+   * from the one that emits. A key is `unit:ordinal` within the unit, which is
+   * stable across the search because relaxing one occurrence changes the bytes
+   * and not the sites: the arms walk the node's own text, which no relaxation
+   * touches.
+   *
+   * THE FIRST RENDER IS A CONTROL, as it is one level up. With nothing relaxed
+   * this must reproduce the state the unit search settled on byte for byte; if
+   * logging changed what was written, the unit-scoped answer is returned rather
+   * than a narrowing built on a pass that is not the pass being measured.
+   *
+   * BOUNDED THE SAME WAY AND FOR THE SAME REASON. A group holding no failing
+   * occurrence is relaxed in one render, so a document with a handful of them
+   * costs about log(n) renders - but a document where every occurrence is load
+   * bearing drives the halving to its leaves and pays a render and a parse per
+   * occurrence, which is a render of the whole document per escaped character.
+   * A file of indented `## H` paragraphs is exactly that, and it is ordinary
+   * input rather than an adversarial one. The budget is the unit search's,
+   * measured over the occurrence count, and the OUTPUT is unchanged where it
+   * binds: those occurrences are the opener runs §2 requires escaped in full.
+   */
+  private narrowOccurrences(
+    units: object[],
+    unitScoped: string,
+    conservativeTree: string,
+    renderSelectively: () => string,
+    probe: EscapeProbe,
+  ): string {
+    const numbers = new Map<object, number>()
+    units.forEach((unit, index) => numbers.set(unit, index))
+    const occurrences: string[] = []
+    const relaxed = new Set<string>()
+
+    this.unitNumbers = numbers
+    this.relaxedOccurrences = relaxed
+    this.occurrenceLog = occurrences
+    try {
+      const control = renderSelectively()
+      this.occurrenceLog = null
+      if (control !== unitScoped || occurrences.length === 0) return unitScoped
+
+      const unitOf = (key: string): object => units[Number(key.slice(0, key.indexOf(':')))]!
+      let budget = 0
+      let spent = (_budget: number): boolean => true
+
+      /** Hand `group` its bare form, keeping it only if the document still holds. */
+      const relaxAll = (group: string[], local: boolean): boolean => {
+        budget -= 1
+        return probe.keeps(
+          local,
+          group.map(unitOf),
+          () => { for (const key of group) relaxed.add(key) },
+          () => { for (const key of group) relaxed.delete(key) },
+        )
+      }
+
+      const relax = (group: string[], local: boolean): void => {
+        if (group.length === 0 || spent(budget) || relaxAll(group, local) || group.length === 1) return
+        const half = group.length >> 1
+        relax(group.slice(0, half), local)
+        relax(group.slice(half), local)
+      }
+
+      // OFFERED FROM THE END OF THE DOCUMENT BACKWARDS, which is what makes the
+      // escape that survives the OPENER's. §2 asks whether omitting the escapes
+      // on an occurrence would let the construct FORM, and a construct forms at
+      // its opener - so with the opener still escaped every later candidate in
+      // the same line is free, while relaxing the opener first leaves the escape
+      // on a closer that was never load bearing (`{.note \\}` where §2 wants
+      // `\\{.note}`). Both spellings re-parse to the same tree, so only the order
+      // separates them.
+      const order = occurrences.slice().reverse()
+      const search = (local: boolean): string => {
+        relaxed.clear()
+        budget = 8 * Math.ceil(Math.log2(occurrences.length + 1)) + 8
+        spent = probe.allowance(budget)
+        relax(order, local)
+        // AND THEN ONE SWEEP OF WHAT IS LEFT, because the halving is not a
+        // FIXPOINT. Relaxing occurrences is not monotone: an occurrence rejected
+        // while a neighbour was still escaped can be free once that neighbour is
+        // relaxed, and the halving never revisits a group it has descended past.
+        // Corpus 160 is the case - the closing `:::` line cannot go bare while the
+        // OPENING one is escaped, because then it is the only fence marker on the
+        // page, and it can once the opener is bare. The sweep offers every
+        // still-escalated occurrence once more, on top of everything the halving
+        // accepted, and spends the same budget - so where the budget is already
+        // gone it costs nothing, which is the pathological document.
+        for (const key of order) {
+          if (spent(budget)) break
+          if (relaxed.has(key)) continue
+          relaxAll([key], local)
+        }
+        return renderSelectively()
+      }
+      const best = search(true)
+      return probe.tree(best) === conservativeTree ? best : search(false)
+    } finally {
+      this.unitNumbers = null
+      this.relaxedOccurrences = null
+      this.occurrenceLog = null
+      this.escapeCallIndexes = null
+    }
+  }
+
+  /**
+   * The spelling a `thematic_break` is written with.
+   *
+   * The document-wide fallback spelling for a break that would otherwise open
+   * manufactured frontmatter. PART 11 section 1 requires
+   * `to_html(fmt(x)) == to_html(x)`.
+   */
+  private thematicBreakMarker: string | null = null
+
+  /**
+   * Render, and fall back to a break spelling that cannot be read as frontmatter
+   * when the finished bytes would be.
+   */
+  private renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
+    const canonicalForm = this.renderOnePass(ast, mode)
+    // The `ast.frontmatter` arm is a COST GATE, not a correctness one, and saying
+    // so is the honest reading: a document that really carries frontmatter has it
+    // written by `renderFrontmatter`, whose closer is not a break, so the fallback
+    // pass would open frontmatter too and the canonical form would be returned
+    // anyway. Removing the arm changes no output, only the number of renders paid
+    // by every document with frontmatter. Verified by mutation.
+    if (ast.frontmatter || !opensFrontmatter(canonicalForm)) return canonicalForm
+    const previousMarker = this.thematicBreakMarker
+    this.thematicBreakMarker = '***'
+    try {
+      const fallback = this.renderOnePass(ast, mode)
+      return opensFrontmatter(fallback) ? canonicalForm : fallback
+    } finally {
+      this.thematicBreakMarker = previousMarker
+    }
+  }
+
+  private renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string {
+    const previous = this.escapeMode
+    this.escapeMode = mode
+    this.writtenBraced = new WeakSet()
+    this.openEmphasisKinds = new Set()
+    this.bracedForScope = new WeakSet()
+    // "Already written on a description line" is true of THIS PASS, not of the
+    // document. renderCarve runs this function twice and picks between the two
+    // forms (PART 11 §4), so a set that survives the first pass tells the second
+    // one that every definition is already placed: the description emits a bare
+    // `:` and the document-level arm - which returns '' for a marked node - emits
+    // nothing either, deleting the definition outright. Whenever the conservative
+    // form then wins, `to_html(fmt(x)) == to_html(x)` fails by turning a resolved
+    // reference back into literal text (markup-carve/carve#805).
+    this.definitionsWrittenInPlace = new WeakSet()
+    this.footnotesWrittenInPlace = new Set()
+    // The LOG and the call indexes are per PASS: `renderWithEscapes` can render
+    // twice for the frontmatter fallback, and keeping either would count the
+    // second pass's runs on from the end of the first.
+    if (this.unitNumbers !== null) {
+      this.escapeCallIndexes = new Map()
+      if (this.occurrenceLog !== null) this.occurrenceLog.length = 0
+    }
+    try {
+      const ctx: CarveContext = {
+        blockDepth: 0,
+        inlineDepth: 0,
+        listDepth: 0,
+        lineBlockDepth: 0,
+        inlineNoteDepth: 0,
+        colonFenceDepth: 0,
+        afterCaptionHost: false,
+        paragraphStartsAfterCaptionHost: false,
+        atAnAuthoredBodyColumn: false,
+      }
+      const parts: string[] = []
+      if (ast.frontmatter) parts.push(this.renderFrontmatter(ast.frontmatter))
+      const body = this.renderDocumentBody(ast, ctx)
+      if (body) parts.push(body)
+      return this.normalize(parts.join('\n\n'))
+    } finally {
+      this.escapeMode = previous
+    }
+  }
+
+  private renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
+    if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+    ctx.blockDepth++
+    const previousHost = ctx.afterCaptionHost
+    const previousParagraphStart = ctx.paragraphStartsAfterCaptionHost
+    ctx.afterCaptionHost = false
+    try {
+      const parts: string[] = []
+      let previousList: List | null = null
+      let listSeparated = false
+      let previousBlock: BlockNode | null = null
+      for (const block of blocks) {
+        ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
+        const rendered = this.renderBlock(block, ctx)
+        ctx.afterCaptionHost = hostsCaption(block)
+        if (block.type === 'list') {
+          listSeparated = previousList !== null && listsWouldMerge(previousList, block)
+          previousList = block
+        } else if (spellsSomething(rendered)) {
+          previousList = null
+          listSeparated = false
+        }
+        // A block that spells nothing contributes nothing - not even the blank
+        // line a part of its own would open. As far as the page is concerned it
+        // is the empty paragraph above it (PART 11 §10j).
+        if (spellsSomething(rendered)) {
+          const text = rendered
+          // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
+          // lines are one paragraph in the source and N nodes in the tree since
+          // PART 12 §18, so the default block separator would open a blank line
+          // between lines the author wrote adjacent - and PART 11 §6 binds the
+          // writer to the author's layout. Adjacency is read from `pos`, so a
+          // blank line the author DID write survives, and a tree with no
+          // positions falls back to the separator every other block gets.
+          if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
+            parts[parts.length - 1] += `\n${text}`
+          } else if (listSeparated && parts.length > 0) {
+            // §11 N1a's boundary, written as a SENTINEL rather than as four
+            // literal newlines. `normalize` squeezes every run of three or more
+            // newlines to two - correct for a decorative run, which the rule says
+            // to normalize away, and fatal for this one, which the rule says to
+            // keep. The squeeze cannot tell them apart from the text; only the
+            // writer knows, so the writer says so and `normalize` restores it.
+            parts[parts.length - 1] += `\n${this.boundaryTag()}${text}`
+          } else {
+            parts.push(text)
+          }
+          previousBlock = block
+        }
+      }
+      return parts.join('\n\n')
+    } finally {
+      ctx.afterCaptionHost = previousHost
+      ctx.paragraphStartsAfterCaptionHost = previousParagraphStart
+      ctx.blockDepth--
+    }
+  }
+
+  /**
+   * Render one block, recording it as the escape unit its own arm writes with.
+   *
+   * PART 11 §2b bounds an escalation to the smallest unit that fails, so the
+   * escape pass has to know which unit each escaped character belongs to. The
+   * unit is the node whose render arm is running: a text node for a run of
+   * prose, the block itself for the strings a block writes directly.
+   */
+  private renderBlock(node: BlockNode, ctx: CarveContext): string {
+    const previous = this.escapeUnit
+    this.escapeUnit = node as unknown as object
+    // THE FLAG DESCRIBES THIS NODE, NOT ITS SUBTREE. A host sets it once and
+    // `renderBlocks` walks several children with it still set, so it is read here
+    // and cleared for whatever this node renders inside itself - a definition
+    // list inside a blockquote inside a footnote body is at the QUOTE's column,
+    // not the body's - and restored so the next sibling still sees it.
+    const atAnAuthoredBodyColumn = ctx.atAnAuthoredBodyColumn
+    ctx.atAnAuthoredBodyColumn = false
+    try {
+      return this.renderBlockBody(node, ctx, atAnAuthoredBodyColumn)
+    } finally {
+      this.escapeUnit = previous
+      ctx.atAnAuthoredBodyColumn = atAnAuthoredBodyColumn
+    }
+  }
+
+  private renderBlockBody(
+    node: BlockNode,
+    ctx: CarveContext,
+    atAnAuthoredBodyColumn = false,
+  ): string {
+    const attrs = renderBlockAttrs(node.attrs)
+    const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
+    switch (node.type) {
+      case 'section':
+        return this.renderHostedBlocks(node.children, ctx)
+      case 'heading': {
+        // A heading is SINGLE-LINE (PART 2), so its text must not contain a
+        // newline: emitting one would end the heading and silently re-parse the
+        // remainder as a following block. No parse can build such a heading, but
+        // an ingested AST can - PART 12 lets any inline sit in a heading, break
+        // nodes included - so a break collapses to a single space here rather
+        // than corrupting the document it is written back to.
+        //
+        // Only an ODD run of backslashes before the newline is a hard break's
+        // marker; an even run is literal backslashes that happen to end the line,
+        // and dropping one there would eat the escape and swallow the space.
+        const text = trimHeadingText(
+          trimHeadingText(this.renderInlines(node.children, ctx)).replace(
+            /(\\*)\n[ \t]*/g,
+            (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ',
+          ),
+        )
+        // A generated id that a fresh parse would re-derive is not written back:
+        // it is a resolution result, not the author's source (carve-js#741). One
+        // the parse would NOT re-derive - an ingested tree whose text was edited -
+        // is written, because the id lives nowhere else.
+        const headingBody = `${'#'.repeat(node.level)} ${text}`
+        if (this.redundantIds.has(node as unknown as object)) {
+          const withoutId = renderBlockAttrs(withoutIdSlot(node.attrs))
+
+          return withoutId ? `${withoutId}\n${headingBody}` : headingBody
+        }
+
+        return withAttrs(headingBody)
+      }
+      case 'paragraph': {
+        const text = guardThematicBreakLines(
+          this.renderInlines(
+            node.children,
+            ctx,
+            attrs === '' && ctx.paragraphStartsAfterCaptionHost,
+            ctx.lineBlockDepth > 0,
+          ),
+        )
+        // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
+        // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
+        // return one stanza as two; a comment-only line is the one construct that
+        // leaves an empty verse line instead of rewriting it, and the block layer
+        // removes it before the inline run exists - so `%%` re-reads to exactly
+        // the empty line it was written for.
+        //
+        // It reaches here from a verbatim run that swallowed such a line: the run
+        // keeps the emptied line as a NEWLINE in its value, and that newline has
+        // to come back out as an empty line. §7c already spells the OTHER source
+        // of one, the empty-content `hard_break`, with a backslash, so no line
+        // arriving here is a break.
+        //
+        // A line block's children are its stanzas, so the guard is the whole
+        // scope: every empty line in this string is interior to one stanza.
+        //
+        // The lookahead is what keeps the LAST newline out of it. §7c writes the
+        // trailing `hard_break` of a last body line as `\` plus the newline it
+        // consumes, so the stanza ends in one - and the position after it is the
+        // closing fence, not an empty verse line.
+        if (ctx.lineBlockDepth > 0) {
+          return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
+        }
+
+        return withAttrs(text)
+      }
+      case 'code_block': {
+        const fence = safeFence(node.content, 3)
+        const info = codeFenceInfo(node.lang, node.header, node.label)
+        // The opener's quoted title is resolved onto `attrs.title` at parse time
+        // so it reaches every consumer, but the fence carries it too - emitting
+        // both says it twice (`{title=x}` AND `\`\`\` lang "x"`), which is longer
+        // than the author wrote and re-parses with an attribute ORDER the source
+        // never had (issue 369). The fence is the authored spelling, so it wins.
+        const attrsWithoutTitle =
+          node.header !== undefined && node.attrs?.keyValues?.['title'] === node.header
+            ? renderBlockAttrs(withoutKey(node.attrs, 'title'))
+            : attrs
+        const body = `${fence}${info}\n${this.protectVerbatim(node.content)}\n${fence}`
+        return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
+      }
+      case 'block_quote': {
+        // Written back in the spelling it was read in (markup-carve/carve#1718).
+        // Choosing structurally instead - the fence whenever the quote holds a
+        // non-paragraph block - changes authored multi-block quotes, so the node
+        // carries the author's choice rather than the writer inferring one.
+        if (node.fenced) {
+          const fence = colonFenceFor(ctx)
+          const body = this.renderColonFenceBody(node.children, ctx)
+          return withAttrs(`${fence} >\n${body}\n${fence}`)
+        }
+        const inner = this.renderHostedBlocks(node.children, ctx)
+        const body = inner
+          .split('\n')
+          .map((line) => (line === '' ? '>' : `> ${line}`))
+          .join('\n')
+        return withAttrs(body)
+      }
+      case 'list':
+        return withLooseAttrs(node, attrs, this.renderList(node, ctx))
+      case 'thematic_break':
+        return withAttrs(thematicBreakSpelling(node.marker, this.thematicBreakMarker))
+      case 'table':
+        return this.renderTableWithColumns(node, ctx)
+      case 'directive': {
+        const title = node.title !== undefined ? ` "${this.renderInlines(node.title, ctx)}"` : ''
+        const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
+        const fence = colonFenceFor(ctx)
+        const body = this.renderColonFenceBody(node.children, ctx)
+        return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
+      }
+      case 'admonition': {
+        // The quoted title is re-parsed as a quoted_title token (which admits
+        // no escapes and cannot contain a quote), so the inline serialization
+        // must be emitted verbatim: wrapping it in escapeQuoted doubles the
+        // backslashes renderInlines already produced and compounds on every
+        // fmt pass (issue 295).
+        const title = node.title !== undefined ? ` "${this.renderInlines(node.title, ctx)}"` : ''
+        const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
+        const fence = colonFenceFor(ctx)
+        const body = this.renderColonFenceBody(node.children, ctx)
+        return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
+      }
+      case 'line_block': {
+        // `::: |` is the line-block opener (PART 3, line_block_open). Emitting a
+        // bare `:::` and tagging the node with a `.line-block` class instead
+        // re-parsed as an ordinary div, so the node type changed across a format
+        // round trip and `parse(fmt(x)) == parse(x)` did not hold (issue 359).
+        //
+        // Inside the fence every newline IS a hard break (PART 3,
+        // line_block_body), so the explicit backslash the inline writer emits for
+        // a hard_break would double it on re-parse.
+        const fence = colonFenceFor(ctx)
+        ctx.lineBlockDepth++
+        ctx.colonFenceDepth++
+        let body: string
+        try {
+          body = this.renderBlocks(node.children, ctx)
+        } finally {
+          ctx.colonFenceDepth--
+          ctx.lineBlockDepth--
+        }
+        // A BODY THAT ALREADY ENDS ITS LINE DOES NOT GET A SECOND NEWLINE. The
+        // last body line can end in a `hard_break`, which under §7c is written
+        // `\` plus the newline it consumes (PART 3); adding the closer's newline
+        // on top of that leaves a BLANK line before the fence, which ends the
+        // stanza and takes the trailing `<br>` - and the space it was holding -
+        // with it (markup-carve/carve#1334).
+        const layout = this.lineBlockLayoutWhitespace(body)
+        return withAttrs(fence + ' |\n' + layout + (layout.endsWith('\n') ? '' : '\n') + fence)
+      }
+      case 'div': {
+        // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
+        // sugar: that sugar forces hard breaks, but a plain div carrying a
+        // `.hardbreaks` class keeps soft breaks. The two are indistinguishable by
+        // attrs - only the child break nodes differ - so we let those break nodes
+        // serialize themselves, which round-trips both. (A line block is its own
+        // node type and is handled above.)
+        const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
+        const fence = colonFenceFor(ctx)
+        const body = this.renderColonFenceBody(node.children, ctx)
+        return withAttrs(`${fence}${label}\n${body}\n${fence}`)
+      }
+      case 'definition_list':
+        // THE ATTRIBUTE LINE MOVES WITH THE LIST. It is part of how this block is
+        // spelled, so raising the body alone would leave `{loose}` at the body
+        // minimum with the `::` line a column past it - a shape no author writes
+        // and one the rebase then has to reconcile a line at a time.
+        return atARaisedBase(
+          withLooseAttrs(node, attrs, this.renderDefinitionList(node.items, ctx)),
+          atAnAuthoredBodyColumn,
+        )
+      case 'figure':
+        return withAttrs(this.renderFigure(node, ctx))
+      case 'figure_group': {
+        // The canonical spelling is the authored form (PART 9 §4c): a bare
+        // `::: figure` fence, the children as an ordinary fence body, and the
+        // group caption as a `^ ` line after the CLOSING fence - unescaped,
+        // because the writer knows the closer hosts it. The `#` placeholder is
+        // written back by the caption_number arm like every numbered caption.
+        const fence = colonFenceFor(ctx)
+        const body = this.renderColonFenceBody(node.children, ctx)
+        const caption = node.caption !== undefined ? this.captionLine(node.caption, ctx) : ''
+        return withAttrs(`${fence} figure\n${body}\n${fence}${caption}`)
+      }
+      case 'image':
+        return renderImage(node)
+      case 'raw_block': {
+        const fence = safeFence(node.content, 3)
+        const content = this.protectVerbatim(node.content)
+        // Empty content means zero payload lines, while an all-newline content
+        // value records exactly that many blank payload lines. In both cases an
+        // extra separator before the closer would change the AST on every
+        // format pass. Non-blank content still needs the ordinary closing-line
+        // separator (including content with a trailing blank line).
+        const closerSeparator = node.content === '' || /^\n+$/.test(node.content) ? '' : '\n'
+        return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
+      }
+      case 'abbreviation_def':
+        return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
+      case 'link_reference_definition': {
+        // PART 12 §10 gave this a node precisely so the writer can put the line
+        // back. Before that there was nowhere to write it from, which is why every
+        // resolved reference was INLINED instead (carve-js#690).
+        //
+        // Unless a definition list already wrote it on its own description line,
+        // where the author put it - writing it twice would define it twice.
+        if (this.definitionsWrittenInPlace.has(node as unknown as object)) return ''
+        const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
+        const attrs = renderAttrs(node.attrs)
+        // The href is re-escaped the way the inline tail's is: the reader
+        // resolves `\(`, `\)` and `\\`, so writing the resolved value bare would
+        // hand back a line whose parentheses no longer balance.
+        return `[${node.label}]: ${escapeDestinationEscapes(node.href)}${title}${attrs === '' ? '' : ` ${attrs}`}`
+      }
+      case 'citation_definition': {
+        // PART 12 §18 gave the bibliography line a node for the same reason §10
+        // gave one to the reference definition: so the writer can put the line
+        // back. The metadata block leads the entry, where the author wrote it.
+        const metadata = renderCitationMetadata(node.attrs)
+        const entry = this.renderInlines(node.children, ctx)
+        const tail = [metadata, entry].filter((part) => part !== '').join(' ')
+        return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
+      }
+      case 'comment':
+        // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
+        // inline one (carve#581) in joining a percent-leading content onto the
+        // marker. At block level the comment-LINE marker is exactly `%%`; a run
+        // of three or more is a comment FENCE (PART 9 §28), so `%%` + `%` is a
+        // different construct that pairs with any later same-width run and
+        // swallows everything between (markup-carve/carve-js#1674).
+        return node.block
+          ? this.renderBlockComment(node.content)
+          : node.delimited
+            ? `{% ${node.content} %}`
+            : `%% ${node.content}`
+      default: {
+        const t: never = node
+        throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
+      }
+    }
+  }
+
+  private renderTableWithColumns(node: Table, ctx: CarveContext): string {
+    if (!node.columns?.length) {
+      const attrs = renderBlockAttrs(node.attrs)
+      const body = this.renderTable(node, ctx)
+      return attrs ? `${attrs}\n${body}` : body
+    }
+    const keyValues = { ...(node.attrs?.keyValues ?? {}) }
+    const join = (field: 'align' | 'valign', key: string) => {
+      if (keyValues[key] === undefined && node.columns!.some((column) => column[field] !== undefined)) {
+        keyValues[key] = node.columns!.map((column) => column[field] ?? '').join(',')
+      }
+    }
+    join('align', 'aligns')
+    join('valign', 'valigns')
+    if (keyValues.widths === undefined && node.columns.some((column) => column.width !== undefined)) {
+      keyValues.widths = node.columns.map((column) => column.width === undefined ? '' : String(column.width * 100)).join(',')
+    }
+    const attrs = renderBlockAttrs({ ...(node.attrs ?? {}), keyValues })
+    return `${attrs}\n${this.renderTable(node, ctx)}`
+  }
+
+  private renderList(node: List, ctx: CarveContext): string {
+    ctx.listDepth++
+    try {
+      let out = ''
+      let counter = node.start ?? 1
+      // The marker is semantic (§11: a different bullet char / ordered delim
+      // starts a new list), so emit it as authored - normalizing would merge
+      // adjacent sibling lists on re-parse (carve issue 286).
+      const delim = node.delim ?? '.'
+      const bullet = node.bulletChar ?? '-'
+      // The bare dot is written back only where the author wrote one (carve#315).
+      // PART 11 §6: `fmt` does not respell a construct to a synonym, because the
+      // choice is the author's and the AST records it - the same rule, and the
+      // same remedy, as the combined bold-italic form. `bareMarker` is that
+      // record; picking a canonical spelling instead would rewrite every
+      // `1.`/`2.`/`3.` list in existing documents on the next format.
+      //
+      // The other three conditions are belt and braces for a hand-built tree: a
+      // bare dot cannot carry a start, a dialect or the `)` delimiter, so a mark
+      // that contradicts one of them is ignored rather than written as source
+      // that reads back differently.
+      const bareDot =
+        node.ordered &&
+        node.bareMarker === true &&
+        delim === '.' &&
+        node.olType === undefined &&
+        (node.start ?? 1) === 1
+      node.items.forEach((item, idx) => {
+        const indent = ''
+        let prefix: string
+        if (node.ordered) {
+          prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim} `
+          counter++
+        } else if (item.checked !== undefined) {
+          prefix = `${bullet} ${taskMarker(item)} `
+        } else {
+          prefix = `${bullet} `
+        }
+        const continuationWidth = node.ordered ? prefix.length : 2
+        const itemAttrs = renderAttrs(item.attrs)
+        if (itemAttrs) {
+          prefix = node.ordered
+            ? `${prefix.trimEnd()}${itemAttrs} `
+            : `${bullet}${itemAttrs}${item.checked !== undefined ? ` ${taskMarker(item)} ` : ' '}`
+        }
+        let content = trimNonNbsp(this.renderListItem(item, ctx, node.tight))
+        const lines = content ? content.split('\n') : ['']
+        // THE FIRST LINE CARRIES THE TAG TOO - only the loop below used to take it
+        // off. An item whose FIRST child goes to the marker column opens with the
+        // continuation marker, so the tag shipped as a literal private-use
+        // character and the item came back holding it (carve-js#1681). Nothing to
+        // strip it TO here: the item's own marker already owns this line, and
+        // `- +` is where §17 L3 puts the marker for an item with nothing before it.
+        const first = (lines.shift() ?? '').replace(this.markerColumnTag(), '')
+        out += `${indent}${prefix}${first || '+'}\n`
+        const continuation = ' '.repeat(continuationWidth)
+        // An EMPTY continuation line stays empty. Indenting it produces a line of
+        // nothing but spaces, which the writer must never emit - the blank line
+        // inside a fenced block in a list item was the one place it did (corpus
+        // 75-list-nesting-and-looseness-5). The content is unchanged either way,
+        // since the reader strips the item's columns back off.
+        for (const line of lines) {
+          if (line.startsWith(this.markerColumnTag())) {
+            // The continuation marker and the block it attaches sit at the ITEM's
+            // marker column, not at its content column: §17 L3 puts the marker at
+            // "the current container's MARKER COLUMN" and attaches the following
+            // block "with no marker prefix or indentation". Indenting either into
+            // the item is what made the attached paragraph fold (carve#861).
+            out += `${indent}${line.slice(this.markerColumnTag().length)}\n`
+            continue
+          }
+          out += line ? `${indent}${continuation}${line}\n` : '\n'
+        }
+        if (!node.tight && idx < node.items.length - 1) out += '\n'
+      })
+      return trimEndNonNbsp(out)
+    } finally {
+      ctx.listDepth--
+    }
+  }
+
+  /**
+   * A hoisted definition that sat BETWEEN two of a container's blocks, written
+   * back into the gap it came from.
+   *
+   * A definition collected out of a list item renders nothing, but it still
+   * SEPARATES the blocks around it: `- a` / `  [^f]: x` / `  more` is an item
+   * holding two paragraphs, and writing the definition at document level instead
+   * leaves `- a` / `  more`, which re-reads as one paragraph with a soft break.
+   * The document changes, not just its spelling (carve-js#754, corpus 228).
+   *
+   * The gap is derivable from the blocks' own positions: a definition whose line
+   * falls after one block ends and before the next begins was written there. This
+   * is the same repair markup-carve/carve#805 needed for a definition-list
+   * description, stated for any pair of siblings rather than for one container.
+   */
+  /** Run one render pass with the in-place write-back bookkeeping reset. */
+  private withFreshWriteBackState<T>(render: () => T): T {
+    this.definitionsWrittenInPlace = new WeakSet()
+    this.footnotesWrittenInPlace = new Set()
+    return render()
+  }
+
+  private definitionInGap(
+    before: BlockNode,
+    after: BlockNode,
+    ctx: CarveContext,
+  ): string | undefined {
+    const from = before.pos?.endLine
+    const to = after.pos?.startLine
+    if (from === undefined || to === undefined) return undefined
+    for (const [line, node] of this.definitionsByLine) {
+      if (line > from && line < to && !this.definitionsWrittenInPlace.has(node as unknown as object)) {
+        const written = this.renderBlock(node, ctx)
+        this.definitionsWrittenInPlace.add(node as unknown as object)
+        return written
+      }
+    }
+    // A footnote definition lives in a root map rather than in `children`, so it
+    // is tracked by label - the same split the description write-back has.
+    for (const [line, label] of this.footnoteDefsByLine) {
+      if (line > from && line < to && !this.footnotesWrittenInPlace.has(label)) {
+        const blocks = ownValue(this.documentFootnoteDefs, label)
+        if (blocks === undefined) continue
+        const written = this.renderOneFootnoteDef(label, blocks, ctx)
+        this.footnotesWrittenInPlace.add(label)
+        return written
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * The tag that says a written line belongs at the item's MARKER column.
+   *
+   * The sixth slot of the picked run, not a code point of its own: `renderList`
+   * strips it back off BY POSITION, so a fixed one is eaten off a continuation
+   * line the AUTHOR opened with it, taking the item's content column with it
+   * (carve-js#1280).
+   */
+  private markerColumnTag(): string {
+    return this.sentinels[SENTINEL_COUNT - 1]!
+  }
+
+  /** Mark the next line for §11 N1a's boundary. `normalize` expands it with the container prefix. */
+  private boundaryTag(): string {
+    return this.sentinels[4]!
+  }
+
+  private atMarkerColumn(text: string): string {
+    const tag = this.markerColumnTag()
+
+    return text
+      .split('\n')
+      .map((line) => tag + line)
+      .join('\n')
+  }
+
+  private renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
+    // A list item is a prefix/indent host: its fences start over at `:::`.
+    const outerFenceDepth = ctx.colonFenceDepth
+    ctx.colonFenceDepth = 0
+    try {
+      return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight))
+    } finally {
+      ctx.colonFenceDepth = outerFenceDepth
+    }
+  }
+
+  private renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
+    // A definition collected from the ONLY line of an item leaves no child
+    // behind.  Do not spell that empty item with `+`: at nested marker depth the
+    // marker attaches the outer item's following block to the empty INNER item.
+    // The definition's retained source position is the only record of what
+    // occupied the item, so put it back there just as definitionInGap puts one
+    // back between two surviving children.
+    if (ctx.listDepth > 1 && item.children.length === 0) {
+      const from = item.pos?.startLine
+      const to = item.pos?.endLine
+      if (from !== undefined && to !== undefined) {
+        for (const [line, definition] of this.definitionsByLine) {
+          if (
+            line >= from &&
+            line <= to &&
+            !this.definitionsWrittenInPlace.has(definition as unknown as object)
+          ) {
+            const written = this.renderBlock(definition, ctx)
+            this.definitionsWrittenInPlace.add(definition as unknown as object)
+            return written
+          }
+        }
+        for (const [line, label] of this.footnoteDefsByLine) {
+          if (line < from || line > to || this.footnotesWrittenInPlace.has(label)) continue
+          const blocks = ownValue(this.documentFootnoteDefs, label)
+          if (blocks === undefined) continue
+          const written = this.renderOneFootnoteDef(label, blocks, ctx)
+          this.footnotesWrittenInPlace.add(label)
+          return written
+        }
+      }
+    }
+    // A loose item separates its blocks with a blank line; a tight item joins
+    // them with a single newline so the re-parse stays tight. Using the generic
+    // blank-line join here would loosen a tight item that has more than one child
+    // (e.g. text after a fenced block), breaking toHtml(fmt(x)) == toHtml(x).
+    if (!tight) return this.renderBlocks(item.children, ctx)
+    if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+    ctx.blockDepth++
+    try {
+      const parts: string[] = []
+      // Whether any child so far was written at the item's MARKER column, which
+      // is column 0. Everything after it has to sit there too - see below - so
+      // this only ever latches on. Clearing it again was a store that could not
+      // change an outcome: no mutation of it failed a test, which is the shape
+      // this repository keeps finding under a check that cannot fail.
+      let previousAtMarkerColumn = false
+      // The last child that actually WROTE something, which is what the block
+      // below it is read against. `item.children[i - 1]` is not that: a definition
+      // hoisted out of the item renders nothing and still sits in `children`.
+      let previousEmitted: BlockNode | null = null
+      // Whether a sub-list has already opened at this item's content column - the
+      // condition under which a later bullet written there joins it instead of
+      // opening below the paragraph above it. See `needsABlankLineAbove`.
+      let aSubListAlreadyOpened = false
+      item.children.forEach((b, i) => {
+        const previous = item.children[i - 1]
+        const next = item.children[i + 1]
+        // A definition written back BETWEEN the two blocks already ends the
+        // paragraph above it, so the marker below is not needed - and emitting it
+        // anyway changes the canonical form of corpus 228, whose whole point is
+        // that a line at the definition's own column forms its own tight block.
+        let separated = false
+        if (previous !== undefined) {
+          const written = this.definitionInGap(previous, b, ctx)
+          if (written !== undefined && written.length > 0) {
+            parts.push(written)
+            separated = true
+          }
+        }
+        let rendered = this.renderBlock(b, ctx)
+        if (rendered.length === 0) return
+        // `guardThematicBreakLines` protects a paragraph continuation that is
+        // semantically an em dash by giving it one leading space.  Inside a list
+        // the ordinary continuation prefix would add the item content column to
+        // that guard.  Since #1705, that combined indentation is an authored
+        // block base and the guarded text would reparse as a real thematic break.
+        // Keep guarded continuation lines at the item's marker column; the one
+        // authored space remains below the content column and therefore remains
+        // lazy paragraph text.
+        if (b.type === 'paragraph' && rendered.includes('\n ')) {
+          rendered = rendered.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.markerColumnTag()} `)
+        }
+        if (b.type === 'list') {
+          if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
+            parts.push(`${this.boundaryTag()}${rendered}`)
+          } else if (
+            !separated &&
+            needsABlankLineAbove(previousEmitted, previousAtMarkerColumn, aSubListAlreadyOpened)
+          ) {
+            parts.push('', rendered)
+          } else {
+            parts.push(rendered)
+          }
+          // Back at the content column, so a child below this one is read against
+          // the list rather than against whatever stood at column 0 above it.
+          previousAtMarkerColumn = false
+          aSubListAlreadyOpened = true
+          previousEmitted = b
+          return
+        }
+        if (
+          previousAtMarkerColumn ||
+          (next !== undefined && adjacentBlocksMerge(b, next)) ||
+          (!separated &&
+            previousEmitted !== null &&
+            anOpenParagraphReachesDown(previousEmitted) &&
+            FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
+            !opensWithAnAttributeLine(rendered))
+        ) {
+          // PART 11 §7e: a block that OPENS the item is written on the marker
+          // line, with the `+` on the line below it. The latch still goes up, so
+          // the block under it lands at the marker column behind its own marker.
+          if (parts.length === 0) parts.push(rendered)
+          else parts.push(this.atMarkerColumn('+'), this.atMarkerColumn(rendered))
+          previousAtMarkerColumn = true
+          previousEmitted = b
+          return
+        }
+        // A LINE COMMENT WRITTEN AT THE ITEM'S CONTENT COLUMN IS READ AGAINST THE
+        // SUB-LIST ABOVE IT: that column is the sub-list's MARKER column, and a
+        // `%%` line there joins the sub-list's last item instead of opening a
+        // block of the hosting item. The comment comes back one level in, and the
+        // next writer pass spells it at the deeper column - so the source keeps
+        // moving right while the HTML never changes (carve-js#1676). The blank
+        // line closes the sub-list; it does not loosen the item, because a
+        // comment spells no paragraph for the blank line to part.
+        //
+        // ONLY BELOW A LIST, and only for the LINE form. A comment below a
+        // paragraph, quote, definition list or fence already opens its own block
+        // at that column, and a `%%%` fence opener closes the sub-list on its own.
+        if (b.type === 'comment' && !b.block && !separated && previousEmitted?.type === 'list') {
+          parts.push('', rendered)
+          previousEmitted = b
+          return
+        }
+        // AN EMPTY LAST ITEM IN THE SUB-LIST ABOVE claims this column: the
+        // sub-list's marker column IS the hosting item's content column, and the
+        // `+` spelling the empty item takes the quote written there into itself
+        // (carve-js#1681). The blank line closes the sub-list and costs the item no
+        // paragraph, so the list stays tight.
+        //
+        // BOUNDED TO A QUOTE, and the bound is measured. Of the thirteen block
+        // kinds swept below an empty item only the quote is taken; a PARAGRAPH must
+        // not get the separator at all, since the blank line would part it and turn
+        // the tight item loose.
+        if (b.type === 'block_quote' && !separated && previousEmitted?.type === 'list') {
+          const last = previousEmitted.items[previousEmitted.items.length - 1]
+          if (last !== undefined && last.children.length === 0) {
+            parts.push('', rendered)
+            previousEmitted = b
+            return
+          }
+        }
+        parts.push(rendered)
+        previousEmitted = b
+      })
+      return parts.join('\n')
+    } finally {
+      ctx.blockDepth--
+    }
+  }
+
+  private renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
+    const out: string[] = []
+    // Every entry writes its own description line, so consecutive `::` lines
+    // never end up sharing one: the list writes back with the grouping it
+    // parsed from.
+    for (const item of items) {
+      for (const term of item.terms) {
+        // A term keeps each continuation line's indent, so a verbatim span in
+        // one can hold a line that starts with whitespace (carve#2411).
+        const outer = this.termKeepsLineIndent
+        this.termKeepsLineIndent = true
+        try {
+          out.push(`:: ${this.renderInlines(term, ctx)}`)
+        } finally {
+          this.termKeepsLineIndent = outer
+        }
+      }
+      item.definitions.forEach((def, index) => {
+        // An EMPTY description whose line carries a hoisted definition is one the
+        // author wrote the definition on: write it back there. Without this the
+        // line came out as a bare `:`, which re-parses into the term above it -
+        // the failure markup-carve/carve#805 describes.
+        if (def.length === 0) {
+          const line = item.definitionLines?.[index]
+          const definition = line === undefined ? undefined : this.definitionsByLine.get(line)
+          if (definition !== undefined) {
+            // Render BEFORE marking it: the document-level arm returns '' for a
+            // node in this set, so marking first renders the line away.
+            const written = this.renderBlock(definition, ctx)
+            this.definitionsWrittenInPlace.add(definition as unknown as object)
+            out.push(`: ${written}`)
+            return
+          }
+          const label = line === undefined ? undefined : this.footnoteDefsByLine.get(line)
+          const blocks = label === undefined ? undefined : ownValue(this.documentFootnoteDefs, label)
+          if (label !== undefined && blocks !== undefined) {
+            const written = this.renderOneFootnoteDef(label, blocks, ctx)
+            this.footnotesWrittenInPlace.add(label)
+            // A footnote body can be multi-line; its continuation lines carry the
+            // body's own two-column indent and sit under the description.
+            const [first, ...rest] = written.split('\n')
+            out.push(`: ${first}`)
+            for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
+            return
+          }
+        }
+        /*
+         * A DESCRIPTION THAT WRITES NOTHING TAKES THE SENTINEL `{empty}`
+         * (PART 11 §7b, markup-carve/carve#1827) - the same body the footnote
+         * definition one construct over is written with.
+         *
+         * THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description is
+         * empty". An HTML import, an ingested AST and `fmt` over parsed source
+         * arrive with a different tree for the same shape, and only the written
+         * result is common to them: a `<dd>` holding an invisible paragraph or a
+         * list with no items writes nothing too, and takes the sentinel alike.
+         *
+         * The sentinel needs no lookahead. It is empty whether a blank line
+         * follows it, a flush-left paragraph does, or nothing does.
+         *
+         * `: \{empty}` and `: {empty} x` are content, not sentinels - the first
+         * escapes the brace and the second is not a block-attribute line - so
+         * both keep writing their own text.
+         */
+        const written = trimNonNbsp(
+          atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx)),
+        )
+        if (written === '') {
+          out.push(`: ${EMPTY_BODY_SENTINEL}`)
+
+          return
+        }
+        const lines = written.split('\n')
+        out.push(`: ${lines.shift() ?? ''}`)
+        for (const line of lines) out.push(`${DEFINITION_BODY_INDENT}${line}`)
+      })
+    }
+    return out.join('\n')
+  }
+
+  private renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
+    ctx.colonFenceDepth++
+    try {
+      return this.renderBlocks(children, ctx)
+    } finally {
+      ctx.colonFenceDepth--
+    }
+  }
+
+  /**
+   * Render blocks that a prefix/indent host owns (blockquote, list item,
+   * definition body). Their fences start over at `:::` - see colonFenceFor.
+   */
+  private renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
+    const outer = ctx.colonFenceDepth
+    ctx.colonFenceDepth = 0
+    try {
+      return this.renderBlocks(children, ctx)
+    } finally {
+      ctx.colonFenceDepth = outer
+    }
+  }
+
+  /**
+   * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
+   * per-cell `<`/`>`/`~` alignment markers.
+   *
+   * A colspan cell is always written plain (`| < |`), so a header row can keep
+   * the native form when its span markers form a TRAILING run of COLSPANS after
+   * at least one real header cell: each `<` absorbs into the `|=` header on its
+   * left, and the row is still promoted by those `|=` markers
+   * (`|= Engine |= Timing | < |`). Everything else needs a delimiter row: a
+   * LEADING span has no `|=` anchor before it; a real cell AFTER a span
+   * (`|~ H | < | < |< K |`) would have to be written `|=< K`, read as an aligned
+   * header rather than the promoted data cell; and a trailing ROWSPAN (`^`) does
+   * not absorb left, so a native `| ^ |` in the first row is not a header cell
+   * and the row would fall out of `<thead>`.
+   */
+  private renderTable(node: Table, ctx: CarveContext): string {
+    const rows: string[] = []
+    const first = node.rows[0]
+    const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
+    const firstSpan = headerRow ? first!.cells.findIndex((c) => c.span !== undefined) : -1
+    const trailingColspansOnly = firstSpan >= 1 && first!.cells.slice(firstSpan).every((c) => c.span === 'colspan')
+    const needsDelimiter = firstSpan >= 0 && !trailingColspansOnly
+
+    node.rows.forEach((row, rowIndex) => {
+      const cells: string[] = []
+      for (const cell of row.cells) {
+        // In the delimiter form the promoted row is written as ordinary data
+        // cells - the row after it is what makes them headers.
+        const asHeader = !(needsDelimiter && rowIndex === 0)
+        cells.push(this.renderTableCell(cell, ctx, asHeader))
+      }
+      // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
+      // so no source spells one and the writer refuses the tree (carve-js#1822).
+      if (cells.every((cell) => cell === ' ' || cell === '= ')) {
+        throw new SourceUnspellableError(
+          'table_row',
+          'a table row whose every cell is blank has no Carve source spelling',
+          row,
+        )
+      }
+      rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
+    })
+    if (needsDelimiter) {
+      rows.splice(1, 0, `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
+    }
+    const caption = node.caption === undefined ? undefined : this.captionRow(node.caption, ctx)
+    if (caption !== undefined) rows.push(caption)
+    return rows.join('\n')
+  }
+
+  private renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): string {
+    const attrs = renderAttrs(cell.attrs)
+    // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
+    // is also the left-alignment sigil, and the two readings differ: the
+    // executable spec reads `|<|` as alignment where all three engines read a
+    // colspan (markup-carve/carve#710). The padded form is unambiguous under either
+    // reading - `alignment_marker` is defined as glued, `colspan_marker` allows
+    // surrounding whitespace - so the writer should never emit the ambiguous one.
+    // `^` is not an alignment sigil and needs no disambiguation, but it takes the
+    // same shape so a row of span cells stays readable.
+    //
+    // With a cell attribute the block stays GLUED to the pipe, which is where the
+    // grammar puts it, and the space goes between it and the marker.
+    const spanMarker = cell.span === 'rowspan' ? '^' : '<'
+    if (cell.span === 'rowspan' || cell.span === 'colspan') {
+      return padCell(attrs, spanMarker)
+    }
+    const align = alignMarker(cell.align)
+    const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
+    const inheritedHorizontal = !align && valign ? '?' : ''
+    // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
+    // after the kind marker and after the alignment marker, so `|={.x} h |` is
+    // an attributed header cell. Writing the block ahead of the markers instead
+    // produced `|{.x}=h |`, which is the one shape the grammar cannot tell from
+    // a data cell whose content starts with `=` - and reads it as that, so an
+    // attributed header cell round-tripped into `<td class="x">=h</td>` and
+    // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
+    const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
+    const content = cell.blocks === undefined
+      ? this.renderInlines(cell.children ?? [], ctx)
+      : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
+    return padCell(prefix, escapeSpanMarkerPayload(content, cell.attrs))
+  }
+
+  /**
+   * A caption line for a caption that spells something, and NOTHING otherwise.
+   */
+  private captionLine(caption: InlineNode[], ctx: CarveContext): string {
+    const row = this.captionRow(caption, ctx)
+
+    return row === undefined ? '' : `\n${row}`
+  }
+
+  /**
+   * The same rule for the one caption slot that is not a `^ ` line UNDER a block:
+   * a table's own caption, which is written as the last ROW of the table itself
+   * (markup-carve/carve-js#1496).
+   *
+   * `renderTable` tested `node.caption` for truthiness and wrote the line
+   * unconditionally, so a table carrying an empty caption run - which
+   * `<table><caption></caption>` imports to, and which an AST ingest can hand in
+   * directly - wrote a bare `^`. That is not a caption line: it re-reads as a
+   * paragraph holding a literal caret, so the document came back saying something
+   * the tree never said, with an empty report. Exactly the addition
+   * markup-carve/carve-js#1423 removed for every FIGURE host; the table's own slot
+   * was simply not covered.
+   *
+   * ONE PREDICATE FOR BOTH SLOTS, which is the point of extracting it: the near
+   * miss is a second mechanism that agrees today and drifts on the next clause.
+   * A caption holding a NO-BREAK SPACE spells something (PART 11 §7) and keeps its
+   * line in both.
+   */
+  private captionRow(caption: InlineNode[], ctx: CarveContext): string | undefined {
+    const written = this.renderInlines(caption, ctx)
+
+    return trimNonNbsp(written) === '' ? undefined : `^ ${written}`
+  }
+
+  /**
+   * THE TARGET KEEPS ITS OWN ATTRIBUTES (ruling markup-carve/carve#1721).
+   */
+  private renderFigure(node: Figure, ctx: CarveContext): string {
+    const target = node.target.type === 'image' ? renderImage(node.target) : this.renderBlock(node.target, ctx)
+    return `${target}${this.captionLine(node.caption, ctx)}`
+  }
+
+  /**
+   * One footnote definition, marker and body.
+   *
+   * Extracted because a definition list writes one back on its own description
+   * line (markup-carve/carve#805) and a second spelling of the body's indent rule
+   * would be a rule with two implementations - the shape that has produced most of
+   * this engine's cross-engine divergences.
+   */
+
+  private renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
+    const rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
+    const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
+    if (body === '') {
+      return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
+    }
+    const lines = body.split('\n')
+    const defLines = [`[^${writeFlatBracketRun(label)}]: ${lines.shift() ?? ''}`]
+    // TWO spaces, the body's own column (PART 9 §16). Three is not a longer
+    // spelling of the same thing: since carve#1752 a recognized opener there
+    // takes its own authored base, so the third column CHANGES what the body
+    // says. The executable spec reads it that way and carve#1763 pins it; the
+    // released carve-rs and carve-php still eject the payload, and the spec
+    // declares that lag rather than this writer working around it.
+    //
+    // So the body's blocks are written at two, and the ONE block whose payload
+    // needs the third column asks for it by itself - see `atARaisedBase`.
+    for (const line of lines) defLines.push(`  ${line}`)
+    return defLines.join('\n')
+  }
+
+  /**
+   * The document's body, then its hoisted definitions in source-position order.
+   *
+   * §7 puts hoisted definitions after the body and orders them among themselves
+   * by source position; this engine publishes them that way since carve#746, and
+   * PART 11 §6 then binds the writer - "fmt does not reorder ... those are the
+   * author's choices and the AST records them".
+   *
+   * The writer used to render `children` and append every footnote afterwards,
+   * because the runtime keeps footnote bodies in a label-keyed map where their
+   * position is not part of what it walks. A link definition hoisted from INSIDE
+   * a footnote body therefore came out BEFORE the footnote containing it, though
+   * the tree has the footnote first (carve-js#750).
+   *
+   * Positions order the definitions, and only when every one of them has a
+   * position: a hand-built or `pos`-less tree has no order to honor, and there the
+   * old behavior - children as they come, then the footnotes - is the only
+   * defensible one.
+   */
+  private renderDocumentBody(ast: Document, ctx: CarveContext): string {
+    type Piece = { at: number | undefined; text: string }
+    const body: BlockNode[] = []
+    const hoisted: BlockNode[] = []
+
+    for (const child of ast.children) {
+      if (HOISTED_DEFINITION_TYPES.has(child.type)) {
+        hoisted.push(child)
+        continue
+      }
+      body.push(child)
+    }
+
+    // THE BODY IS RENDERED FIRST, whatever the output order. A definition written
+    // inside a definition-list description is emitted on that line and marked, and
+    // `renderBlock` then returns '' for it here (carve-js#748) - so rendering the
+    // definitions before the body wrote them twice.
+    const bodyText = this.renderBlocks(body, ctx)
+
+    const definitions: Piece[] = hoisted.map((child) => ({
+      at: (child as { pos?: { startOffset?: number } }).pos?.startOffset,
+      text: this.renderBlockAtTop(child, ctx),
+    }))
+
+    for (const [label, blocks] of Object.entries(ast.footnoteDefs ?? {})) {
+      // Unless a definition list already wrote it where the author put it.
+      if (this.footnotesWrittenInPlace.has(label)) continue
+      definitions.push({
+        at: ownValue(ast.footnoteDefPos, label)?.startOffset,
+        text: this.renderOneFootnoteDef(label, blocks, ctx),
+      })
+    }
+
+    const ordered = definitions.every((piece) => piece.at !== undefined)
+      ? definitions
+          .map((piece, index) => ({ piece, index }))
+          // STABLE: two definitions at the same offset keep the order they were
+          // collected in, which is the tree's.
+          .sort((a, b) => a.piece.at! - b.piece.at! || a.index - b.index)
+          .map(({ piece }) => piece)
+      : definitions
+
+    return [bodyText, ...ordered.map((piece) => piece.text)]
+      .filter((text) => text.length > 0)
+      .join('\n\n')
+  }
+
+  /** One top-level block, with the depth accounting `renderBlocks` does. */
+  private renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
+    if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+    ctx.blockDepth++
+    try {
+      return this.renderBlock(block, ctx)
+    } finally {
+      ctx.blockDepth--
+    }
+  }
+
+  private directiveOverrides(nodes: InlineNode[]): Map<number, { text: string; ranges: LiteralRange[] }> {
+    const overrides = new Map<number, { text: string; ranges: LiteralRange[] }>()
+    let i = 0
+    while (i < nodes.length) {
+      if (directiveRunText(nodes[i]!) === null) {
+        i++
+        continue
+      }
+      let end = i
+      while (end < nodes.length && directiveRunText(nodes[end]!) !== null) end++
+      const texts = nodes.slice(i, end).map((node) => directiveRunText(node)!)
+      const full = texts.join('')
+      // A control character would be stripped by escapeText but survives a
+      // verbatim emit, so such a run keeps the (already degenerate) old path.
+      // Fast path: a run with no "{{" cannot hold a directive, so the common
+      // (directive-free) document never pays for the scan.
+      const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full)
+      if (spans.length) {
+        let offset = 0
+        for (let k = 0; k < texts.length; k++) {
+          const text = texts[k]!
+          const start = offset
+          offset += text.length
+          const covering = spans.filter((s) => s.start < offset && s.end > start)
+          if (covering.length === 0) continue
+          let out = ''
+          const ranges: LiteralRange[] = []
+          const node = nodes[i + k]!
+          const appendLiteral = (from: number, to: number): void => {
+            const previous = this.escapeUnit
+            this.escapeUnit = node
+            let piece: string
+            try { piece = this.escapeText(text.slice(from, to), false, false, from) }
+            finally { this.escapeUnit = previous }
+            if (node.type === 'text' && piece.includes('(')) {
+              ranges.push({ start: out.length, end: out.length + piece.length, node, sourceStart: from })
+            }
+            out += piece
+          }
+          let cursor = start
+          for (const span of covering) {
+            if (span.start > cursor) appendLiteral(cursor - start, span.start - start)
+            // The whole directive is emitted once, by the node where it STARTS.
+            // A later node that the same span merely runs THROUGH contributes
+            // nothing, which is what lets the emitted form differ in length
+            // from the source it replaces (a rebuilt quoted path does).
+            if (span.start >= start) out += emitDirective(span.raw)
+            cursor = Math.min(span.end, offset)
+          }
+          appendLiteral(cursor - start, text.length)
+          overrides.set(i + k, { text: out, ranges })
+        }
+      }
+      i = end
+    }
+    return overrides
+  }
+
+  private renderInlines(
+    sourceNodes: InlineNode[],
+    ctx: CarveContext,
+    captionCanOpen = false,
+    /**
+     * These nodes are a line block's STANZA, so the newline after the last of
+     * them ends the stanza rather than a line inside it (PART 11 §7c). Set only
+     * by the paragraph arm: a nested inline container inside a line block is not
+     * a stanza, and its last node is not at a stanza boundary.
+     */
+    isStanza = false,
+  ): string {
+    const nodes = flattenRubyForCarve(sourceNodes)
+    if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+    if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, this.loneBrackets, this.leftToSearch, this.pairedClosers)
+    ctx.inlineDepth++
+    try {
+      let out = ''
+      const literalRanges: LiteralRange[] = []
+      const noteCloses: number[] = []
+      let firstLine = true
+      let lineNodeCount = 0
+      let lineHostsCaption = false
+      // THE CURRENT OUTPUT LINE, CARRIED FORWARD instead of read back off `out`.
+      // The two decisions below are properties of the line written so far, and
+      // `out` is the wrong place to ask: it grows with every node, and probing a
+      // growing accumulator per node is the quadratic shape this engine's scaling
+      // guards exist to keep out. Two counters answer both questions in O(piece).
+      let lineLength = 0
+      /** The last up-to-two characters of the current output line. */
+      let lineTail = ''
+      // The end of `out`, for the boundary checks below: reading `out` itself
+      // flattens the growing string on every node, which is quadratic per line.
+      let outTail = ''
+      const written = (): { text: string; offset: number } =>
+        outTail.length < out.length && !RE_BOUNDARY_STOP.test(outTail.slice(0, -1))
+          ? { text: out, offset: 0 }
+          : { text: outTail, offset: out.length - outTail.length }
+      const overrides = this.directiveOverrides(nodes)
+      nodes.forEach((node, idx) => {
+        this.lastLiteralRanges = []
+        this.lastNoteCloses = []
+        const override = overrides.get(idx)
+        let piece = override?.text ?? this.renderInline(
+          node,
+          ctx,
+          // A span leaves no boundary character of its own, so the one it WROTE
+          // (its closer) is what the next opener sits against.
+          lastBoundary(nodes[idx - 1]) || lineTail.slice(-1),
+          firstBoundary(nodes[idx + 1]),
+          captionCanOpen,
+          opensBacktickRun(nodes[idx + 1]),
+          // A run of three or more backticks at block start is a code fence.
+          // A shorter run, or one after an inline opener, can start a code span.
+          idx === nodes.length - 1 && (out !== '' || ctx.inlineDepth > 1 || (node.type === 'code' && safeFence(node.value, 1).length < 3)),
+        )
+        // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
+        // live here and not in `renderInline`: the answer is a property of the
+        // output line, not of the neighbouring nodes. `lastBoundary` cannot stand
+        // in for it - after a code span it reports the span's last CONTENT
+        // character, not the backtick that actually ends the line.
+        const atLineStart = lineLength === 0
+
+        if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
+
+        if (
+          ctx.lineBlockDepth > 0 &&
+          node.type === 'hard_break' &&
+          piece === '\n' &&
+          nodes[idx - 1]?.type !== 'comment' &&
+          (atLineStart ||
+            /(?:^|[^ \t]) $/.test(lineTail) ||
+            (isStanza && idx === nodes.length - 1))
+        ) {
+          piece = '\\\n'
+        }
+
+        // The end of what is written can open a construct with the next node's
+        // start: `^[` an inline note, `:name[` an inline extension, `$` plus a
+        // backtick run or `$` math. The escape belongs to the previous node, so
+        // its form decides (PART 11 §2b).
+        const end = written()
+        const escapeAt = boundaryEscapeAt(end.text, piece)
+        if (escapeAt !== -1 && this.escapeModeOf(nodes[idx - 1]) === 'conservative') {
+          const at = end.offset + escapeAt
+          out = `${out.slice(0, at)}\\${out.slice(at)}`
+          outTail = out.slice(-OUT_TAIL_LENGTH)
+          lineLength += 1
+          lineTail = out.slice(-2)
+        }
+
+        refuseGluedName(node, nodes[idx - 1], outTail, piece)
+
+        if (separatesBacktickRuns(written().text, piece)) {
+          out += EMPTY_COMMENT
+          outTail = (outTail + EMPTY_COMMENT).slice(-OUT_TAIL_LENGTH)
+          lineLength += EMPTY_COMMENT.length
+          lineTail = (lineTail + EMPTY_COMMENT).slice(-2)
+        }
+
+        if (this.escapeMode === 'minimal') {
+          if (override === undefined) for (const close of this.lastNoteCloses) noteCloses.push(out.length + close)
+          for (const range of override?.ranges ?? this.lastLiteralRanges) {
+            literalRanges.push({ ...range, start: out.length + range.start, end: out.length + range.end })
+          }
+        }
+        out += piece
+        outTail = (outTail + piece).slice(-OUT_TAIL_LENGTH)
+        const lastNewline = piece.lastIndexOf('\n')
+        if (lastNewline === -1) {
+          lineLength += piece.length
+          lineTail = (lineTail + piece).slice(-2)
+        } else {
+          lineLength = piece.length - lastNewline - 1
+          lineTail = piece.slice(lastNewline + 1).slice(-2)
+        }
+        if (node.type === 'soft_break') {
+          captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
+          firstLine = false
+          lineNodeCount = 0
+          lineHostsCaption = false
+          return
+        }
+        lineNodeCount++
+        lineHostsCaption = lineNodeCount === 1 && inlineHostsCaption(node)
+        captionCanOpen = false
+      })
+      if (this.escapeMode === 'minimal') {
+        // A bracket or destination may cross a nested emphasis boundary. Keep
+        // its text-node ranges until the outer inline run is complete.
+        if (ctx.inlineDepth === 1) return this.escapeLiteralDestinations(out, literalRanges, new Set(noteCloses))
+        this.inlineChildProjections.push({ text: out, ranges: literalRanges, noteCloses })
+      }
+      return out
+    } finally {
+      ctx.inlineDepth--
+    }
+  }
+
+  /** Render one inline node, recording it as its own escape unit (see `renderBlock`). */
+  private renderInline(
+    node: InlineNode,
+    ctx: CarveContext,
+    prevChar = '',
+    nextChar = '',
+    captionCanOpen = false,
+    nextOpensBacktickRun = false,
+    mayRunToEndOfText = false,
+  ): string {
+    const previous = this.escapeUnit
+    const parentProjections = this.inlineChildProjections
+    this.inlineChildProjections = []
+    this.escapeUnit = node as unknown as object
+    try {
+      const result = this.renderInlineBody(
+        node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun, mayRunToEndOfText,
+      )
+      this.lastLiteralRanges = []
+      this.lastNoteCloses = []
+      if (this.escapeMode === 'minimal') {
+        if (node.type === 'text' && result.includes('(')) {
+          this.lastLiteralRanges.push({ start: 0, end: result.length, node })
+        } else {
+          let cursor = 0
+          for (const child of this.inlineChildProjections) {
+            if (child.ranges.length === 0 && child.noteCloses.length === 0) continue
+            const start = result.indexOf(child.text, cursor)
+            if (start === -1) continue
+            for (const close of child.noteCloses) this.lastNoteCloses.push(start + close)
+            for (const range of child.ranges) {
+              this.lastLiteralRanges.push({ ...range, start: start + range.start, end: start + range.end })
+            }
+            cursor = start + child.text.length
+          }
+        }
+      }
+      if (this.escapeMode === 'minimal' && (node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
+        const close = buildBracketMap(result, true)(result.indexOf('['))
+        if (close !== undefined) this.lastNoteCloses.push(close)
+      }
+      return result
+    } finally {
+      this.escapeUnit = previous
+      this.inlineChildProjections = parentProjections
+    }
+  }
+
+  private renderInlineBody(
+    node: InlineNode,
+    ctx: CarveContext,
+    prevChar = '',
+    nextChar = '',
+    captionCanOpen = false,
+    /**
+     * Whether the node AFTER this one is written starting with a backtick run.
+     *
+     * `firstBoundary` cannot answer it: for a code span it reports the span's
+     * first CONTENT character, not the backtick that actually starts the piece.
+     * §27 binds `!` to a FOLLOWING BACKTICK RUN, so a text node ending in `!`
+     * needs to know (carve-js#1175).
+     */
+    nextOpensBacktickRun = false,
+    /**
+     * Whether a verbatim span written here may run to the END of this inline
+     * text - nothing follows it, so an unclosed opener spells its content.
+     *
+     * The inline LOOP is the only place that knows: it needs both that this is
+     * the last node and that the text has already begun, since a backtick run
+     * opening the first line of a block is a code FENCE and not a span at all.
+     */
+    mayRunToEndOfText = false,
+  ): string {
+    const renderSession = this
+    // A stored tree may still carry a type this engine no longer emits; map it
+    // before dispatch so the switch below only ever sees current types.
+    node = normalizeLegacyInline(node)
+
+    const withAttrs = (body: string) => `${renderSession.bracedOnce(node, body)}${renderAttrs(node.attrs)}`
+    // An empty brace pair is not a construct, and `{--}` is the braced en dash
+    // (markup-carve/carve#1608), so an empty mark has no spelling.
+    const marked = (children: InlineNode[]): string => {
+      const content = renderSession.renderInlines(children, ctx)
+      if (content === '') {
+        throw new SourceUnspellableError(node.type, `an empty ${node.type} has no Carve source spelling`, node)
+      }
+      return content
+    }
+    const emphasisOf = (delim: string, children: InlineNode[]): string => {
+      const content = marked(children)
+      // An empty code span is written as an unclosed run, which swallows a bare
+      // closer; only the braced one ends it.
+      const last = children[children.length - 1]
+      return (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node)
+        ? renderForcedEmphasis(delim, content)
+        : renderEmphasis(delim, content, prevChar, nextChar)
+    }
+    // E3 pushes no second level of one kind while one is open, and the forced
+    // form is on the same stack, so a span of a kind already open has no
+    // spelling at all (markup-carve/carve#2078).
+    if (EMPHASIS_KINDS.has(node.type)) {
+      if (renderSession.openEmphasisKinds.has(node.type)) {
+        throw new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
+      }
+      const outer = renderSession.openEmphasisKinds
+      const children = (node as { children?: InlineNode[] }).children ?? []
+      const scoped = node.type === 'superscript' || node.type === 'subscript' || holdsOpenKind(children, outer)
+      if (scoped) renderSession.bracedForScope.add(node)
+      renderSession.openEmphasisKinds = scoped ? new Set([node.type]) : new Set([...outer, node.type])
+      try {
+        return renderInlineDispatch()
+      } finally {
+        renderSession.openEmphasisKinds = outer
+      }
+    }
+
+    return renderInlineDispatch()
+
+    function renderInlineDispatch(): string {
+    switch (node.type) {
+      case 'text':
+        return renderSession.escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
+      case 'escaped_text':
+        // The author escaped this character; the writer says so again. No
+        // minimal/conservative decision applies - the node IS the decision.
+        return '\\' + node.value
+      case 'emphasis':
+        return withAttrs(emphasisOf('/', node.children))
+      case 'strong': {
+        // The combined bold-italic form is a single production, and the nested
+        // spelling parses to the SAME strong-wrapping-emphasis tree - so the
+        // nesting does not record which one the author wrote and cannot be
+        // serialized back "literally". The comment here used to claim each
+        // spelling re-parses to the shape it came from; it does not, which is why
+        // the documented form was being rewritten into an undocumented one
+        // (carve#375). `boldItalic` carries the answer (PART 11 section 6).
+        const inner = node.children[0]
+        if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis' && !renderSession.bracedForScope.has(node)) {
+          const content = renderSession.renderInlines(inner.children, ctx)
+          // `/*` needs content that hugs it: `/* x*/` or `/**/` reparses as an
+          // emphasis holding literal stars, so fall back to the nested spelling.
+          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content)) {
+            return withAttrs(`/*${content}*/`)
+          }
+        }
+        return withAttrs(emphasisOf('*', node.children))
+      }
+      case 'underline':
+        return withAttrs(emphasisOf('_', node.children))
+      case 'strike':
+        return withAttrs(emphasisOf('~', node.children))
+      case 'superscript':
+        return withAttrs(renderForcedEmphasis('^', marked(node.children)))
+      case 'subscript':
+        return withAttrs(renderForcedEmphasis(',', marked(node.children)))
+      case 'highlight':
+        return withAttrs(emphasisOf('=', node.children))
+      case 'code':
+        if (renderSession.unspellableEmptyCodeSpans.has(node)) {
+          throw new SourceUnspellableError(
+            'code',
+            'a code span has no Carve source spelling where its open run does not end',
+          )
+        }
+        // The unclosed spelling is offered only when NOTHING is written after the
+        // span. An attribute block is written after it, so a code span carrying
+        // one keeps the closed form (and `raw_inline` and `literal_inline`, which
+        // both append to `renderCode`, never ask for it).
+        return withAttrs(renderSession.renderCode(node.value, mayRunToEndOfText && renderAttrs(node.attrs) === ''))
+      case 'link':
+        return renderSession.renderLink(node, ctx)
+      case 'image':
+        return renderImage(node)
+      case 'span':
+        return `[${escapeNoteReferenceLabel(renderSession.renderInlines(node.children, ctx), ctx)}]${renderAttrs(node.attrs) || '{}'}`
+      case 'ruby': {
+        return renderSession.renderInlines(flattenRubyForCarve([node]), ctx)
+      }
+      case 'small_caps': {
+        const content = renderSession.renderInlines(node.children, ctx)
+        return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderAttrs(node.attrs)}` : content
+      }
+      case 'math':
+        return withAttrs(renderSession.renderMath(node.display, node.content))
+      case 'raw_inline':
+        if (node.content === '') {
+          throw new SourceUnspellableError(
+            'raw_inline',
+            'an empty raw inline has no Carve source spelling',
+          )
+        }
+        return `${renderSession.renderCode(node.content, false, 'raw_inline')}{=${escapeFormat(node.format)}}`
+      case 'literal_inline':
+        // §27: `!` prefix on a verbatim span. A trailing attribute block is the
+        // ordinary inline attribute block (same as a code span carries).
+        // renderCode widens the backtick fence when the content holds backticks.
+        return `!${renderSession.renderCode(node.content, false, 'literal_inline')}${renderAttrs(node.attrs)}`
+      case 'symbol':
+        return withAttrs(`:${escapeSymbolName(node.name)}:`)
+      case 'autolink':
+        // Emit the raw autolink content verbatim (keeps a URI scheme like
+        // `mailto:`); fall back to the href for nodes without `text`.
+        return withAttrs(`<${escapeAutolinkHref(node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href))}>`)
+      case 'mention':
+      case 'tag':
+        // An attribute block after a mention or tag stays text (carve-php#2083).
+        if (renderAttrs(node.attrs) !== '') {
+          throw new SourceUnspellableError(node.type, `a ${node.type} carrying attributes has no Carve source spelling`)
+        }
+        return node.type === 'mention' ? `@${spellableName(node.user, 'mention')}` : `#${spellableName(node.name, 'tag')}`
+      case 'inline_extension':
+        return withAttrs(`:${escapeIdentifier(node.name)}[${renderSession.renderInlines(node.content, ctx)}]`)
+      case 'abbreviation':
+        return renderSession.escapeText(node.abbr)
+      case 'footnote_ref':
+      case 'inline_footnote':
+        return withAttrs(node.inline
+          ? `^[${renderSession.renderInlines(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
+          : `[^${writeFlatBracketRun(node.id ?? '')}]`)
+      case 'non_breaking_space':
+        return renderAttrs(node.attrs) ? `[${renderSession.sentinels[3]}]${renderAttrs(node.attrs)}` : renderSession.sentinels[3]!
+      case 'soft_break':
+        return '\n'
+      case 'hard_break':
+        return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
+      case 'insert':
+        return withAttrs(`{+${marked(node.children)}+}`)
+      case 'delete':
+        return withAttrs(`{-${marked(node.children)}-}`)
+      case 'substitution':
+        return withAttrs(`{~${renderSession.renderInlines(node.old, ctx)}~>${renderSession.renderInlines(node.new, ctx)}~}`)
+      case 'critic_comment':
+        // The content is literal (PART 3 EDITORIAL COMMENT CONTENT IS LITERAL),
+        // so an escape reaches the reader as a backslash. A `}` has no spelling
+        // at all: the content production takes none (carve-js#1847).
+        if (node.text.includes('}')) {
+          throw new SourceUnspellableError('critic_comment', 'an editorial comment holding a closing brace has no Carve source spelling')
+        }
+        return `{#${node.text}#}`
+      case 'heading_ref':
+        return `</#${escapeCrossrefTarget(node.target)}>`
+      case 'caption_number':
+        return '#'
+      case 'citation_group': {
+        const integral = node.items[0]?.mode === 'integral'
+        if (node.items.some((item) => (item.mode === 'integral') !== integral)) {
+          throw new SourceUnspellableError(
+            'citation_group',
+            'a group with mixed per-item citation modes has no Carve source spelling',
+            node,
+          )
+        }
+        if (integral) return node.raw.startsWith('[+') ? node.raw : `[+${node.raw.slice(1)}`
+        return node.raw.startsWith('[+') ? `[${node.raw.slice(2)}` : node.raw
+      }
+      case 'comment':
+        if (node.delimited) return `{% ${node.content} %}`
+        // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
+        // joins the opener rather than being separated from it by a space: a
+        // comment whose content is `%` is written ` %%%`, not ` %% %`, which
+        // splits a three-character opener run into an opener plus a stray
+        // character - "a shape that happens to work rather than one that says
+        // what it means". Both re-parse to the same content, so the invariant
+        // never saw it; §1's `to_html(fmt(x)) == to_html(x)` is necessary, not
+        // sufficient. (carve#581, carve#544)
+        return node.content.startsWith('%')
+          ? ` %%${node.content}`
+          : ` %% ${node.content}`
+      case 'smart_punctuation':
+        // The whole point: reproduce the author's source run verbatim.
+        return node.value
+      default: {
+        const t: never = node
+        throw new Error(`renderCarve: unknown inline ${(t as { type: string }).type}`)
+      }
+    }
+    }
+  }
+
+  private renderLink(node: Link, ctx: CarveContext): string {
+    // An unresolved reference link (parse() left `ref` set with an empty href -
+    // no matching `[label]: url` def) round-trips via its verbatim source. resolve
+    // either matches it to a heading later or renders it literally; emitting the
+    // raw reference reproduces that exactly, where `[text]()` would not.
+    // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
+    // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
+    // no longer answers this question (carve#596).
+    if (node.ref !== undefined && node.rawRef !== undefined && !node.href) {
+      return node.rawRef
+    }
+    if (node.ref !== undefined && node.rawRef !== undefined) {
+      return node.rawRef
+    }
+    const text = escapeNoteReferenceLabel(this.renderInlines(node.children, ctx), ctx)
+    const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
+    return `[${text}](${escapeDestination(node.href)}${title})${renderAttrs(node.attrs)}`
+  }
+
+  /**
+   * THE CANONICAL OPENER SPELLS THE FORMAT OUT: `---yaml`, never a bare `---`
+   * (markup-carve/carve#977, PART 11 §6b; markup-carve/carve#961).
+   *
+   * The writer used to drop the token for `yaml` alone. That was a special case
+   * for ONE format in a writer that already spelled every other one out - `toml`,
+   * `json` and any custom word all came back as `---toml` / `---json` - so the
+   * ruling REMOVES a branch rather than adding one, and it is the spelling
+   * carve-rs already produced.
+   *
+   * The two forms parse identically: a bare opener takes
+   * `defaultFrontmatterFormat`, whose default is `yaml`. Writing the token is
+   * what makes the round trip say what the AST holds - a document parsed with
+   * `defaultFrontmatterFormat: 'toml'` and written back bare would have read as
+   * `yaml` on the next pass, under the option's default.
+   */
+  private renderFrontmatter(frontmatter: { format: string; content: string }): string {
+    return `---${escapeFormat(frontmatter.format)}\n${this.protectVerbatim(frontmatter.content)}\n---`
+  }
+
+  private renderBlockComment(content: string): string {
+    let longest = 0
+    for (const match of content.matchAll(/%+/g)) longest = Math.max(longest, match[0].length)
+    const fence = '%'.repeat(Math.max(3, longest + 1))
+    return `${fence}\n${this.protectVerbatim(content)}\n${fence}`
+  }
+
+  private renderMath(display: boolean, content: string): string {
+    const code = this.renderCode(content, false, 'math')
+    return `${display ? '$$' : '$'}${code}`
+  }
+
+  /**
+   * Why NO Carve source reproduces this verbatim value, or `undefined` when one
+   * does (carve-js#1344).
+   */
+  private termKeepsLineIndent = false
+
+  private unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
+    if (/[ \t][\r\n]/.test(content)) {
+      return 'a line of the value ends in whitespace, which the block layer strips'
+    }
+    if (!this.termKeepsLineIndent && /[\r\n][ \t]/.test(content)) {
+      return 'a line of the value starts with whitespace, which the block layer strips'
+    }
+    if (needsPad && /[\r\n]$/.test(content)) {
+      return 'a padded value ending in a line terminator loses the pad'
+    }
+    return undefined
+  }
+
+  private renderCode(content: string, allowUnclosed = false, nodeType = 'code'): string {
+    // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
+    // much as it is inside a fence - and `normalize()` would otherwise rewrite it
+    // to `\ `, which inside backticks is a literal backslash and a space
+    // (carve-js#688). Same sentinel as protectVerbatim uses; `restoreVerbatim`
+    // puts the character back at the end of normalization. carve-rs already emits
+    // it as itself here.
+    const fence = safeFence(content, 1)
+    const needsPad =
+      content.startsWith('`') ||
+      content.endsWith('`') ||
+      (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
+    // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
+    // writer refuses it instead of emitting the nearest form (carve-js#1344).
+    // Same throw path as the empty `raw_inline`, and the same sentence: the
+    // writer's contract is that what it returns re-reads as what it was given,
+    // EXCEPT on the structural carve-outs `renderCarve`'s own docblock names
+    // (PART 11 §1b, §1c and §10j). None of them reaches here: every one is about
+    // the SHAPE a node sits in or the blocks it holds, and this test is on a
+    // node's own VALUE. That is why refusing is right here and wrong there -
+    // refusing an unspellable value loses nothing that had a spelling to begin
+    // with, while refusing a structural carve-out would fail an editor's round
+    // trip on a tree the renderer accepts.
+    const unspellable = this.unspellableVerbatimReason(content, needsPad)
+    if (unspellable !== undefined) throw new SourceUnspellableError(nodeType, unspellable)
+    // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
+    // the closed form has no spelling and the bare opener is the one that does
+    // (carve-js#1338). Only the caller knows whether the opener may run to the
+    // end of the text, so it says so.
+    if (needsPad && /^[\r\n]/.test(content) && allowUnclosed && unclosedVerbatimSpells(content)) {
+      return `${fence}${content}`
+    }
+    if (needsPad && /^[\r\n]/.test(content)) {
+      throw new SourceUnspellableError(nodeType, 'a leading newline loses its padding where the code span cannot run to the end')
+    }
+    return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
+  }
+
+  private lineBlockLayoutWhitespace(body: string): string {
+    return body.replace(new RegExp(`(?:^${this.sentinels[3]}+)|${this.sentinels[3]}{2,}`, 'gm'), (run) => this.sentinels[0].repeat(run.length))
+  }
+
+  private normalize(text: string): string {
+    const lines = trimNonNbspKeepingGuard(
+      text.replace(new RegExp(`${this.sentinels[3]}(?=[ \t]*(?:\n|$))`, 'g'), '\u00a0').replace(new RegExp(this.sentinels[3], 'g'), '\\ '),
+    ).split('\n')
+    const swept = lines.map((line) => {
+      // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
+      // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so
+      // three spaces inside a code block are out of reach and stay intact.
+      if (line.length > 0 && RE_WRITER_BLANK.test(line)) return ''
+      // Strip a line's trailing whitespace, on EVERY line (PART 2 NO TRAILING
+      // WHITESPACE; carve#926).
+      //
+      // This used to fire only where the line ENDED A BLOCK, because before a
+      // SOFT BREAK the parser kept the run, so stripping it there changed the
+      // rendered output and broke carveToHtml(fmt(x)) == carveToHtml(x). The
+      // parser is the half that moved: it drops the run at both positions now, so
+      // the restriction inverts - keeping the run is what breaks the invariant,
+      // for a hand-built tree that carries one. carve-rs#359 and carve#375 added
+      // the restriction for the old parser and it goes with it.
+      return dropTrailingWs(line)
+    })
+    // The squeeze runs FIRST, so a decorative run still normalizes; the boundary
+    // sentinel is not a newline yet and passes through it untouched.
+    const squeezed = swept.join('\n').replace(/\n{3,}/g, '\n\n')
+    // The boundary tag opens the line it sits on, and everything to its LEFT is
+    // the prefix its host had already put there - two columns of a list item's
+    // content, `> ` from a blockquote, both together when a list sits in a quote.
+    // The three blank lines have to carry that same prefix, minus its trailing
+    // whitespace, because that is how each host spells a blank line: a list item
+    // writes nothing, a blockquote writes `>`. Taking the prefix from the line
+    // rather than passing it down means no host has to know about the boundary.
+    //
+    // ONE TAG PER LINE, always: every site that writes one puts it directly after
+    // a newline, so the lazy prefix cannot run past a line it does not own.
+    const cleaned = trimNonNbspKeepingGuard(
+      squeezed.replace(new RegExp(`^(.*?)${this.sentinels[4]}`, 'gm'), (_match, prefix: string) => {
+        const blank = dropTrailingWs(prefix)
+        return `${blank}\n${blank}\n${blank}\n${prefix}`
+      }),
+    )
+
+    return `${guardLeadingBom(this.restoreVerbatim(cleaned))}\n`
+  }
+
+  private sentinels: string[] = []
+
+  /**
+   * Whole-document normalization (trailing-whitespace strip, blank-line
+   * collapsing) must not reach inside verbatim content - code blocks, raw
+   * blocks, frontmatter, and block comments reproduce their content
+   * byte-exact (issue 340). Sentinel-encode the vulnerable bytes before the
+   * content joins the document string; normalize() restores them at the end.
+   * U+E000 is already the parser's NBSP marker; the first four slots of the picked
+   * run extend the scheme.
+   */
+  private protectVerbatim(content: string): string {
+    const [sp, tab, blank] = this.sentinels
+
+    return content
+      // An authored U+E000 inside verbatim content is the CHARACTER, not an
+      // escape. `normalize()` rewrites every U+E000 to `\ `, which is right
+      // outside verbatim and wrong inside it - escapes do not resolve in a code
+      // block, so `\ ` there is a literal backslash and a space and
+      // toHtml(fmt(x)) != toHtml(x) (carve-js#688). Carrying it through
+      // normalization under its own sentinel keeps it out of that rewrite;
+      // `restoreVerbatim` puts the character back. carve-rs already emits it as
+      // itself.
+      .replace(/[ \t]+(?=\n|$)/g, (run) => run.replace(/ /g, sp).replace(/\t/g, tab))
+      .split('\n')
+      .map((line) => (line === '' ? blank : line))
+      .join('\n')
+  }
+
+  private restoreVerbatim(text: string): string {
+    return (
+      text
+        .replace(new RegExp(`^([ \\t>]*)${this.sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
+          dropTrailingWs(prefix),
+        )
+        .replace(new RegExp(this.sentinels[0], 'g'), ' ')
+        .replace(new RegExp(this.sentinels[1], 'g'), '\t')
+        .replace(new RegExp(this.sentinels[2], 'g'), '')
+        // Back to the character itself - see protectVerbatim.
+    )
+  }
+
+  // Which set the writer is escaping right now. renderCarve renders the document
+  // minimally, checks that it re-parses to the same AST, and re-renders
+  // conservatively only when it does not (PART 11 section 4).
+  private escapeMode: 'minimal' | 'conservative' = 'conservative'
+
+  /**
+   * The units written in the conservative form, when the writer is deciding unit
+   * by unit rather than document by document.
+   *
+   * Null means the whole pass follows `escapeMode`, which is what the two
+   * exploratory renders in `renderCarve` do. Non-null is PART 11 §2b's pass: a
+   * unit in the set is escaped in full, every other unit is emitted by §2's own
+   * test, and for a character nothing needs that means bare.
+   */
+  private escalatedUnits: Set<object> | null = null
+
+  /**
+   * Where the writer records the unit a character it is escaping belongs to.
+   *
+   * Non-null only for `narrowEscalation`'s control render, which uses it to learn
+   * which units the escape arms actually ask about - see the comment there. Null
+   * everywhere else, so no other render pays for the bookkeeping.
+   */
+  private askedUnits: Set<object> | null = null
+
+  /**
+   * The node whose render arm is currently writing, and therefore the unit the
+   * next escaped character belongs to.
+   *
+   * Set by `renderBlock` and `renderInline`, so a run of prose is charged to its
+   * text node and the strings a block writes itself are charged to the block.
+   */
+  private escapeUnit: object | null = null
+
+  /** The form another node's escapes take. */
+  private escapeModeOf(unit: object | undefined): 'minimal' | 'conservative' {
+    const previous = this.escapeUnit
+    this.escapeUnit = unit ?? null
+    try {
+      return this.escapeModeHere()
+    } finally {
+      this.escapeUnit = previous
+    }
+  }
+
+  /** Which form the character being written now takes (PART 11 §2b). */
+  private escapeModeHere(): 'minimal' | 'conservative' {
+    if (this.askedUnits !== null && this.escapeUnit !== null) this.askedUnits.add(this.escapeUnit)
+    if (this.escalatedUnits === null) return this.escapeMode
+    return this.escapeUnit !== null && this.escalatedUnits.has(this.escapeUnit) ? 'conservative' : 'minimal'
+  }
+
+  /** §5's lone brackets, which both forms escape, by writing node and offset. */
+  private loneBrackets: LoneBrackets = new WeakMap()
+
+  private leftToSearch: LeftToSearch = new WeakSet()
+
+  private pairedClosers: PairedClosers = new WeakMap()
+
+  /**
+   * Whether each paired `[` was last written escaped, for its closer. The two
+   * sit in different units whenever a nested construct separates them, and as
+   * separate knobs neither could be relaxed alone, so the search kept both.
+   */
+  private escapedOpeners = new WeakMap<object, Map<number, boolean>>()
+
+  /**
+   * Which units the occurrence search numbers, so a key survives a re-render.
+   *
+   * Non-null only during that search. Everywhere else the whole unit follows
+   * `escapeModeHere`, which is §2b's per-unit knob.
+   */
+  private unitNumbers: Map<object, number> | null = null
+
+  /** The occurrences handed back their bare form by the search (PART 11 §2). */
+  private relaxedOccurrences: Set<string> | null = null
+
+  /** Where a pass records the occurrences it visited, in emission order. */
+  private occurrenceLog: string[] | null = null
+
+  /** The decision the last candidate site took, so a RUN can inherit it. */
+  private lastOccurrenceRelaxed = false
+
+  /**
+   * How many escaped runs each unit has written in this pass.
+   *
+   * THE OFFSET ALONE IS NOT A KEY. A unit is the node whose arm wrote the
+   * character, and a BLOCK's arm can write several runs - a table row's cells, a
+   * fence title beside its info string - each with its own offsets starting at
+   * zero. Two of them collide at offset 0 and the search would then relax both
+   * sites or neither, which is the per-unit knob this whole change removes, one
+   * level down.
+   *
+   * The count is stable across the search for the same reason the offsets are:
+   * relaxing an occurrence changes which characters are emitted and never which
+   * arms run, so a unit writes the same runs in the same order on every render.
+   */
+  private escapeCallIndexes: Map<object, number> | null = null
+
+  /** The index of the run now being escaped, within its unit. */
+  private nextEscapeCallIndex(): number {
+    if (this.escapeCallIndexes === null || this.escapeUnit === null) return 0
+    const index = this.escapeCallIndexes.get(this.escapeUnit) ?? 0
+    this.escapeCallIndexes.set(this.escapeUnit, index + 1)
+    return index
+  }
+
+  /**
+   * Whether the search has handed the candidate at `offset` back its bare form.
+   *
+   * THE KEY IS THE POSITION, NOT AN ORDINAL, and that is what makes it survive a
+   * re-render: relaxing an occurrence changes the emitted BYTES and never the
+   * node's own text, so a site keeps the offset it had. An ordinal would have to
+   * be counted at every site whether it was offered or not, and two engines whose
+   * escape classes differ by one character would then number every later site
+   * differently.
+   *
+   * THE OCCURRENCE IS THE RUN, WHICH IS §2's OWN UNIT. "THE UNIT IS THE OPENER,
+   * NOT THE CHARACTER" - where a construct opens on a run of characters the whole
+   * run is escaped, so `\\#\\# H` and never `\\## H`. A search that offered the
+   * two hashes separately relaxes the second one, because with the first still
+   * escaped no heading forms either way, and emits precisely the half-escaped run
+   * §2 calls "a shape that happens to work rather than one that says what it
+   * means". So a candidate repeating the character before it inherits that
+   * character's decision instead of taking one, and the run is escaped or bare as
+   * a whole.
+   */
+  private occurrenceIsRelaxed(call: number, offset: number, continuesRun: boolean): boolean {
+    if (this.unitNumbers === null || this.escapeUnit === null) return false
+    if (continuesRun) return this.lastOccurrenceRelaxed
+    const unit = this.unitNumbers.get(this.escapeUnit)
+    if (unit === undefined) return false
+    const key = `${unit}:${call}:${offset}`
+    this.occurrenceLog?.push(key)
+    this.lastOccurrenceRelaxed = this.relaxedOccurrences !== null && this.relaxedOccurrences.has(key)
+    return this.lastOccurrenceRelaxed
+  }
+
+  /**
+   * Headings whose published id is the one a fresh parse would assign anyway.
+   *
+   * PART 12 §5 publishes a heading's slugged id, and PART 11 §1 writes the
+   * document back - so the writer must not turn the first into source. An
+   * AUTHORED id carries an `#id` slot and is written; a GENERATED one carries
+   * none and is dropped, EXCEPT where dropping it would change the document: an
+   * ingested tree whose heading text was edited carries an id the text no longer
+   * slugs to, and there the id is the only place that information lives.
+   *
+   * "What a fresh parse would assign" is computed with the parser's own pass over
+   * a copy with the ids removed, rather than a second dedup implementation here
+   * that could drift from it (carve-js#741).
+   */
+  private redundantIds = new WeakSet<object>()
+
+  /** The inline nodes this pass wrote with a braced opener. */
+  private writtenBraced = new WeakSet<object>()
+
+  /** The emphasis kinds open around the node being written. */
+  private openEmphasisKinds = new Set<string>()
+
+  /** Spans written braced so their content starts a scope of its own. */
+  private bracedForScope = new WeakSet<object>()
+
+  /**
+   * Records a braced emphasis, and refuses one holding a braced span of the same
+   * kind with no braced span of another kind between them: E3 keeps that inner
+   * `{*` literal (markup-carve/carve#2066, carve#2091).
+   */
+  private bracedOnce(node: InlineNode, body: string): string {
+    if (!BRACEABLE_TYPES.has(node.type) || !body.startsWith('{')) return body
+    const children = (node as { children?: InlineNode[] }).children ?? []
+    const inner = nearestOfType(children, node.type, this.writtenBraced).find((child) => this.writtenBraced.has(child))
+    if (inner !== undefined) {
+      throw new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
+    }
+    this.writtenBraced.add(node)
+    return body
+  }
+
+  private unspellableEmptyCodeSpans = new WeakSet<object>()
+
+  /**
+   * Hoisted definitions keyed by the SOURCE LINE they were written on, and the
+   * ones a definition list has already written back.
+   *
+   * A definition collected from a definition list's description empties the `dd`
+   * (spec markup-carve/carve#801), and an empty description has no source
+   * spelling: the writer emitted a bare `:` line, which re-parses as a
+   * continuation of the term, so `to_html(fmt(x)) == to_html(x)` failed on the
+   * documents that rule added (markup-carve/carve#805).
+   *
+   * Nothing new is needed to fix it. The entry records `definitionLines`, the
+   * definition node keeps the `pos` it was written at (PART 12 §4), and the two
+   * name the SAME LINE - so the description can be written back with the
+   * definition on it, exactly as the author had it, and the document-level pass
+   * skips what a description already claimed.
+   *
+   * This is the same shape as the heading id: the tree already distinguishes
+   * authored from derived, and the writer only had to ask (carve-php#901).
+   */
+  private definitionsByLine = new Map<number, BlockNode>()
+
+  private definitionsWrittenInPlace = new WeakSet<object>()
+
+  /** Footnote definitions live in a root map, not in `children`, so these are
+   *  tracked by LABEL rather than by node identity. */
+  private footnoteDefsByLine = new Map<number, string>()
+
+  private footnotesWrittenInPlace = new Set<string>()
+
+  /** The document's footnote bodies, so a description can write one back. */
+  private documentFootnoteDefs: Record<string, BlockNode[]> | undefined
+
+  private destinationParensByUnit = new WeakMap<object, Set<number>>()
+
+  private lastLiteralRanges: LiteralRange[] = []
+
+  private lastNoteCloses: number[] = []
+
+  private inlineChildProjections: Array<{ text: string; ranges: LiteralRange[]; noteCloses: number[] }> = []
+
+  /** Choose escapes from the emitted inline run, including intervening inline nodes. */
+  private escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteCloses: Set<number>): string {
+    if (!text.includes('](') || ranges.length === 0) return text
+    const destinations = completeDestinationOpeners(text)
+    const bracketClose = buildBracketMap(text, true)
+    const paired = new Set<number>()
+    for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', i + 1)) {
+      const close = bracketClose(i)
+      if (close !== undefined && !noteCloses.has(close) && destinations.has(close + 1)) paired.add(close + 1)
+    }
+    const selected: number[] = []
+    const sources = new Map<Text, string>()
+    for (const range of ranges) {
+      let source = sources.get(range.node)
+      if (source === undefined) {
+        source = cleanEscapedText(range.node).replace(UNWRITABLE_CONTROLS, '')
+        sources.set(range.node, source)
+      }
+      let sourceOffset = (range.sourceStart ?? 0) - 1
+      for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
+        sourceOffset = source.indexOf('(', sourceOffset + 1)
+        if (!paired.has(i) || precededByOddBackslashRun(text, i) || this.leftToSearch.has(range.node)) continue
+        let forced = this.destinationParensByUnit.get(range.node)
+        if (forced === undefined) this.destinationParensByUnit.set(range.node, forced = new Set())
+        forced.add(sourceOffset)
+        selected.push(i)
+      }
+    }
+    let out = ''
+    let cursor = 0
+    for (const i of selected) {
+      out += text.slice(cursor, i) + '\\'
+      cursor = i
+    }
+    return out + text.slice(cursor)
+  }
+
+  private escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false, sourceOffset = 0): string {
+    const mode = this.escapeModeHere()
+    text = text.replace(UNWRITABLE_CONTROLS, '')
+    const destinationParens = this.escapeUnit == null ? undefined : this.destinationParensByUnit.get(this.escapeUnit)
+    const lone = this.escapeUnit == null ? undefined : this.loneBrackets.get(this.escapeUnit)
+    const closers = this.escapeUnit == null ? undefined : this.pairedClosers.get(this.escapeUnit)
+    const unit = this.escapeUnit
+    const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
+    const call = mode === 'conservative' ? this.nextEscapeCallIndex() : 0
+    const decide = (char: string, offset: number, subject: string): string => {
+      if (destinationParens?.has(sourceOffset + offset)) return '\\('
+      if (lone?.has(sourceOffset + offset)) {
+        this.lastOccurrenceRelaxed = false
+        return `\\${char}`
+      }
+      // A paired closer follows its opener, which may sit in another unit.
+      const opener = char === ']' ? closers?.get(sourceOffset + offset) : undefined
+      if (opener !== undefined) {
+        const escaped = this.escapedOpeners.get(opener.owner)?.get(opener.offset) ?? false
+        this.lastOccurrenceRelaxed = !escaped
+        return escaped ? '\\]' : ']'
+      }
+      if (mode === 'minimal' && (char === '(' || char === '[' || char === ']')) return char
+      // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
+      // search has escalated, each candidate site is offered back on its own,
+      // so the one occurrence that needed the escape no longer drags the rest
+      // of the unit with it. The unconditional set is not a candidate and is
+      // never offered.
+      if (
+        mode === 'conservative' &&
+        !NOT_OFFERED_PER_OCCURRENCE.includes(char) &&
+        this.occurrenceIsRelaxed(call, offset, offset > 0 && subject[offset - 1] === char)
+      ) {
+        return char
+      }
+      // A COLON at the start of a line opens a structure - `::` a definition
+      // term, `:::` a fence - and PART 11 §2 escapes a character only where
+      // omitting it would change the re-parse. Mid-line the colon is left to
+      // the symbol pass below, which is the one channel it still opens there.
+      if (char === ':' && !opensLine(subject, offset)) return ':'
+      if (char !== '^') return `\\${char}`
+      const next = text[offset + 1] ?? ''
+      // A TAB after the marker is not a caption opener: PART 10 §231 leaves
+      // that line as prose, which is why the corpus renders `^<TAB>Figure 1`
+      // as a paragraph. Escaping it wrote `\^` where carve-php and carve-rs
+      // write the caret bare, and an escape that guards a channel the
+      // character cannot open is exactly what corpus 304 refuses.
+      const opensCaption = captionCanOpen && offset === 0 && next === ' '
+      // Before a `}` the brace takes the escape, and `^\}` closes nothing (PART 11 §2).
+      const opensInline = next === '[' || (text[offset - 1] ?? '') === '{'
+      return opensCaption || opensInline ? '\\^' : '^'
+    }
+    let out = text
+      .replace(escapes, (char, offset: number, subject: string) => {
+        const written = decide(char, offset, subject)
+        if (char === '[' && unit !== null) {
+          let decisions = this.escapedOpeners.get(unit)
+          if (decisions === undefined) this.escapedOpeners.set(unit, (decisions = new Map()))
+          decisions.set(sourceOffset + offset, written !== char)
+        }
+        return written
+      })
+    // The caption-opening caret is escaped in EVERY mode, not only when `^` is
+    // in the candidate class: after a caption host (a figure group, an image, a
+    // table...) an unescaped `^ ` line re-attaches as the caption on re-parse,
+    // so the minimal form always failed the redundancy check and the WHOLE
+    // document escalated to conservative escaping - `\(a\)` and `\#` where
+    // carve-php and carve-rs write the characters bare. One structural escape
+    // keeps the minimal pass winnable (cross-engine fmt parity, PART 11 §4).
+    if (
+      mode === 'minimal' &&
+      captionCanOpen &&
+      out.startsWith('^') &&
+      out[1] === ' '
+    ) {
+      out = '\\' + out
+    }
+    // A TRAILING `!` BEFORE A BACKTICK RUN is escaped in EVERY mode too, for the
+    // same reason and with the same shape. §27 makes `!` immediately before a
+    // verbatim run an INLINE LITERAL, and names this as the single case the
+    // construct reinterprets: "A literal `!` immediately before a backtick run is
+    // therefore written `\!`". So the escape is not optional - it is the only
+    // spelling of this tree - and leaving the minimal pass to discover that by
+    // failing its redundancy check escalated the WHOLE DOCUMENT to conservative
+    // escaping. `foo (bar) 50% a-b` in a document that also holds a `!` before a
+    // code span came out `foo \(bar\) 50\% a\-b`, which is the over-escaping PART
+    // 11 §4 forbids, while carve-rs wrote the whole line bare (carve-js#1175).
+    if (mode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
+      out = out.slice(0, -1) + '\\!'
+    }
+    // A SYMBOL-OPENING COLON is escaped in EVERY mode, for the reason the caption
+    // caret and the trailing `!` above are: it is not an optional escape. Under a
+    // configured symbol map `a :rocket: b` re-parses to a `symbol` node the text
+    // never held, so PART 11 section 2 requires the backslash - and the map is
+    // not the writer's to know, which is why the node is what decides and not the
+    // rendering. Leaving it to the minimal pass's redundancy check instead
+    // escalated the WHOLE document to conservative escaping, the over-escaping
+    // section 4 forbids, because `:` is not in the unconditional class.
+    //
+    // MID-LINE ONLY IS THE WRONG FRAME, so this pass does not ask where the colon
+    // sits: `symbolOpensAt` is the parser's own predicate, and it answers for a
+    // line-opening colon too. A `:name:` at column 0 was already escaped by the
+    // branch above, and the odd-backslash guard here is what keeps this pass from
+    // escaping it a second time.
+    //
+    // Only the OPENING colon is escaped, because only the opening colon opens
+    // anything: the closing one is preceded by a name character, so the
+    // predicate declines it and `a \:rocket: b` is the whole escape. A colon that
+    // closes no shortcode opens no symbol either, which is what leaves the
+    // corpus's `a : b : c` bare.
+    if (out.includes(':')) {
+      let scanned = ''
+      for (let i = 0; i < out.length; i += 1) {
+        if (out[i] === ':' && !precededByOddBackslashRun(out, i) && symbolOpensAt(out, i)) scanned += '\\'
+        scanned += out[i]
+      }
+      out = scanned
+    }
+    return out
   }
 }
