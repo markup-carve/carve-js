@@ -835,6 +835,9 @@ const IMPLEMENTED = new Set([
   // trailing-whitespace rule landed on carve-js#2080.
   'a-comment-line-s-text-is-content-and-a-block-body-is-payload',
   'an-attribute-line-under-an-attributed-sub-item-stays-in-that-item',
+  // Arrives with carve 9f88255d and all ten documents already render
+  // byte-exact: a definition term has no content column at any depth.
+  'a-block-opener-indented-under-a-definition-term-is-term-text-at-every-depth',
 ])
 
 /**
