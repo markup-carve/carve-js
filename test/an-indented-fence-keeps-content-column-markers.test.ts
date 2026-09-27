@@ -17,6 +17,12 @@ describe('an indented fence keeps content-column markers (#2212)', () => {
     }
   }
 
+  it.each([1, 2, 3])('keeps payload with an opener %i columns past a term lead', (extra) => {
+    const pad = ' '.repeat(2 + extra)
+    const src = `- :: term\n\n${pad}\`\`\`\n${pad}a\n  - second\n`
+    expect(carveToHtml(src)).toContain('<pre><code>a\n- second\n</code></pre>')
+  })
+
   it('keeps the marker inside a quoted item', () => {
     expect(carveToHtml('> - head\n>\n>       ```\n>       a\n>   - second\n'))
       .toContain('<pre><code>a\n- second\n</code></pre>')
