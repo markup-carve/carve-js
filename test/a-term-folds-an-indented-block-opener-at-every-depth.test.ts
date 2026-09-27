@@ -76,6 +76,11 @@ describe('lintCarve - definition-term-block-folded', () => {
     expect(reports('> :: c\n>   # H\n')).toMatchObject([{ line: 2, column: 5 }])
   })
 
+  it('reports through a carriage return or a byte order mark', () => {
+    expect(reports(':: c\r  # H\r')).toMatchObject([{ line: 2, column: 3 }])
+    expect(reports('\uFEFF:: c\n # H\n')).toMatchObject([{ line: 2, column: 2 }])
+  })
+
   it('stays quiet for plain continuation text, list markers, and openers that open', () => {
     expect(reports(':: c\n  more text\n')).toEqual([])
     expect(reports(':: c\n  - x\n')).toEqual([])

@@ -856,10 +856,11 @@ function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning
     starts[i] = offset
     offset += lines[i]!.length + (source.slice(offset + lines[i]!.length, offset + lines[i]!.length + 2) === '\r\n' ? 2 : 1)
   }
+  // A leading BOM counts in positions but has no width.
   const visualColumn = (line: string, end: number): number => {
     let column = 0
     for (let i = 0; i < end && i < line.length; ) {
-      column = line[i] === '\t' ? Math.floor(column / 4 + 1) * 4 : column + 1
+      if (line[i] !== '\uFEFF') column = line[i] === '\t' ? Math.floor(column / 4 + 1) * 4 : column + 1
       i += (line.codePointAt(i) ?? 0) > 0xffff ? 2 : 1
     }
     return column
