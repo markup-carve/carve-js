@@ -519,14 +519,6 @@ function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
 }
 
 /**
- * The whitespace at the edges of a BLOCK's inline content, dropped.
- *
- * Only at a block boundary, never around an inline element: `a <em> b </em>c`
- * renders with the space between the words, so trimming inside the `<em>`
- * would join them. The caller says which it is - `inlines()` itself cannot
- * know, since it serves both.
- */
-/**
  * Is this text node LAYOUT rather than content (PART 11 §7,
  * markup-carve/carve#1628)?
  *
@@ -545,22 +537,54 @@ function isLayoutOnlyText(node: P5Node): boolean {
   return node.nodeName === '#text' && trimNonNbsp(node.value ?? '') === ''
 }
 
+/** Trim block-edge padding and redundant padding inside formatting. */
 function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
-  const out = [...nodes]
-  while (textEdge(out[0], 'start')) {
-    const first = out[0] as { type: 'text'; value: string }
-    const value = first.value.replace(/^[ 	]+/, '')
-    if (value === '') out.shift()
-    else out[0] = { ...first, value }
-  }
-  while (textEdge(out.at(-1), 'end')) {
-    const last = out.at(-1) as { type: 'text'; value: string }
-    const value = last.value.replace(/[ 	]+$/, '')
-    if (value === '') out.pop()
-    else out[out.length - 1] = { ...last, value }
-  }
+  return trimFormattingEdges(nodes, true, true)
+}
 
+function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: boolean): InlineNode[] {
+  const out = [...nodes]
+  while (leading && out[0]?.type === 'text') {
+    const first = out[0]
+    const value = first.value.replace(/^[ \t]+/, '')
+    if (value === '') out.shift()
+    else {
+      out[0] = { ...first, value }
+      break
+    }
+  }
+  while (trailing && out.at(-1)?.type === 'text') {
+    const last = out.at(-1) as { type: 'text'; value: string }
+    const value = last.value.replace(/[ \t]+$/, '')
+    if (value === '') out.pop()
+    else {
+      out[out.length - 1] = { ...last, value }
+      break
+    }
+  }
+  const endsWithSpace = (node: InlineNode | undefined): boolean => {
+    if (node === undefined) return false
+    if (textEdge(node, 'end')) return true
+    if (node.type === 'link' || node.type === 'span' || isFormatting(node)) return endsWithSpace(node.children.at(-1))
+    return false
+  }
+  for (let index = 0; index < out.length; index++) {
+    const node = out[index]!
+    if (!isFormatting(node) || node.children.every((child) => child.type === 'text' && /^[ \t]*$/.test(child.value))) continue
+    const next = out[index + 1]
+    node.children = trimFormattingEdges(
+      node.children,
+      index === 0 ? leading : out[index - 1]?.type === 'hard_break' || endsWithSpace(out[index - 1]),
+      next === undefined ? trailing : next.type === 'hard_break' || textEdge(next, 'start'),
+    )
+  }
   return out
+}
+
+function isFormatting(node: InlineNode): node is Extract<InlineNode, { type: 'strong' | 'emphasis' | 'underline' | 'strike' | 'highlight' | 'insert' | 'delete' | 'superscript' | 'subscript' }> {
+  return node.type === 'strong' || node.type === 'emphasis' || node.type === 'underline'
+    || node.type === 'strike' || node.type === 'highlight' || node.type === 'insert'
+    || node.type === 'delete' || node.type === 'superscript' || node.type === 'subscript'
 }
 
 const ADAPTERS = new Set<HtmlImportAdapter>([
