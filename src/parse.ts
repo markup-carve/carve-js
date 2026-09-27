@@ -6113,10 +6113,8 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
       while (i < n && isIdentPart(text[i]!)) i++
       if (text[i] === '=') {
         const v = text[i + 1]
-        // `key=` with an EMPTY value (EOF, `}`, or any whitespace follows) leaves
-        // a dangling `=` and is invalid — a bare value is `\S+` (>=1 non-space)
-        // and a quoted value starts with `"`/`'`. Otherwise (quoted or bare value)
-        // defer to the regex (a valid bare value is consumed whole -> linear).
+        // An empty value leaves a dangling `=`. For any other candidate,
+        // defer to the value regex, which checks quoting and delimiters.
         if (v === undefined || v === '}' || isCarveWhitespace(v)) {
           return true
         }
@@ -6648,7 +6646,7 @@ function isValidAttrPayload(inner: string): boolean {
  * validates as an attribute block that then parses to nothing.
  */
 const ATTR_ITEM_SRC =
-  '(?:#[a-zA-Z0-9_][\\w-]*)|(?:\\.[a-zA-Z0-9_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z][\\w-]*)'
+  '(?:#[a-zA-Z0-9_][\\w-]*)|(?:\\.[a-zA-Z0-9_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^}|"\'\\\\ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z][\\w-]*)'
 const ATTR_PAYLOAD = new RegExp(
   `^[ \\t\\n\\r]*(?:(?:${ATTR_ITEM_SRC})(?:[ \\t\\n\\r]+(?:${ATTR_ITEM_SRC}))*[ \\t\\n\\r]*)?$`,
 )
@@ -6713,7 +6711,7 @@ export function parseAttrs(src: string): Attrs {
   const note = (slot: string) => {
     if (!order.includes(slot)) order.push(slot)
   }
-  const re = /(?:#([a-zA-Z0-9_][\w-]*))|(?:\.([a-zA-Z0-9_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
+  const re = /(?:#([a-zA-Z0-9_][\w-]*))|(?:\.([a-zA-Z0-9_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^}|"'\\ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {
