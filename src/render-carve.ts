@@ -1303,8 +1303,8 @@ function isLanguageTag(value: string): boolean {
 }
 
 function quoteAttrValue(value: string): string {
-  // Unquoted values exclude ASCII whitespace, quotes, pipes and backslashes.
-  // Keep braces quoted too. Non-ASCII whitespace remains valid unquoted text.
+  // Unquoted values exclude space, tab, CR, LF, quotes, pipes and backslashes.
+  // Keep braces quoted too. Other whitespace remains valid unquoted text.
   // Quoted backslashes are doubled; pipes are escaped so table cell splitting
   // leaves them inside the value (CARVE-P2-019).
   if (/^[^ \t\n\r"'{}|\\]+$/.test(value)) return value

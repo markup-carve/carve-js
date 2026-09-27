@@ -21,13 +21,15 @@ describe('unquoted attribute value boundaries (#2191)', () => {
 
   it.each([
     '-{k=a|b} item\n',
-    '[l]: /u {k=a|b}\n\n[l]\n',
+    '[l]: /u {k=a|b}\n\n[l][]\n',
     '| x |{k=a\\b}\n',
     '{.ok\n k=a\\b}\n\nparagraph\n',
   ])('refuses invalid values through container-specific paths: %s', (source) => {
     const html = carveToHtml(source)
     expect(html).not.toMatch(/<[^>]+ k=/)
     expect(html).toContain('k=')
+    const valid = source.replace(/k=a[|\\]b/, 'k=a/b')
+    expect(carveToHtml(valid)).toContain('k="a/b"')
     expect(carveToHtml(renderCarve(parse(source)))).toBe(html)
   })
 
