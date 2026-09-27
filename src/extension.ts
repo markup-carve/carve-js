@@ -143,6 +143,8 @@ export interface BlockMatch {
  * references the same way core does.
  */
 export interface MatcherContext {
+  /** Whether inline parsing is inside an authored link label. */
+  readonly inLinkLabel?: boolean
   /** Parse inline markup (core + extensions) into nodes. */
   parseInlines(text: string): InlineNode[]
   /** Parse block markup (core + extensions) into nodes. */

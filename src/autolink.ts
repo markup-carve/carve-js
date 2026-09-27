@@ -83,7 +83,8 @@ export function autolink(opts: AutolinkOptions = {}): CarveExtension {
 
   return {
     name: 'autolink',
-    matchInline(text, pos) {
+    matchInline(text, pos, ctx) {
+      if (ctx.inLinkLabel) return null
       const url = urlRe && at(urlRe, text, pos)
       if (url) {
         const decoded = url.replace(RE_ESCAPE, '$1')

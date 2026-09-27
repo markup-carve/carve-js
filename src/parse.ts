@@ -6877,6 +6877,8 @@ function attrOrder(a: Attrs): string[] {
 
 /** State owned by one synchronous parse operation. */
 class ParseSession {
+  private linkLabelDepth = 0
+
   // Matchers belong to this parse; fragment parsing scopes its matcher context.
   private activeMatchers: CarveExtension[] = []
 
@@ -6962,7 +6964,9 @@ class ParseSession {
   // extension-parsed content behaves like core nested content, not an isolated
   // snippet.
   private makeMatcherCtx(lexer: Lexer, opts: ParseOptions): MatcherContext {
+    const session = this
     return {
+      get inLinkLabel() { return session.linkLabelDepth > 0 },
       parseInlines: (t) => this.parseInline(t, lexer.abbrDefs, lexer.linkDefs),
       parseBlocks: (s) => this.parseBlockSource(s, opts, lexer),
       linkDefs: lexer.linkDefs,
@@ -7031,6 +7035,15 @@ class ParseSession {
       }
     }
     return null
+  }
+
+  private scanLinkLabel(text: string, source: InlineSource, inFootnote: boolean): InlineNode[] {
+    this.linkLabelDepth++
+    try {
+      return this.scanInline(text, source, inFootnote)
+    } finally {
+      this.linkLabelDepth--
+    }
   }
 
   // Offer the active inline matchers the position `pos` in `text`, in
@@ -12140,7 +12153,7 @@ class ParseSession {
             const link: Link = {
               type: 'link',
               href: ml[1]!,
-              children: this.scanInline(innerText, this.shiftSource(source, text, i + 1), inFootnote),
+              children: this.scanLinkLabel(innerText, this.shiftSource(source, text, i + 1), inFootnote),
             }
             const title = ml[2] ?? ml[3]
             if (title !== undefined) link.title = unescapeAttrValue(title)
@@ -12179,7 +12192,7 @@ class ParseSession {
             const refLink: Link = {
               type: 'link',
               href: '',
-              children: this.scanInline(innerText, this.shiftSource(source, text, i + 1), inFootnote),
+              children: this.scanLinkLabel(innerText, this.shiftSource(source, text, i + 1), inFootnote),
               ref: mref[1]! !== '' ? mref[1]! : innerText,
               // rawRef includes any consumed trailing {attrs} so the literal
               // fallback for an unresolved ref preserves the full source, and it

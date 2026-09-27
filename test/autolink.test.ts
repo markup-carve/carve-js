@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { autolink, carveToHtml, markdownToCarve } from '../src/index.js'
+import { autolink, carveToCarve, carveToHtml, markdownToCarve } from '../src/index.js'
 
 describe('autolink extension', () => {
   it('links a bare https URL', () => {
@@ -82,5 +82,34 @@ describe('autolink extension decodes escapes', () => {
     expect(html(markdownToCarve('See http://e.com/a--b now.\n'))).toBe(
       '<p>See <a href="http://e.com/a--b">http://e.com/a--b</a> now.</p>',
     )
+  })
+})
+
+describe('autolink formatting', () => {
+  it.each(['https://example.com', 'a@b.com', 'mailto:a@b.com'])(
+    'keeps %s stable across formatting passes', (url) => {
+      const options = { extensions: [autolink()] }
+      const source = `Visit ${url} now.\n`
+      const written = carveToCarve(source, options)
+      expect(carveToCarve(written, options)).toBe(written)
+      expect(carveToHtml(written, options)).toBe(carveToHtml(source, options))
+    },
+  )
+
+  it('keeps nested emphasis inside a link and resumes after its label', () => {
+    const options = { extensions: [autolink()] }
+    const source = '[*https://example.com*](/target) https://outside.com\n'
+    const written = carveToCarve(source, options)
+    expect(carveToCarve(written, options)).toBe(written)
+    expect(carveToHtml(source, options)).toContain('<strong>https://example.com</strong>')
+    expect(carveToHtml(source, options)).toContain('href="https://outside.com"')
+  })
+
+  it('keeps reference labels stable', () => {
+    const options = { extensions: [autolink()] }
+    const source = '[https://example.com][r]\n\n[r]: /target\n'
+    const written = carveToCarve(source, options)
+    expect(carveToCarve(written, options)).toBe(written)
+    expect(carveToHtml(written, options)).toBe(carveToHtml(source, options))
   })
 })
