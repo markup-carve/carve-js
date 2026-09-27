@@ -463,16 +463,22 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
     }
     const children = [...node.children]
     const lead = textEdge(children[0], 'start')
-    if (lead) {
+    while (textEdge(children[0], 'start')) {
       const value = (children[0] as { value: string }).value.replace(/^[ \t]+/, '')
       if (value === '') children.shift()
-      else children[0] = { ...(children[0] as object), value } as InlineNode
+      else {
+        children[0] = { ...(children[0] as object), value } as InlineNode
+        break
+      }
     }
     const trail = textEdge(children.at(-1), 'end')
-    if (trail) {
+    while (textEdge(children.at(-1), 'end')) {
       const value = (children.at(-1) as { value: string }).value.replace(/[ \t]+$/, '')
       if (value === '') children.pop()
-      else children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
+      else {
+        children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
+        break
+      }
     }
     if (lead) owed = true
     if (owed && !blankEdge(out.at(-1), 'end')) out.push({ type: 'text', value: ' ' })
@@ -484,14 +490,7 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
   }
   pay(undefined)
 
-  const merged: InlineNode[] = []
-  for (const node of out) {
-    const last = merged.at(-1)
-    if (node.type === 'text' && last?.type === 'text') last.value += node.value
-    else merged.push(node)
-  }
-
-  return merged
+  return out
 }
 
 /**
@@ -4197,7 +4196,14 @@ class Importer {
       // `<p>a</p><p></p><p>b</p>` is `a b`, never `a  b`.
       if (produced.length > 0) previousWasBlock = isFlattenedBlock(node)
     })
-    return dropSpaceAfterHardBreak(hoistEdgeSpace(out))
+    const merged: InlineNode[] = []
+    for (const node of hoistEdgeSpace(out)) {
+      const last = merged.at(-1)
+      if (node.type === 'text' && last?.type === 'text') last.value += node.value
+      else merged.push(node)
+    }
+
+    return dropSpaceAfterHardBreak(merged)
   }
 
   /**
