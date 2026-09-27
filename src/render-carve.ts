@@ -1935,7 +1935,17 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
   // never end up sharing one: the list writes back with the grouping it
   // parsed from.
   for (const item of items) {
-    for (const term of item.terms) out.push(`:: ${renderInlines(term, ctx)}`)
+    for (const term of item.terms) {
+      // A term keeps each continuation line's indent, so a verbatim span in
+      // one can hold a line that starts with whitespace (carve#2411).
+      const outer = termKeepsLineIndent
+      termKeepsLineIndent = true
+      try {
+        out.push(`:: ${renderInlines(term, ctx)}`)
+      } finally {
+        termKeepsLineIndent = outer
+      }
+    }
     item.definitions.forEach((def, index) => {
       // An EMPTY description whose line carries a hoisted definition is one the
       // author wrote the definition on: write it back there. Without this the
@@ -3167,11 +3177,13 @@ function unclosedVerbatimSpells(content: string): boolean {
  * Why NO Carve source reproduces this verbatim value, or `undefined` when one
  * does (carve-js#1344).
  */
+let termKeepsLineIndent = false
+
 function unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
   if (/[ \t][\r\n]/.test(content)) {
     return 'a line of the value ends in whitespace, which the block layer strips'
   }
-  if (/[\r\n][ \t]/.test(content)) {
+  if (!termKeepsLineIndent && /[\r\n][ \t]/.test(content)) {
     return 'a line of the value starts with whitespace, which the block layer strips'
   }
   if (needsPad && /[\r\n]$/.test(content)) {
