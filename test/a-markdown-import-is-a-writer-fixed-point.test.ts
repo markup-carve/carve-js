@@ -302,10 +302,12 @@ describe('a Markdown import closes, renumbers and re-indents the way carve fmt d
   // after it. That spacing is the part #1925 left open.
   it.each([
     // Closed, the item would read tight where GFM and the open fence read it loose.
+    // GFM reads this list loose, and Carve reads the blank as the open fence's own
+    // content (§17 L1a), so the attribute is what carries the source's looseness.
     [
       'leaves open a fence set apart from its item text with a blank line inside',
       md('- a', '', '  ~~~', '  x', '', '  y'),
-      md('- a', '', '  ```', '  x', '', '  y'),
+      md('{loose}', '- a', '', '  ```', '  x', '', '  y'),
     ],
     ['numbers a list after an item fence from its own marker', md('9. ~~~', '   x', 'more', '', '9. b'), md('9. ```', '   x', '   ```', '', 'more', '', '9. b')],
     ['keeps a quote the item left out of the item quote', md('- a', '', '  > iq', '> q'), md('{loose}', '- a', '', '  > iq', '', '> q')],
