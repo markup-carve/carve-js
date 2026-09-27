@@ -546,21 +546,52 @@ function isLayoutOnlyText(node: P5Node): boolean {
 }
 
 function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
-  const out = [...nodes]
-  while (textEdge(out[0], 'start')) {
-    const first = out[0] as { type: 'text'; value: string }
-    const value = first.value.replace(/^[ 	]+/, '')
-    if (value === '') out.shift()
-    else out[0] = { ...first, value }
-  }
-  while (textEdge(out.at(-1), 'end')) {
-    const last = out.at(-1) as { type: 'text'; value: string }
-    const value = last.value.replace(/[ 	]+$/, '')
-    if (value === '') out.pop()
-    else out[out.length - 1] = { ...last, value }
-  }
+  return trimFormattingEdges(nodes, true, true)
+}
 
+function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: boolean): InlineNode[] {
+  const out = [...nodes]
+  while (leading && out[0]?.type === 'text') {
+    const first = out[0]
+    const value = first.value.replace(/^[ \t]+/, '')
+    if (value === '') out.shift()
+    else {
+      out[0] = { ...first, value }
+      break
+    }
+  }
+  while (trailing && out.at(-1)?.type === 'text') {
+    const last = out.at(-1) as { type: 'text'; value: string }
+    const value = last.value.replace(/[ \t]+$/, '')
+    if (value === '') out.pop()
+    else {
+      out[out.length - 1] = { ...last, value }
+      break
+    }
+  }
+  const endsWithSpace = (node: InlineNode | undefined): boolean => {
+    if (node === undefined) return false
+    if (node.type === 'hard_break' || textEdge(node, 'end')) return true
+    if (node.type === 'link' || node.type === 'span' || isFormatting(node)) return endsWithSpace(node.children.at(-1))
+    return false
+  }
+  for (let index = 0; index < out.length; index++) {
+    const node = out[index]!
+    if (!isFormatting(node) || node.children.every((child) => child.type === 'text' && /^[ \t]*$/.test(child.value))) continue
+    const next = out[index + 1]
+    node.children = trimFormattingEdges(
+      node.children,
+      index === 0 ? leading : endsWithSpace(out[index - 1]),
+      next === undefined ? trailing : next.type === 'hard_break' || textEdge(next, 'start'),
+    )
+  }
   return out
+}
+
+function isFormatting(node: InlineNode): node is Extract<InlineNode, { type: 'strong' | 'emphasis' | 'underline' | 'strike' | 'highlight' | 'insert' | 'delete' | 'superscript' | 'subscript' }> {
+  return node.type === 'strong' || node.type === 'emphasis' || node.type === 'underline'
+    || node.type === 'strike' || node.type === 'highlight' || node.type === 'insert'
+    || node.type === 'delete' || node.type === 'superscript' || node.type === 'subscript'
 }
 
 const ADAPTERS = new Set<HtmlImportAdapter>([

@@ -146,9 +146,9 @@ describe('the HTML importer and an empty code span', () => {
   })
 
   it.each([
-    ['<p><s>x<code></code> </s></p>', '{"type":"code","value":""},{"type":"text","value":" "}'],
+    ['<p><s>x<code></code> </s></p>', '{"type":"code","value":""}'],
     ['<p><s>x<code></code> y</s></p>', '{"type":"code","value":""},{"type":"text","value":" y"}'],
-  ])('leaves the AST of %s as it is', (html, run) => {
+  ])('keeps the empty code in the AST of %s', (html, run) => {
     expect(JSON.stringify(htmlToAst(html).value.children)).toContain(run)
   })
 
