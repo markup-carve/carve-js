@@ -11,8 +11,8 @@ const stripSgr = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 describe('non-HTML table column count (header-rowspan)', () => {
   const src = '|= A |\n| ^ | x |\n'
 
-  it('markdown gives the delimiter the header row cell count', () => {
-    expect(carveToMarkdown(src)).toBe('| A |\n| --- |\n|  | x |\n')
+  it('markdown pads the header row and delimiter to the widest row', () => {
+    expect(carveToMarkdown(src)).toBe('| A |  |\n| --- | --- |\n|  | x |\n')
   })
 
   it('plain text drops the trailing empty header cell', () => {

@@ -700,18 +700,24 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     }
   }
   let out = ''
+  // A loop, not a spread: a spread of every row overflows the argument limit.
+  let widest = 0
+  for (const row of node.rows) widest = Math.max(widest, row.cells.length)
   if (header === undefined) {
     // GFM reads a pipe table only below a header row, so a headerless table
     // gets an empty one as wide as its widest row (PART 11 section 10n).
-    headerColumns = Math.max(0, ...node.rows.map((row) => row.cells.length))
+    headerColumns = widest
     if (headerColumns > 0) header = `| ${Array.from({ length: headerColumns }, () => '').join(' | ')} |`
   }
   if (header !== undefined) {
+    // GFM drops every body cell past the header's width, so a narrower header
+    // row gains empty cells up to the widest row (PART 11 section 10n).
+    const width = Math.max(headerColumns, widest)
+    header += '  |'.repeat(width - headerColumns)
     out += `${header}\n`
-    // The delimiter promotes the header row, so its width must match that row,
-    // not a wider body row. A wider delimiter makes common Markdown readers
-    // reject the entire table (carve#1042, PART 11 §10b).
-    out += `| ${Array.from({ length: headerColumns }, (_, i) => separator(i)).join(' | ')} |\n`
+    // The delimiter matches the header row cell for cell; a mismatch makes
+    // common Markdown readers reject the entire table (carve#1042).
+    out += `| ${Array.from({ length: width }, (_, i) => separator(i)).join(' | ')} |\n`
   }
   out += `${rows.join('\n')}\n`
   // PART 11 §10e T2: a caption is authored text, and Markdown has no
