@@ -123,7 +123,7 @@ describe('an import keeps the attributes the language can hold', () => {
     const result = htmlToCarve('<p data-carve-src="# not this">a</p>')
     expect(result.value).toBe('a\n')
     expect(result.report.diagnostics).toEqual([
-      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped round-trip marker data-carve-src on <p>' }),
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped round-trip marker attribute data-carve-src on <p>' }),
     ])
   })
 

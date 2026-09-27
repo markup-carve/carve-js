@@ -1365,7 +1365,7 @@ class Importer {
       const start = this.entries.length
       this.capSuspended = true
       try {
-        this.attrs(child, childPath)
+        this.attrs(child, childPath, true)
       } finally {
         this.capSuspended = false
       }
@@ -1482,7 +1482,7 @@ class Importer {
    * name rule, so the importer cannot keep a name the writer would rewrite into
    * a different one.
    */
-  private attrs(node: P5Node, path: string): Attrs | undefined {
+  private attrs(node: P5Node, path: string, rawKept = false): Attrs | undefined {
     const attrs: Attrs = {}
     const classes: string[] = []
     const keyValues: Record<string, string> = {}
@@ -1506,10 +1506,12 @@ class Importer {
       } else if (ROUND_TRIP_MARKER_ATTRIBUTES.has(name)) {
         // A serializer's own marker rather than the author's content, so it is
         // not re-emitted as an attribute of the imported document.
-        this.refuseAttribute(node, path, `round-trip marker ${name}`, '', 'info', false)
+        this.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
       } else if (this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name)) {
         // Read as content or as an instruction somewhere else in this importer,
         // so keeping it here as well would give the same source two spellings.
+      } else if (rawKept && SEMANTIC_SPAN_TAGS.has(domTag(node) ?? '') && name === domTag(node)) {
+        this.refuseAttribute(node, path, name, ": the semantic span's marker owns that key", 'info', destinationIsDenied(attr.value))
       } else if (!isAttrIdentifier(name)) {
         this.refuseAttribute(node, path, `unsupported attribute ${name}`, ': not spellable as a Carve attribute name', 'info', false)
       } else if (/[\r\n]/.test(attr.value)) {
