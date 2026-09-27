@@ -159,7 +159,7 @@ describe('static render mode — mermaid (no-renderer source vs with-renderer im
     const html = carveToHtml(SRC, {
       extensions: exts(),
       mode: 'static',
-      renderers: { mermaid: (src) => `<svg data-src="${src.length}"><!--diagram--></svg>` },
+      renderers: { mermaid: (src: string) => `<svg data-src="${src.length}"><!--diagram--></svg>` },
     })
     // The renderer receives the verbatim diagram source ("graph TD; A --> B"),
     // and its output is wrapped in the same `<pre class="mermaid" role="img" aria-label="mermaid">` element the
@@ -315,7 +315,7 @@ describe('static render mode — math (SSR via renderer vs source)', () => {
     const html = carveToHtml('``` math\n\\int_0^1 x^2\n```', {
       extensions: exts(),
       mode: 'static',
-      renderers: { math: (tex, display) => `<math data-display="${display}">SSR</math>` },
+      renderers: { math: (_tex, display) => `<math data-display="${display}">SSR</math>` },
     })
     expect(html).toBe('<div class="math display"><math data-display="true">SSR</math></div>')
   })

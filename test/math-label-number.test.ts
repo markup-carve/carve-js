@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   fromAstJson, parse, resolve, renderHtml, renderMarkdown, renderPlainText,
-  renderAnsi, renderCarve, renderCarveWithConversionReport, renderCarveWithReport,
+  renderAnsi,  renderCarveWithConversionReport, renderCarveWithReport,
   toAstJson, AstJsonSchemaError,
 } from '../src/index.js'
 import type { Document, Math } from '../src/ast.js'
@@ -144,7 +144,7 @@ describe('labeled display equations', () => {
     const report = renderCarveWithReport(doc)
     expect(report.value).toContain('$$`x`')
     expect(report.losses).toEqual([])
-    const { report: diagnostics } = renderCarveWithConversionReport(resolve(equation()), renderCarve)
+    const { report: diagnostics } = renderCarveWithConversionReport(resolve(equation()))
     expect(diagnostics.diagnostics.filter((entry) => entry.node === 'math').map((entry) => entry.field)).toEqual(['label', 'number'])
   })
 })

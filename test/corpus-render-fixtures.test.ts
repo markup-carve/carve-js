@@ -50,7 +50,7 @@ const fixtures = readdirSync(corpusDir)
   .flatMap((name) => {
     const match = /^(\d+-.*)\.(md|txt|ansi|fmt)$/.exec(name)
     if (!match) return []
-    const [, slug, target] = match as [string, string, Target]
+    const [, slug, target] = match as unknown as [string, string, Target]
     return [{ slug, target, path: resolve(corpusDir, name) }]
   })
   .sort((a, b) => `${a.target}/${a.slug}`.localeCompare(`${b.target}/${b.slug}`))

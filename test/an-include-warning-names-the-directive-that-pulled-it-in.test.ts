@@ -138,7 +138,7 @@ describe('an include warning names the directive that pulled it in', () => {
 
   it('a root document with no sourcePath reports a reach with no file', () => {
     const source = '{{ child.crv }}\n'
-    const files = { 'child.crv': '{{ gone.crv }}\n' }
+    const files: Record<string, string> = { 'child.crv': '{{ gone.crv }}\n' }
     const doc = parse(source, { positions: true })
     const result = expandIncludes(doc, source, {
       resolve: (path) => (path in files ? { source: files[path]!, id: path } : null),

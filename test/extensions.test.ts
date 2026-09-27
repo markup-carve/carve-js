@@ -6,7 +6,6 @@ import {
   carveToHtml,
   carveToMarkdown,
   carveToPlainText,
-  type BeforeRenderContext,
   type CarveExtension,
   type Document,
 } from '../src/index.js'
@@ -46,7 +45,7 @@ describe('extension transforms', () => {
       beforeRender(doc) {
         const walk = (n: unknown) => {
           if (!n || typeof n !== 'object') return
-          const node = n as {
+          const node = n as unknown as {
             type?: string
             value?: string
             children?: unknown[]
@@ -75,7 +74,7 @@ describe('extension transforms', () => {
     const ext: CarveExtension = {
       name: 'peek',
       beforeRender(doc, ctx) {
-        seen = ctx.options as Record<string, unknown>
+        seen = ctx.options as unknown as Record<string, unknown>
         return doc
       },
     }
@@ -145,7 +144,7 @@ describe('extension transforms', () => {
         return doc
       },
     }
-    const opts = { extensions: [ext], mode: 'static' } as const
+    const opts = { extensions: [ext], mode: 'static' as const }
     carveToHtml('hi', opts)
     expect(seen.pop()).toEqual({ target: 'html', mode: 'static', isStatic: true })
     carveToMarkdown('hi', opts)
@@ -250,7 +249,7 @@ describe('block renderers', () => {
       blockRenderers: {
         div: (node, ctx) => {
           const kids = ctx.renderChildren(
-            (node as { children: never[] }).children,
+            (node as unknown as { children: never[] }).children,
             ctx.level + 1,
           )
           return `${ctx.indent(ctx.level)}<box>\n${kids}\n${ctx.indent(ctx.level)}</box>`
@@ -267,7 +266,7 @@ describe('block renderers', () => {
       name: 'only-empty',
       blockRenderers: {
         paragraph: (node) =>
-          (node as { children: unknown[] }).children.length === 0 ? '<empty>' : undefined,
+          (node as unknown as { children: unknown[] }).children.length === 0 ? '<empty>' : undefined,
       },
     }
     expect(carveToHtml('hi', { extensions: [onlyEmpty] }).trim()).toBe('<p>hi</p>')

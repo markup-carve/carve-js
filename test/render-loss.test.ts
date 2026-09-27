@@ -19,7 +19,7 @@ describe('render loss reports', () => {
     expect(result.value).toBe(carveToHtml(source))
     expect(result.totalLosses).toBe(2)
     expect(result.truncated).toBe(false)
-    expect(result.losses.map((loss) => [loss.code, loss.format, loss.target, loss.nodeType])).toEqual([
+    expect(result.losses.map((loss) => [loss.code, loss.code === 'raw-format-dropped' ? loss.format : undefined, loss.target, loss.nodeType])).toEqual([
       ['raw-format-dropped', 'latex', 'html', 'inline'],
       ['raw-format-dropped', 'typst', 'html', 'block'],
     ])

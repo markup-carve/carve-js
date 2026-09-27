@@ -62,7 +62,7 @@ describe('constructed figure invariants', () => {
         ],
       },
     ],
-  ] as const)('renders a constructed %s target before its caption', (_name, target) => {
+  ] satisfies Array<[string, Figure['target']]>)('renders a constructed %s target before its caption', (_name, target) => {
     const doc = document([figure(target, 'CAP-STANDALONE')])
 
     for (const [name, render] of Object.entries(renderers)) {

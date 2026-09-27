@@ -58,7 +58,7 @@ const withoutLocations = (value: unknown): unknown => {
  */
 function expectDiagnosticsSubsequence(
   wanted: Array<Record<string, unknown>>,
-  got: Array<Record<string, unknown>>,
+  got: Array<{ code: string }>,
   fixture: string,
 ): void {
   const allowed = new Set(wanted.map((row) => row.code))

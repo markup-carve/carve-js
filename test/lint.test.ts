@@ -343,7 +343,7 @@ describe('lintCarve — verbatim regions still suppress in-block warnings', () =
 })
 
 describe('lintCarve — indented fenced-code delimiter', () => {
-  const rulesOf = (src) => lintCarve(src).map((w) => w.rule)
+  const rulesOf = (src: string) => lintCarve(src).map((w) => w.rule)
 
   it('flags an indented fence opener at the top level', () => {
     const w = lintCarve('  ```\n  code\n  ```\n')
@@ -384,7 +384,7 @@ describe('lintCarve — indented fenced-code delimiter', () => {
 
 describe('lintCarve — indented fence rule inline-span guard', () => {
   it('does not flag an indented inline code span (complete on one line)', () => {
-    const rulesOf = (src) => lintCarve(src).map((w) => w.rule)
+    const rulesOf = (src: string) => lintCarve(src).map((w) => w.rule)
     expect(rulesOf('  ```not a fence```\n')).not.toContain('fence-delimiter-indentation')
     expect(rulesOf('  ```foo bar```\n')).not.toContain('fence-delimiter-indentation')
   })
@@ -529,7 +529,7 @@ describe('lintCarve — empty-include-path advisory', () => {
 })
 
 describe('lintCarve — fence opener that fell back to inline text', () => {
-  const rulesOf = (src) => lintCarve(src).map((w) => w.rule)
+  const rulesOf = (src: string) => lintCarve(src).map((w) => w.rule)
   const RULE = 'fence-opener-fallback'
 
   it('flags a trailing attribute block and suggests the line above', () => {

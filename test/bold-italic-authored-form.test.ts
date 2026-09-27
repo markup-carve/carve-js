@@ -1,3 +1,4 @@
+import { paragraph as requireParagraph } from './helpers/ast.js'
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse, renderCarve, renderHtml } from '../src/index.js'
 
@@ -15,7 +16,11 @@ const NESTED = '*/x/*'
 
 describe('the authored bold-italic spelling survives a format', () => {
   it('marks the combined form and only the combined form', () => {
-    const strongOf = (src: string) => parse(src).children[0].children[0]
+    const strongOf = (src: string) => {
+      const strong = requireParagraph(parse(src).children[0]).children[0]
+      if (strong.type !== 'strong') throw new Error('Expected strong node')
+      return strong
+    }
     expect(strongOf(COMBINED).boldItalic).toBe(true)
     expect(strongOf(NESTED).boldItalic).toBeUndefined()
   })
@@ -59,8 +64,9 @@ describe('the authored bold-italic spelling survives a format', () => {
     // requires one on every node but the document root, and a consumer cannot
     // tell a synthesized node from a parsed one.
     const src = 'x /*bold italic*/ y'
-    const paragraph = parse(src).children[0] as { children: Array<Record<string, any>> }
+    const paragraph = requireParagraph(parse(src).children[0])
     const strong = paragraph.children.find((c) => c.type === 'strong')!
+    if (strong.type !== 'strong') throw new Error('Expected strong node')
     const emphasis = strong.children[0]!
 
     expect(emphasis.type).toBe('emphasis')
@@ -68,18 +74,19 @@ describe('the authored bold-italic spelling survives a format', () => {
 
     // Truthful, not merely present: the emphasis spans the CONTENT, the strong
     // spans the delimiters too.
-    expect(src.slice(emphasis.pos.startOffset, emphasis.pos.endOffset)).toBe('bold italic')
-    expect(src.slice(strong.pos.startOffset, strong.pos.endOffset)).toBe('/*bold italic*/')
+    expect(src.slice(emphasis.pos!.startOffset, emphasis.pos!.endOffset)).toBe('bold italic')
+    expect(src.slice(strong.pos!.startOffset, strong.pos!.endOffset)).toBe('/*bold italic*/')
   })
 
   it('gives the nested spelling the same inner span', () => {
     const src = 'x */bold italic/* y'
-    const paragraph = parse(src).children[0] as { children: Array<Record<string, any>> }
+    const paragraph = requireParagraph(parse(src).children[0])
     const strong = paragraph.children.find((c) => c.type === 'strong')!
+    if (strong.type !== 'strong') throw new Error('Expected strong node')
     const emphasis = strong.children.find((c) => c.type === 'emphasis')!
 
     expect(emphasis.pos).toBeDefined()
-    expect(src.slice(emphasis.pos.startOffset, emphasis.pos.endOffset)).toContain('bold italic')
+    expect(src.slice(emphasis.pos!.startOffset, emphasis.pos!.endOffset)).toContain('bold italic')
   })
 })
 

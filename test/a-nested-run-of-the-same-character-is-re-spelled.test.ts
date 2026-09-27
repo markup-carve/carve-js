@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, carveToMarkdown, htmlToAst, renderHtml, renderMarkdown } from '../src/index.js'
+import { carveToMarkdown, htmlToAst, renderHtml, renderMarkdown } from '../src/index.js'
 
 // Same-kind nesting has no Carve source since carve-js#1831, so the trees that
 // have it come in through the HTML importer.

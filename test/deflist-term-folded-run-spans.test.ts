@@ -29,7 +29,7 @@ import { carveToHtml, parse, toAstJson } from '../src/index.js'
 
 interface Placed {
   type: string
-  value?: string
+  value: string | undefined
   slice: string | null
 }
 

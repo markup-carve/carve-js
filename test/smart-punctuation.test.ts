@@ -56,7 +56,7 @@ describe('smart punctuation nodes', () => {
 
   it('carries the source run and the kind on the node', () => {
     const doc = parse('a...b')
-    const kids = (doc.children[0] as { children: Array<Record<string, unknown>> }).children
+    const kids = (doc.children[0] as unknown as { children: Array<Record<string, unknown>> }).children
     const node = kids[1]!
     expect(node.type).toBe('smart_punctuation')
     expect(node.kind).toBe('ellipsis')
@@ -68,7 +68,7 @@ describe('smart punctuation nodes', () => {
     // Four hyphens resolve to two en dashes, so the run becomes two nodes of
     // two hyphens each, together reproducing the original run.
     const doc = parse('word----word')
-    const kids = (doc.children[0] as { children: Array<Record<string, unknown>> }).children
+    const kids = (doc.children[0] as unknown as { children: Array<Record<string, unknown>> }).children
     expect(kids[1]!.kind).toBe('en_dash')
     expect(kids[1]!.value).toBe('--')
     expect(kids[2]!.kind).toBe('en_dash')
@@ -77,7 +77,7 @@ describe('smart punctuation nodes', () => {
 
   it('records the resolved glyph on a quote node', () => {
     const doc = parse('"hi"')
-    const kids = (doc.children[0] as { children: Array<Record<string, unknown>> }).children
+    const kids = (doc.children[0] as unknown as { children: Array<Record<string, unknown>> }).children
     expect(kids[0]!.kind).toBe('left_double_quote')
     expect(kids[0]!.glyph).toBe('“')
     expect(kids[0]!.value).toBe('"')

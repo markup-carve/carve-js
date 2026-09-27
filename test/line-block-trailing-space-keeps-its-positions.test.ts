@@ -30,7 +30,7 @@ import { parse } from '../src/index.js'
 
 interface Placed {
   type: string
-  value?: string
+  value: string | undefined
   slice: string | null
 }
 
@@ -64,7 +64,6 @@ describe('a line block keeps its positions across a dropped trailing run', () =>
   // A preserved column is the U+E000 sentinel, not a space, so a two-column run
   // is CONTENT and shows up in both the value and the slice. Spelled out here
   // because it is invisible in a failure diff otherwise.
-  const NBSP = '\ue000'
 
   it('places both lines when the LAST one carries a trailing space', () => {
     // The corpus document, spelled out: markup-carve/carve#961 reported this as

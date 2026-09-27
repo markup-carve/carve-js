@@ -37,7 +37,6 @@ import { fileSystemResolver } from '../src/includes-fs.js'
 // handed over alongside rather than exported into a bundle that cannot
 // have it.
 const carve = { ...carveApi, fileSystemResolver }
-// @ts-expect-error - vendored spec-repo ESM helper, no type declarations.
 import { runVector, EXPECTED_FIELDS } from '../spec/scripts/include-conformance-lib.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

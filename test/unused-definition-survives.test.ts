@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToMarkdown, carveToPlainText, carveToAnsi, carveToCarve, carveToHtml } from '../src/index.js'
+import { carveToMarkdown, carveToPlainText, carveToAnsi, carveToHtml } from '../src/index.js'
 import { carveToAstJson } from '../src/index.js'
 
 /*

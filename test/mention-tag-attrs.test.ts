@@ -28,11 +28,11 @@ function html(node: SocialNode, opts: RenderOptions = {}): string {
 }
 
 function mention(attrs?: Attrs): Mention {
-  return { type: 'mention', user: 'alice', attrs }
+  return { type: 'mention', user: 'alice', ...(attrs === undefined ? {} : { attrs }) }
 }
 
 function tag(attrs?: Attrs): Tag {
-  return { type: 'tag', name: 'release', attrs }
+  return { type: 'tag', name: 'release', ...(attrs === undefined ? {} : { attrs }) }
 }
 
 describe('mention/tag HTML attributes', () => {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error - a plain .mjs script, imported for its exported comparison
 import { compareCorpus } from '../scripts/published-drift.mjs'
 
 /*
@@ -87,7 +86,7 @@ describe('the published-drift comparison', () => {
   it('does not count a document the working tree could not render as agreement', () => {
     // The specific shape that made the gate green: a broken engine looked like
     // a perfectly aligned one, because both sides of the count were empty.
-    const result = compare(engine((s) => s, FILES), engine((s) => 'entirely different'))
+    const result = compare(engine((s) => s, FILES), engine((_s) => 'entirely different'))
 
     expect(result.differing).toEqual([])
     expect(result.localThrew).toHaveLength(3)

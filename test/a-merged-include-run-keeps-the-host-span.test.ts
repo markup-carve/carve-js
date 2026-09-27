@@ -150,7 +150,7 @@ describe('a merged run from one file', () => {
         { type: 'text', value: 'a', pos: at(0, 1) },
         { type: 'text', value: 'b', pos: at(2, 3) },
       ],
-      { file: undefined },
+      { file: undefined, span: undefined },
     )
 
     expect(merged).toEqual([{ type: 'text', value: 'ab', pos: undefined }])

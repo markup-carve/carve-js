@@ -33,7 +33,7 @@ const SOURCE = '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
 
 /** A REAL payload for a real table, with `rowGroups` set on it. */
 const tablePayload = (rowGroups?: unknown) => {
-  const payload = JSON.parse(JSON.stringify(toAstJson(parse(SOURCE)))) as {
+  const payload = JSON.parse(JSON.stringify(toAstJson(parse(SOURCE)))) as unknown as {
     children: Array<Record<string, unknown>>
   }
   const table = payload.children.find((child) => child.type === 'table')
@@ -44,7 +44,7 @@ const tablePayload = (rowGroups?: unknown) => {
 
 const decodedRowGroups = (rowGroups?: unknown): unknown => {
   const tree = fromAstJson(tablePayload(rowGroups))
-  const table = (tree.children as Array<Record<string, unknown>>).find(
+  const table = tree.children.find(
     (child) => child.type === 'table',
   )
   return table?.rowGroups
@@ -123,7 +123,7 @@ describe('a nested record on an ingested node', () => {
     expect(decodedRowGroups(wellFormed)).toEqual(wellFormed)
 
     const tree = fromAstJson(tablePayload(wellFormed))
-    const republished = JSON.parse(JSON.stringify(toAstJson(tree))) as {
+    const republished = JSON.parse(JSON.stringify(toAstJson(tree))) as unknown as {
       children: Array<Record<string, unknown>>
     }
     const table = republished.children.find((child) => child.type === 'table')

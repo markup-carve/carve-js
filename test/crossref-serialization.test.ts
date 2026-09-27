@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   carveToAstJson,
-  carveToCarve,
   carveToHtml,
   carveToMarkdown,
   fromAstJson,
@@ -26,7 +25,7 @@ describe('a crossref serializes as a heading_ref', () => {
     const json = carveToAstJson(source) as unknown as {
       children: Array<{ type: string; children?: Array<Record<string, unknown>> }>
     }
-    const para = json.children.findLast((n) => n.type === 'paragraph')
+    const para = json.children.slice().reverse().find((n) => n.type === 'paragraph')
     return para?.children ?? []
   }
 
@@ -103,7 +102,7 @@ describe('a crossref serializes as a heading_ref', () => {
     expect(carveToHtml(source)).toContain('<p><a href="/outer">see H</a></p>')
 
     const doc = resolve(parse(source))
-    const para = doc.children.findLast((n) => n.type === 'paragraph') as Paragraph
+    const para = doc.children.slice().reverse().find((n) => n.type === 'paragraph') as Paragraph
     const link = para.children[0] as { children: Array<{ type: string }> }
     expect(link.children.map((c) => c.type)).toEqual(['text', 'heading_ref'])
     expect((link.children[1] as CrossRef).href).toBe('#H')

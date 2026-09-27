@@ -26,7 +26,7 @@ function expandFrom(cwd: string, rootSpec: string) {
     } catch {
       resolver = undefined
     }
-    const result = expandIncludes(parse(SOURCE, { positions: true }), SOURCE, { resolve: resolver })
+    const result = expandIncludes(parse(SOURCE, { positions: true }), SOURCE, resolver === undefined ? {} : { resolve: resolver })
     return { ...result, html: renderHtml(resolve(result.doc)) }
   } finally {
     process.chdir(previous)
