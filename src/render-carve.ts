@@ -1187,6 +1187,14 @@ function renderEmphasis(
  * rest: that nothing needs to be written after the span, and that every line
  * of the content survives whole-document normalization and the block layer.
  */
+function codeSpanFence(content: string): string {
+  if (/^[\r\n]/.test(content)) {
+    const widths = new Set(Array.from(content.matchAll(/`+/g), match => match[0].length))
+    for (const width of [1, 2]) if (!widths.has(width)) return '`'.repeat(width)
+  }
+  return safeFence(content, 1)
+}
+
 function unclosedVerbatimSpells(content: string): boolean {
   // A TRAILING terminator is lost: it would be the block's own final newline.
   if (/[\r\n]$/.test(content)) return false
@@ -3875,7 +3883,7 @@ class CarveRenderSession {
           opensBacktickRun(nodes[idx + 1]),
           // A run of three or more backticks at block start is a code fence.
           // A shorter run, or one after an inline opener, can start a code span.
-          idx === nodes.length - 1 && (out !== '' || ctx.inlineDepth > 1 || (node.type === 'code' && safeFence(node.value, 1).length < 3)),
+          idx === nodes.length - 1 && (out !== '' || ctx.inlineDepth > 1 || (node.type === 'code' && codeSpanFence(node.value).length < 3)),
         )
         // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
         // live here and not in `renderInline`: the answer is a property of the
@@ -4128,7 +4136,7 @@ class CarveRenderSession {
         // span. An attribute block is written after it, so a code span carrying
         // one keeps the closed form (and `raw_inline` and `literal_inline`, which
         // both append to `renderCode`, never ask for it).
-        return withAttrs(renderSession.renderCode(node.value, mayRunToEndOfText && renderAttrs(node.attrs) === ''))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderAttrs(node.attrs) === ''), ctx))
       case 'link':
         return renderSession.renderLink(node, ctx)
       case 'image':
@@ -4310,6 +4318,11 @@ class CarveRenderSession {
     return undefined
   }
 
+  private guardCodeLines(written: string, ctx: CarveContext): string {
+    if (ctx.lineBlockDepth > 0 || this.termKeepsLineIndent) return written
+    return written.replace(/\n(?=> |\[[^\]\n]+\]:[ \t])/g, '\n ')
+  }
+
   private renderCode(content: string, allowUnclosed = false, nodeType = 'code'): string {
     // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
     // much as it is inside a fence - and `normalize()` would otherwise rewrite it
@@ -4317,7 +4330,7 @@ class CarveRenderSession {
     // (carve-js#688). Same sentinel as protectVerbatim uses; `restoreVerbatim`
     // puts the character back at the end of normalization. carve-rs already emits
     // it as itself here.
-    const fence = safeFence(content, 1)
+    const fence = codeSpanFence(content)
     const needsPad =
       content.startsWith('`') ||
       content.endsWith('`') ||

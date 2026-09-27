@@ -346,7 +346,7 @@ function renderOrderedList(lines: string[], start: number, depth: number, defs: 
   while (i < lines.length) {
     const item = decimalListItem(lines[i]!)
     if (!item) break
-    if (item.number !== expected || blockish(item.text)) return undefined
+    if (item.number !== expected || item.text === '+' || blockish(item.text)) return undefined
     const inline = renderInline(item.text, defs, opts)
     if (inline === undefined) return undefined
     out.push('\n', indent(depth + 1), '<li>', inline, '</li>')

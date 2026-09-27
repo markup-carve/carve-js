@@ -476,6 +476,13 @@ export function lintCarve(
   // (explicit ids win; colliding slugs get a `-2`, `-3`, … suffix), and warn
   // on every collision along the way.
   const used = new Set<string>()
+  const allocated = new Set<string>()
+  const explicitHeadings = new Set<string>()
+  const nextSuffix = new Map<string, number>()
+  walkDocument(doc, (node) => {
+    const id = (node as { attrs?: Attrs }).attrs?.id
+    if (id !== undefined) allocated.add(id)
+  })
   const headingRefs = new Map<string, string>()
   // Mirror resolveHeadingIds: a heading inside a list/blockquote/div/etc. also
   // gets an id and is a valid crossref target, so the lint index must walk the
@@ -490,24 +497,26 @@ export function lintCarve(
           let id: string
           if (explicit !== undefined) {
             id = explicit
-            if (used.has(explicit)) {
+            if (explicitHeadings.has(explicit)) {
               out.push({
                 ...locate(heading, toUtf16),
                 rule: 'duplicate-heading-id',
                 message: `Duplicate heading id "${explicit}": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.`,
               })
             }
+            explicitHeadings.add(explicit)
             used.add(explicit)
           } else {
             const base = slugify(inlineText(heading.children), slugOpts)
-            if (used.has(base)) {
-              let n = 2
-              while (used.has(`${base}-${n}`)) n++
+            if (allocated.has(base)) {
+              let n = nextSuffix.get(base) ?? 2
+              while (allocated.has(`${base}-${n}`)) n++
+              nextSuffix.set(base, n + 1)
               id = `${base}-${n}`
               out.push({
                 ...locate(heading, toUtf16),
                 rule: 'duplicate-heading-id',
-                message: `Heading slug "${base}" collides with an earlier heading; its auto id becomes "${id}", and ambiguous references to "${base}" resolve to the first occurrence.`,
+                message: `Heading slug "${base}" collides with another heading or an explicit id; its auto id becomes "${id}", and ambiguous references to "${base}" resolve to the first occurrence.`,
               })
               used.add(id)
             } else {
@@ -515,6 +524,7 @@ export function lintCarve(
               used.add(base)
             }
           }
+          allocated.add(id)
           if (!inBlockquote) {
             const key = normalizeHeadingRefLabel(inlineText(heading.children))
             if (key && !headingRefs.has(key)) headingRefs.set(key, id)
@@ -553,6 +563,7 @@ export function lintCarve(
     }
   }
   indexHeadings(doc.children, false)
+  for (const body of Object.values(doc.footnoteDefs ?? {})) indexHeadings(body, false)
 
   // Captioned tables/figures with a `#` caption-number placeholder and an id
   // are also valid cross-reference targets after resolve() numbers captions.
@@ -1421,8 +1432,6 @@ function collectSilentFailures(
     const ln = (h.pos as { endLine?: number } | undefined)?.endLine ?? h.pos?.startLine
     if (!ln) continue
     const line = lines[ln - 1] ?? ''
-    // Guard against position drift: only flag if this really is a heading line.
-    if (!/^\s*#{1,6}\s/.test(line)) continue
     const m = TRAILING_HEADING_ATTR.exec(line)
     if (!m) continue
     const col = m.index + m[1]!.length + 1
@@ -1439,12 +1448,14 @@ function collectSilentFailures(
   // 2. Legacy `raw FORMAT` fence: never opens, and desyncs later fences.
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
-    const m = LEGACY_RAW_FENCE.exec(lines[i]!)
+    const view = stripContainerPrefixesKeepIndent(lines[i]!)
+    const prefix = lines[i]!.length - view.length
+    const m = LEGACY_RAW_FENCE.exec(view)
     if (!m) continue
     push(
       i + 1,
-      m[1]!.length + 1,
-      lines[i]!.length - m[1]!.length,
+      prefix + m[1]!.length + 1,
+      view.length - m[1]!.length,
       'raw-block-syntax',
       `"${m[2]}raw ${m[3]}" is not a Carve raw block; it fails to open and desyncs the ` +
         `document's fences. Use "${m[2]}=${m[3]}" to pass content through to ${m[3]}.`,

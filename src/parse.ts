@@ -7204,6 +7204,7 @@ class ParseSession {
         // parser folds it into the item lazily, so popping the column there
         // rejected the definition below it as top-level indentation.
         isColonFenceOpener(rawTrimmed) ||
+        isBlockAttributeLine(rawTrimmed) ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
       if (marker && /\S/.test(raw.slice(marker[0].length))) {
         // Every marker on the line, not just the first: `- - see` opens TWO
