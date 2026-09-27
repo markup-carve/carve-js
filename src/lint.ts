@@ -891,10 +891,11 @@ function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning
       for (const [k, span] of (item.termSpans ?? []).entries()) {
         if (!span?.endLine || span.endLine <= span.startLine) continue
         // A line inside a multi-line code, math, raw or literal span, at any
-        // inline depth, is verbatim content.
+        // inline depth, is verbatim content, and so is a folded comment.
         const spans: [number, number][] = []
         walkDocument({ children: item.terms?.[k] ?? [] } as unknown as Document, (child) => {
           const p = (child as Positioned).pos
+          if (p && child.type === 'comment') spans.push([p.startLine - 1, p.endLine ?? p.startLine])
           if (p && (child.type === 'code' || child.type === 'math' || child.type === 'raw_inline' || child.type === 'literal_inline')) {
             spans.push([p.startLine, p.endLine ?? p.startLine])
           }
@@ -903,7 +904,11 @@ function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning
         const termLine = lines[span.startLine - 1] ?? ''
         const markerIndex = unitIndex(termLine, Math.max(0, (span.startColumn ?? 1) - 1))
         const quotes = (termLine.slice(0, markerIndex).match(/>/g) ?? []).length
-        const markerColumn = visualColumn(termLine, markerIndex)
+        // A task checkbox is outside the item's content-column width.
+        const taskPrefix = /[-*] +\[[ xX\-_>?]\] +[ \t]*$/.exec(termLine.slice(0, markerIndex))
+        const markerColumn = taskPrefix
+          ? visualColumn(termLine, taskPrefix.index) + 2
+          : visualColumn(termLine, markerIndex)
         let reported = false
         for (let ln = span.startLine + 1; ln <= span.endLine; ln++) {
           // Every continuation line is term text, so no other indentation rule

@@ -2719,6 +2719,11 @@ function quotedFenceHasCloser(
 
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
 // SAME length (more `%` nest). Not rendered.
+function commentLineContent(line: string): string {
+  // ONE separator character, and it is `whitespace` (markup-carve/carve#977).
+  return line.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '').replace(/[ \t]+$/, '')
+}
+
 function parseCommentBlock(lexer: Lexer): Comment {
   // A comment fence delimiter is STRUCTURAL, not content: only the leading run
   // of `%` is matched, so neither trailing text (`%%% TODO`) nor a stray
@@ -5274,6 +5279,35 @@ function leadingWhitespace(line: string): number {
 
 
 /**
+ * The next line after `index` holding a comment fence of exactly `width`, or
+ * -1. Indexed once, so a closer is found without rescanning per opener.
+ */
+function commentCloserLookup(lines: readonly string[]): (width: number, index: number) => number {
+  let byWidth: Map<number, number[]> | undefined
+  return (width, index) => {
+    if (!byWidth) {
+      byWidth = new Map()
+      lines.forEach((line, at) => {
+        const run = commentFenceRun(line.replace(/^(?:[ \t]*>(?: |$))+/, '').replace(/^[ \t]+/, ''))
+        if (run === undefined) return
+        const list = byWidth!.get(run)
+        if (list) list.push(at)
+        else byWidth!.set(run, [at])
+      })
+    }
+    const at = byWidth.get(width) ?? []
+    let lo = 0
+    let hi = at.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (at[mid]! <= index) lo = mid + 1
+      else hi = mid
+    }
+    return lo < at.length ? at[lo]! : -1
+  }
+}
+
+/**
  * Apply an over-indented list block opener's authored column as a temporary
  * local block base (PART 9 §24 C3, carve#1705).
  *
@@ -5302,6 +5336,8 @@ function rebaseOverindentedBlocks(
   hostIsFootnoteBody = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
+  // One index for the whole pass; a dedent only moves leading whitespace.
+  let commentCloser: ((width: number, index: number) => number) | undefined
   const firstVisible = lines.find((line) => !isBlankLine(line))
   const firstMarkerColumn = firstVisible === undefined ? -1 : markerContentColumn(firstVisible)
   if (firstMarkerColumn >= 0) {
@@ -5394,9 +5430,8 @@ function rebaseOverindentedBlocks(
       // the innermost open body, so keep its exact column band here.
       let descriptionColumn: number | null = null
       // A term has no content column of its own, so a line past the list's
-      // base folds into an open term as text and is never an authored block
-      // (carve#2411). List markers still interrupt it (§24 C4), and comments
-      // and link and footnote definitions keep their §10 I5 reading.
+      // base folds into an open term and is never an authored block
+      // (carve#2411). Only a list marker still interrupts it (§24 C4).
       let termOpen = RE_DEFLIST_TERM.test(opener)
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
@@ -5425,14 +5460,13 @@ function rebaseOverindentedBlocks(
           if (description) descriptionColumn = base + 1 + description[1]!.length
           continue
         }
-        if (
-          termOpen &&
-          column > base &&
-          markerContentColumn(local) < 0 &&
-          !isLinkDefLine(sliceColumns(candidate, column, true)) &&
-          !RE_FOOTNOTE_DEF.test(sliceColumns(candidate, column, true)) &&
-          !sliceColumns(candidate, column, true).startsWith('%%')
-        ) {
+        if (termOpen && column > base && markerContentColumn(local) < 0) {
+          // A comment fence keeps its body and closer, whatever they look like.
+          const comment = commentFenceRun(sliceColumns(candidate, column, true))
+          if (comment !== undefined) {
+            const close = (commentCloser ??= commentCloserLookup(lines))(comment, j)
+            if (close > j) j = close
+          }
           end = j
           continue
         }
@@ -7099,6 +7133,8 @@ class ParseSession {
     // document and only when a paragraph is actually open under a fence-shaped
     // line. A scan per opener is the quadratic shape this index exists to close.
     let prepassClosers: CloserIndex['code'] | null = null
+    // The definition term whose column later lines are measured against (carve#2411).
+    let term: { col: number; quotes: number } | null = null
     for (let idx = 0; idx < lexer.lines.length; idx++) {
       // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
       // none, including an unclosed opener that is NOT frontmatter), so a
@@ -7358,6 +7394,48 @@ class ParseSession {
       // strip the enclosing content column so a fence delimiter at that column
       // is recognized (kept-indent view keeps residual indent after markers)
       const contentCol = listCols.length ? listCols[listCols.length - 1]!.col : 0
+      // A line past an open term's column is term text (carve#2411): it
+      // registers nothing and opens no fence. A comment fence there still hides
+      // its body, so it falls through to the comment branch below.
+      if (commentFence === null && verse === null) {
+        const quotes = composed.peeled.filter((entry) => entry.quote).length
+        const view = raw.slice(composed.column)
+        const marker = composed.peeled.find((entry) => !entry.quote)
+        const col = marker?.marker ?? composed.column
+        const rest = marker ? raw.slice(marker.marker) : view
+        if (isBlankLine(view)) {
+          term = null
+        } else if (term && quotes === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
+          if (commentFenceRun(rest) === undefined) {
+            if (matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
+            paraState = 'yes'
+            continue
+          }
+        } else {
+          if (
+            term &&
+            (quotes !== term.quotes ||
+              prepassOpensBlock(rest) ||
+              RE_DEFLIST_DEF.test(rest) ||
+              isLinkDefLine(rest) ||
+              RE_FOOTNOTE_DEF.test(rest))
+          ) {
+            term = null
+          }
+          const lastMarker = composed.peeled.at(-1)
+          const task = lastMarker && !lastMarker.quote ? RE_TASK.exec(raw.slice(lastMarker.marker)) : null
+          const termLead = task?.[3] ?? view
+          if (RE_DEFLIST_TERM.test(termLead) && composed.peeled.every((entry) => !entry.folds && !entry.behindQuote)) {
+            let termColumn = composed.column
+            for (const entry of composed.peeled) {
+              if (entry.quote) continue
+              const width = markerContentColumn(raw.slice(entry.marker))
+              if (width >= 0) termColumn -= entry.content - entry.marker - width
+            }
+            term = { col: termColumn, quotes: quotes }
+          }
+        }
+      }
       // A comment fence's closer is a leading `%` run of the SAME length;
       // trailing text is allowed, so `%%% end` closes a `%%%` fence.
       if (commentFence !== null) {
@@ -7904,7 +7982,7 @@ class ParseSession {
       // class, so a `%%<VT>note` line had its vertical tab eaten as the
       // separator and `carve fmt` wrote a SPACE back in its place: a character
       // the clause calls content, replaced by one the author did not write.
-      return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '').replace(/[ \t]+$/, '') }
+      return { type: 'comment', block: false, content: commentLineContent(l) }
     }
     if (RE_LINE_BLOCK_OPEN.test(line)) return this.parseLineBlock(lexer)
     if (RE_HARDBREAKS_OPEN.test(line)) return this.parseHardBreaksBlock(lexer)
@@ -9278,10 +9356,27 @@ class ParseSession {
         // Each line drops its own trailing layout below, once the fold is
         // complete. In particular, the separator on a content-less marker-shaped
         // continuation (`* `, `. `) is content here.
-        let termText = t[1]!
-        let continuationLines = 0
+        // A comment past the container column stays a comment and does not end
+        // the term (carve#2411). Like a paragraph, the term's inline content
+        // never reaches across it, so each run of lines between comments is
+        // scanned on its own. `lines` holds the source index of each line of a
+        // run; the first run starts on the term's own line.
+        type TermPart = { lines: number[]; text: string } | Comment
+        const parts: TermPart[] = [{ lines: [termLineIndex], text: t[1]! }]
         while (!lexer.eof()) {
           const next = lexer.peek()!
+          if (/^[ \t]+%%/.test(next)) {
+            const first = lexer.pos
+            const fence = RE_COMMENT_BLOCK_ANY.exec(next)
+            const comment: Comment =
+              fence && commentBlockHasCloser(lexer, fence[1]!.length)
+                ? parseCommentBlock(lexer)
+                : { type: 'comment', block: false, content: commentLineContent(lexer.consume()) }
+            const span = lexer.hasDocumentOffsets ? lineRange(lexer, first, lexer.pos - 1) : undefined
+            if (span) comment.pos = span
+            parts.push(comment)
+            continue
+          }
           // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
           // because a framed heading is the term's text rather than a block.
           const nextEntry = stripLazyFrame(next)
@@ -9295,11 +9390,15 @@ class ParseSession {
           // The term is the other place a framed line becomes text. The frame
           // kept the opener tests above from claiming it; it comes off before
           // the fold, exactly as the oracle unframes here.
-          termText += '\n' + stripLazyFrame(next)
-          continuationLines++
+          const last = parts[parts.length - 1]!
+          if ('lines' in last) {
+            last.text += '\n' + stripLazyFrame(next)
+            last.lines.push(lexer.pos)
+          } else {
+            parts.push({ lines: [lexer.pos], text: stripLazyFrame(next) })
+          }
           lexer.consume()
         }
-        termText = dropTrailingWhitespace(termText)
         // `t` was matched against the UNFRAMED line, so the index comes from
         // that same string: the frame is not in the author's source and must
         // not be counted into the offset. This corrects arithmetic rather than
@@ -9312,33 +9411,37 @@ class ParseSession {
         // offset drifts by the indent on every line after the first. Each line
         // gets its own origin instead (#441): the term's own line starts after its
         // `::` marker, a continuation line at its left edge.
-        const termAnchors =
-          continuationLines > 0
-            ? [
-                {
-                  offset: lexer.lineOffset(termLineIndex) + termStart,
-                  column: lexer.lineStartColumn(termLineIndex) + termStart,
-                  line: lexer.lineNumber(termLineIndex),
-                },
-                ...Array.from({ length: continuationLines }, (_unused, i) => ({
-                  offset: lexer.lineOffset(termLineIndex + 1 + i),
-                  column: lexer.lineStartColumn(termLineIndex + 1 + i),
-                  line: lexer.lineNumber(termLineIndex + 1 + i),
-                })),
-              ]
-            : undefined
-        terms.push(
-          parseSession.parseInline(termText, lexer.abbrDefs, lexer.linkDefs, {
-            anchored: lexer.hasDocumentOffsets,
-            baseOffset: lexer.lineOffset(termLineIndex) + termStart,
-            startLine: lexer.lineNumber(termLineIndex),
-            startColumn: lexer.lineStartColumn(termLineIndex) + termStart,
-            ...(termAnchors ? { lineAnchors: termAnchors } : {}),
-          }),
-        )
+        const anchorOf = (source: number) => {
+          const shift = source === termLineIndex ? termStart : 0
+          return {
+            offset: lexer.lineOffset(source) + shift,
+            column: lexer.lineStartColumn(source) + shift,
+            line: lexer.lineNumber(source),
+          }
+        }
+        const termInlines: InlineNode[] = []
+        parts.forEach((part, index) => {
+          // Preserve each source line boundary, including either side of a comment.
+          if (index > 0) termInlines.push({ type: 'soft_break' })
+          if (!('lines' in part)) {
+            termInlines.push(part)
+            return
+          }
+          const origin = anchorOf(part.lines[0]!)
+          termInlines.push(
+            ...parseSession.parseInline(dropTrailingWhitespace(part.text), lexer.abbrDefs, lexer.linkDefs, {
+              anchored: lexer.hasDocumentOffsets,
+              baseOffset: origin.offset,
+              startLine: origin.line,
+              startColumn: origin.column,
+              ...(part.lines.length > 1 ? { lineAnchors: part.lines.map(anchorOf) } : {}),
+            }),
+          )
+        })
+        terms.push(termInlines)
         termSpans.push(
           lexer.hasDocumentOffsets
-            ? lineRange(lexer, termLineIndex, termLineIndex + continuationLines)
+            ? lineRange(lexer, termLineIndex, lexer.pos - 1)
             : undefined,
         )
       }
@@ -10286,13 +10389,25 @@ class ParseSession {
         RE_ORDERED.test(content) ||
         RE_TASK.test(content) ||
         extractItemAttr(content) !== null
-      const authoredBlockBlanks = hasOverindentedBlockCandidate
+      // Include a marker-line term so its continuation is not rebased as a new block.
+      const leadIsTerm = RE_DEFLIST_TERM.test(content)
+      const rebaseLines = leadIsTerm ? [content, ...nested] : nested
+      const rebaseEligible = leadIsTerm
+        ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
+        : authoredBaseEligible
+      const rebasedBlanks = hasOverindentedBlockCandidate
         ? rebaseOverindentedBlocks(
-          nested,
-          authoredBaseEligible,
+          rebaseLines,
+          rebaseEligible,
           leadIsMarker ? markerContentColumn(content) : -1,
         )
         : new Set<number>()
+      if (leadIsTerm) {
+        for (let index = 0; index < nested.length; index++) nested[index] = rebaseLines[index + 1]!
+      }
+      const authoredBlockBlanks = leadIsTerm
+        ? new Set(Array.from(rebasedBlanks, (index) => index - 1))
+        : rebasedBlanks
 
       // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
       // not loosen the item on its own - it is not a second paragraph - but it

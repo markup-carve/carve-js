@@ -1,6 +1,7 @@
 import type {
   Attrs,
   BlockNode,
+  Comment,
   DefinitionItem,
   DefinitionList,
   Document,
@@ -3388,6 +3389,37 @@ class CarveRenderSession {
     }
   }
 
+  /**
+   * A term's inlines, with each comment that sits on its own line (a soft break
+   * before it) spelled one column past the term's, where it stays in the term
+   * (carve#2411). A line comment keeps its separator before a `%`, or it would
+   * re-read as a comment fence.
+   */
+  private renderTermInlines(term: InlineNode[], ctx: CarveContext): string {
+    const lines: string[] = []
+    let run: InlineNode[] = []
+    for (let i = 0; i < term.length; i++) {
+      const node = term[i]!
+      const own = node.type === 'comment' && !node.delimited && i > 0 && term[i - 1]!.type === 'soft_break'
+      if (!own) {
+        run.push(node)
+        continue
+      }
+      run.pop()
+      if (run.length > 0 || lines.length === 0) lines.push(this.renderInlines(run, ctx))
+      run = []
+      const comment = node as Comment
+      lines.push(
+        comment.block
+          ? this.renderBlockComment(comment.content).split('\n').map((line) => ` ${line}`).join('\n')
+          : comment.content === '' ? ' %%' : ` %% ${comment.content}`,
+      )
+      if (term[i + 1]?.type === 'soft_break') i++
+    }
+    if (run.length > 0) lines.push(this.renderInlines(run, ctx))
+    return lines.join('\n')
+  }
+
   private renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
     const out: string[] = []
     // Every entry writes its own description line, so consecutive `::` lines
@@ -3400,7 +3432,7 @@ class CarveRenderSession {
         const outer = this.termKeepsLineIndent
         this.termKeepsLineIndent = true
         try {
-          out.push(`:: ${this.renderInlines(term, ctx)}`)
+          out.push(`:: ${this.renderTermInlines(term, ctx)}`)
         } finally {
           this.termKeepsLineIndent = outer
         }
@@ -4178,6 +4210,7 @@ class CarveRenderSession {
       }
       case 'comment':
         if (node.delimited) return `{% ${node.content} %}`
+        if (node.block) return renderSession.renderBlockComment(node.content)
         // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
         // joins the opener rather than being separated from it by a space: a
         // comment whose content is `%` is written ` %%%`, not ` %% %`, which
