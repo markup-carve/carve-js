@@ -5355,6 +5355,14 @@ function commentCloserLookup(lines: readonly string[]): (width: number, index: n
   }
 }
 
+/** Whether a line starts an authored block outside the body's first sublist. */
+function isParentAuthoredBlock(line: string, firstMarkerColumn: number): boolean {
+  const column = indentColumns(line, firstMarkerColumn)
+  if (column === 0 || column >= firstMarkerColumn) return false
+  const opener = sliceColumns(line, column, true)
+  return markerContentColumn(opener) < 0 && lineOpensItemBlock(opener)
+}
+
 /**
  * Apply an over-indented list block opener's authored column as a temporary
  * local block base (PART 9 §24 C3, carve#1705).
@@ -5393,10 +5401,7 @@ function rebaseOverindentedBlocks(
   if (firstMarkerColumn >= 0) {
     const hasParentOwnedCandidate = lines.some((line, index) => {
       if (isBlankLine(line) || (eligible && !eligible.has(index))) return false
-      const column = indentColumns(line, firstMarkerColumn)
-      if (column === 0 || column >= firstMarkerColumn) return false
-      const opener = sliceColumns(line, column, true)
-      return markerContentColumn(opener) < 0 && lineOpensItemBlock(opener)
+      return isParentAuthoredBlock(line, firstMarkerColumn)
     })
     if (!hasParentOwnedCandidate) return ownedBlanks
   }
@@ -9949,6 +9954,57 @@ class ParseSession {
       // but that must never be mistaken for #1705 over-indentation.
       const authoredBaseEligible = new Set<number>()
       let hasOverindentedBlockCandidate = false
+      let authoredFenceBase = 0
+      let nestedOwnerColumn = markerContentColumn(content)
+      let firstBodyMarkerColumn: number | undefined = RE_DEFLIST_TERM.test(content) ? -1 : undefined
+      let hasParentAuthoredBlock = false
+      // Lines that could open a parent-owned block, tested only where the answer
+      // is read: isParentAuthoredBlock() walks an indentation run per line and a
+      // fence below the child column is rare (markup-carve/carve#752).
+      const parentBlockCandidates: string[] = []
+      const parentAuthoredBlock = (): boolean => {
+        const markerColumn = firstBodyMarkerColumn ?? -1
+        if (markerColumn < 0) return false
+        while (!hasParentAuthoredBlock && parentBlockCandidates.length) {
+          const line = parentBlockCandidates.shift()!
+          if (isParentAuthoredBlock(line, markerColumn)) hasParentAuthoredBlock = true
+        }
+        return hasParentAuthoredBlock
+      }
+      // Which child a collected line belongs to, walked only when a code fence
+      // opens below that child's column - the one place the answer is read. Both
+      // reads it needs walk an indentation run, so a body with no such fence pays
+      // nothing for the tracking (markup-carve/carve#752).
+      const ownerPending: {line: string, followsBlank: boolean, foldable: boolean, framed: boolean}[] = []
+      const walkOwnership = (): boolean => {
+        let opensFence = false
+        for (const entry of ownerPending) {
+          opensFence = false
+          const column = nestedOwnerColumn >= 0 ? indentColumns(entry.line, nestedOwnerColumn) : 0
+          // A line below a child's column can continue its paragraph. A blank or a
+          // block boundary returns ownership to this item.
+          if (nestedOwnerColumn < 0 || column < nestedOwnerColumn) {
+            const markerColumn = markerContentColumn(entry.line)
+            if (nestedOwnerColumn < 0 || entry.followsBlank || markerColumn >= 0 ||
+              lineOpensItemBlock(entry.line)) {
+              nestedOwnerColumn = markerColumn
+              // Track a new fence at its authored base so a later dedent cannot
+              // fold into its body as paragraph text. Deeper items track their own
+              // fences when their collected content is parsed.
+              if (markerColumn < 0 && !entry.foldable && !entry.framed &&
+                ((firstBodyMarkerColumn ?? -1) < 0 || parentAuthoredBlock())) {
+                const opener = entry.line.trimStart()
+                if (opener !== entry.line && opensCodeFence(opener)) {
+                  authoredFenceBase = indentColumns(entry.line)
+                  opensFence = true
+                }
+              }
+            }
+          }
+        }
+        ownerPending.length = 0
+        return opensFence
+      }
       // Candidate sublist markers, resolved after authored fence bases are applied.
       const subListMarkers = new Set<number>()
       let bodyHasContentColumnLine = false
@@ -10084,6 +10140,7 @@ class ParseSession {
             // tracker sees them: what they leave open decides how a later
             // dedented line folds.
             trackItemLazyState(attachedLines[k]!, lazyState)
+            if (!lazyState.inFence) authoredFenceBase = 0
           }
           continue
         }
@@ -10157,6 +10214,7 @@ class ParseSession {
           !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
           const placed = sliceColumns(l, contentCol, true)
           if (!RE_ADMONITION_CLOSE.test(placed)) bodyHasContentColumnLine = true
+          const followsBlank = pendingBlanks > 0
           for (let k = 0; k < pendingBlanks; k++) {
             // Emptied here, a nested item's own collector would have no residue
             // left to measure its opener against, so the container keeps what it
@@ -10211,13 +10269,34 @@ class ParseSession {
           if (!lazyState.inFence) {
             authoredBaseEligible.add(nested.length)
             if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
+            if (firstBodyMarkerColumn === undefined) {
+              firstBodyMarkerColumn = markerContentColumn(nested.find((line) => !isBlankLine(line)) ?? dedented)
+            }
+            if (firstBodyMarkerColumn >= 0 && !hasParentAuthoredBlock) parentBlockCandidates.push(dedented)
           }
           nested.push(dedented)
           nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           const fenceLineIndex = lexer.pos
+          let trackedContent = dedented
+          if (lazyState.inFence) {
+            if (authoredFenceBase > 0 && indentColumns(dedented, authoredFenceBase) >= authoredFenceBase) {
+              trackedContent = sliceColumns(dedented, authoredFenceBase, true)
+            }
+          } else {
+            const opener = dedented.trimStart()
+            const mayOpenFence = opener !== dedented && lazyState.quoteInner === null &&
+              opensCodeFence(opener)
+            ownerPending.push({
+              line: dedented,
+              followsBlank,
+              foldable: lazyState.lazyFoldable,
+              framed: insideOpenFence(lazyState),
+            })
+            if (mayOpenFence && walkOwnership()) trackedContent = opener
+          }
           trackItemLazyState(
-            dedented,
+            trackedContent,
             lazyState,
             (marker) => {
               const answer = itemFenceHasCloser(
@@ -10237,6 +10316,7 @@ class ParseSession {
             true,
             (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
           )
+          if (!lazyState.inFence) authoredFenceBase = 0
           lexer.consume()
         } else if (
           pendingBlanks === 0 &&
@@ -10320,21 +10400,20 @@ class ParseSession {
           // is the lazy continuation of the paragraph above it, which stays open
           // behind it (corpus 183, 197, 358).
           trackItemLazyState(lazyLine, lazyState, () => true, false)
+          if (!lazyState.inFence) authoredFenceBase = 0
           lexer.consume()
         } else if (
-          leadFence !== null &&
+          (leadFence !== null || authoredFenceBase > 0) &&
           lazyState.inFence &&
           pendingBlanks === 0 &&
           indentColumns(l, contentCol) < contentCol &&
           (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
         ) {
-          // AN UNFINISHED FENCE ON THE LEAD LINE OWNS WHAT THE CONTAINER FOLDED
-          // IN (markup-carve/carve-js#1630). A fence at an item's block start
-          // runs to the end of its container, and a line the ENCLOSING item
-          // already admitted as lazy text is inside that container - so it is
-          // fence body, and a closing run written among those lines is body text
-          // too, because a fence's content is not re-scanned for structure.
+          // An open fence owns lines an enclosing container already admitted
+          // as lazy text (#1630, #2216). Those lines are inside its container
+          // even when they reach neither the item column nor the authored fence
+          // base. A closing run among them stays payload.
           //
           // The `itemLazyLines` test is the whole rule. Without it this arm would
           // also take a line the AUTHOR wrote below the column, and the outermost
@@ -10356,6 +10435,7 @@ class ParseSession {
           nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           trackItemLazyState(framed, lazyState, () => true, false)
+          if (!lazyState.inFence) authoredFenceBase = 0
           lexer.consume()
         } else {
           break
