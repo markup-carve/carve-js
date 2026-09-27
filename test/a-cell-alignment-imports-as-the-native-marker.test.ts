@@ -5,25 +5,9 @@ import { parse } from '../src/parse.js'
 import type { HtmlImportMode } from '../src/html-import.js'
 
 /**
- * A cell's `text-align` and `vertical-align` reach the cell's MARKER RUN in
- * `semantic` and `roundtrip`, and are dropped and reported in `safe`.
- *
- * `style` used to be refused wholesale except for one arm that mapped
- * `text-align` onto the key-value `{align=…}`. Both halves were wrong. The
- * alignment had somewhere faithful to go the whole time - a Carve cell
- * alignment is written back as `style="text-align: right;"`, the very
- * declaration the import was handed - and the key-value is written back as
- * `align="right"`, so `carve -> html -> carve -> html` was not stable: the
- * first render wrote the CSS, the import turned it into the attribute, and the
- * second render wrote the attribute (markup-carve/carve#1741,
- * markup-carve/carve#1745). `vertical-align` has the same answer through the
- * cell's `valign` and was not mapped at all (markup-carve/carve#1746).
- *
- * THE BOUNDARY IS THE POINT, so every side of it is pinned: the mapping
- * happens and survives a full re-render; `safe` still drops and still reports;
- * a property the language genuinely cannot spell still reports, so the change
- * cannot read as a blanket "stop reporting"; and a body cell repeating its
- * column's value writes no run of its own, because the head already says it.
+ * Cell alignment uses native markers so rendering restores the CSS declaration.
+ * An align attribute would render the legacy HTML attribute instead (carve#1745).
+ * Horizontal alignment maps in every mode; vertical alignment maps outside safe.
  */
 const imported = (html: string, mode: HtmlImportMode): string => htmlToCarve(html, { mode }).value
 
@@ -33,9 +17,9 @@ const codes = (html: string, mode: HtmlImportMode): string[] =>
 const rendered = (carve: string): string => renderHtml(parse(carve)).replace(/\n\s*/g, '')
 
 describe('a cell alignment imports as the native marker', () => {
-  it('maps text-align onto the marker run in semantic and roundtrip', () => {
+  it('maps text-align onto the marker run in every mode', () => {
     const html = '<table><tr><td style="text-align:right">a</td><td>b</td></tr></table>'
-    for (const mode of ['semantic', 'roundtrip'] as const) {
+    for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
       expect(imported(html, mode)).toBe('|> a | b |\n')
       expect(codes(html, mode)).toEqual([])
     }
@@ -86,8 +70,8 @@ describe('a cell alignment imports as the native marker', () => {
   /**
    * The boundary a careless fix crosses.
    */
-  it('still drops and reports in safe', () => {
-    for (const declaration of ['text-align:right', 'vertical-align:top']) {
+  it('still drops vertical alignment in safe', () => {
+    for (const declaration of ['vertical-align:top']) {
       const html = `<table><tr><td style="${declaration}">a</td><td>b</td></tr></table>`
       expect(imported(html, 'safe')).toBe('| a | b |\n')
       expect(codes(html, 'safe')).toEqual(['style-unmapped'])

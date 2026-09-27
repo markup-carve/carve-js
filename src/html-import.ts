@@ -2060,8 +2060,8 @@ class Importer {
    * The Carve slot a CSS declaration maps to, or `undefined` where nothing in
    * the language spells it.
    */
-  private mappedStyleDeclaration(property: string, value: string): { key: 'align' | 'valign'; value: string } | undefined {
-    if (this.mode === 'safe') return undefined
+  private mappedStyleDeclaration(property: string, value: string, cell: boolean): { key: 'align' | 'valign'; value: string } | undefined {
+    if (this.mode === 'safe' && !(cell && property === 'text-align')) return undefined
     if (property === 'text-align' && ['left', 'right', 'center'].includes(value)) return { key: 'align', value }
     if (property === 'vertical-align' && ['top', 'middle', 'bottom'].includes(value)) return { key: 'valign', value }
     return undefined
@@ -2099,7 +2099,7 @@ class Importer {
       const property = declaration.slice(0, split).trim().toLowerCase()
       const val = declaration.slice(split + 1).trim().toLowerCase()
       if (!property) continue
-      const mapped = this.mappedStyleDeclaration(property, val)
+      const mapped = this.mappedStyleDeclaration(property, val, cell)
       // A CELL TAKES THE MARKER RUN, NOT AN ATTRIBUTE. `|>` is written back as
       // `style="text-align: right;"` and `{align=right}` as `align="right"`, so
       // only the marker returns the declaration the import was handed - and
