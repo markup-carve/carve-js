@@ -122,23 +122,6 @@ export interface UnclosedContainer {
   fenceWidth: number
 }
 
-// Active extension matchers for the current parse() call. A module-level hook
-// keeps the ~15 recursive scanInline call sites and every sub-lexer free of an
-// extra threaded parameter. Parsing is synchronous; parse() saves/restores the
-// previous values in a finally so nested and sequential parses stay isolated.
-let activeMatchers: CarveExtension[] = []
-let activeMatcherCtx: MatcherContext | null = null
-
-/**
- * The document being parsed, for the one field that promises VERBATIM SOURCE.
- */
-let activeDocument: string | null = null
-
-// A definition pre-pass probe parses a source fragment through the block layer.
-// Matchers remain active during that parse, but its own definition scan must not
-// start another probe (a matcher may recursively call ctx.parseBlocks too).
-let probingLazyParagraph = false
-
 // Content must carry at least one non-ASCII-whitespace character, mirroring
 // RE_CAPTION: `# ` / `#   ` (marker + whitespace only) and `#\t…` are NOT
 // headings, exactly like the caption rule. Leading spaces are folded into the
@@ -1239,80 +1222,12 @@ export function opensFrontmatter(source: string, opts: ParseOptions = {}): boole
   return lexer.frontmatter !== undefined
 }
 
+// Shared only for the synchronous recursion budget: extensions can re-enter
+// public parse(), whose document state belongs to a separate session.
+let inlineDepth = 0
+
 export function parse(source: string, opts: ParseOptions = {}): Document {
-  newlineIndexCache.clear()
-  const previousQuoteCharacters = activeQuoteCharacters
-  activeQuoteCharacters = opts.extensions
-    ?.map((extension) => extension.quoteCharacters)
-    .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
-    .at(-1) ?? previousQuoteCharacters
-  // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
-  // is a heading, not literal text. Only here in the root entry -- nested
-  // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
-  // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
-  const strippedBom = source.charCodeAt(0) === 0xfeff
-  if (strippedBom) source = source.slice(1)
-  // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
-  // byte never reaches output (decided cross-impl behavior; WHATWG-style).
-  if (source.includes('\0')) source = source.replace(/\0/g, '�')
-  const lexer = new Lexer(
-    source,
-    opts,
-    0,
-    opts.onUnclosedContainer ? new Set<string>() : undefined,
-  )
-  // POSITIONS STILL INDEX THE FILE, not the stripped text. Slicing the mark off
-  // shifted every offset in the document by one codepoint, so a consumer that
-  // sliced the original bytes by a reported span got the character before the
-  // one the node holds - `text` at 2..3 was the space, where the node said `T`
-  // (carve#876). All three engines did this the same way.
-  //
-  // `sourceOffsetMap` is the mechanism a container sub-lexer already uses to
-  // map its stripped view back to the document; the BOM is the same problem
-  // with a fixed width of one, so it reuses it rather than adding a second
-  // spelling. `linePrefixWidths` moves with it: the mark occupies the first
-  // column of the first line, so the content of that line starts at column 2.
-  if (strippedBom) {
-    lexer.sourceOffsetMap = lexer.lineOffsets.map((offset) => offset + 1)
-    lexer.linePrefixWidths = lexer.lineOffsets.map((_offset, index) => (index === 0 ? 1 : 0))
-  }
-  lexer.atDocumentLevel = true
-  // Consume leading frontmatter first so `lexer.pos` marks the end of the
-  // metadata region; the def passes and parseBlocks all start from there.
-  lexer.consumeFrontmatter()
-  const prevMatchers = activeMatchers
-  const prevCtx = activeMatcherCtx
-  const prevDocument = activeDocument
-  activeDocument = strippedBom ? '﻿' + source : source
-  // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
-  // no matcher, but it now asks whether one is registered: an extension's
-  // `matchBlock` may claim any line, and a claimed line reads as prose to a
-  // line-shape test. `makeMatcherCtx` captures the definition maps by
-  // reference, so building it first sees the same tables the pass fills.
-  activeMatchers = (opts.extensions ?? []).filter((e) => e.matchInline || e.matchBlock)
-  activeMatcherCtx = activeMatchers.length ? makeMatcherCtx(lexer, opts) : null
-  try {
-    // First pass: collect abbreviation and reference-link definitions so
-    // they can be resolved regardless of document order (grammar §6).
-    collectLinkDefs(lexer)
-    const children = parseBlocks(lexer, 0)
-    appendLinkReferenceDefinitions(children, lexer, source)
-    const doc: Document = { type: 'document', children }
-    // Record the source byte length so renderers can size the
-    // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
-    doc.srcByteLength = utf8ByteLength(source)
-    if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
-    if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
-    if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
-    if (opts.positions === false) dropPositions(doc)
-    else toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
-    return doc
-  } finally {
-    activeMatchers = prevMatchers
-    activeMatcherCtx = prevCtx
-    activeDocument = prevDocument
-    activeQuoteCharacters = previousQuoteCharacters
-  }
+  return new ParseSession().parse(source, opts)
 }
 
 /**
@@ -1374,95 +1289,6 @@ function wholeLinePos(lexer: Lexer, line: number, source: string): Position {
     startOffset,
     endOffset: Math.min(startOffset + text.length, source.length),
   }
-}
-
-// The MatcherContext handed to an extension's matchers, bound to a specific
-// lexer's definition tables. Recursive parsing resolves that lexer's defs so
-// extension-parsed content behaves like core nested content, not an isolated
-// snippet.
-function makeMatcherCtx(lexer: Lexer, opts: ParseOptions): MatcherContext {
-  return {
-    parseInlines: (t) => parseInline(t, lexer.abbrDefs, lexer.linkDefs),
-    parseBlocks: (s) => parseBlockSource(s, opts, lexer),
-    linkDefs: lexer.linkDefs,
-    abbrDefs: lexer.abbrDefs,
-  }
-}
-
-// Recursively parse a block source for an extension's ctx.parseBlocks. Reuses
-// the current activeMatchers (so nested content sees the same extensions)
-// without re-entering parse() — which would reset the matcher context. The
-// document's link/abbr defs are seeded first so references defined elsewhere
-// resolve inside the snippet (snippet-local defs override on top), and the
-// root footnote map is SHARED by reference — exactly as core nested containers
-// (blockquotes/lists) do — so a footnote def inside extension-owned content
-// reaches the document. While parsing, the matcher context is rebound to the
-// sub-lexer so a nested matcher reading ctx.linkDefs/abbrDefs sees the
-// snippet-local definitions.
-function parseBlockSource(source: string, opts: ParseOptions, root: Lexer): BlockNode[] {
-  const sourceLines = normalizedSourceLines(source)
-  const anchor = root.pos + 1
-  const sourceLineMap =
-    sourceLines.length > 0 &&
-    sourceLines.every((line, i) => root.lines[anchor + i] === line)
-      ? sourceLines.map((_line, i) => root.lineNumber(anchor + i))
-      : undefined
-  const sub = subLexer(
-    source,
-    opts,
-    root.lineNumberOffset + anchor,
-    sourceLineMap,
-    root.unclosedContainerKeys,
-  )
-  if (!sourceLineMap) sub.suppressPositions = true
-  // Propagate nesting depth so MAX_NESTING_DEPTH still bounds extension-owned
-  // recursion (a self-recursive container matcher would otherwise stack-overflow).
-  sub.depth = root.depth + 1
-  sub.nested = true
-  for (const [k, v] of root.linkDefs) sub.linkDefs.set(k, v)
-  for (const [k, v] of root.abbrDefs) sub.abbrDefs.set(k, v)
-  sub.footnoteDefs = root.footnoteDefs
-  sub.footnoteDefPos = root.footnoteDefPos
-  collectLinkDefs(sub)
-  if (!activeMatchers.length) return parseBlocks(sub, 0)
-  const prevCtx = activeMatcherCtx
-  activeMatcherCtx = makeMatcherCtx(sub, opts)
-  try {
-    return parseBlocks(sub, 0)
-  } finally {
-    activeMatcherCtx = prevCtx
-  }
-}
-
-// Offer the active block matchers the line at the lexer cursor, in registration
-// order. On a match, advance the lexer by linesConsumed and return the node.
-// Core block constructs are dispatched first (see parseBlockInner), so an
-// extension only sees lines core declined.
-function tryBlockMatchers(lexer: Lexer): BlockNode | null {
-  const ctx = activeMatcherCtx
-  if (!ctx) return null
-  for (const ext of activeMatchers) {
-    if (!ext.matchBlock) continue
-    const res = ext.matchBlock(lexer.lines, lexer.pos, ctx)
-    if (res && res.linesConsumed > 0) {
-      for (let k = 0; k < res.linesConsumed && !lexer.eof(); k++) lexer.consume()
-      return res.node
-    }
-  }
-  return null
-}
-
-// Offer the active inline matchers the position `pos` in `text`, in
-// registration order. Returns the first match whose end advances past pos.
-function tryInlineMatchers(text: string, pos: number): InlineMatch | null {
-  const ctx = activeMatcherCtx
-  if (!ctx) return null
-  for (const ext of activeMatchers) {
-    if (!ext.matchInline) continue
-    const res = ext.matchInline(text, pos, ctx)
-    if (res && res.end > pos && res.end <= text.length) return res
-  }
-  return null
 }
 
 
@@ -1887,854 +1713,6 @@ function spendLazyProbeBudget(lexer: Lexer, candidate: number, budget: number): 
 }
 
 /**
- * Does the block layer fold `candidate` into a paragraph that was already open?
- *
- * THE PROBE IS ALLOWED TO RUN MATCHERS. Grammar PART 9R R1a makes a matcher a
- * pure predicate precisely so a processor may invoke one speculatively, more
- * than once at a position, and discard the result - which core parsing already
- * does when a matcher reports a consumption the parser rejects. Without running
- * them the pre-pass cannot know an extension consumed the line above, and would
- * suppress a definition that is real metadata.
- *
- * WHAT IT HANDS THE MATCHER IS A FRAGMENT, NOT THE DOCUMENT: the run back to
- * the last blank line, rebased to index 0. A matcher keyed on its absolute
- * `start`, or one that reads lines above that blank, therefore sees a different
- * question than it will during the real parse and can answer it differently.
- * Preserving the coordinates means parsing from the top of the document per
- * candidate, which is the quadratic shape the byte budget exists to prevent, and
- * carve-rs and carve-php probe the same fragment - so the limitation is shared
- * rather than an engine quirk (markup-carve/carve#1437).
- */
-function lineFoldsIntoOpenParagraph(
-  lexer: Lexer,
-  candidate: number,
-  budget: number,
-): boolean | 'unknown' {
-  // `'unknown'` means THE PROBE DID NOT RUN, not "it does not fold". PART 9R
-  // R1a lets the bound stay but forbids spending it as an answer, so the caller
-  // reaches the answer statically instead (markup-carve/carve#1895).
-  if (probingLazyParagraph) return 'unknown'
-  const priced = lazyProbeCost(lexer, candidate)
-  if (!priced || priced.cost > budget) return 'unknown'
-  const before = lexer.lines.slice(priced.start, candidate).join('\n')
-  const after = `${before}\n${lexer.lines[candidate]!}`
-  const probe = (source: string): LazyProbeFrame => {
-    const { onUnclosedContainer: _ignored, ...callerOptions } = lexer.parseOptions
-    const options: ParseOptions = { ...callerOptions, positions: false }
-    const sub = new Lexer(source, options)
-    sub.atDocumentLevel = true
-    sub.suppressPositions = true
-    const previousCtx = activeMatcherCtx
-    activeMatcherCtx = activeMatchers.length ? makeMatcherCtx(sub, options) : null
-    try {
-      collectLinkDefs(sub)
-      return lazyProbeFrame(parseBlocks(sub, 0))
-    } finally {
-      activeMatcherCtx = previousCtx
-    }
-  }
-  probingLazyParagraph = true
-  try {
-    const a = probe(before)
-    const b = probe(after)
-    return b.endsInParagraph && a.levels.join('\0') === b.levels.join('\0')
-  } finally {
-    probingLazyParagraph = false
-  }
-}
-
-function collectLinkDefs(lexer: Lexer) {
-  // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
-  // opened, or null when there was none. A fence inside a div ends at that div's
-  // closer, exactly as it ends at the end of a quote or a list item - and the
-  // block parser agrees: `:::` / ``` ``` `` / `x` / `:::` renders the code and
-  // then leaves the div, while a run of a different width, or one with trailing
-  // text, is ordinary fence content.
-  let fence:
-    | {
-        ch: string
-        len: number
-        contentCol: number
-        quoted: boolean
-        scope: PrepassScope
-        divWidth: number | null
-        hasCloser: boolean
-      }
-    | null = null
-  // A LINE BLOCK is verse: a definition written inside one is text the author
-  // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
-  // closed on its own width so a wider `:::: |` is not closed by a narrower run.
-  let verse: { width: number; scope: PrepassScope } | null = null
-  // A comment's body is OPAQUE. This pass did not know it, so a `[r]: /u`
-  // written inside `%%%` registered and a reference elsewhere resolved against
-  // text the author commented out - invisible in the output AND active in the
-  // link table (carve-js#634). The footnote path already treats a comment as
-  // opaque; this one did not.
-  let commentFence: number | null = null
-  // The boundary scan `commentCloserInScope` shares between the openers of one
-  // container. See `CommentScopeMemo`.
-  const commentScopeMemo: CommentScopeMemo = new Map()
-  // Div nesting depth, for the abbreviation branch below. A div is the one
-  // container that adds NO per-line prefix, so `raw` alone cannot tell a
-  // document-level definition from one written inside `:::`. Colon fences close
-  // on an exact length match (carve#455), which is what the stack records.
-  //
-  // EACH ENTRY CARRIES THE CONTAINER IT WAS OPENED IN. The stack was
-  // document-wide, so a quoted `> :::` pushed onto it and nothing popped when
-  // the quote ended - leaving it non-empty for the rest of the document, and
-  // the abbreviation branch requires document level, so every abbreviation
-  // below a one-line quoted div stopped registering (carve-js#1139).
-  const divs: {
-    width: number
-    opens: boolean
-    scope: PrepassScope
-    host: 'list' | 'description' | 'footnote' | null
-  }[] = []
-  // Track the enclosing list item's content column so a fenced-code delimiter
-  // is tested at its container's content column (PART 2), not blindly at
-  // column 0. Without this the prepass cannot tell a real fence nested at a
-  // list item's content column from a merely indented run, and a definition
-  // written inside such a fence is spuriously collected. Same content-column
-  // stack the Markdown migrator uses. (Blockquote prefixes are handled by
-  // stripContainerPrefixes; a list nested inside a blockquote is not tracked
-  // here — a rarer residual case.)
-  // Each entry remembers whether its item was opened BEHIND A QUOTE MARKER.
-  // A blank line ends every open quote, so a column opened inside one dies
-  // with it, and a later line that writes the marker again opens a NEW quote
-  // that inherits nothing (PART 0, A NEW MARKER DOES NOT REACH A DEAD
-  // CONTAINER'S COLUMN; carve#1892). A column opened at document level is not
-  // affected: a list item is transparent across a blank.
-  const listCols: Array<{ col: number; inQuote: boolean; kind: 'list' | 'description' }> = []
-  // A definition list STARTS only on a `::` term (PART 2; the parser enters
-  // parseDefinitionList from RE_DEFLIST_TERM alone), so a single-colon `: body`
-  // line is a description marker only once one has been seen. Ungated, `: term`
-  // in ordinary prose pushed a content column the parser never opens.
-  let sawDeflistTerm = false
-  // THE COMPOSED CONTENT-COLUMN STACK, absolute, outermost first - `listCols`
-  // read through every container rather than through list markers alone.
-  //
-  // `listCols` walks a line's list markers on `unquoted`, which strips a
-  // COLUMN-0 quote run and stops at the first quote it meets. So under
-  // `- > - - x` it records 2 and loses 6 and 8, and the definition gate below
-  // fell back to an exemption for any line carrying a prefix of its own - which
-  // registered every quoted definition whatever column it was written at
-  // (carve-js#1199). This stack is what that gate asks instead; the trackers
-  // above keep `listCols`, whose answers they already agree with.
-  const openCols: OpenContainer[] = []
-  let prevBlank = true
-  // Carried rather than scanned backwards: a document of blank lines would make
-  // a backward walk quadratic, and this pre-pass is on the parse hot path.
-  let prevNonBlankLine = ''
-  // Track whether we are inside a footnote body. A footnote continuation is
-  // indented, so an indented link def inside a note body must still be collected
-  // (the note's content column, not column 0) -- matching the spec oracle, which
-  // collects it structurally. Without this the strict top-level rejection below
-  // would drop it. A flush footnote opener enters the body; a non-blank line
-  // back at column 0 (a new top-level block) leaves it; blank/indented lines
-  // stay inside.
-  let inFootnoteBody = false
-  let plusColumn: number | null = null
-  let paraState: 'no' | 'yes' | 'ask' = 'no'
-  let paraLine = ''
-  // Number of composed quote/list containers that own the open paragraph.
-  // This separates a real sibling marker after item prose from a marker that
-  // merely looks like a new item while folding into document/quote prose.
-  let paraDepth = 0
-  let paragraphFoldedAbove: boolean = false
-  // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
-  // is invisible. `prepassOpensBlock` sees only the leading brace, so the
-  // continuation lines read as prose and reopened a paragraph over a run the
-  // block parser consumes whole. `peekBlockAttributes`
-  // is the real reader and ends the run at the first `}` or a blank line.
-  let attrRun = false
-  const hasBlockMatchers = activeMatchers.some((e) => e.matchBlock)
-  // Parsing every growing blank-free prefix would be quadratic. Price the two
-  // parses in UTF-8 bytes and fail toward collecting when the allowance is
-  // exhausted (PART 9R R1a).
-  let lazyProbeBudget = utf8ByteLength(lexer.lines.join('\n')) * 4 + 4096
-  // `codeCloserPossible` over the prepass's own view of a closer, built once per
-  // document and only when a paragraph is actually open under a fence-shaped
-  // line. A scan per opener is the quadratic shape this index exists to close.
-  let prepassClosers: CloserIndex['code'] | null = null
-  for (let idx = 0; idx < lexer.lines.length; idx++) {
-    // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
-    // none, including an unclosed opener that is NOT frontmatter), so a
-    // `[ref]: ...` inside it is not collected, while content after an
-    // unclosed opener still is.
-    if (idx < lexer.pos) continue
-    const raw = lexer.lines[idx]!
-    // A description continues an entry opened by a `::` term or by a previous
-    // description, and only then does its marker open content here.
-    // Tested on the PREFIX-STRIPPED previous line, the way the current line is
-    // read one line down. Asking the raw line meant `> :: term` did not read as
-    // a term, so the `:  ` marker below it was never stripped and the
-    // definition on it was neither collected nor hoisted - the `dd` was still
-    // emptied, so the author's line vanished and a reference to it stayed
-    // literal (carve#840). A div was the one container that worked, because it
-    // adds no per-line prefix for this to hide behind.
-    // THE PREVIOUS NON-BLANK LINE, because a blank between description entries
-    // does not end the list - it only makes it loose, and the parser reads
-    // `:  a` over a blank over `:  b` exactly as it reads them adjacent. Asking
-    // the line directly above meant a description marker after a blank went
-    // unstripped, so the `dd` was emptied while the definition on it was
-    // collected by nobody: the author's line vanished and the reference to it
-    // stayed literal, the same outcome carve#840 named one blank line further
-    // up (carve-js#1586). A blank that really ends the list still refuses, its
-    // previous non-blank line being the prose that ended it.
-    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(prevNonBlankLine))
-    if (!isBlankLine(raw)) prevNonBlankLine = raw
-    const line = stripContainerPrefixes(raw, afterTerm)
-    // Content columns are measured INSIDE the block quote. `> - a` puts the
-    // item's content column at 2 of the quoted content, not of the raw line -
-    // which carries the `> ` and matches no marker, so the column stayed 0 and
-    // a definition at it was rejected as "indented at top level". The item
-    // consumed the line anyway, so it rendered nothing AND defined nothing
-    // (carve#658). The footnote prepass already reads the quoted line.
-    // Only a COLUMN-0 marker is stripped. An indented one is inside something -
-    // `- a` / `  > [r]: /u` puts the quote at the item's content column - and
-    // eating that indentation here loses the very column the definition has to
-    // reach, which is what emptied the stack and dropped that definition
-    // (carve-js#649).
-    const unquoted = raw.replace(/^(?:>(?: |$))+/, '')
-    const wasPrevBlank = prevBlank
-    // `isBlankLine`, not `raw.trim() === ''`: this prepass decides the same
-    // `blank_line` the block lexer does, and the native trim carries the wider
-    // legacy set (see `RE_BLANK_LINE`). Spelling one rule twice is what let the
-    // two answers drift.
-    prevBlank = isBlankLine(raw)
-    // A fence is quoted if a blockquote marker stands anywhere in the line's
-    // container prefix, however many list markers lead it (`- > ``` `,
-    // `- - > ``` `), so its closer is blockquote-stripped.
-    //
-    // THE DEPTH AND THE BOOLEAN COME FROM ONE WALK. A fence opened at two quote
-    // levels is not held by a line carrying one: `> :::` under `> > ``` ` has
-    // left the inner quote and closes the div outside it, and a boolean cannot
-    // tell the two apart - it reports "still quoted" and the closer loses its
-    // pop. Reading the raw line and the line behind ONE marker answered both
-    // questions for a single marker only (carve-js#1181).
-    const rawQuoteDepth = containerQuoteDepth(raw)
-    const rawIsQuoted = rawQuoteDepth > 0
-    if (fence) {
-      // A line under an open fence is VERBATIM CONTENT, not prose, so no
-      // paragraph is open on the line below it - including the closer's own.
-      paraState = 'no'
-      // CLOSER: strip a blockquote prefix only when the fence is quoted, and
-      // NEVER a list marker -- a fence delimiter is a continuation line of pure
-      // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
-      // is not a closer. Re-base to the column the fence opened at.
-      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
-      const ki = k.length - k.replace(/^[ \t]+/, '').length
-      const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
-      // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
-      // the block lexer does, and a definition written after a fence that only
-      // ONE of the two reads as closed is collected by one and rendered by the
-      // other.
-      const close = d.match(RE_FENCE_CLOSER_PREPASS)
-      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
-        fence = null
-        continue
-      }
-      // THE FENCE ENDS WITH ITS CONTAINER. A fence opened inside a quote, a
-      // list item or a div does not hold a line that no longer reaches that
-      // container: the block parser has left the container and reads the line
-      // afresh, so the fence is over. This pass used to leave it open forever,
-      // and an unterminated fence has no closer - so every definition after the
-      // container was read as fence body and skipped (carve-js#1135).
-      //
-      // Asked AFTER the closer, never before: a closer written at column 0 for
-      // a fence opened at an item's content column is dedented out of its
-      // container by construction, and testing the container first would read
-      // that very line as a new opener.
-      //
-      // EVERY container the fence sits in has to hold the line, not whichever
-      // one is easiest to ask about. A quoted fence can also sit at a list
-      // item's content column (`> - ``` `), and a following `> :::` keeps the
-      // quote while leaving the item.
-      //
-      // The column is measured on `k`, the same quote-stripped view the closer
-      // above reads, because a content column inside a quote is measured
-      // inside the quote (carve#658). Reading the raw indent there would
-      // compare a column against a line that still carries its `> ` prefix.
-      //
-      // THE DIV IS THE CONTAINER `scope` CANNOT SEE, because a div adds no
-      // per-line prefix and no column - so a fence inside one is held by every
-      // test above and outlived the div too. Its closer is the enclosing div's
-      // own: a BARE colon run of exactly the width that was open when the fence
-      // opened (carve#455's exact-length rule, which is what the depth stack
-      // records). A different width, or a run with trailing text, is fence
-      // content, and the block parser reads all three the same way.
-      //
-      // AND ONLY FOR A FENCE THAT NEVER CLOSES. A fence with a closer ahead is
-      // opaque all the way to it, so a same-width `:::` written inside such a
-      // sample is CODE and the block parser renders it - only an unterminated
-      // fence degrades at its container's boundary. Ending the fence there
-      // anyway collected the definitions below it out of a visible `<pre>`,
-      // which is the worst outcome this pass has.
-      //
-      // Matched with the block parser's OWN colon closer, on `d` - the same
-      // re-based view the fence's closer above reads. That settles three things
-      // at once that a hand-rolled test got wrong: the pattern is anchored, so
-      // an INDENTED `:::` inside the body is content rather than the div's
-      // closer; it carries the structural trailing-whitespace class, where
-      // `trim()` also ate a no-break space the parser keeps as content; and it
-      // compares RUN LENGTHS rather than building a `:::` string per body line,
-      // which was quadratic in the div's width times the sample's length.
-      const divCloser =
-        fence.divWidth !== null && !fence.hasCloser ? RE_ADMONITION_CLOSE.exec(d) : null
-      const enclosingDivCloses = divCloser !== null && divCloser[1]!.length === fence.divWidth
-      // THE INDENT IS MEASURED ON `unquoted`, NOT ON `k`, because the recorded
-      // column was. The quote-prefix pattern `k` uses admits a LEADING
-      // INDENTATION RUN before the marker, so `k` loses the item's indentation
-      // along with the `> ` - and a fence opened behind both (`- > ``` `)
-      // records the ITEM's column while its body lines score zero against it.
-      // Every body line then looked out of the item, the fence ended on its
-      // own first one, and the code sample's definitions went live. `unquoted` strips only a COLUMN-0 quote marker, so it
-      // keeps exactly the indentation the column was measured against - and it
-      // is never the SHALLOWER of the two, since `k` removes a superset of what
-      // `unquoted` does wherever the fence is quoted at all.
-      if (
-        scopeHoldsLine(fence.scope, raw, rawQuoteDepth, unquoted) &&
-        !enclosingDivCloses
-      ) {
-        continue // definitions inside fenced code are literal samples
-      }
-      // Out of its container. The fence is over and this line is read fresh -
-      // it may be a boundary the trackers below have to see, a new opener, or a
-      // definition site.
-      fence = null
-    }
-    const marker = prepassMarker(unquoted)
-    if (RE_DEFLIST_TERM.test(unquoted)) sawDeflistTerm = true
-    const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
-    let deflistDef: RegExpExecArray | null = null
-    // Test the RAW line for a block starter: a blockquote `>` is stripped by
-    // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
-    // interrupting a list item would not pop the stack.
-    const rawTrimmed = raw.trim()
-    const startsBlock =
-      /^#{1,6}([ \t]|$)/.test(rawTrimmed) ||
-      RE_BLOCKQUOTE.test(rawTrimmed) ||
-      /^(`{3,}|~{3,})/.test(rawTrimmed) ||
-      // A COLON FENCE ENDS THE ITEM TOO, and was the one block opener missing
-      // from this list. A flush `:::` under an unblanked item opens a SIBLING
-      // container - the parser renders the div next to the list, not inside it
-      // - so the item's content column is gone. Left here, the column stayed
-      // live and the div recorded it as the container it was opened in, which
-      // then released at the next blank line and let an abbreviation written
-      // INSIDE a visibly rendered div register.
-      //
-      // Only a fence the parser REALLY opens: `:::note` is prose, and the
-      // parser folds it into the item lazily, so popping the column there
-      // rejected the definition below it as top-level indentation.
-      isColonFenceOpener(rawTrimmed) ||
-      /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
-    if (marker && /\S/.test(raw.slice(marker[0].length))) {
-      // Every marker on the line, not just the first: `- - see` opens TWO
-      // items and its content column is 4, not 2. Tracking only the first
-      // understated the column, and a definition written at the real one
-      // then read as "past the column" (carve-js#613's guard) or as a fence
-      // at the wrong base. Each marker pops the stack against its own indent
-      // and pushes its cumulative content column.
-      let rest = unquoted
-      let base = 0
-      for (let m2: RegExpMatchArray | null = marker; m2 && /\S/.test(rest.slice(m2[0].length)); ) {
-        while (listCols.length && listCols[listCols.length - 1]!.col > base + m2[1]!.length) {
-          listCols.pop()
-        }
-        base += m2[0].length
-        listCols.push({ col: base, inQuote: unquoted !== raw, kind: 'list' })
-        rest = rest.slice(m2[0].length)
-        m2 = prepassMarker(rest)
-      }
-    } else if (sawDeflistTerm && (deflistDef = RE_DEFLIST_DEF.exec(unquoted))) {
-      while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
-      listCols.push({
-        col: indent + deflistContentCol(deflistDef[1]!),
-        inQuote: unquoted !== raw,
-        kind: 'description',
-      })
-    } else if (
-      // BLANK BEHIND ITS OWN MARKER IS STILL BLANK. `raw` carries the container
-      // prefix, so a quote-marked empty line (`>`) failed this test, matched
-      // `startsBlock` through RE_BLOCKQUOTE, and popped the list column its own
-      // quote still holds open - the definition below it then read as top-level
-      // indentation and never registered (carve-js#1584). A list item is
-      // transparent across a blank whatever marks it.
-      !isBlankLine(unquoted) &&
-      (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
-    ) {
-      while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
-    }
-    // A BLANK ENDS EVERY OPEN QUOTE, so every column opened inside one goes
-    // with it. Without this the item column survived its own quote, a later
-    // `>   [r]: /u` reached it, and a definition the page printed as ordinary
-    // text registered document-wide as well - both halves at once, which I5
-    // permits under neither reading (carve#1892).
-    if (isBlankLine(raw)) {
-      const firstQuoted = listCols.findIndex((entry) => entry.inQuote)
-      if (firstQuoted >= 0) listCols.length = firstQuoted
-    }
-    // THE COMPOSED STACK IS MAINTAINED ON THE SAME THREE BRANCHES, over the
-    // whole container prefix rather than over list markers alone.
-    const composed = composeContainerPrefix(raw, afterTerm, openCols)
-    if (isBlankLine(raw)) {
-      // A BLANK LINE ENDS EVERY OPEN BLOCK QUOTE, and everything written inside
-      // one goes with it. A list item is transparent across a blank, which is
-      // why `listCols` treats every blank that way and this stack cannot.
-      //
-      // NOT LOAD-BEARING, and said so rather than left to be discovered: a
-      // mutation that removes this drop changes no output across the suite or
-      // 1652 swept prefix shapes, because the walk's own `depth` already refuses
-      // to enter a quote the line does not re-mark, and a line that DOES re-mark
-      // it peels into the same entry whether or not the blank dropped it. It
-      // stays because it states the rule where the state is kept.
-      const firstQuote = openCols.findIndex((e) => e.quote)
-      if (firstQuote >= 0) openCols.length = firstQuote
-    } else if (composed.peeled.length) {
-      // A FOLDED MARKER OPENS NOTHING, so the stack the window is measured
-      // against must not move under it. The first folding marker is the item's
-      // lead text and so is everything after it on the line; recording it as a
-      // container replaced the real owner with the folded marker's own columns,
-      // and the next line was then measured against a window that never
-      // existed (markup-carve/carve-js#1598).
-      const foldAt = composed.peeled.findIndex((one) => one.folds)
-      if (foldAt !== 0) {
-        // The walk confirmed `depth` of the open containers. Anything past that
-        // is gone: a sibling list marker at an open item's own column closes
-        // that item, and everything written inside it goes with it.
-        openCols.length = composed.depth
-        for (const one of foldAt < 0 ? composed.peeled : composed.peeled.slice(0, foldAt)) {
-          if (!one.matched) openCols.push({ col: one.content, quote: one.quote, base: one.marker })
-        }
-      }
-    } else if (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed)) {
-      while (openCols.length && openCols[openCols.length - 1]!.col > composed.column) {
-        openCols.pop()
-      }
-    }
-    // strip the enclosing content column so a fence delimiter at that column
-    // is recognized (kept-indent view keeps residual indent after markers)
-    const contentCol = listCols.length ? listCols[listCols.length - 1]!.col : 0
-    // A comment fence's closer is a leading `%` run of the SAME length;
-    // trailing text is allowed, so `%%% end` closes a `%%%` fence.
-    if (commentFence !== null) {
-      const close = RE_COMMENT_BLOCK_ANY.exec(line)
-      if (close && close[1]!.length === commentFence) commentFence = null
-      paraState = 'no'
-      continue
-    }
-    {
-      const open = RE_COMMENT_BLOCK_ANY.exec(line)
-      // Under §5, an opener hides definitions only when its closer is in the same
-      // container. Document-level fences use the raw line index; nested fences
-      // use the stripped container view. Attached blocks start at the `+`
-      // marker column, which can differ from the item content column.
-      const commentScope: PrepassScope = {
-        quoteDepth: rawQuoteDepth,
-        contentCol: plusColumn ?? contentCol,
-      }
-      const atDocumentLevel = commentScope.quoteDepth === 0 && commentScope.contentCol === 0
-      const opensRegion =
-        open !== null &&
-        (atDocumentLevel
-          ? commentBlockHasCloser(lexer, open[1]!.length, idx)
-          : commentCloserInScope(lexer, open[1]!.length, idx, commentScope, commentScopeMemo))
-      if (open && opensRegion) {
-        commentFence = open[1]!.length
-        paraState = 'no'
-        continue
-      }
-    }
-    if (verse !== null && !scopeHoldsLine(verse.scope, raw, rawQuoteDepth, unquoted)) {
-      verse = null
-    }
-    if (verse !== null) {
-      const close = line.trim().match(/^(:{3,})$/)
-      if (close && close[1]!.length >= verse.width) verse = null
-      paraState = 'no'
-      continue
-    }
-    const verseOpen = line.trim().match(/^(:{3,})[ \t]*\|$/)
-    if (verseOpen) {
-      verse = {
-        width: verseOpen[1]!.length,
-        scope: { quoteDepth: rawQuoteDepth, contentCol },
-      }
-      paraState = 'no'
-      continue
-    }
-    while (
-      divs.length &&
-      !scopeHoldsLine(divs[divs.length - 1]!.scope, raw, rawQuoteDepth, unquoted)
-    ) {
-      divs.pop()
-    }
-    // Track `:::` nesting so the abbreviation branch can require document
-    // level. Only the depth matters here, not what kind of div it is.
-    const colon = line.trim().match(/^(:{3,})[ \t]*(.*)$/)
-    if (colon) {
-      const width = colon[1]!.length
-      if (colon[2] === '' && divs.length && divs[divs.length - 1]!.width === width) divs.pop()
-      else {
-        divs.push({
-          width,
-          opens: isColonFenceOpener(line),
-          scope: { quoteDepth: rawQuoteDepth, contentCol },
-          host: inFootnoteBody ? 'footnote' : (listCols[listCols.length - 1]?.kind ?? null),
-        })
-      }
-    }
-    // WHETHER A PARAGRAPH IS OPEN ON THE NEXT LINE, decided here because every
-    // line that carries verbatim or opaque content has already been consumed
-    // above with the flag cleared.
-    //
-    // The rule reads only the line itself, which is the SAFE simplification of
-    // §10's two halves. A paragraph stays open across a line that starts no
-    // block, and a line that starts one ends it; the cases where the two halves
-    // differ - a list marker opens a block but does NOT interrupt an open
-    // paragraph - cannot separate them here, because `line` has the marker
-    // stripped already and reads as the item's content either way. That is also
-    // the answer §10 wants: `text` / `- a` folds the bullet into the paragraph,
-    // and `- a` after a blank opens an item whose paragraph a flush-left line
-    // lazily continues. Both leave a paragraph open.
-    // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0. Its content
-    // column is §16's own and a flush line has left the body, so the block
-    // parser opens a top-level fence there even with a paragraph open inside the
-    // note - unlike a list item, whose paragraph a flush line really does
-    // continue. `line` has the body's indentation stripped, so without this the
-    // two are indistinguishable here.
-    // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0 - see the note on
-    // `paraState`. Read here, where `inFootnoteBody` still describes the line
-    // above; the expensive half is deferred to the opener below.
-    // DID THE LINE ABOVE FOLD INTO THIS PARAGRAPH? `prepassOpensBlock` answers
-    // whether it LOOKS like an opener, and a definition-shaped line looks like
-    // one whether or not it was collected - so asking it about the line above
-    // assumes the answer to the question being asked. A line the pass already
-    // decided was lazy opened nothing, and the paragraph is still open below it
-    // (markup-carve/carve-js#1580).
-    const foldedAbove: boolean = paragraphFoldedAbove
-    const paraWasOpen =
-      paraState !== 'no' && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
-    const paraAsk = paraState === 'ask'
-    const paraLineAbove = paraLine
-    const paraDepthAbove = paraDepth
-    // Lists do not interrupt an open paragraph AT DOCUMENT LEVEL. Inside an
-    // item they do: §24 C3 folds a marker only where it is below the item's
-    // content column and past its base, and everywhere else - at the base
-    // column, or at/past the content column - the marker opens a real item
-    // whose definition line is metadata. A newly opened quote interrupts only
-    // when every marker before it continues the open paragraph's containers:
-    // `para` / `> - [d]: u` does, but `para` / `- > [d]: u` does not because
-    // the lazy list marker owns the quote too.
-    //
-    // THE TEST USED TO BE `one.matched`, which is column EQUALITY with the open
-    // item rather than the window, so it was wrong in both directions: a
-    // sibling of a different marker width (`- lead` / `1. [d]: u`) collected
-    // nothing though the block parser opened a real `ol` for it, and a marker
-    // inside the window that happened to land on the open column (`-   lead` /
-    // `  - [d]: u`) collected though the item's lead text is where it belongs.
-    // Measured against the executable spec on 42 column shapes
-    // (markup-carve/carve-js#1598).
-    let markerInterruptsParagraph = false
-    let prefixOwnedByParagraph = true
-    for (let depth = 0; depth < composed.peeled.length; depth++) {
-      const one = composed.peeled[depth]!
-      if (one.quote && !one.matched && prefixOwnedByParagraph) markerInterruptsParagraph = true
-      if (!one.quote && !one.folds && !one.behindQuote && depth < paraDepthAbove)
-        markerInterruptsParagraph = true
-      if (!one.matched) prefixOwnedByParagraph = false
-    }
-    // Only a definition behind a list marker and a fence-shaped line consume
-    // this answer. Scoping the probe to those questions avoids observable
-    // matcher calls on unrelated lines and keeps the byte allowance useful.
-    const matcherProbeCandidate =
-      hasBlockMatchers &&
-      !probingLazyParagraph &&
-      ((composed.peeled.some((one) => !one.quote) &&
-        isLinkDefLine(line)) ||
-        RE_FENCE.test(line) ||
-        RE_RAW_FENCE.test(line))
-    const probed: boolean | 'unknown' = matcherProbeCandidate
-      ? lineFoldsIntoOpenParagraph(lexer, idx, lazyProbeBudget)
-      : 'unknown'
-    // AN EXHAUSTED BUDGET IS NOT AN ANSWER (PART 9R R1a, markup-carve/carve#1895).
-    // Bounding the probe stays sound; what the clause forbids is declining the
-    // line because the bound ran out, which made an unrelated extension drop a
-    // definition a matcher-free parse of the same document collects. So a probe
-    // that did not run falls back to the static reading - the same one every
-    // matcher-free document uses.
-    //
-    // THE STATIC READING IS BLIND IN EXACTLY ONE DIRECTION, and it is the safe
-    // one. Core block constructs are dispatched before `matchBlock`, so a line
-    // `prepassOpensBlock` claims is one no matcher can have consumed, and
-    // `false` here is sound. Where it says `true` a matcher may have eaten the
-    // line above unseen - and `true` collects nothing, which is the outcome the
-    // clause still licenses there.
-    const folds: boolean =
-      probed === 'unknown'
-        ? !paraAsk || foldedAbove || !prepassOpensBlock(paraLineAbove)
-        : probed
-    // ONE `folds` FEEDS EVERY CONSUMER (R1a), the collection gates and
-    // `paraDepth` alike. Giving the depth a narrower answer than the gate leaked
-    // the bug back at scale: a line the two disagreed on changed the recorded
-    // depth, which made the next marker read as interrupting, which collected
-    // it. carve-rs holds the same line for the same reason.
-    const paragraphReallyOpen: boolean =
-      paraWasOpen && !markerInterruptsParagraph && folds
-    const collectsNothing = paragraphReallyOpen
-    if (matcherProbeCandidate && paraWasOpen && !markerInterruptsParagraph) {
-      lazyProbeBudget = spendLazyProbeBudget(lexer, idx, lazyProbeBudget)
-    }
-    const inAttrRun = attrRun
-    attrRun = !isBlankLine(raw) && !line.includes('}') && (attrRun || line.startsWith('{'))
-    paraState = isBlankLine(raw) || inAttrRun ? 'no' : 'ask'
-    paraDepth =
-      paraState === 'no' ? 0 : paragraphReallyOpen ? paraDepthAbove : openCols.length
-    // WHAT CARRIES IS "THIS LINE FOLDED", NOT "A PARAGRAPH WAS OPEN ABOVE IT".
-    // The two differ on exactly the openers PART 9 §10 calls invisible: a
-    // top-level `[q]: /q` has a paragraph open above it and interrupts it all
-    // the same. Only a line the pass decided was lazy - marker-carried, inside a
-    // list, in an open paragraph - opened nothing and leaves it open below.
-    paragraphFoldedAbove =
-      paragraphReallyOpen && composed.peeled.some((one) => !one.quote)
-    paraLine = line
-    const quoteIndent = leadingWhitespace(raw)
-    const quoteAtWrongColumn =
-      !inFootnoteBody &&
-      quoteIndent > 0 &&
-      raw.slice(quoteIndent).startsWith('>') &&
-      (listCols.length === 0 || quoteIndent < Math.max(...listCols.map((entry) => entry.col)))
-    if (quoteAtWrongColumn) continue
-    const kept = stripContainerPrefixesKeepIndent(raw, afterTerm)
-    const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
-    // A FOOTNOTE BODY has a content column too, and it is not a list column.
-    // `contentCol` tracks only list items, so inside a note body it is 0 and an
-    // INDENTED fence opener matched nothing - the fence went untracked and the
-    // definition-shaped line inside it was collected as a real definition, so a
-    // reference below the note resolved against a code sample (carve-js#667).
-    // The opener's own indent is the column to re-base on; the closer check below
-    // already re-bases to whatever `fence.contentCol` says.
-    // Behind a QUOTE prefix the note body's leniency does not reach: see the
-    // block-quote sub-lexer. `kept` has the `>` stripped, so its residual indent
-    // is the definition's own, not a rebase remainder to absorb. Read off the
-    // RAW line - `composed.peeled` is empty for a quoted line here, so asking it
-    // silently answered "not quoted" for every one of them.
-    const behindQuotePrefix = raw.slice(quoteIndent).startsWith('>')
-    const openerCol =
-      inFootnoteBody && contentCol === 0 && !behindQuotePrefix
-        ? keptIndent
-        : contentCol > 0 && keptIndent >= contentCol
-          ? keptIndent
-          : contentCol
-    const descSeparator = afterTerm ? RE_DEFLIST_SEPARATOR.exec(unquoted) : null
-    const scopeCol = Math.max(openerCol, descSeparator ? deflistContentCol(descSeparator[1]!) : 0)
-    const deIndented = keptIndent >= openerCol ? kept.slice(openerCol) : kept
-    // BOTH fence spellings, not just the code one. `RE_FENCE`'s language slot
-    // excludes `=`, so a raw block's ```` ```=FORMAT ```` opener matched nothing
-    // here and the fence went untracked - and then the CLOSER read as an opener,
-    // which put the whole rest of the document inside a fence that never closes.
-    // A definition after a raw block was therefore never collected (it did not
-    // reach the AST at all), while a definition written INSIDE the raw block was
-    // collected and went live in the link table, so a reference below it resolved
-    // against opaque passthrough content. That is carve-js#634's failure with a
-    // different opener. The two lazy-continuation sites already read both
-    // patterns; this prepass was the one place that read only one.
-    const open = RE_FENCE.exec(deIndented)
-    const rawOpen = open ? null : RE_RAW_FENCE.exec(deIndented)
-    const run = open ? open[2]! : rawOpen?.[1]
-    if (run) {
-      // The innermost depth entry the block parser really opened - a phantom
-      // one from a malformed `:::note` decides nothing here. Written as a loop
-      // rather than `findLast`, which the compile target does not carry.
-      let enclosingDiv: { width: number; opens: boolean; scope: PrepassScope } | undefined
-      for (let i = divs.length - 1; i >= 0; i--) {
-        if (divs[i]!.opens) {
-          enclosingDiv = divs[i]
-          break
-        }
-      }
-      if (
-        !collectsNothing ||
-        codeCloserPossibleIn(
-          (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
-          run,
-          idx,
-        )
-      ) {
-        fence = {
-          ch: run[0]!,
-          len: run.length,
-          contentCol: openerCol,
-          quoted: rawIsQuoted,
-          scope: { quoteDepth: rawQuoteDepth, contentCol: scopeCol },
-          divWidth: enclosingDiv ? enclosingDiv.width : null,
-          // Asked only for a fence INSIDE a div, which is the one place the
-          // answer is read - so an ordinary document never builds the index.
-          //
-          // THE INDEX IS PERMISSIVE, and that is deliberate here. A merely
-          // closer-SHAPED line - indented, or inside another container - counts
-          // as "a closer may be ahead", so the div boundary declines to end the
-          // fence and a definition after it stays uncollected. That direction
-          // is a definition this pass does not reach, which is what it did
-          // before this change; the other direction ends a live fence early and
-          // publishes a definition out of a visible code sample. An exact
-          // answer wants a container-bounded scan per opener, which is the
-          // quadratic shape this index exists to avoid.
-          hasCloser:
-            enclosingDiv !== undefined &&
-            codeCloserPossibleIn(
-              (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
-              run,
-              idx,
-            ),
-        }
-        paraState = 'no'
-        continue
-      }
-      // Not a fence: the line is the paragraph's own text and the paragraph is
-      // still open below it. Known outright, so the line below never has to ask.
-      paraState = 'yes'
-    }
-    // Maintain footnote-body context (see `inFootnoteBody` above): a flush
-    // footnote opener enters the body; a non-blank line at column 0 leaves it.
-    if (RE_FOOTNOTE_DEF.test(raw)) inFootnoteBody = true
-    else if (!isBlankLine(raw) && leadingWhitespace(raw) === 0) inFootnoteBody = false
-    // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
-    // HERE rather than by a scan of its own, because a scan of its own knew
-    // nothing about what is opaque: it registered a definition written inside a
-    // fenced code SAMPLE, so documenting the syntax changed the prose around it
-    // (carve#573).
-    // PART 12 §7: an abbreviation definition is recognized ONLY at document
-    // level. Tested against `raw`, NOT the container-stripped `line`: stripping
-    // is what made `> *[X]: y` register a document-wide expansion, which is the
-    // one definition kind with no marker at the use site to point back at it.
-    // The anchored pattern rules out an indented (list-item continuation) line
-    // on its own; `divs` covers the one container that adds no line prefix.
-    // `listCols` covers the remaining container: a flush-left definition line
-    // that directly follows an open list item is that item's lazy continuation
-    // (text), not a document-level definition. A blank line first pops the
-    // stack, and then it is one.
-    const abbr =
-      divs.length === 0 && listCols.length === 0 && !inFootnoteBody
-        ? RE_ABBR_DEF.exec(raw)
-        : null
-    if (abbr) {
-      lexer.abbrDefs.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
-      continue
-    }
-    // A footnote def (`[^label]: body`) is parsed as a block in
-    // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
-    if (RE_FOOTNOTE_DEF.test(line)) continue
-    // Strict column-0 rule: a definition is a block opener recognized ONLY at
-    // its container's content column. At the true document top level
-    // (contentCol 0, outside any footnote body) a def indented above column 0 is
-    // literal paragraph text -- not collected here (and rendered literally by the
-    // block parser, whose RE_LINK_DEF consumption is likewise flush-only), so the
-    // flat pre-pass does not resolve a reference against an indented non-def line.
-    // Nested defs (list items, footnote bodies, blockquotes) keep the lenient
-    // collection: their real content column is >0 or the flat pass cannot model
-    // it, and the oracle resolves them, so `deIndented` residual whitespace must
-    // NOT reject them.
-    const topLevelIndentedDef =
-      contentCol === 0 && (!inFootnoteBody || behindQuotePrefix) && /^[ \t]/.test(deIndented)
-    const rawIndent = leadingWhitespace(unquoted)
-    if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
-    else if (isBlankLine(raw)) plusColumn = null
-    // Inside a footnote body the minimum is column two. After carve#1729 a
-    // recognized opener at or past it establishes an authored local base, so
-    // an over-indented link definition registers just like the exact-column
-    // spelling. A line below two still leaves the body and stays literal.
-    const openColumn = inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol
-    // THE COLUMN IS THE COMPOSED ONE, and it is compared against the columns the
-    // line REACHED plus the ones it opened itself. `rawIndent` measures a line
-    // behind a COLUMN-0 quote run only, so `  >    [r]: /url` scored 2 - the
-    // indent before a marker the block parser strips - and the exemption below
-    // let it through on top of that.
-    const deepestListColumn = openCols
-      .filter((entry) => !entry.quote)
-      .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
-    const deepestTrackedListColumn = listCols.reduce<number | null>(
-      (deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest,
-      deepestListColumn,
-    )
-    const reachedOuterListColumn = openCols
-      .slice(0, composed.depth)
-      .filter((entry) => !entry.quote)
-      .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
-    // WITH A LIST COLUMN IN PLAY the test is "at or past the deepest one", not
-    // "exactly at an open one": §24 C3 erases an authored base before the item
-    // parses the line, so an over-indented definition is the item's definition
-    // and registers document-wide (carve#1705). With NO list column open the
-    // exact test stands unchanged - a quote's content column is reached, not
-    // rebased.
-    const reached = (col: number): boolean =>
-      deepestTrackedListColumn !== null
-        ? col >= deepestTrackedListColumn
-        : composed.peeled.some((one) => one.content === col) ||
-          openCols.some((e, i) => i < composed.depth && e.col === col)
-    const anyReached = composed.peeled.length > 0 || composed.depth > 0
-    // An unmarked line may lazily continue a quote's open paragraph, but it
-    // does not reach a container inside that quote. Falling back to the outer
-    // `contentCol` here made a definition-shaped lazy line both disappear from
-    // the paragraph and become active document-wide.
-    const stoppedAtQuote =
-      !composed.peeled.some((one) => one.quote) &&
-      composed.depth < openCols.length &&
-      openCols[composed.depth]!.quote
-    const atAnOpenContentColumn = stoppedAtQuote
-      ? reachedOuterListColumn !== null && composed.column >= reachedOuterListColumn
-      : plusColumn !== null
-      ? rawIndent === plusColumn
-      : anyReached
-        ? reached(composed.column)
-        : inFootnoteBody
-          ? composed.column >= FOOTNOTE_BODY_COLUMN
-          : composed.column === openColumn
-    // NO EXEMPTION FOR A LINE THAT CARRIES ITS OWN PREFIX. The guard used to
-    // apply only where `kept === unquoted`, which asked "does this line carry a
-    // marker of its own?" - because `rawIndent` measured the wrong thing on the
-    // lines that do, and `- [ref]: /url` had to survive it. It was widened once
-    // already, from `kept === raw` to `kept === unquoted`, when a COLUMN-0 quote
-    // marker turned out to open the same hole (carve-js#648); an indented quote
-    // marker, and a quote behind another one, are the same hole again
-    // (carve-js#1199). Composing the strips answers for all of them at once:
-    // `composed.column` is where the definition really sits, and on a marker
-    // line that is the column the marker just handed out.
-    const notAtContentColumn = !atAnOpenContentColumn
-    const matched = matchLinkDef(line)
-    // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0). Once the block parser would
-    // fold this marker into the paragraph above, its definition-shaped content
-    // is visible text and cannot also define a reference.
-    const declines =
-      topLevelIndentedDef ||
-      notAtContentColumn ||
-      (divs[divs.length - 1]?.host === 'list' &&
-        composed.column > divs[divs.length - 1]!.scope.contentCol) ||
-      (collectsNothing && composed.peeled.some((one) => !one.quote))
-    // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
-    // reading the line as something other than a definition; the block parser
-    // reaches its own reading and, where that one says "definition", removes
-    // the line on the strength of a collection that never happened. Recording
-    // the decline is what lets the strip ask instead of assume.
-    if (declines && matched !== null) {
-      lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
-    }
-    if (!declines && matched !== null) {
-      const def: LinkDef = { href: matched.href }
-      if (matched.title !== undefined) def.title = unescapeAttrValue(matched.title)
-      if (matched.attrText !== null) def.attrs = parseAttrs(matched.attrText)
-      // Link definitions use the shared, case-sensitive ASCII-whitespace key.
-      // The raw spelling stays on the winning definition for the canonical
-      // writer. Implicit heading references remain a separate, looser path.
-      def.line = idx
-      def.rawLabel = matched.label
-      lexer.linkDefs.set(normalizeRefLabel(matched.label), def)
-      continue
-    }
-  }
-}
-
-/**
  * A block-attribute run handed BETWEEN two consecutive `parseBlocks` calls over
  * what the author wrote as one stream. `attrs` goes in as the starting `pending`
  * and comes back out as whatever was still pending when the stream ended.
@@ -2745,95 +1723,6 @@ function collectLinkDefs(lexer: Lexer) {
  */
 interface PendingAttrCarry {
   attrs: Attrs | null
-}
-
-function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry): BlockNode[] {
-  const out: BlockNode[] = []
-  // Leading block-attribute lines (grammar PART 9 §15) accumulate here
-  // and attach to the next block. They float across blank lines; a
-  // dangling run with no following block is dropped -- unless a `carry` says
-  // this stream is only HALF of one the caller split, in which case the run
-  // travels to the other half instead of dying at the seam.
-  let pending: Attrs | null = carry?.attrs ?? null
-  while (!lexer.eof()) {
-    const line = lexer.peek()!
-    if (isBlankLine(line)) {
-      // Blank lines do NOT reset pending block attributes (§15 reach).
-      lexer.consume()
-      continue
-    }
-    // Stop at lower indent (caller's responsibility to detect this)
-    const indent = leadingWhitespace(line)
-    if (indent < baseIndent) break
-
-    const ba = tryCollectBlockAttributes(lexer)
-    if (ba) {
-      pending = pending ? mergeAttrs(pending, ba) : ba
-      continue
-    }
-
-    const node = parseBlock(lexer)
-    // A2a AN INVISIBLE CONSTRUCT IS NOT THE NEXT BLOCK (§15, carve#529):
-    // `pending` floats PAST anything that renders nothing and attaches to the
-    // next VISIBLE block, so
-    //
-    //     {#i}
-    //     [^f]: note
-    //
-    //     e
-    //
-    // is `<p id="i">e</p>`. The attribute is the author's instruction about a
-    // rendered element; attaching it to a construct that emits nothing silently
-    // discards it, and A4 reserves discarding for the one case where there is
-    // genuinely nothing left -- end of document.
-    //
-    // Five kinds are invisible. A reference definition and a footnote
-    // definition leave NO node (the first pass collected them), so the null
-    // return is what identifies them; an abbreviation definition and the two
-    // comment forms leave a node that renders nothing.
-    const invisible =
-      node === null || node.type === 'abbreviation_def' || node.type === 'comment'
-    if (node) {
-      if (pending && !invisible) {
-        // Leading attrs are earlier in source; the block's own trailing
-        // attrs win on conflict (id/key last), classes accumulate (§15).
-        node.attrs = mergeAttrs(pending, node.attrs ?? {})
-      }
-      if (node.type === 'table') deriveTableMetadata(node)
-      consumeLooseKey(node)
-      // A code fence's opener "header" becomes the `title` attribute on the
-      // <pre>. Resolved here (after the pending merge) so a preceding
-      // {title=...} line wins, and so the title lives on the node attrs --
-      // rendered by every code-block path, including inside a code-group or a
-      // caption figure (where parseFence returns a Figure wrapping the block).
-      const cb =
-        node.type === 'code_block'
-          ? node
-          : node.type === 'figure' && node.target.type === 'code_block'
-            ? (node.target as CodeBlock)
-            : undefined
-      // An explicit {title=} wins: for a captioned block it merged onto the
-      // wrapping Figure (node.attrs), otherwise onto the block itself.
-      if (
-        cb?.header !== undefined &&
-        node.attrs?.keyValues?.title === undefined &&
-        cb.attrs?.keyValues?.title === undefined
-      ) {
-        cb.attrs = {
-          ...(cb.attrs ?? {}),
-          keyValues: { ...(cb.attrs?.keyValues ?? {}), title: cb.header },
-        }
-      }
-      out.push(node)
-    }
-    // A VISIBLE block absorbs any pending attrs; an invisible one leaves them
-    // pending for the next block (A2a, above).
-    if (!invisible) pending = null
-  }
-  // A dangling pending run (no following block) is dropped -- or, when the
-  // caller split one stream in two, handed on to the next half.
-  if (carry) carry.attrs = pending
-  return out
 }
 
 /**
@@ -3121,194 +2010,6 @@ function parseBlockAttributeRun(src: string): Attrs | null {
   return out
 }
 
-function parseBlock(lexer: Lexer): BlockNode | null {
-  const startLine = lexer.pos
-  const node = parseBlockInner(lexer)
-  if (node) attachBlockPos(lexer, node, startLine, lexer.pos)
-  return node
-}
-
-function parseBlockInner(lexer: Lexer): BlockNode | null {
-  const line = lexer.peek()!
-  const hostedLinkDef =
-    lexer.consumesHostedLinkDefs === 'all' ||
-    (lexer.consumesHostedLinkDefs === 'lazy' &&
-      lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
-  const hostedLinkDefLine = hostedLinkDef ? stripLazyFrame(line) : line
-
-  // Past the nesting limit, stop opening recursive containers and treat the
-  // line as paragraph text. Prevents a call-stack overflow on pathologically
-  // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
-  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer, true)
-
-  // Block-level constructs in priority order
-  if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
-  if (RE_FENCE.test(line)) return parseFence(lexer)
-  // Comments (not rendered). Block (`%%%`) before line (`%%`). A `%%%` opener
-  // with NO matching closer ahead does not open a block (PART 9 §28) — it falls
-  // through to the line-comment rule below, so the following blocks still
-  // render instead of being swallowed to EOF.
-  const commentFence = RE_COMMENT_BLOCK_ANY.exec(line)
-  if (commentFence && commentBlockHasCloser(lexer, commentFence[1]!.length)) {
-    return parseCommentBlock(lexer)
-  }
-  if (RE_COMMENT_LINE.test(line)) {
-    const l = lexer.consume()
-    // ONE separator character, and it is `whitespace` - a space or a tab
-    // (markup-carve/carve#977, PART 7). This read `/^\s/`, the host language's
-    // class, so a `%%<VT>note` line had its vertical tab eaten as the
-    // separator and `carve fmt` wrote a SPACE back in its place: a character
-    // the clause calls content, replaced by one the author did not write.
-    return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '').replace(/[ \t]+$/, '') }
-  }
-  if (RE_LINE_BLOCK_OPEN.test(line)) return parseLineBlock(lexer)
-  if (RE_HARDBREAKS_OPEN.test(line)) return parseHardBreaksBlock(lexer)
-  if (RE_QUOTE_BLOCK_OPEN.test(line)) return parseQuoteBlock(lexer)
-  // A typed `::: word` admonition opens immediately; if no exact closer appears
-  // ahead, it auto-closes at EOF.
-  if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
-    return parseAdmonition(lexer)
-  // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
-  // admonition branch above already claimed the `::: word` form).
-  if (RE_DIV_OPEN.test(line)) return parseDiv(lexer)
-  // PART 12 §7: only at document level. In a container the line falls through
-  // to the paragraph branch and is preserved as the text the author typed.
-  if (lexer.atDocumentLevel && RE_ABBR_DEF.test(line)) {
-    return parseAbbrDef(lexer)
-  }
-  // Footnote definition: consume the def line + indented continuation
-  // and stash the parsed body (tested before RE_LINK_DEF).
-  if (RE_FOOTNOTE_DEF.test(line)) return parseFootnoteDef(lexer)
-  // A NESTED footnote def, indented past a consuming container's own content
-  // column, is registered on the host's behalf exactly as a link def is
-  // (markup-carve/carve-js#1638). The flush test above misses it - the marker
-  // sits past column 0 - but a container that consumes hosted definitions
-  // consumes an indented footnote def the same way; parseFootnoteDef strips the
-  // marker's indent. Footnote-shaped, so it is NOT caught by the link-def arm
-  // below, which excludes `[^`.
-  if (
-    (lexer.inFootnoteBody || hostedLinkDef) &&
-    RE_FOOTNOTE_DEF.test(hostedLinkDefLine.replace(/^[ \t]+/, ''))
-  ) {
-    return parseFootnoteDef(lexer)
-  }
-  // Reference-link definitions were collected in the first pass; the
-  // line itself produces no block (consume it so it is not a paragraph).
-  // Strict column-0 rule: RE_LINK_DEF is whitespace-tolerant (its leading
-  // `[^\S ]*` matches spaces/tabs so a quoted/nested def is still
-  // recognized in other passes), but a def is a block opener and opens ONLY at
-  // its container's content column (column 0 here). An INDENTED `[x]: …` line is
-  // literal paragraph text -- and, since RE_LINK_DEF also matches `[^fn]: …`, an
-  // indented footnote def (missed by the flush-anchored RE_FOOTNOTE_DEF above)
-  // must not be swallowed here either. A footnote body is the exception: its
-  // containers absorb residual indentation at or past their content column.
-  if (
-    (leadingWhitespace(hostedLinkDefLine) === 0 ||
-      // A FOOTNOTE DEF IS NOT A LINK DEF, though `RE_LINK_DEF` matches both.
-      // The flush-anchored test above missed an indented one, so without this
-      // the note body's leniency swallowed a NESTED footnote definition and its
-      // reference dangled (the oracle registers it).
-      (lexer.inFootnoteBody && !/^[ \t]*\[\^/.test(hostedLinkDefLine)) ||
-      (hostedLinkDef && !/^[ \t]*\[\^/.test(hostedLinkDefLine))) &&
-    isLinkDefLine(hostedLinkDefLine) &&
-    (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef) &&
-    // NOTHING COLLECTED IT, SO NOTHING MAY REMOVE IT. Under-collecting is the
-    // error PART 9R R1a licenses; deleting the author's line is the one it
-    // rules out, and carve#1883 forbids returning a document missing text the
-    // author typed. Falling through leaves the line as the paragraph it looks
-    // like (markup-carve/carve-js#1597).
-    (!lexer.declinedLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef)
-  ) {
-    lexer.consume()
-    return null
-  }
-  if (RE_HR.test(line)) {
-    lexer.consume()
-    const node: ThematicBreak = { type: 'thematic_break' }
-    if (line[0] === '*' || line[0] === '_') node.marker = line[0]
-    return node
-  }
-  if (RE_HEADING.test(line)) return parseHeading(lexer)
-  // Definition list starts on a `:: term` line (two colons, not three).
-  if (RE_DEFLIST_TERM.test(line)) return parseDefinitionList(lexer)
-  if (RE_BLOCKQUOTE.test(line)) return parseBlockQuote(lexer)
-  if (
-    RE_TASK.test(line) ||
-    RE_UNORDERED.test(line) ||
-    RE_ORDERED.test(line) ||
-    extractItemAttr(line) !== null
-  )
-    return parseList(lexer)
-  if (isTableRow(line)) return parseTable(lexer)
-  if (isBlockImageLine(line) && imageIsBlock(lexer)) return parseBlockImage(lexer)
-  // Extension block matchers run after every core construct, before the
-  // paragraph fallback: extensions add syntax, they never hijack core.
-  if (activeMatchers.length) {
-    const matched = tryBlockMatchers(lexer)
-    if (matched) return matched
-  }
-  // A line that is nothing but a display-math span (`$$`…``) standalone on its
-  // block is a candidate EQUATION; when a caption follows it is numbered like a
-  // figure/table/listing (#87). Diverted here, before the paragraph fallback,
-  // because parseParagraph would otherwise fold the caption line into the math
-  // paragraph.
-  if (line.trimStart().startsWith('$$`')) {
-    const eq = parseEquationBlock(lexer)
-    if (eq) return eq
-  }
-  return parseParagraph(lexer)
-}
-
-// Parse a standalone display-math line, optionally wrapping it in a figure when
-// a caption follows (a numbered equation). Returns null when the line is not
-// solely display math, or when non-blank prose follows with no blank line (so
-// the line belongs to a normal multi-line paragraph instead).
-function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
-  // Mirror parseParagraph's leading-whitespace strip + base-position folding so
-  // an indented standalone equation is still recognized and the math span keeps
-  // its true source offset.
-  const lineIndex = lexer.pos
-  const raw = lexer.peek()!
-  const firstLead = raw.match(/^[ \t]+/)?.[0].length ?? 0
-  const inline = parseInline(raw.replace(/^[ \t]+/, ''), lexer.abbrDefs, lexer.linkDefs, {
-    anchored: lexer.hasDocumentOffsets,
-    baseOffset: lexer.lineOffset(lineIndex) + firstLead,
-    startLine: lexer.lineNumber(lineIndex),
-    startColumn: lexer.lineStartColumn(lineIndex) + firstLead,
-  })
-  if (inline.length !== 1) return null
-  const only = inline[0]!
-  if (only.type !== 'math' || !(only as Math).display) return null
-  // First non-blank line after the math line, and how many blanks precede it.
-  let la = 1
-  while (isBlankLine(lexer.peek(la))) la++
-  const after = lexer.peek(la)
-  const blanks = la - 1
-  const cap = after !== undefined ? RE_CAPTION.exec(after) : null
-  // A display-math equation line reaches here already dispatched as a block, so
-  // it stands at its container's content column by construction.
-  const para: Paragraph = { type: 'paragraph', children: inline }
-  // §4: a caption attaches across at most one blank line.
-  if (cap && blanks <= 1) {
-    for (let i = 0; i <= la; i++) lexer.consume()
-    // The block loop spans the FIGURE, so the equation paragraph it wraps would
-    // otherwise have no position of its own (PART 12 §4). The equation occupies
-    // exactly its own line; the figure spans that plus the caption.
-    attachBlockPos(lexer, para, lineIndex, lineIndex + 1)
-    return {
-      type: 'figure',
-      target: para,
-      caption: parseCaptionInline(lexer, cap[1]!),
-    } as Figure
-  }
-  // Non-blank, non-caption text immediately follows: let parseParagraph fold
-  // the math and that text into one paragraph (preserve existing behavior).
-  if (after !== undefined && blanks === 0) return null
-  // Standalone display math with no caption: a plain single-math paragraph.
-  lexer.consume()
-  return para
-}
-
 /*
  * A CONTAINER ENDS AT ITS LAST PLACED CHILD (PART 12 §4, markup-carve/carve#1522
  * and markup-carve/carve#1524).
@@ -3460,98 +2161,6 @@ function attachBlockPos(
       if (node.pos.startOffset !== undefined) node.pos.endOffset = node.pos.startOffset + marker
     }
   }
-}
-
-function parseHeading(lexer: Lexer): Heading {
-  const lineIndex = lexer.pos
-  const line = lexer.consume()
-  const m = RE_HEADING.exec(line)!
-  const level = m[1]!.length as HeadingLevel
-
-  // SINGLE-LINE HEADINGS (NORMATIVE, diverges from Djot): a heading ENDS AT THE
-  // NEWLINE. Nothing folds into it -- not a plain line, not a same-count `#`
-  // line -- so the next line begins whatever block it begins, exactly as after
-  // any other closed block. Lazy continuation therefore means one thing across
-  // the language: it continues an open PARAGRAPH, and a heading is not one.
-  let text = line.replace(/^#{1,6} +/, '')
-  // NO TRAILING WHITESPACE (PART 2; carve#926). A heading is one line by
-  // construction, so the single-line form is the whole rule here.
-  text = text.replace(RE_TRAILING_WS, '')
-
-  const node: Heading = { type: 'heading', level, children: [] }
-  // djot-strict: a heading takes its attributes on the PRECEDING block-
-  // attribute line (§15), not as a trailing `{…}` on its own line. A `{…}`
-  // at the end of the heading text is therefore ordinary inline content.
-  // Column where the content starts on the first line (the marker + spaces).
-  const textColumn = line.length - line.replace(/^#{1,6} +/, '').length + 1
-  node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
-    anchored: lexer.hasDocumentOffsets,
-    baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
-    startLine: lexer.lineNumber(lineIndex),
-    startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
-  })
-  return node
-}
-
-function parseFence(lexer: Lexer): CodeBlock | Figure {
-  const fenceStartIndex = lexer.pos
-  const open = lexer.consume()
-  const m = RE_FENCE.exec(open)!
-  const indent = m[1]!.length
-  const marker = m[2]!
-  const lang = m[3] || undefined
-  // Header is the quoted group (with or without a language); label is the
-  // bracketed group from whichever alternative matched. Strip the delimiters.
-  const headerRaw = m[4] ?? m[6]
-  const labelRaw = m[5] ?? m[7] ?? m[8]
-  const header = headerRaw ? headerRaw.slice(1, -1) : undefined
-  const label = labelRaw ? labelRaw.slice(1, -1) : undefined
-  const closeRe = fenceCloseRe(marker)
-  const lines: string[] = []
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
-      lexer.consume()
-      break
-    }
-    lexer.consume()
-    // The frame did its work in the closer test above - it is what keeps a
-    // closing run the CONTAINER folded in from closing this block - and a
-    // verbatim body is where a framed line becomes text, so it comes off here
-    // (markup-carve/carve-js#1630).
-    const body = stripLazyFrame(ln)
-    // Strip the common indent of the opening fence (Djot rule)
-    lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
-  }
-  const fenceEndIndex = lexer.pos
-  const cb: CodeBlock = { type: 'code_block', content: lines.join('\n') }
-  if (lang) cb.lang = lang
-  if (header !== undefined) cb.header = header
-  if (label !== undefined) cb.label = label
-  // Optional caption (`^ …`): a captioned code block is a numbered LISTING,
-  // wrapped in a figure exactly like a captioned image/blockquote/table.
-  let lookahead = 0
-  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
-  const next = lexer.peek(lookahead)
-  if (next) {
-    const cap = RE_CAPTION.exec(next)
-    // §4: a caption attaches only when it immediately follows the block
-    // or is separated by at most ONE blank line.
-    if (cap && lookahead <= 1) {
-      for (let i = 0; i <= lookahead; i++) lexer.consume()
-      // The block loop spans the FIGURE, so the fence it wraps would otherwise
-      // have no position of its own (PART 12 §4). It ends where the caption
-      // begins - the same treatment the captioned image and blockquote already
-      // get.
-      attachBlockPos(lexer, cb, fenceStartIndex, fenceEndIndex)
-      return {
-        type: 'figure',
-        target: cb,
-        caption: parseCaptionInline(lexer, cap[1]!),
-      } as Figure
-    }
-  }
-  return cb
 }
 
 // Raw passthrough block: ```=FORMAT … ``` . Content is verbatim; the
@@ -4147,238 +2756,6 @@ function parseCommentBlock(lexer: Lexer): Comment {
   return { type: 'comment', block: true, content: lines.join('\n') }
 }
 
-// Footnote definition. The def line's trailing text plus following lines
-// indented by >= 2 spaces (single blank lines allowed between chunks)
-// form the note body, parsed as blocks. First definition for a label
-// wins. Emits no block — the body is stashed on lexer.footnoteDefs and
-// rendered in the endnotes section.
-function parseFootnoteDef(lexer: Lexer): null {
-  const defLineIndex = lexer.pos
-  const defLineRaw = lexer.consume()
-  // A note's body column is measured from its OWN marker: §16 asks for two
-  // columns past the marker, not two past the frame's zero. A properly nested
-  // note rebases to column zero, so `markerColumn` is 0 and `bodyColumn` is the
-  // fixed minimum of two. A note that opens one column shy of its host's body
-  // column keeps a residual marker indent here (the `i < m+2` nested-note
-  // geometry of carve-js#1653 / markup-carve/carve#1946): its body column is
-  // then `markerColumn + 2`, so a trailing line below the note's own content
-  // column is NOT claimed by it and falls to the surviving ancestor note. Left
-  // at the fixed 2 the innermost note over-reached, taking a line that belongs
-  // to the outer note.
-  const markerColumn = indentColumns(defLineRaw)
-  const bodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
-  const m = RE_FOOTNOTE_DEF.exec(defLineRaw.replace(/^[ \t]+/, ''))!
-  // Preserve the raw label as the AST/source-layout spelling. Resolution and
-  // duplicate handling derive their shared ASCII-whitespace key separately.
-  const label = m[1]!
-  const bodyLines = [m[2]!]
-  const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
-  let pendingBlanks = 0
-  let pendingBlankLineNumbers: number[] = []
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    if (isBlankLine(ln)) {
-      pendingBlanks++
-      pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
-      lexer.consume()
-      continue
-    }
-    // Form B: a lone `+` attaches the FOLLOWING flush-left block to the note
-    // with no indentation (the same continuation marker lists and block quotes
-    // use); the attached block ends at a blank line, another `+`, or the next
-    // footnote definition - unless a fence this block opened is still open, in
-    // which case all three are body text (corpus category 279).
-    if (/^\+[ \t]*$/.test(ln)) {
-      const plusLineNumber = lexer.lineNumber(lexer.pos)
-      lexer.consume()
-      pendingBlanks = 0
-      pendingBlankLineNumbers = []
-      // ...AND THE NOTE ENDS WHERE A COMMENT ENDS IT. The gate below decides
-      // whether this `+` is a marker at all; when it is not, the line is an
-      // ordinary invisible line at document column 0, and a footnote body ends
-      // at one of those exactly as it ends at a comment line there
-      // (markup-carve/carve#1814). Asked one line early because this loop's
-      // own continuation branch would otherwise claim the following line before
-      // any extent is measured. The `+` is consumed either way, so the
-      // enclosing parse resumes on the line the marker did not take.
-      if (!attachesAtDocumentColumnZero(lexer)) break
-      const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
-        lexer,
-        (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a),
-      )
-      if (attached.length > 0) {
-        bodyLines.push('')
-        bodyLineNumbers.push(plusLineNumber)
-        for (const a of attached) bodyLines.push(a)
-        bodyLineNumbers.push(...attachedLineNumbers)
-      }
-      continue
-    }
-    // §16 asks for COLUMNS, not characters, and §24 C1 gives a tab a column
-    // value - so a bare tab reaches column 4 and continues the note exactly as
-    // two spaces do. Matching characters here accepted `<SPACE><TAB>` and
-    // refused a bare tab, while carve-php refused the mixture and took the bare
-    // tab: three engines, three readings (carve#796, carve-js#725). A rejected
-    // continuation does not indent differently, it LEAVES the note and lands in
-    // the document body, so the split moved content between blocks.
-    if (indentColumns(ln, bodyColumn) >= bodyColumn) {
-      for (let k = 0; k < pendingBlanks; k++) {
-        bodyLines.push('')
-        bodyLineNumbers.push(pendingBlankLineNumbers[k]!)
-      }
-      pendingBlanks = 0
-      pendingBlankLineNumbers = []
-      bodyLines.push(sliceColumns(ln, bodyColumn, true))
-      bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
-      lexer.consume()
-    } else {
-      break
-    }
-  }
-  if (!lexer.footnoteDefs.has(label)) {
-    // A recognized opener at or beyond the note's minimum column establishes
-    // its authored column as a local base (carve#1729). The collector has
-    // already removed the fixed two-column body margin.
-    rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
-    const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
-    sub.sublistsCarryAuthoredBase = true
-    sub.inFootnoteBody = true
-    sub.hostBody = 'footnote'
-    lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
-    // The definition runs from its `[^label]:` marker to the last line it
-    // consumed. The body blocks cannot supply that: the marker is not part of
-    // any of them, so a span derived from the body would start inside the
-    // definition (carve-js#480).
-    //
-    // Only when this lexer can express a document offset - inside an unmapped
-    // container the numbers mean something else, and §4 forbids inventing one.
-    if (lexer.hasDocumentOffsets) {
-      let lastIndex = Math.max(defLineIndex, lexer.pos - 1)
-      while (lastIndex > defLineIndex && isBlankLine(lexer.lines[lastIndex] ?? '')) lastIndex--
-      const lastLine = lexer.lines[lastIndex] ?? ''
-      // A span begins at the `[^label]:` marker, not at the line start. When
-      // this definition is nested one column shy of its parent's body margin,
-      // the sub-lexer strips a fixed margin and leaves a residual space ahead
-      // of the marker; the start must skip it (PART 12 §4, carve#1963).
-      const defLine = lexer.lines[defLineIndex] ?? ''
-      const defLead = defLine.length - defLine.replace(/^[ \t]+/, '').length
-      const pos: Position = {
-        startLine: lexer.lineNumber(defLineIndex),
-        endLine: lexer.lineNumber(lastIndex),
-        startColumn: lexer.lineStartColumn(defLineIndex) + defLead,
-        endColumn: lexer.lineStartColumn(lastIndex) + lastLine.length,
-        startOffset: lexer.lineOffset(defLineIndex) + defLead,
-        endOffset: lexer.lineOffset(lastIndex) + lastLine.length,
-      }
-      const lastOwned = [...(lexer.footnoteDefs.get(label) ?? [])]
-        .reverse()
-        .find((child) => child.pos !== undefined)?.pos
-      if (lastOwned !== undefined) {
-        pos.endLine = lastOwned.endLine
-        if (lastOwned.endColumn !== undefined) pos.endColumn = lastOwned.endColumn
-        if (lastOwned.endOffset !== undefined) pos.endOffset = lastOwned.endOffset
-      }
-      lexer.footnoteDefPos.set(label, pos)
-    }
-  }
-  return null
-}
-
-function parseAdmonition(lexer: Lexer): Admonition | Directive | FigureGroup {
-  const openLineIndex = lexer.pos
-  const open = lexer.consume()
-  const m = RE_ADMONITION_OPEN.exec(open)!
-  const fence = m[1]!.length
-  const kind = m[2]!
-  // PART 9 §4c: a BARE `::: figure` opener - kind only, no quoted title, no
-  // `[label]` - is a composite figure group, not an admonition. An opener
-  // carrying either piece of metadata does not match the figure production and
-  // stays a generic container (the group node has no title/label fields by
-  // design). A bare opener inside an OPEN group's body is demoted the same way:
-  // groups do not nest, which is what `inFigureGroup` carries through the
-  // recursion.
-  const isFigureGroup =
-    kind === 'figure' && m[3] === undefined && m[4] === undefined && !lexer.inFigureGroup
-  // The opener carries an optional quoted title only (grammar
-  // quoted_title; PART 9 §12). The quotes delimit the title and are
-  // stripped (not part of the rendered text); an explicitly empty `""`
-  // still counts as a supplied (empty) title. No inline attributes -- the
-  // opener regex already rejected any trailing `{...}`.
-  const titleText = m[3] !== undefined ? m[3]!.slice(1, -1) : undefined
-  // Optional inert grouping `[label]` (PART 9 §12): a group extension (tabs)
-  // uses it as the tab name; core does not render it.
-  const label = m[4] !== undefined ? m[4]!.slice(1, -1) : undefined
-  const inner = collectColonFenceBody(lexer, {
-    // Which of the two named-container types this fence opens, so an unclosed
-    // one is reported as the thing it was (CARVE-P12-057).
-    kind: GENERATED_CONTENT_KINDS.has(kind) ? 'directive' : 'admonition',
-    lineIndex: openLineIndex,
-    fenceWidth: fence,
-  })
-  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
-  subLexer.consumesHostedLinkDefs =
-    lexer.hostBody === 'description' || lexer.hostBody === 'footnote' ? 'all' : false
-  if (isFigureGroup) subLexer.inFigureGroup = true
-  const children = parseBlocks(subLexer, 0)
-  if (isFigureGroup) {
-    const group: FigureGroup = { type: 'figure_group', children }
-    // The group's CLOSING fence is §4's sixth caption host: a `^ …` line
-    // directly after it (or across at most one blank line) attaches as the
-    // GROUP caption - the same slot idiom the five parse-time hosts use.
-    // A group auto-closed at EOF has no closer line to host the slot, and in
-    // that case the lexer is already exhausted, so the lookahead finds nothing.
-    let lookahead = 0
-    while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
-    const next = lexer.peek(lookahead)
-    if (next) {
-      const cap = RE_CAPTION.exec(next)
-      // §4: a caption attaches only when it immediately follows the block
-      // or is separated by at most ONE blank line.
-      if (cap && lookahead <= 1) {
-        for (let i = 0; i <= lookahead; i++) lexer.consume()
-        group.caption = parseCaptionInline(lexer, cap[1]!)
-      }
-    }
-    // A preceding block-attribute line is the only way to attribute the group
-    // (same as the admonition below); parseBlocks applies it to the returned
-    // node.
-    return group
-  }
-  // CARVE-P12-057: a named container whose kind names GENERATED CONTENT is a
-  // `directive`, not an `admonition`. The kind list is CLOSED - a seventh
-  // generated-looking word (`endnotes`, `contents`) takes the admonition branch
-  // below, because the clause rules that "every other named container is an
-  // `admonition`".
-  //
-  // Keep the quoted opener title for either named container type. An explicit
-  // empty title still occupies the title slot.
-  let title: InlineNode[] | undefined
-  if (titleText !== undefined) {
-    const titleStart = open.indexOf(m[3]!) + 1
-    title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs, {
-      anchored: lexer.hasDocumentOffsets && titleStart > 0,
-      baseOffset: lexer.lineOffset(openLineIndex) + titleStart,
-      startLine: lexer.lineNumber(openLineIndex),
-      startColumn: lexer.lineStartColumn(openLineIndex) + titleStart,
-    })
-  }
-  if (GENERATED_CONTENT_KINDS.has(kind)) {
-    const directive: Directive = { type: 'directive', kind, children }
-    if (title !== undefined) directive.title = title
-    if (label !== undefined) directive.label = label
-    return directive
-  }
-  const node: Admonition = { type: 'admonition', kind, children }
-  if (title !== undefined) node.title = title
-  if (label !== undefined) {
-    node.label = label
-  }
-  // No inline opener attributes (strict djot): a preceding block-attribute
-  // line is the only way to attribute an admonition, and parseBlocks
-  // applies it to the returned node.
-  return node
-}
-
 /**
  * Drop `pos` from a subtree whose positions cannot be mapped to the document.
  *
@@ -4571,377 +2948,6 @@ function collectLiteralColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
   return lines
 }
 
-function parseLineBlock(lexer: Lexer): LineBlock {
-  const openLineIndex = lexer.pos
-  const open = lexer.consume()
-  const m = RE_LINE_BLOCK_OPEN.exec(open)!
-  const fence = m[1]!.length
-  interface StanzaLine {
-    text: string
-    lineIndex: number
-    /** Source UTF-16 offset for each expanded character; absent for tab columns. */
-    sourceOffsets: Array<number | undefined>
-    aligned: boolean
-    /**
-     * The comment this line WAS, for a line the block layer emptied.
-     *
-     * Kept because §23 removes the line from the RENDER and not from the tree:
-     * it stays a `comment` node like any other, so the canonical writer can put
-     * the author's line back at the column they wrote it at.
-     */
-    comment?: Comment
-  }
-  const stanzas: StanzaLine[][] = []
-  let stanza: StanzaLine[] = []
-  for (const { text: ln, lineIndex } of collectLiteralColonFenceBody(lexer, {
-    kind: 'line block',
-    lineIndex: openLineIndex,
-    fenceWidth: fence,
-  })) {
-    if (isBlankLine(ln)) {
-      if (stanza.length) {
-        stanzas.push(stanza)
-        stanza = []
-      }
-      continue
-    }
-    if (ln.startsWith('%%')) {
-      const comment: Comment = {
-        type: 'comment',
-        block: false,
-        content: ln.slice(2).replace(/^[ \t]/, '').replace(/[ \t]+$/, ''),
-      }
-      if (lexer.hasDocumentOffsets) {
-        comment.pos = {
-          startLine: lexer.lineNumber(lineIndex),
-          endLine: lexer.lineNumber(lineIndex),
-          startColumn: lexer.lineStartColumn(lineIndex),
-          endColumn: lexer.lineStartColumn(lineIndex) + ln.length,
-          startOffset: lexer.lineOffset(lineIndex),
-          endOffset: lexer.lineOffset(lineIndex) + ln.length,
-        }
-      }
-      stanza.push({ text: '', lineIndex, sourceOffsets: [], aligned: true, comment })
-      continue
-    }
-    const sourceOffsets: Array<number | undefined> = []
-    const expanded = expandLineBlockWhitespace(ln, sourceOffsets)
-    stanza.push({
-      text: dropTrailingSpaces(expanded),
-      lineIndex,
-      sourceOffsets,
-      aligned: !ln.includes('\t'),
-    })
-  }
-  if (stanza.length) stanzas.push(stanza)
-
-  const children = stanzas.map<Paragraph>((lines) => {
-    const anchorable = lexer.hasDocumentOffsets
-    const unchangedColumns = lines.every((line) => line.aligned)
-
-    const terminalCommentGuard = lines.at(-1)?.comment ? '\uE001' : ''
-    const joined = lines.map((line) => line.text).join('\n') + terminalCommentGuard
-    const firstLineNumber = lexer.lineNumber(lines[0]!.lineIndex)
-    // The break BETWEEN line `index` and the one after it, from line geometry.
-    // Unchanged from when each break was built during the per-line walk, down to
-    // the clamp: keep the usual start after the parsed text, so a dropped
-    // trailing source space remains part of the break span, but do not let an
-    // expanded tab put `startOffset` past the following line's offset.
-    const breakPos = (index: number): Position | undefined => {
-      if (!lexer.hasDocumentOffsets) return undefined
-      const line = lines[index]!
-      const next = lines[index + 1]
-      if (!next) return undefined
-      const lineOffset = lexer.lineOffset(line.lineIndex)
-      const sourceLineEnd = lineOffset + (lexer.lines[line.lineIndex]?.length ?? 0)
-      return {
-        startLine: lexer.lineNumber(line.lineIndex),
-        endLine: lexer.lineNumber(next.lineIndex),
-        startColumn:
-          lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0),
-        endColumn: lexer.lineStartColumn(next.lineIndex),
-        // A COMMENT LINE IS MEASURED FROM ITS SOURCE, not from the empty text
-        // the block layer left behind. The clamp above reads the parsed text's
-        // length, which is zero here, so the break would start at the line's
-        // FIRST column while its `startColumn` is derived from the source line
-        // and reports the last - one span with two answers, overlapping the
-        // `comment` node that occupies those same bytes.
-        startOffset: line.comment
-          ? sourceLineEnd
-          : Math.min(lineOffset + line.text.length, sourceLineEnd),
-        endOffset: lexer.lineOffset(next.lineIndex),
-      }
-    }
-    // Parse with expanded columns, then map each surviving span to its source.
-    const outerLineBlock = inLineBlock
-    inLineBlock = true
-    let parsed: InlineNode[]
-    try {
-      parsed = parseInline(
-        joined,
-        lexer.abbrDefs,
-        lexer.linkDefs,
-        lexer.hasDocumentOffsets
-          ? inlineSource({
-              baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
-              startLine: firstLineNumber,
-              startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
-              lineAnchors: lines.map((line) => ({
-                offset: lexer.lineOffset(line.lineIndex),
-                column: lexer.lineStartColumn(line.lineIndex),
-                line: lexer.lineNumber(line.lineIndex),
-              })),
-            })
-          : inlineSource({ anchored: false }),
-      )
-    } finally {
-      inLineBlock = outerLineBlock
-    }
-    // Source NULs were replaced before block parsing; these are generated gaps.
-    const restoreVerbatimGaps = (value: unknown): void => {
-      if (!value || typeof value !== 'object') return
-      for (const [key, child] of Object.entries(value)) {
-        if (typeof child === 'string' && child.includes('\0')) {
-          (value as Record<string, unknown>)[key] = child.replace(/\0/g, '\u00a0')
-        } else restoreVerbatimGaps(child)
-      }
-    }
-    restoreVerbatimGaps(parsed)
-    if (terminalCommentGuard) {
-      const removeGuard = (nodes: InlineNode[]): boolean => {
-        for (let index = 0; index < nodes.length; index++) {
-          const node = nodes[index]!
-          const record = node as unknown as Record<string, unknown>
-          for (const key of ['value', 'content'] as const) {
-            const value = record[key]
-            if (typeof value === 'string' && value.endsWith(terminalCommentGuard)) {
-              record[key] = value.slice(0, -terminalCommentGuard.length)
-              // The guard may be the entire final text leaf when no verbatim
-              // run claims it. Leaving that synthesized empty node behind also
-              // leaves its source span over the comment bytes, overlapping the
-              // real comment node reinserted below.
-              if (node.type === 'text' && record.value === '') nodes.splice(index, 1)
-              return true
-            }
-          }
-          for (const key of ['children', 'inline', 'content'] as const) {
-            const value = record[key]
-            if (Array.isArray(value) && removeGuard(value as InlineNode[])) return true
-          }
-        }
-        return false
-      }
-      removeGuard(parsed)
-      if (lexer.hasDocumentOffsets) {
-        const guardLine = lines[lines.length - 1]!
-        const guardOffset = lexer.lineOffset(guardLine.lineIndex)
-        const guardColumn = lexer.lineStartColumn(guardLine.lineIndex)
-        const guardLineNumber = lexer.lineNumber(guardLine.lineIndex)
-        // AT EVERY DEPTH: the run that swallows the boundary may be nested
-        // inside emphasis that opened on an earlier body line, and then the
-        // container ends there too.
-        const clampToGuard = (nodes: InlineNode[]): void => {
-          for (const node of nodes) {
-            const pos = node.pos
-            if (pos && pos.endOffset !== undefined && pos.endOffset > guardOffset) {
-              pos.endOffset = guardOffset
-              pos.endColumn = guardColumn
-              pos.endLine = guardLineNumber
-            }
-            const record = node as unknown as Record<string, unknown>
-            for (const key of ['children', 'inline', 'content'] as const) {
-              const value = record[key]
-              if (Array.isArray(value)) clampToGuard(value as InlineNode[])
-            }
-          }
-        }
-        clampToGuard(parsed)
-      }
-    }
-    // Read the boundary each break belongs to BEFORE any stripping takes the
-    // position that says so.
-    const breakIndex = new Map<InlineNode, number>()
-    // WHICH LINES STILL END AT A BOUNDARY, counting the boundaries the author
-    // spelled with a `\` as well as the ones the container hardens. A `\` is
-    // not a soft break and never reaches the conversion below, but it is just
-    // as much a surviving line end - and the comment reinsertion asks that
-    // question, not the conversion's.
-    const boundaryLines = new Set<number>()
-    // EVERY SLOT AN INLINE NODE HOLDS OTHER INLINES IN, not just `children`: an
-    // inline footnote carries its body in `inline` and an inline extension in
-    // `content`, and a walk that knows only one name misses two containers.
-    // Named once so the two passes below cannot drift apart on it.
-    const INLINE_SLOTS = ['children', 'inline', 'content'] as const
-    const slotsOf = (node: InlineNode): InlineNode[][] => {
-      const record = node as unknown as Record<string, unknown>
-      // `content` is a STRING on a comment and on an inline literal, so the
-      // array test is the discriminator rather than the name.
-      return INLINE_SLOTS.map((slot) => record[slot]).filter(Array.isArray) as InlineNode[][]
-    }
-    // AT EVERY DEPTH. An inline container that opens on one body line and
-    // closes on a later one holds the boundaries between them as its OWN
-    // children, so a walk over the stanza's top-level nodes never sees them
-    // (carve-js#1174).
-    const readBoundaries = (nodes: InlineNode[]): void => {
-      for (const node of nodes) {
-        if (node.type === 'soft_break' || node.type === 'hard_break') {
-          const startLine = node.pos?.startLine
-          if (startLine === undefined) continue
-          boundaryLines.add(startLine - firstLineNumber)
-          if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
-          continue
-        }
-        for (const slot of slotsOf(node)) readBoundaries(slot)
-      }
-    }
-    readBoundaries(parsed)
-    if (!anchorable) stripPositions(parsed)
-    else if (!unchangedColumns || lines.some((line) => lexer.lineStartColumn(line.lineIndex) < 1)) {
-      const byLine = new Map(lines.map((line) => [lexer.lineNumber(line.lineIndex), line]))
-      const remap = (nodes: InlineNode[]): void => {
-        for (const node of nodes) {
-          const pos = node.pos
-          if (pos && typeof pos === 'object' && typeof pos.startLine === 'number' && typeof pos.endLine === 'number') {
-            const first = byLine.get(pos.startLine)
-            const last = byLine.get(pos.endLine)
-            const start = first && pos.startColumn !== undefined
-              ? pos.startColumn - lexer.lineStartColumn(first.lineIndex) : -1
-            const end = last && pos.endColumn !== undefined
-              ? pos.endColumn - lexer.lineStartColumn(last.lineIndex) : -1
-            const sourceStart = first?.sourceOffsets[start]
-            const sourceLast = end === 0 && last
-              ? -1 : last?.sourceOffsets[end - 1]
-            const contiguousText = node.type !== 'text' || (first === last &&
-              sourceStart !== undefined && sourceLast !== undefined &&
-              sourceLast - sourceStart === end - start - 1 &&
-              first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined))
-            if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText ||
-              lexer.lineStartColumn(first.lineIndex) + sourceStart < 1) {
-              delete node.pos
-            } else {
-              pos.startColumn = lexer.lineStartColumn(first.lineIndex) + sourceStart
-              pos.endColumn = lexer.lineStartColumn(last.lineIndex) + sourceLast + 1
-              pos.startOffset = lexer.lineOffset(first.lineIndex) + sourceStart
-              pos.endOffset = lexer.lineOffset(last.lineIndex) + sourceLast + 1
-            }
-          }
-          for (const [key, value] of Object.entries(node)) {
-            if (key !== 'pos' && (key !== 'attrs' || typeof node.type !== 'string') && value && typeof value === 'object') {
-              remap((Array.isArray(value) ? value : [value]) as InlineNode[])
-            }
-          }
-        }
-      }
-      remap(parsed)
-    }
-    const pendingComments = new Map<number, Comment>()
-    lines.forEach((line, index) => {
-      if (!line.comment) return
-      pendingComments.set(index, line.comment)
-    })
-    const place = (nodes: InlineNode[]): InlineNode[] => {
-      const out: InlineNode[] = []
-      for (const node of nodes) {
-        if (node.type !== 'soft_break') {
-          const record = node as unknown as Record<string, unknown>
-          for (const slot of INLINE_SLOTS) {
-            const value = record[slot]
-            if (Array.isArray(value)) record[slot] = place(value as InlineNode[])
-          }
-          out.push(node)
-          continue
-        }
-        const index = breakIndex.get(node)
-        // The comment sits BEFORE the break that ends its line: the line is empty
-        // now, so there is nothing else on it.
-        if (index !== undefined) {
-          const comment = pendingComments.get(index)
-          if (comment) {
-            // A NESTED REINSERTION KEEPS ITS POSITION NOW. It could not before:
-            // the nodes it sits among were measured from the JOINED text, which
-            // is shorter than the source by exactly the line this comment
-            // emptied, so `c` in `*a` / `%% secret` / `c*` reported the offset
-            // of `%` and a correct span beside it would have asserted that two
-            // nodes hold the same bytes (carve-js#1182). With the anchors
-            // carried into the nested scan those siblings are measured from the
-            // line they were written on, and the spans nest the way PART 12
-            // containment asks.
-            out.push(comment)
-            pendingComments.delete(index)
-          }
-        }
-        // EVERY SURVIVING BREAK IS HARDENED AND RE-POSED FROM LINE GEOMETRY, at
-        // any depth. A nested break left on its scanned span ends where the
-        // NEXT line starts, so the one that ends an emptied comment line
-        // covered that whole line and overlapped the comment reinserted just
-        // above it.
-        const hardBreak = { type: 'hard_break' } as InlineNode
-        const pos = index === undefined ? undefined : breakPos(index)
-        if (pos) hardBreak.pos = pos
-
-        out.push(hardBreak)
-      }
-      return out
-    }
-    const inline: InlineNode[] = place(parsed)
-    // A COMMENT ON THE STANZA'S LAST LINE has no break after it to sit before,
-    // so it goes at the end - the boundary that opens its line is still there,
-    // which is what says the line is still there.
-    //
-    // A COMMENT AN OPEN RUN SWALLOWED does not survive, and that is §23's own
-    // account of the shape rather than a loss: what the run carries across the
-    // emptied line is a NEWLINE, the same thing it carries across every other
-    // boundary it swallows. There is no boundary left in the tree to host the
-    // node, and appending one anyway put a span BEFORE the run that contains it
-    // and after the node that follows it, which PART 12 containment refuses.
-    // The writer keeps the LINE - an empty verse line has exactly one spelling
-    // inside an open run, and it is a comment line.
-    for (const index of [...pendingComments.keys()].sort((a, b) => a - b)) {
-      const isLastLine = index === lines.length - 1
-      if (isLastLine && (index === 0 || boundaryLines.has(index - 1))) {
-        inline.push(pendingComments.get(index)!)
-      }
-    }
-
-    const paragraph: Paragraph = { type: 'paragraph', children: inline }
-    if (lexer.hasDocumentOffsets) {
-      const first = lines[0]!
-      const last = lines[lines.length - 1]!
-      paragraph.pos = {
-        startLine: lexer.lineNumber(first.lineIndex),
-        endLine: lexer.lineNumber(last.lineIndex),
-        startColumn: lexer.lineStartColumn(first.lineIndex),
-        endColumn: lexer.lineStartColumn(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
-        startOffset: lexer.lineOffset(first.lineIndex),
-        endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
-      }
-      const placed = anchorable && unchangedColumns ? inline.filter((node) => node.pos !== undefined) : []
-      const firstPos = placed.find(
-        (node) => node.type !== 'soft_break' && node.type !== 'hard_break',
-      )?.pos
-      const lastPos = placed[placed.length - 1]?.pos
-      if (firstPos) {
-        paragraph.pos.startLine = firstPos.startLine
-        if (firstPos.startColumn !== undefined) paragraph.pos.startColumn = firstPos.startColumn
-        if (firstPos.startOffset !== undefined) paragraph.pos.startOffset = firstPos.startOffset
-      }
-      if (lastPos) {
-        paragraph.pos.endLine = lastPos.endLine
-        if (lastPos.endColumn !== undefined) paragraph.pos.endColumn = lastPos.endColumn
-        if (lastPos.endOffset !== undefined) paragraph.pos.endOffset = lastPos.endOffset
-      }
-    }
-    return paragraph
-  })
-  // No inline opener attributes (strict djot); a preceding block-attribute
-  // line merges onto this node in parseBlocks.
-  const node: LineBlock = {
-    type: 'line_block',
-    children,
-  }
-  return node
-}
-
 /** Whether UTF-16 index `i` opens a surrogate pair: one codepoint, two units. */
 function isAstralAt(line: string, i: number): boolean {
   const high = line.charCodeAt(i)
@@ -5021,642 +3027,6 @@ function expandLineBlockWhitespace(line: string, sourceOffsets: Array<number | u
  */
 function dropTrailingSpaces(line: string): string {
   return line.replace(/ +$/, '')
-}
-
-// `::: \` hard-break block. Unlike the line block, the body is parsed as
-// ordinary blocks (so nested admonitions / lists work); soft breaks are then
-// promoted to hard breaks ONLY in the div's DIRECT paragraph children, and
-// there is no leading-whitespace preservation. Emits `<div class="hardbreaks">`.
-function parseHardBreaksBlock(lexer: Lexer): Div {
-  const openLineIndex = lexer.pos
-  const m = RE_HARDBREAKS_OPEN.exec(lexer.consume())!
-  const fence = m[1]!.length
-  const inner = collectColonFenceBody(lexer, {
-    kind: 'hard-break block',
-    lineIndex: openLineIndex,
-    fenceWidth: fence,
-  })
-  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
-  const children = parseBlocks(subLexer, 0)
-  for (const child of children) {
-    if (child.type === 'paragraph') {
-      child.children = child.children.map((node) => {
-        if (node.type !== 'soft_break') return node
-        // Keep the break's span: it is the same source, just a different
-        // meaning inside a hard-breaks block. Building a fresh object dropped
-        // it, which is the same slip the line block already fixed (#462).
-        const hardBreak = { type: 'hard_break' } as InlineNode
-        if (node.pos) hardBreak.pos = node.pos
-
-        return hardBreak
-      })
-    }
-  }
-  return {
-    type: 'div',
-    attrs: { classes: ['hardbreaks'], order: ['.class'] },
-    children,
-  }
-}
-
-// Fenced block quote. parseDiv's shape exactly, with no label slot and a
-// block_quote node instead of a div (markup-carve/carve#1718).
-function parseQuoteBlock(lexer: Lexer): BlockQuote | Figure {
-  const openLineIndex = lexer.pos
-  const m = RE_QUOTE_BLOCK_OPEN.exec(lexer.consume())!
-  const fence = m[1]!.length
-  const inner = collectColonFenceBody(lexer, {
-    kind: 'block quote',
-    lineIndex: openLineIndex,
-    fenceWidth: fence,
-  })
-  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
-  const bq: BlockQuote = { type: 'block_quote', fenced: true, children: parseBlocks(subLexer, 0) }
-  const quoteEndIndex = lexer.pos
-  // §4's seventh caption host. The slot hangs on the CLOSING fence, as the
-  // figure group's does, and what it produces is what the PREFIXED spelling
-  // produces: a captioned quote is a figure either way, because the two
-  // spellings are one node and §4's rule reads the node (carve#1742).
-  // A quote auto-closed at end of input has no closer line to host the slot,
-  // and there the lexer is already exhausted so the lookahead finds nothing.
-  let lookahead = 0
-  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
-  const next = lexer.peek(lookahead)
-  if (next) {
-    const cap = RE_CAPTION.exec(next)
-    // §4: adjacent, or across at most ONE blank line.
-    if (cap && lookahead <= 1) {
-      for (let i = 0; i <= lookahead; i++) lexer.consume()
-      // The TARGET keeps its own span, as every other caption host's does.
-      // Wrapping without this left a captioned fenced quote as the one block
-      // quote in the vocabulary with no `pos`, which the position rules would
-      // report the moment a corpus document reached the shape.
-      attachBlockPos(lexer, bq, openLineIndex, quoteEndIndex)
-      return { type: 'figure', target: bq, caption: parseCaptionInline(lexer, cap[1]!) } as Figure
-    }
-  }
-  return bq
-}
-
-function parseDiv(lexer: Lexer): Div {
-  const openLineIndex = lexer.pos
-  const m = RE_DIV_OPEN.exec(lexer.consume())!
-  const fence = m[1]!.length
-  // Optional inert grouping `[label]` on a typeless div (`::: [First]`).
-  const label = m[2] !== undefined ? m[2]!.slice(1, -1) : undefined
-  const inner = collectColonFenceBody(lexer, {
-    kind: 'div',
-    lineIndex: openLineIndex,
-    fenceWidth: fence,
-  })
-  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
-  // No inline opener attributes (strict djot): a bare `:::` carries none;
-  // a preceding block-attribute line attaches them in parseBlocks.
-  const node: Div = { type: 'div', children: parseBlocks(subLexer, 0) }
-  if (label !== undefined) {
-    node.label = label
-  }
-  return node
-}
-
-// Definition list (§4.5). An entry is 1+ `:: term` lines followed by 1+
-// `: definition` lines; a definition continues on lines that REACH its own
-// body's column, which is `:` plus the width of the separator it was written
-// with (`deflistContentCol`). A `:: term` after a definition starts a new
-// entry; a single blank line between entries is allowed, anything else ends the
-// list.
-function parseDefinitionList(lexer: Lexer): DefinitionList {
-  const items: DefinitionItem[] = []
-  /**
-   * Collect and parse one body.
-   *
-   * `contentCol` is THE BODY'S OWN COLUMN, passed in rather than read from a
-   * constant: the §4 tracker and the three indent tests below all measure
-   * against it, and two bodies of the same list may be written at different
-   * widths (`: one` beside `:  two`). A run of bare `3`s is how a column rule
-   * acquires several spellings, and a single parameter is how it keeps one.
-   */
-  const parseDefBody = (
-    first: string,
-    firstLineIndex: number,
-    markerContentCol: number,
-  ): BlockNode[] => {
-    // The marker fixes the body's minimum column. Adjacency never lowers it:
-    // ownership is selected by the same column band with or without a blank.
-    const contentCol = markerContentCol
-    const bodyLines: string[] = []
-    const bodyLineNumbers: number[] = []
-    const lazyState: ItemLazyState = {
-      inFence: false,
-      fenceClose: null,
-      inComment: false,
-      commentLen: 0,
-      lazyFoldableBeforeComment: false,
-      openedCommentAtColumn: false,
-      inTable: false,
-      invisibleAtColumn: false,
-      commentAtColumn: false,
-      inFootnoteBody: false,
-      quoteInner: null,
-      absorbingFence: false,
-      divDepth: 0,
-      lazyFoldable: false,
-      inDefList: false,
-      attrRun: null,
-    }
-    const defFenceMemo: QuotedFenceCloserMemo = new Map()
-    // The next entry ends the body, and so does a line below its column after a
-    // blank.
-    const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
-      RE_DEFLIST_TERM.test(line) ||
-      RE_DEFLIST_DEF.test(line) ||
-      (afterBlank && indentColumns(line, contentCol) < contentCol)
-    /**
-     * Feed one collected body line to the S4 tracker.
-     *
-     * `atContentColumn` is false only for a line the body took LAZILY, from
-     * below its content column. An invisible line there adds no block, so the
-     * paragraph it was folded into is still open behind it.
-     *
-     * `openerCol` is the column the fence on this line is READ at, which is the
-     * body's own column plus whatever residual indent the flush reading below
-     * stripped. THE LOOKAHEAD MUST ASK IN THE SPELLING THE TRACKER READS
-     * (markup-carve/carve#1930): with the opener read flush and the closer
-     * sought at the body's column, an over-indented pair never matched, the
-     * fence degraded to inline verbatim and its paragraph stayed open one column
-     * past where the same fence ends the body.
-     */
-    const track = (
-      content: string,
-      atLineIndex?: number,
-      atContentColumn = true,
-      openerCol = contentCol,
-    ): void => {
-      trackItemLazyState(
-        content,
-        lazyState,
-        (marker) => {
-          if (atLineIndex === undefined) return true
-          const answer = itemFenceHasCloser(
-            lexer,
-            marker,
-            atLineIndex,
-            openerCol,
-            defFenceMemo,
-            bodyEndsAt,
-          )
-          lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
-          return answer
-        },
-        atContentColumn,
-      )
-    }
-    // Lines admitted by REACHING the body's content column, mirroring the list
-    // item's `authoredBaseEligible` one collector over. A below-column lazy line
-    // keeps a positive residual indent on purpose, and that residue must never
-    // be read as #1705 over-indentation and rebased away: rebasing it delivers
-    // the line FLUSH inside the `dd`, where its shape is recognized again - a
-    // definition registers, an attribute attaches - and the fold §10 I5 asks for
-    // has not happened (markup-carve/carve-js#1550).
-    const bodyBaseEligible = new Set<number>()
-    // Has any line of this body been a block QUOTE?
-    //
-    // Once one has, the body's paragraph is no longer necessarily the innermost
-    // OPEN one - the quote's is - and SS10 I2 hands a line below to THAT
-    // paragraph instead. markup-carve/carve#1911 carves exactly this out and
-    // names the block quote for it; corpus section 444 row 11 is the case where
-    // the quote IS the payload, and this flag is that row generalized to a
-    // quote opened anywhere above it. Asked of the FLUSH spelling, because that
-    // is the spelling the body reads - an over-indented `> q` is still a quote.
-    //
-    // The flag is only half of it: a quote opened on the DESCRIPTION MARKER
-    // line (`: > q`) is already in `lazyState.quoteInner` before this loop
-    // runs and never passes through the flag, so the gate below asks both.
-    let bodyHoldsQuote = false
-    /**
-     * The residual indent the currently open block's OPENER was written at, or
-     * null while nothing is open.
-     *
-     * `normalizeAuthoredBodyBases` dedents a block by the one column its opener
-     * established, so only lines written at that column are the block's own
-     * structure and anything deeper is payload. The tracker reads the body one
-     * line at a time and has to carry the same base to reach the same answer
-     * (markup-carve/carve#1930).
-     */
-    let authoredBase: number | null = null
-    // The boundary set for a `+`-attached block in a definition body: a blank,
-    // a further `+`, or the next term / description marker. Whether a line in
-    // that set actually ENDS the block is `insideOpenFence`'s answer, layered
-    // on by `collectAttachedBlock`.
-    const isDefBodyBoundary = (a: string): boolean =>
-      isBlankLine(a) ||
-      /^\+[ \t]*$/.test(a) ||
-      RE_DEFLIST_TERM.test(a) ||
-      RE_DEFLIST_DEF.test(a)
-    // First-block form (`:  +`, mirroring the list `- +`): when the sole
-    // content is a lone `+`, the definition body is the FOLLOWING flush-left
-    // block, with no indentation. `:  \+` keeps a literal `+` instead.
-    if (/^\+[ \t]*$/.test(first)) {
-      const firstBlock = collectAttachedBlock(lexer, isDefBodyBoundary)
-      for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
-      bodyLines.push(...firstBlock.lines)
-      bodyLineNumbers.push(...firstBlock.lineNumbers)
-      for (const a of firstBlock.lines) track(a)
-    } else {
-      bodyBaseEligible.add(bodyLines.length)
-      bodyLines.push(first)
-      bodyLineNumbers.push(lexer.lineNumber(firstLineIndex))
-      // The MARKER LINE never goes through the tracker in the list either, and
-      // for the same reason it is seeded by hand here: nothing precedes it, so
-      // no closer lookahead applies and a fence on it opens unconditionally
-      // (markup-carve/carve#950). The lead opens a paragraph unless it is one of
-      // the shapes that open nothing - PART 1 S4's question, asked here in the
-      // ONE spelling the list item asks it in. THE CONTAINER KIND IS NOT A
-      // PARAMETER (carve#920): a heading, a table or an attribute block written
-      // on the `:  ` marker leaves no paragraph open for exactly the reason it
-      // leaves none on a `- ` marker.
-      const firstState = markerLineState(first)
-      const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
-      lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
-      lazyState.inTable = firstState.endsOnTableRow
-      lazyState.quoteInner = firstState.quote
-      // A FOOTNOTE DEFINITION ON THE MARKER LINE OPENS A BODY RUN, exactly as
-      // one on a continuation line does through the tracker (§16, the arm at
-      // `RE_FOOTNOTE_DEF.test(content)` further down). The marker line never
-      // passes through `track`, so without this the run went untracked: a note
-      // continuation at the note's floor re-armed `lazyFoldable`, and a column-0
-      // trailing line then folded into the `dd` instead of falling to the
-      // document, where PART 0's owner selection places a line below the dd's
-      // base column (markup-carve/carve#1974).
-      lazyState.inFootnoteBody = RE_FOOTNOTE_DEF.test(first)
-      if (firstIsColonContainer) lazyState.divDepth = 1
-      const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
-      if (leadFence) {
-        lazyState.inFence = true
-        lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(first) ? leadFence[2]! : leadFence[1]!)
-        lazyState.lazyFoldable = false
-      }
-    }
-    // A definition continues like a list item (PART 9 \u00a717):
-    //  - form A: a deeper-indented line (>= the content column) folds in, and a
-    //    blank line is tolerated when a later line still continues the body, so
-    //    a `<dd>` can hold multiple paragraphs;
-    //  - form B: a lone `+` attaches the FOLLOWING flush-left block, so rich
-    //    content can join the definition with no indentation (the un-prefixed
-    //    analogue of the list-item and block-quote `+` forms; a leading `:  +`
-    //    is the same marker opening the FIRST block);
-    //  - lazy continuation: a flush-left line with no blank before it that does
-    //    NOT start an interrupting block folds into the open paragraph (the same
-    //    CommonMark lazy rule list items and block quotes use, matching djot).
-    for (;;) {
-      if (lexer.eof()) break
-      const ln = lexer.peek()!
-      // Form B: `+` pull-left continuation.
-      if (/^\+[ \t]*$/.test(ln)) {
-        const plusLineIndex = lexer.pos
-        lexer.consume()
-        // ...AND THE DESCRIPTION ENDS WHERE A COMMENT ENDS IT. Same shape as
-        // the footnote body (markup-carve/carve#1814): a `+` the gate refuses
-        // is an ordinary invisible line at document column 0, and a `<dd>` ends
-        // at one of those. Asked before the body's own continuation branch can
-        // claim the following line. A block quote does NOT end at a comment
-        // there, so it does not end at a refused marker either - that is each
-        // container's invisible-line rule, not a second column rule.
-        if (!attachesAtDocumentColumnZero(lexer)) break
-        const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
-          lexer,
-          isDefBodyBoundary,
-        )
-        if (attached.length > 0) {
-          bodyBaseEligible.add(bodyLines.length)
-          bodyLines.push('')
-          bodyLineNumbers.push(lexer.lineNumber(plusLineIndex))
-          track('')
-          for (const a of attached) {
-            bodyBaseEligible.add(bodyLines.length)
-            bodyLines.push(a)
-            track(a)
-          }
-          bodyLineNumbers.push(...attachedLineNumbers)
-        }
-        continue
-      }
-      // Form A: an indented continuation line (with no intervening blank).
-      // The indent is a COLUMN claim, not a character count: `definition_
-      // continuation` is a leading indentation run, so a tab is syntax there and
-      // advances to the next multiple of 4 (markup-carve/carve#888's signoff,
-      // reaffirmed by markup-carve/carve#901; the same family as #692, #796 and
-      // #905). Counting characters made a lone tab - column 4, past the content
-      // column - end the body, while three spaces continued it, and made the
-      // answer depend on how the author spelled a run rather than where it
-      // landed (markup-carve/carve-js#812).
-      if (!isBlankLine(ln) && indentColumns(ln, contentCol) >= contentCol) {
-        const lineIndex = lexer.pos
-        const dedented = sliceColumns(ln, contentCol, true)
-        bodyBaseEligible.add(bodyLines.length)
-        bodyLines.push(dedented)
-        bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-        // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
-        // (markup-carve/carve#1911). `sliceColumns` removes the body's content
-        // column and KEEPS the rest, so an opener written one column past it
-        // arrives here as ` # H` - and every VISIBLE-opener arm of the tracker is
-        // column-0 strict, so it read prose and left the paragraph open. The line
-        // is not prose: `rebaseOverindentedBlocks` below gives it ONE AUTHORED
-        // BLOCK BASE and the body parses a heading. The paragraph was decided
-        // from a spelling the body never reads, one pass before the pass that
-        // normalizes it. The INVISIBLE arms are whitespace-tolerant and were
-        // already right, which is exactly the split between the corpus rows that
-        // passed and the ones that did not - and why row 7 contradicted itself,
-        // ending the body at the column and keeping it open one past.
-        //
-        // SS10 I1 closes the paragraph for a visible opener at or past the column
-        // and SS10 I5 closes it for a definition or an attribute block, so the two
-        // columns answer alike - an answer that MOVES between the body's column
-        // and one past it is reading indentation rather than the rule.
-        //
-        // AN OPENER THAT LEAVES A BLOCK OPEN IS READ IN THE SAME SPELLING, AT ONE
-        // AUTHORED BASE (markup-carve/carve#1930). Refusing the flush reading for
-        // those left the body's fence state untracked across this whole band:
-        // `::: note` one column past never reached `divDepth`, its `:::` was never
-        // a closer, and the body ended on prose - so a CLOSED fence held the
-        // paragraph open and `tail` folded in, where the same body written AT the
-        // column ends it.
-        //
-        // The base is the OPENER's residual indent, and only lines written at it
-        // are that block's structure. `normalizeAuthoredBodyBases` dedents a block
-        // by the one column its opener established and leaves anything deeper
-        // alone, so `::: note` at the column with its `:::` one deeper closes
-        // nothing - the run is payload and the container is still collecting.
-        // Reading every over-indented line flush on its own closed those, and
-        // moved 26 documents off the oracle while fixing 72.
-        const flush = dedented.replace(/^[ \t]+/, '')
-        if (flush.startsWith('>')) bodyHoldsQuote = true
-        const residual = indentColumns(ln) - contentCol
-        let bodyReadsFlush = false
-        if (!bodyHoldsQuote && lazyState.quoteInner === null && flush !== dedented && lineOpensItemBlock(flush)) {
-          // A COPY, and one that cannot write back. `quoteInner` is the state's
-          // only mutable object and `trackBlockQuoteLazyState` advances it IN
-          // PLACE, so a plain spread would let this probe move the real quote
-          // tracker and `track` below would then move it a second time. The gate
-          // above already means no quote is open here, so seeding it null is both
-          // free and true - and it stays safe if that gate is ever relaxed.
-          const probe: ItemLazyState = { ...lazyState, quoteInner: null }
-          trackItemLazyState(flush, probe, () => true, true)
-          if (!probe.lazyFoldable) {
-            if (insideOpenFence(lazyState)) {
-              // Inside an open block: structure at the block's own base, payload
-              // below it. This is what keeps a deeper `:::` from closing an
-              // admonition its opener wrote one column shallower.
-              //
-              // AND NOT A DEEPER CONTAINER. `bodyClosesAFenceAt` scans the body
-              // flat - it closes a colon fence on the first bare run of its own
-              // width and steps over code-fence payload, with no stack - so a
-              // nested opener is not structure to it. Reading one as an opener
-              // here made the inner closer close the outer block and published a
-              // follower the oracle keeps in the body, on 10 documents.
-              bodyReadsFlush = residual === authoredBase && probe.divDepth <= lazyState.divDepth
-            } else {
-              // Nothing open. A LEAF block (a heading, a table, a definition)
-              // needs no base - that arm is carve#1911's, unchanged. A line that
-              // OPENS one fixes the base the rest of that block is read at.
-              bodyReadsFlush = true
-              if (insideOpenFence(probe)) authoredBase = residual
-            }
-          }
-        }
-        track(
-          bodyReadsFlush ? flush : dedented,
-          lineIndex,
-          true,
-          bodyReadsFlush ? contentCol + residual : contentCol,
-        )
-        // The base belongs to the block that established it and dies with it.
-        if (!insideOpenFence(lazyState)) authoredBase = null
-        lexer.consume()
-        continue
-      }
-      // Blank line: absorb it as a paragraph separator ONLY when a later line
-      // is still an indented continuation. Otherwise leave it in place so the
-      // entry-separator rule (a single blank before the next `:: term`) and the
-      // outer block stream see it unchanged.
-      if (isBlankLine(ln)) {
-        let look = 1
-        while (isBlankLine(lexer.peek(look))) look++
-        const after = lexer.peek(look)
-        // The SECOND spelling of the same rule, and it has its own job: this one
-        // decides whether the body survives the blank at all, the Form A branch
-        // above decides whether a line folds. Both read columns, or a lone tab
-        // after a blank ends the body while Form A would have kept it.
-        if (
-          after !== undefined &&
-          !isBlankLine(after) &&
-          indentColumns(after, contentCol) >= contentCol
-        ) {
-          for (let k = 0; k < look; k++) {
-            const lineIndex = lexer.pos
-            bodyBaseEligible.add(bodyLines.length)
-            bodyLines.push('')
-            bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-            track('')
-            lexer.consume()
-          }
-          continue
-        }
-        break
-      }
-      // A new term/definition marker ends this definition (the outer loop
-      // picks it up). An empty term marker is not one: `::` and `:: ` are the
-      // same line, a term with no content, so it folds (#1891).
-      if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
-      const below = ln.replace(/^[ \t]+/, '')
-      const atDocumentColumn = below === ln
-      if (
-        lazyState.lazyFoldable &&
-        !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
-      ) {
-        const lineIndex = lexer.pos
-        // RECORD THE FOLD so the reparse can read it (markup-carve/carve-js#1650,
-        // carve#1947). A flush-left line this body folds in is invisible from the
-        // column alone; the description body is a container above the item just
-        // as a list is, so when that item's lead opened an unfinished fence the
-        // folded line is the fence's BODY - and parseList's fence-owns-its-body
-        // arm keys off exactly this set (carve-js#1630). Unconditional like the
-        // list collector's own recording; the reparse consumes it only for an
-        // item whose lead actually opened a fence.
-        if (indentColumns(ln, contentCol) < contentCol) {
-          lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
-        }
-        bodyLines.push(ln)
-        bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-        track(ln, undefined, false)
-        lexer.consume()
-        continue
-      }
-      break
-    }
-    // The same authored-base rule list items use, now in the definition body's
-    // coordinate system after its own content margin was removed - plus
-    // Definition entries use the same exact block extent in every container.
-    rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true)
-    const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
-    sub.sublistsCarryAuthoredBase = true
-    sub.hostBody = 'description'
-    return parseBlocks(sub, 0)
-  }
-  /**
-   * The span covering document lines `first`..`last` inclusive, marker and all.
-   *
-   * `last` is never a blank line, and this does NOT trim one. `parseDefBody`
-   * absorbs a blank only when it has already looked ahead and found a line that
-   * still continues the body, so the next turn of its loop always consumes that
-   * line - the last thing it takes is a content line by construction.
-   *
-   */
-  function lineRange(lx: Lexer, first: number, last: number): Position | undefined {
-    // Measure the final line after stripping its lazy frame.
-    const lastLine = lx.lines[last] === undefined ? undefined : stripLazyFrame(lx.lines[last]!)
-    if (lastLine === undefined) return undefined
-
-    return {
-      startLine: lx.lineNumber(first),
-      endLine: lx.lineNumber(last),
-      startColumn: lx.lineStartColumn(first),
-      endColumn: lx.lineStartColumn(last) + lastLine.length,
-      startOffset: lx.lineOffset(first),
-      endOffset: lx.lineOffset(last) + lastLine.length,
-    }
-  }
-
-  // THE ENTRY MATCHER IS THE ONE PREDICATE THAT SEES THROUGH THE FRAME
-  // (PART 9 SS24 C3's LENIENT def-list entry). A `::` or `:` line a quote
-  // folded in reaches no column here, so it attaches to the open term from
-  // wherever it landed - which is why this collector unframes before every
-  // entry test while the block dispatch never does.
-  const peekEntry = (n = 0) => stripLazyFrame(lexer.peek(n) ?? '')
-  while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry())) {
-    const terms: InlineNode[][] = []
-    const termSpans: (Position | undefined)[] = []
-    const definitions: BlockNode[][] = []
-    const definitionLines: number[] = []
-    const definitionSpans: (Position | undefined)[] = []
-    while (!lexer.eof()) {
-      const t = RE_DEFLIST_TERM.exec(peekEntry())
-      if (!t) break
-      const termLineIndex = lexer.pos
-      lexer.consume()
-      // A term is multi-line like a heading: a following plain line folds into
-      // it with a soft break, instead of ending the list and stranding the
-      // definition. A blank line, a new marker (`::` / `:  `), or a block
-      // opener ends the term.
-      // Each line drops its own trailing layout below, once the fold is
-      // complete. In particular, the separator on a content-less marker-shaped
-      // continuation (`* `, `. `) is content here.
-      let termText = t[1]!
-      let continuationLines = 0
-      while (!lexer.eof()) {
-        const next = lexer.peek()!
-        // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
-        // because a framed heading is the term's text rather than a block.
-        const nextEntry = stripLazyFrame(next)
-        if (
-          isBlankLine(next) ||
-          RE_DEFLIST_TERM.test(nextEntry) ||
-          RE_DEFLIST_DEF.test(nextEntry) ||
-          endsHeadingOrQuote(lexer)
-        )
-          break
-        // The term is the other place a framed line becomes text. The frame
-        // kept the opener tests above from claiming it; it comes off before
-        // the fold, exactly as the oracle unframes here.
-        termText += '\n' + stripLazyFrame(next)
-        continuationLines++
-        lexer.consume()
-      }
-      termText = dropTrailingWhitespace(termText)
-      // `t` was matched against the UNFRAMED line, so the index comes from
-      // that same string: the frame is not in the author's source and must
-      // not be counted into the offset. This corrects arithmetic rather than
-      // output - a framed line only ever reaches an item body sub-lexer, which
-      // is unanchored and publishes no positions, so no document of the 13790
-      // swept moves. It is here so the two halves read the same string.
-      const termStart = stripLazyFrame(lexer.lines[termLineIndex]!).indexOf(t[1]!)
-      // A continuation line folds in whole, indent included, and the scanner
-      // strips that indent when it builds the text node - so a single base
-      // offset drifts by the indent on every line after the first. Each line
-      // gets its own origin instead (#441): the term's own line starts after its
-      // `::` marker, a continuation line at its left edge.
-      const termAnchors =
-        continuationLines > 0
-          ? [
-              {
-                offset: lexer.lineOffset(termLineIndex) + termStart,
-                column: lexer.lineStartColumn(termLineIndex) + termStart,
-                line: lexer.lineNumber(termLineIndex),
-              },
-              ...Array.from({ length: continuationLines }, (_unused, i) => ({
-                offset: lexer.lineOffset(termLineIndex + 1 + i),
-                column: lexer.lineStartColumn(termLineIndex + 1 + i),
-                line: lexer.lineNumber(termLineIndex + 1 + i),
-              })),
-            ]
-          : undefined
-      terms.push(
-        parseInline(termText, lexer.abbrDefs, lexer.linkDefs, {
-          anchored: lexer.hasDocumentOffsets,
-          baseOffset: lexer.lineOffset(termLineIndex) + termStart,
-          startLine: lexer.lineNumber(termLineIndex),
-          startColumn: lexer.lineStartColumn(termLineIndex) + termStart,
-          ...(termAnchors ? { lineAnchors: termAnchors } : {}),
-        }),
-      )
-      termSpans.push(
-        lexer.hasDocumentOffsets
-          ? lineRange(lexer, termLineIndex, termLineIndex + continuationLines)
-          : undefined,
-      )
-    }
-    while (!lexer.eof()) {
-      // A blank line before a `:  ` definition is allowed: a definition may be
-      // separated from its term (or a previous definition) by a blank line for
-      // readability, matching djot. The blank is a separator only - it does not
-      // end the entry when a `:  ` definition follows.
-      if (isBlankLine(lexer.peek()!)) {
-        let look = 1
-        while (isBlankLine(lexer.peek(look))) look++
-        if (!RE_DEFLIST_DEF.test(peekEntry(look))) break
-        for (let k = 0; k < look; k++) lexer.consume()
-      }
-      const defLineIndex = lexer.pos
-      const d = RE_DEFLIST_DEF.exec(peekEntry())
-      if (!d) break
-      lexer.consume()
-      definitionLines.push(lexer.lineNumber(defLineIndex))
-      definitions.push(parseDefBody(d[2]!, defLineIndex, deflistContentCol(d[1]!)))
-      // The description's own extent anchors to its MARKER LINE. The wire
-      // derives the END from the placed children (definition-list-wire.ts), so
-      // this only supplies the start and the fallback when the body produced no
-      // placed child at all - a description whose only content hoists to the
-      // root (carve-js#813). In that case the span is the marker line and stops
-      // there: §4 ends a closerless container at its last placed child, and a
-      // hoisted sibling is not a child (carve#1522), so the continuation lines
-      // that carried the hoisted definitions are not part of the description
-      // (carve#1963). It always takes at least the marker line, so the range is
-      // never empty and never runs backwards.
-      definitionSpans.push(
-        lexer.hasDocumentOffsets ? lineRange(lexer, defLineIndex, defLineIndex) : undefined,
-      )
-    }
-    items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
-    // Allow a single blank line before the next entry's `:: term`.
-    if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
-      let look = 1
-      while (isBlankLine(lexer.peek(look))) look++
-      const next = lexer.peek(look)
-      if (next && RE_DEFLIST_TERM.test(next)) for (let k = 0; k < look; k++) lexer.consume()
-      else break
-    }
-  }
-  return { type: 'definition_list', items }
 }
 
 function parseAbbrDef(lexer: Lexer): AbbreviationDef {
@@ -5967,147 +3337,6 @@ function classifyQuotedLine(
   return null
 }
 
-function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
-  const firstLineIndex = lexer.pos
-  const inner: string[] = []
-  const innerLineNumbers: number[] = []
-  const state: BlockQuoteLazyState = {
-    mode: { kind: 'closed' },
-    inTable: false,
-    colonWidths: [],
-    attrRun: null,
-  }
-  const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    const m = RE_BLOCKQUOTE.exec(ln)
-    if (m) {
-      const lineIndex = lexer.pos
-      lexer.consume()
-      const content = m[1] ?? ''
-      inner.push(content)
-      innerLineNumbers.push(lexer.lineNumber(lineIndex))
-      trackBlockQuoteLazyState(
-        content,
-        state,
-        (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
-      )
-      continue
-    }
-    // Continuation marker (Carve, PART 9 §17): a lone `+` at column 0 after a
-    // quoted line attaches the FOLLOWING flush-left block to the quote -- the
-    // un-prefixed analogue of the list-item form, so a real block (list, fenced
-    // code, table, ...) can join the quote without repeating `>`. Collect the
-    // block's lines (up to a blank line or a further `+`) and
-    // splice them into the quote body behind a blank-line separator, so they
-    // parse as their own block instead of folding into the quoted paragraph.
-    if (/^\+[ \t]*$/.test(ln)) {
-      lexer.consume()
-      const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
-        lexer,
-        (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
-      )
-      if (attached.length > 0) {
-        // `inner` always holds the quote's first content line, so a leading
-        // blank separates the attached block from it.
-        // The separators are SYNTHETIC - no such blank line exists in the
-        // source - so each borrows the line it sits against rather than the
-        // `+` marker's. Borrowing the marker's put them BEFORE the attached
-        // block in document order, and a block spanning first-to-last line then
-        // reported an end offset earlier than its start (#462).
-        inner.push('')
-        innerLineNumbers.push(attachedLineNumbers[0]!)
-        for (const attachedLine of attached) inner.push(attachedLine)
-        innerLineNumbers.push(...attachedLineNumbers)
-        inner.push('')
-        innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
-        // The attached block closed any open paragraph: a following unmarked
-        // line no longer lazily continues the quote.
-        closeBlockQuoteParagraph(state)
-      }
-      continue
-    }
-    if (
-      isBlankLine(ln) ||
-      RE_CAPTION.test(ln) ||
-      colonFenceShapeEndsLazyContinuation(ln) ||
-      startsInterruptingBlock(lexer, undefined, false)
-    ) {
-      break
-    }
-    // A non-`>` line inside an open fence/comment, or after a block that left no
-    // open paragraph (heading/table/fence/thematic/div), terminates the quote
-    // instead of being swallowed. This is also what ends the quote on a lazy
-    // list marker when no open paragraph precedes it.
-    if (!blockQuoteParagraphOpen(state)) break
-    const lineIndex = lexer.pos
-    lexer.consume()
-    const lazyLinkDef = isLinkDefLine(ln)
-    if (lazyLinkDef) {
-      lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
-    }
-    // THE LINE IS THE QUOTE'S LAZY TEXT, AND A MARKER DOES NOT SURVIVE THE
-    // HAND-OVER (PART 0 lazy continuation, markup-carve/carve#1904). Below it
-    // parses as the quote's body, where the marker read as an opener again and
-    // put an item INSIDE the quote for a line carrying no `>`.
-    //
-    // AT EVERY COLUMN, including one an enclosing item hands out (ruled on
-    // markup-carve/carve#1905, ported at carve-js#1615). A QUOTE IS REACHED BY
-    // ITS MARKER, AND A COLUMN NEVER REACHES INTO ONE - so a line writing no
-    // `>` is in no quote wherever it lands, and §24 C3 never governs it. The
-    // hold-back this used to carry made the marker twin differ from the
-    // paragraph twin, which folds there in every reader.
-    if (isListMarkerLine(ln)) {
-      lexer.quoteLazyMarkerLines.add(lexer.lineNumber(lineIndex))
-    }
-    // The shape-blind half of the same fact, for the consumers the two sets
-    // above do not serve.
-    lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
-    inner.push(ln)
-    innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    if (!lazyLinkDef) {
-      trackBlockQuoteLazyState(
-        ln,
-        state,
-        (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
-      )
-    }
-  }
-  const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
-  // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
-  // stops here. A footnote body absorbs residual indentation because its blocks
-  // are REBASED to an authored base; a quote is not rebased, and an indented
-  // definition after `>` is literal text there exactly as at top level
-  // (markup-carve/carve-js#1628).
-  subLexer.inFootnoteBody = false
-  subLexer.consumesHostedLinkDefs = lexer.hostBody === null ? false : 'lazy'
-  const children = parseBlocks(subLexer, 0)
-  const bq: BlockQuote = { type: 'block_quote', children }
-  const quoteEndIndex = lexer.pos
-  // Optional caption with ^
-  // Allow one blank line between
-  let lookahead = 0
-  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
-  const next = lexer.peek(lookahead)
-  if (next) {
-    const cap = RE_CAPTION.exec(next)
-    // §4: a caption attaches only when it immediately follows the block
-    // or is separated by at most ONE blank line.
-    if (cap && lookahead <= 1) {
-      for (let i = 0; i <= lookahead; i++) lexer.consume()
-      attachBlockPos(lexer, bq, firstLineIndex, quoteEndIndex)
-      return {
-        type: 'figure',
-        target: bq,
-        caption: parseCaptionInline(lexer, cap[1]!),
-      } as Figure
-    }
-  }
-  return bq
-}
-
 /**
  * True when `line` is a standalone block image: `![…](…)` optionally followed
  * by a trailing attribute block that yields REAL attributes. An empty or
@@ -6151,41 +3380,6 @@ function imageIsBlock(lexer: Lexer): boolean {
   const interrupts = startsInterruptingBlock(lexer)
   lexer.pos = saved
   return interrupts
-}
-
-function parseBlockImage(lexer: Lexer): Image | Figure {
-  const imageLineIndex = lexer.pos
-  const line = lexer.consume()
-  const m = RE_BARE_IMAGE.exec(line)!
-  // `isBlockImageLine` has already read the run as a destination, so the
-  // escapes are resolved here as they are on the inline tail.
-  const img: Image = { type: 'image', src: linkDestinationValue(m[2]!)!, alt: m[1]! }
-  const title = m[3] ?? m[4]
-  if (title !== undefined) img.title = title
-  if (m[5]) img.attrs = parseAttrs(m[5])
-  // Optional caption
-  let lookahead = 0
-  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
-  const next = lexer.peek(lookahead)
-  if (next) {
-    const cap = RE_CAPTION.exec(next)
-    // §4: a caption attaches only when it immediately follows the block
-    // or is separated by at most ONE blank line.
-    if (cap && lookahead <= 1) {
-      for (let i = 0; i <= lookahead; i++) lexer.consume()
-      // The block loop attaches a span to whatever this returns, so a figure
-      // gets one and its TARGET would be left without - PART 12 section 4 wants
-      // one on every node but the root. The image occupies exactly its own line;
-      // the figure spans that plus the caption.
-      attachBlockPos(lexer, img, imageLineIndex, imageLineIndex + 1)
-      return {
-        type: 'figure',
-        target: img,
-        caption: parseCaptionInline(lexer, cap[1]!),
-      } as Figure
-    }
-  }
-  return img
 }
 
 /** The unordered/task bullet character (`-`, `*`, or `+`) of a line. */
@@ -6749,75 +3943,6 @@ function fencedBlockEnd(scan: AttachedScan): number {
 }
 
 /**
- * Collect the ONE flush-left block a `+` continuation marker attaches
- * (PART 9 §17 L3/L4).
- */
-/**
- * How many of the `limit` lines at the lexer's position the ONE block a `+`
- * attaches actually occupies (§17 L3).
- *
- * At least one line, always: a probe that consumed nothing would leave the
- * caller's cursor where it was and the container loop would see the same line
- * forever.
- *
- * A LEADING ATTRIBUTE RUN IS PART OF THE BLOCK IT FLOATS ONTO. Only
- * `parseBlocks` owns a pending-attribute slot and this is a `parseBlock` call,
- * so an attribute line left to it reads as a paragraph and the measurement stops
- * in front of the block the attributes were written for.
- */
-function attachedBlockExtent(
-  lexer: Lexer,
-  limit: number,
-  transform?: (line: string) => string,
-): number {
-  if (limit <= 1) return limit
-  const lines: string[] = []
-  for (let k = 0; k < limit; k++) {
-    const line = lexer.peek(k)!
-    lines.push(transform ? transform(line) : line)
-  }
-  const probe = subLexer(lines, lexer.parseOptions, 0)
-  probe.nested = true
-  probe.suppressPositions = true
-  // The depth the block is really parsed at. `MAX_NESTING_DEPTH` turns every
-  // line into literal paragraph text once it is reached, so a probe left at 0
-  // would measure a construct the real parse never builds. Stated as alignment,
-  // not as a fix: no document was found where it changes the answer, because at
-  // those depths a `+` has already stopped acting as a continuation marker.
-  probe.depth = lexer.depth + 1
-  // NO EXTENSION MATCHER RUNS FOR A MEASUREMENT. `matchBlock` and `matchInline`
-  // are public callbacks and nothing requires them to be pure: one allocating
-  // sequential ids would number its first authored block 2, because the probe
-  // called it once for a parse whose result is thrown away. The probe only needs
-  // to know where a block ENDS, and an extension block ends where the core
-  // parser's fallback for those same lines ends.
-  const matchers = activeMatchers
-  activeMatchers = []
-  try {
-    // A LEADING ATTRIBUTE RUN IS PART OF THE BLOCK IT FLOATS ONTO, and so is
-    // whatever INVISIBLE construct sits between them. Only `parseBlocks` owns a
-    // pending-attribute slot, and §15 A2a keeps that slot across a comment or a
-    // reference, footnote or abbreviation definition - so a probe that stopped
-    // at the first node would stop in front of the block the attributes were
-    // written for and leave it outside the container, attributes dropped.
-    for (;;) {
-      while (!probe.eof() && tryCollectBlockAttributes(probe) !== null) {
-        /* the run floats forward; keep looking for what it floats onto */
-      }
-      if (probe.eof()) return limit
-      const node = parseBlock(probe)
-      const invisible =
-        node === null || node.type === 'abbreviation_def' || node.type === 'comment'
-      if (!invisible || probe.eof()) break
-    }
-  } finally {
-    activeMatchers = matchers
-  }
-
-  return Math.min(Math.max(probe.pos, 1), limit)
-}
-
-/**
  * §17 L3: does the marker's candidate block begin at DOCUMENT column 0?
  *
  * "Flush-left" is the reach, not a description of the usual case: a line at any
@@ -6850,54 +3975,6 @@ function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
     rest = rest.slice(m[0].length)
   }
   return leadingWhitespace(rest) === 0
-}
-
-function collectAttachedBlock(
-  lexer: Lexer,
-  isBoundary: (line: string) => boolean,
-  transform?: (line: string) => string,
-): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
-  // AND FLUSH-LEFT MEANS COLUMN 0 IS ASKED HERE, ONCE, FOR EVERY CONTAINER
-  // (§17 L3, markup-carve/carve#1814). The predicate existed but only the list
-  // item's three attach paths called it, so the footnote body, the definition
-  // description and the block quote each reached out for a line the clause
-  // leaves where the author wrote it: a `<dd>` whose content column is 3 pulled
-  // in a column-1 or column-2 line, a note pulled in a column-1 line, and a
-  // quote took a column-2 line that A QUOTE IS REACHED BY ITS MARKER (§10 I5,
-  // markup-carve/carve#1384) puts in no quote at all. Every caller already
-  // treats an EMPTY result as "the marker attached nothing" and lets its own
-  // ordinary rules have the line, which is exactly what the clause's comment
-  // spelling does.
-  if (!attachesAtDocumentColumnZero(lexer)) {
-    return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
-  }
-  const fenced = fencedBlockEnd({
-    at: (offset) => {
-      const line = lexer.peek(offset)
-      return line === undefined ? undefined : transform ? transform(line) : line
-    },
-    index: closerIndex(lexer),
-    base: lexer.pos,
-  })
-  let take = 0
-  if (fenced !== -1) {
-    take = fenced + 1
-  } else {
-    while (lexer.peek(take) !== undefined && !isBoundary(lexer.peek(take)!)) take++
-    const measured = attachedBlockExtent(lexer, take, transform)
-    if (measured < take) take = measured
-  }
-  const startLineIndex = lexer.pos
-  const lines: string[] = []
-  const lineNumbers: number[] = []
-  for (let k = 0; k < take; k++) {
-    const raw = lexer.peek()!
-    lines.push(transform ? transform(raw) : raw)
-    lineNumbers.push(lexer.lineNumber(lexer.pos))
-    lexer.consume()
-  }
-
-  return { lines, lineNumbers, startLineIndex }
 }
 
 /**
@@ -7574,1036 +4651,6 @@ function trackItemLazyState(
   }
 }
 
-function parseList(lexer: Lexer): List {
-  const first = lexer.peek()!
-  const baseIndent = indentColumns(first)
-  // Classify on the marker after stripping any abutting `{...}` attribute block.
-  const firstAttr = extractItemAttr(first)
-  const firstStripped = firstAttr ? firstAttr.stripped : first
-  const isTask = RE_TASK.test(firstStripped)
-  const isOrdered = !isTask && RE_ORDERED.test(firstStripped)
-  // A change of unordered marker character (`-` vs `*` vs `+`), or of
-  // ordered dialect/delimiter (decimal/alpha/roman, `.` vs `)`), starts a
-  // new list (grammar PART 9 §11). The first item fixes the ordered
-  // dialect; the second item's marker (if a sibling) tie-breaks an
-  // ambiguous single roman letter.
-  const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(firstStripped)
-  const firstOrdered = isOrdered ? RE_ORDERED.exec(firstStripped)! : null
-  const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
-  let orderedKind: OlKind = 'dec'
-  let orderedStart = 1
-  if (firstOrdered) {
-    // Tie-break the dialect on the next sibling, looking past blank lines
-    // and the first item's own continuation/nested lines (indented deeper
-    // than the marker) — `x.` / blank or indented body / `xi.` is still one
-    // roman list.
-    let k = 1
-    for (; lexer.peek(k) !== undefined; k++) {
-      const ln = lexer.peek(k)!
-      if (!isBlankLine(ln) && indentColumns(ln, baseIndent + 1) <= baseIndent) break
-    }
-    const nextLine = lexer.peek(k)
-    const nextStripped =
-      nextLine !== undefined
-        ? (extractItemAttr(nextLine)?.stripped ?? nextLine)
-        : undefined
-    const nm =
-      nextStripped !== undefined && indentColumns(nextLine!, baseIndent + 1) === baseIndent
-        ? RE_ORDERED.exec(nextStripped)
-        : null
-    orderedKind = olKindOf(firstOrdered[2]!, nm ? nm[2]! : null)
-    orderedStart = olStartOf(firstOrdered[2]!, orderedKind)
-  }
-  const items: ListItem[] = []
-  let loose = false
-  // §11 N1 hard boundary: a run of three or more blank lines before a
-  // compatible sibling marker ends this list rather than loosening it. Set
-  // where the loose decision is made, acted on after the item is pushed.
-  let hardBoundary = false
-
-  /**
-   * The boundary set for a `+`-attached block in a list item: a blank, a
-   * dedent below the marker column, and at the marker column a sibling marker,
-   * ANY list marker (§11) or a further `+`. Both `+` paths - the first-block
-   * `- +` and the mid-item one - carry the SAME set, so it is written once;
-   * whether a line in it ends the block is `insideOpenFence`'s answer, layered
-   * on by `collectAttachedBlock`.
-   */
-  const isItemAttachBoundary = (a: string): boolean => {
-    if (isBlankLine(a)) return true
-    const ind = indentColumns(a, baseIndent + 1)
-    if (ind < baseIndent) return true
-    if (ind !== baseIndent) return false
-    const am = matchListMarker(a, isTask, isOrdered)
-    const sibling =
-      am &&
-      (isOrdered
-        ? orderedContinues(a, orderedKind, orderedDelim)
-        : unorderedMarkerChar(a) === firstMarkerChar)
-    const anyMarker =
-      RE_ORDERED.test(a) || RE_UNORDERED.test(a) || RE_TASK.test(a) || extractItemAttr(a) !== null
-    return Boolean(sibling) || anyMarker || isContinuationMarker(a)
-  }
-
-  while (!lexer.eof()) {
-    const itemStartLineIndex = lexer.pos
-    const line = lexer.peek()!
-    if (isBlankLine(line)) {
-      // Blank lines between siblings are handled by the per-item collector
-      // below; a stray leading blank just ends the list.
-      break
-    }
-    if (indentColumns(line, baseIndent + 1) !== baseIndent) break
-    // Strip an abutting `{...}` attribute block off the marker so the bare
-    // marker regexes match; remember its attributes to attach to the <li>.
-    const la = extractItemAttr(line)
-    const mline = la ? la.stripped : line
-    const m = matchListMarker(mline, isTask, isOrdered)
-    if (!m) break
-    // §11: a sibling with a different marker character (unordered) or a
-    // different delimiter (ordered) is a new list.
-    if (!isOrdered && unorderedMarkerChar(mline) !== firstMarkerChar) break
-    if (isOrdered && !orderedContinues(mline, orderedKind, orderedDelim)) break
-
-    let content: string
-    let checked: boolean | undefined
-    let taskState: TaskState | undefined
-    if (isTask) {
-      checked = m[2]!.toLowerCase() === 'x'
-      taskState = authoredTaskState(m[2]!, checked)
-      content = m[3]!
-    } else if (isOrdered) {
-      content = m[4]!
-    } else {
-      content = m[2]!
-    }
-    const itemAttrs = la ? la.attrs : undefined
-
-    // item (continuation paragraphs or nested lists). Visual content column:
-    // baseIndent (tab-aware columns) plus the BARE marker width. An abutting
-    // `{...}` block is item metadata and contributes zero, so changing a class
-    // or Unicode value cannot restructure the body (carve#1701, carve#1698). The leading
-    // whitespace may be a tab, so it is measured in columns (baseIndent) rather
-    // than characters. For a TASK item the
-    // checkbox is content, not marker, so the content column is the bullet
-    // width (`- `/`* ` = 2) -- not the full
-    // `- [x] ` width (matching the spec's task attribute/continuation
-    // convention `- [x] x` / `  {.c}`).
-    const contentCol = isTask
-      ? baseIndent + 2
-      : baseIndent + (mline.length - leadingWhitespace(mline) - content.length)
-    lexer.consume()
-
-    if (isContinuationMarker(content) && !attachesAtDocumentColumnZero(lexer)) {
-      // The marker line is still consumed and contributes nothing; the item
-      // carries an EMPTY lead from here, exactly as a comment on that line
-      // would leave it. `contentCol` is already measured off the marker, so
-      // the column the body is collected at does not move.
-      content = ''
-    } else if (isContinuationMarker(content)) {
-      // The attached block is a block: a boundary line inside a fence it opened
-      // is that fence's body, not a boundary (see the indented loop's note on
-      // carve#975 and corpus category 279). Without this the opener came out an
-      // EMPTY code block and the closer an inline code span, which is the same
-      // damage category 278 pins one level in.
-      const {
-        lines: attached,
-        lineNumbers: attachedLineNumbers,
-        startLineIndex: attachedStartLineIndex,
-      } = collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
-      // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
-      // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
-      // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
-      // as soon as it had ONE block, so the second marker was left at the top
-      // level and rendered as a paragraph of its own - `<p>+</p>` on the page,
-      // with the block it was written for outside the item (§17 L3, corpus
-      // 327-…-that-block-s-extent-7).
-      //
-      // The blank between two attached blocks is a SEPARATOR, not a loosener:
-      // the author wrote no blank line, so the item stays tight, which is the
-      // same carve-out `plusSeparators` makes in the indented body.
-      while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
-        const plusLineIndex = lexer.pos
-        lexer.consume()
-        const more = collectAttachedBlock(lexer, isItemAttachBoundary, (a) =>
-          sliceColumns(a, baseIndent),
-        )
-        // An empty result is the column gate's refusal as well as an exhausted
-        // boundary set, and a second marker that attaches nothing ends the run
-        // either way (markup-carve/carve#1814).
-        if (more.lines.length === 0) break
-        attached.push('')
-        attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
-        attached.push(...more.lines)
-        attachedLineNumbers.push(...more.lineNumbers)
-      }
-      const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
-      const fbChildren = parseBlocks(sub, 0)
-      const fbItem: ListItem = { type: 'list_item', children: fbChildren }
-      attachBlockPos(lexer, fbItem, itemStartLineIndex, lexer.pos)
-      if (checked !== undefined) fbItem.checked = checked
-      if (taskState !== undefined) fbItem.taskState = taskState
-      if (itemAttrs) fbItem.attrs = itemAttrs
-      items.push(fbItem)
-      continue
-    }
-
-    const nested: string[] = []
-    const nestedLineNumbers: number[] = []
-    // Lines admitted by reaching this item's content column. A below-column
-    // lazy line can retain a positive residual indent for recursive safety,
-    // but that must never be mistaken for #1705 over-indentation.
-    const authoredBaseEligible = new Set<number>()
-    let hasOverindentedBlockCandidate = false
-    // Index in `nested` where an indented ORDERED sub-list begins. Ordered
-    // markers do not interrupt a paragraph (§10), so if the sub-list is joined
-    // with the lead text it folds into the lead paragraph instead of nesting
-    // (`1. a` / `   1. b` -> `<li>a\n1. b</li>`). Splitting it into its own block
-    // stream lets it nest. Unordered/task sub-lists interrupt and already nest
-    // via the join, and lazy continuation / block-attribute lines must stay on
-    // the join, so only an indented ordered marker triggers the split.
-    let firstBlockIdx = -1
-    // Every `nested` index whose line opens a sub-list item, not only the first.
-    const subListMarkers = new Set<number>()
-    let bodyHasContentColumnLine = false
-    let bodyHasBelowColumnLine = false
-    let pendingBlanks = 0
-    let pendingBlankLineNumbers: number[] = []
-    // What each buffered blank leaves past the content column. Inside an open
-    // fence a line of spaces is body, so its residue is content (CARVE-P11-016).
-    let pendingBlankTexts: string[] = []
-    // Indices in `nested` that hold a `+`-injected blank separator. These keep
-    // the attached block parsing standalone but never loosen the list (Bug B).
-    const plusSeparators = new Set<number>()
-    // Track whether the item's collected content currently ends in an open
-    // paragraph (family-D lazy continuation). The lead text opens one.
-    // ONE WALK for the three questions the lead line answers.
-    const leadState = markerLineState(content)
-    const lazyState: ItemLazyState = {
-      inFence: false,
-      fenceClose: null,
-      inComment: false,
-      commentLen: 0,
-      lazyFoldableBeforeComment: false,
-      openedCommentAtColumn: false,
-      invisibleAtColumn: false,
-      commentAtColumn: false,
-      inFootnoteBody: false,
-      absorbingFence: false,
-      divDepth: 0,
-      // The lead text opens a paragraph unless it is one of the shapes that
-      // open nothing - PART 1 S4's one question, asked of the block the marker
-      // line holds. See `markerLineState`.
-      lazyFoldable: leadState.leavesParagraphOpen,
-      inTable: leadState.endsOnTableRow,
-      quoteInner: leadState.quote,
-      inDefList: RE_DEFLIST_TERM.test(content)
-        ? 'term'
-        : RE_DEFLIST_DEF.test(content)
-          ? 'description'
-          : false,
-      attrRun: leadState.wrappedAttributeRun,
-    }
-    // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
-    // The lead line never went through `trackItemLazyState`, so `- ``` ` left
-    // the tracker believing the item held an open paragraph, and every line
-    // below the content column folded into the code text - body and closer
-    // both. Nothing precedes the lead, so no closer lookahead applies: the
-    // fence opens unconditionally, exactly as it does at the top of a quote.
-    const itemFenceMemo: QuotedFenceCloserMemo = new Map()
-    // A sibling or outer marker ends the item, and so does a line below the
-    // column after a blank (carve#1379).
-    const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
-      (isListMarkerLine(line) && indentColumns(line) <= baseIndent) ||
-      (afterBlank && indentColumns(line, contentCol) < contentCol)
-    const itemCommentMemo: ItemCommentCloserMemo = { index: null }
-    const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
-    if (leadFence) {
-      lazyState.inFence = true
-      lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!)
-      lazyState.lazyFoldable = false
-    }
-    // A COMMENT FENCE OPENED ON THE MARKER LINE IS AN OPEN COMMENT, for the
-    // reason carve#950 gives for the code fence one line up: the lead line
-    // never goes through `trackItemLazyState`, so `- %%%` left the tracker
-    // believing the item held an open paragraph and nothing below the marker
-    // line was comment body to it. PART 9 §28 makes that body VERBATIM, so the
-    // tracker has to know the comment is open before it reads the next line.
-    const leadComment = leadFence ? undefined : commentFenceRun(content)
-    if (leadComment !== undefined) {
-      lazyState.inComment = true
-      lazyState.commentLen = leadComment
-      lazyState.lazyFoldableBeforeComment = lazyState.lazyFoldable
-      lazyState.lazyFoldable = false
-    }
-    // The lead line may itself be the malformed fence (`- :::note`), and then
-    // the paragraph it opens is already absorbing: the `:::` below it is text,
-    // not a closer for a block nothing opened (PART 9 §12, carve#891).
-    lazyState.absorbingFence =
-      /^:{3,}/.test(content) &&
-      !RE_DIV_OPEN.test(content) &&
-      !RE_ADMONITION_OPEN.test(content) &&
-      !RE_LINE_BLOCK_OPEN.test(content) &&
-      !RE_HARDBREAKS_OPEN.test(content) &&
-      !RE_QUOTE_BLOCK_OPEN.test(content)
-    while (!lexer.eof()) {
-      const l = lexer.peek()!
-      if (isBlankLine(l)) {
-        pendingBlanks++
-        pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
-        pendingBlankTexts.push(insideOpenFence(lazyState) ? sliceColumns(l, contentCol, true) : '')
-        lexer.consume()
-        continue
-      }
-      // List-continuation marker (Carve): a lone `+` at the marker column
-      // attaches the FOLLOWING flush-left block to this item without indenting
-      // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
-      // injects a blank separator so the block parses on its own; the
-      // compact-list rule above then keeps the item tight.
-      if (indentColumns(l, baseIndent + 1) === baseIndent && isContinuationMarker(l)) {
-        const plusLineNumber = lexer.lineNumber(lexer.pos)
-        lexer.consume()
-        pendingBlanks = 0
-        pendingBlankLineNumbers = []
-        pendingBlankTexts = []
-        // Mark this blank as a `+`-injected separator: it lets the attached
-        // block parse on its own but must NOT loosen the list (Bug B). A real
-        // internal blank before a plain paragraph still loosens; a `+` one
-        // never does, matching carve-php.
-        // ONLY A FLUSH-LEFT BLOCK (§17 L3, markup-carve/carve#1436) - see the
-        // first-block form above. Nothing is attached from another column, and
-        // the marker line itself is still consumed, so the candidate falls
-        // through to the ordinary rules on the next turn of this loop.
-        if (!attachesAtDocumentColumnZero(lexer)) continue
-        plusSeparators.add(nested.length)
-        nested.push('')
-        nestedLineNumbers.push(plusLineNumber)
-        trackItemLazyState('', lazyState)
-        // A boundary line inside a fence THIS attached block opened is that
-        // fence's body, exactly as it is in the indented body (carve#975 for
-        // the marker, corpus category 279 for the blank, the dedent and the
-        // three fence kinds together). The old loop consulted the tracker for
-        // two of the kinds and for no boundary but the marker, so a blank
-        // severed a code fence from its opener and a colon fence severed on
-        // every boundary there is.
-        const { lines: attachedLines, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
-          lexer,
-          isItemAttachBoundary,
-          (a) => sliceColumns(a, baseIndent),
-        )
-        for (let k = 0; k < attachedLines.length; k++) {
-          nested.push(attachedLines[k]!)
-          nestedLineNumbers.push(attachedLineNumbers[k]!)
-          // The attached block's lines are the item's, so the item's own
-          // tracker sees them: what they leave open decides how a later
-          // dedented line folds.
-          trackItemLazyState(attachedLines[k]!, lazyState)
-        }
-        continue
-      }
-      // Content-column model (carve#295): a continuation belongs to the item
-      // only if it reaches the item's content column - the SAME rule the
-      // no-blank case uses; the blank line only decides tight vs loose. There is
-      // no `baseIndent + 2` relaxation and no below-column block-opener nesting.
-      // A block opener is recognized only AT the content column (the item body's
-      // column 0), exactly as at the top level; a line that reaches the content
-      // column but carries residual indent is lazy paragraph text, and a line
-      // below the content column ends the item body and parses at document level
-      // (falling through to the lazy-fold / detach branch below). Intentional
-      // divergence from djot, which attaches at any indent past the marker.
-      const lw = indentColumns(l, contentCol)
-      // A MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT COLUMN HERE
-      // (markup-carve/carve#1904). It carried no `>`, so it is not inside the
-      // quote as a block at any column - it folds into the innermost open
-      // paragraph, which is this item's. Sending it down the content-column arm
-      // dedents it to the body's column 0, where §24 C3 opens a SUBLIST; the
-      // lazy arm below keeps its indent and the fold holds.
-      // A DESCRIPTION MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT
-      // COLUMN EITHER (markup-carve/carve-js#1606). Same fact as the marker
-      // above, asked of the other line the item re-classifies by column: the
-      // content-column arm dedents by the item's own column and leaves
-      // everything past it as residual indent, and an indented `:` is no longer
-      // a marker - so `> - :: t` over a column-4 `:  a` folded the description
-      // into the term while the unquoted spelling of the same document read the
-      // body. The lazy arm below strips the indent instead, which is PART 9
-      // §24 C3's LENIENT def-list entry: a `:` attaches a fresh description to
-      // an open term from at or below column 0.
-      //
-      // UNLESS A DESCRIPTION BODY IS ALREADY OPEN, where the same line is that
-      // body's own lazy continuation rather than a second entry. That is where
-      // the oracle's two collectors differ - the term's fold tests for an entry
-      // AFTER unframing a lazy line and the description body's fold tests
-      // before it - and it is the only state that has to be excluded: with no
-      // def list open at all there is no body to continue, and holding the arm
-      // back there too left 20 documents on the old answer for no reason the
-      // clause states.
-      //
-      // ONE SHAPE, DELIBERATELY. Every quote-lazy line has this much in common,
-      // but sending them all down the lazy arm moves fence-shaped lines off the
-      // oracle's answer as well - the general port is its own measurement.
-      // EVERY quote-lazy line, not the three shapes ported one at a time (a
-      // link definition, a list marker at markup-carve/carve#1904, a description
-      // marker at markup-carve/carve-js#1606). They shared one fact and it is
-      // general: the line carries no `>`, so PART 0 makes it the innermost open
-      // paragraph's text wherever it landed, and it reaches no content column
-      // inside the item at all.
-      //
-      // #1606'S DESCRIPTION-OPEN GATE IS GONE, and the frame is why. That gate
-      // held a `:` line back from the lazy arm while a description body was
-      // open, so the body would read it as its own continuation rather than a
-      // second entry. The frame gets the same answer structurally, because it is
-      // the ORDER of the oracle's two collectors: the body's fold tests a lazy
-      // line BEFORE anything unframes it and so sees plain text, while the
-      // term's fold tests for an entry AFTER. Measured dead over 5880 documents
-      // written to exercise exactly that state, so it is not carried here as a
-      // condition that cannot fire.
-      const quoteLazyFramed =
-        lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-        // AN OPEN FENCE CLASSIFIES NOTHING, so the frame has no work to do
-        // inside one and must not divert the line: a fence body takes every
-        // line it is given, and it needs this one at the column the item's
-        // content column leaves it at.
-        !insideOpenFence(lazyState)
-      if (lw >= contentCol && !quoteLazyFramed &&
-        // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
-        // quote-lazy MARKER line never reaches the content-column arm, not even
-        // inside an open fence, where the gate above hands the line back.
-        !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
-        const placed = sliceColumns(l, contentCol, true)
-        if (!RE_ADMONITION_CLOSE.test(placed)) bodyHasContentColumnLine = true
-        for (let k = 0; k < pendingBlanks; k++) {
-          nested.push(pendingBlankTexts[k] ?? '')
-          nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
-          trackItemLazyState('', lazyState)
-        }
-        pendingBlanks = 0
-        pendingBlankLineNumbers = []
-        pendingBlankTexts = []
-        const isMarker =
-          !insideOpenFence(lazyState) &&
-          !insideOpenQuoteParagraph(lazyState) &&
-          (RE_ORDERED.test(l) ||
-            RE_UNORDERED.test(l) ||
-            RE_TASK.test(l) ||
-            // An abutting-attr bullet (`-{.x} item`) is a marker too. It no
-            // longer reaches here via §10 interruption (bullets do not
-            // interrupt), so the sub-list nesting path must recognize it
-            // directly to keep nesting.
-            extractItemAttr(l) !== null)
-        if (firstBlockIdx === -1 && isMarker) {
-          firstBlockIdx = nested.length
-        }
-        if (isMarker) subListMarkers.add(nested.length)
-        // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
-        // CONTENT COLUMN (markup-carve/carve-js#1645). It carries no `>`, so its
-        // leading whitespace is alignment under the quoted item, not source the
-        // author put inside the fence body; the executable spec and carve-php
-        // strip it whole. `sliceColumns` removed only the item's content column
-        // and left the rest, so a body aligned under `> - ` kept two columns of
-        // indent on every line. The frame is what the #1630 arm below already
-        // uses for the below-column case: its first character is not whitespace,
-        // so a closing run among these lines matches no closer and stays body,
-        // the fence running to the end of its container - which is the answer
-        // both references give at every closer offset. A MARKED line (`>  code`)
-        // is not quote-lazy and keeps the content-column dedent that preserves
-        // its authored indentation.
-        const dedented =
-          lazyState.inFence && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
-            ? l.startsWith(LAZY_FRAME)
-              ? l
-              : LAZY_FRAME + l.replace(/^[ \t]+/, '')
-            : sliceColumns(l, contentCol, true)
-        // A line collected INSIDE AN OPEN FENCE is verbatim body, never an
-        // authored base. Without this guard the rebase saw an over-indented
-        // fence CLOSER - one written past its opener, which is body text, not a
-        // closer - as a fresh opener (the real opener is the item's lead line
-        // and is not in `nested`), dedented it to column 0, and parseFence then
-        // closed the fence there, losing the rest of its body
-        // (markup-carve/carve-js#1636). carve-rs keeps it as body already.
-        if (!lazyState.inFence) {
-          authoredBaseEligible.add(nested.length)
-          if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
-        }
-        nested.push(dedented)
-        nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        const fenceLineIndex = lexer.pos
-        trackItemLazyState(
-          dedented,
-          lazyState,
-          (marker) => {
-            const answer = itemFenceHasCloser(
-              lexer,
-              marker,
-              fenceLineIndex,
-              contentCol,
-              itemFenceMemo,
-              itemEndsAt,
-            )
-            lexer.fenceLookaheadAnswers.set(
-              `${lexer.lineNumber(fenceLineIndex)}:${marker}`,
-              answer,
-            )
-            return answer
-          },
-          true,
-          (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
-        )
-        lexer.consume()
-      } else if (
-        pendingBlanks === 0 &&
-        !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-        (((lazyState.lazyFoldable ||
-          (lazyState.inComment && lazyState.lazyFoldableBeforeComment) ||
-          // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
-          // (markup-carve/carve#1364). The item goes on collecting, so a line
-          // still indented belongs to it and starts a paragraph of its own
-          // there (corpus 197, 277-3, 358). The container ends at document
-          // column 0, which is the line this test excludes and which is all
-          // that separates 358 from 357-2.
-          (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
-          !lazyContinuationEndsList(l, lexer)) ||
-          // A list marker indented past the base column but BELOW the content
-          // column folds into the lead text rather than ending the list. Under
-          // symmetric §10 no list marker interrupts a paragraph, so on the
-          // recursive reparse it stays folded: `1. a`/`  1. b`, `- a`/` - b`,
-          // and the abutting-attr form `- a`/` -{.x} b` all fold. (At or past
-          // the content column the marker nests; at the base column it can start
-          // a sibling list, §11 -- so only a below-content indented one folds.)
-          (indentColumns(l, baseIndent + 1) > baseIndent &&
-            (RE_TASK.test(l) ||
-              RE_UNORDERED.test(l) ||
-              RE_ORDERED.test(l) ||
-              extractItemAttr(l) !== null)))
-      ) {
-        bodyHasBelowColumnLine = true
-        let lazyLine = l
-        if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
-          lazyLine = l.replace(/^[ \t]+/, '')
-        } else if (quoteLazyFramed) {
-          // Stripped WHOLE and framed. Its indentation inside the quote body
-          // means nothing, and the frame - not a leftover column of indent - is
-          // what now keeps it from re-classifying, so there is no reason to keep
-          // any of it. That residue is what put two columns of indent inside a
-          // `dt`.
-          lazyLine = l.startsWith(LAZY_FRAME)
-            ? l
-            : LAZY_FRAME + l.replace(/^[ \t]+/, '')
-        } else if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
-          lazyLine = l.replace(/^[ \t]+/, '')
-        } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
-          // A block-SHAPED line below the content column opens nothing (§24 C3:
-          // below it a marker folds as lazy item text and no other opener nests
-          // either), and it is folding here for that reason. It must not carry
-          // enough indentation to reach the SUB-list's content column on the
-          // recursive reparse, though, or it opens a list one level down -
-          // which is what `-   x` / `    - a` / `  - b` did, nesting `b` under
-          // `a` where the executable spec folds it (carve#603). One column
-          // reaches no content column at all, so the fold holds at every depth.
-          //
-          // A COMMENT ALREADY AT COLUMN 0 KEEPS IT (carve-js#1623). The column
-          // is a clamp on a line that has indentation to reduce; added to a
-          // line authored flush left it is not a clamp but source the author
-          // never wrote, and `attachDocumentOffsets` charges it back to the
-          // document - the sub-line is one character longer than its document
-          // line, the prefix goes to -1, and the span starts on the newline
-          // ENDING THE LINE ABOVE with `startColumn: 0`, below the AST schema's
-          // integer>=1. Only a DEGRADED comment fence reaches here at column 0,
-          // and only since carve-js#1607 stopped it ending the item; its `%%`
-          // spelling never took this branch at all, which is the control for
-          // the position it should have had.
-          //
-          // The exemption is the comment's alone. An unterminated code fence
-          // arrives here flush left too and NEEDS the column: without it the
-          // line opens a code block at the item's own column 0 instead of
-          // staying the paragraph's inline verbatim run (carve-js#540).
-          const flushed = l.replace(/^[ \t]+/, '')
-          lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
-        }
-        nested.push(lazyLine)
-        nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        // The item's own reparse cannot see this from the column alone - the
-        // clamp above rewrote it - so record the FACT for the arm below.
-        if (indentColumns(l, contentCol) < contentCol) {
-          lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
-        }
-        // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
-        // is the lazy continuation of the paragraph above it, which stays open
-        // behind it (corpus 183, 197, 358).
-        trackItemLazyState(lazyLine, lazyState, () => true, false)
-        lexer.consume()
-      } else if (
-        leadFence !== null &&
-        lazyState.inFence &&
-        pendingBlanks === 0 &&
-        indentColumns(l, contentCol) < contentCol &&
-        (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
-          lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
-      ) {
-        // AN UNFINISHED FENCE ON THE LEAD LINE OWNS WHAT THE CONTAINER FOLDED
-        // IN (markup-carve/carve-js#1630). A fence at an item's block start
-        // runs to the end of its container, and a line the ENCLOSING item
-        // already admitted as lazy text is inside that container - so it is
-        // fence body, and a closing run written among those lines is body text
-        // too, because a fence's content is not re-scanned for structure.
-        //
-        // The `itemLazyLines` test is the whole rule. Without it this arm would
-        // also take a line the AUTHOR wrote below the column, and the outermost
-        // spelling of the document - `- ``` x` with a flush-left body, where no
-        // container folded anything - must keep ending the item and leaking the
-        // body to the document, which is what the executable spec does there
-        // and what every engine already agreed on.
-        //
-        // The leading whitespace goes: it is the enclosing item's one-column
-        // clamp, not the author's indentation, and the fence's body is measured
-        // from its own column.
-        // FRAMED, not merely dedented. The frame's first character is not
-        // whitespace and matches no block opener, which is what keeps a closing
-        // run among these lines from CLOSING the fence: it is content, and a
-        // fence's content is not re-scanned for structure. A dedent alone left
-        // the run closing the block it was written inside.
-        const framed = l.startsWith(LAZY_FRAME) ? l : LAZY_FRAME + l.replace(/^[ \t]+/, '')
-        nested.push(framed)
-        nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        trackItemLazyState(framed, lazyState, () => true, false)
-        lexer.consume()
-      } else {
-        break
-      }
-    }
-
-    // A block opener may be authored past the canonical item-body column.  The
-    // collector above deliberately keeps the whole physical run; rebase each
-    // recognized block group now, before tightness and block parsing inspect
-    // it.  This is #1705's authored `block_base`: only structural indentation
-    // is removed, while indentation beyond the opener's base remains payload.
-    const leadIsMarker =
-      RE_UNORDERED.test(content) ||
-      RE_ORDERED.test(content) ||
-      RE_TASK.test(content) ||
-      extractItemAttr(content) !== null
-    const authoredBlockBlanks = hasOverindentedBlockCandidate
-      ? rebaseOverindentedBlocks(
-        nested,
-        authoredBaseEligible,
-        leadIsMarker ? markerContentColumn(content) : -1,
-      )
-      : new Set<number>()
-
-    // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
-    // not loosen the item on its own - it is not a second paragraph - but it
-    // does not FILL the gap either. So when the item's tail after its last
-    // blank is nothing but invisible lines, the item is still "followed by a
-    // blank line before the next marker" and L1's other clause applies. Without
-    // this, attaching the comment consumed the signal and `- a` / blank /
-    // `  %% n` / `- b` came out tight, where the same document without the
-    // comment is loose.
-    let blankBeforeInvisible = false
-    for (let k = nested.length - 1; k >= 0; k--) {
-      const ln = nested[k]!
-      if (isBlankLine(ln)) {
-        // A `+`-injected separator is not a blank line the author wrote, and
-        // never loosens - the same exemption the second-paragraph scan below
-        // makes for it. Without this the item went loose through the back door:
-        // `- a` / `+` / `%% note` / `- b` came out loose where the identical
-        // document without the comment is tight.
-        blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k)
-        break
-      }
-      if (!isInvisibleLine(ln)) break
-    }
-
-    // A blank line inside an OPEN verbatim fence is that fence's content, not
-    // spacing between blocks. Blanks are buffered in `pendingBlanks` and
-    // flushed only when a later line reaches the content column, so a fence
-    // running to the end of the item never received them.
-    //
-    // Only while a fence or comment is open: with nothing open the trailing
-    // blanks really are spacing, and flushing them would change list tightness
-    // and the item's end position (markup-carve/carve-js#988).
-    if (pendingBlanks > 0 && (lazyState.inFence || lazyState.inComment)) {
-      for (let k = 0; k < pendingBlanks; k++) {
-        nested.push(pendingBlankTexts[k] ?? '')
-        nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
-      }
-      // `pendingBlanks` is NOT cleared. The loose-list test below reads it to
-      // decide whether a blank separated this item from its sibling, and a
-      // blank is both at once: the fence's content AND the separator that
-      // loosens the list. Clearing it made `- a\n  %%% x\n b\n\n- c\n` tight.
-    }
-
-    // Blank line(s) before the next sibling marker make the list loose.
-    // The next marker must be a real sibling of THIS list: same kind and
-    // (for unordered) same marker character. A blank line before a
-    // different marker (`- a\n\n+ b`) separates two distinct lists
-    // (§11), so it must not loosen this one.
-    if ((pendingBlanks > 0 || blankBeforeInvisible) && !lexer.eof()) {
-      const nextLine = lexer.peek()!
-      const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
-      if (
-        indentColumns(nextLine, baseIndent + 1) === baseIndent &&
-        matchListMarker(nextStripped, isTask, isOrdered) &&
-        (isOrdered
-          ? orderedContinues(nextStripped, orderedKind, orderedDelim)
-          : unorderedMarkerChar(nextStripped) === firstMarkerChar)
-      ) {
-        // A run of THREE OR MORE blank lines is a hard boundary (§11 N1): the
-        // sibling marker after it opens a new list instead of joining this
-        // one. One or two blank lines remain the ordinary loose separator
-        // (§17 L1). `blankBeforeInvisible` is deliberately not counted here -
-        // a run broken by a comment is not a run of blank lines.
-        if (pendingBlanks >= 3) hardBoundary = true
-        else loose = true
-      }
-    }
-
-    // Compact list blocks (Carve): an internal blank line loosens the item only
-    // when the content after it is a plain paragraph (a real second paragraph).
-    // A blank followed by a block opener (sub-list, quote, fence, div, heading,
-    // table) keeps the item tight, so an item can carry a sub-block without the
-    // list going loose. Only the tight/loose RENDERING changes; block structure
-    // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
-    // A blank line INSIDE a fenced block is that block's content, not an
-    // interior block separator, so it must not loosen the item (carve#326 case
-    // C; matches carve-rs / carve-php). Precompute which lines fall inside a
-    // CLOSED fence in a single pass, then skip those blanks in the scan below.
-    // Only a fence with a matching closer forms a block; an UNCLOSED opener is
-    // inline verbatim inside a paragraph, so a following blank still loosens
-    // (matches carve-rs). The opener may be the item's lead (a marker-line
-    // fence, `- ``` `, which is not in `nested`), so the pass prepends `content`
-    // and a `nested[k]` corresponds to `fenceLines[k + 1]`. Marking closed
-    // ranges is O(n) total (ranges never overlap), keeping the scan linear.
-    //
-    // ALL THREE FENCE KINDS. This knew only the code fence, which is the same
-    // one-kind-of-three defect corpus category 279 pins for the collectors -
-    // and it surfaced the moment they were fixed: the blank inside a
-    // `+`-attached `::: note` or `%%%` body reaches `nested` now and loosened
-    // the item, where the identical code fence kept it tight.
-    //
-    // STILL ONE STATEFUL PASS, not one scan per line. Asking
-    // `fencedBlockEnd` at every index reads the same suffix again for every
-    // unterminated opener, which is quadratic. With comment openers of
-    // increasing width that cannot close, each opener repeats the suffix scan.
-    // The stack below runs `findColonCloser`'s nesting model once, left to right,
-    // keeping the whole pass linear (ranges never overlap).
-    const fenceLines = [content, ...nested]
-    const inFence: boolean[] = new Array(fenceLines.length).fill(false)
-    // AN OPENER WITH NO CLOSER AHEAD OPENS NOTHING, so it must not latch this
-    // pass either. Without the check an unterminated `%%%` swallowed every
-    // later line and a genuinely CLOSED code fence below it went unmarked, so a
-    // blank inside that code loosened the item - the divergence from what the
-    // block parser does with the same lines.
-    const closers = buildCloserIndex(fenceLines)
-    // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
-    // `:::` container that IS the item's first block is the item's own body:
-    // the blank line between two of its blocks is the only blank line the item
-    // has, and §17 L1 reads it. That is already what happens when the closer is
-    // MISSING - an unterminated opener latches nothing below, so the blank is
-    // seen and the list is loose - and writing the closer is a spelling change,
-    // so it must not move the tightness. Marking the range made
-    //
-    //     - ::: d
-    //       b
-    //
-    //       tail
-    //
-    // loose and the same document with `  :::` written TIGHT, which is
-    // `parse(fmt(x)) != parse(x)` - PART 11 §1 - on the one corpus document
-    // where the writer supplies a missing closer, corpus
-    // `362-an-unterminated-container-does-not-extend-the-item-past-a-blank-line-3`.
-    // The maintainer ruled the two converge on the reading the SOURCE already
-    // gets, which is loose.
-    //
-    // A container the item ATTACHES below a lead block keeps its interior: a
-    // blank between two of ITS blocks is the container's, not the item's, and
-    // corpus `279-a-boundary-line-inside-an-open-fence-does-not-end-the-
-    // container-10` pins that reading. So the lead test is what separates them,
-    // not the presence of a closer.
-    //
-    // STILL ONE MARKED RANGE PER OUTERMOST OPAQUE FENCE, so the pass stays
-    // linear. `openOpaque` counts the opaque fences currently open, and only
-    // the transition through zero writes a range: nesting a hundred containers
-    // inside an item marks the outermost span once rather than once per level,
-    // which is the same bound the openIdx it replaces had.
-    const firstContentIdx = fenceLines.findIndex((l) => l.trim() !== '')
-    const open: Array<{
-      kind: 'code' | 'comment' | 'colon'
-      close: RegExp | null
-      len: number
-      opaque: boolean
-    }> = []
-    let openOpaque = 0
-    let opaqueIdx = -1
-    const enter = (entry: { opaque: boolean }, k: number): void => {
-      if (!entry.opaque) return
-      if (openOpaque === 0) opaqueIdx = k
-      openOpaque++
-    }
-    const leave = (entry: { opaque: boolean }, k: number): void => {
-      if (!entry.opaque) return
-      openOpaque--
-      if (openOpaque > 0) return
-      for (let i = opaqueIdx; i <= k; i++) inFence[i] = true
-      opaqueIdx = -1
-    }
-    for (let k = 0; k < fenceLines.length; k++) {
-      const line = fenceLines[k]!
-      const inner = open[open.length - 1]
-      if (inner !== undefined && inner.kind !== 'colon') {
-        const closed =
-          inner.kind === 'code' ? inner.close!.test(line) : commentFenceRun(line) === inner.len
-        if (!closed) continue
-        open.pop()
-        leave(inner, k)
-        continue
-      }
-      if (inner !== undefined) {
-        // Inside a colon fence a bare run of the INNERMOST width closes it and
-        // any other run opens one (carve#455's exact-length rule).
-        const close = RE_ADMONITION_CLOSE.exec(line)
-        if (close) {
-          const len = close[1]!.length
-          if (len === inner.len) {
-            open.pop()
-            leave(inner, k)
-          } else {
-            const nested = { kind: 'colon' as const, close: null, len, opaque: true }
-            open.push(nested)
-            enter(nested, k)
-          }
-          continue
-        }
-      }
-      const fence = RE_FENCE.exec(line)
-      const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
-      const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
-      let opened: { kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number } | null =
-        null
-      if (marker !== null) {
-        if (codeCloserPossible(closers, marker, k))
-          opened = { kind: 'code', close: fenceCloseRe(marker), len: marker.length }
-      } else {
-        const run = commentFenceRun(line)
-        if (run !== undefined) {
-          if (exactCloserPossible(closers.comment, run, k))
-            opened = { kind: 'comment', close: null, len: run }
-        } else {
-          const colon = colonBlockOpenerRun(line)
-          if (colon !== null) opened = { kind: 'colon', close: null, len: colon }
-        }
-      }
-      if (opened === null) continue
-      const entry = {
-        ...opened,
-        opaque: !(opened.kind === 'colon' && k === firstContentIdx),
-      }
-      open.push(entry)
-      enter(entry, k)
-    }
-    // WHAT IS STILL OPEN AT THE END REACHED THE END, and its range is marked
-    // from where it opened to the item's last line. Only the loop's transition
-    // through zero wrote a range, so an unterminated container left the stack
-    // non-empty and marked nothing - which is the same blindness the closer gate
-    // above used to produce, one step later.
-    if (openOpaque > 0 && opaqueIdx >= 0) {
-      for (let i = opaqueIdx; i < fenceLines.length; i++) inFence[i] = true
-    }
-    // A FOOTNOTE DEFINITION'S BLOCK RUNS TO THE END OF ITS BODY, blank lines and
-    // all (markup-carve/carve#1363, PART 1 S4). A blank between two lines of the
-    // definition is inside its block, not an interior separator of the item, so
-    // it must not loosen the item any more than a blank inside a fence does.
-    //
-    // ONLY THE FOOTNOTE FORM. A link reference definition has no body at all, so
-    // it opens no run and the blank after it still loosens - `- a` /
-    // `  [r]: /u` / blank / `    more` IS a second paragraph (corpus 359-2). That
-    // is the control an over-wide fix breaks, and it is the whole difference
-    // between the two definition kinds here.
-    const inFootnoteRun: boolean[] = new Array(nested.length).fill(false)
-    for (let k = 0; k < nested.length; k++) {
-      const line = nested[k]!
-      if (indentColumns(line, 1) !== 0 || !RE_FOOTNOTE_DEF.test(line)) continue
-      // The run reaches the LAST indented line under the definition; the blanks
-      // after that one are the item's again, so a trailing blank still loosens.
-      let last = k
-      for (let j = k + 1; j < nested.length; j++) {
-        const next = nested[j]!
-        if (next === '') continue
-        // The same `FOOTNOTE_BODY_COLUMN` boundary the tracker uses, so the two
-        // agree about where the definition's block ends.
-        if (indentColumns(next, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
-        last = j
-      }
-      for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
-      k = last
-    }
-    // The content column of the sub-list item each line sits in. A marker at
-    // the item's content column opens a sibling sub-list item or a new sibling
-    // sub-list (§24 C3, carve-js#1951), whose own column then applies; one
-    // indented below the current column folds into the open paragraph instead.
-    // Built on first use: most items never reach the check below.
-    let subColAt: number[] | null = null
-    const subListColumnAt = (at: number): number => {
-      if (subColAt === null) {
-        subColAt = new Array(nested.length).fill(-1)
-        let col = leadIsMarker ? markerContentColumn(content) : -1
-        for (let k = 0; k < nested.length; k++) {
-          if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
-            col = markerContentColumn(nested[k]!)
-          }
-          subColAt[k] = col
-        }
-      }
-      return subColAt[at]!
-    }
-    for (let k = 0; k < nested.length; k++) {
-      if (inFence[k + 1]!) continue
-      if (inFootnoteRun[k]!) continue
-      if (authoredBlockBlanks.has(k)) continue
-      if (nested[k] !== '') continue
-      // A `+`-injected separator never loosens, even when the block it attaches
-      // is a plain paragraph -- it keeps the item tight like a `+`-attached
-      // quote/code/table (Bug B, corpus 83-list-continuation-marker family).
-      if (plusSeparators.has(k)) continue
-      let j = k + 1
-      // Skip blanks AND invisible lines: §17 L1 loosens on a second PARAGRAPH,
-      // and a comment or a definition renders nothing, so it is neither the
-      // paragraph that loosens nor a wall that hides one behind it. Stopping at
-      // the invisible line instead of looking past it kept `%% n` / `text`
-      // tight, which is the opposite error - the item does hold a second
-      // paragraph, it just has a comment in front of it (carve#621).
-      while (j < nested.length) {
-        if (nested[j] === '') {
-          j++
-          continue
-        }
-        const comment = commentFenceRun(nested[j]!)
-        if (comment !== undefined) {
-          let close = j + 1
-          while (close < nested.length && commentFenceRun(nested[close]!) !== comment) close++
-          // A closed comment fence is one invisible block. Its verbatim
-          // payload is not a paragraph behind an invisible opener.
-          if (close < nested.length) {
-            j = close + 1
-            continue
-          }
-        }
-        if (isInvisibleLine(nested[j]!)) {
-          j++
-          continue
-        }
-        break
-      }
-      if (j >= nested.length) continue
-      // A blank followed by content the item's SUB-LIST consumes does not
-      // loosen THIS item: that content belongs to the sub-list, whose looseness
-      // is decided by its own recursive parse. Counting it here wrongly
-      // propagates a child's looseness up to the parent (carve#322). The
-      // threshold is the sub-list's content column: a line at or past it is the
-      // sub-list's, a line BELOW it (an above-content-column line, §24 C3, or a
-      // dedented column-0 paragraph) is the item's OWN block and still loosens.
-      // Matches carve-php / carve-rs, and the sibling-blank invariant where the
-      // outer item stays tight. A marker LEAD (`- 1. x`) is that sub-list's
-      // first item (carve-js#1938); a later sibling sub-list brings its own
-      // column (carve-js#1951).
-      const subCol = subListColumnAt(k)
-      if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
-      // `j` can no longer be an invisible line (skipped above), so this is the
-      // plain "is the next visible thing a paragraph" test it always was.
-      //
-      // STILL `lineOpensBlock`, not §24 C3's wider family. The rebase above has
-      // already rewritten an over-indented opener into its exact-column
-      // spelling, so asking the ordinary question here is what makes the two
-      // spellings agree. Asking `lineOpensItemBlock` instead widened the
-      // EXACT-column case too, and a lone block image - a paragraph under §17
-      // L2 - stopped loosening its item (corpus 411, 162).
-      if (!lineOpensBlock(nested[j]!)) {
-        loose = true
-        break
-      }
-    }
-
-    const leadOpensColonFence =
-      (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
-      RE_DIV_OPEN.test(content)
-    // Parse the lead text together with its continuation/nested lines as one
-    // block sequence (lazy continuation merges into the lead paragraph). An
-    // indented ordered sub-list, however, is parsed as its own block stream so
-    // it nests instead of folding into the lead paragraph.
-    const literalBelowColumnColonFence =
-      leadOpensColonFence && bodyHasBelowColumnLine && !bodyHasContentColumnLine
-    const itemLead = literalBelowColumnColonFence ? ` ${content}` : content
-    const keepStreamWhole =
-      firstBlockIdx === -1 || leadIsMarker || (leadOpensColonFence && !literalBelowColumnColonFence)
-    const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
-    const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
-    const mkSub = (
-      lines: readonly string[],
-      startLineIndex: number,
-      sourceLineMap?: number[],
-    ): Lexer => {
-      const sub = nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap)
-      // THIS BODY'S COLUMN 0 IS THE ITEM'S CONTENT COLUMN, so a marker reaching
-      // it opens a sublist rather than folding into an open paragraph (§24 C3,
-      // markup-carve/carve#1517). Set here rather than in `nestedSubLexer`
-      // because it must NOT travel: a quote, a div or a definition body inside
-      // the item gets its own lexer without it, and a marker there folds as §10
-      // I2 says.
-      sub.markerOpensSublist = true
-      sub.hostBody = 'list'
-      return sub
-    }
-    const carry: PendingAttrCarry = { attrs: null }
-    const children = parseBlocks(
-      mkSub([itemLead, ...leadLines], itemStartLineIndex, [
-        lexer.lineNumber(itemStartLineIndex),
-        ...nestedLineNumbers.slice(0, leadLines.length),
-      ]),
-      0,
-      blockLines.length > 0 ? carry : undefined,
-    )
-    if (blockLines.length > 0) {
-      children.push(
-        ...parseBlocks(
-          mkSub(
-            blockLines,
-            itemStartLineIndex + 1 + firstBlockIdx,
-            nestedLineNumbers.slice(firstBlockIdx),
-          ),
-          0,
-          carry,
-        ),
-      )
-    }
-
-    const item: ListItem = { type: 'list_item', children }
-    let itemEnd = lexer.pos
-    while (itemEnd > itemStartLineIndex + 1 && isBlankLine(lexer.lines[itemEnd - 1]!)) itemEnd--
-    // The end-at-the-last-placed-child fixup that used to sit here moved into
-    // `attachBlockPos`, which now applies it to every closerless container
-    // rather than to items alone (markup-carve/carve#1522).
-    attachBlockPos(lexer, item, itemStartLineIndex, itemEnd)
-    if (checked !== undefined) item.checked = checked
-    if (taskState !== undefined) item.taskState = taskState
-    if (itemAttrs) item.attrs = itemAttrs
-    items.push(item)
-    if (hardBoundary) break
-  }
-
-  const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }
-  if (isOrdered) {
-    if (orderedStart !== 1) list.start = orderedStart
-    const t = olTypeOf(orderedKind)
-    if (t) list.olType = t
-    if (orderedDelim === '.' || orderedDelim === ')') list.delim = orderedDelim
-    // The bare dot is a spelling, not a dialect: `. a` and `1. a` are the same
-    // list, so the tree has to carry which one opened it or the writer must
-    // normalize one away (PART 11 §6).
-    if (firstOrdered && firstOrdered[2] === '') list.bareMarker = true
-  } else if (firstMarkerChar === '-' || firstMarkerChar === '*') {
-    list.bulletChar = firstMarkerChar
-  }
-  return list
-}
-
 /**
  * Parse a table cell's leading markers from its raw between-pipe text.
  *
@@ -8925,299 +4972,6 @@ function openVerbatimRun(text: string, from = 0): number {
   return openRun
 }
 
-function parseTable(lexer: Lexer): Table | Figure {
-  // Collect raw cell source first; a `+` continuation row appends its
-  // non-empty fragments to the previous row's *source* so an inline
-  // construct spanning the line boundary is one logical cell. Inline
-  // parsing happens once, after merging.
-  const rawRows: RawCell[][] = []
-  const rowAttrsList: (Attrs | undefined)[] = []
-  /** Where a row BEGINS, by row index - its own line, not its first cell's. */
-  const rowStarts: Array<{ line: number; column: number; offset: number } | undefined> = []
-  /** Where a row ENDS once `+` continuations have extended it, by row index. */
-  const rowEnds: Array<{ line: number; column: number; offset: number } | undefined> = []
-  let lastRaw: RawCell[] | null = null
-  while (
-    !lexer.eof() &&
-    (isTableRow(lexer.peek()!) || RE_TABLE_CONT.test(lexer.peek()!))
-  ) {
-    const line = lexer.peek()!
-    const lineIndex = lexer.pos
-    if (RE_TABLE_CONT.test(line)) {
-      if (!lastRaw) break // a continuation with no row to extend
-      if (
-        rawRows.length === 2 &&
-        rawRows[1] === lastRaw &&
-        isGfmDelimiterRow(lastRaw) &&
-        !isGfmDelimiterRow(rawRows[0]!)
-      )
-        break
-      lexer.consume()
-      // A row that continues still occupies a CONTIGUOUS run of lines, and no
-      // sibling row overlaps it - so unlike its cells, the row can be placed.
-      // Recording where it now ends is what makes that possible.
-      rowEnds[rawRows.length - 1] = {
-        line: lexer.lineNumber(lineIndex),
-        column: lexer.lineStartColumn(lineIndex) + line.length,
-        offset: lexer.lineOffset(lineIndex) + line.length,
-      }
-      const contOffset = lexer.lineOffset(lineIndex)
-      const contLine = lexer.lineNumber(lineIndex)
-      const contColumn = lexer.lineStartColumn(lineIndex)
-      const contCanPosition = lexer.hasDocumentOffsets
-      splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
-        const frag = trimCellPadding(src)
-        const target = lastRaw![idx]
-        // A fragment on a span (`^`/`<`) column is skipped: the spec's
-        // "Combined: Rowspan + Multi-line" example always places the `+`
-        // rows *before* the `^` row, so they extend the real origin cell
-        // (verified). A `+` after the span row is not a spec'd ordering.
-        if (!frag || !target || target.span) return
-        const fragStart = target.raw ? target.raw.length + 1 : 0
-        target.raw = target.raw ? `${target.raw} ${frag}` : frag
-        // Only the NEW fragment is read; the joining space is not a run
-        // character, so resuming from the cell's own state is exact.
-        target.openRun = openVerbatimRun(frag, target.openRun)
-        // The CELL keeps no span. Its content sits in two column ranges on
-        // non-adjacent lines, and one range covering both would swallow the
-        // neighbouring column's content on the lines between - so cell 1 would
-        // CONTAIN cell 0, and an offset would map to two sibling cells at once.
-        // A construct that is not one contiguous range cannot honestly be one.
-        delete target.pos
-        const within = contCanPosition ? src.indexOf(frag) : -1
-        if (within >= 0 && line.slice(start + within, start + within + frag.length) === frag) {
-          const range: AnchorRange = {
-            from: fragStart,
-            to: fragStart + frag.length,
-            offset: contOffset + start + within,
-            line: contLine,
-            column: contColumn + start + within,
-          }
-          if (target.anchors) target.anchors.push(range)
-          else target.anchors = [range]
-        }
-        // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
-        // range's `to` is the length `raw` had when it was appended, and the
-        // next fragment starts one past that, so the joining space is already
-        // the only offset between them and an unplaced fragment simply leaves a
-        // wider gap. `to` is inclusive so an exclusive span end may land on it;
-        // the space itself belongs to no range, which is what makes a node
-        // reaching across the boundary unplaceable.
-      })
-      continue
-    }
-    lexer.consume()
-    const { attrs: rowAttrs, body: rowBody } = rowAttrsFromLine(line)
-    // Positions are only emitted when this lexer can express a document offset.
-    // Verifying the content against the local line is not enough: inside an
-    // unmapped container the check passes while the offset means something else.
-    const canPosition = lexer.hasDocumentOffsets
-    const lineOffset = lexer.lineOffset(lineIndex)
-    const lineNo = lexer.lineNumber(lineIndex)
-    const lineCol = lexer.lineStartColumn(lineIndex)
-    const raw: RawCell[] = splitTableRowSpans(rowBody).map(({ text: src, start }) => {
-      const { header, span, align, valign, attrs, content } = parseCellMarkers(src)
-      const c: RawCell = { header, raw: content, openRun: openVerbatimRun(content) }
-      if (span) c.span = span
-      if (align) c.align = align
-      if (valign) c.valign = valign
-      if (attrs) c.attrs = attrs
-      if (canPosition) {
-        c.pos = {
-          startLine: lineNo,
-          endLine: lineNo,
-          startColumn: lineCol + start,
-          endColumn: lineCol + start + src.length,
-          startOffset: lineOffset + start,
-          endOffset: lineOffset + start + src.length,
-        }
-      }
-      // Anchor the cell's inline content, but only after checking the content is
-      // where we think it is. `\|` unescapes to one character, so a cell holding
-      // an escaped pipe is not a verbatim slice and gets no anchor.
-      const within = content === '' || !canPosition ? -1 : src.indexOf(content)
-      if (within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
-        c.anchors = [
-          {
-            from: 0,
-            to: content.length,
-            offset: lineOffset + start + within,
-            line: lineNo,
-            column: lineCol + start + within,
-          },
-        ]
-      }
-      return c
-    })
-    rawRows.push(raw)
-    rowAttrsList.push(rowAttrs)
-    // The row's own extent, independent of whether its cells keep theirs. A row
-    // whose every cell continues has no cell span to start from, and it still
-    // occupies these lines.
-    rowStarts[rawRows.length - 1] = canPosition
-      ? { line: lineNo, column: lineCol, offset: lineOffset }
-      : undefined
-    rowEnds[rawRows.length - 1] = canPosition
-      ? {
-          line: lineNo,
-          column: lineCol + line.length,
-          offset: lineOffset + line.length,
-        }
-      : undefined
-    lastRaw = raw
-  }
-  // GFM-style header separator: when the SECOND row is a delimiter row -- every
-  // cell a run of dashes with optional alignment colons (`---`, `:--`, `--:`,
-  // `:-:`) -- the first row becomes the header (rendered in <thead>) and the
-  // colons set per-column alignment for the whole column. The delimiter row is
-  // dropped. This is in addition to Carve's tight per-cell markers `|=`/`|<`; a
-  // delimiter row anywhere else is an ordinary data row.
-  // A cell carrying author attributes (`|{.x} ---`) is content, not a plain
-  // structural delimiter, so it never makes its row a GFM header separator.
-  if (
-    rawRows.length >= 2 &&
-    isGfmDelimiterRow(rawRows[1]!) &&
-    !isGfmDelimiterRow(rawRows[0]!)
-  ) {
-    const aligns = rawRows[1]!.map((c) => {
-      // DOMINATED, and narrowed anyway. `isGfmDelimiterCell` above already
-      // required `/^:?-+:?$/` of the SAME space-trimmed string, so a cell whose
-      // padding is not a space has already stopped the row from being a
-      // delimiter row and never reaches here - reverting this one site to the
-      // wider trim cannot change the answer. It is narrowed regardless, because
-      // one rule spelled two ways is how this class of defect starts: the
-      // domination is a property of the code above, not of the rule.
-      const t = trimCellPadding(c.raw)
-      const left = t.startsWith(':')
-      const right = t.endsWith(':')
-      return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined
-    })
-    rawRows.splice(1, 1)
-    rowAttrsList.splice(1, 1)
-    rowStarts.splice(1, 1)
-    rowEnds.splice(1, 1)
-    for (const c of rawRows[0]!) c.header = true
-    // Column alignment lands on the HEADER cells only, matching what the native
-    // `|=<` markers produce. Propagating it onto body cells too made the same
-    // logical table parse to two different trees depending on which separator
-    // syntax was used, and the writer then serialized the propagated values as
-    // per-cell markers the author never wrote (carve#352, corpus 09-tables-3).
-    //
-    // Nothing is lost: the HTML renderer already inherits column alignment for a
-    // body cell whose own align is unset, which is how the native path has always
-    // rendered aligned body cells. A genuine per-cell override still sets
-    // `c.align` itself and is untouched here.
-    rawRows[0]!.forEach((c, i) => {
-      const a = aligns[i]
-      if (a && !c.align) c.align = a
-    })
-  }
-  const rows: TableRow[] = rawRows.map((rc, idx) => {
-    const row: TableRow = {
-      type: 'table_row',
-      cells: rc.map((c) => {
-        const cell: TableCell = {
-          type: 'table_cell',
-          header: c.header,
-          children: c.span
-            ? []
-            : c.anchors?.length
-              ? parseInline(
-                  c.raw,
-                  lexer.abbrDefs,
-                  lexer.linkDefs,
-                  inlineSource({
-                    baseOffset: c.anchors[0]!.offset,
-                    startLine: c.anchors[0]!.line,
-                    startColumn: c.anchors[0]!.column,
-                    anchoredRanges: c.anchors,
-                  }),
-                )
-              : stripPositions(parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs)),
-        }
-        if (c.span) cell.span = c.span
-        if (c.align) cell.align = c.align
-        if (c.valign) cell.valign = c.valign
-        if (c.attrs) cell.attrs = c.attrs
-        if (c.pos) cell.pos = c.pos
-        return cell
-      }),
-    }
-    // A row owns its complete source line, including its pipe delimiters.
-    //
-    // A `+` continuation breaks that, because the extended cell loses its own
-    // span - its content sits in two column ranges on non-adjacent lines. The
-    // ROW is still one contiguous range that no sibling row overlaps, so it is
-    // placed from where it starts to where the continuation leaves it. Only
-    // when every cell continued does the start come from the row's own line
-    // rather than a cell, since there is no cell span left to take it from.
-    const spans = rc.map((c) => c.pos)
-    const end = rowEnds[idx]
-    if (end) {
-      const first = rowStarts[idx] ?? spans.find(Boolean)
-      const startLine = 'startLine' in (first ?? {}) ? (first as Position).startLine : undefined
-      const rowStart = first
-        ? 'line' in first
-          ? { line: first.line, column: first.column, offset: first.offset }
-          : {
-              line: startLine!,
-              column: (first as Position).startColumn!,
-              offset: (first as Position).startOffset!,
-            }
-        : undefined
-      if (rowStart) {
-        row.pos = {
-          startLine: rowStart.line,
-          endLine: end.line,
-          startColumn: rowStart.column,
-          endColumn: end.column,
-          startOffset: rowStart.offset,
-          endOffset: end.offset,
-        }
-      }
-    } else {
-      const first = spans[0]
-      const last = spans[spans.length - 1]
-      if (
-        first &&
-        last &&
-        spans.every(Boolean) &&
-        first.startColumn !== undefined &&
-        last.endColumn !== undefined &&
-        first.startOffset !== undefined &&
-        last.endOffset !== undefined
-      ) {
-        row.pos = {
-          startLine: first.startLine,
-          endLine: last.endLine,
-          startColumn: first.startColumn,
-          endColumn: last.endColumn,
-          startOffset: first.startOffset,
-          endOffset: last.endOffset,
-        }
-      }
-    }
-    const ra = rowAttrsList[idx]
-    if (ra) row.attrs = ra
-    return row
-  })
-  const table: Table = { type: 'table', rows }
-  // Optional caption ^ ...
-  let lookahead = 0
-  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
-  const next = lexer.peek(lookahead)
-  if (next) {
-    const cap = RE_CAPTION.exec(next)
-    // §4: a caption attaches only when it immediately follows the block
-    // or is separated by at most ONE blank line.
-    if (cap && lookahead <= 1) {
-      for (let i = 0; i <= lookahead; i++) lexer.consume()
-      table.caption = parseCaptionInline(lexer, cap[1]!)
-    }
-  }
-  return table
-}
-
 /**
  * Split a table row into cells, reporting where each one STARTS in the line.
  *
@@ -9471,68 +5225,6 @@ function opensSublistHere(lexer: Lexer, ln: string, i: number, enabled: boolean)
   )
 }
 
-// Whether the peeked line ENDS an open heading or blockquote (and starts a
-// sibling block). A list marker (bullet, task, ordered, or abutting-attr) ends
-// them and starts a sibling list -- unlike paragraph interruption, where a list
-// marker FOLDS in (symmetric §10): a list folds into a PARAGRAPH but ends a
-// heading/quote, matching djot. Every paragraph-interrupter ends them too.
-// Consume a caption's continuation lines. A caption is multi-line inline
-// content, so it folds following lines exactly like a PARAGRAPH (§10), NOT like
-// a heading: a list marker FOLDS in (djot — a list needs a blank line to
-// interrupt), while a heading / blockquote / table / fenced code / `:::` div /
-// thematic break / `%%%` comment interrupts and ends the caption. A blank line
-// or a further `^ ` caption line also ends it. Continuation lines join with
-// `\n`. The lexer is positioned on the line AFTER the caption's first line;
-// `firstLine` is that first line's already-extracted text (`cap[1]`).
-/**
- * Parse a caption's inline content, anchored to the source.
- *
- * The caption's text IS a suffix of its line (`^ text` keeps everything after
- * the marker), and its continuation lines are appended verbatim - so unlike a
- * line block's expanded whitespace or a table's reassembled cells, an exact
- * mapping exists and there is nothing to invent. Captions were nonetheless run
- * through `stripPositions`, which is why 41 of this engine's 61 unplaced corpus
- * nodes were inside a `caption`.
- *
- * The suffix test is kept as a guard rather than assumed: if the line the lexer
- * is sitting on does not end with the caption text, the mapping is not exact
- * and the positions are dropped, as before.
- */
-function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
-  const capIndex = lexer.pos - 1
-  const capLine = lexer.lines[capIndex]
-  const anchors: Array<{ offset: number; column: number; line: number }> = []
-  const anchorable =
-    lexer.hasDocumentOffsets && capLine !== undefined && capLine.endsWith(firstLine)
-  if (anchorable) {
-    const within = capLine.length - firstLine.length
-    anchors.push({
-      offset: lexer.lineOffset(capIndex) + within,
-      column: lexer.lineStartColumn(capIndex) + within,
-      line: lexer.lineNumber(capIndex),
-    })
-  }
-  const text = readCaptionText(lexer, firstLine, anchorable ? anchors : undefined)
-  if (!anchorable) {
-    return stripPositions(
-      parseInline(text, lexer.abbrDefs, lexer.linkDefs, undefined, true),
-    )
-  }
-  return parseInline(
-    text,
-    lexer.abbrDefs,
-    lexer.linkDefs,
-    inlineSource({
-      anchored: true,
-      baseOffset: anchors[0]!.offset,
-      startLine: lexer.lineNumber(capIndex),
-      startColumn: anchors[0]!.column,
-      lineAnchors: anchors,
-    }),
-    true,
-  )
-}
-
 function readCaptionText(
   lexer: Lexer,
   firstLine: string,
@@ -9570,95 +5262,6 @@ function endsHeadingOrQuote(lexer: Lexer): boolean {
     return true
   }
   return startsInterruptingBlock(lexer)
-}
-
-/**
- * `flattened` marks the MAX_NESTING_DEPTH degradation path (§25): past the cap
- * every opener "becomes literal paragraph text", so NOTHING interrupts here and
- * consecutive flattened openers plus any text after them form ONE paragraph,
- * ending at the first blank line. Grouping them one-per-opener was an artifact
- * of where the degrade path handed back to the block parser, not a rule -
- * "degrades to literal text" is the whole rule, and literal text groups the way
- * the same characters typed by an author would. (carve#547, carve#494)
- */
-function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
-  const lines: string[] = []
-  const startLineIndex = lexer.pos
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    if (isBlankLine(ln)) break
-    // Paragraph interruption (grammar PART 9 §10): a VISIBLE block (heading,
-    // list, quote, table, fence, thematic break, admonition/div) interrupts
-    // an open paragraph with no blank line before it, at the top level AND
-    // nested — the Markdown-like rule. Invisible constructs (reference
-    // definitions, comments) interrupt too. A bare image does not interrupt,
-    // an ordered marker interrupts only as `1.`/`1)`, and a fence/`:::` only
-    // when it has a matching closer ahead. See startsInterruptingBlock.
-    //
-    // Only a paragraph that already holds a line can be interrupted: the FIRST
-    // line is always consumed. In normal dispatch the first line reaching
-    // parseParagraph is never a block opener (parseBlockInner would have
-    // claimed it), so this does not change interruption. It DOES guarantee
-    // progress on the MAX_NESTING_DEPTH degradation path, where a marker line
-    // (e.g. a `>` past the depth cap) is routed here to become literal text —
-    // without this guard startsInterruptingBlock would break before consuming,
-    // looping forever on the same line.
-    if (
-      !flattened &&
-      lines.length > 0 &&
-      (((lexer.consumesHostedLinkDefs === 'all' ||
-        (lexer.consumesHostedLinkDefs === 'lazy' &&
-          lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))) &&
-        isLinkDefLine(stripLazyFrame(ln))) ||
-        (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
-          startsInterruptingBlock(lexer))) &&
-      !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
-    )
-      break
-    lexer.consume()
-    // The frame did its work in the interruption test above; a paragraph is
-    // where a framed line becomes text, so it comes off here.
-    lines.push(stripLazyFrame(ln))
-  }
-  // Every paragraph line has its leading whitespace stripped (djot /
-  // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
-  // line (` c`, or a fresh paragraph after a list closes) renders as `c` —
-  // Carve has no indented code blocks, so indentation never survives into a
-  // paragraph. The first line's stripped width is folded into the inline
-  // base position so source offsets/columns stay accurate.
-  const firstLead = lines[0]!.match(/^[ \t]+/)?.[0].length ?? 0
-  const text = dropTrailingWhitespace(lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n'))
-  // Each line contributes its OWN leading whitespace on top of whatever prefix
-  // the container stripped, so a continuation line needs its own origin rather
-  // than a single base offset plus a local one (#444).
-  const anchors =
-    lines.length > 1
-      ? lines.map((ln, i) => {
-          const lead = ln.match(/^[ \t]+/)?.[0].length ?? 0
-          return {
-            offset: lexer.lineOffset(startLineIndex + i) + lead,
-            column: lexer.lineStartColumn(startLineIndex + i) + lead,
-            line: lexer.lineNumber(startLineIndex + i),
-          }
-        })
-      : undefined
-  const paragraphNode: Paragraph = {
-    type: 'paragraph',
-    children: parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
-      anchored: lexer.hasDocumentOffsets,
-      baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
-      startLine: lexer.lineNumber(startLineIndex),
-      startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
-      ...(anchors ? { lineAnchors: anchors } : {}),
-    }),
-  }
-  // The container prefix is already stripped by the lexer, so a first line with
-  // leading whitespace LEFT sat above the container's content column. Recorded
-  // here because this is the last place the answer exists: the indentation is
-  // thrown away two lines up, and the block-image promotion phase has no way to
-  // recover it from the tree (carve-js#1553).
-  if (firstLead > 0) markAboveContentColumn(paragraphNode)
-  return paragraphNode
 }
 
 function leadingWhitespace(line: string): number {
@@ -10498,153 +6101,9 @@ const RE_CRITIC_CMT = /^\{#([^}]+)#\}/
 // MEANT a dash in that position had no way to say so. This is that way, and it
 // cost nothing: the string it took was an empty `<del>`.
 const RE_BRACED_EN_DASH = /^\{--\}/
-/**
- * Where a braced inline opened at `open` closes, or -1.
- *
- * The scan skips verbatim spans, whose closer is searched for across the rest
- * of the BLOCK (PART 3 UNCLOSED RUN, ruling markup-carve/carve#2079), so a
- * closer a code span holds is code and the brace pair closes later or not at
- * all.
- */
-/**
- * A substitution opening at `open`: where the pair ends and where its `~>`
- * sits, or null for a strike or no pair at all.
- *
- * Only a top-level `~>` splits the pair. Verbatim content (a code span, which
- * math and an inline literal are prefixes of), a comment and an escape are
- * skipped (markup-carve/carve#2083).
- */
-function substitutionAt(text: string, open: number): { end: number; arrow: number } | null {
-  if (text[open + 1] !== '~') return null
-  const end = bracedPairEnd(text, open, '~}')
-  if (end === -1) return null
-  const to = end - 2
-  for (let j = open + 2; j < to; j++) {
-    const ch = text[j]!
-    if (ch === '\\') {
-      j++
-      continue
-    }
-    if (ch === '`') {
-      const span = verbatimSpanEnd(text, j)
-      if (!span.closed) return null
-      j = span.end - 1
-      continue
-    }
-    if (ch === '{' && (text[j + 1] === '%' || text[j + 1] === '#')) {
-      const close = text.indexOf(`${text[j + 1]}}`, j + 2)
-      if (close !== -1 && close < to) {
-        j = close + 1
-        continue
-      }
-    }
-    if (ch === '~' && text[j + 1] === '>') return { end, arrow: j }
-  }
-
-  return null
-}
 
 /** The markers a braced pair opens with, each a scope of its own (#1841). */
 const PAIR_MARKERS = '/*_^,~=+-'
-
-let pairEndText: string | undefined
-let pairEndTable: Array<Int32Array | undefined> = []
-
-/**
- * For each marker the text opens a pair with, where a scan for its closer
- * starting at each position stops: the closer's index, or -1. Built right to
- * left in one pass, so the end of a nested pair is known before any scan that
- * has to skip it, and a document of nested pairs costs a pass per level rather
- * than a pass per pair.
- */
-function pairEndTables(text: string): Array<Int32Array | undefined> {
-  if (text === pairEndText) return pairEndTable
-  const n = text.length
-  const markers: number[] = []
-  for (let m = 0; m < PAIR_MARKERS.length; m++) {
-    if (text.includes(`{${PAIR_MARKERS[m]}`) && text.includes(`${PAIR_MARKERS[m]}}`)) markers.push(m)
-  }
-  const tables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
-  const raws: Int32Array[] = []
-  for (const m of markers) {
-    tables[m] = new Int32Array(n + 2).fill(-1)
-    raws[m] = new Int32Array(n + 2).fill(-1)
-  }
-  const ends = new Int32Array(n + 2).fill(-1)
-  const hasTick = text.includes('`')
-  for (let j = n - 1; j >= 0; j--) {
-    const ch = text[j]!
-    const next = text[j + 1]
-    const nextId = next === undefined ? -1 : PAIR_MARKERS.indexOf(next)
-    // Where the pair opening here ends, if it closes at all.
-    if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined) {
-      const stop = tables[nextId]![j + 2]!
-      ends[j] = stop === -1 ? -1 : stop + 2
-    }
-    const span = hasTick && ch === '`' ? verbatimSpanEnd(text, j) : undefined
-    for (const m of markers) {
-      const table = tables[m]!
-      const raw = raws[m]!
-      // AN ESCAPE HIDES THE CHARACTER AFTER IT, so a closer written there
-      // closes nothing and the scan resumes past it. Only an escaped backtick
-      // was skipped before, which left `{*a\*}` closing on its escaped
-      // delimiter and publishing the backslash as a hard break
-      // (markup-carve/carve-js#1897). `raw` is the closer an UNCLOSED verbatim
-      // run ends at, and a backslash inside one is content rather than an
-      // escape, so it keeps counting that closer.
-      if (ch === '\\') {
-        raw[j] = raw[j + 1]!
-        table[j] = table[j + 2]!
-        continue
-      }
-      const isCloser = next === '}' && ch === PAIR_MARKERS[m]
-      raw[j] = isCloser ? j : raw[j + 1]!
-      let stop: number
-      if (span !== undefined) {
-        // An unclosed run ends at the pair's closer instead of running to the
-        // end of the block (markup-carve/carve#2056).
-        stop = span.closed ? table[span.end]! : raw[j]!
-      } else if (isCloser) stop = j
-      else if (ch === '{' && nextId !== -1 && nextId !== m && ends[j] !== -1) {
-        // A braced pair of another kind is its own scope, so a closer inside
-        // it cannot close this one (markup-carve/carve#2091). One of this
-        // kind is content under E3 and hides nothing.
-        stop = table[ends[j]!]!
-      } else stop = table[j + 1]!
-      table[j] = stop
-    }
-  }
-  pairEndText = text
-  pairEndTable = tables
-
-  return tables
-}
-
-/** Where a braced inline opened at `open` closes (exclusive), or -1. */
-function bracedPairEnd(text: string, open: number, closer: string): number {
-  const stop = pairEndTables(text)[PAIR_MARKERS.indexOf(closer[0]!)]?.[open + 2] ?? -1
-
-  return stop === -1 || stop === open + 2 ? -1 : stop + closer.length
-}
-
-/**
- * Critic insertion/deletion pairs do not close on a delimiter escaped inside
- * an unclosed verbatim run. The forced-emphasis family deliberately does.
- */
-function criticPairEnd(text: string, open: number, closer: '+}' | '-}'): number {
-  const end = bracedPairEnd(text, open, closer)
-  if (end === -1) return -1
-  const close = end - 2
-  if (text[close - 1] !== '\\') return end
-
-  for (let tick = text.indexOf('`', open + 2); tick !== -1 && tick < close; tick = text.indexOf('`', tick + 1)) {
-    if (tick > open + 2 && text[tick - 1] === '\\') continue
-    const span = verbatimSpanEnd(text.slice(0, close), tick)
-    if (!span.closed) return -1
-    tick = span.end - 1
-  }
-  return end
-}
 const FORCED_TYPE: Record<string, Emphasis['type']> = {
   '/': 'emphasis',
   '*': 'strong',
@@ -10755,66 +6214,6 @@ function lastEmittedGlyph(out: InlineNode[]): string {
   return 'x'
 }
 
-let activeQuoteCharacters: readonly [string, string, string, string] = ['“', '”', '‘', '’']
-
-function smartToken(
-  text: string,
-  i: number,
-  prev: string,
-): { out: string; len: number; kind: string } | null {
-  for (const [tok, out, kind] of SMART_TOKENS) {
-    if (text.startsWith(tok, i)) return { out, len: tok.length, kind }
-  }
-  // A run of 2+ hyphens collapses to em/en dashes (djot allocation). A
-  // lone `-` stays literal.
-  if (text[i] === '-' && text[i + 1] === '-') {
-    let n = 0
-    while (text[i + n] === '-') n++
-    // PART 9 §8 (carve#1443): a run PRECEDED by whitespace (or the start of the
-    // content) and FOLLOWED by a non-whitespace character is a long CLI flag,
-    // not a dash, and stays literal. `git log --oneline` rendered `git log
-    // –oneline` before this - silently, and in the output only.
-    //
-    // The run start is scanned back to, not assumed to be `i`: a literal run is
-    // emitted one hyphen at a time, so the next character re-enters here with
-    // hyphens already behind it. Reading only forward would convert the tail of
-    // `---foo` into an en dash.
-    let start = i
-    while (start > 0 && text[start - 1] === '-') start--
-    const before = start > 0 ? text[start - 1]! : ''
-    const after = text[i + n] ?? ''
-    //
-    // The whole run is consumed as literal text rather than declined, so the
-    // arrow token cannot pick up what the dash rule put down: declining left
-    // `-->` as a stray `-` plus a live `->`, and the flag rendered `-→`.
-    if ((before === '' || isFlankSpace(before)) && after !== '' && !isFlankSpace(after)) {
-      return { out: text.slice(i, i + n), len: n, kind: 'literal_hyphen_run' }
-    }
-    return { out: allocateDashes(n), len: n, kind: 'dash_run' }
-  }
-  const c = text[i]!
-  if (c === '"') {
-    const open = isQuoteOpenContext(prev)
-    return { out: open ? activeQuoteCharacters[0] : activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
-  }
-  if (c === "'") {
-    // Contextual single quote (matches djot): an apostrophe / closing
-    // quote `’` when the previous char is alphanumeric (`it's`,
-    // `John's`) OR the next char is a digit (decade elision `'70s`, and
-    // `'24'` -> `’24’` as djot does); an opening quote `‘` in an open
-    // context (`'word'`, `rock 'n' roll`); otherwise `’`.
-    const next = text[i + 1] ?? ''
-    const open = isQuoteOpenContext(prev)
-    const apostrophe = /[0-9]/.test(next) || (!open && isAlnum(next))
-    return {
-      out: apostrophe ? '’' : open ? activeQuoteCharacters[2] : activeQuoteCharacters[3],
-      len: 1,
-      kind: open && !apostrophe ? 'left_single_quote' : 'right_single_quote',
-    }
-  }
-  return null
-}
-
 /**
  * The inline nodes of a REFERENCE LABEL, for PART 9R R1's heading-index lookup.
  *
@@ -10830,18 +6229,7 @@ function smartToken(
  * anyway.
  */
 export function parseRefLabelInlines(label: string): InlineNode[] {
-  return scanInline(label, inlineSource(), false)
-}
-
-function parseInline(
-  text: string,
-  abbrDefs: Map<string, string>,
-  linkDefs: Map<string, LinkDef> = new Map(),
-  source: InlineSource = inlineSource(),
-  captionContext = false,
-): InlineNode[] {
-  const nodes = applyAbbreviations(scanInline(text, source, false, captionContext), abbrDefs)
-  return applyLinkDefs(nodes, linkDefs)
+  return new ParseSession().parseRefLabelInlines(label)
 }
 
 interface InlineSource {
@@ -10962,16 +6350,6 @@ function anchorRangeAt(ranges: readonly AnchorRange[], offset: number): AnchorRa
   return found && offset <= found.to ? found : undefined
 }
 
-
-// Inline recursion depth, bounding the same nesting the block side caps with
-// MAX_NESTING_DEPTH. scanInline recurses one frame per nested link / span /
-// emphasis / critic level; without a cap a deeply nested run (e.g.
-// `[[[[…x]]]]`) overflows the call stack and throws RangeError. JS is
-// single-threaded, so a module-level counter with try/finally is sufficient
-// (and far less invasive than threading a depth arg through every recursive
-// call site). Over the cap the run stays literal text instead of recursing.
-let inlineDepth = 0
-
 /**
  * The emphasis kinds open around the run being scanned.
  *
@@ -10983,983 +6361,10 @@ let inlineDepth = 0
  * from nothing.
  */
 const NO_OPEN_KINDS: ReadonlySet<string> = new Set()
-let openKinds: ReadonlySet<string> = NO_OPEN_KINDS
-
-/** `openKinds` with `delim` added. */
-function withOpenKind(delim: string): ReadonlySet<string> {
-  return new Set([...openKinds, delim])
-}
-
-/** Whether the inline text being scanned is a line block's stanza. */
-let inLineBlock = false
-
-/**
- * An unclosed run's content with the trailing whitespace its end drops. In a
- * line block a line break is content and is kept (markup-carve/carve#2089); a
- * stanza's own end leaves nothing there to keep.
- */
-function trimUnclosedRun(content: string): string {
-  return inLineBlock ? content : content.replace(/[ \t\n\r]+$/, '')
-}
-
-function scanInline(
-  text: string,
-  source: InlineSource = inlineSource(),
-  inFootnote = false,
-  captionContext = false,
-  kinds: ReadonlySet<string> = NO_OPEN_KINDS,
-): InlineNode[] {
-  if (inlineDepth >= MAX_NESTING_DEPTH) {
-    return [withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
-  }
-  inlineDepth++
-  const outer = openKinds
-  openKinds = kinds
-  try {
-    return scanInlineInner(text, source, inFootnote, captionContext)
-  } finally {
-    openKinds = outer
-    inlineDepth--
-  }
-}
-
-function scanInlineInner(
-  text: string,
-  source: InlineSource,
-  inFootnote: boolean,
-  captionContext: boolean,
-): InlineNode[] {
-  const out: InlineNode[] = []
-  let i = 0
-  let buf = ''
-  let bufStart = 0
-  // Caption number placeholder: only the first bare `#` in a caption becomes one.
-  let captionNumberEmitted = false
-  // Last char appended to buf. Tracked explicitly because reading
-  // `buf[buf.length - 1]` each char indexes a growing ConsString, which V8 must
-  // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
-  // once the rope gets deep). A scalar keeps the smart-quote context check O(1).
-  let bufLast = ''
-  const emphasisNoClose = newEmphasisMemo()
-
-  // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
-  // branches resolve the close bracket in O(1); see buildBracketMap.
-  const bracketClose: BracketClose = text.includes('[') ? buildBracketMap(text) : () => undefined
-
-  // Suffix tables so a tail regex is only run when its mandatory close
-  // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
-  // fail. See suffixHasChar/suffixHasPair. Built only when the delimiter is
-  // present at all, mirroring the bracketClose guard above.
-  const rparenSuf = text.includes(')') ? suffixHasChar(text, ')') : null
-  const rbraceSuf = text.includes('}') ? suffixHasChar(text, '}') : null
-  const insSuf = text.includes('+}') ? suffixHasPair(text, '+', '}') : null
-  const delSuf = text.includes('-}') ? suffixHasPair(text, '-', '}') : null
-
-  const flush = () => {
-    if (buf) {
-      const node = { type: 'text', value: buf } as Text
-      out.push(withPos(node, source, text, bufStart, i))
-      buf = ''
-      bufLast = ''
-    }
-  }
-
-  const append = (value: string) => {
-    if (!buf) bufStart = i
-    buf += value
-    if (value) bufLast = value[value.length - 1]!
-  }
-
-  while (i < text.length) {
-    const c = text[i]!
-    if (c === '\0' && inLineBlock) {
-      flush()
-      out.push(withPos({ type: 'non_breaking_space' }, source, text, i, i + 1))
-      i++
-      continue
-    }
-
-    // Core inline constructs all begin with punctuation. When no extension
-    // matcher can claim an arbitrary offset, append ordinary ASCII prose as a
-    // run instead of asking smart typography, emphasis and every other inline
-    // recognizer about each letter and space individually.
-    const code = text.charCodeAt(i)
-    if (
-      activeMatchers.length === 0 &&
-      ((code >= 48 && code <= 57) ||
-        (code >= 65 && code <= 90) ||
-        (code >= 97 && code <= 122) ||
-        code === 32 ||
-        code === 9)
-    ) {
-      const start = i
-      do {
-        i++
-        if (i >= text.length) break
-        const next = text.charCodeAt(i)
-        if (
-          !(
-            (next >= 48 && next <= 57) ||
-            (next >= 65 && next <= 90) ||
-            (next >= 97 && next <= 122) ||
-            next === 32 ||
-            next === 9
-          )
-        ) {
-          break
-        }
-      } while (true)
-      const value = text.slice(start, i)
-      if (!buf) bufStart = start
-      buf += value
-      bufLast = value[value.length - 1]!
-      continue
-    }
-    const rest = text.slice(i)
-
-    // Hard line break: a backslash at end of line (before a newline).
-    if (c === '\\' && text[i + 1] === '\n') {
-      flush()
-      out.push(withPos({ type: 'hard_break' }, source, text, i, i + 2))
-      i += 2
-      continue
-    }
-    // A backslash at the very end of the content (no following character) is
-    // still a hard break, mirroring the `\`-before-newline rule at end of
-    // input (`para\` at EOF -> `<br>`), matching djot and carve's cheatsheet.
-    if (c === '\\' && i + 1 >= text.length) {
-      flush()
-      out.push(withPos({ type: 'hard_break' }, source, text, i, i + 1))
-      i++
-      continue
-    }
-    // Non-breaking space: a backslash followed by a space (djot). Emit the
-    // internal placeholder (U+E000) rather than a literal U+00A0 so it is
-    // converted per renderer (HTML &nbsp;, Markdown U+00A0, plain/ANSI a
-    // space) and never confused with an author's literal non-breaking space.
-    if (c === '\\' && text[i + 1] === ' ') {
-      flush()
-      out.push(withPos({ type: 'non_breaking_space' }, source, text, i, i + 2))
-      i += 2
-      continue
-    }
-
-    // Escape: a backslash before any ASCII punctuation yields that literal
-    // character (djot / grammar `ascii_punctuation` — the full set, including
-    // `& : ; ?`).
-    if (c === '\\' && i + 1 < text.length) {
-      const nxt = text[i + 1]!
-      if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/.test(nxt)) {
-        // The escape is its own node: the backslash carries intent the literal
-        // character does not. `\-\-` was written precisely so a downstream
-        // processor would not read an en dash, and flattening it into text lost
-        // that (carve#350).
-        const escStart = i
-        flush()
-        out.push(
-          withPos({ type: 'escaped_text', value: nxt } as EscapedText, source, text, escStart, i + 2),
-        )
-        i += 2
-        continue
-      }
-    }
-
-    // Smart typography (grammar.ebnf §"Smart Typography", PART 9 §8).
-    // Runs after the escape check, so `\->` etc. are already absorbed
-    // into buf as literals and never reach here. Inside code is handled
-    // by the opaque code branch below (continues before this on a
-    // backtick). Multi-char tokens are matched longest-first.
-    {
-      // Quote context: the char in buf, else (buf flushed by a prior
-      // inline node like code/emphasis/link) treat it as word-adjacent
-      // so a closing quote stays closing; only true start is "".
-      const prevForQuote = buf.length
-        ? bufLast
-        : out.length
-          ? lastEmittedGlyph(out)
-          : ''
-      const st = smartToken(text, i, prevForQuote)
-      if (st && st.kind === 'literal_hyphen_run') {
-        // A flag-shaped hyphen run (carve#1443) is ordinary text: it joins the
-        // buffer rather than becoming a node, so it renders and round-trips as
-        // the hyphens the author wrote.
-        buf += st.out
-        bufLast = st.out[st.out.length - 1]!
-        i += st.len
-        continue
-      }
-      if (st) {
-        flush()
-        // A dash run resolves to one or more glyphs; each consumes a fixed
-        // number of source hyphens (3 for em, 2 for en), so the run partitions
-        // into one node per glyph carrying the hyphens it came from.
-        if (st.kind === 'dash_run') {
-          let consumed = 0
-          for (const glyph of st.out) {
-            const width = glyph === '—' ? 3 : 2
-            out.push(
-              withPos(
-                {
-                  type: 'smart_punctuation',
-                  kind: glyph === '—' ? 'em_dash' : 'en_dash',
-                  value: text.slice(i + consumed, i + consumed + width),
-                } as SmartPunctuation,
-                source,
-                text,
-                i + consumed,
-                i + consumed + width,
-              ),
-            )
-            consumed += width
-          }
-        } else {
-          const node = {
-            type: 'smart_punctuation',
-            kind: st.kind,
-            value: text.slice(i, i + st.len),
-          } as SmartPunctuation
-          // Quote glyphs are locale-dependent and decided here, so record the
-          // resolved character; other kinds resolve through the glyph table.
-          if (st.kind.endsWith('_quote')) node.glyph = st.out
-          out.push(withPos(node, source, text, i, i + st.len))
-        }
-        i += st.len
-        continue
-      }
-    }
-
-    // Trailing (inline) line comment: `%%` preceded by whitespace or at the
-    // start of the run consumes to the next newline (or end of input). The
-    // preceding whitespace is absorbed so the visible text keeps no trailing
-    // space; the terminating newline stays and becomes a soft break. `%%`
-    // inside a code span never reaches here (code is consumed opaquely), and
-    // `\%%` is already handled by the escape branch. (§4.13, grammar
-    // inline_comment.)
-    // A NEWLINE counts as the whitespace before it: `%%` at the start of a
-    // later line is a comment exactly as it is on the first. A paragraph never
-    // showed the difference - a comment-only line is handled at the block layer
-    // there - but inside a line block the whole stanza is inline content, so
-    // the verse kept `%% c` as text where the other engines drop it, and this
-    // one dropped it on the first line and not the second (carve#574).
-    if (c === '%' && text[i + 1] === '%' && (i === 0 || /[ \t\n]/.test(text[i - 1]!))) {
-      // Absorb the whitespace run immediately before `%%` so the visible text
-      // keeps no trailing space. Flush the trimmed buffer with a source span
-      // that ends where that whitespace begins, and start the comment node
-      // there too, keeping inline source spans contiguous.
-      const trimmed = buf.replace(/[ \t]+$/, '')
-      const commentStart = i - (buf.length - trimmed.length)
-      if (trimmed) {
-        const node = { type: 'text', value: trimmed } as Text
-        out.push(withPos(node, source, text, bufStart, commentStart))
-      }
-      buf = ''
-      const nl = text.indexOf('\n', i)
-      const end = nl === -1 ? text.length : nl
-      const content = text.slice(i + 2, end).replace(/^[ \t]/, '').replace(/[ \t]+$/, '')
-      out.push(
-        withPos({ type: 'comment', block: false, content } as Comment, source, text, i, end),
-      )
-      i = end
-      continue
-    }
-
-    // Explicitly delimited inline comment (PART 9 §21a). The first `%}` wins;
-    // an opener in the content is ordinary text, and an opener with no closer
-    // stays literal. Unlike `%%`, surrounding whitespace is ordinary visible
-    // text and scanning resumes after the closer.
-    if (c === '{' && text[i + 1] === '%') {
-      const close = text.indexOf('%}', i + 2)
-      if (close !== -1) {
-        flush()
-        const content = text.slice(i + 2, close).replace(/^ /, '').replace(/ $/, '')
-        out.push(
-          withPos(
-            { type: 'comment', block: false, delimited: true, content } as Comment,
-            source,
-            text,
-            i,
-            close + 2,
-          ),
-        )
-        i = close + 2
-        continue
-      }
-    }
-
-    // Inline verbatim (code span). The opening run is the MAXIMAL run of
-    // backticks; it closes only on a run of EXACTLY the same length (a shorter
-    // OR longer run is content). An opener with no equal-length closer still
-    // opens a verbatim span that runs to the END of the block — matches djot
-    // upstream + carve-php (grammar code_span, "UNCLOSED RUN"). Uses the shared
-    // verbatimSpanEnd helper so the tokenizer, findEmphasisClose, and
-    // buildBracketMap stay in lockstep on span boundaries.
-    if (c === '`') {
-      const { end, closed, openLen } = verbatimSpanEnd(text, i)
-      flush()
-      if (!closed) {
-        // Unclosed: verbatim to end of block, with the block's trailing
-        // whitespace stripped (no surrounding single-space strip — that applies
-        // only to a closed span).
-        // PART 7's four characters (the run may cross a line, so `\n` and `\r`
-        // are in). `\s` ate a trailing vertical tab out of the span's content.
-        const value = trimUnclosedRun(text.slice(i + openLen))
-        out.push(withPos({ type: 'code', value }, source, text, i, text.length))
-        i = text.length
-        continue
-      }
-      const inner = stripVerbatimPadding(text.slice(i + openLen, end - openLen))
-      // A verbatim span tagged `{=format}` is raw inline passthrough.
-      const raw = RE_RAW_INLINE.exec(text.slice(end))
-      if (raw) {
-        const len = end - i + raw[0].length
-        out.push(withPos({ type: 'raw_inline', format: raw[1]!, content: inner } as RawInline, source, text, i, i + len))
-        i += len
-        continue
-      }
-      out.push(withPos({ type: 'code', value: inner }, source, text, i, end))
-      i = end
-      continue
-    }
-
-    // Math (djot form): inline $`x`, display $$`x`. A bare `$` not
-    // followed by a backtick run (e.g. currency `$5`) stays literal.
-    if (c === '$') {
-      const display = text[i + 1] === '$'
-      const dollarLen = display ? 2 : 1
-      const tick = i + dollarLen
-      if (text[tick] === '`') {
-        const { end, closed, openLen } = verbatimSpanEnd(text, tick)
-        const innerEnd = end - openLen
-        const hasContent = closed
-          ? innerEnd > tick + openLen && text[innerEnd - 1] !== '`'
-          : text.length > tick + openLen
-        if (hasContent && (!closed || text[end] !== '`')) {
-          flush()
-          const content = closed
-            ? stripVerbatimPadding(text.slice(tick + openLen, innerEnd))
-            : trimUnclosedRun(text.slice(tick + openLen))
-          const len = end - i
-          out.push(withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
-          i += len
-          continue
-        }
-      }
-    }
-
-    // Inline literal (§27): a `!` prefix on a verbatim code span, mirroring
-    // the `$`-math prefix above. The span content is captured verbatim, later
-    // HTML-escaped and emitted by every renderer with the `<code>` wrapper
-    // dropped; a trailing `{…}` attaches below as an ordinary inline attribute
-    // block (no special first-token sigil). Like code and math, an unclosed
-    // span reaches the end of the containing block.
-    if (c === '!' && text[i + 1] === '`') {
-      const { end, closed, openLen } = verbatimSpanEnd(text, i + 1)
-      flush()
-      const content = closed
-        ? stripVerbatimPadding(text.slice(i + 1 + openLen, end - openLen))
-        : trimUnclosedRun(text.slice(i + 1 + openLen))
-      out.push(withPos({ type: 'literal_inline', content } as LiteralInline, source, text, i, end))
-      i = end
-      continue
-    }
-
-    // Image ![alt](src) — the alt text allows nested balanced [...], so the
-    // close `]` is found by balance, not a [^\]]* regex that would mis-split
-    // a nested bracket (e.g. `![a [b] c](/u)`). Alt is raw text, not inline.
-    if (c === '!' && text[i + 1] === '[') {
-      const closeAbs = bracketClose(i + 1)
-      const close = closeAbs === undefined ? -1 : closeAbs - i
-      if (close > 1) {
-        const alt = rest.slice(2, close)
-        const tail = rest.slice(close + 1)
-        // A link/image tail needs a literal `)`; skip when none lies ahead.
-        const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
-        if (ml) {
-          flush()
-          const img: Image = { type: 'image', src: ml[1]!, alt }
-          const title = ml[2] ?? ml[3]
-          if (title !== undefined) img.title = unescapeAttrValue(title)
-          let len = close + 1 + ml[0].length
-          if (ml[4]) {
-            // An invalid payload (`{2=v}`) is literal (§14), and an
-            // empty-attr `{…}` is literal too -- neither is consumed.
-            if (!isValidInlineAttrPayload(ml[4])) {
-              len -= ml[4].length + 2
-            } else {
-              const a = parseAttrs(ml[4])
-              if (isEmptyAttrs(a)) len -= ml[4].length + 2
-              else img.attrs = a
-            }
-          }
-          out.push(withPos(img, source, text, i, i + len))
-          i += len
-          continue
-        }
-        // Reference image `![alt][ref]{attrs}`; collapsed `![alt][]` reuses the
-        // alt as the label. The image form of a reference link — same explicit
-        // `[label]: url` resolution (applyLinkDefs), src instead of href. Alt
-        // must be non-empty (as for a reference link's text).
-        const mref = RE_REF_TAIL.exec(tail)
-        // Full `![alt][ref]` allows an empty alt (`![][ref]`, label = ref);
-        // collapsed `![alt][]` needs a non-empty alt to use as the label.
-        if (mref && (mref[1]! !== '' || alt !== '')) {
-          flush()
-          let len = close + 1 + mref[0].length
-          let attrs: Attrs | undefined
-          if (mref[2]) {
-            if (!isValidInlineAttrPayload(mref[2])) {
-              len -= mref[2].length + 2
-            } else {
-              const a = parseAttrs(mref[2])
-              if (isEmptyAttrs(a)) len -= mref[2].length + 2
-              else attrs = a
-            }
-          }
-          const img: Image = {
-            type: 'image',
-            src: '',
-            alt,
-            ref: mref[1]! !== '' ? mref[1]! : alt,
-            rawRef: rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
-          }
-          if (attrs) img.attrs = attrs
-          out.push(withPos(img, source, text, i, i + len))
-          i += len
-          continue
-        }
-      }
-    }
-
-    // Inline footnote `^[content]` (pandoc-style; design §2-§5). The caret must
-    // immediately precede `[` and must not be inside footnote content (no notes
-    // inside notes, §3.1). A `^` anywhere else is literal text (there is no bare
-    // superscript), so `^^[x]` is a literal `^` followed by a note. The matching
-    // `]` is the balanced close from bracketClose (escape/code-span aware).
-    // Empty or whitespace-only content is literal. Content is inline-only,
-    // parsed with footnote recognition disabled.
-    if (!inFootnote && c === '^' && text[i + 1] === '[') {
-      const close = bracketClose(i + 1)
-      if (close !== undefined && trimStructural(text.slice(i + 2, close)) !== '') {
-        flush()
-        const inner = text.slice(i + 2, close)
-        const children = scanInline(inner, shiftSource(source, text, i + 2), true)
-        out.push(withPos({ type: 'inline_footnote', inline: children } as InlineFootnote, source, text, i, close + 1))
-        i = close + 1
-        continue
-      }
-    }
-
-    // Link / reference link / footnote / span. The bracket text may contain
-    // nested balanced [...] (djot: `[a [b] c](/u)`, `[[x](y)](z)`), so the
-    // matching close `]` is found by balance — not a [^\]]* regex that would
-    // mis-split at the first inner `]`. The (url) / [ref] / {attrs} tail is
-    // then parsed by the same sub-patterns the old fast-path regexes used.
-    if (c === '[') {
-      const closeAbs = bracketClose(i)
-      const close = closeAbs === undefined ? -1 : closeAbs - i
-      if (close > 0) {
-        const innerText = rest.slice(1, close)
-        const tail = rest.slice(close + 1)
-        // Footnote reference [^label] -- before reference links so adjacent
-        // refs like `[^a][^a]` are two notes, not one unresolved `[text][ref]`.
-        // Inside footnote content a `[^x]` is literal, not a reference
-        // (no notes inside notes, design §3.1).
-        const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
-        if (mfn) {
-          flush()
-          out.push(withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
-          i += mfn[0].length
-          continue
-        }
-        // Inline link [text](url "title"){attrs}
-        const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
-        if (ml) {
-          flush()
-          const link: Link = {
-            type: 'link',
-            href: ml[1]!,
-            children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
-          }
-          const title = ml[2] ?? ml[3]
-          if (title !== undefined) link.title = unescapeAttrValue(title)
-          let len = close + 1 + ml[0].length
-          if (ml[4]) {
-            // An invalid payload (`{2=v}`) is literal (§14), and an
-            // empty-attr `{…}` is literal too -- neither is consumed.
-            if (!isValidInlineAttrPayload(ml[4])) {
-              len -= ml[4].length + 2
-            } else {
-              const a = parseAttrs(ml[4])
-              if (isEmptyAttrs(a)) len -= ml[4].length + 2
-              else link.attrs = a
-            }
-          }
-          out.push(withPos(link, source, text, i, i + len))
-          i += len
-          continue
-        }
-        const mref = RE_REF_TAIL.exec(tail)
-        if (mref && (innerText !== '' || !mref[1]!.startsWith('@'))) {
-          flush()
-          let len = close + 1 + mref[0].length
-          let attrs: Attrs | undefined
-          if (mref[2]) {
-            // An invalid payload (`{2=v}`) is literal (§14), and an
-            // empty-attr `{…}` is literal too -- neither is consumed.
-            if (!isValidInlineAttrPayload(mref[2])) {
-              len -= mref[2].length + 2
-            } else {
-              const a = parseAttrs(mref[2])
-              if (isEmptyAttrs(a)) len -= mref[2].length + 2
-              else attrs = a
-            }
-          }
-          const refLink: Link = {
-            type: 'link',
-            href: '',
-            children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
-            ref: mref[1]! !== '' ? mref[1]! : innerText,
-            // rawRef includes any consumed trailing {attrs} so the literal
-            // fallback for an unresolved ref preserves the full source, and it
-            // is read from the DOCUMENT where the scanner's own text is not
-            // that source (carve-js#1183).
-            rawRef: rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
-          }
-          if (attrs) refLink.attrs = attrs
-          out.push(withPos(refLink, source, text, i, i + len))
-          i += len
-          continue
-        }
-      }
-      // Footnote reference [^label] -- before span, so `[^x]{.c}` stays a
-      // footnote ref (the `{.c}` then attaches via the inline-attr pass)
-      // rather than becoming a <span> of `^x`. Footnote labels hold no
-      // nested brackets, so its own regex stays authoritative.
-      const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
-      if (mfn) {
-        flush()
-        out.push(withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
-        i += mfn[0].length
-        continue
-      }
-      // Inline span `[text]{attrs}` (PART 9 §14). After links so `[t](u)` /
-      // `[t][r]` win; the `{` must directly abut `]`. A bracket followed by a
-      // VALID attribute block forms a span -- including an empty one (`[x]{}`,
-      // `[x]{ }` -> empty <span>, matching djot). An INVALID block (`{???}`,
-      // `{=y=}`) is not an attribute block, so it stays literal.
-      if (close > 0) {
-        const innerText = rest.slice(1, close)
-        // A span tail needs a literal `}` ahead; and its `{…}` content must be
-        // able to form a valid attribute payload. Skip RE_SPAN_TAIL (which would
-        // otherwise scan to a far `}` at every `[` -> O(n^2) on `[x]{[x]{…}`)
-        // when no `}` lies ahead or the payload is provably invalid.
-        const ms =
-          rbraceSuf && rbraceSuf[i + close + 1] && !spanAttrProvablyInvalid(text, i + close + 1)
-            ? RE_SPAN_TAIL.exec(rest.slice(close + 1))
-            : null
-        if (ms && isValidInlineAttrPayload(ms[1]!)) {
-          flush()
-          out.push(
-            withPos(
-              {
-                type: 'span',
-                children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
-                attrs: parseAttrs(ms[1]!),
-              } as Span,
-              source,
-              text,
-              i,
-              i + close + 1 + ms[0].length,
-            ),
-          )
-          i += close + 1 + ms[0].length
-          continue
-        }
-      }
-    }
-
-    // Inline extension :type[content]{attrs}
-    if (c === ':') {
-      const m = RE_EXTENSION.exec(rest)
-      if (m) {
-        flush()
-        const ext: Extension = {
-          type: 'inline_extension',
-          name: m[1]!,
-          content: scanInline(m[2]!, shiftSource(source, text, i + m[0].indexOf('[') + 1), inFootnote),
-        }
-        // THE ONLY INLINE ATTRIBUTE SURFACE WITH NO VALIDITY GATE, until now: a
-        // trailing block here went straight to `parseAttrs`, so `{#1a}` became
-        // `a=""` where §14 makes it literal on every sibling surface, a tab
-        // separated two attributes after markup-carve/carve#906 narrowed the
-        // rest, and a quoted value carried a line break past
-        // markup-carve/carve#888. An invalid payload is not consumed - the
-        // extension parses without attributes and the braces stay literal
-        // text, exactly as the link and image tails already do.
-        let consumed = m[0].length
-        if (m[3] !== undefined) {
-          if (isValidInlineAttrPayload(m[3])) ext.attrs = parseAttrs(m[3])
-          else consumed -= m[3].length + 2
-        }
-        out.push(withPos(ext, source, text, i, i + consumed))
-        i += consumed
-        continue
-      }
-      // Symbol shortcode `:name:` (after extension, which needs `[`).
-      const sym = symbolOpensAt(text, i) ? RE_SYMBOL.exec(rest) : null
-      if (sym) {
-        flush()
-        out.push(withPos({ type: 'symbol', name: sym[1]! } as SymbolInline, source, text, i, i + sym[0].length))
-        i += sym[0].length
-        continue
-      }
-    }
-
-    // Autolink <url>
-    if (c === '<') {
-      const cr = RE_CROSSREF.exec(rest)
-      if (cr) {
-        flush()
-        const cref: CrossRef = { type: 'heading_ref', target: cr[1]! }
-        out.push(withPos(cref, source, text, i, i + cr[0].length))
-        i += cr[0].length
-        continue
-      }
-      const m = RE_AUTOLINK.exec(rest)
-      if (m) {
-        flush()
-        const href = m[1]!
-        const auto: AutoLink = {
-          type: 'autolink',
-          href: href.includes('@') && !href.includes(':') ? `mailto:${href}` : href,
-          // Display is the raw `<...>` content: a URI autolink keeps its scheme
-          // (`<mailto:a@b>` -> `mailto:a@b`), an email autolink shows the address.
-          text: href,
-        }
-        let consumed = m[0].length
-        // Optional trailing {attrs} (djot): `<url>{.c}`. An explicit
-        // `href` in the block is ignored -- the structural href wins
-        // (djot + carve-php), so it never produces a duplicate attribute.
-        // An invalid payload (`{2=v}`) is literal (§14), not an
-        // attribute block -- leave it for normal text processing.
-        const am = /^\{([^}\n]+)\}/.exec(text.slice(i + consumed))
-        if (am && isValidInlineAttrPayload(am[1]!)) {
-          const attrs = parseAttrs(am[1]!)
-          if (!isEmptyAttrs(attrs)) {
-            // A real attribute block: consume it (so it is not
-            // re-processed). Drop a structural `href` so it never
-            // duplicates the autolink's own href (djot + carve-php).
-            if (attrs.keyValues?.href !== undefined) {
-              delete attrs.keyValues.href
-              if (attrs.order) attrs.order = attrs.order.filter((s) => s !== 'href')
-            }
-            if (!isEmptyAttrs(attrs)) auto.attrs = attrs
-            consumed += am[0].length
-          }
-        }
-        out.push(withPos(auto, source, text, i, i + consumed))
-        i += consumed
-        continue
-      }
-    }
-
-    // CriticMarkup family
-    if (c === '{') {
-      // Each `{…}` tail regex requires its own literal close (`}`, `+}`, `-}`);
-      // skip it when that delimiter is absent from the rest of the input, which
-      // would otherwise force a backtrack to EOF at every `{` (quadratic on
-      // runs like `{+`×n or `{~`×n). O(1) suffix lookups; output-identical.
-      const hasBrace = !!(rbraceSuf && rbraceSuf[i])
-      const sub = hasBrace ? substitutionAt(text, i) : null
-      if (sub) {
-        flush()
-        out.push(
-          withPos(
-            {
-              type: 'substitution',
-              old: scanInline(text.slice(i + 2, sub.arrow), shiftSource(source, text, i + 2), inFootnote),
-              new: scanInline(text.slice(sub.arrow + 2, sub.end - 2), shiftSource(source, text, sub.arrow + 2), inFootnote),
-            } as CriticSubstitute,
-            source,
-            text,
-            i,
-            sub.end,
-          ),
-        )
-        i = sub.end
-        continue
-      }
-      const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? criticPairEnd(text, i, '+}') : -1
-      if (ins !== -1) {
-        flush()
-        out.push(withPos({ type: 'insert', children: scanInline(text.slice(i + 2, ins - 2), shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, ins))
-        i = ins
-        continue
-      }
-      const del = delSuf && delSuf[i] && text[i + 1] === '-' ? criticPairEnd(text, i, '-}') : -1
-      if (del !== -1) {
-        flush()
-        out.push(withPos({ type: 'delete', children: scanInline(text.slice(i + 2, del - 2), shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, del))
-        i = del
-        continue
-      }
-      if (hasBrace && RE_BRACED_EN_DASH.test(rest)) {
-        // The SAME node the bare run produces, carrying the authored spelling
-        // in `value` - so the AST says "an en dash was written here" rather
-        // than holding a glyph in a text run, and `fmt` writes `{--}` back
-        // instead of the literal character. PART 12's vocabulary already has
-        // the kind; the braced form is a second spelling of it, not a second
-        // construct.
-        flush()
-        out.push(
-          withPos(
-            { type: 'smart_punctuation', kind: 'en_dash', value: '{--}' } as SmartPunctuation,
-            source,
-            text,
-            i,
-            i + 4,
-          ),
-        )
-        i += 4
-        continue
-      }
-      const cmt = hasBrace ? RE_CRITIC_CMT.exec(rest) : null
-      if (cmt) {
-        flush()
-        out.push(withPos({ type: 'critic_comment', text: cmt[1]! } as CriticComment, source, text, i, i + cmt[0].length))
-        i += cmt[0].length
-        continue
-      }
-      // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
-      // bare delimiter, but with no word-boundary condition.
-      const delim = text[i + 1]
-      const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined && !openKinds.has(delim)
-        ? bracedPairEnd(text, i, `${delim}}`)
-        : -1
-      if (forced !== -1) {
-        flush()
-        out.push(withPos({ type: FORCED_TYPE[delim!]!, children: scanInline(text.slice(i + 2, forced - 2), shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!])) } as Emphasis, source, text, i, forced))
-        i = forced
-        continue
-      }
-      // Inline attribute block — attaches to preceding node. It must be GLUED:
-      // a non-empty `buf` means unflushed text (e.g. a space) sits between the
-      // preceding node and the `{`, so the block is NOT attached -- it stays
-      // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
-      const attr = !buf && hasBrace ? RE_INLINE_ATTR.exec(rest) : null
-      // A digit-leading key or otherwise invalid payload (`{2=v}`) makes the
-      // whole block literal (§14), same strict rule as block/span attrs — so
-      // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.
-      if (attr && out.length && isValidInlineAttrPayload(attr[1]!)) {
-        const prev = out[out.length - 1]!
-        const parsed = parseAttrs(attr[1]!)
-        // A `{...}` that yields no real attribute is literal text (PART 9
-        // §15), not an empty attribute block to attach. Without this guard a
-        // payload like `{=hl=}`, `{ }`, or `{???}` after a non-text node is
-        // silently consumed and dropped.
-        // The block also stays literal after an inert node whose renderer emits
-        // NO attributes -- a soft/hard break, a mention, or a tag -- otherwise
-        // the attrs attach and are silently discarded at render (mentions/tags
-        // are stable inert spans that do not take attributes). Matches
-        // carve-rs / carve-php, which keep the `{...}` literal in these cases.
-        if (!ATTR_INERT_PREV.has(prev.type) && !isEmptyAttrs(parsed)) {
-          ;(prev as { attrs?: Attrs }).attrs = mergeAttrs(
-            (prev as { attrs?: Attrs }).attrs,
-            parsed,
-          )
-          // A TRAILING ATTRIBUTE BLOCK IS THE NODE'S OWN MARKUP (PART 12 §4,
-          // carve#521), so the span covers it: `*x*{#i}` gives the `strong`
-          // offsets 0..7, not 0..3. The braces are where the node's `attrs`
-          // came from, and a span stopping at `*x*` says the node ends before
-          // the markup that gave it half its content -- the same reading that
-          // already puts a break's backslash inside the break.
-          extendPosTo(prev, source, text, i + attr[0].length)
-          i += attr[0].length
-          continue
-        }
-      }
-    }
-
-    // Mention
-    if (c === '@' && (i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!))) {
-      const m = RE_MENTION.exec(rest)
-      if (m) {
-        flush()
-        out.push(withPos({ type: 'mention', user: m[1]! } as Mention, source, text, i, i + m[0].length))
-        i += m[0].length
-        continue
-      }
-    }
-    // Tag
-    if (c === '#') {
-      const m = RE_TAG.exec(rest)
-      const tagBoundary = i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!)
-      if (m && tagBoundary) {
-        flush()
-        out.push(withPos({ type: 'tag', name: m[1]! } as Tag, source, text, i, i + m[0].length))
-        i += m[0].length
-        continue
-      }
-      // Bare `#` (not a tag) in a caption = number placeholder, first only.
-      // `\#` never reaches here (the escape branch consumes it as literal).
-      if (!m && captionContext && !captionNumberEmitted) {
-        flush()
-        out.push(withPos({ type: 'caption_number' } as CaptionNumber, source, text, i, i + 1))
-        captionNumberEmitted = true
-        i += 1
-        continue
-      }
-    }
-
-    // Emphasis-family delimiters
-    const em = matchEmphasis(text, i, source, inFootnote, emphasisNoClose)
-    if (em) {
-      flush()
-      out.push(withPos(em.node, source, text, i, em.end))
-      i = em.end
-      continue
-    }
-
-    // Soft break (single newline inside paragraph)
-    if (c === '\n') {
-      flush()
-      out.push(withPos({ type: 'soft_break' }, source, text, i, i + 1))
-      i++
-      continue
-    }
-
-    // Extension inline matchers run only here, where every core construct has
-    // declined position i: extensions add syntax, they never hijack core.
-    if (activeMatchers.length) {
-      const xm = tryInlineMatchers(text, i)
-      if (xm) {
-        flush()
-        const node = withPos(xm.node, source, text, i, xm.end)
-        if (node.type === 'citation_group') positionCitationItems(node, source, text, i)
-        out.push(node)
-        i = xm.end
-        continue
-      }
-    }
-
-    append(c)
-    i++
-  }
-  flush()
-  return out
-}
 
 interface EmphasisMatch {
   node: Emphasis
   end: number
-}
-
-function matchEmphasis(
-  text: string,
-  i: number,
-  source: InlineSource,
-  inFootnote = false,
-  noClose: EmphasisMemo = newEmphasisMemo(),
-): EmphasisMatch | null {
-  const c = text[i]!
-
-  // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
-  if (c === '/' && text[i + 1] === '*') {
-    const start = i + 2
-    // A bold-italic span requires a non-whitespace char right after `/*`
-    // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
-    // (`/* x*/`) content is not bold-italic and falls through to `/` emphasis,
-    // matching carve-php parseBoldItalic.
-    // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
-    // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
-    if (start < text.length && !isCarveWhitespace(text[start])) {
-      let searchPos = start
-      for (;;) {
-        const close = findClose(text, searchPos, '*/')
-        if (close === -1) break
-        const inner = text.slice(start, close)
-        // The content must not end in whitespace (nor be empty). A trailing
-        // space closer like `/*x */` is not bold-italic; skip this `*/` and
-        // look for a later one before giving up (parity with carve-php).
-        if (inner === '' || isCarveWhitespace(inner[inner.length - 1])) {
-          searchPos = close + 1
-          continue
-        }
-        const children = scanInline(inner, shiftSource(source, text, start), inFootnote, false, new Set([...openKinds, '/', '*']))
-        return {
-          // `boldItalic` records that the author used the combined form. The
-          // nested spelling `*/x/*` yields the same tree, so the writer needs the
-          // mark to reproduce what was written (PART 11 §6).
-          node: {
-            type: 'strong',
-            boldItalic: true,
-            // The inner emphasis is synthesized from the single `/*…*/` token
-            // rather than scanned as its own delimiter pair, so nothing else
-            // assigns it a span. PART 12 §4 requires one on every node but the
-            // document root, and a consumer cannot tell a synthesized node from
-            // a parsed one. It spans the CONTENT; the outer strong spans the
-            // delimiters too.
-            children: [withPos({ type: 'emphasis', children }, source, text, start, close)],
-          },
-          end: close + 2,
-        }
-      }
-    }
-  }
-  // Single-char delimiters. Highlight `=` is single-char like the rest; a
-  // doubled `==` is therefore literal by same-delimiter adjacency (handled
-  // below), exactly like `**x**`. There is NO bare `^`/`,` delimiter:
-  // superscript and subscript exist only in the braced forms `{^x^}`/`{,x,}`
-  // (grammar PART 9 §9 rationale note) -- a bare caret or comma is literal.
-  const pairs: Array<[string, Emphasis['type']]> = [
-    ['/', 'emphasis'],
-    ['*', 'strong'],
-    ['_', 'underline'],
-    ['~', 'strike'],
-    ['=', 'highlight'],
-  ]
-  for (const [delim, type] of pairs) {
-    if (c === delim) {
-      const after = text[i + 1]
-      const before = text[i - 1]
-      // Opener must be followed by a non-whitespace character (CARVE-P3-013;
-      // a tab counts, PART 7).
-      if (!after || isCarveWhitespace(after)) continue
-      // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
-      // same delimiter (before OR after) does not open, so a doubled
-      // delimiter is literal text. `**x**`, `~~x~~`, `==x==` stay literal,
-      // uniformly with `//x//` and `__x__`. Applies to all five.
-      if (after === delim || before === delim) continue
-      // E3: a second opener of an open kind is content.
-      if (openKinds.has(delim)) continue
-      // Word-boundary opener (spec §9): every bare delimiter can't open after
-      // an alphanumeric or `_`, keeping paths/identifiers/numbers literal
-      // (a/b/c, foo*bar*baz, snake_case, x = 5, key=value, 1,2,3). Use the
-      // forced `{X…X}` family for deliberate intraword emphasis.
-      if (before && /[A-Za-z0-9_]/.test(before)) continue
-      // A HIGHLIGHT DOES NOT OPEN BEFORE `>` (markup-carve/carve#1442). `=>`
-      // stopped being an arrow, which exposed its `=` to this machinery for the
-      // first time: `d => e; x != y` opened here and closed on the `=` of `!=`,
-      // rendering `<mark>&gt; e; x !</mark>` out of two things that are not
-      // emphasis at all. The spec's Ohm grammar carries the same guard, and it
-      // costs nothing real - a highlight whose content starts with `>` is a
-      // shape nobody writes, while `=>` in prose about code is everywhere.
-      if (delim === '=' && after === '>') continue
-      // Italic/underline additionally can't open after `/` (path protection,
-      // e.g. snake_/case/).
-      if ((delim === '/' || delim === '_') && before === '/') continue
-      // Find closer that's not preceded by space
-      const close = cachedFindEmphasisClose(text, i + 1, delim, noClose)
-      if (close !== -1) {
-        const inner = text.slice(i + 1, close)
-        return {
-          node: { type, children: scanInline(inner, shiftSource(source, text, i + 1), inFootnote, false, withOpenKind(delim)) },
-          end: close + 1,
-        }
-      }
-    }
-  }
-  return null
 }
 
 function findClose(text: string, from: number, marker: string): number {
@@ -11980,404 +6385,9 @@ function newEmphasisMemo(): EmphasisMemo {
   return { failed: new Map(), lastBrace: -2 }
 }
 
-function cachedFindEmphasisClose(
-  text: string,
-  from: number,
-  delim: string,
-  memo: EmphasisMemo,
-): number {
-  const failed = memo.failed.get(delim)
-  if (failed !== undefined && failed[from] === 1) return -1
-  const visited: number[] = []
-  const close = findEmphasisClose(text, from, delim, memo, failed, visited)
-  if (close === -1) {
-    const marks = failed ?? new Uint8Array(text.length + 1)
-    for (const j of visited) marks[j] = 1
-    memo.failed.set(delim, marks)
-  }
-  return close
-}
-
-function withPos<T extends InlineNode>(
-  node: T,
-  source: InlineSource,
-  text: string,
-  start: number,
-  end: number,
-): T {
-  if (source.anchored === false) return node
-  const pos = sourcePos(source, text, start, end)
-  if (pos) node.pos = pos
-  return node
-}
-
-/** Give each semicolon-delimited citation item its own authored span. */
-function positionCitationItems(
-  node: CitationGroup,
-  source: InlineSource,
-  text: string,
-  groupStart: number,
-): void {
-  if (source.anchored === false) return
-  const innerStart = node.mode === 'integral' ? 2 : 1
-  const inner = node.raw.slice(innerStart, -1)
-  let cursor = 0
-  const parts = inner.split(';')
-  for (let index = 0; index < node.items.length; index++) {
-    const part = parts[index]
-    if (part === undefined) return
-    const leading = part.length - part.trimStart().length
-    const trailing = part.length - part.trimEnd().length
-    const start = groupStart + innerStart + cursor + leading
-    const end = groupStart + innerStart + cursor + part.length - trailing
-    const pos = sourcePos(source, text, start, end)
-    if (pos) node.items[index]!.pos = pos
-    cursor += part.length + 1
-  }
-}
-
-/**
- * Move a node's span end out to `end`, keeping its start where it was.
- *
- * Used when markup that belongs to an already-emitted node is read after it -
- * a trailing attribute block. A node parsed with `anchored: false` carries no
- * `pos` at all, and there is nothing to extend.
- */
-function extendPosTo(node: InlineNode, source: InlineSource, text: string, end: number): void {
-  const pos = (node as { pos?: Position }).pos
-  if (!pos) return
-  const point = pointAt(source, text, end)
-  // The markup read after the node is outside every anchored range, so the
-  // extended span would end somewhere the text does not map. A span that cannot
-  // state its own end is not a span; the node keeps none.
-  if (!point) {
-    delete (node as { pos?: Position }).pos
-    return
-  }
-  pos.endLine = point.line
-  pos.endColumn = point.column
-  pos.endOffset = point.offset
-}
-
-function sourcePos(
-  source: InlineSource,
-  text: string,
-  start: number,
-  end: number,
-): Position | undefined {
-  const startPoint = pointAt(source, text, start)
-  const endPoint = pointAt(source, text, end)
-  if (!startPoint || !endPoint) return undefined
-  // BOTH ENDS IN THE SAME RANGE. Two ends that each map is not enough when the
-  // text is assembled: a node reaching from one fragment into the next covers
-  // source it does not own - the row boundary between them - and one span for
-  // two non-adjacent regions is the invented value PART 12 section 4 forbids.
-  if (source.anchoredRanges && startPoint.range !== endPoint.range) return undefined
-  return {
-    startLine: startPoint.line,
-    endLine: endPoint.line,
-    startColumn: startPoint.column,
-    endColumn: endPoint.column,
-    startOffset: startPoint.offset,
-    endOffset: endPoint.offset,
-  }
-}
-
-/**
- * The AUTHORED SOURCE of `text[start..end)`, for a field that promises verbatim.
- */
-function rawSourceSlice(
-  source: InlineSource,
-  text: string,
-  start: number,
-  end: number,
-): string | undefined {
-  // ONLY ANCHORED TEXT CAN BE ASKED. Without `lineAnchors` a span is a single
-  // base offset plus a local one, which is the document only when the two never
-  // diverge - and a bare `inlineSource()` scanning a detached label has no
-  // document behind it at all.
-  if (!source.lineAnchors || activeDocument === null) return undefined
-  const pos = sourcePos(source, text, start, end)
-  if (pos?.startOffset === undefined || pos.endOffset === undefined) return undefined
-  const candidate = normalizeNewlines(activeDocument.slice(pos.startOffset, pos.endOffset))
-  const local = text.slice(start, end)
-  if (candidate === local) return undefined
-  const candidateLines = candidate.split('\n')
-  const localLines = local.split('\n')
-  if (candidateLines.length !== localLines.length) return undefined
-  for (const [i, localLine] of localLines.entries()) {
-    if (localLine !== '' && localLine !== candidateLines[i]) return undefined
-  }
-
-  return candidate
-}
-
-function shiftSource(source: InlineSource, text: string, by: number): InlineSource {
-  const point = pointAt(source, text, by)
-  const shifted: InlineSource = {
-    // THE ANCHORED BASE, NOT THE LINEAR ONE. `baseOffset + by` walks the LOCAL
-    // text, which is the document only while the two have the same length. A
-    // line block's joined text is shorter than its source by every comment line
-    // the block layer emptied, so past the first such line the linear sum lands
-    // mid-comment: `*a` / `%% secret` / `c*` measured `c` at the second `%`
-    // (carve-js#1182). `pointAt` already resolved the anchored answer.
-    baseOffset: point?.offset ?? source.baseOffset + by,
-    startLine: point?.line ?? source.startLine,
-    startColumn: point?.column ?? source.startColumn,
-  }
-  if (source.anchoredRanges) {
-    shifted.anchoredRanges = source.anchoredRanges
-    shifted.rangeShift = (source.rangeShift ?? 0) + by
-  }
-  if (source.lineAnchors) {
-    // CARRIED INWARD, which is the whole defect: the anchors reached the
-    // stanza's top-level nodes and stopped at the first inline container, so a
-    // node nested under one was measured from the joined text. Shared, with the
-    // starting LINE carried as a delta - the array belongs to the whole stanza,
-    // and copying a suffix per nested construct is quadratic in a tall stanza
-    // that also carries markup.
-    shifted.lineAnchors = source.lineAnchors
-    shifted.anchorShift = (source.anchorShift ?? 0) + newlinesUpTo(text, by)
-  }
-  return shifted
-}
-
-/** How many newlines of `text` sit strictly before `offset`. */
-function newlinesUpTo(text: string, offset: number): number {
-  const indices = newlineIndices(text)
-  let lo = 0
-  let hi = indices.length
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (indices[mid]! < offset) lo = mid + 1
-    else hi = mid
-  }
-  return lo
-}
-
-// Per-document cache of newline offsets for each inline text. pointAt() used to
-// rescan `text` from 0 to `offset` on every token, which is O(offset) per call
-// and O(n^2) across a token-dense or many-line paragraph. Caching the sorted
-// newline indices once per distinct text and binary-searching makes each lookup
-// O(log n). Cleared at the start of every parse() so it never outlives a
-// document.
-const newlineIndexCache = new Map<string, number[]>()
-
-function newlineIndices(text: string): number[] {
-  let indices = newlineIndexCache.get(text)
-  if (indices === undefined) {
-    indices = []
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '\n') indices.push(i)
-    }
-    newlineIndexCache.set(text, indices)
-  }
-  return indices
-}
-
-/**
- * Map a local offset in the inline text to its document line, column and
- * offset.
- *
- * With `lineAnchors` each line carries its own origin, so a continuation line is
- * measured from where that line actually starts in the document rather than by
- * adding a single base offset to a local one.
- *
- * With `anchoredRanges` the text was assembled from regions the scanner cannot
- * see the boundaries of, and an offset OUTSIDE every range has no document
- * position at all - undefined, rather than a number computed from the wrong
- * origin. The range is reported alongside so a caller can require both ends of a
- * span to come from the same one.
- */
-function pointAt(
-  source: InlineSource,
-  text: string,
-  offset: number,
-): { line: number; column: number; offset: number; range?: AnchorRange } | undefined {
-  if (source.anchoredRanges) {
-    const cellOffset = offset + (source.rangeShift ?? 0)
-    const range = anchorRangeAt(source.anchoredRanges, cellOffset)
-    if (!range) return undefined
-    const within = cellOffset - range.from
-    return {
-      line: range.line,
-      column: range.column + within,
-      offset: range.offset + within,
-      range,
-    }
-  }
-  const indices = newlineIndices(text)
-  const newlinesBefore = newlinesUpTo(text, offset)
-  // A FALLBACK ONLY. `startLine + newlinesBefore` assumes the stripped text has
-  // one newline per source line, which an anchored text need not: see
-  // `lineAnchors`. Where anchors exist the anchor's own line wins below.
-  const line = source.startLine + newlinesBefore
-  // Offset of this line's start within the LOCAL text.
-  const lineStart = newlinesBefore === 0 ? 0 : indices[newlinesBefore - 1]! + 1
-  const withinLine = offset - lineStart
-
-  // A NESTED SCAN STARTS PART WAY INTO THE ANCHORED TEXT, so its first line is
-  // whichever line of the outer text it began on. `anchorShift` carries that
-  // index rather than a re-based copy of the array, for the reason `rangeShift`
-  // carries one: an inline construct per line would otherwise copy the whole
-  // anchor list per construct.
-  const anchor = source.lineAnchors?.[newlinesBefore + (source.anchorShift ?? 0)]
-  if (anchor) {
-    // THE FIRST LINE MAY BEGIN MID-LINE and the rest never do. A shifted text
-    // starts wherever its opener left off, so its origin is the source's own
-    // base, which `shiftSource` already resolved through this function; only a
-    // line reached by crossing a newline starts where the anchor says. For an
-    // unshifted source the two agree by construction, since its first anchor IS
-    // its base.
-    if (newlinesBefore === 0) {
-      return { line, column: source.startColumn + offset, offset: source.baseOffset + offset }
-    }
-    return {
-      line: anchor.line,
-      column: anchor.column + withinLine,
-      offset: anchor.offset + withinLine,
-    }
-  }
-
-  // Column resets to 1 right after the most recent newline; with none, it
-  // continues from the source's starting column.
-  const column =
-    newlinesBefore === 0
-      ? source.startColumn + offset
-      : offset - indices[newlinesBefore - 1]!
-  return { line, column, offset: source.baseOffset + offset }
-}
-
-function findEmphasisClose(
-  text: string,
-  from: number,
-  delim: string,
-  memo: EmphasisMemo = newEmphasisMemo(),
-  failed?: Uint8Array,
-  visited?: number[],
-): number {
-  for (let j = from; j < text.length; j++) {
-    if (failed !== undefined && failed[j] === 1) return -1
-    visited?.push(j)
-    const ch = text[j]!
-    // Skip escapes
-    if (ch === '\\' && j + 1 < text.length) {
-      j++
-      continue
-    }
-    // Skip verbatim (code) spans. An unclosed run is opaque to the end of the
-    // block, so no emphasis closer can follow it — the opener cannot close.
-    if (ch === '`') {
-      const span = verbatimSpanEnd(text, j)
-      if (!span.closed) return -1
-      j = span.end - 1
-      continue
-    }
-    // An unbounded comment consumes the rest of its line before the delimiter
-    // stack can claim a closer there. A later line can still close the span.
-    if (
-      ch === '%' &&
-      text[j + 1] === '%' &&
-      (j === 0 || /[ \t\n]/.test(text[j - 1]!))
-    ) {
-      const newline = text.indexOf('\n', j + 2)
-      if (newline === -1) return -1
-      j = newline
-      continue
-    }
-    // Comment contents are transparent to the surrounding emphasis structure.
-    // Only a closed form is a comment; an unterminated opener remains literal.
-    if (ch === '{' && text[j + 1] === '%') {
-      const close = text.indexOf('%}', j + 2)
-      if (close !== -1) {
-        j = close + 1
-        continue
-      }
-    }
-    // A raw inline's format token is opaque as itself, not as a braced
-    // highlight: the main loop builds it together with the code span in front
-    // of it, so a closer after it stays reachable (E2a, carve-js#1745).
-    if (ch === '{' && text[j - 1] === '`') {
-      RE_RAW_INLINE_STICKY.lastIndex = j
-      const m = RE_RAW_INLINE_STICKY.exec(text)
-      if (m) {
-        j += m[0].length - 1
-        continue
-      }
-    }
-    // Braced inlines are opaque too (E2a, markup-carve/carve#2027).
-    if (ch === '{') {
-      const end = bracedInlineEnd(text, j, memo, delim)
-      if (end !== -1) {
-        j = end
-        continue
-      }
-    }
-    // A link or image destination, title included, and an autolink (E2a,
-    // markup-carve/carve#2046). The label is NOT opaque and stays as it is.
-    if (ch === '(' && text[j - 1] === ']') {
-      const end = linkDestinations(text, memo).get(j)
-      if (end !== undefined) {
-        j = end
-        continue
-      }
-    }
-    if (ch === '<') {
-      RE_AUTOLINK_STICKY.lastIndex = j
-      const m = RE_AUTOLINK_STICKY.exec(text)
-      if (m) {
-        j += m[0].length - 1
-        continue
-      }
-    }
-    if (ch === delim) {
-      // Closer must not be preceded by whitespace (CARVE-P3-013).
-      const prev = text[j - 1]
-      if (prev === undefined || isCarveWhitespace(prev)) continue
-      const next = text[j + 1]
-      // Word-boundary closer (spec §9): no bare delimiter closes when followed
-      // by an alphanumeric. Applies to every delimiter, not just / and _.
-      if (next && /[A-Za-z0-9]/.test(next)) continue
-      return j
-    }
-  }
-  return -1
-}
-
 // The braced inlines E2a names, as sticky copies of the matchers the main loop
 // uses, so the scan hides exactly the region the parser builds a node from.
 const BRACED_INLINE_STICKY = [/\{#([^}]+)#\}/y]
-
-// The last index of the braced inline opening at `open`, or -1.
-function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo, scanning?: string): number {
-  if (memo.lastBrace === -2) memo.lastBrace = text.lastIndexOf('}')
-  if (memo.lastBrace < open) return -1
-  // The pairs whose closer the parser searches for across the block are asked
-  // the same question here, so the scan hides the region the parser builds.
-  const marker = text[open + 1]
-  // A forced opener of an open kind is not a span, so it hides nothing. The
-  // kind whose closer this scan is looking for counts as open: the span it
-  // belongs to is open across its own content. A substitution is a construct
-  // of its own rather than a second strike, so it stays opaque.
-  if (
-    marker !== undefined &&
-    FORCED_TYPE[marker] !== undefined &&
-    (openKinds.has(marker) || marker === scanning) &&
-    !(marker === '~' && substitutionAt(text, open) !== null)
-  ) {
-    return -1
-  }
-  if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-')) {
-    const end = bracedPairEnd(text, open, `${marker}}`)
-    if (end !== -1) return end - 1
-  }
-  for (const re of BRACED_INLINE_STICKY) {
-    re.lastIndex = open
-    const m = re.exec(text)
-    if (m) return open + m[0].length - 1
-  }
-  return -1
-}
 
 // The autolink, raw-inline format and link-tail matchers the main loop uses, as
 // sticky copies, so the scan hides exactly the region the parser builds a node
@@ -12794,4 +6804,6005 @@ function attrOrder(a: Attrs): string[] {
   if (a.id !== undefined) o.push('#id')
   if (a.keyValues) for (const k of Object.keys(a.keyValues)) o.push(k)
   return o
+}
+
+
+/** State owned by one synchronous parse operation. */
+class ParseSession {
+  // Matchers belong to this parse; fragment parsing scopes its matcher context.
+  private activeMatchers: CarveExtension[] = []
+
+  private activeMatcherCtx: MatcherContext | null = null
+
+  /**
+   * The document being parsed, for the one field that promises VERBATIM SOURCE.
+   */
+  private activeDocument: string | null = null
+
+  // A definition pre-pass probe parses a source fragment through the block layer.
+  // Matchers remain active during that parse, but its own definition scan must not
+  // start another probe (a matcher may recursively call ctx.parseBlocks too).
+  private probingLazyParagraph = false
+
+  parse(source: string, opts: ParseOptions = {}): Document {
+    this.newlineIndexCache.clear()
+    this.activeQuoteCharacters = opts.extensions
+      ?.map((extension) => extension.quoteCharacters)
+      .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
+      .at(-1) ?? this.activeQuoteCharacters
+    // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
+    // is a heading, not literal text. Only here in the root entry -- nested
+    // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
+    // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
+    const strippedBom = source.charCodeAt(0) === 0xfeff
+    if (strippedBom) source = source.slice(1)
+    // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
+    // byte never reaches output (decided cross-impl behavior; WHATWG-style).
+    if (source.includes('\0')) source = source.replace(/\0/g, '�')
+    const lexer = new Lexer(
+      source,
+      opts,
+      0,
+      opts.onUnclosedContainer ? new Set<string>() : undefined,
+    )
+    // POSITIONS STILL INDEX THE FILE, not the stripped text. Slicing the mark off
+    // shifted every offset in the document by one codepoint, so a consumer that
+    // sliced the original bytes by a reported span got the character before the
+    // one the node holds - `text` at 2..3 was the space, where the node said `T`
+    // (carve#876). All three engines did this the same way.
+    //
+    // `sourceOffsetMap` is the mechanism a container sub-lexer already uses to
+    // map its stripped view back to the document; the BOM is the same problem
+    // with a fixed width of one, so it reuses it rather than adding a second
+    // spelling. `linePrefixWidths` moves with it: the mark occupies the first
+    // column of the first line, so the content of that line starts at column 2.
+    if (strippedBom) {
+      lexer.sourceOffsetMap = lexer.lineOffsets.map((offset) => offset + 1)
+      lexer.linePrefixWidths = lexer.lineOffsets.map((_offset, index) => (index === 0 ? 1 : 0))
+    }
+    lexer.atDocumentLevel = true
+    // Consume leading frontmatter first so `lexer.pos` marks the end of the
+    // metadata region; the def passes and parseBlocks all start from there.
+    lexer.consumeFrontmatter()
+    this.activeDocument = strippedBom ? '﻿' + source : source
+    // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
+    // no matcher, but it now asks whether one is registered: an extension's
+    // `matchBlock` may claim any line, and a claimed line reads as prose to a
+    // line-shape test. `makeMatcherCtx` captures the definition maps by
+    // reference, so building it first sees the same tables the pass fills.
+    this.activeMatchers = (opts.extensions ?? []).filter((e) => e.matchInline || e.matchBlock)
+    this.activeMatcherCtx = this.activeMatchers.length ? this.makeMatcherCtx(lexer, opts) : null
+    // First pass: collect abbreviation and reference-link definitions so
+    // they can be resolved regardless of document order (grammar §6).
+    this.collectLinkDefs(lexer)
+    const children = this.parseBlocks(lexer, 0)
+    appendLinkReferenceDefinitions(children, lexer, source)
+    const doc: Document = { type: 'document', children }
+    // Record the source byte length so renderers can size the
+    // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
+    doc.srcByteLength = utf8ByteLength(source)
+    if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
+    if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
+    if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
+    if (opts.positions === false) dropPositions(doc)
+    else toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
+    return doc
+  }
+
+  // The MatcherContext handed to an extension's matchers, bound to a specific
+  // lexer's definition tables. Recursive parsing resolves that lexer's defs so
+  // extension-parsed content behaves like core nested content, not an isolated
+  // snippet.
+  private makeMatcherCtx(lexer: Lexer, opts: ParseOptions): MatcherContext {
+    return {
+      parseInlines: (t) => this.parseInline(t, lexer.abbrDefs, lexer.linkDefs),
+      parseBlocks: (s) => this.parseBlockSource(s, opts, lexer),
+      linkDefs: lexer.linkDefs,
+      abbrDefs: lexer.abbrDefs,
+    }
+  }
+
+  // Recursively parse a block source for an extension's ctx.parseBlocks. Reuses
+  // the current activeMatchers (so nested content sees the same extensions)
+  // without re-entering parse() — which would reset the matcher context. The
+  // document's link/abbr defs are seeded first so references defined elsewhere
+  // resolve inside the snippet (snippet-local defs override on top), and the
+  // root footnote map is SHARED by reference — exactly as core nested containers
+  // (blockquotes/lists) do — so a footnote def inside extension-owned content
+  // reaches the document. While parsing, the matcher context is rebound to the
+  // sub-lexer so a nested matcher reading ctx.linkDefs/abbrDefs sees the
+  // snippet-local definitions.
+  private parseBlockSource(source: string, opts: ParseOptions, root: Lexer): BlockNode[] {
+    const sourceLines = normalizedSourceLines(source)
+    const anchor = root.pos + 1
+    const sourceLineMap =
+      sourceLines.length > 0 &&
+      sourceLines.every((line, i) => root.lines[anchor + i] === line)
+        ? sourceLines.map((_line, i) => root.lineNumber(anchor + i))
+        : undefined
+    const sub = subLexer(
+      source,
+      opts,
+      root.lineNumberOffset + anchor,
+      sourceLineMap,
+      root.unclosedContainerKeys,
+    )
+    if (!sourceLineMap) sub.suppressPositions = true
+    // Propagate nesting depth so MAX_NESTING_DEPTH still bounds extension-owned
+    // recursion (a self-recursive container matcher would otherwise stack-overflow).
+    sub.depth = root.depth + 1
+    sub.nested = true
+    for (const [k, v] of root.linkDefs) sub.linkDefs.set(k, v)
+    for (const [k, v] of root.abbrDefs) sub.abbrDefs.set(k, v)
+    sub.footnoteDefs = root.footnoteDefs
+    sub.footnoteDefPos = root.footnoteDefPos
+    this.collectLinkDefs(sub)
+    if (!this.activeMatchers.length) return this.parseBlocks(sub, 0)
+    const prevCtx = this.activeMatcherCtx
+    this.activeMatcherCtx = this.makeMatcherCtx(sub, opts)
+    try {
+      return this.parseBlocks(sub, 0)
+    } finally {
+      this.activeMatcherCtx = prevCtx
+    }
+  }
+
+  // Offer the active block matchers the line at the lexer cursor, in registration
+  // order. On a match, advance the lexer by linesConsumed and return the node.
+  // Core block constructs are dispatched first (see parseBlockInner), so an
+  // extension only sees lines core declined.
+  private tryBlockMatchers(lexer: Lexer): BlockNode | null {
+    const ctx = this.activeMatcherCtx
+    if (!ctx) return null
+    for (const ext of this.activeMatchers) {
+      if (!ext.matchBlock) continue
+      const res = ext.matchBlock(lexer.lines, lexer.pos, ctx)
+      if (res && res.linesConsumed > 0) {
+        for (let k = 0; k < res.linesConsumed && !lexer.eof(); k++) lexer.consume()
+        return res.node
+      }
+    }
+    return null
+  }
+
+  // Offer the active inline matchers the position `pos` in `text`, in
+  // registration order. Returns the first match whose end advances past pos.
+  private tryInlineMatchers(text: string, pos: number): InlineMatch | null {
+    const ctx = this.activeMatcherCtx
+    if (!ctx) return null
+    for (const ext of this.activeMatchers) {
+      if (!ext.matchInline) continue
+      const res = ext.matchInline(text, pos, ctx)
+      if (res && res.end > pos && res.end <= text.length) return res
+    }
+    return null
+  }
+
+  /**
+   * Does the block layer fold `candidate` into a paragraph that was already open?
+   *
+   * THE PROBE IS ALLOWED TO RUN MATCHERS. Grammar PART 9R R1a makes a matcher a
+   * pure predicate precisely so a processor may invoke one speculatively, more
+   * than once at a position, and discard the result - which core parsing already
+   * does when a matcher reports a consumption the parser rejects. Without running
+   * them the pre-pass cannot know an extension consumed the line above, and would
+   * suppress a definition that is real metadata.
+   *
+   * WHAT IT HANDS THE MATCHER IS A FRAGMENT, NOT THE DOCUMENT: the run back to
+   * the last blank line, rebased to index 0. A matcher keyed on its absolute
+   * `start`, or one that reads lines above that blank, therefore sees a different
+   * question than it will during the real parse and can answer it differently.
+   * Preserving the coordinates means parsing from the top of the document per
+   * candidate, which is the quadratic shape the byte budget exists to prevent, and
+   * carve-rs and carve-php probe the same fragment - so the limitation is shared
+   * rather than an engine quirk (markup-carve/carve#1437).
+   */
+  private lineFoldsIntoOpenParagraph(
+    lexer: Lexer,
+    candidate: number,
+    budget: number,
+  ): boolean | 'unknown' {
+    // `'unknown'` means THE PROBE DID NOT RUN, not "it does not fold". PART 9R
+    // R1a lets the bound stay but forbids spending it as an answer, so the caller
+    // reaches the answer statically instead (markup-carve/carve#1895).
+    if (this.probingLazyParagraph) return 'unknown'
+    const priced = lazyProbeCost(lexer, candidate)
+    if (!priced || priced.cost > budget) return 'unknown'
+    const before = lexer.lines.slice(priced.start, candidate).join('\n')
+    const after = `${before}\n${lexer.lines[candidate]!}`
+    const probe = (source: string): LazyProbeFrame => {
+      const { onUnclosedContainer: _ignored, ...callerOptions } = lexer.parseOptions
+      const options: ParseOptions = { ...callerOptions, positions: false }
+      const sub = new Lexer(source, options)
+      sub.atDocumentLevel = true
+      sub.suppressPositions = true
+      const previousCtx = this.activeMatcherCtx
+      this.activeMatcherCtx = this.activeMatchers.length ? this.makeMatcherCtx(sub, options) : null
+      try {
+        this.collectLinkDefs(sub)
+        return lazyProbeFrame(this.parseBlocks(sub, 0))
+      } finally {
+        this.activeMatcherCtx = previousCtx
+      }
+    }
+    this.probingLazyParagraph = true
+    try {
+      const a = probe(before)
+      const b = probe(after)
+      return b.endsInParagraph && a.levels.join('\0') === b.levels.join('\0')
+    } finally {
+      this.probingLazyParagraph = false
+    }
+  }
+
+  private collectLinkDefs(lexer: Lexer) {
+    // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
+    // opened, or null when there was none. A fence inside a div ends at that div's
+    // closer, exactly as it ends at the end of a quote or a list item - and the
+    // block parser agrees: `:::` / ``` ``` `` / `x` / `:::` renders the code and
+    // then leaves the div, while a run of a different width, or one with trailing
+    // text, is ordinary fence content.
+    let fence:
+      | {
+          ch: string
+          len: number
+          contentCol: number
+          quoted: boolean
+          scope: PrepassScope
+          divWidth: number | null
+          hasCloser: boolean
+        }
+      | null = null
+    // A LINE BLOCK is verse: a definition written inside one is text the author
+    // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
+    // closed on its own width so a wider `:::: |` is not closed by a narrower run.
+    let verse: { width: number; scope: PrepassScope } | null = null
+    // A comment's body is OPAQUE. This pass did not know it, so a `[r]: /u`
+    // written inside `%%%` registered and a reference elsewhere resolved against
+    // text the author commented out - invisible in the output AND active in the
+    // link table (carve-js#634). The footnote path already treats a comment as
+    // opaque; this one did not.
+    let commentFence: number | null = null
+    // The boundary scan `commentCloserInScope` shares between the openers of one
+    // container. See `CommentScopeMemo`.
+    const commentScopeMemo: CommentScopeMemo = new Map()
+    // Div nesting depth, for the abbreviation branch below. A div is the one
+    // container that adds NO per-line prefix, so `raw` alone cannot tell a
+    // document-level definition from one written inside `:::`. Colon fences close
+    // on an exact length match (carve#455), which is what the stack records.
+    //
+    // EACH ENTRY CARRIES THE CONTAINER IT WAS OPENED IN. The stack was
+    // document-wide, so a quoted `> :::` pushed onto it and nothing popped when
+    // the quote ended - leaving it non-empty for the rest of the document, and
+    // the abbreviation branch requires document level, so every abbreviation
+    // below a one-line quoted div stopped registering (carve-js#1139).
+    const divs: {
+      width: number
+      opens: boolean
+      scope: PrepassScope
+      host: 'list' | 'description' | 'footnote' | null
+    }[] = []
+    // Track the enclosing list item's content column so a fenced-code delimiter
+    // is tested at its container's content column (PART 2), not blindly at
+    // column 0. Without this the prepass cannot tell a real fence nested at a
+    // list item's content column from a merely indented run, and a definition
+    // written inside such a fence is spuriously collected. Same content-column
+    // stack the Markdown migrator uses. (Blockquote prefixes are handled by
+    // stripContainerPrefixes; a list nested inside a blockquote is not tracked
+    // here — a rarer residual case.)
+    // Each entry remembers whether its item was opened BEHIND A QUOTE MARKER.
+    // A blank line ends every open quote, so a column opened inside one dies
+    // with it, and a later line that writes the marker again opens a NEW quote
+    // that inherits nothing (PART 0, A NEW MARKER DOES NOT REACH A DEAD
+    // CONTAINER'S COLUMN; carve#1892). A column opened at document level is not
+    // affected: a list item is transparent across a blank.
+    const listCols: Array<{ col: number; inQuote: boolean; kind: 'list' | 'description' }> = []
+    // A definition list STARTS only on a `::` term (PART 2; the parser enters
+    // parseDefinitionList from RE_DEFLIST_TERM alone), so a single-colon `: body`
+    // line is a description marker only once one has been seen. Ungated, `: term`
+    // in ordinary prose pushed a content column the parser never opens.
+    let sawDeflistTerm = false
+    // THE COMPOSED CONTENT-COLUMN STACK, absolute, outermost first - `listCols`
+    // read through every container rather than through list markers alone.
+    //
+    // `listCols` walks a line's list markers on `unquoted`, which strips a
+    // COLUMN-0 quote run and stops at the first quote it meets. So under
+    // `- > - - x` it records 2 and loses 6 and 8, and the definition gate below
+    // fell back to an exemption for any line carrying a prefix of its own - which
+    // registered every quoted definition whatever column it was written at
+    // (carve-js#1199). This stack is what that gate asks instead; the trackers
+    // above keep `listCols`, whose answers they already agree with.
+    const openCols: OpenContainer[] = []
+    let prevBlank = true
+    // Carried rather than scanned backwards: a document of blank lines would make
+    // a backward walk quadratic, and this pre-pass is on the parse hot path.
+    let prevNonBlankLine = ''
+    // Track whether we are inside a footnote body. A footnote continuation is
+    // indented, so an indented link def inside a note body must still be collected
+    // (the note's content column, not column 0) -- matching the spec oracle, which
+    // collects it structurally. Without this the strict top-level rejection below
+    // would drop it. A flush footnote opener enters the body; a non-blank line
+    // back at column 0 (a new top-level block) leaves it; blank/indented lines
+    // stay inside.
+    let inFootnoteBody = false
+    let plusColumn: number | null = null
+    let paraState: 'no' | 'yes' | 'ask' = 'no'
+    let paraLine = ''
+    // Number of composed quote/list containers that own the open paragraph.
+    // This separates a real sibling marker after item prose from a marker that
+    // merely looks like a new item while folding into document/quote prose.
+    let paraDepth = 0
+    let paragraphFoldedAbove: boolean = false
+    // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
+    // is invisible. `prepassOpensBlock` sees only the leading brace, so the
+    // continuation lines read as prose and reopened a paragraph over a run the
+    // block parser consumes whole. `peekBlockAttributes`
+    // is the real reader and ends the run at the first `}` or a blank line.
+    let attrRun = false
+    const hasBlockMatchers = this.activeMatchers.some((e) => e.matchBlock)
+    // Parsing every growing blank-free prefix would be quadratic. Price the two
+    // parses in UTF-8 bytes and fail toward collecting when the allowance is
+    // exhausted (PART 9R R1a).
+    let lazyProbeBudget = utf8ByteLength(lexer.lines.join('\n')) * 4 + 4096
+    // `codeCloserPossible` over the prepass's own view of a closer, built once per
+    // document and only when a paragraph is actually open under a fence-shaped
+    // line. A scan per opener is the quadratic shape this index exists to close.
+    let prepassClosers: CloserIndex['code'] | null = null
+    for (let idx = 0; idx < lexer.lines.length; idx++) {
+      // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
+      // none, including an unclosed opener that is NOT frontmatter), so a
+      // `[ref]: ...` inside it is not collected, while content after an
+      // unclosed opener still is.
+      if (idx < lexer.pos) continue
+      const raw = lexer.lines[idx]!
+      // A description continues an entry opened by a `::` term or by a previous
+      // description, and only then does its marker open content here.
+      // Tested on the PREFIX-STRIPPED previous line, the way the current line is
+      // read one line down. Asking the raw line meant `> :: term` did not read as
+      // a term, so the `:  ` marker below it was never stripped and the
+      // definition on it was neither collected nor hoisted - the `dd` was still
+      // emptied, so the author's line vanished and a reference to it stayed
+      // literal (carve#840). A div was the one container that worked, because it
+      // adds no per-line prefix for this to hide behind.
+      // THE PREVIOUS NON-BLANK LINE, because a blank between description entries
+      // does not end the list - it only makes it loose, and the parser reads
+      // `:  a` over a blank over `:  b` exactly as it reads them adjacent. Asking
+      // the line directly above meant a description marker after a blank went
+      // unstripped, so the `dd` was emptied while the definition on it was
+      // collected by nobody: the author's line vanished and the reference to it
+      // stayed literal, the same outcome carve#840 named one blank line further
+      // up (carve-js#1586). A blank that really ends the list still refuses, its
+      // previous non-blank line being the prose that ended it.
+      const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(prevNonBlankLine))
+      if (!isBlankLine(raw)) prevNonBlankLine = raw
+      const line = stripContainerPrefixes(raw, afterTerm)
+      // Content columns are measured INSIDE the block quote. `> - a` puts the
+      // item's content column at 2 of the quoted content, not of the raw line -
+      // which carries the `> ` and matches no marker, so the column stayed 0 and
+      // a definition at it was rejected as "indented at top level". The item
+      // consumed the line anyway, so it rendered nothing AND defined nothing
+      // (carve#658). The footnote prepass already reads the quoted line.
+      // Only a COLUMN-0 marker is stripped. An indented one is inside something -
+      // `- a` / `  > [r]: /u` puts the quote at the item's content column - and
+      // eating that indentation here loses the very column the definition has to
+      // reach, which is what emptied the stack and dropped that definition
+      // (carve-js#649).
+      const unquoted = raw.replace(/^(?:>(?: |$))+/, '')
+      const wasPrevBlank = prevBlank
+      // `isBlankLine`, not `raw.trim() === ''`: this prepass decides the same
+      // `blank_line` the block lexer does, and the native trim carries the wider
+      // legacy set (see `RE_BLANK_LINE`). Spelling one rule twice is what let the
+      // two answers drift.
+      prevBlank = isBlankLine(raw)
+      // A fence is quoted if a blockquote marker stands anywhere in the line's
+      // container prefix, however many list markers lead it (`- > ``` `,
+      // `- - > ``` `), so its closer is blockquote-stripped.
+      //
+      // THE DEPTH AND THE BOOLEAN COME FROM ONE WALK. A fence opened at two quote
+      // levels is not held by a line carrying one: `> :::` under `> > ``` ` has
+      // left the inner quote and closes the div outside it, and a boolean cannot
+      // tell the two apart - it reports "still quoted" and the closer loses its
+      // pop. Reading the raw line and the line behind ONE marker answered both
+      // questions for a single marker only (carve-js#1181).
+      const rawQuoteDepth = containerQuoteDepth(raw)
+      const rawIsQuoted = rawQuoteDepth > 0
+      if (fence) {
+        // A line under an open fence is VERBATIM CONTENT, not prose, so no
+        // paragraph is open on the line below it - including the closer's own.
+        paraState = 'no'
+        // CLOSER: strip a blockquote prefix only when the fence is quoted, and
+        // NEVER a list marker -- a fence delimiter is a continuation line of pure
+        // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
+        // is not a closer. Re-base to the column the fence opened at.
+        const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
+        const ki = k.length - k.replace(/^[ \t]+/, '').length
+        const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
+        // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
+        // the block lexer does, and a definition written after a fence that only
+        // ONE of the two reads as closed is collected by one and rendered by the
+        // other.
+        const close = d.match(RE_FENCE_CLOSER_PREPASS)
+        if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
+          fence = null
+          continue
+        }
+        // THE FENCE ENDS WITH ITS CONTAINER. A fence opened inside a quote, a
+        // list item or a div does not hold a line that no longer reaches that
+        // container: the block parser has left the container and reads the line
+        // afresh, so the fence is over. This pass used to leave it open forever,
+        // and an unterminated fence has no closer - so every definition after the
+        // container was read as fence body and skipped (carve-js#1135).
+        //
+        // Asked AFTER the closer, never before: a closer written at column 0 for
+        // a fence opened at an item's content column is dedented out of its
+        // container by construction, and testing the container first would read
+        // that very line as a new opener.
+        //
+        // EVERY container the fence sits in has to hold the line, not whichever
+        // one is easiest to ask about. A quoted fence can also sit at a list
+        // item's content column (`> - ``` `), and a following `> :::` keeps the
+        // quote while leaving the item.
+        //
+        // The column is measured on `k`, the same quote-stripped view the closer
+        // above reads, because a content column inside a quote is measured
+        // inside the quote (carve#658). Reading the raw indent there would
+        // compare a column against a line that still carries its `> ` prefix.
+        //
+        // THE DIV IS THE CONTAINER `scope` CANNOT SEE, because a div adds no
+        // per-line prefix and no column - so a fence inside one is held by every
+        // test above and outlived the div too. Its closer is the enclosing div's
+        // own: a BARE colon run of exactly the width that was open when the fence
+        // opened (carve#455's exact-length rule, which is what the depth stack
+        // records). A different width, or a run with trailing text, is fence
+        // content, and the block parser reads all three the same way.
+        //
+        // AND ONLY FOR A FENCE THAT NEVER CLOSES. A fence with a closer ahead is
+        // opaque all the way to it, so a same-width `:::` written inside such a
+        // sample is CODE and the block parser renders it - only an unterminated
+        // fence degrades at its container's boundary. Ending the fence there
+        // anyway collected the definitions below it out of a visible `<pre>`,
+        // which is the worst outcome this pass has.
+        //
+        // Matched with the block parser's OWN colon closer, on `d` - the same
+        // re-based view the fence's closer above reads. That settles three things
+        // at once that a hand-rolled test got wrong: the pattern is anchored, so
+        // an INDENTED `:::` inside the body is content rather than the div's
+        // closer; it carries the structural trailing-whitespace class, where
+        // `trim()` also ate a no-break space the parser keeps as content; and it
+        // compares RUN LENGTHS rather than building a `:::` string per body line,
+        // which was quadratic in the div's width times the sample's length.
+        const divCloser =
+          fence.divWidth !== null && !fence.hasCloser ? RE_ADMONITION_CLOSE.exec(d) : null
+        const enclosingDivCloses = divCloser !== null && divCloser[1]!.length === fence.divWidth
+        // THE INDENT IS MEASURED ON `unquoted`, NOT ON `k`, because the recorded
+        // column was. The quote-prefix pattern `k` uses admits a LEADING
+        // INDENTATION RUN before the marker, so `k` loses the item's indentation
+        // along with the `> ` - and a fence opened behind both (`- > ``` `)
+        // records the ITEM's column while its body lines score zero against it.
+        // Every body line then looked out of the item, the fence ended on its
+        // own first one, and the code sample's definitions went live. `unquoted` strips only a COLUMN-0 quote marker, so it
+        // keeps exactly the indentation the column was measured against - and it
+        // is never the SHALLOWER of the two, since `k` removes a superset of what
+        // `unquoted` does wherever the fence is quoted at all.
+        if (
+          scopeHoldsLine(fence.scope, raw, rawQuoteDepth, unquoted) &&
+          !enclosingDivCloses
+        ) {
+          continue // definitions inside fenced code are literal samples
+        }
+        // Out of its container. The fence is over and this line is read fresh -
+        // it may be a boundary the trackers below have to see, a new opener, or a
+        // definition site.
+        fence = null
+      }
+      const marker = prepassMarker(unquoted)
+      if (RE_DEFLIST_TERM.test(unquoted)) sawDeflistTerm = true
+      const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
+      let deflistDef: RegExpExecArray | null = null
+      // Test the RAW line for a block starter: a blockquote `>` is stripped by
+      // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
+      // interrupting a list item would not pop the stack.
+      const rawTrimmed = raw.trim()
+      const startsBlock =
+        /^#{1,6}([ \t]|$)/.test(rawTrimmed) ||
+        RE_BLOCKQUOTE.test(rawTrimmed) ||
+        /^(`{3,}|~{3,})/.test(rawTrimmed) ||
+        // A COLON FENCE ENDS THE ITEM TOO, and was the one block opener missing
+        // from this list. A flush `:::` under an unblanked item opens a SIBLING
+        // container - the parser renders the div next to the list, not inside it
+        // - so the item's content column is gone. Left here, the column stayed
+        // live and the div recorded it as the container it was opened in, which
+        // then released at the next blank line and let an abbreviation written
+        // INSIDE a visibly rendered div register.
+        //
+        // Only a fence the parser REALLY opens: `:::note` is prose, and the
+        // parser folds it into the item lazily, so popping the column there
+        // rejected the definition below it as top-level indentation.
+        isColonFenceOpener(rawTrimmed) ||
+        /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
+      if (marker && /\S/.test(raw.slice(marker[0].length))) {
+        // Every marker on the line, not just the first: `- - see` opens TWO
+        // items and its content column is 4, not 2. Tracking only the first
+        // understated the column, and a definition written at the real one
+        // then read as "past the column" (carve-js#613's guard) or as a fence
+        // at the wrong base. Each marker pops the stack against its own indent
+        // and pushes its cumulative content column.
+        let rest = unquoted
+        let base = 0
+        for (let m2: RegExpMatchArray | null = marker; m2 && /\S/.test(rest.slice(m2[0].length)); ) {
+          while (listCols.length && listCols[listCols.length - 1]!.col > base + m2[1]!.length) {
+            listCols.pop()
+          }
+          base += m2[0].length
+          listCols.push({ col: base, inQuote: unquoted !== raw, kind: 'list' })
+          rest = rest.slice(m2[0].length)
+          m2 = prepassMarker(rest)
+        }
+      } else if (sawDeflistTerm && (deflistDef = RE_DEFLIST_DEF.exec(unquoted))) {
+        while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
+        listCols.push({
+          col: indent + deflistContentCol(deflistDef[1]!),
+          inQuote: unquoted !== raw,
+          kind: 'description',
+        })
+      } else if (
+        // BLANK BEHIND ITS OWN MARKER IS STILL BLANK. `raw` carries the container
+        // prefix, so a quote-marked empty line (`>`) failed this test, matched
+        // `startsBlock` through RE_BLOCKQUOTE, and popped the list column its own
+        // quote still holds open - the definition below it then read as top-level
+        // indentation and never registered (carve-js#1584). A list item is
+        // transparent across a blank whatever marks it.
+        !isBlankLine(unquoted) &&
+        (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
+      ) {
+        while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
+      }
+      // A BLANK ENDS EVERY OPEN QUOTE, so every column opened inside one goes
+      // with it. Without this the item column survived its own quote, a later
+      // `>   [r]: /u` reached it, and a definition the page printed as ordinary
+      // text registered document-wide as well - both halves at once, which I5
+      // permits under neither reading (carve#1892).
+      if (isBlankLine(raw)) {
+        const firstQuoted = listCols.findIndex((entry) => entry.inQuote)
+        if (firstQuoted >= 0) listCols.length = firstQuoted
+      }
+      // THE COMPOSED STACK IS MAINTAINED ON THE SAME THREE BRANCHES, over the
+      // whole container prefix rather than over list markers alone.
+      const composed = composeContainerPrefix(raw, afterTerm, openCols)
+      if (isBlankLine(raw)) {
+        // A BLANK LINE ENDS EVERY OPEN BLOCK QUOTE, and everything written inside
+        // one goes with it. A list item is transparent across a blank, which is
+        // why `listCols` treats every blank that way and this stack cannot.
+        //
+        // NOT LOAD-BEARING, and said so rather than left to be discovered: a
+        // mutation that removes this drop changes no output across the suite or
+        // 1652 swept prefix shapes, because the walk's own `depth` already refuses
+        // to enter a quote the line does not re-mark, and a line that DOES re-mark
+        // it peels into the same entry whether or not the blank dropped it. It
+        // stays because it states the rule where the state is kept.
+        const firstQuote = openCols.findIndex((e) => e.quote)
+        if (firstQuote >= 0) openCols.length = firstQuote
+      } else if (composed.peeled.length) {
+        // A FOLDED MARKER OPENS NOTHING, so the stack the window is measured
+        // against must not move under it. The first folding marker is the item's
+        // lead text and so is everything after it on the line; recording it as a
+        // container replaced the real owner with the folded marker's own columns,
+        // and the next line was then measured against a window that never
+        // existed (markup-carve/carve-js#1598).
+        const foldAt = composed.peeled.findIndex((one) => one.folds)
+        if (foldAt !== 0) {
+          // The walk confirmed `depth` of the open containers. Anything past that
+          // is gone: a sibling list marker at an open item's own column closes
+          // that item, and everything written inside it goes with it.
+          openCols.length = composed.depth
+          for (const one of foldAt < 0 ? composed.peeled : composed.peeled.slice(0, foldAt)) {
+            if (!one.matched) openCols.push({ col: one.content, quote: one.quote, base: one.marker })
+          }
+        }
+      } else if (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed)) {
+        while (openCols.length && openCols[openCols.length - 1]!.col > composed.column) {
+          openCols.pop()
+        }
+      }
+      // strip the enclosing content column so a fence delimiter at that column
+      // is recognized (kept-indent view keeps residual indent after markers)
+      const contentCol = listCols.length ? listCols[listCols.length - 1]!.col : 0
+      // A comment fence's closer is a leading `%` run of the SAME length;
+      // trailing text is allowed, so `%%% end` closes a `%%%` fence.
+      if (commentFence !== null) {
+        const close = RE_COMMENT_BLOCK_ANY.exec(line)
+        if (close && close[1]!.length === commentFence) commentFence = null
+        paraState = 'no'
+        continue
+      }
+      {
+        const open = RE_COMMENT_BLOCK_ANY.exec(line)
+        // Under §5, an opener hides definitions only when its closer is in the same
+        // container. Document-level fences use the raw line index; nested fences
+        // use the stripped container view. Attached blocks start at the `+`
+        // marker column, which can differ from the item content column.
+        const commentScope: PrepassScope = {
+          quoteDepth: rawQuoteDepth,
+          contentCol: plusColumn ?? contentCol,
+        }
+        const atDocumentLevel = commentScope.quoteDepth === 0 && commentScope.contentCol === 0
+        const opensRegion =
+          open !== null &&
+          (atDocumentLevel
+            ? commentBlockHasCloser(lexer, open[1]!.length, idx)
+            : commentCloserInScope(lexer, open[1]!.length, idx, commentScope, commentScopeMemo))
+        if (open && opensRegion) {
+          commentFence = open[1]!.length
+          paraState = 'no'
+          continue
+        }
+      }
+      if (verse !== null && !scopeHoldsLine(verse.scope, raw, rawQuoteDepth, unquoted)) {
+        verse = null
+      }
+      if (verse !== null) {
+        const close = line.trim().match(/^(:{3,})$/)
+        if (close && close[1]!.length >= verse.width) verse = null
+        paraState = 'no'
+        continue
+      }
+      const verseOpen = line.trim().match(/^(:{3,})[ \t]*\|$/)
+      if (verseOpen) {
+        verse = {
+          width: verseOpen[1]!.length,
+          scope: { quoteDepth: rawQuoteDepth, contentCol },
+        }
+        paraState = 'no'
+        continue
+      }
+      while (
+        divs.length &&
+        !scopeHoldsLine(divs[divs.length - 1]!.scope, raw, rawQuoteDepth, unquoted)
+      ) {
+        divs.pop()
+      }
+      // Track `:::` nesting so the abbreviation branch can require document
+      // level. Only the depth matters here, not what kind of div it is.
+      const colon = line.trim().match(/^(:{3,})[ \t]*(.*)$/)
+      if (colon) {
+        const width = colon[1]!.length
+        if (colon[2] === '' && divs.length && divs[divs.length - 1]!.width === width) divs.pop()
+        else {
+          divs.push({
+            width,
+            opens: isColonFenceOpener(line),
+            scope: { quoteDepth: rawQuoteDepth, contentCol },
+            host: inFootnoteBody ? 'footnote' : (listCols[listCols.length - 1]?.kind ?? null),
+          })
+        }
+      }
+      // WHETHER A PARAGRAPH IS OPEN ON THE NEXT LINE, decided here because every
+      // line that carries verbatim or opaque content has already been consumed
+      // above with the flag cleared.
+      //
+      // The rule reads only the line itself, which is the SAFE simplification of
+      // §10's two halves. A paragraph stays open across a line that starts no
+      // block, and a line that starts one ends it; the cases where the two halves
+      // differ - a list marker opens a block but does NOT interrupt an open
+      // paragraph - cannot separate them here, because `line` has the marker
+      // stripped already and reads as the item's content either way. That is also
+      // the answer §10 wants: `text` / `- a` folds the bullet into the paragraph,
+      // and `- a` after a blank opens an item whose paragraph a flush-left line
+      // lazily continues. Both leave a paragraph open.
+      // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0. Its content
+      // column is §16's own and a flush line has left the body, so the block
+      // parser opens a top-level fence there even with a paragraph open inside the
+      // note - unlike a list item, whose paragraph a flush line really does
+      // continue. `line` has the body's indentation stripped, so without this the
+      // two are indistinguishable here.
+      // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0 - see the note on
+      // `paraState`. Read here, where `inFootnoteBody` still describes the line
+      // above; the expensive half is deferred to the opener below.
+      // DID THE LINE ABOVE FOLD INTO THIS PARAGRAPH? `prepassOpensBlock` answers
+      // whether it LOOKS like an opener, and a definition-shaped line looks like
+      // one whether or not it was collected - so asking it about the line above
+      // assumes the answer to the question being asked. A line the pass already
+      // decided was lazy opened nothing, and the paragraph is still open below it
+      // (markup-carve/carve-js#1580).
+      const foldedAbove: boolean = paragraphFoldedAbove
+      const paraWasOpen =
+        paraState !== 'no' && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
+      const paraAsk = paraState === 'ask'
+      const paraLineAbove = paraLine
+      const paraDepthAbove = paraDepth
+      // Lists do not interrupt an open paragraph AT DOCUMENT LEVEL. Inside an
+      // item they do: §24 C3 folds a marker only where it is below the item's
+      // content column and past its base, and everywhere else - at the base
+      // column, or at/past the content column - the marker opens a real item
+      // whose definition line is metadata. A newly opened quote interrupts only
+      // when every marker before it continues the open paragraph's containers:
+      // `para` / `> - [d]: u` does, but `para` / `- > [d]: u` does not because
+      // the lazy list marker owns the quote too.
+      //
+      // THE TEST USED TO BE `one.matched`, which is column EQUALITY with the open
+      // item rather than the window, so it was wrong in both directions: a
+      // sibling of a different marker width (`- lead` / `1. [d]: u`) collected
+      // nothing though the block parser opened a real `ol` for it, and a marker
+      // inside the window that happened to land on the open column (`-   lead` /
+      // `  - [d]: u`) collected though the item's lead text is where it belongs.
+      // Measured against the executable spec on 42 column shapes
+      // (markup-carve/carve-js#1598).
+      let markerInterruptsParagraph = false
+      let prefixOwnedByParagraph = true
+      for (let depth = 0; depth < composed.peeled.length; depth++) {
+        const one = composed.peeled[depth]!
+        if (one.quote && !one.matched && prefixOwnedByParagraph) markerInterruptsParagraph = true
+        if (!one.quote && !one.folds && !one.behindQuote && depth < paraDepthAbove)
+          markerInterruptsParagraph = true
+        if (!one.matched) prefixOwnedByParagraph = false
+      }
+      // Only a definition behind a list marker and a fence-shaped line consume
+      // this answer. Scoping the probe to those questions avoids observable
+      // matcher calls on unrelated lines and keeps the byte allowance useful.
+      const matcherProbeCandidate =
+        hasBlockMatchers &&
+        !this.probingLazyParagraph &&
+        ((composed.peeled.some((one) => !one.quote) &&
+          isLinkDefLine(line)) ||
+          RE_FENCE.test(line) ||
+          RE_RAW_FENCE.test(line))
+      const probed: boolean | 'unknown' = matcherProbeCandidate
+        ? this.lineFoldsIntoOpenParagraph(lexer, idx, lazyProbeBudget)
+        : 'unknown'
+      // AN EXHAUSTED BUDGET IS NOT AN ANSWER (PART 9R R1a, markup-carve/carve#1895).
+      // Bounding the probe stays sound; what the clause forbids is declining the
+      // line because the bound ran out, which made an unrelated extension drop a
+      // definition a matcher-free parse of the same document collects. So a probe
+      // that did not run falls back to the static reading - the same one every
+      // matcher-free document uses.
+      //
+      // THE STATIC READING IS BLIND IN EXACTLY ONE DIRECTION, and it is the safe
+      // one. Core block constructs are dispatched before `matchBlock`, so a line
+      // `prepassOpensBlock` claims is one no matcher can have consumed, and
+      // `false` here is sound. Where it says `true` a matcher may have eaten the
+      // line above unseen - and `true` collects nothing, which is the outcome the
+      // clause still licenses there.
+      const folds: boolean =
+        probed === 'unknown'
+          ? !paraAsk || foldedAbove || !prepassOpensBlock(paraLineAbove)
+          : probed
+      // ONE `folds` FEEDS EVERY CONSUMER (R1a), the collection gates and
+      // `paraDepth` alike. Giving the depth a narrower answer than the gate leaked
+      // the bug back at scale: a line the two disagreed on changed the recorded
+      // depth, which made the next marker read as interrupting, which collected
+      // it. carve-rs holds the same line for the same reason.
+      const paragraphReallyOpen: boolean =
+        paraWasOpen && !markerInterruptsParagraph && folds
+      const collectsNothing = paragraphReallyOpen
+      if (matcherProbeCandidate && paraWasOpen && !markerInterruptsParagraph) {
+        lazyProbeBudget = spendLazyProbeBudget(lexer, idx, lazyProbeBudget)
+      }
+      const inAttrRun = attrRun
+      attrRun = !isBlankLine(raw) && !line.includes('}') && (attrRun || line.startsWith('{'))
+      paraState = isBlankLine(raw) || inAttrRun ? 'no' : 'ask'
+      paraDepth =
+        paraState === 'no' ? 0 : paragraphReallyOpen ? paraDepthAbove : openCols.length
+      // WHAT CARRIES IS "THIS LINE FOLDED", NOT "A PARAGRAPH WAS OPEN ABOVE IT".
+      // The two differ on exactly the openers PART 9 §10 calls invisible: a
+      // top-level `[q]: /q` has a paragraph open above it and interrupts it all
+      // the same. Only a line the pass decided was lazy - marker-carried, inside a
+      // list, in an open paragraph - opened nothing and leaves it open below.
+      paragraphFoldedAbove =
+        paragraphReallyOpen && composed.peeled.some((one) => !one.quote)
+      paraLine = line
+      const quoteIndent = leadingWhitespace(raw)
+      const quoteAtWrongColumn =
+        !inFootnoteBody &&
+        quoteIndent > 0 &&
+        raw.slice(quoteIndent).startsWith('>') &&
+        (listCols.length === 0 || quoteIndent < Math.max(...listCols.map((entry) => entry.col)))
+      if (quoteAtWrongColumn) continue
+      const kept = stripContainerPrefixesKeepIndent(raw, afterTerm)
+      const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
+      // A FOOTNOTE BODY has a content column too, and it is not a list column.
+      // `contentCol` tracks only list items, so inside a note body it is 0 and an
+      // INDENTED fence opener matched nothing - the fence went untracked and the
+      // definition-shaped line inside it was collected as a real definition, so a
+      // reference below the note resolved against a code sample (carve-js#667).
+      // The opener's own indent is the column to re-base on; the closer check below
+      // already re-bases to whatever `fence.contentCol` says.
+      // Behind a QUOTE prefix the note body's leniency does not reach: see the
+      // block-quote sub-lexer. `kept` has the `>` stripped, so its residual indent
+      // is the definition's own, not a rebase remainder to absorb. Read off the
+      // RAW line - `composed.peeled` is empty for a quoted line here, so asking it
+      // silently answered "not quoted" for every one of them.
+      const behindQuotePrefix = raw.slice(quoteIndent).startsWith('>')
+      const openerCol =
+        inFootnoteBody && contentCol === 0 && !behindQuotePrefix
+          ? keptIndent
+          : contentCol > 0 && keptIndent >= contentCol
+            ? keptIndent
+            : contentCol
+      const descSeparator = afterTerm ? RE_DEFLIST_SEPARATOR.exec(unquoted) : null
+      const scopeCol = Math.max(openerCol, descSeparator ? deflistContentCol(descSeparator[1]!) : 0)
+      const deIndented = keptIndent >= openerCol ? kept.slice(openerCol) : kept
+      // BOTH fence spellings, not just the code one. `RE_FENCE`'s language slot
+      // excludes `=`, so a raw block's ```` ```=FORMAT ```` opener matched nothing
+      // here and the fence went untracked - and then the CLOSER read as an opener,
+      // which put the whole rest of the document inside a fence that never closes.
+      // A definition after a raw block was therefore never collected (it did not
+      // reach the AST at all), while a definition written INSIDE the raw block was
+      // collected and went live in the link table, so a reference below it resolved
+      // against opaque passthrough content. That is carve-js#634's failure with a
+      // different opener. The two lazy-continuation sites already read both
+      // patterns; this prepass was the one place that read only one.
+      const open = RE_FENCE.exec(deIndented)
+      const rawOpen = open ? null : RE_RAW_FENCE.exec(deIndented)
+      const run = open ? open[2]! : rawOpen?.[1]
+      if (run) {
+        // The innermost depth entry the block parser really opened - a phantom
+        // one from a malformed `:::note` decides nothing here. Written as a loop
+        // rather than `findLast`, which the compile target does not carry.
+        let enclosingDiv: { width: number; opens: boolean; scope: PrepassScope } | undefined
+        for (let i = divs.length - 1; i >= 0; i--) {
+          if (divs[i]!.opens) {
+            enclosingDiv = divs[i]
+            break
+          }
+        }
+        if (
+          !collectsNothing ||
+          codeCloserPossibleIn(
+            (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
+            run,
+            idx,
+          )
+        ) {
+          fence = {
+            ch: run[0]!,
+            len: run.length,
+            contentCol: openerCol,
+            quoted: rawIsQuoted,
+            scope: { quoteDepth: rawQuoteDepth, contentCol: scopeCol },
+            divWidth: enclosingDiv ? enclosingDiv.width : null,
+            // Asked only for a fence INSIDE a div, which is the one place the
+            // answer is read - so an ordinary document never builds the index.
+            //
+            // THE INDEX IS PERMISSIVE, and that is deliberate here. A merely
+            // closer-SHAPED line - indented, or inside another container - counts
+            // as "a closer may be ahead", so the div boundary declines to end the
+            // fence and a definition after it stays uncollected. That direction
+            // is a definition this pass does not reach, which is what it did
+            // before this change; the other direction ends a live fence early and
+            // publishes a definition out of a visible code sample. An exact
+            // answer wants a container-bounded scan per opener, which is the
+            // quadratic shape this index exists to avoid.
+            hasCloser:
+              enclosingDiv !== undefined &&
+              codeCloserPossibleIn(
+                (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
+                run,
+                idx,
+              ),
+          }
+          paraState = 'no'
+          continue
+        }
+        // Not a fence: the line is the paragraph's own text and the paragraph is
+        // still open below it. Known outright, so the line below never has to ask.
+        paraState = 'yes'
+      }
+      // Maintain footnote-body context (see `inFootnoteBody` above): a flush
+      // footnote opener enters the body; a non-blank line at column 0 leaves it.
+      if (RE_FOOTNOTE_DEF.test(raw)) inFootnoteBody = true
+      else if (!isBlankLine(raw) && leadingWhitespace(raw) === 0) inFootnoteBody = false
+      // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
+      // HERE rather than by a scan of its own, because a scan of its own knew
+      // nothing about what is opaque: it registered a definition written inside a
+      // fenced code SAMPLE, so documenting the syntax changed the prose around it
+      // (carve#573).
+      // PART 12 §7: an abbreviation definition is recognized ONLY at document
+      // level. Tested against `raw`, NOT the container-stripped `line`: stripping
+      // is what made `> *[X]: y` register a document-wide expansion, which is the
+      // one definition kind with no marker at the use site to point back at it.
+      // The anchored pattern rules out an indented (list-item continuation) line
+      // on its own; `divs` covers the one container that adds no line prefix.
+      // `listCols` covers the remaining container: a flush-left definition line
+      // that directly follows an open list item is that item's lazy continuation
+      // (text), not a document-level definition. A blank line first pops the
+      // stack, and then it is one.
+      const abbr =
+        divs.length === 0 && listCols.length === 0 && !inFootnoteBody
+          ? RE_ABBR_DEF.exec(raw)
+          : null
+      if (abbr) {
+        lexer.abbrDefs.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
+        continue
+      }
+      // A footnote def (`[^label]: body`) is parsed as a block in
+      // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
+      if (RE_FOOTNOTE_DEF.test(line)) continue
+      // Strict column-0 rule: a definition is a block opener recognized ONLY at
+      // its container's content column. At the true document top level
+      // (contentCol 0, outside any footnote body) a def indented above column 0 is
+      // literal paragraph text -- not collected here (and rendered literally by the
+      // block parser, whose RE_LINK_DEF consumption is likewise flush-only), so the
+      // flat pre-pass does not resolve a reference against an indented non-def line.
+      // Nested defs (list items, footnote bodies, blockquotes) keep the lenient
+      // collection: their real content column is >0 or the flat pass cannot model
+      // it, and the oracle resolves them, so `deIndented` residual whitespace must
+      // NOT reject them.
+      const topLevelIndentedDef =
+        contentCol === 0 && (!inFootnoteBody || behindQuotePrefix) && /^[ \t]/.test(deIndented)
+      const rawIndent = leadingWhitespace(unquoted)
+      if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
+      else if (isBlankLine(raw)) plusColumn = null
+      // Inside a footnote body the minimum is column two. After carve#1729 a
+      // recognized opener at or past it establishes an authored local base, so
+      // an over-indented link definition registers just like the exact-column
+      // spelling. A line below two still leaves the body and stays literal.
+      const openColumn = inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol
+      // THE COLUMN IS THE COMPOSED ONE, and it is compared against the columns the
+      // line REACHED plus the ones it opened itself. `rawIndent` measures a line
+      // behind a COLUMN-0 quote run only, so `  >    [r]: /url` scored 2 - the
+      // indent before a marker the block parser strips - and the exemption below
+      // let it through on top of that.
+      const deepestListColumn = openCols
+        .filter((entry) => !entry.quote)
+        .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
+      const deepestTrackedListColumn = listCols.reduce<number | null>(
+        (deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest,
+        deepestListColumn,
+      )
+      const reachedOuterListColumn = openCols
+        .slice(0, composed.depth)
+        .filter((entry) => !entry.quote)
+        .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
+      // WITH A LIST COLUMN IN PLAY the test is "at or past the deepest one", not
+      // "exactly at an open one": §24 C3 erases an authored base before the item
+      // parses the line, so an over-indented definition is the item's definition
+      // and registers document-wide (carve#1705). With NO list column open the
+      // exact test stands unchanged - a quote's content column is reached, not
+      // rebased.
+      const reached = (col: number): boolean =>
+        deepestTrackedListColumn !== null
+          ? col >= deepestTrackedListColumn
+          : composed.peeled.some((one) => one.content === col) ||
+            openCols.some((e, i) => i < composed.depth && e.col === col)
+      const anyReached = composed.peeled.length > 0 || composed.depth > 0
+      // An unmarked line may lazily continue a quote's open paragraph, but it
+      // does not reach a container inside that quote. Falling back to the outer
+      // `contentCol` here made a definition-shaped lazy line both disappear from
+      // the paragraph and become active document-wide.
+      const stoppedAtQuote =
+        !composed.peeled.some((one) => one.quote) &&
+        composed.depth < openCols.length &&
+        openCols[composed.depth]!.quote
+      const atAnOpenContentColumn = stoppedAtQuote
+        ? reachedOuterListColumn !== null && composed.column >= reachedOuterListColumn
+        : plusColumn !== null
+        ? rawIndent === plusColumn
+        : anyReached
+          ? reached(composed.column)
+          : inFootnoteBody
+            ? composed.column >= FOOTNOTE_BODY_COLUMN
+            : composed.column === openColumn
+      // NO EXEMPTION FOR A LINE THAT CARRIES ITS OWN PREFIX. The guard used to
+      // apply only where `kept === unquoted`, which asked "does this line carry a
+      // marker of its own?" - because `rawIndent` measured the wrong thing on the
+      // lines that do, and `- [ref]: /url` had to survive it. It was widened once
+      // already, from `kept === raw` to `kept === unquoted`, when a COLUMN-0 quote
+      // marker turned out to open the same hole (carve-js#648); an indented quote
+      // marker, and a quote behind another one, are the same hole again
+      // (carve-js#1199). Composing the strips answers for all of them at once:
+      // `composed.column` is where the definition really sits, and on a marker
+      // line that is the column the marker just handed out.
+      const notAtContentColumn = !atAnOpenContentColumn
+      const matched = matchLinkDef(line)
+      // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0). Once the block parser would
+      // fold this marker into the paragraph above, its definition-shaped content
+      // is visible text and cannot also define a reference.
+      const declines =
+        topLevelIndentedDef ||
+        notAtContentColumn ||
+        (divs[divs.length - 1]?.host === 'list' &&
+          composed.column > divs[divs.length - 1]!.scope.contentCol) ||
+        (collectsNothing && composed.peeled.some((one) => !one.quote))
+      // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
+      // reading the line as something other than a definition; the block parser
+      // reaches its own reading and, where that one says "definition", removes
+      // the line on the strength of a collection that never happened. Recording
+      // the decline is what lets the strip ask instead of assume.
+      if (declines && matched !== null) {
+        lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
+      }
+      if (!declines && matched !== null) {
+        const def: LinkDef = { href: matched.href }
+        if (matched.title !== undefined) def.title = unescapeAttrValue(matched.title)
+        if (matched.attrText !== null) def.attrs = parseAttrs(matched.attrText)
+        // Link definitions use the shared, case-sensitive ASCII-whitespace key.
+        // The raw spelling stays on the winning definition for the canonical
+        // writer. Implicit heading references remain a separate, looser path.
+        def.line = idx
+        def.rawLabel = matched.label
+        lexer.linkDefs.set(normalizeRefLabel(matched.label), def)
+        continue
+      }
+    }
+  }
+
+  private parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry): BlockNode[] {
+    const out: BlockNode[] = []
+    // Leading block-attribute lines (grammar PART 9 §15) accumulate here
+    // and attach to the next block. They float across blank lines; a
+    // dangling run with no following block is dropped -- unless a `carry` says
+    // this stream is only HALF of one the caller split, in which case the run
+    // travels to the other half instead of dying at the seam.
+    let pending: Attrs | null = carry?.attrs ?? null
+    while (!lexer.eof()) {
+      const line = lexer.peek()!
+      if (isBlankLine(line)) {
+        // Blank lines do NOT reset pending block attributes (§15 reach).
+        lexer.consume()
+        continue
+      }
+      // Stop at lower indent (caller's responsibility to detect this)
+      const indent = leadingWhitespace(line)
+      if (indent < baseIndent) break
+
+      const ba = tryCollectBlockAttributes(lexer)
+      if (ba) {
+        pending = pending ? mergeAttrs(pending, ba) : ba
+        continue
+      }
+
+      const node = this.parseBlock(lexer)
+      // A2a AN INVISIBLE CONSTRUCT IS NOT THE NEXT BLOCK (§15, carve#529):
+      // `pending` floats PAST anything that renders nothing and attaches to the
+      // next VISIBLE block, so
+      //
+      //     {#i}
+      //     [^f]: note
+      //
+      //     e
+      //
+      // is `<p id="i">e</p>`. The attribute is the author's instruction about a
+      // rendered element; attaching it to a construct that emits nothing silently
+      // discards it, and A4 reserves discarding for the one case where there is
+      // genuinely nothing left -- end of document.
+      //
+      // Five kinds are invisible. A reference definition and a footnote
+      // definition leave NO node (the first pass collected them), so the null
+      // return is what identifies them; an abbreviation definition and the two
+      // comment forms leave a node that renders nothing.
+      const invisible =
+        node === null || node.type === 'abbreviation_def' || node.type === 'comment'
+      if (node) {
+        if (pending && !invisible) {
+          // Leading attrs are earlier in source; the block's own trailing
+          // attrs win on conflict (id/key last), classes accumulate (§15).
+          node.attrs = mergeAttrs(pending, node.attrs ?? {})
+        }
+        if (node.type === 'table') deriveTableMetadata(node)
+        consumeLooseKey(node)
+        // A code fence's opener "header" becomes the `title` attribute on the
+        // <pre>. Resolved here (after the pending merge) so a preceding
+        // {title=...} line wins, and so the title lives on the node attrs --
+        // rendered by every code-block path, including inside a code-group or a
+        // caption figure (where parseFence returns a Figure wrapping the block).
+        const cb =
+          node.type === 'code_block'
+            ? node
+            : node.type === 'figure' && node.target.type === 'code_block'
+              ? (node.target as CodeBlock)
+              : undefined
+        // An explicit {title=} wins: for a captioned block it merged onto the
+        // wrapping Figure (node.attrs), otherwise onto the block itself.
+        if (
+          cb?.header !== undefined &&
+          node.attrs?.keyValues?.title === undefined &&
+          cb.attrs?.keyValues?.title === undefined
+        ) {
+          cb.attrs = {
+            ...(cb.attrs ?? {}),
+            keyValues: { ...(cb.attrs?.keyValues ?? {}), title: cb.header },
+          }
+        }
+        out.push(node)
+      }
+      // A VISIBLE block absorbs any pending attrs; an invisible one leaves them
+      // pending for the next block (A2a, above).
+      if (!invisible) pending = null
+    }
+    // A dangling pending run (no following block) is dropped -- or, when the
+    // caller split one stream in two, handed on to the next half.
+    if (carry) carry.attrs = pending
+    return out
+  }
+
+  private parseBlock(lexer: Lexer): BlockNode | null {
+    const startLine = lexer.pos
+    const node = this.parseBlockInner(lexer)
+    if (node) attachBlockPos(lexer, node, startLine, lexer.pos)
+    return node
+  }
+
+  private parseBlockInner(lexer: Lexer): BlockNode | null {
+    const line = lexer.peek()!
+    const hostedLinkDef =
+      lexer.consumesHostedLinkDefs === 'all' ||
+      (lexer.consumesHostedLinkDefs === 'lazy' &&
+        lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
+    const hostedLinkDefLine = hostedLinkDef ? stripLazyFrame(line) : line
+
+    // Past the nesting limit, stop opening recursive containers and treat the
+    // line as paragraph text. Prevents a call-stack overflow on pathologically
+    // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
+    if (lexer.depth >= MAX_NESTING_DEPTH) return this.parseParagraph(lexer, true)
+
+    // Block-level constructs in priority order
+    if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
+    if (RE_FENCE.test(line)) return this.parseFence(lexer)
+    // Comments (not rendered). Block (`%%%`) before line (`%%`). A `%%%` opener
+    // with NO matching closer ahead does not open a block (PART 9 §28) — it falls
+    // through to the line-comment rule below, so the following blocks still
+    // render instead of being swallowed to EOF.
+    const commentFence = RE_COMMENT_BLOCK_ANY.exec(line)
+    if (commentFence && commentBlockHasCloser(lexer, commentFence[1]!.length)) {
+      return parseCommentBlock(lexer)
+    }
+    if (RE_COMMENT_LINE.test(line)) {
+      const l = lexer.consume()
+      // ONE separator character, and it is `whitespace` - a space or a tab
+      // (markup-carve/carve#977, PART 7). This read `/^\s/`, the host language's
+      // class, so a `%%<VT>note` line had its vertical tab eaten as the
+      // separator and `carve fmt` wrote a SPACE back in its place: a character
+      // the clause calls content, replaced by one the author did not write.
+      return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '').replace(/[ \t]+$/, '') }
+    }
+    if (RE_LINE_BLOCK_OPEN.test(line)) return this.parseLineBlock(lexer)
+    if (RE_HARDBREAKS_OPEN.test(line)) return this.parseHardBreaksBlock(lexer)
+    if (RE_QUOTE_BLOCK_OPEN.test(line)) return this.parseQuoteBlock(lexer)
+    // A typed `::: word` admonition opens immediately; if no exact closer appears
+    // ahead, it auto-closes at EOF.
+    if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
+      return this.parseAdmonition(lexer)
+    // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
+    // admonition branch above already claimed the `::: word` form).
+    if (RE_DIV_OPEN.test(line)) return this.parseDiv(lexer)
+    // PART 12 §7: only at document level. In a container the line falls through
+    // to the paragraph branch and is preserved as the text the author typed.
+    if (lexer.atDocumentLevel && RE_ABBR_DEF.test(line)) {
+      return parseAbbrDef(lexer)
+    }
+    // Footnote definition: consume the def line + indented continuation
+    // and stash the parsed body (tested before RE_LINK_DEF).
+    if (RE_FOOTNOTE_DEF.test(line)) return this.parseFootnoteDef(lexer)
+    // A NESTED footnote def, indented past a consuming container's own content
+    // column, is registered on the host's behalf exactly as a link def is
+    // (markup-carve/carve-js#1638). The flush test above misses it - the marker
+    // sits past column 0 - but a container that consumes hosted definitions
+    // consumes an indented footnote def the same way; parseFootnoteDef strips the
+    // marker's indent. Footnote-shaped, so it is NOT caught by the link-def arm
+    // below, which excludes `[^`.
+    if (
+      (lexer.inFootnoteBody || hostedLinkDef) &&
+      RE_FOOTNOTE_DEF.test(hostedLinkDefLine.replace(/^[ \t]+/, ''))
+    ) {
+      return this.parseFootnoteDef(lexer)
+    }
+    // Reference-link definitions were collected in the first pass; the
+    // line itself produces no block (consume it so it is not a paragraph).
+    // Strict column-0 rule: RE_LINK_DEF is whitespace-tolerant (its leading
+    // `[^\S ]*` matches spaces/tabs so a quoted/nested def is still
+    // recognized in other passes), but a def is a block opener and opens ONLY at
+    // its container's content column (column 0 here). An INDENTED `[x]: …` line is
+    // literal paragraph text -- and, since RE_LINK_DEF also matches `[^fn]: …`, an
+    // indented footnote def (missed by the flush-anchored RE_FOOTNOTE_DEF above)
+    // must not be swallowed here either. A footnote body is the exception: its
+    // containers absorb residual indentation at or past their content column.
+    if (
+      (leadingWhitespace(hostedLinkDefLine) === 0 ||
+        // A FOOTNOTE DEF IS NOT A LINK DEF, though `RE_LINK_DEF` matches both.
+        // The flush-anchored test above missed an indented one, so without this
+        // the note body's leniency swallowed a NESTED footnote definition and its
+        // reference dangled (the oracle registers it).
+        (lexer.inFootnoteBody && !/^[ \t]*\[\^/.test(hostedLinkDefLine)) ||
+        (hostedLinkDef && !/^[ \t]*\[\^/.test(hostedLinkDefLine))) &&
+      isLinkDefLine(hostedLinkDefLine) &&
+      (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef) &&
+      // NOTHING COLLECTED IT, SO NOTHING MAY REMOVE IT. Under-collecting is the
+      // error PART 9R R1a licenses; deleting the author's line is the one it
+      // rules out, and carve#1883 forbids returning a document missing text the
+      // author typed. Falling through leaves the line as the paragraph it looks
+      // like (markup-carve/carve-js#1597).
+      (!lexer.declinedLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef)
+    ) {
+      lexer.consume()
+      return null
+    }
+    if (RE_HR.test(line)) {
+      lexer.consume()
+      const node: ThematicBreak = { type: 'thematic_break' }
+      if (line[0] === '*' || line[0] === '_') node.marker = line[0]
+      return node
+    }
+    if (RE_HEADING.test(line)) return this.parseHeading(lexer)
+    // Definition list starts on a `:: term` line (two colons, not three).
+    if (RE_DEFLIST_TERM.test(line)) return this.parseDefinitionList(lexer)
+    if (RE_BLOCKQUOTE.test(line)) return this.parseBlockQuote(lexer)
+    if (
+      RE_TASK.test(line) ||
+      RE_UNORDERED.test(line) ||
+      RE_ORDERED.test(line) ||
+      extractItemAttr(line) !== null
+    )
+      return this.parseList(lexer)
+    if (isTableRow(line)) return this.parseTable(lexer)
+    if (isBlockImageLine(line) && imageIsBlock(lexer)) return this.parseBlockImage(lexer)
+    // Extension block matchers run after every core construct, before the
+    // paragraph fallback: extensions add syntax, they never hijack core.
+    if (this.activeMatchers.length) {
+      const matched = this.tryBlockMatchers(lexer)
+      if (matched) return matched
+    }
+    // A line that is nothing but a display-math span (`$$`…``) standalone on its
+    // block is a candidate EQUATION; when a caption follows it is numbered like a
+    // figure/table/listing (#87). Diverted here, before the paragraph fallback,
+    // because parseParagraph would otherwise fold the caption line into the math
+    // paragraph.
+    if (line.trimStart().startsWith('$$`')) {
+      const eq = this.parseEquationBlock(lexer)
+      if (eq) return eq
+    }
+    return this.parseParagraph(lexer)
+  }
+
+  // Parse a standalone display-math line, optionally wrapping it in a figure when
+  // a caption follows (a numbered equation). Returns null when the line is not
+  // solely display math, or when non-blank prose follows with no blank line (so
+  // the line belongs to a normal multi-line paragraph instead).
+  private parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
+    // Mirror parseParagraph's leading-whitespace strip + base-position folding so
+    // an indented standalone equation is still recognized and the math span keeps
+    // its true source offset.
+    const lineIndex = lexer.pos
+    const raw = lexer.peek()!
+    const firstLead = raw.match(/^[ \t]+/)?.[0].length ?? 0
+    const inline = this.parseInline(raw.replace(/^[ \t]+/, ''), lexer.abbrDefs, lexer.linkDefs, {
+      anchored: lexer.hasDocumentOffsets,
+      baseOffset: lexer.lineOffset(lineIndex) + firstLead,
+      startLine: lexer.lineNumber(lineIndex),
+      startColumn: lexer.lineStartColumn(lineIndex) + firstLead,
+    })
+    if (inline.length !== 1) return null
+    const only = inline[0]!
+    if (only.type !== 'math' || !(only as Math).display) return null
+    // First non-blank line after the math line, and how many blanks precede it.
+    let la = 1
+    while (isBlankLine(lexer.peek(la))) la++
+    const after = lexer.peek(la)
+    const blanks = la - 1
+    const cap = after !== undefined ? RE_CAPTION.exec(after) : null
+    // A display-math equation line reaches here already dispatched as a block, so
+    // it stands at its container's content column by construction.
+    const para: Paragraph = { type: 'paragraph', children: inline }
+    // §4: a caption attaches across at most one blank line.
+    if (cap && blanks <= 1) {
+      for (let i = 0; i <= la; i++) lexer.consume()
+      // The block loop spans the FIGURE, so the equation paragraph it wraps would
+      // otherwise have no position of its own (PART 12 §4). The equation occupies
+      // exactly its own line; the figure spans that plus the caption.
+      attachBlockPos(lexer, para, lineIndex, lineIndex + 1)
+      return {
+        type: 'figure',
+        target: para,
+        caption: this.parseCaptionInline(lexer, cap[1]!),
+      } as Figure
+    }
+    // Non-blank, non-caption text immediately follows: let parseParagraph fold
+    // the math and that text into one paragraph (preserve existing behavior).
+    if (after !== undefined && blanks === 0) return null
+    // Standalone display math with no caption: a plain single-math paragraph.
+    lexer.consume()
+    return para
+  }
+
+  private parseHeading(lexer: Lexer): Heading {
+    const lineIndex = lexer.pos
+    const line = lexer.consume()
+    const m = RE_HEADING.exec(line)!
+    const level = m[1]!.length as HeadingLevel
+
+    // SINGLE-LINE HEADINGS (NORMATIVE, diverges from Djot): a heading ENDS AT THE
+    // NEWLINE. Nothing folds into it -- not a plain line, not a same-count `#`
+    // line -- so the next line begins whatever block it begins, exactly as after
+    // any other closed block. Lazy continuation therefore means one thing across
+    // the language: it continues an open PARAGRAPH, and a heading is not one.
+    let text = line.replace(/^#{1,6} +/, '')
+    // NO TRAILING WHITESPACE (PART 2; carve#926). A heading is one line by
+    // construction, so the single-line form is the whole rule here.
+    text = text.replace(RE_TRAILING_WS, '')
+
+    const node: Heading = { type: 'heading', level, children: [] }
+    // djot-strict: a heading takes its attributes on the PRECEDING block-
+    // attribute line (§15), not as a trailing `{…}` on its own line. A `{…}`
+    // at the end of the heading text is therefore ordinary inline content.
+    // Column where the content starts on the first line (the marker + spaces).
+    const textColumn = line.length - line.replace(/^#{1,6} +/, '').length + 1
+    node.children = this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      anchored: lexer.hasDocumentOffsets,
+      baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
+      startLine: lexer.lineNumber(lineIndex),
+      startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
+    })
+    return node
+  }
+
+  private parseFence(lexer: Lexer): CodeBlock | Figure {
+    const fenceStartIndex = lexer.pos
+    const open = lexer.consume()
+    const m = RE_FENCE.exec(open)!
+    const indent = m[1]!.length
+    const marker = m[2]!
+    const lang = m[3] || undefined
+    // Header is the quoted group (with or without a language); label is the
+    // bracketed group from whichever alternative matched. Strip the delimiters.
+    const headerRaw = m[4] ?? m[6]
+    const labelRaw = m[5] ?? m[7] ?? m[8]
+    const header = headerRaw ? headerRaw.slice(1, -1) : undefined
+    const label = labelRaw ? labelRaw.slice(1, -1) : undefined
+    const closeRe = fenceCloseRe(marker)
+    const lines: string[] = []
+    while (!lexer.eof()) {
+      const ln = lexer.peek()!
+      if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
+        lexer.consume()
+        break
+      }
+      lexer.consume()
+      // The frame did its work in the closer test above - it is what keeps a
+      // closing run the CONTAINER folded in from closing this block - and a
+      // verbatim body is where a framed line becomes text, so it comes off here
+      // (markup-carve/carve-js#1630).
+      const body = stripLazyFrame(ln)
+      // Strip the common indent of the opening fence (Djot rule)
+      lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
+    }
+    const fenceEndIndex = lexer.pos
+    const cb: CodeBlock = { type: 'code_block', content: lines.join('\n') }
+    if (lang) cb.lang = lang
+    if (header !== undefined) cb.header = header
+    if (label !== undefined) cb.label = label
+    // Optional caption (`^ …`): a captioned code block is a numbered LISTING,
+    // wrapped in a figure exactly like a captioned image/blockquote/table.
+    let lookahead = 0
+    while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+    const next = lexer.peek(lookahead)
+    if (next) {
+      const cap = RE_CAPTION.exec(next)
+      // §4: a caption attaches only when it immediately follows the block
+      // or is separated by at most ONE blank line.
+      if (cap && lookahead <= 1) {
+        for (let i = 0; i <= lookahead; i++) lexer.consume()
+        // The block loop spans the FIGURE, so the fence it wraps would otherwise
+        // have no position of its own (PART 12 §4). It ends where the caption
+        // begins - the same treatment the captioned image and blockquote already
+        // get.
+        attachBlockPos(lexer, cb, fenceStartIndex, fenceEndIndex)
+        return {
+          type: 'figure',
+          target: cb,
+          caption: this.parseCaptionInline(lexer, cap[1]!),
+        } as Figure
+      }
+    }
+    return cb
+  }
+
+  // Footnote definition. The def line's trailing text plus following lines
+  // indented by >= 2 spaces (single blank lines allowed between chunks)
+  // form the note body, parsed as blocks. First definition for a label
+  // wins. Emits no block — the body is stashed on lexer.footnoteDefs and
+  // rendered in the endnotes section.
+  private parseFootnoteDef(lexer: Lexer): null {
+    const defLineIndex = lexer.pos
+    const defLineRaw = lexer.consume()
+    // A note's body column is measured from its OWN marker: §16 asks for two
+    // columns past the marker, not two past the frame's zero. A properly nested
+    // note rebases to column zero, so `markerColumn` is 0 and `bodyColumn` is the
+    // fixed minimum of two. A note that opens one column shy of its host's body
+    // column keeps a residual marker indent here (the `i < m+2` nested-note
+    // geometry of carve-js#1653 / markup-carve/carve#1946): its body column is
+    // then `markerColumn + 2`, so a trailing line below the note's own content
+    // column is NOT claimed by it and falls to the surviving ancestor note. Left
+    // at the fixed 2 the innermost note over-reached, taking a line that belongs
+    // to the outer note.
+    const markerColumn = indentColumns(defLineRaw)
+    const bodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
+    const m = RE_FOOTNOTE_DEF.exec(defLineRaw.replace(/^[ \t]+/, ''))!
+    // Preserve the raw label as the AST/source-layout spelling. Resolution and
+    // duplicate handling derive their shared ASCII-whitespace key separately.
+    const label = m[1]!
+    const bodyLines = [m[2]!]
+    const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
+    let pendingBlanks = 0
+    let pendingBlankLineNumbers: number[] = []
+    while (!lexer.eof()) {
+      const ln = lexer.peek()!
+      if (isBlankLine(ln)) {
+        pendingBlanks++
+        pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
+        lexer.consume()
+        continue
+      }
+      // Form B: a lone `+` attaches the FOLLOWING flush-left block to the note
+      // with no indentation (the same continuation marker lists and block quotes
+      // use); the attached block ends at a blank line, another `+`, or the next
+      // footnote definition - unless a fence this block opened is still open, in
+      // which case all three are body text (corpus category 279).
+      if (/^\+[ \t]*$/.test(ln)) {
+        const plusLineNumber = lexer.lineNumber(lexer.pos)
+        lexer.consume()
+        pendingBlanks = 0
+        pendingBlankLineNumbers = []
+        // ...AND THE NOTE ENDS WHERE A COMMENT ENDS IT. The gate below decides
+        // whether this `+` is a marker at all; when it is not, the line is an
+        // ordinary invisible line at document column 0, and a footnote body ends
+        // at one of those exactly as it ends at a comment line there
+        // (markup-carve/carve#1814). Asked one line early because this loop's
+        // own continuation branch would otherwise claim the following line before
+        // any extent is measured. The `+` is consumed either way, so the
+        // enclosing parse resumes on the line the marker did not take.
+        if (!attachesAtDocumentColumnZero(lexer)) break
+        const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+          lexer,
+          (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a),
+        )
+        if (attached.length > 0) {
+          bodyLines.push('')
+          bodyLineNumbers.push(plusLineNumber)
+          for (const a of attached) bodyLines.push(a)
+          bodyLineNumbers.push(...attachedLineNumbers)
+        }
+        continue
+      }
+      // §16 asks for COLUMNS, not characters, and §24 C1 gives a tab a column
+      // value - so a bare tab reaches column 4 and continues the note exactly as
+      // two spaces do. Matching characters here accepted `<SPACE><TAB>` and
+      // refused a bare tab, while carve-php refused the mixture and took the bare
+      // tab: three engines, three readings (carve#796, carve-js#725). A rejected
+      // continuation does not indent differently, it LEAVES the note and lands in
+      // the document body, so the split moved content between blocks.
+      if (indentColumns(ln, bodyColumn) >= bodyColumn) {
+        for (let k = 0; k < pendingBlanks; k++) {
+          bodyLines.push('')
+          bodyLineNumbers.push(pendingBlankLineNumbers[k]!)
+        }
+        pendingBlanks = 0
+        pendingBlankLineNumbers = []
+        bodyLines.push(sliceColumns(ln, bodyColumn, true))
+        bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+        lexer.consume()
+      } else {
+        break
+      }
+    }
+    if (!lexer.footnoteDefs.has(label)) {
+      // A recognized opener at or beyond the note's minimum column establishes
+      // its authored column as a local base (carve#1729). The collector has
+      // already removed the fixed two-column body margin.
+      rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
+      const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
+      sub.sublistsCarryAuthoredBase = true
+      sub.inFootnoteBody = true
+      sub.hostBody = 'footnote'
+      lexer.footnoteDefs.set(label, this.parseBlocks(sub, 0))
+      // The definition runs from its `[^label]:` marker to the last line it
+      // consumed. The body blocks cannot supply that: the marker is not part of
+      // any of them, so a span derived from the body would start inside the
+      // definition (carve-js#480).
+      //
+      // Only when this lexer can express a document offset - inside an unmapped
+      // container the numbers mean something else, and §4 forbids inventing one.
+      if (lexer.hasDocumentOffsets) {
+        let lastIndex = Math.max(defLineIndex, lexer.pos - 1)
+        while (lastIndex > defLineIndex && isBlankLine(lexer.lines[lastIndex] ?? '')) lastIndex--
+        const lastLine = lexer.lines[lastIndex] ?? ''
+        // A span begins at the `[^label]:` marker, not at the line start. When
+        // this definition is nested one column shy of its parent's body margin,
+        // the sub-lexer strips a fixed margin and leaves a residual space ahead
+        // of the marker; the start must skip it (PART 12 §4, carve#1963).
+        const defLine = lexer.lines[defLineIndex] ?? ''
+        const defLead = defLine.length - defLine.replace(/^[ \t]+/, '').length
+        const pos: Position = {
+          startLine: lexer.lineNumber(defLineIndex),
+          endLine: lexer.lineNumber(lastIndex),
+          startColumn: lexer.lineStartColumn(defLineIndex) + defLead,
+          endColumn: lexer.lineStartColumn(lastIndex) + lastLine.length,
+          startOffset: lexer.lineOffset(defLineIndex) + defLead,
+          endOffset: lexer.lineOffset(lastIndex) + lastLine.length,
+        }
+        const lastOwned = [...(lexer.footnoteDefs.get(label) ?? [])]
+          .reverse()
+          .find((child) => child.pos !== undefined)?.pos
+        if (lastOwned !== undefined) {
+          pos.endLine = lastOwned.endLine
+          if (lastOwned.endColumn !== undefined) pos.endColumn = lastOwned.endColumn
+          if (lastOwned.endOffset !== undefined) pos.endOffset = lastOwned.endOffset
+        }
+        lexer.footnoteDefPos.set(label, pos)
+      }
+    }
+    return null
+  }
+
+  private parseAdmonition(lexer: Lexer): Admonition | Directive | FigureGroup {
+    const openLineIndex = lexer.pos
+    const open = lexer.consume()
+    const m = RE_ADMONITION_OPEN.exec(open)!
+    const fence = m[1]!.length
+    const kind = m[2]!
+    // PART 9 §4c: a BARE `::: figure` opener - kind only, no quoted title, no
+    // `[label]` - is a composite figure group, not an admonition. An opener
+    // carrying either piece of metadata does not match the figure production and
+    // stays a generic container (the group node has no title/label fields by
+    // design). A bare opener inside an OPEN group's body is demoted the same way:
+    // groups do not nest, which is what `inFigureGroup` carries through the
+    // recursion.
+    const isFigureGroup =
+      kind === 'figure' && m[3] === undefined && m[4] === undefined && !lexer.inFigureGroup
+    // The opener carries an optional quoted title only (grammar
+    // quoted_title; PART 9 §12). The quotes delimit the title and are
+    // stripped (not part of the rendered text); an explicitly empty `""`
+    // still counts as a supplied (empty) title. No inline attributes -- the
+    // opener regex already rejected any trailing `{...}`.
+    const titleText = m[3] !== undefined ? m[3]!.slice(1, -1) : undefined
+    // Optional inert grouping `[label]` (PART 9 §12): a group extension (tabs)
+    // uses it as the tab name; core does not render it.
+    const label = m[4] !== undefined ? m[4]!.slice(1, -1) : undefined
+    const inner = collectColonFenceBody(lexer, {
+      // Which of the two named-container types this fence opens, so an unclosed
+      // one is reported as the thing it was (CARVE-P12-057).
+      kind: GENERATED_CONTENT_KINDS.has(kind) ? 'directive' : 'admonition',
+      lineIndex: openLineIndex,
+      fenceWidth: fence,
+    })
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    subLexer.consumesHostedLinkDefs =
+      lexer.hostBody === 'description' || lexer.hostBody === 'footnote' ? 'all' : false
+    if (isFigureGroup) subLexer.inFigureGroup = true
+    const children = this.parseBlocks(subLexer, 0)
+    if (isFigureGroup) {
+      const group: FigureGroup = { type: 'figure_group', children }
+      // The group's CLOSING fence is §4's sixth caption host: a `^ …` line
+      // directly after it (or across at most one blank line) attaches as the
+      // GROUP caption - the same slot idiom the five parse-time hosts use.
+      // A group auto-closed at EOF has no closer line to host the slot, and in
+      // that case the lexer is already exhausted, so the lookahead finds nothing.
+      let lookahead = 0
+      while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+      const next = lexer.peek(lookahead)
+      if (next) {
+        const cap = RE_CAPTION.exec(next)
+        // §4: a caption attaches only when it immediately follows the block
+        // or is separated by at most ONE blank line.
+        if (cap && lookahead <= 1) {
+          for (let i = 0; i <= lookahead; i++) lexer.consume()
+          group.caption = this.parseCaptionInline(lexer, cap[1]!)
+        }
+      }
+      // A preceding block-attribute line is the only way to attribute the group
+      // (same as the admonition below); parseBlocks applies it to the returned
+      // node.
+      return group
+    }
+    // CARVE-P12-057: a named container whose kind names GENERATED CONTENT is a
+    // `directive`, not an `admonition`. The kind list is CLOSED - a seventh
+    // generated-looking word (`endnotes`, `contents`) takes the admonition branch
+    // below, because the clause rules that "every other named container is an
+    // `admonition`".
+    //
+    // Keep the quoted opener title for either named container type. An explicit
+    // empty title still occupies the title slot.
+    let title: InlineNode[] | undefined
+    if (titleText !== undefined) {
+      const titleStart = open.indexOf(m[3]!) + 1
+      title = this.parseInline(titleText, lexer.abbrDefs, lexer.linkDefs, {
+        anchored: lexer.hasDocumentOffsets && titleStart > 0,
+        baseOffset: lexer.lineOffset(openLineIndex) + titleStart,
+        startLine: lexer.lineNumber(openLineIndex),
+        startColumn: lexer.lineStartColumn(openLineIndex) + titleStart,
+      })
+    }
+    if (GENERATED_CONTENT_KINDS.has(kind)) {
+      const directive: Directive = { type: 'directive', kind, children }
+      if (title !== undefined) directive.title = title
+      if (label !== undefined) directive.label = label
+      return directive
+    }
+    const node: Admonition = { type: 'admonition', kind, children }
+    if (title !== undefined) node.title = title
+    if (label !== undefined) {
+      node.label = label
+    }
+    // No inline opener attributes (strict djot): a preceding block-attribute
+    // line is the only way to attribute an admonition, and parseBlocks
+    // applies it to the returned node.
+    return node
+  }
+
+  private parseLineBlock(lexer: Lexer): LineBlock {
+    const openLineIndex = lexer.pos
+    const open = lexer.consume()
+    const m = RE_LINE_BLOCK_OPEN.exec(open)!
+    const fence = m[1]!.length
+    interface StanzaLine {
+      text: string
+      lineIndex: number
+      /** Source UTF-16 offset for each expanded character; absent for tab columns. */
+      sourceOffsets: Array<number | undefined>
+      aligned: boolean
+      /**
+       * The comment this line WAS, for a line the block layer emptied.
+       *
+       * Kept because §23 removes the line from the RENDER and not from the tree:
+       * it stays a `comment` node like any other, so the canonical writer can put
+       * the author's line back at the column they wrote it at.
+       */
+      comment?: Comment
+    }
+    const stanzas: StanzaLine[][] = []
+    let stanza: StanzaLine[] = []
+    for (const { text: ln, lineIndex } of collectLiteralColonFenceBody(lexer, {
+      kind: 'line block',
+      lineIndex: openLineIndex,
+      fenceWidth: fence,
+    })) {
+      if (isBlankLine(ln)) {
+        if (stanza.length) {
+          stanzas.push(stanza)
+          stanza = []
+        }
+        continue
+      }
+      if (ln.startsWith('%%')) {
+        const comment: Comment = {
+          type: 'comment',
+          block: false,
+          content: ln.slice(2).replace(/^[ \t]/, '').replace(/[ \t]+$/, ''),
+        }
+        if (lexer.hasDocumentOffsets) {
+          comment.pos = {
+            startLine: lexer.lineNumber(lineIndex),
+            endLine: lexer.lineNumber(lineIndex),
+            startColumn: lexer.lineStartColumn(lineIndex),
+            endColumn: lexer.lineStartColumn(lineIndex) + ln.length,
+            startOffset: lexer.lineOffset(lineIndex),
+            endOffset: lexer.lineOffset(lineIndex) + ln.length,
+          }
+        }
+        stanza.push({ text: '', lineIndex, sourceOffsets: [], aligned: true, comment })
+        continue
+      }
+      const sourceOffsets: Array<number | undefined> = []
+      const expanded = expandLineBlockWhitespace(ln, sourceOffsets)
+      stanza.push({
+        text: dropTrailingSpaces(expanded),
+        lineIndex,
+        sourceOffsets,
+        aligned: !ln.includes('\t'),
+      })
+    }
+    if (stanza.length) stanzas.push(stanza)
+
+    const children = stanzas.map<Paragraph>((lines) => {
+      const anchorable = lexer.hasDocumentOffsets
+      const unchangedColumns = lines.every((line) => line.aligned)
+
+      const terminalCommentGuard = lines.at(-1)?.comment ? '\uE001' : ''
+      const joined = lines.map((line) => line.text).join('\n') + terminalCommentGuard
+      const firstLineNumber = lexer.lineNumber(lines[0]!.lineIndex)
+      // The break BETWEEN line `index` and the one after it, from line geometry.
+      // Unchanged from when each break was built during the per-line walk, down to
+      // the clamp: keep the usual start after the parsed text, so a dropped
+      // trailing source space remains part of the break span, but do not let an
+      // expanded tab put `startOffset` past the following line's offset.
+      const breakPos = (index: number): Position | undefined => {
+        if (!lexer.hasDocumentOffsets) return undefined
+        const line = lines[index]!
+        const next = lines[index + 1]
+        if (!next) return undefined
+        const lineOffset = lexer.lineOffset(line.lineIndex)
+        const sourceLineEnd = lineOffset + (lexer.lines[line.lineIndex]?.length ?? 0)
+        return {
+          startLine: lexer.lineNumber(line.lineIndex),
+          endLine: lexer.lineNumber(next.lineIndex),
+          startColumn:
+            lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0),
+          endColumn: lexer.lineStartColumn(next.lineIndex),
+          // A COMMENT LINE IS MEASURED FROM ITS SOURCE, not from the empty text
+          // the block layer left behind. The clamp above reads the parsed text's
+          // length, which is zero here, so the break would start at the line's
+          // FIRST column while its `startColumn` is derived from the source line
+          // and reports the last - one span with two answers, overlapping the
+          // `comment` node that occupies those same bytes.
+          startOffset: line.comment
+            ? sourceLineEnd
+            : Math.min(lineOffset + line.text.length, sourceLineEnd),
+          endOffset: lexer.lineOffset(next.lineIndex),
+        }
+      }
+      // Parse with expanded columns, then map each surviving span to its source.
+      const outerLineBlock = this.inLineBlock
+      this.inLineBlock = true
+      let parsed: InlineNode[]
+      try {
+        parsed = this.parseInline(
+          joined,
+          lexer.abbrDefs,
+          lexer.linkDefs,
+          lexer.hasDocumentOffsets
+            ? inlineSource({
+                baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
+                startLine: firstLineNumber,
+                startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
+                lineAnchors: lines.map((line) => ({
+                  offset: lexer.lineOffset(line.lineIndex),
+                  column: lexer.lineStartColumn(line.lineIndex),
+                  line: lexer.lineNumber(line.lineIndex),
+                })),
+              })
+            : inlineSource({ anchored: false }),
+        )
+      } finally {
+        this.inLineBlock = outerLineBlock
+      }
+      // Source NULs were replaced before block parsing; these are generated gaps.
+      const restoreVerbatimGaps = (value: unknown): void => {
+        if (!value || typeof value !== 'object') return
+        for (const [key, child] of Object.entries(value)) {
+          if (typeof child === 'string' && child.includes('\0')) {
+            (value as Record<string, unknown>)[key] = child.replace(/\0/g, '\u00a0')
+          } else restoreVerbatimGaps(child)
+        }
+      }
+      restoreVerbatimGaps(parsed)
+      if (terminalCommentGuard) {
+        const removeGuard = (nodes: InlineNode[]): boolean => {
+          for (let index = 0; index < nodes.length; index++) {
+            const node = nodes[index]!
+            const record = node as unknown as Record<string, unknown>
+            for (const key of ['value', 'content'] as const) {
+              const value = record[key]
+              if (typeof value === 'string' && value.endsWith(terminalCommentGuard)) {
+                record[key] = value.slice(0, -terminalCommentGuard.length)
+                // The guard may be the entire final text leaf when no verbatim
+                // run claims it. Leaving that synthesized empty node behind also
+                // leaves its source span over the comment bytes, overlapping the
+                // real comment node reinserted below.
+                if (node.type === 'text' && record.value === '') nodes.splice(index, 1)
+                return true
+              }
+            }
+            for (const key of ['children', 'inline', 'content'] as const) {
+              const value = record[key]
+              if (Array.isArray(value) && removeGuard(value as InlineNode[])) return true
+            }
+          }
+          return false
+        }
+        removeGuard(parsed)
+        if (lexer.hasDocumentOffsets) {
+          const guardLine = lines[lines.length - 1]!
+          const guardOffset = lexer.lineOffset(guardLine.lineIndex)
+          const guardColumn = lexer.lineStartColumn(guardLine.lineIndex)
+          const guardLineNumber = lexer.lineNumber(guardLine.lineIndex)
+          // AT EVERY DEPTH: the run that swallows the boundary may be nested
+          // inside emphasis that opened on an earlier body line, and then the
+          // container ends there too.
+          const clampToGuard = (nodes: InlineNode[]): void => {
+            for (const node of nodes) {
+              const pos = node.pos
+              if (pos && pos.endOffset !== undefined && pos.endOffset > guardOffset) {
+                pos.endOffset = guardOffset
+                pos.endColumn = guardColumn
+                pos.endLine = guardLineNumber
+              }
+              const record = node as unknown as Record<string, unknown>
+              for (const key of ['children', 'inline', 'content'] as const) {
+                const value = record[key]
+                if (Array.isArray(value)) clampToGuard(value as InlineNode[])
+              }
+            }
+          }
+          clampToGuard(parsed)
+        }
+      }
+      // Read the boundary each break belongs to BEFORE any stripping takes the
+      // position that says so.
+      const breakIndex = new Map<InlineNode, number>()
+      // WHICH LINES STILL END AT A BOUNDARY, counting the boundaries the author
+      // spelled with a `\` as well as the ones the container hardens. A `\` is
+      // not a soft break and never reaches the conversion below, but it is just
+      // as much a surviving line end - and the comment reinsertion asks that
+      // question, not the conversion's.
+      const boundaryLines = new Set<number>()
+      // EVERY SLOT AN INLINE NODE HOLDS OTHER INLINES IN, not just `children`: an
+      // inline footnote carries its body in `inline` and an inline extension in
+      // `content`, and a walk that knows only one name misses two containers.
+      // Named once so the two passes below cannot drift apart on it.
+      const INLINE_SLOTS = ['children', 'inline', 'content'] as const
+      const slotsOf = (node: InlineNode): InlineNode[][] => {
+        const record = node as unknown as Record<string, unknown>
+        // `content` is a STRING on a comment and on an inline literal, so the
+        // array test is the discriminator rather than the name.
+        return INLINE_SLOTS.map((slot) => record[slot]).filter(Array.isArray) as InlineNode[][]
+      }
+      // AT EVERY DEPTH. An inline container that opens on one body line and
+      // closes on a later one holds the boundaries between them as its OWN
+      // children, so a walk over the stanza's top-level nodes never sees them
+      // (carve-js#1174).
+      const readBoundaries = (nodes: InlineNode[]): void => {
+        for (const node of nodes) {
+          if (node.type === 'soft_break' || node.type === 'hard_break') {
+            const startLine = node.pos?.startLine
+            if (startLine === undefined) continue
+            boundaryLines.add(startLine - firstLineNumber)
+            if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
+            continue
+          }
+          for (const slot of slotsOf(node)) readBoundaries(slot)
+        }
+      }
+      readBoundaries(parsed)
+      if (!anchorable) stripPositions(parsed)
+      else if (!unchangedColumns || lines.some((line) => lexer.lineStartColumn(line.lineIndex) < 1)) {
+        const byLine = new Map(lines.map((line) => [lexer.lineNumber(line.lineIndex), line]))
+        const remap = (nodes: InlineNode[]): void => {
+          for (const node of nodes) {
+            const pos = node.pos
+            if (pos && typeof pos === 'object' && typeof pos.startLine === 'number' && typeof pos.endLine === 'number') {
+              const first = byLine.get(pos.startLine)
+              const last = byLine.get(pos.endLine)
+              const start = first && pos.startColumn !== undefined
+                ? pos.startColumn - lexer.lineStartColumn(first.lineIndex) : -1
+              const end = last && pos.endColumn !== undefined
+                ? pos.endColumn - lexer.lineStartColumn(last.lineIndex) : -1
+              const sourceStart = first?.sourceOffsets[start]
+              const sourceLast = end === 0 && last
+                ? -1 : last?.sourceOffsets[end - 1]
+              const contiguousText = node.type !== 'text' || (first === last &&
+                sourceStart !== undefined && sourceLast !== undefined &&
+                sourceLast - sourceStart === end - start - 1 &&
+                first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined))
+              if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText ||
+                lexer.lineStartColumn(first.lineIndex) + sourceStart < 1) {
+                delete node.pos
+              } else {
+                pos.startColumn = lexer.lineStartColumn(first.lineIndex) + sourceStart
+                pos.endColumn = lexer.lineStartColumn(last.lineIndex) + sourceLast + 1
+                pos.startOffset = lexer.lineOffset(first.lineIndex) + sourceStart
+                pos.endOffset = lexer.lineOffset(last.lineIndex) + sourceLast + 1
+              }
+            }
+            for (const [key, value] of Object.entries(node)) {
+              if (key !== 'pos' && (key !== 'attrs' || typeof node.type !== 'string') && value && typeof value === 'object') {
+                remap((Array.isArray(value) ? value : [value]) as InlineNode[])
+              }
+            }
+          }
+        }
+        remap(parsed)
+      }
+      const pendingComments = new Map<number, Comment>()
+      lines.forEach((line, index) => {
+        if (!line.comment) return
+        pendingComments.set(index, line.comment)
+      })
+      const place = (nodes: InlineNode[]): InlineNode[] => {
+        const out: InlineNode[] = []
+        for (const node of nodes) {
+          if (node.type !== 'soft_break') {
+            const record = node as unknown as Record<string, unknown>
+            for (const slot of INLINE_SLOTS) {
+              const value = record[slot]
+              if (Array.isArray(value)) record[slot] = place(value as InlineNode[])
+            }
+            out.push(node)
+            continue
+          }
+          const index = breakIndex.get(node)
+          // The comment sits BEFORE the break that ends its line: the line is empty
+          // now, so there is nothing else on it.
+          if (index !== undefined) {
+            const comment = pendingComments.get(index)
+            if (comment) {
+              // A NESTED REINSERTION KEEPS ITS POSITION NOW. It could not before:
+              // the nodes it sits among were measured from the JOINED text, which
+              // is shorter than the source by exactly the line this comment
+              // emptied, so `c` in `*a` / `%% secret` / `c*` reported the offset
+              // of `%` and a correct span beside it would have asserted that two
+              // nodes hold the same bytes (carve-js#1182). With the anchors
+              // carried into the nested scan those siblings are measured from the
+              // line they were written on, and the spans nest the way PART 12
+              // containment asks.
+              out.push(comment)
+              pendingComments.delete(index)
+            }
+          }
+          // EVERY SURVIVING BREAK IS HARDENED AND RE-POSED FROM LINE GEOMETRY, at
+          // any depth. A nested break left on its scanned span ends where the
+          // NEXT line starts, so the one that ends an emptied comment line
+          // covered that whole line and overlapped the comment reinserted just
+          // above it.
+          const hardBreak = { type: 'hard_break' } as InlineNode
+          const pos = index === undefined ? undefined : breakPos(index)
+          if (pos) hardBreak.pos = pos
+
+          out.push(hardBreak)
+        }
+        return out
+      }
+      const inline: InlineNode[] = place(parsed)
+      // A COMMENT ON THE STANZA'S LAST LINE has no break after it to sit before,
+      // so it goes at the end - the boundary that opens its line is still there,
+      // which is what says the line is still there.
+      //
+      // A COMMENT AN OPEN RUN SWALLOWED does not survive, and that is §23's own
+      // account of the shape rather than a loss: what the run carries across the
+      // emptied line is a NEWLINE, the same thing it carries across every other
+      // boundary it swallows. There is no boundary left in the tree to host the
+      // node, and appending one anyway put a span BEFORE the run that contains it
+      // and after the node that follows it, which PART 12 containment refuses.
+      // The writer keeps the LINE - an empty verse line has exactly one spelling
+      // inside an open run, and it is a comment line.
+      for (const index of [...pendingComments.keys()].sort((a, b) => a - b)) {
+        const isLastLine = index === lines.length - 1
+        if (isLastLine && (index === 0 || boundaryLines.has(index - 1))) {
+          inline.push(pendingComments.get(index)!)
+        }
+      }
+
+      const paragraph: Paragraph = { type: 'paragraph', children: inline }
+      if (lexer.hasDocumentOffsets) {
+        const first = lines[0]!
+        const last = lines[lines.length - 1]!
+        paragraph.pos = {
+          startLine: lexer.lineNumber(first.lineIndex),
+          endLine: lexer.lineNumber(last.lineIndex),
+          startColumn: lexer.lineStartColumn(first.lineIndex),
+          endColumn: lexer.lineStartColumn(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
+          startOffset: lexer.lineOffset(first.lineIndex),
+          endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
+        }
+        const placed = anchorable && unchangedColumns ? inline.filter((node) => node.pos !== undefined) : []
+        const firstPos = placed.find(
+          (node) => node.type !== 'soft_break' && node.type !== 'hard_break',
+        )?.pos
+        const lastPos = placed[placed.length - 1]?.pos
+        if (firstPos) {
+          paragraph.pos.startLine = firstPos.startLine
+          if (firstPos.startColumn !== undefined) paragraph.pos.startColumn = firstPos.startColumn
+          if (firstPos.startOffset !== undefined) paragraph.pos.startOffset = firstPos.startOffset
+        }
+        if (lastPos) {
+          paragraph.pos.endLine = lastPos.endLine
+          if (lastPos.endColumn !== undefined) paragraph.pos.endColumn = lastPos.endColumn
+          if (lastPos.endOffset !== undefined) paragraph.pos.endOffset = lastPos.endOffset
+        }
+      }
+      return paragraph
+    })
+    // No inline opener attributes (strict djot); a preceding block-attribute
+    // line merges onto this node in parseBlocks.
+    const node: LineBlock = {
+      type: 'line_block',
+      children,
+    }
+    return node
+  }
+
+  // `::: \` hard-break block. Unlike the line block, the body is parsed as
+  // ordinary blocks (so nested admonitions / lists work); soft breaks are then
+  // promoted to hard breaks ONLY in the div's DIRECT paragraph children, and
+  // there is no leading-whitespace preservation. Emits `<div class="hardbreaks">`.
+  private parseHardBreaksBlock(lexer: Lexer): Div {
+    const openLineIndex = lexer.pos
+    const m = RE_HARDBREAKS_OPEN.exec(lexer.consume())!
+    const fence = m[1]!.length
+    const inner = collectColonFenceBody(lexer, {
+      kind: 'hard-break block',
+      lineIndex: openLineIndex,
+      fenceWidth: fence,
+    })
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    const children = this.parseBlocks(subLexer, 0)
+    for (const child of children) {
+      if (child.type === 'paragraph') {
+        child.children = child.children.map((node) => {
+          if (node.type !== 'soft_break') return node
+          // Keep the break's span: it is the same source, just a different
+          // meaning inside a hard-breaks block. Building a fresh object dropped
+          // it, which is the same slip the line block already fixed (#462).
+          const hardBreak = { type: 'hard_break' } as InlineNode
+          if (node.pos) hardBreak.pos = node.pos
+
+          return hardBreak
+        })
+      }
+    }
+    return {
+      type: 'div',
+      attrs: { classes: ['hardbreaks'], order: ['.class'] },
+      children,
+    }
+  }
+
+  // Fenced block quote. parseDiv's shape exactly, with no label slot and a
+  // block_quote node instead of a div (markup-carve/carve#1718).
+  private parseQuoteBlock(lexer: Lexer): BlockQuote | Figure {
+    const openLineIndex = lexer.pos
+    const m = RE_QUOTE_BLOCK_OPEN.exec(lexer.consume())!
+    const fence = m[1]!.length
+    const inner = collectColonFenceBody(lexer, {
+      kind: 'block quote',
+      lineIndex: openLineIndex,
+      fenceWidth: fence,
+    })
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    const bq: BlockQuote = { type: 'block_quote', fenced: true, children: this.parseBlocks(subLexer, 0) }
+    const quoteEndIndex = lexer.pos
+    // §4's seventh caption host. The slot hangs on the CLOSING fence, as the
+    // figure group's does, and what it produces is what the PREFIXED spelling
+    // produces: a captioned quote is a figure either way, because the two
+    // spellings are one node and §4's rule reads the node (carve#1742).
+    // A quote auto-closed at end of input has no closer line to host the slot,
+    // and there the lexer is already exhausted so the lookahead finds nothing.
+    let lookahead = 0
+    while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+    const next = lexer.peek(lookahead)
+    if (next) {
+      const cap = RE_CAPTION.exec(next)
+      // §4: adjacent, or across at most ONE blank line.
+      if (cap && lookahead <= 1) {
+        for (let i = 0; i <= lookahead; i++) lexer.consume()
+        // The TARGET keeps its own span, as every other caption host's does.
+        // Wrapping without this left a captioned fenced quote as the one block
+        // quote in the vocabulary with no `pos`, which the position rules would
+        // report the moment a corpus document reached the shape.
+        attachBlockPos(lexer, bq, openLineIndex, quoteEndIndex)
+        return { type: 'figure', target: bq, caption: this.parseCaptionInline(lexer, cap[1]!) } as Figure
+      }
+    }
+    return bq
+  }
+
+  private parseDiv(lexer: Lexer): Div {
+    const openLineIndex = lexer.pos
+    const m = RE_DIV_OPEN.exec(lexer.consume())!
+    const fence = m[1]!.length
+    // Optional inert grouping `[label]` on a typeless div (`::: [First]`).
+    const label = m[2] !== undefined ? m[2]!.slice(1, -1) : undefined
+    const inner = collectColonFenceBody(lexer, {
+      kind: 'div',
+      lineIndex: openLineIndex,
+      fenceWidth: fence,
+    })
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    // No inline opener attributes (strict djot): a bare `:::` carries none;
+    // a preceding block-attribute line attaches them in parseBlocks.
+    const node: Div = { type: 'div', children: this.parseBlocks(subLexer, 0) }
+    if (label !== undefined) {
+      node.label = label
+    }
+    return node
+  }
+
+  // Definition list (§4.5). An entry is 1+ `:: term` lines followed by 1+
+  // `: definition` lines; a definition continues on lines that REACH its own
+  // body's column, which is `:` plus the width of the separator it was written
+  // with (`deflistContentCol`). A `:: term` after a definition starts a new
+  // entry; a single blank line between entries is allowed, anything else ends the
+  // list.
+  private parseDefinitionList(lexer: Lexer): DefinitionList {
+    const parseSession = this
+    const items: DefinitionItem[] = []
+    /**
+     * Collect and parse one body.
+     *
+     * `contentCol` is THE BODY'S OWN COLUMN, passed in rather than read from a
+     * constant: the §4 tracker and the three indent tests below all measure
+     * against it, and two bodies of the same list may be written at different
+     * widths (`: one` beside `:  two`). A run of bare `3`s is how a column rule
+     * acquires several spellings, and a single parameter is how it keeps one.
+     */
+    const parseDefBody = (
+      first: string,
+      firstLineIndex: number,
+      markerContentCol: number,
+    ): BlockNode[] => {
+      // The marker fixes the body's minimum column. Adjacency never lowers it:
+      // ownership is selected by the same column band with or without a blank.
+      const contentCol = markerContentCol
+      const bodyLines: string[] = []
+      const bodyLineNumbers: number[] = []
+      const lazyState: ItemLazyState = {
+        inFence: false,
+        fenceClose: null,
+        inComment: false,
+        commentLen: 0,
+        lazyFoldableBeforeComment: false,
+        openedCommentAtColumn: false,
+        inTable: false,
+        invisibleAtColumn: false,
+        commentAtColumn: false,
+        inFootnoteBody: false,
+        quoteInner: null,
+        absorbingFence: false,
+        divDepth: 0,
+        lazyFoldable: false,
+        inDefList: false,
+        attrRun: null,
+      }
+      const defFenceMemo: QuotedFenceCloserMemo = new Map()
+      // The next entry ends the body, and so does a line below its column after a
+      // blank.
+      const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
+        RE_DEFLIST_TERM.test(line) ||
+        RE_DEFLIST_DEF.test(line) ||
+        (afterBlank && indentColumns(line, contentCol) < contentCol)
+      /**
+       * Feed one collected body line to the S4 tracker.
+       *
+       * `atContentColumn` is false only for a line the body took LAZILY, from
+       * below its content column. An invisible line there adds no block, so the
+       * paragraph it was folded into is still open behind it.
+       *
+       * `openerCol` is the column the fence on this line is READ at, which is the
+       * body's own column plus whatever residual indent the flush reading below
+       * stripped. THE LOOKAHEAD MUST ASK IN THE SPELLING THE TRACKER READS
+       * (markup-carve/carve#1930): with the opener read flush and the closer
+       * sought at the body's column, an over-indented pair never matched, the
+       * fence degraded to inline verbatim and its paragraph stayed open one column
+       * past where the same fence ends the body.
+       */
+      const track = (
+        content: string,
+        atLineIndex?: number,
+        atContentColumn = true,
+        openerCol = contentCol,
+      ): void => {
+        trackItemLazyState(
+          content,
+          lazyState,
+          (marker) => {
+            if (atLineIndex === undefined) return true
+            const answer = itemFenceHasCloser(
+              lexer,
+              marker,
+              atLineIndex,
+              openerCol,
+              defFenceMemo,
+              bodyEndsAt,
+            )
+            lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
+            return answer
+          },
+          atContentColumn,
+        )
+      }
+      // Lines admitted by REACHING the body's content column, mirroring the list
+      // item's `authoredBaseEligible` one collector over. A below-column lazy line
+      // keeps a positive residual indent on purpose, and that residue must never
+      // be read as #1705 over-indentation and rebased away: rebasing it delivers
+      // the line FLUSH inside the `dd`, where its shape is recognized again - a
+      // definition registers, an attribute attaches - and the fold §10 I5 asks for
+      // has not happened (markup-carve/carve-js#1550).
+      const bodyBaseEligible = new Set<number>()
+      // Has any line of this body been a block QUOTE?
+      //
+      // Once one has, the body's paragraph is no longer necessarily the innermost
+      // OPEN one - the quote's is - and SS10 I2 hands a line below to THAT
+      // paragraph instead. markup-carve/carve#1911 carves exactly this out and
+      // names the block quote for it; corpus section 444 row 11 is the case where
+      // the quote IS the payload, and this flag is that row generalized to a
+      // quote opened anywhere above it. Asked of the FLUSH spelling, because that
+      // is the spelling the body reads - an over-indented `> q` is still a quote.
+      //
+      // The flag is only half of it: a quote opened on the DESCRIPTION MARKER
+      // line (`: > q`) is already in `lazyState.quoteInner` before this loop
+      // runs and never passes through the flag, so the gate below asks both.
+      let bodyHoldsQuote = false
+      /**
+       * The residual indent the currently open block's OPENER was written at, or
+       * null while nothing is open.
+       *
+       * `normalizeAuthoredBodyBases` dedents a block by the one column its opener
+       * established, so only lines written at that column are the block's own
+       * structure and anything deeper is payload. The tracker reads the body one
+       * line at a time and has to carry the same base to reach the same answer
+       * (markup-carve/carve#1930).
+       */
+      let authoredBase: number | null = null
+      // The boundary set for a `+`-attached block in a definition body: a blank,
+      // a further `+`, or the next term / description marker. Whether a line in
+      // that set actually ENDS the block is `insideOpenFence`'s answer, layered
+      // on by `collectAttachedBlock`.
+      const isDefBodyBoundary = (a: string): boolean =>
+        isBlankLine(a) ||
+        /^\+[ \t]*$/.test(a) ||
+        RE_DEFLIST_TERM.test(a) ||
+        RE_DEFLIST_DEF.test(a)
+      // First-block form (`:  +`, mirroring the list `- +`): when the sole
+      // content is a lone `+`, the definition body is the FOLLOWING flush-left
+      // block, with no indentation. `:  \+` keeps a literal `+` instead.
+      if (/^\+[ \t]*$/.test(first)) {
+        const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary)
+        for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
+        bodyLines.push(...firstBlock.lines)
+        bodyLineNumbers.push(...firstBlock.lineNumbers)
+        for (const a of firstBlock.lines) track(a)
+      } else {
+        bodyBaseEligible.add(bodyLines.length)
+        bodyLines.push(first)
+        bodyLineNumbers.push(lexer.lineNumber(firstLineIndex))
+        // The MARKER LINE never goes through the tracker in the list either, and
+        // for the same reason it is seeded by hand here: nothing precedes it, so
+        // no closer lookahead applies and a fence on it opens unconditionally
+        // (markup-carve/carve#950). The lead opens a paragraph unless it is one of
+        // the shapes that open nothing - PART 1 S4's question, asked here in the
+        // ONE spelling the list item asks it in. THE CONTAINER KIND IS NOT A
+        // PARAMETER (carve#920): a heading, a table or an attribute block written
+        // on the `:  ` marker leaves no paragraph open for exactly the reason it
+        // leaves none on a `- ` marker.
+        const firstState = markerLineState(first)
+        const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
+        lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
+        lazyState.inTable = firstState.endsOnTableRow
+        lazyState.quoteInner = firstState.quote
+        // A FOOTNOTE DEFINITION ON THE MARKER LINE OPENS A BODY RUN, exactly as
+        // one on a continuation line does through the tracker (§16, the arm at
+        // `RE_FOOTNOTE_DEF.test(content)` further down). The marker line never
+        // passes through `track`, so without this the run went untracked: a note
+        // continuation at the note's floor re-armed `lazyFoldable`, and a column-0
+        // trailing line then folded into the `dd` instead of falling to the
+        // document, where PART 0's owner selection places a line below the dd's
+        // base column (markup-carve/carve#1974).
+        lazyState.inFootnoteBody = RE_FOOTNOTE_DEF.test(first)
+        if (firstIsColonContainer) lazyState.divDepth = 1
+        const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
+        if (leadFence) {
+          lazyState.inFence = true
+          lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(first) ? leadFence[2]! : leadFence[1]!)
+          lazyState.lazyFoldable = false
+        }
+      }
+      // A definition continues like a list item (PART 9 \u00a717):
+      //  - form A: a deeper-indented line (>= the content column) folds in, and a
+      //    blank line is tolerated when a later line still continues the body, so
+      //    a `<dd>` can hold multiple paragraphs;
+      //  - form B: a lone `+` attaches the FOLLOWING flush-left block, so rich
+      //    content can join the definition with no indentation (the un-prefixed
+      //    analogue of the list-item and block-quote `+` forms; a leading `:  +`
+      //    is the same marker opening the FIRST block);
+      //  - lazy continuation: a flush-left line with no blank before it that does
+      //    NOT start an interrupting block folds into the open paragraph (the same
+      //    CommonMark lazy rule list items and block quotes use, matching djot).
+      for (;;) {
+        if (lexer.eof()) break
+        const ln = lexer.peek()!
+        // Form B: `+` pull-left continuation.
+        if (/^\+[ \t]*$/.test(ln)) {
+          const plusLineIndex = lexer.pos
+          lexer.consume()
+          // ...AND THE DESCRIPTION ENDS WHERE A COMMENT ENDS IT. Same shape as
+          // the footnote body (markup-carve/carve#1814): a `+` the gate refuses
+          // is an ordinary invisible line at document column 0, and a `<dd>` ends
+          // at one of those. Asked before the body's own continuation branch can
+          // claim the following line. A block quote does NOT end at a comment
+          // there, so it does not end at a refused marker either - that is each
+          // container's invisible-line rule, not a second column rule.
+          if (!attachesAtDocumentColumnZero(lexer)) break
+          const { lines: attached, lineNumbers: attachedLineNumbers } = parseSession.collectAttachedBlock(
+            lexer,
+            isDefBodyBoundary,
+          )
+          if (attached.length > 0) {
+            bodyBaseEligible.add(bodyLines.length)
+            bodyLines.push('')
+            bodyLineNumbers.push(lexer.lineNumber(plusLineIndex))
+            track('')
+            for (const a of attached) {
+              bodyBaseEligible.add(bodyLines.length)
+              bodyLines.push(a)
+              track(a)
+            }
+            bodyLineNumbers.push(...attachedLineNumbers)
+          }
+          continue
+        }
+        // Form A: an indented continuation line (with no intervening blank).
+        // The indent is a COLUMN claim, not a character count: `definition_
+        // continuation` is a leading indentation run, so a tab is syntax there and
+        // advances to the next multiple of 4 (markup-carve/carve#888's signoff,
+        // reaffirmed by markup-carve/carve#901; the same family as #692, #796 and
+        // #905). Counting characters made a lone tab - column 4, past the content
+        // column - end the body, while three spaces continued it, and made the
+        // answer depend on how the author spelled a run rather than where it
+        // landed (markup-carve/carve-js#812).
+        if (!isBlankLine(ln) && indentColumns(ln, contentCol) >= contentCol) {
+          const lineIndex = lexer.pos
+          const dedented = sliceColumns(ln, contentCol, true)
+          bodyBaseEligible.add(bodyLines.length)
+          bodyLines.push(dedented)
+          bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+          // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
+          // (markup-carve/carve#1911). `sliceColumns` removes the body's content
+          // column and KEEPS the rest, so an opener written one column past it
+          // arrives here as ` # H` - and every VISIBLE-opener arm of the tracker is
+          // column-0 strict, so it read prose and left the paragraph open. The line
+          // is not prose: `rebaseOverindentedBlocks` below gives it ONE AUTHORED
+          // BLOCK BASE and the body parses a heading. The paragraph was decided
+          // from a spelling the body never reads, one pass before the pass that
+          // normalizes it. The INVISIBLE arms are whitespace-tolerant and were
+          // already right, which is exactly the split between the corpus rows that
+          // passed and the ones that did not - and why row 7 contradicted itself,
+          // ending the body at the column and keeping it open one past.
+          //
+          // SS10 I1 closes the paragraph for a visible opener at or past the column
+          // and SS10 I5 closes it for a definition or an attribute block, so the two
+          // columns answer alike - an answer that MOVES between the body's column
+          // and one past it is reading indentation rather than the rule.
+          //
+          // AN OPENER THAT LEAVES A BLOCK OPEN IS READ IN THE SAME SPELLING, AT ONE
+          // AUTHORED BASE (markup-carve/carve#1930). Refusing the flush reading for
+          // those left the body's fence state untracked across this whole band:
+          // `::: note` one column past never reached `divDepth`, its `:::` was never
+          // a closer, and the body ended on prose - so a CLOSED fence held the
+          // paragraph open and `tail` folded in, where the same body written AT the
+          // column ends it.
+          //
+          // The base is the OPENER's residual indent, and only lines written at it
+          // are that block's structure. `normalizeAuthoredBodyBases` dedents a block
+          // by the one column its opener established and leaves anything deeper
+          // alone, so `::: note` at the column with its `:::` one deeper closes
+          // nothing - the run is payload and the container is still collecting.
+          // Reading every over-indented line flush on its own closed those, and
+          // moved 26 documents off the oracle while fixing 72.
+          const flush = dedented.replace(/^[ \t]+/, '')
+          if (flush.startsWith('>')) bodyHoldsQuote = true
+          const residual = indentColumns(ln) - contentCol
+          let bodyReadsFlush = false
+          if (!bodyHoldsQuote && lazyState.quoteInner === null && flush !== dedented && lineOpensItemBlock(flush)) {
+            // A COPY, and one that cannot write back. `quoteInner` is the state's
+            // only mutable object and `trackBlockQuoteLazyState` advances it IN
+            // PLACE, so a plain spread would let this probe move the real quote
+            // tracker and `track` below would then move it a second time. The gate
+            // above already means no quote is open here, so seeding it null is both
+            // free and true - and it stays safe if that gate is ever relaxed.
+            const probe: ItemLazyState = { ...lazyState, quoteInner: null }
+            trackItemLazyState(flush, probe, () => true, true)
+            if (!probe.lazyFoldable) {
+              if (insideOpenFence(lazyState)) {
+                // Inside an open block: structure at the block's own base, payload
+                // below it. This is what keeps a deeper `:::` from closing an
+                // admonition its opener wrote one column shallower.
+                //
+                // AND NOT A DEEPER CONTAINER. `bodyClosesAFenceAt` scans the body
+                // flat - it closes a colon fence on the first bare run of its own
+                // width and steps over code-fence payload, with no stack - so a
+                // nested opener is not structure to it. Reading one as an opener
+                // here made the inner closer close the outer block and published a
+                // follower the oracle keeps in the body, on 10 documents.
+                bodyReadsFlush = residual === authoredBase && probe.divDepth <= lazyState.divDepth
+              } else {
+                // Nothing open. A LEAF block (a heading, a table, a definition)
+                // needs no base - that arm is carve#1911's, unchanged. A line that
+                // OPENS one fixes the base the rest of that block is read at.
+                bodyReadsFlush = true
+                if (insideOpenFence(probe)) authoredBase = residual
+              }
+            }
+          }
+          track(
+            bodyReadsFlush ? flush : dedented,
+            lineIndex,
+            true,
+            bodyReadsFlush ? contentCol + residual : contentCol,
+          )
+          // The base belongs to the block that established it and dies with it.
+          if (!insideOpenFence(lazyState)) authoredBase = null
+          lexer.consume()
+          continue
+        }
+        // Blank line: absorb it as a paragraph separator ONLY when a later line
+        // is still an indented continuation. Otherwise leave it in place so the
+        // entry-separator rule (a single blank before the next `:: term`) and the
+        // outer block stream see it unchanged.
+        if (isBlankLine(ln)) {
+          let look = 1
+          while (isBlankLine(lexer.peek(look))) look++
+          const after = lexer.peek(look)
+          // The SECOND spelling of the same rule, and it has its own job: this one
+          // decides whether the body survives the blank at all, the Form A branch
+          // above decides whether a line folds. Both read columns, or a lone tab
+          // after a blank ends the body while Form A would have kept it.
+          if (
+            after !== undefined &&
+            !isBlankLine(after) &&
+            indentColumns(after, contentCol) >= contentCol
+          ) {
+            for (let k = 0; k < look; k++) {
+              const lineIndex = lexer.pos
+              bodyBaseEligible.add(bodyLines.length)
+              bodyLines.push('')
+              bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+              track('')
+              lexer.consume()
+            }
+            continue
+          }
+          break
+        }
+        // A new term/definition marker ends this definition (the outer loop
+        // picks it up). An empty term marker is not one: `::` and `:: ` are the
+        // same line, a term with no content, so it folds (#1891).
+        if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
+        const below = ln.replace(/^[ \t]+/, '')
+        const atDocumentColumn = below === ln
+        if (
+          lazyState.lazyFoldable &&
+          !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
+        ) {
+          const lineIndex = lexer.pos
+          // RECORD THE FOLD so the reparse can read it (markup-carve/carve-js#1650,
+          // carve#1947). A flush-left line this body folds in is invisible from the
+          // column alone; the description body is a container above the item just
+          // as a list is, so when that item's lead opened an unfinished fence the
+          // folded line is the fence's BODY - and parseList's fence-owns-its-body
+          // arm keys off exactly this set (carve-js#1630). Unconditional like the
+          // list collector's own recording; the reparse consumes it only for an
+          // item whose lead actually opened a fence.
+          if (indentColumns(ln, contentCol) < contentCol) {
+            lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
+          }
+          bodyLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+          track(ln, undefined, false)
+          lexer.consume()
+          continue
+        }
+        break
+      }
+      // The same authored-base rule list items use, now in the definition body's
+      // coordinate system after its own content margin was removed - plus
+      // Definition entries use the same exact block extent in every container.
+      rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true)
+      const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
+      sub.sublistsCarryAuthoredBase = true
+      sub.hostBody = 'description'
+      return parseSession.parseBlocks(sub, 0)
+    }
+    /**
+     * The span covering document lines `first`..`last` inclusive, marker and all.
+     *
+     * `last` is never a blank line, and this does NOT trim one. `parseDefBody`
+     * absorbs a blank only when it has already looked ahead and found a line that
+     * still continues the body, so the next turn of its loop always consumes that
+     * line - the last thing it takes is a content line by construction.
+     *
+     */
+    function lineRange(lx: Lexer, first: number, last: number): Position | undefined {
+      // Measure the final line after stripping its lazy frame.
+      const lastLine = lx.lines[last] === undefined ? undefined : stripLazyFrame(lx.lines[last]!)
+      if (lastLine === undefined) return undefined
+
+      return {
+        startLine: lx.lineNumber(first),
+        endLine: lx.lineNumber(last),
+        startColumn: lx.lineStartColumn(first),
+        endColumn: lx.lineStartColumn(last) + lastLine.length,
+        startOffset: lx.lineOffset(first),
+        endOffset: lx.lineOffset(last) + lastLine.length,
+      }
+    }
+
+    // THE ENTRY MATCHER IS THE ONE PREDICATE THAT SEES THROUGH THE FRAME
+    // (PART 9 SS24 C3's LENIENT def-list entry). A `::` or `:` line a quote
+    // folded in reaches no column here, so it attaches to the open term from
+    // wherever it landed - which is why this collector unframes before every
+    // entry test while the block dispatch never does.
+    const peekEntry = (n = 0) => stripLazyFrame(lexer.peek(n) ?? '')
+    while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry())) {
+      const terms: InlineNode[][] = []
+      const termSpans: (Position | undefined)[] = []
+      const definitions: BlockNode[][] = []
+      const definitionLines: number[] = []
+      const definitionSpans: (Position | undefined)[] = []
+      while (!lexer.eof()) {
+        const t = RE_DEFLIST_TERM.exec(peekEntry())
+        if (!t) break
+        const termLineIndex = lexer.pos
+        lexer.consume()
+        // A term is multi-line like a heading: a following plain line folds into
+        // it with a soft break, instead of ending the list and stranding the
+        // definition. A blank line, a new marker (`::` / `:  `), or a block
+        // opener ends the term.
+        // Each line drops its own trailing layout below, once the fold is
+        // complete. In particular, the separator on a content-less marker-shaped
+        // continuation (`* `, `. `) is content here.
+        let termText = t[1]!
+        let continuationLines = 0
+        while (!lexer.eof()) {
+          const next = lexer.peek()!
+          // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
+          // because a framed heading is the term's text rather than a block.
+          const nextEntry = stripLazyFrame(next)
+          if (
+            isBlankLine(next) ||
+            RE_DEFLIST_TERM.test(nextEntry) ||
+            RE_DEFLIST_DEF.test(nextEntry) ||
+            endsHeadingOrQuote(lexer)
+          )
+            break
+          // The term is the other place a framed line becomes text. The frame
+          // kept the opener tests above from claiming it; it comes off before
+          // the fold, exactly as the oracle unframes here.
+          termText += '\n' + stripLazyFrame(next)
+          continuationLines++
+          lexer.consume()
+        }
+        termText = dropTrailingWhitespace(termText)
+        // `t` was matched against the UNFRAMED line, so the index comes from
+        // that same string: the frame is not in the author's source and must
+        // not be counted into the offset. This corrects arithmetic rather than
+        // output - a framed line only ever reaches an item body sub-lexer, which
+        // is unanchored and publishes no positions, so no document of the 13790
+        // swept moves. It is here so the two halves read the same string.
+        const termStart = stripLazyFrame(lexer.lines[termLineIndex]!).indexOf(t[1]!)
+        // A continuation line folds in whole, indent included, and the scanner
+        // strips that indent when it builds the text node - so a single base
+        // offset drifts by the indent on every line after the first. Each line
+        // gets its own origin instead (#441): the term's own line starts after its
+        // `::` marker, a continuation line at its left edge.
+        const termAnchors =
+          continuationLines > 0
+            ? [
+                {
+                  offset: lexer.lineOffset(termLineIndex) + termStart,
+                  column: lexer.lineStartColumn(termLineIndex) + termStart,
+                  line: lexer.lineNumber(termLineIndex),
+                },
+                ...Array.from({ length: continuationLines }, (_unused, i) => ({
+                  offset: lexer.lineOffset(termLineIndex + 1 + i),
+                  column: lexer.lineStartColumn(termLineIndex + 1 + i),
+                  line: lexer.lineNumber(termLineIndex + 1 + i),
+                })),
+              ]
+            : undefined
+        terms.push(
+          parseSession.parseInline(termText, lexer.abbrDefs, lexer.linkDefs, {
+            anchored: lexer.hasDocumentOffsets,
+            baseOffset: lexer.lineOffset(termLineIndex) + termStart,
+            startLine: lexer.lineNumber(termLineIndex),
+            startColumn: lexer.lineStartColumn(termLineIndex) + termStart,
+            ...(termAnchors ? { lineAnchors: termAnchors } : {}),
+          }),
+        )
+        termSpans.push(
+          lexer.hasDocumentOffsets
+            ? lineRange(lexer, termLineIndex, termLineIndex + continuationLines)
+            : undefined,
+        )
+      }
+      while (!lexer.eof()) {
+        // A blank line before a `:  ` definition is allowed: a definition may be
+        // separated from its term (or a previous definition) by a blank line for
+        // readability, matching djot. The blank is a separator only - it does not
+        // end the entry when a `:  ` definition follows.
+        if (isBlankLine(lexer.peek()!)) {
+          let look = 1
+          while (isBlankLine(lexer.peek(look))) look++
+          if (!RE_DEFLIST_DEF.test(peekEntry(look))) break
+          for (let k = 0; k < look; k++) lexer.consume()
+        }
+        const defLineIndex = lexer.pos
+        const d = RE_DEFLIST_DEF.exec(peekEntry())
+        if (!d) break
+        lexer.consume()
+        definitionLines.push(lexer.lineNumber(defLineIndex))
+        definitions.push(parseDefBody(d[2]!, defLineIndex, deflistContentCol(d[1]!)))
+        // The description's own extent anchors to its MARKER LINE. The wire
+        // derives the END from the placed children (definition-list-wire.ts), so
+        // this only supplies the start and the fallback when the body produced no
+        // placed child at all - a description whose only content hoists to the
+        // root (carve-js#813). In that case the span is the marker line and stops
+        // there: §4 ends a closerless container at its last placed child, and a
+        // hoisted sibling is not a child (carve#1522), so the continuation lines
+        // that carried the hoisted definitions are not part of the description
+        // (carve#1963). It always takes at least the marker line, so the range is
+        // never empty and never runs backwards.
+        definitionSpans.push(
+          lexer.hasDocumentOffsets ? lineRange(lexer, defLineIndex, defLineIndex) : undefined,
+        )
+      }
+      items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
+      // Allow a single blank line before the next entry's `:: term`.
+      if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
+        let look = 1
+        while (isBlankLine(lexer.peek(look))) look++
+        const next = lexer.peek(look)
+        if (next && RE_DEFLIST_TERM.test(next)) for (let k = 0; k < look; k++) lexer.consume()
+        else break
+      }
+    }
+    return { type: 'definition_list', items }
+  }
+
+  private parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
+    const firstLineIndex = lexer.pos
+    const inner: string[] = []
+    const innerLineNumbers: number[] = []
+    const state: BlockQuoteLazyState = {
+      mode: { kind: 'closed' },
+      inTable: false,
+      colonWidths: [],
+      attrRun: null,
+    }
+    const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
+    while (!lexer.eof()) {
+      const ln = lexer.peek()!
+      const m = RE_BLOCKQUOTE.exec(ln)
+      if (m) {
+        const lineIndex = lexer.pos
+        lexer.consume()
+        const content = m[1] ?? ''
+        inner.push(content)
+        innerLineNumbers.push(lexer.lineNumber(lineIndex))
+        trackBlockQuoteLazyState(
+          content,
+          state,
+          (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
+          (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
+        )
+        continue
+      }
+      // Continuation marker (Carve, PART 9 §17): a lone `+` at column 0 after a
+      // quoted line attaches the FOLLOWING flush-left block to the quote -- the
+      // un-prefixed analogue of the list-item form, so a real block (list, fenced
+      // code, table, ...) can join the quote without repeating `>`. Collect the
+      // block's lines (up to a blank line or a further `+`) and
+      // splice them into the quote body behind a blank-line separator, so they
+      // parse as their own block instead of folding into the quoted paragraph.
+      if (/^\+[ \t]*$/.test(ln)) {
+        lexer.consume()
+        const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+          lexer,
+          (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
+        )
+        if (attached.length > 0) {
+          // `inner` always holds the quote's first content line, so a leading
+          // blank separates the attached block from it.
+          // The separators are SYNTHETIC - no such blank line exists in the
+          // source - so each borrows the line it sits against rather than the
+          // `+` marker's. Borrowing the marker's put them BEFORE the attached
+          // block in document order, and a block spanning first-to-last line then
+          // reported an end offset earlier than its start (#462).
+          inner.push('')
+          innerLineNumbers.push(attachedLineNumbers[0]!)
+          for (const attachedLine of attached) inner.push(attachedLine)
+          innerLineNumbers.push(...attachedLineNumbers)
+          inner.push('')
+          innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
+          // The attached block closed any open paragraph: a following unmarked
+          // line no longer lazily continues the quote.
+          closeBlockQuoteParagraph(state)
+        }
+        continue
+      }
+      if (
+        isBlankLine(ln) ||
+        RE_CAPTION.test(ln) ||
+        colonFenceShapeEndsLazyContinuation(ln) ||
+        startsInterruptingBlock(lexer, undefined, false)
+      ) {
+        break
+      }
+      // A non-`>` line inside an open fence/comment, or after a block that left no
+      // open paragraph (heading/table/fence/thematic/div), terminates the quote
+      // instead of being swallowed. This is also what ends the quote on a lazy
+      // list marker when no open paragraph precedes it.
+      if (!blockQuoteParagraphOpen(state)) break
+      const lineIndex = lexer.pos
+      lexer.consume()
+      const lazyLinkDef = isLinkDefLine(ln)
+      if (lazyLinkDef) {
+        lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
+      }
+      // THE LINE IS THE QUOTE'S LAZY TEXT, AND A MARKER DOES NOT SURVIVE THE
+      // HAND-OVER (PART 0 lazy continuation, markup-carve/carve#1904). Below it
+      // parses as the quote's body, where the marker read as an opener again and
+      // put an item INSIDE the quote for a line carrying no `>`.
+      //
+      // AT EVERY COLUMN, including one an enclosing item hands out (ruled on
+      // markup-carve/carve#1905, ported at carve-js#1615). A QUOTE IS REACHED BY
+      // ITS MARKER, AND A COLUMN NEVER REACHES INTO ONE - so a line writing no
+      // `>` is in no quote wherever it lands, and §24 C3 never governs it. The
+      // hold-back this used to carry made the marker twin differ from the
+      // paragraph twin, which folds there in every reader.
+      if (isListMarkerLine(ln)) {
+        lexer.quoteLazyMarkerLines.add(lexer.lineNumber(lineIndex))
+      }
+      // The shape-blind half of the same fact, for the consumers the two sets
+      // above do not serve.
+      lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
+      inner.push(ln)
+      innerLineNumbers.push(lexer.lineNumber(lineIndex))
+      if (!lazyLinkDef) {
+        trackBlockQuoteLazyState(
+          ln,
+          state,
+          (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
+          (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
+        )
+      }
+    }
+    const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
+    // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
+    // stops here. A footnote body absorbs residual indentation because its blocks
+    // are REBASED to an authored base; a quote is not rebased, and an indented
+    // definition after `>` is literal text there exactly as at top level
+    // (markup-carve/carve-js#1628).
+    subLexer.inFootnoteBody = false
+    subLexer.consumesHostedLinkDefs = lexer.hostBody === null ? false : 'lazy'
+    const children = this.parseBlocks(subLexer, 0)
+    const bq: BlockQuote = { type: 'block_quote', children }
+    const quoteEndIndex = lexer.pos
+    // Optional caption with ^
+    // Allow one blank line between
+    let lookahead = 0
+    while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+    const next = lexer.peek(lookahead)
+    if (next) {
+      const cap = RE_CAPTION.exec(next)
+      // §4: a caption attaches only when it immediately follows the block
+      // or is separated by at most ONE blank line.
+      if (cap && lookahead <= 1) {
+        for (let i = 0; i <= lookahead; i++) lexer.consume()
+        attachBlockPos(lexer, bq, firstLineIndex, quoteEndIndex)
+        return {
+          type: 'figure',
+          target: bq,
+          caption: this.parseCaptionInline(lexer, cap[1]!),
+        } as Figure
+      }
+    }
+    return bq
+  }
+
+  private parseBlockImage(lexer: Lexer): Image | Figure {
+    const imageLineIndex = lexer.pos
+    const line = lexer.consume()
+    const m = RE_BARE_IMAGE.exec(line)!
+    // `isBlockImageLine` has already read the run as a destination, so the
+    // escapes are resolved here as they are on the inline tail.
+    const img: Image = { type: 'image', src: linkDestinationValue(m[2]!)!, alt: m[1]! }
+    const title = m[3] ?? m[4]
+    if (title !== undefined) img.title = title
+    if (m[5]) img.attrs = parseAttrs(m[5])
+    // Optional caption
+    let lookahead = 0
+    while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+    const next = lexer.peek(lookahead)
+    if (next) {
+      const cap = RE_CAPTION.exec(next)
+      // §4: a caption attaches only when it immediately follows the block
+      // or is separated by at most ONE blank line.
+      if (cap && lookahead <= 1) {
+        for (let i = 0; i <= lookahead; i++) lexer.consume()
+        // The block loop attaches a span to whatever this returns, so a figure
+        // gets one and its TARGET would be left without - PART 12 section 4 wants
+        // one on every node but the root. The image occupies exactly its own line;
+        // the figure spans that plus the caption.
+        attachBlockPos(lexer, img, imageLineIndex, imageLineIndex + 1)
+        return {
+          type: 'figure',
+          target: img,
+          caption: this.parseCaptionInline(lexer, cap[1]!),
+        } as Figure
+      }
+    }
+    return img
+  }
+
+  /**
+   * Collect the ONE flush-left block a `+` continuation marker attaches
+   * (PART 9 §17 L3/L4).
+   */
+  /**
+   * How many of the `limit` lines at the lexer's position the ONE block a `+`
+   * attaches actually occupies (§17 L3).
+   *
+   * At least one line, always: a probe that consumed nothing would leave the
+   * caller's cursor where it was and the container loop would see the same line
+   * forever.
+   *
+   * A LEADING ATTRIBUTE RUN IS PART OF THE BLOCK IT FLOATS ONTO. Only
+   * `parseBlocks` owns a pending-attribute slot and this is a `parseBlock` call,
+   * so an attribute line left to it reads as a paragraph and the measurement stops
+   * in front of the block the attributes were written for.
+   */
+  private attachedBlockExtent(
+    lexer: Lexer,
+    limit: number,
+    transform?: (line: string) => string,
+  ): number {
+    if (limit <= 1) return limit
+    const lines: string[] = []
+    for (let k = 0; k < limit; k++) {
+      const line = lexer.peek(k)!
+      lines.push(transform ? transform(line) : line)
+    }
+    const probe = subLexer(lines, lexer.parseOptions, 0)
+    probe.nested = true
+    probe.suppressPositions = true
+    // The depth the block is really parsed at. `MAX_NESTING_DEPTH` turns every
+    // line into literal paragraph text once it is reached, so a probe left at 0
+    // would measure a construct the real parse never builds. Stated as alignment,
+    // not as a fix: no document was found where it changes the answer, because at
+    // those depths a `+` has already stopped acting as a continuation marker.
+    probe.depth = lexer.depth + 1
+    // NO EXTENSION MATCHER RUNS FOR A MEASUREMENT. `matchBlock` and `matchInline`
+    // are public callbacks and nothing requires them to be pure: one allocating
+    // sequential ids would number its first authored block 2, because the probe
+    // called it once for a parse whose result is thrown away. The probe only needs
+    // to know where a block ENDS, and an extension block ends where the core
+    // parser's fallback for those same lines ends.
+    const matchers = this.activeMatchers
+    this.activeMatchers = []
+    try {
+      // A LEADING ATTRIBUTE RUN IS PART OF THE BLOCK IT FLOATS ONTO, and so is
+      // whatever INVISIBLE construct sits between them. Only `parseBlocks` owns a
+      // pending-attribute slot, and §15 A2a keeps that slot across a comment or a
+      // reference, footnote or abbreviation definition - so a probe that stopped
+      // at the first node would stop in front of the block the attributes were
+      // written for and leave it outside the container, attributes dropped.
+      for (;;) {
+        while (!probe.eof() && tryCollectBlockAttributes(probe) !== null) {
+          /* the run floats forward; keep looking for what it floats onto */
+        }
+        if (probe.eof()) return limit
+        const node = this.parseBlock(probe)
+        const invisible =
+          node === null || node.type === 'abbreviation_def' || node.type === 'comment'
+        if (!invisible || probe.eof()) break
+      }
+    } finally {
+      this.activeMatchers = matchers
+    }
+
+    return Math.min(Math.max(probe.pos, 1), limit)
+  }
+
+  private collectAttachedBlock(
+    lexer: Lexer,
+    isBoundary: (line: string) => boolean,
+    transform?: (line: string) => string,
+  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
+    // AND FLUSH-LEFT MEANS COLUMN 0 IS ASKED HERE, ONCE, FOR EVERY CONTAINER
+    // (§17 L3, markup-carve/carve#1814). The predicate existed but only the list
+    // item's three attach paths called it, so the footnote body, the definition
+    // description and the block quote each reached out for a line the clause
+    // leaves where the author wrote it: a `<dd>` whose content column is 3 pulled
+    // in a column-1 or column-2 line, a note pulled in a column-1 line, and a
+    // quote took a column-2 line that A QUOTE IS REACHED BY ITS MARKER (§10 I5,
+    // markup-carve/carve#1384) puts in no quote at all. Every caller already
+    // treats an EMPTY result as "the marker attached nothing" and lets its own
+    // ordinary rules have the line, which is exactly what the clause's comment
+    // spelling does.
+    if (!attachesAtDocumentColumnZero(lexer)) {
+      return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
+    }
+    const fenced = fencedBlockEnd({
+      at: (offset) => {
+        const line = lexer.peek(offset)
+        return line === undefined ? undefined : transform ? transform(line) : line
+      },
+      index: closerIndex(lexer),
+      base: lexer.pos,
+    })
+    let take = 0
+    if (fenced !== -1) {
+      take = fenced + 1
+    } else {
+      while (lexer.peek(take) !== undefined && !isBoundary(lexer.peek(take)!)) take++
+      const measured = this.attachedBlockExtent(lexer, take, transform)
+      if (measured < take) take = measured
+    }
+    const startLineIndex = lexer.pos
+    const lines: string[] = []
+    const lineNumbers: number[] = []
+    for (let k = 0; k < take; k++) {
+      const raw = lexer.peek()!
+      lines.push(transform ? transform(raw) : raw)
+      lineNumbers.push(lexer.lineNumber(lexer.pos))
+      lexer.consume()
+    }
+
+    return { lines, lineNumbers, startLineIndex }
+  }
+
+  private parseList(lexer: Lexer): List {
+    const first = lexer.peek()!
+    const baseIndent = indentColumns(first)
+    // Classify on the marker after stripping any abutting `{...}` attribute block.
+    const firstAttr = extractItemAttr(first)
+    const firstStripped = firstAttr ? firstAttr.stripped : first
+    const isTask = RE_TASK.test(firstStripped)
+    const isOrdered = !isTask && RE_ORDERED.test(firstStripped)
+    // A change of unordered marker character (`-` vs `*` vs `+`), or of
+    // ordered dialect/delimiter (decimal/alpha/roman, `.` vs `)`), starts a
+    // new list (grammar PART 9 §11). The first item fixes the ordered
+    // dialect; the second item's marker (if a sibling) tie-breaks an
+    // ambiguous single roman letter.
+    const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(firstStripped)
+    const firstOrdered = isOrdered ? RE_ORDERED.exec(firstStripped)! : null
+    const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
+    let orderedKind: OlKind = 'dec'
+    let orderedStart = 1
+    if (firstOrdered) {
+      // Tie-break the dialect on the next sibling, looking past blank lines
+      // and the first item's own continuation/nested lines (indented deeper
+      // than the marker) — `x.` / blank or indented body / `xi.` is still one
+      // roman list.
+      let k = 1
+      for (; lexer.peek(k) !== undefined; k++) {
+        const ln = lexer.peek(k)!
+        if (!isBlankLine(ln) && indentColumns(ln, baseIndent + 1) <= baseIndent) break
+      }
+      const nextLine = lexer.peek(k)
+      const nextStripped =
+        nextLine !== undefined
+          ? (extractItemAttr(nextLine)?.stripped ?? nextLine)
+          : undefined
+      const nm =
+        nextStripped !== undefined && indentColumns(nextLine!, baseIndent + 1) === baseIndent
+          ? RE_ORDERED.exec(nextStripped)
+          : null
+      orderedKind = olKindOf(firstOrdered[2]!, nm ? nm[2]! : null)
+      orderedStart = olStartOf(firstOrdered[2]!, orderedKind)
+    }
+    const items: ListItem[] = []
+    let loose = false
+    // §11 N1 hard boundary: a run of three or more blank lines before a
+    // compatible sibling marker ends this list rather than loosening it. Set
+    // where the loose decision is made, acted on after the item is pushed.
+    let hardBoundary = false
+
+    /**
+     * The boundary set for a `+`-attached block in a list item: a blank, a
+     * dedent below the marker column, and at the marker column a sibling marker,
+     * ANY list marker (§11) or a further `+`. Both `+` paths - the first-block
+     * `- +` and the mid-item one - carry the SAME set, so it is written once;
+     * whether a line in it ends the block is `insideOpenFence`'s answer, layered
+     * on by `collectAttachedBlock`.
+     */
+    const isItemAttachBoundary = (a: string): boolean => {
+      if (isBlankLine(a)) return true
+      const ind = indentColumns(a, baseIndent + 1)
+      if (ind < baseIndent) return true
+      if (ind !== baseIndent) return false
+      const am = matchListMarker(a, isTask, isOrdered)
+      const sibling =
+        am &&
+        (isOrdered
+          ? orderedContinues(a, orderedKind, orderedDelim)
+          : unorderedMarkerChar(a) === firstMarkerChar)
+      const anyMarker =
+        RE_ORDERED.test(a) || RE_UNORDERED.test(a) || RE_TASK.test(a) || extractItemAttr(a) !== null
+      return Boolean(sibling) || anyMarker || isContinuationMarker(a)
+    }
+
+    while (!lexer.eof()) {
+      const itemStartLineIndex = lexer.pos
+      const line = lexer.peek()!
+      if (isBlankLine(line)) {
+        // Blank lines between siblings are handled by the per-item collector
+        // below; a stray leading blank just ends the list.
+        break
+      }
+      if (indentColumns(line, baseIndent + 1) !== baseIndent) break
+      // Strip an abutting `{...}` attribute block off the marker so the bare
+      // marker regexes match; remember its attributes to attach to the <li>.
+      const la = extractItemAttr(line)
+      const mline = la ? la.stripped : line
+      const m = matchListMarker(mline, isTask, isOrdered)
+      if (!m) break
+      // §11: a sibling with a different marker character (unordered) or a
+      // different delimiter (ordered) is a new list.
+      if (!isOrdered && unorderedMarkerChar(mline) !== firstMarkerChar) break
+      if (isOrdered && !orderedContinues(mline, orderedKind, orderedDelim)) break
+
+      let content: string
+      let checked: boolean | undefined
+      let taskState: TaskState | undefined
+      if (isTask) {
+        checked = m[2]!.toLowerCase() === 'x'
+        taskState = authoredTaskState(m[2]!, checked)
+        content = m[3]!
+      } else if (isOrdered) {
+        content = m[4]!
+      } else {
+        content = m[2]!
+      }
+      const itemAttrs = la ? la.attrs : undefined
+
+      // item (continuation paragraphs or nested lists). Visual content column:
+      // baseIndent (tab-aware columns) plus the BARE marker width. An abutting
+      // `{...}` block is item metadata and contributes zero, so changing a class
+      // or Unicode value cannot restructure the body (carve#1701, carve#1698). The leading
+      // whitespace may be a tab, so it is measured in columns (baseIndent) rather
+      // than characters. For a TASK item the
+      // checkbox is content, not marker, so the content column is the bullet
+      // width (`- `/`* ` = 2) -- not the full
+      // `- [x] ` width (matching the spec's task attribute/continuation
+      // convention `- [x] x` / `  {.c}`).
+      const contentCol = isTask
+        ? baseIndent + 2
+        : baseIndent + (mline.length - leadingWhitespace(mline) - content.length)
+      lexer.consume()
+
+      if (isContinuationMarker(content) && !attachesAtDocumentColumnZero(lexer)) {
+        // The marker line is still consumed and contributes nothing; the item
+        // carries an EMPTY lead from here, exactly as a comment on that line
+        // would leave it. `contentCol` is already measured off the marker, so
+        // the column the body is collected at does not move.
+        content = ''
+      } else if (isContinuationMarker(content)) {
+        // The attached block is a block: a boundary line inside a fence it opened
+        // is that fence's body, not a boundary (see the indented loop's note on
+        // carve#975 and corpus category 279). Without this the opener came out an
+        // EMPTY code block and the closer an inline code span, which is the same
+        // damage category 278 pins one level in.
+        const {
+          lines: attached,
+          lineNumbers: attachedLineNumbers,
+          startLineIndex: attachedStartLineIndex,
+        } = this.collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
+        // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
+        // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
+        // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
+        // as soon as it had ONE block, so the second marker was left at the top
+        // level and rendered as a paragraph of its own - `<p>+</p>` on the page,
+        // with the block it was written for outside the item (§17 L3, corpus
+        // 327-…-that-block-s-extent-7).
+        //
+        // The blank between two attached blocks is a SEPARATOR, not a loosener:
+        // the author wrote no blank line, so the item stays tight, which is the
+        // same carve-out `plusSeparators` makes in the indented body.
+        while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
+          const plusLineIndex = lexer.pos
+          lexer.consume()
+          const more = this.collectAttachedBlock(lexer, isItemAttachBoundary, (a) =>
+            sliceColumns(a, baseIndent),
+          )
+          // An empty result is the column gate's refusal as well as an exhausted
+          // boundary set, and a second marker that attaches nothing ends the run
+          // either way (markup-carve/carve#1814).
+          if (more.lines.length === 0) break
+          attached.push('')
+          attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
+          attached.push(...more.lines)
+          attachedLineNumbers.push(...more.lineNumbers)
+        }
+        const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
+        const fbChildren = this.parseBlocks(sub, 0)
+        const fbItem: ListItem = { type: 'list_item', children: fbChildren }
+        attachBlockPos(lexer, fbItem, itemStartLineIndex, lexer.pos)
+        if (checked !== undefined) fbItem.checked = checked
+        if (taskState !== undefined) fbItem.taskState = taskState
+        if (itemAttrs) fbItem.attrs = itemAttrs
+        items.push(fbItem)
+        continue
+      }
+
+      const nested: string[] = []
+      const nestedLineNumbers: number[] = []
+      // Lines admitted by reaching this item's content column. A below-column
+      // lazy line can retain a positive residual indent for recursive safety,
+      // but that must never be mistaken for #1705 over-indentation.
+      const authoredBaseEligible = new Set<number>()
+      let hasOverindentedBlockCandidate = false
+      // Index in `nested` where an indented ORDERED sub-list begins. Ordered
+      // markers do not interrupt a paragraph (§10), so if the sub-list is joined
+      // with the lead text it folds into the lead paragraph instead of nesting
+      // (`1. a` / `   1. b` -> `<li>a\n1. b</li>`). Splitting it into its own block
+      // stream lets it nest. Unordered/task sub-lists interrupt and already nest
+      // via the join, and lazy continuation / block-attribute lines must stay on
+      // the join, so only an indented ordered marker triggers the split.
+      let firstBlockIdx = -1
+      // Every `nested` index whose line opens a sub-list item, not only the first.
+      const subListMarkers = new Set<number>()
+      let bodyHasContentColumnLine = false
+      let bodyHasBelowColumnLine = false
+      let pendingBlanks = 0
+      let pendingBlankLineNumbers: number[] = []
+      // What each buffered blank leaves past the content column. Inside an open
+      // fence a line of spaces is body, so its residue is content (CARVE-P11-016).
+      let pendingBlankTexts: string[] = []
+      // Indices in `nested` that hold a `+`-injected blank separator. These keep
+      // the attached block parsing standalone but never loosen the list (Bug B).
+      const plusSeparators = new Set<number>()
+      // Track whether the item's collected content currently ends in an open
+      // paragraph (family-D lazy continuation). The lead text opens one.
+      // ONE WALK for the three questions the lead line answers.
+      const leadState = markerLineState(content)
+      const lazyState: ItemLazyState = {
+        inFence: false,
+        fenceClose: null,
+        inComment: false,
+        commentLen: 0,
+        lazyFoldableBeforeComment: false,
+        openedCommentAtColumn: false,
+        invisibleAtColumn: false,
+        commentAtColumn: false,
+        inFootnoteBody: false,
+        absorbingFence: false,
+        divDepth: 0,
+        // The lead text opens a paragraph unless it is one of the shapes that
+        // open nothing - PART 1 S4's one question, asked of the block the marker
+        // line holds. See `markerLineState`.
+        lazyFoldable: leadState.leavesParagraphOpen,
+        inTable: leadState.endsOnTableRow,
+        quoteInner: leadState.quote,
+        inDefList: RE_DEFLIST_TERM.test(content)
+          ? 'term'
+          : RE_DEFLIST_DEF.test(content)
+            ? 'description'
+            : false,
+        attrRun: leadState.wrappedAttributeRun,
+      }
+      // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
+      // The lead line never went through `trackItemLazyState`, so `- ``` ` left
+      // the tracker believing the item held an open paragraph, and every line
+      // below the content column folded into the code text - body and closer
+      // both. Nothing precedes the lead, so no closer lookahead applies: the
+      // fence opens unconditionally, exactly as it does at the top of a quote.
+      const itemFenceMemo: QuotedFenceCloserMemo = new Map()
+      // A sibling or outer marker ends the item, and so does a line below the
+      // column after a blank (carve#1379).
+      const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
+        (isListMarkerLine(line) && indentColumns(line) <= baseIndent) ||
+        (afterBlank && indentColumns(line, contentCol) < contentCol)
+      const itemCommentMemo: ItemCommentCloserMemo = { index: null }
+      const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
+      if (leadFence) {
+        lazyState.inFence = true
+        lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!)
+        lazyState.lazyFoldable = false
+      }
+      // A COMMENT FENCE OPENED ON THE MARKER LINE IS AN OPEN COMMENT, for the
+      // reason carve#950 gives for the code fence one line up: the lead line
+      // never goes through `trackItemLazyState`, so `- %%%` left the tracker
+      // believing the item held an open paragraph and nothing below the marker
+      // line was comment body to it. PART 9 §28 makes that body VERBATIM, so the
+      // tracker has to know the comment is open before it reads the next line.
+      const leadComment = leadFence ? undefined : commentFenceRun(content)
+      if (leadComment !== undefined) {
+        lazyState.inComment = true
+        lazyState.commentLen = leadComment
+        lazyState.lazyFoldableBeforeComment = lazyState.lazyFoldable
+        lazyState.lazyFoldable = false
+      }
+      // The lead line may itself be the malformed fence (`- :::note`), and then
+      // the paragraph it opens is already absorbing: the `:::` below it is text,
+      // not a closer for a block nothing opened (PART 9 §12, carve#891).
+      lazyState.absorbingFence =
+        /^:{3,}/.test(content) &&
+        !RE_DIV_OPEN.test(content) &&
+        !RE_ADMONITION_OPEN.test(content) &&
+        !RE_LINE_BLOCK_OPEN.test(content) &&
+        !RE_HARDBREAKS_OPEN.test(content) &&
+        !RE_QUOTE_BLOCK_OPEN.test(content)
+      while (!lexer.eof()) {
+        const l = lexer.peek()!
+        if (isBlankLine(l)) {
+          pendingBlanks++
+          pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
+          pendingBlankTexts.push(insideOpenFence(lazyState) ? sliceColumns(l, contentCol, true) : '')
+          lexer.consume()
+          continue
+        }
+        // List-continuation marker (Carve): a lone `+` at the marker column
+        // attaches the FOLLOWING flush-left block to this item without indenting
+        // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
+        // injects a blank separator so the block parses on its own; the
+        // compact-list rule above then keeps the item tight.
+        if (indentColumns(l, baseIndent + 1) === baseIndent && isContinuationMarker(l)) {
+          const plusLineNumber = lexer.lineNumber(lexer.pos)
+          lexer.consume()
+          pendingBlanks = 0
+          pendingBlankLineNumbers = []
+          pendingBlankTexts = []
+          // Mark this blank as a `+`-injected separator: it lets the attached
+          // block parse on its own but must NOT loosen the list (Bug B). A real
+          // internal blank before a plain paragraph still loosens; a `+` one
+          // never does, matching carve-php.
+          // ONLY A FLUSH-LEFT BLOCK (§17 L3, markup-carve/carve#1436) - see the
+          // first-block form above. Nothing is attached from another column, and
+          // the marker line itself is still consumed, so the candidate falls
+          // through to the ordinary rules on the next turn of this loop.
+          if (!attachesAtDocumentColumnZero(lexer)) continue
+          plusSeparators.add(nested.length)
+          nested.push('')
+          nestedLineNumbers.push(plusLineNumber)
+          trackItemLazyState('', lazyState)
+          // A boundary line inside a fence THIS attached block opened is that
+          // fence's body, exactly as it is in the indented body (carve#975 for
+          // the marker, corpus category 279 for the blank, the dedent and the
+          // three fence kinds together). The old loop consulted the tracker for
+          // two of the kinds and for no boundary but the marker, so a blank
+          // severed a code fence from its opener and a colon fence severed on
+          // every boundary there is.
+          const { lines: attachedLines, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+            lexer,
+            isItemAttachBoundary,
+            (a) => sliceColumns(a, baseIndent),
+          )
+          for (let k = 0; k < attachedLines.length; k++) {
+            nested.push(attachedLines[k]!)
+            nestedLineNumbers.push(attachedLineNumbers[k]!)
+            // The attached block's lines are the item's, so the item's own
+            // tracker sees them: what they leave open decides how a later
+            // dedented line folds.
+            trackItemLazyState(attachedLines[k]!, lazyState)
+          }
+          continue
+        }
+        // Content-column model (carve#295): a continuation belongs to the item
+        // only if it reaches the item's content column - the SAME rule the
+        // no-blank case uses; the blank line only decides tight vs loose. There is
+        // no `baseIndent + 2` relaxation and no below-column block-opener nesting.
+        // A block opener is recognized only AT the content column (the item body's
+        // column 0), exactly as at the top level; a line that reaches the content
+        // column but carries residual indent is lazy paragraph text, and a line
+        // below the content column ends the item body and parses at document level
+        // (falling through to the lazy-fold / detach branch below). Intentional
+        // divergence from djot, which attaches at any indent past the marker.
+        const lw = indentColumns(l, contentCol)
+        // A MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT COLUMN HERE
+        // (markup-carve/carve#1904). It carried no `>`, so it is not inside the
+        // quote as a block at any column - it folds into the innermost open
+        // paragraph, which is this item's. Sending it down the content-column arm
+        // dedents it to the body's column 0, where §24 C3 opens a SUBLIST; the
+        // lazy arm below keeps its indent and the fold holds.
+        // A DESCRIPTION MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT
+        // COLUMN EITHER (markup-carve/carve-js#1606). Same fact as the marker
+        // above, asked of the other line the item re-classifies by column: the
+        // content-column arm dedents by the item's own column and leaves
+        // everything past it as residual indent, and an indented `:` is no longer
+        // a marker - so `> - :: t` over a column-4 `:  a` folded the description
+        // into the term while the unquoted spelling of the same document read the
+        // body. The lazy arm below strips the indent instead, which is PART 9
+        // §24 C3's LENIENT def-list entry: a `:` attaches a fresh description to
+        // an open term from at or below column 0.
+        //
+        // UNLESS A DESCRIPTION BODY IS ALREADY OPEN, where the same line is that
+        // body's own lazy continuation rather than a second entry. That is where
+        // the oracle's two collectors differ - the term's fold tests for an entry
+        // AFTER unframing a lazy line and the description body's fold tests
+        // before it - and it is the only state that has to be excluded: with no
+        // def list open at all there is no body to continue, and holding the arm
+        // back there too left 20 documents on the old answer for no reason the
+        // clause states.
+        //
+        // ONE SHAPE, DELIBERATELY. Every quote-lazy line has this much in common,
+        // but sending them all down the lazy arm moves fence-shaped lines off the
+        // oracle's answer as well - the general port is its own measurement.
+        // EVERY quote-lazy line, not the three shapes ported one at a time (a
+        // link definition, a list marker at markup-carve/carve#1904, a description
+        // marker at markup-carve/carve-js#1606). They shared one fact and it is
+        // general: the line carries no `>`, so PART 0 makes it the innermost open
+        // paragraph's text wherever it landed, and it reaches no content column
+        // inside the item at all.
+        //
+        // #1606'S DESCRIPTION-OPEN GATE IS GONE, and the frame is why. That gate
+        // held a `:` line back from the lazy arm while a description body was
+        // open, so the body would read it as its own continuation rather than a
+        // second entry. The frame gets the same answer structurally, because it is
+        // the ORDER of the oracle's two collectors: the body's fold tests a lazy
+        // line BEFORE anything unframes it and so sees plain text, while the
+        // term's fold tests for an entry AFTER. Measured dead over 5880 documents
+        // written to exercise exactly that state, so it is not carried here as a
+        // condition that cannot fire.
+        const quoteLazyFramed =
+          lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+          // AN OPEN FENCE CLASSIFIES NOTHING, so the frame has no work to do
+          // inside one and must not divert the line: a fence body takes every
+          // line it is given, and it needs this one at the column the item's
+          // content column leaves it at.
+          !insideOpenFence(lazyState)
+        if (lw >= contentCol && !quoteLazyFramed &&
+          // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
+          // quote-lazy MARKER line never reaches the content-column arm, not even
+          // inside an open fence, where the gate above hands the line back.
+          !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
+          const placed = sliceColumns(l, contentCol, true)
+          if (!RE_ADMONITION_CLOSE.test(placed)) bodyHasContentColumnLine = true
+          for (let k = 0; k < pendingBlanks; k++) {
+            nested.push(pendingBlankTexts[k] ?? '')
+            nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
+            trackItemLazyState('', lazyState)
+          }
+          pendingBlanks = 0
+          pendingBlankLineNumbers = []
+          pendingBlankTexts = []
+          const isMarker =
+            !insideOpenFence(lazyState) &&
+            !insideOpenQuoteParagraph(lazyState) &&
+            (RE_ORDERED.test(l) ||
+              RE_UNORDERED.test(l) ||
+              RE_TASK.test(l) ||
+              // An abutting-attr bullet (`-{.x} item`) is a marker too. It no
+              // longer reaches here via §10 interruption (bullets do not
+              // interrupt), so the sub-list nesting path must recognize it
+              // directly to keep nesting.
+              extractItemAttr(l) !== null)
+          if (firstBlockIdx === -1 && isMarker) {
+            firstBlockIdx = nested.length
+          }
+          if (isMarker) subListMarkers.add(nested.length)
+          // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
+          // CONTENT COLUMN (markup-carve/carve-js#1645). It carries no `>`, so its
+          // leading whitespace is alignment under the quoted item, not source the
+          // author put inside the fence body; the executable spec and carve-php
+          // strip it whole. `sliceColumns` removed only the item's content column
+          // and left the rest, so a body aligned under `> - ` kept two columns of
+          // indent on every line. The frame is what the #1630 arm below already
+          // uses for the below-column case: its first character is not whitespace,
+          // so a closing run among these lines matches no closer and stays body,
+          // the fence running to the end of its container - which is the answer
+          // both references give at every closer offset. A MARKED line (`>  code`)
+          // is not quote-lazy and keeps the content-column dedent that preserves
+          // its authored indentation.
+          const dedented =
+            lazyState.inFence && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
+              ? l.startsWith(LAZY_FRAME)
+                ? l
+                : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+              : sliceColumns(l, contentCol, true)
+          // A line collected INSIDE AN OPEN FENCE is verbatim body, never an
+          // authored base. Without this guard the rebase saw an over-indented
+          // fence CLOSER - one written past its opener, which is body text, not a
+          // closer - as a fresh opener (the real opener is the item's lead line
+          // and is not in `nested`), dedented it to column 0, and parseFence then
+          // closed the fence there, losing the rest of its body
+          // (markup-carve/carve-js#1636). carve-rs keeps it as body already.
+          if (!lazyState.inFence) {
+            authoredBaseEligible.add(nested.length)
+            if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
+          }
+          nested.push(dedented)
+          nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+          const fenceLineIndex = lexer.pos
+          trackItemLazyState(
+            dedented,
+            lazyState,
+            (marker) => {
+              const answer = itemFenceHasCloser(
+                lexer,
+                marker,
+                fenceLineIndex,
+                contentCol,
+                itemFenceMemo,
+                itemEndsAt,
+              )
+              lexer.fenceLookaheadAnswers.set(
+                `${lexer.lineNumber(fenceLineIndex)}:${marker}`,
+                answer,
+              )
+              return answer
+            },
+            true,
+            (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
+          )
+          lexer.consume()
+        } else if (
+          pendingBlanks === 0 &&
+          !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
+          (((lazyState.lazyFoldable ||
+            (lazyState.inComment && lazyState.lazyFoldableBeforeComment) ||
+            // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
+            // (markup-carve/carve#1364). The item goes on collecting, so a line
+            // still indented belongs to it and starts a paragraph of its own
+            // there (corpus 197, 277-3, 358). The container ends at document
+            // column 0, which is the line this test excludes and which is all
+            // that separates 358 from 357-2.
+            (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
+            !lazyContinuationEndsList(l, lexer)) ||
+            // A list marker indented past the base column but BELOW the content
+            // column folds into the lead text rather than ending the list. Under
+            // symmetric §10 no list marker interrupts a paragraph, so on the
+            // recursive reparse it stays folded: `1. a`/`  1. b`, `- a`/` - b`,
+            // and the abutting-attr form `- a`/` -{.x} b` all fold. (At or past
+            // the content column the marker nests; at the base column it can start
+            // a sibling list, §11 -- so only a below-content indented one folds.)
+            (indentColumns(l, baseIndent + 1) > baseIndent &&
+              (RE_TASK.test(l) ||
+                RE_UNORDERED.test(l) ||
+                RE_ORDERED.test(l) ||
+                extractItemAttr(l) !== null)))
+        ) {
+          bodyHasBelowColumnLine = true
+          let lazyLine = l
+          if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
+            lazyLine = l.replace(/^[ \t]+/, '')
+          } else if (quoteLazyFramed) {
+            // Stripped WHOLE and framed. Its indentation inside the quote body
+            // means nothing, and the frame - not a leftover column of indent - is
+            // what now keeps it from re-classifying, so there is no reason to keep
+            // any of it. That residue is what put two columns of indent inside a
+            // `dt`.
+            lazyLine = l.startsWith(LAZY_FRAME)
+              ? l
+              : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+          } else if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
+            lazyLine = l.replace(/^[ \t]+/, '')
+          } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
+            // A block-SHAPED line below the content column opens nothing (§24 C3:
+            // below it a marker folds as lazy item text and no other opener nests
+            // either), and it is folding here for that reason. It must not carry
+            // enough indentation to reach the SUB-list's content column on the
+            // recursive reparse, though, or it opens a list one level down -
+            // which is what `-   x` / `    - a` / `  - b` did, nesting `b` under
+            // `a` where the executable spec folds it (carve#603). One column
+            // reaches no content column at all, so the fold holds at every depth.
+            //
+            // A COMMENT ALREADY AT COLUMN 0 KEEPS IT (carve-js#1623). The column
+            // is a clamp on a line that has indentation to reduce; added to a
+            // line authored flush left it is not a clamp but source the author
+            // never wrote, and `attachDocumentOffsets` charges it back to the
+            // document - the sub-line is one character longer than its document
+            // line, the prefix goes to -1, and the span starts on the newline
+            // ENDING THE LINE ABOVE with `startColumn: 0`, below the AST schema's
+            // integer>=1. Only a DEGRADED comment fence reaches here at column 0,
+            // and only since carve-js#1607 stopped it ending the item; its `%%`
+            // spelling never took this branch at all, which is the control for
+            // the position it should have had.
+            //
+            // The exemption is the comment's alone. An unterminated code fence
+            // arrives here flush left too and NEEDS the column: without it the
+            // line opens a code block at the item's own column 0 instead of
+            // staying the paragraph's inline verbatim run (carve-js#540).
+            const flushed = l.replace(/^[ \t]+/, '')
+            lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
+          }
+          nested.push(lazyLine)
+          nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+          // The item's own reparse cannot see this from the column alone - the
+          // clamp above rewrote it - so record the FACT for the arm below.
+          if (indentColumns(l, contentCol) < contentCol) {
+            lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+          }
+          // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
+          // is the lazy continuation of the paragraph above it, which stays open
+          // behind it (corpus 183, 197, 358).
+          trackItemLazyState(lazyLine, lazyState, () => true, false)
+          lexer.consume()
+        } else if (
+          leadFence !== null &&
+          lazyState.inFence &&
+          pendingBlanks === 0 &&
+          indentColumns(l, contentCol) < contentCol &&
+          (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
+            lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
+        ) {
+          // AN UNFINISHED FENCE ON THE LEAD LINE OWNS WHAT THE CONTAINER FOLDED
+          // IN (markup-carve/carve-js#1630). A fence at an item's block start
+          // runs to the end of its container, and a line the ENCLOSING item
+          // already admitted as lazy text is inside that container - so it is
+          // fence body, and a closing run written among those lines is body text
+          // too, because a fence's content is not re-scanned for structure.
+          //
+          // The `itemLazyLines` test is the whole rule. Without it this arm would
+          // also take a line the AUTHOR wrote below the column, and the outermost
+          // spelling of the document - `- ``` x` with a flush-left body, where no
+          // container folded anything - must keep ending the item and leaking the
+          // body to the document, which is what the executable spec does there
+          // and what every engine already agreed on.
+          //
+          // The leading whitespace goes: it is the enclosing item's one-column
+          // clamp, not the author's indentation, and the fence's body is measured
+          // from its own column.
+          // FRAMED, not merely dedented. The frame's first character is not
+          // whitespace and matches no block opener, which is what keeps a closing
+          // run among these lines from CLOSING the fence: it is content, and a
+          // fence's content is not re-scanned for structure. A dedent alone left
+          // the run closing the block it was written inside.
+          const framed = l.startsWith(LAZY_FRAME) ? l : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+          nested.push(framed)
+          nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+          trackItemLazyState(framed, lazyState, () => true, false)
+          lexer.consume()
+        } else {
+          break
+        }
+      }
+
+      // A block opener may be authored past the canonical item-body column.  The
+      // collector above deliberately keeps the whole physical run; rebase each
+      // recognized block group now, before tightness and block parsing inspect
+      // it.  This is #1705's authored `block_base`: only structural indentation
+      // is removed, while indentation beyond the opener's base remains payload.
+      const leadIsMarker =
+        RE_UNORDERED.test(content) ||
+        RE_ORDERED.test(content) ||
+        RE_TASK.test(content) ||
+        extractItemAttr(content) !== null
+      const authoredBlockBlanks = hasOverindentedBlockCandidate
+        ? rebaseOverindentedBlocks(
+          nested,
+          authoredBaseEligible,
+          leadIsMarker ? markerContentColumn(content) : -1,
+        )
+        : new Set<number>()
+
+      // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
+      // not loosen the item on its own - it is not a second paragraph - but it
+      // does not FILL the gap either. So when the item's tail after its last
+      // blank is nothing but invisible lines, the item is still "followed by a
+      // blank line before the next marker" and L1's other clause applies. Without
+      // this, attaching the comment consumed the signal and `- a` / blank /
+      // `  %% n` / `- b` came out tight, where the same document without the
+      // comment is loose.
+      let blankBeforeInvisible = false
+      for (let k = nested.length - 1; k >= 0; k--) {
+        const ln = nested[k]!
+        if (isBlankLine(ln)) {
+          // A `+`-injected separator is not a blank line the author wrote, and
+          // never loosens - the same exemption the second-paragraph scan below
+          // makes for it. Without this the item went loose through the back door:
+          // `- a` / `+` / `%% note` / `- b` came out loose where the identical
+          // document without the comment is tight.
+          blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k)
+          break
+        }
+        if (!isInvisibleLine(ln)) break
+      }
+
+      // A blank line inside an OPEN verbatim fence is that fence's content, not
+      // spacing between blocks. Blanks are buffered in `pendingBlanks` and
+      // flushed only when a later line reaches the content column, so a fence
+      // running to the end of the item never received them.
+      //
+      // Only while a fence or comment is open: with nothing open the trailing
+      // blanks really are spacing, and flushing them would change list tightness
+      // and the item's end position (markup-carve/carve-js#988).
+      if (pendingBlanks > 0 && (lazyState.inFence || lazyState.inComment)) {
+        for (let k = 0; k < pendingBlanks; k++) {
+          nested.push(pendingBlankTexts[k] ?? '')
+          nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
+        }
+        // `pendingBlanks` is NOT cleared. The loose-list test below reads it to
+        // decide whether a blank separated this item from its sibling, and a
+        // blank is both at once: the fence's content AND the separator that
+        // loosens the list. Clearing it made `- a\n  %%% x\n b\n\n- c\n` tight.
+      }
+
+      // Blank line(s) before the next sibling marker make the list loose.
+      // The next marker must be a real sibling of THIS list: same kind and
+      // (for unordered) same marker character. A blank line before a
+      // different marker (`- a\n\n+ b`) separates two distinct lists
+      // (§11), so it must not loosen this one.
+      if ((pendingBlanks > 0 || blankBeforeInvisible) && !lexer.eof()) {
+        const nextLine = lexer.peek()!
+        const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
+        if (
+          indentColumns(nextLine, baseIndent + 1) === baseIndent &&
+          matchListMarker(nextStripped, isTask, isOrdered) &&
+          (isOrdered
+            ? orderedContinues(nextStripped, orderedKind, orderedDelim)
+            : unorderedMarkerChar(nextStripped) === firstMarkerChar)
+        ) {
+          // A run of THREE OR MORE blank lines is a hard boundary (§11 N1): the
+          // sibling marker after it opens a new list instead of joining this
+          // one. One or two blank lines remain the ordinary loose separator
+          // (§17 L1). `blankBeforeInvisible` is deliberately not counted here -
+          // a run broken by a comment is not a run of blank lines.
+          if (pendingBlanks >= 3) hardBoundary = true
+          else loose = true
+        }
+      }
+
+      // Compact list blocks (Carve): an internal blank line loosens the item only
+      // when the content after it is a plain paragraph (a real second paragraph).
+      // A blank followed by a block opener (sub-list, quote, fence, div, heading,
+      // table) keeps the item tight, so an item can carry a sub-block without the
+      // list going loose. Only the tight/loose RENDERING changes; block structure
+      // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
+      // A blank line INSIDE a fenced block is that block's content, not an
+      // interior block separator, so it must not loosen the item (carve#326 case
+      // C; matches carve-rs / carve-php). Precompute which lines fall inside a
+      // CLOSED fence in a single pass, then skip those blanks in the scan below.
+      // Only a fence with a matching closer forms a block; an UNCLOSED opener is
+      // inline verbatim inside a paragraph, so a following blank still loosens
+      // (matches carve-rs). The opener may be the item's lead (a marker-line
+      // fence, `- ``` `, which is not in `nested`), so the pass prepends `content`
+      // and a `nested[k]` corresponds to `fenceLines[k + 1]`. Marking closed
+      // ranges is O(n) total (ranges never overlap), keeping the scan linear.
+      //
+      // ALL THREE FENCE KINDS. This knew only the code fence, which is the same
+      // one-kind-of-three defect corpus category 279 pins for the collectors -
+      // and it surfaced the moment they were fixed: the blank inside a
+      // `+`-attached `::: note` or `%%%` body reaches `nested` now and loosened
+      // the item, where the identical code fence kept it tight.
+      //
+      // STILL ONE STATEFUL PASS, not one scan per line. Asking
+      // `fencedBlockEnd` at every index reads the same suffix again for every
+      // unterminated opener, which is quadratic. With comment openers of
+      // increasing width that cannot close, each opener repeats the suffix scan.
+      // The stack below runs `findColonCloser`'s nesting model once, left to right,
+      // keeping the whole pass linear (ranges never overlap).
+      const fenceLines = [content, ...nested]
+      const inFence: boolean[] = new Array(fenceLines.length).fill(false)
+      // AN OPENER WITH NO CLOSER AHEAD OPENS NOTHING, so it must not latch this
+      // pass either. Without the check an unterminated `%%%` swallowed every
+      // later line and a genuinely CLOSED code fence below it went unmarked, so a
+      // blank inside that code loosened the item - the divergence from what the
+      // block parser does with the same lines.
+      const closers = buildCloserIndex(fenceLines)
+      // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
+      // `:::` container that IS the item's first block is the item's own body:
+      // the blank line between two of its blocks is the only blank line the item
+      // has, and §17 L1 reads it. That is already what happens when the closer is
+      // MISSING - an unterminated opener latches nothing below, so the blank is
+      // seen and the list is loose - and writing the closer is a spelling change,
+      // so it must not move the tightness. Marking the range made
+      //
+      //     - ::: d
+      //       b
+      //
+      //       tail
+      //
+      // loose and the same document with `  :::` written TIGHT, which is
+      // `parse(fmt(x)) != parse(x)` - PART 11 §1 - on the one corpus document
+      // where the writer supplies a missing closer, corpus
+      // `362-an-unterminated-container-does-not-extend-the-item-past-a-blank-line-3`.
+      // The maintainer ruled the two converge on the reading the SOURCE already
+      // gets, which is loose.
+      //
+      // A container the item ATTACHES below a lead block keeps its interior: a
+      // blank between two of ITS blocks is the container's, not the item's, and
+      // corpus `279-a-boundary-line-inside-an-open-fence-does-not-end-the-
+      // container-10` pins that reading. So the lead test is what separates them,
+      // not the presence of a closer.
+      //
+      // STILL ONE MARKED RANGE PER OUTERMOST OPAQUE FENCE, so the pass stays
+      // linear. `openOpaque` counts the opaque fences currently open, and only
+      // the transition through zero writes a range: nesting a hundred containers
+      // inside an item marks the outermost span once rather than once per level,
+      // which is the same bound the openIdx it replaces had.
+      const firstContentIdx = fenceLines.findIndex((l) => l.trim() !== '')
+      const open: Array<{
+        kind: 'code' | 'comment' | 'colon'
+        close: RegExp | null
+        len: number
+        opaque: boolean
+      }> = []
+      let openOpaque = 0
+      let opaqueIdx = -1
+      const enter = (entry: { opaque: boolean }, k: number): void => {
+        if (!entry.opaque) return
+        if (openOpaque === 0) opaqueIdx = k
+        openOpaque++
+      }
+      const leave = (entry: { opaque: boolean }, k: number): void => {
+        if (!entry.opaque) return
+        openOpaque--
+        if (openOpaque > 0) return
+        for (let i = opaqueIdx; i <= k; i++) inFence[i] = true
+        opaqueIdx = -1
+      }
+      for (let k = 0; k < fenceLines.length; k++) {
+        const line = fenceLines[k]!
+        const inner = open[open.length - 1]
+        if (inner !== undefined && inner.kind !== 'colon') {
+          const closed =
+            inner.kind === 'code' ? inner.close!.test(line) : commentFenceRun(line) === inner.len
+          if (!closed) continue
+          open.pop()
+          leave(inner, k)
+          continue
+        }
+        if (inner !== undefined) {
+          // Inside a colon fence a bare run of the INNERMOST width closes it and
+          // any other run opens one (carve#455's exact-length rule).
+          const close = RE_ADMONITION_CLOSE.exec(line)
+          if (close) {
+            const len = close[1]!.length
+            if (len === inner.len) {
+              open.pop()
+              leave(inner, k)
+            } else {
+              const nested = { kind: 'colon' as const, close: null, len, opaque: true }
+              open.push(nested)
+              enter(nested, k)
+            }
+            continue
+          }
+        }
+        const fence = RE_FENCE.exec(line)
+        const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
+        const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
+        let opened: { kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number } | null =
+          null
+        if (marker !== null) {
+          if (codeCloserPossible(closers, marker, k))
+            opened = { kind: 'code', close: fenceCloseRe(marker), len: marker.length }
+        } else {
+          const run = commentFenceRun(line)
+          if (run !== undefined) {
+            if (exactCloserPossible(closers.comment, run, k))
+              opened = { kind: 'comment', close: null, len: run }
+          } else {
+            const colon = colonBlockOpenerRun(line)
+            if (colon !== null) opened = { kind: 'colon', close: null, len: colon }
+          }
+        }
+        if (opened === null) continue
+        const entry = {
+          ...opened,
+          opaque: !(opened.kind === 'colon' && k === firstContentIdx),
+        }
+        open.push(entry)
+        enter(entry, k)
+      }
+      // WHAT IS STILL OPEN AT THE END REACHED THE END, and its range is marked
+      // from where it opened to the item's last line. Only the loop's transition
+      // through zero wrote a range, so an unterminated container left the stack
+      // non-empty and marked nothing - which is the same blindness the closer gate
+      // above used to produce, one step later.
+      if (openOpaque > 0 && opaqueIdx >= 0) {
+        for (let i = opaqueIdx; i < fenceLines.length; i++) inFence[i] = true
+      }
+      // A FOOTNOTE DEFINITION'S BLOCK RUNS TO THE END OF ITS BODY, blank lines and
+      // all (markup-carve/carve#1363, PART 1 S4). A blank between two lines of the
+      // definition is inside its block, not an interior separator of the item, so
+      // it must not loosen the item any more than a blank inside a fence does.
+      //
+      // ONLY THE FOOTNOTE FORM. A link reference definition has no body at all, so
+      // it opens no run and the blank after it still loosens - `- a` /
+      // `  [r]: /u` / blank / `    more` IS a second paragraph (corpus 359-2). That
+      // is the control an over-wide fix breaks, and it is the whole difference
+      // between the two definition kinds here.
+      const inFootnoteRun: boolean[] = new Array(nested.length).fill(false)
+      for (let k = 0; k < nested.length; k++) {
+        const line = nested[k]!
+        if (indentColumns(line, 1) !== 0 || !RE_FOOTNOTE_DEF.test(line)) continue
+        // The run reaches the LAST indented line under the definition; the blanks
+        // after that one are the item's again, so a trailing blank still loosens.
+        let last = k
+        for (let j = k + 1; j < nested.length; j++) {
+          const next = nested[j]!
+          if (next === '') continue
+          // The same `FOOTNOTE_BODY_COLUMN` boundary the tracker uses, so the two
+          // agree about where the definition's block ends.
+          if (indentColumns(next, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
+          last = j
+        }
+        for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
+        k = last
+      }
+      // The content column of the sub-list item each line sits in. A marker at
+      // the item's content column opens a sibling sub-list item or a new sibling
+      // sub-list (§24 C3, carve-js#1951), whose own column then applies; one
+      // indented below the current column folds into the open paragraph instead.
+      // Built on first use: most items never reach the check below.
+      let subColAt: number[] | null = null
+      const subListColumnAt = (at: number): number => {
+        if (subColAt === null) {
+          subColAt = new Array(nested.length).fill(-1)
+          let col = leadIsMarker ? markerContentColumn(content) : -1
+          for (let k = 0; k < nested.length; k++) {
+            if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
+              col = markerContentColumn(nested[k]!)
+            }
+            subColAt[k] = col
+          }
+        }
+        return subColAt[at]!
+      }
+      for (let k = 0; k < nested.length; k++) {
+        if (inFence[k + 1]!) continue
+        if (inFootnoteRun[k]!) continue
+        if (authoredBlockBlanks.has(k)) continue
+        if (nested[k] !== '') continue
+        // A `+`-injected separator never loosens, even when the block it attaches
+        // is a plain paragraph -- it keeps the item tight like a `+`-attached
+        // quote/code/table (Bug B, corpus 83-list-continuation-marker family).
+        if (plusSeparators.has(k)) continue
+        let j = k + 1
+        // Skip blanks AND invisible lines: §17 L1 loosens on a second PARAGRAPH,
+        // and a comment or a definition renders nothing, so it is neither the
+        // paragraph that loosens nor a wall that hides one behind it. Stopping at
+        // the invisible line instead of looking past it kept `%% n` / `text`
+        // tight, which is the opposite error - the item does hold a second
+        // paragraph, it just has a comment in front of it (carve#621).
+        while (j < nested.length) {
+          if (nested[j] === '') {
+            j++
+            continue
+          }
+          const comment = commentFenceRun(nested[j]!)
+          if (comment !== undefined) {
+            let close = j + 1
+            while (close < nested.length && commentFenceRun(nested[close]!) !== comment) close++
+            // A closed comment fence is one invisible block. Its verbatim
+            // payload is not a paragraph behind an invisible opener.
+            if (close < nested.length) {
+              j = close + 1
+              continue
+            }
+          }
+          if (isInvisibleLine(nested[j]!)) {
+            j++
+            continue
+          }
+          break
+        }
+        if (j >= nested.length) continue
+        // A blank followed by content the item's SUB-LIST consumes does not
+        // loosen THIS item: that content belongs to the sub-list, whose looseness
+        // is decided by its own recursive parse. Counting it here wrongly
+        // propagates a child's looseness up to the parent (carve#322). The
+        // threshold is the sub-list's content column: a line at or past it is the
+        // sub-list's, a line BELOW it (an above-content-column line, §24 C3, or a
+        // dedented column-0 paragraph) is the item's OWN block and still loosens.
+        // Matches carve-php / carve-rs, and the sibling-blank invariant where the
+        // outer item stays tight. A marker LEAD (`- 1. x`) is that sub-list's
+        // first item (carve-js#1938); a later sibling sub-list brings its own
+        // column (carve-js#1951).
+        const subCol = subListColumnAt(k)
+        if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
+        // `j` can no longer be an invisible line (skipped above), so this is the
+        // plain "is the next visible thing a paragraph" test it always was.
+        //
+        // STILL `lineOpensBlock`, not §24 C3's wider family. The rebase above has
+        // already rewritten an over-indented opener into its exact-column
+        // spelling, so asking the ordinary question here is what makes the two
+        // spellings agree. Asking `lineOpensItemBlock` instead widened the
+        // EXACT-column case too, and a lone block image - a paragraph under §17
+        // L2 - stopped loosening its item (corpus 411, 162).
+        if (!lineOpensBlock(nested[j]!)) {
+          loose = true
+          break
+        }
+      }
+
+      const leadOpensColonFence =
+        (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
+        RE_DIV_OPEN.test(content)
+      // Parse the lead text together with its continuation/nested lines as one
+      // block sequence (lazy continuation merges into the lead paragraph). An
+      // indented ordered sub-list, however, is parsed as its own block stream so
+      // it nests instead of folding into the lead paragraph.
+      const literalBelowColumnColonFence =
+        leadOpensColonFence && bodyHasBelowColumnLine && !bodyHasContentColumnLine
+      const itemLead = literalBelowColumnColonFence ? ` ${content}` : content
+      const keepStreamWhole =
+        firstBlockIdx === -1 || leadIsMarker || (leadOpensColonFence && !literalBelowColumnColonFence)
+      const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
+      const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
+      const mkSub = (
+        lines: readonly string[],
+        startLineIndex: number,
+        sourceLineMap?: number[],
+      ): Lexer => {
+        const sub = nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap)
+        // THIS BODY'S COLUMN 0 IS THE ITEM'S CONTENT COLUMN, so a marker reaching
+        // it opens a sublist rather than folding into an open paragraph (§24 C3,
+        // markup-carve/carve#1517). Set here rather than in `nestedSubLexer`
+        // because it must NOT travel: a quote, a div or a definition body inside
+        // the item gets its own lexer without it, and a marker there folds as §10
+        // I2 says.
+        sub.markerOpensSublist = true
+        sub.hostBody = 'list'
+        return sub
+      }
+      const carry: PendingAttrCarry = { attrs: null }
+      const children = this.parseBlocks(
+        mkSub([itemLead, ...leadLines], itemStartLineIndex, [
+          lexer.lineNumber(itemStartLineIndex),
+          ...nestedLineNumbers.slice(0, leadLines.length),
+        ]),
+        0,
+        blockLines.length > 0 ? carry : undefined,
+      )
+      if (blockLines.length > 0) {
+        children.push(
+          ...this.parseBlocks(
+            mkSub(
+              blockLines,
+              itemStartLineIndex + 1 + firstBlockIdx,
+              nestedLineNumbers.slice(firstBlockIdx),
+            ),
+            0,
+            carry,
+          ),
+        )
+      }
+
+      const item: ListItem = { type: 'list_item', children }
+      let itemEnd = lexer.pos
+      while (itemEnd > itemStartLineIndex + 1 && isBlankLine(lexer.lines[itemEnd - 1]!)) itemEnd--
+      // The end-at-the-last-placed-child fixup that used to sit here moved into
+      // `attachBlockPos`, which now applies it to every closerless container
+      // rather than to items alone (markup-carve/carve#1522).
+      attachBlockPos(lexer, item, itemStartLineIndex, itemEnd)
+      if (checked !== undefined) item.checked = checked
+      if (taskState !== undefined) item.taskState = taskState
+      if (itemAttrs) item.attrs = itemAttrs
+      items.push(item)
+      if (hardBoundary) break
+    }
+
+    const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }
+    if (isOrdered) {
+      if (orderedStart !== 1) list.start = orderedStart
+      const t = olTypeOf(orderedKind)
+      if (t) list.olType = t
+      if (orderedDelim === '.' || orderedDelim === ')') list.delim = orderedDelim
+      // The bare dot is a spelling, not a dialect: `. a` and `1. a` are the same
+      // list, so the tree has to carry which one opened it or the writer must
+      // normalize one away (PART 11 §6).
+      if (firstOrdered && firstOrdered[2] === '') list.bareMarker = true
+    } else if (firstMarkerChar === '-' || firstMarkerChar === '*') {
+      list.bulletChar = firstMarkerChar
+    }
+    return list
+  }
+
+  private parseTable(lexer: Lexer): Table | Figure {
+    // Collect raw cell source first; a `+` continuation row appends its
+    // non-empty fragments to the previous row's *source* so an inline
+    // construct spanning the line boundary is one logical cell. Inline
+    // parsing happens once, after merging.
+    const rawRows: RawCell[][] = []
+    const rowAttrsList: (Attrs | undefined)[] = []
+    /** Where a row BEGINS, by row index - its own line, not its first cell's. */
+    const rowStarts: Array<{ line: number; column: number; offset: number } | undefined> = []
+    /** Where a row ENDS once `+` continuations have extended it, by row index. */
+    const rowEnds: Array<{ line: number; column: number; offset: number } | undefined> = []
+    let lastRaw: RawCell[] | null = null
+    while (
+      !lexer.eof() &&
+      (isTableRow(lexer.peek()!) || RE_TABLE_CONT.test(lexer.peek()!))
+    ) {
+      const line = lexer.peek()!
+      const lineIndex = lexer.pos
+      if (RE_TABLE_CONT.test(line)) {
+        if (!lastRaw) break // a continuation with no row to extend
+        if (
+          rawRows.length === 2 &&
+          rawRows[1] === lastRaw &&
+          isGfmDelimiterRow(lastRaw) &&
+          !isGfmDelimiterRow(rawRows[0]!)
+        )
+          break
+        lexer.consume()
+        // A row that continues still occupies a CONTIGUOUS run of lines, and no
+        // sibling row overlaps it - so unlike its cells, the row can be placed.
+        // Recording where it now ends is what makes that possible.
+        rowEnds[rawRows.length - 1] = {
+          line: lexer.lineNumber(lineIndex),
+          column: lexer.lineStartColumn(lineIndex) + line.length,
+          offset: lexer.lineOffset(lineIndex) + line.length,
+        }
+        const contOffset = lexer.lineOffset(lineIndex)
+        const contLine = lexer.lineNumber(lineIndex)
+        const contColumn = lexer.lineStartColumn(lineIndex)
+        const contCanPosition = lexer.hasDocumentOffsets
+        splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
+          const frag = trimCellPadding(src)
+          const target = lastRaw![idx]
+          // A fragment on a span (`^`/`<`) column is skipped: the spec's
+          // "Combined: Rowspan + Multi-line" example always places the `+`
+          // rows *before* the `^` row, so they extend the real origin cell
+          // (verified). A `+` after the span row is not a spec'd ordering.
+          if (!frag || !target || target.span) return
+          const fragStart = target.raw ? target.raw.length + 1 : 0
+          target.raw = target.raw ? `${target.raw} ${frag}` : frag
+          // Only the NEW fragment is read; the joining space is not a run
+          // character, so resuming from the cell's own state is exact.
+          target.openRun = openVerbatimRun(frag, target.openRun)
+          // The CELL keeps no span. Its content sits in two column ranges on
+          // non-adjacent lines, and one range covering both would swallow the
+          // neighbouring column's content on the lines between - so cell 1 would
+          // CONTAIN cell 0, and an offset would map to two sibling cells at once.
+          // A construct that is not one contiguous range cannot honestly be one.
+          delete target.pos
+          const within = contCanPosition ? src.indexOf(frag) : -1
+          if (within >= 0 && line.slice(start + within, start + within + frag.length) === frag) {
+            const range: AnchorRange = {
+              from: fragStart,
+              to: fragStart + frag.length,
+              offset: contOffset + start + within,
+              line: contLine,
+              column: contColumn + start + within,
+            }
+            if (target.anchors) target.anchors.push(range)
+            else target.anchors = [range]
+          }
+          // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
+          // range's `to` is the length `raw` had when it was appended, and the
+          // next fragment starts one past that, so the joining space is already
+          // the only offset between them and an unplaced fragment simply leaves a
+          // wider gap. `to` is inclusive so an exclusive span end may land on it;
+          // the space itself belongs to no range, which is what makes a node
+          // reaching across the boundary unplaceable.
+        })
+        continue
+      }
+      lexer.consume()
+      const { attrs: rowAttrs, body: rowBody } = rowAttrsFromLine(line)
+      // Positions are only emitted when this lexer can express a document offset.
+      // Verifying the content against the local line is not enough: inside an
+      // unmapped container the check passes while the offset means something else.
+      const canPosition = lexer.hasDocumentOffsets
+      const lineOffset = lexer.lineOffset(lineIndex)
+      const lineNo = lexer.lineNumber(lineIndex)
+      const lineCol = lexer.lineStartColumn(lineIndex)
+      const raw: RawCell[] = splitTableRowSpans(rowBody).map(({ text: src, start }) => {
+        const { header, span, align, valign, attrs, content } = parseCellMarkers(src)
+        const c: RawCell = { header, raw: content, openRun: openVerbatimRun(content) }
+        if (span) c.span = span
+        if (align) c.align = align
+        if (valign) c.valign = valign
+        if (attrs) c.attrs = attrs
+        if (canPosition) {
+          c.pos = {
+            startLine: lineNo,
+            endLine: lineNo,
+            startColumn: lineCol + start,
+            endColumn: lineCol + start + src.length,
+            startOffset: lineOffset + start,
+            endOffset: lineOffset + start + src.length,
+          }
+        }
+        // Anchor the cell's inline content, but only after checking the content is
+        // where we think it is. `\|` unescapes to one character, so a cell holding
+        // an escaped pipe is not a verbatim slice and gets no anchor.
+        const within = content === '' || !canPosition ? -1 : src.indexOf(content)
+        if (within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
+          c.anchors = [
+            {
+              from: 0,
+              to: content.length,
+              offset: lineOffset + start + within,
+              line: lineNo,
+              column: lineCol + start + within,
+            },
+          ]
+        }
+        return c
+      })
+      rawRows.push(raw)
+      rowAttrsList.push(rowAttrs)
+      // The row's own extent, independent of whether its cells keep theirs. A row
+      // whose every cell continues has no cell span to start from, and it still
+      // occupies these lines.
+      rowStarts[rawRows.length - 1] = canPosition
+        ? { line: lineNo, column: lineCol, offset: lineOffset }
+        : undefined
+      rowEnds[rawRows.length - 1] = canPosition
+        ? {
+            line: lineNo,
+            column: lineCol + line.length,
+            offset: lineOffset + line.length,
+          }
+        : undefined
+      lastRaw = raw
+    }
+    // GFM-style header separator: when the SECOND row is a delimiter row -- every
+    // cell a run of dashes with optional alignment colons (`---`, `:--`, `--:`,
+    // `:-:`) -- the first row becomes the header (rendered in <thead>) and the
+    // colons set per-column alignment for the whole column. The delimiter row is
+    // dropped. This is in addition to Carve's tight per-cell markers `|=`/`|<`; a
+    // delimiter row anywhere else is an ordinary data row.
+    // A cell carrying author attributes (`|{.x} ---`) is content, not a plain
+    // structural delimiter, so it never makes its row a GFM header separator.
+    if (
+      rawRows.length >= 2 &&
+      isGfmDelimiterRow(rawRows[1]!) &&
+      !isGfmDelimiterRow(rawRows[0]!)
+    ) {
+      const aligns = rawRows[1]!.map((c) => {
+        // DOMINATED, and narrowed anyway. `isGfmDelimiterCell` above already
+        // required `/^:?-+:?$/` of the SAME space-trimmed string, so a cell whose
+        // padding is not a space has already stopped the row from being a
+        // delimiter row and never reaches here - reverting this one site to the
+        // wider trim cannot change the answer. It is narrowed regardless, because
+        // one rule spelled two ways is how this class of defect starts: the
+        // domination is a property of the code above, not of the rule.
+        const t = trimCellPadding(c.raw)
+        const left = t.startsWith(':')
+        const right = t.endsWith(':')
+        return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined
+      })
+      rawRows.splice(1, 1)
+      rowAttrsList.splice(1, 1)
+      rowStarts.splice(1, 1)
+      rowEnds.splice(1, 1)
+      for (const c of rawRows[0]!) c.header = true
+      // Column alignment lands on the HEADER cells only, matching what the native
+      // `|=<` markers produce. Propagating it onto body cells too made the same
+      // logical table parse to two different trees depending on which separator
+      // syntax was used, and the writer then serialized the propagated values as
+      // per-cell markers the author never wrote (carve#352, corpus 09-tables-3).
+      //
+      // Nothing is lost: the HTML renderer already inherits column alignment for a
+      // body cell whose own align is unset, which is how the native path has always
+      // rendered aligned body cells. A genuine per-cell override still sets
+      // `c.align` itself and is untouched here.
+      rawRows[0]!.forEach((c, i) => {
+        const a = aligns[i]
+        if (a && !c.align) c.align = a
+      })
+    }
+    const rows: TableRow[] = rawRows.map((rc, idx) => {
+      const row: TableRow = {
+        type: 'table_row',
+        cells: rc.map((c) => {
+          const cell: TableCell = {
+            type: 'table_cell',
+            header: c.header,
+            children: c.span
+              ? []
+              : c.anchors?.length
+                ? this.parseInline(
+                    c.raw,
+                    lexer.abbrDefs,
+                    lexer.linkDefs,
+                    inlineSource({
+                      baseOffset: c.anchors[0]!.offset,
+                      startLine: c.anchors[0]!.line,
+                      startColumn: c.anchors[0]!.column,
+                      anchoredRanges: c.anchors,
+                    }),
+                  )
+                : stripPositions(this.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs)),
+          }
+          if (c.span) cell.span = c.span
+          if (c.align) cell.align = c.align
+          if (c.valign) cell.valign = c.valign
+          if (c.attrs) cell.attrs = c.attrs
+          if (c.pos) cell.pos = c.pos
+          return cell
+        }),
+      }
+      // A row owns its complete source line, including its pipe delimiters.
+      //
+      // A `+` continuation breaks that, because the extended cell loses its own
+      // span - its content sits in two column ranges on non-adjacent lines. The
+      // ROW is still one contiguous range that no sibling row overlaps, so it is
+      // placed from where it starts to where the continuation leaves it. Only
+      // when every cell continued does the start come from the row's own line
+      // rather than a cell, since there is no cell span left to take it from.
+      const spans = rc.map((c) => c.pos)
+      const end = rowEnds[idx]
+      if (end) {
+        const first = rowStarts[idx] ?? spans.find(Boolean)
+        const startLine = 'startLine' in (first ?? {}) ? (first as Position).startLine : undefined
+        const rowStart = first
+          ? 'line' in first
+            ? { line: first.line, column: first.column, offset: first.offset }
+            : {
+                line: startLine!,
+                column: (first as Position).startColumn!,
+                offset: (first as Position).startOffset!,
+              }
+          : undefined
+        if (rowStart) {
+          row.pos = {
+            startLine: rowStart.line,
+            endLine: end.line,
+            startColumn: rowStart.column,
+            endColumn: end.column,
+            startOffset: rowStart.offset,
+            endOffset: end.offset,
+          }
+        }
+      } else {
+        const first = spans[0]
+        const last = spans[spans.length - 1]
+        if (
+          first &&
+          last &&
+          spans.every(Boolean) &&
+          first.startColumn !== undefined &&
+          last.endColumn !== undefined &&
+          first.startOffset !== undefined &&
+          last.endOffset !== undefined
+        ) {
+          row.pos = {
+            startLine: first.startLine,
+            endLine: last.endLine,
+            startColumn: first.startColumn,
+            endColumn: last.endColumn,
+            startOffset: first.startOffset,
+            endOffset: last.endOffset,
+          }
+        }
+      }
+      const ra = rowAttrsList[idx]
+      if (ra) row.attrs = ra
+      return row
+    })
+    const table: Table = { type: 'table', rows }
+    // Optional caption ^ ...
+    let lookahead = 0
+    while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+    const next = lexer.peek(lookahead)
+    if (next) {
+      const cap = RE_CAPTION.exec(next)
+      // §4: a caption attaches only when it immediately follows the block
+      // or is separated by at most ONE blank line.
+      if (cap && lookahead <= 1) {
+        for (let i = 0; i <= lookahead; i++) lexer.consume()
+        table.caption = this.parseCaptionInline(lexer, cap[1]!)
+      }
+    }
+    return table
+  }
+
+  // Whether the peeked line ENDS an open heading or blockquote (and starts a
+  // sibling block). A list marker (bullet, task, ordered, or abutting-attr) ends
+  // them and starts a sibling list -- unlike paragraph interruption, where a list
+  // marker FOLDS in (symmetric §10): a list folds into a PARAGRAPH but ends a
+  // heading/quote, matching djot. Every paragraph-interrupter ends them too.
+  // Consume a caption's continuation lines. A caption is multi-line inline
+  // content, so it folds following lines exactly like a PARAGRAPH (§10), NOT like
+  // a heading: a list marker FOLDS in (djot — a list needs a blank line to
+  // interrupt), while a heading / blockquote / table / fenced code / `:::` div /
+  // thematic break / `%%%` comment interrupts and ends the caption. A blank line
+  // or a further `^ ` caption line also ends it. Continuation lines join with
+  // `\n`. The lexer is positioned on the line AFTER the caption's first line;
+  // `firstLine` is that first line's already-extracted text (`cap[1]`).
+  /**
+   * Parse a caption's inline content, anchored to the source.
+   *
+   * The caption's text IS a suffix of its line (`^ text` keeps everything after
+   * the marker), and its continuation lines are appended verbatim - so unlike a
+   * line block's expanded whitespace or a table's reassembled cells, an exact
+   * mapping exists and there is nothing to invent. Captions were nonetheless run
+   * through `stripPositions`, which is why 41 of this engine's 61 unplaced corpus
+   * nodes were inside a `caption`.
+   *
+   * The suffix test is kept as a guard rather than assumed: if the line the lexer
+   * is sitting on does not end with the caption text, the mapping is not exact
+   * and the positions are dropped, as before.
+   */
+  private parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
+    const capIndex = lexer.pos - 1
+    const capLine = lexer.lines[capIndex]
+    const anchors: Array<{ offset: number; column: number; line: number }> = []
+    const anchorable =
+      lexer.hasDocumentOffsets && capLine !== undefined && capLine.endsWith(firstLine)
+    if (anchorable) {
+      const within = capLine.length - firstLine.length
+      anchors.push({
+        offset: lexer.lineOffset(capIndex) + within,
+        column: lexer.lineStartColumn(capIndex) + within,
+        line: lexer.lineNumber(capIndex),
+      })
+    }
+    const text = readCaptionText(lexer, firstLine, anchorable ? anchors : undefined)
+    if (!anchorable) {
+      return stripPositions(
+        this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+      )
+    }
+    return this.parseInline(
+      text,
+      lexer.abbrDefs,
+      lexer.linkDefs,
+      inlineSource({
+        anchored: true,
+        baseOffset: anchors[0]!.offset,
+        startLine: lexer.lineNumber(capIndex),
+        startColumn: anchors[0]!.column,
+        lineAnchors: anchors,
+      }),
+      true,
+    )
+  }
+
+  /**
+   * `flattened` marks the MAX_NESTING_DEPTH degradation path (§25): past the cap
+   * every opener "becomes literal paragraph text", so NOTHING interrupts here and
+   * consecutive flattened openers plus any text after them form ONE paragraph,
+   * ending at the first blank line. Grouping them one-per-opener was an artifact
+   * of where the degrade path handed back to the block parser, not a rule -
+   * "degrades to literal text" is the whole rule, and literal text groups the way
+   * the same characters typed by an author would. (carve#547, carve#494)
+   */
+  private parseParagraph(lexer: Lexer, flattened = false): Paragraph {
+    const lines: string[] = []
+    const startLineIndex = lexer.pos
+    while (!lexer.eof()) {
+      const ln = lexer.peek()!
+      if (isBlankLine(ln)) break
+      // Paragraph interruption (grammar PART 9 §10): a VISIBLE block (heading,
+      // list, quote, table, fence, thematic break, admonition/div) interrupts
+      // an open paragraph with no blank line before it, at the top level AND
+      // nested — the Markdown-like rule. Invisible constructs (reference
+      // definitions, comments) interrupt too. A bare image does not interrupt,
+      // an ordered marker interrupts only as `1.`/`1)`, and a fence/`:::` only
+      // when it has a matching closer ahead. See startsInterruptingBlock.
+      //
+      // Only a paragraph that already holds a line can be interrupted: the FIRST
+      // line is always consumed. In normal dispatch the first line reaching
+      // parseParagraph is never a block opener (parseBlockInner would have
+      // claimed it), so this does not change interruption. It DOES guarantee
+      // progress on the MAX_NESTING_DEPTH degradation path, where a marker line
+      // (e.g. a `>` past the depth cap) is routed here to become literal text —
+      // without this guard startsInterruptingBlock would break before consuming,
+      // looping forever on the same line.
+      if (
+        !flattened &&
+        lines.length > 0 &&
+        (((lexer.consumesHostedLinkDefs === 'all' ||
+          (lexer.consumesHostedLinkDefs === 'lazy' &&
+            lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))) &&
+          isLinkDefLine(stripLazyFrame(ln))) ||
+          (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
+            startsInterruptingBlock(lexer))) &&
+        !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
+      )
+        break
+      lexer.consume()
+      // The frame did its work in the interruption test above; a paragraph is
+      // where a framed line becomes text, so it comes off here.
+      lines.push(stripLazyFrame(ln))
+    }
+    // Every paragraph line has its leading whitespace stripped (djot /
+    // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
+    // line (` c`, or a fresh paragraph after a list closes) renders as `c` —
+    // Carve has no indented code blocks, so indentation never survives into a
+    // paragraph. The first line's stripped width is folded into the inline
+    // base position so source offsets/columns stay accurate.
+    const firstLead = lines[0]!.match(/^[ \t]+/)?.[0].length ?? 0
+    const text = dropTrailingWhitespace(lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n'))
+    // Each line contributes its OWN leading whitespace on top of whatever prefix
+    // the container stripped, so a continuation line needs its own origin rather
+    // than a single base offset plus a local one (#444).
+    const anchors =
+      lines.length > 1
+        ? lines.map((ln, i) => {
+            const lead = ln.match(/^[ \t]+/)?.[0].length ?? 0
+            return {
+              offset: lexer.lineOffset(startLineIndex + i) + lead,
+              column: lexer.lineStartColumn(startLineIndex + i) + lead,
+              line: lexer.lineNumber(startLineIndex + i),
+            }
+          })
+        : undefined
+    const paragraphNode: Paragraph = {
+      type: 'paragraph',
+      children: this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+        anchored: lexer.hasDocumentOffsets,
+        baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
+        startLine: lexer.lineNumber(startLineIndex),
+        startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
+        ...(anchors ? { lineAnchors: anchors } : {}),
+      }),
+    }
+    // The container prefix is already stripped by the lexer, so a first line with
+    // leading whitespace LEFT sat above the container's content column. Recorded
+    // here because this is the last place the answer exists: the indentation is
+    // thrown away two lines up, and the block-image promotion phase has no way to
+    // recover it from the tree (carve-js#1553).
+    if (firstLead > 0) markAboveContentColumn(paragraphNode)
+    return paragraphNode
+  }
+
+  /**
+   * Where a braced inline opened at `open` closes, or -1.
+   *
+   * The scan skips verbatim spans, whose closer is searched for across the rest
+   * of the BLOCK (PART 3 UNCLOSED RUN, ruling markup-carve/carve#2079), so a
+   * closer a code span holds is code and the brace pair closes later or not at
+   * all.
+   */
+  /**
+   * A substitution opening at `open`: where the pair ends and where its `~>`
+   * sits, or null for a strike or no pair at all.
+   *
+   * Only a top-level `~>` splits the pair. Verbatim content (a code span, which
+   * math and an inline literal are prefixes of), a comment and an escape are
+   * skipped (markup-carve/carve#2083).
+   */
+  private substitutionAt(text: string, open: number): { end: number; arrow: number } | null {
+    if (text[open + 1] !== '~') return null
+    const end = this.bracedPairEnd(text, open, '~}')
+    if (end === -1) return null
+    const to = end - 2
+    for (let j = open + 2; j < to; j++) {
+      const ch = text[j]!
+      if (ch === '\\') {
+        j++
+        continue
+      }
+      if (ch === '`') {
+        const span = verbatimSpanEnd(text, j)
+        if (!span.closed) return null
+        j = span.end - 1
+        continue
+      }
+      if (ch === '{' && (text[j + 1] === '%' || text[j + 1] === '#')) {
+        const close = text.indexOf(`${text[j + 1]}}`, j + 2)
+        if (close !== -1 && close < to) {
+          j = close + 1
+          continue
+        }
+      }
+      if (ch === '~' && text[j + 1] === '>') return { end, arrow: j }
+    }
+
+    return null
+  }
+
+  private pairEndText: string | undefined
+
+  private pairEndTable: Array<Int32Array | undefined> = []
+
+  /**
+   * For each marker the text opens a pair with, where a scan for its closer
+   * starting at each position stops: the closer's index, or -1. Built right to
+   * left in one pass, so the end of a nested pair is known before any scan that
+   * has to skip it, and a document of nested pairs costs a pass per level rather
+   * than a pass per pair.
+   */
+  private pairEndTables(text: string): Array<Int32Array | undefined> {
+    if (text === this.pairEndText) return this.pairEndTable
+    const n = text.length
+    const markers: number[] = []
+    for (let m = 0; m < PAIR_MARKERS.length; m++) {
+      if (text.includes(`{${PAIR_MARKERS[m]}`) && text.includes(`${PAIR_MARKERS[m]}}`)) markers.push(m)
+    }
+    const tables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
+    const raws: Int32Array[] = []
+    for (const m of markers) {
+      tables[m] = new Int32Array(n + 2).fill(-1)
+      raws[m] = new Int32Array(n + 2).fill(-1)
+    }
+    const ends = new Int32Array(n + 2).fill(-1)
+    const hasTick = text.includes('`')
+    for (let j = n - 1; j >= 0; j--) {
+      const ch = text[j]!
+      const next = text[j + 1]
+      const nextId = next === undefined ? -1 : PAIR_MARKERS.indexOf(next)
+      // Where the pair opening here ends, if it closes at all.
+      if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined) {
+        const stop = tables[nextId]![j + 2]!
+        ends[j] = stop === -1 ? -1 : stop + 2
+      }
+      const span = hasTick && ch === '`' ? verbatimSpanEnd(text, j) : undefined
+      for (const m of markers) {
+        const table = tables[m]!
+        const raw = raws[m]!
+        // AN ESCAPE HIDES THE CHARACTER AFTER IT, so a closer written there
+        // closes nothing and the scan resumes past it. Only an escaped backtick
+        // was skipped before, which left `{*a\*}` closing on its escaped
+        // delimiter and publishing the backslash as a hard break
+        // (markup-carve/carve-js#1897). `raw` is the closer an UNCLOSED verbatim
+        // run ends at, and a backslash inside one is content rather than an
+        // escape, so it keeps counting that closer.
+        if (ch === '\\') {
+          raw[j] = raw[j + 1]!
+          table[j] = table[j + 2]!
+          continue
+        }
+        const isCloser = next === '}' && ch === PAIR_MARKERS[m]
+        raw[j] = isCloser ? j : raw[j + 1]!
+        let stop: number
+        if (span !== undefined) {
+          // An unclosed run ends at the pair's closer instead of running to the
+          // end of the block (markup-carve/carve#2056).
+          stop = span.closed ? table[span.end]! : raw[j]!
+        } else if (isCloser) stop = j
+        else if (ch === '{' && nextId !== -1 && nextId !== m && ends[j] !== -1) {
+          // A braced pair of another kind is its own scope, so a closer inside
+          // it cannot close this one (markup-carve/carve#2091). One of this
+          // kind is content under E3 and hides nothing.
+          stop = table[ends[j]!]!
+        } else stop = table[j + 1]!
+        table[j] = stop
+      }
+    }
+    this.pairEndText = text
+    this.pairEndTable = tables
+
+    return tables
+  }
+
+  /** Where a braced inline opened at `open` closes (exclusive), or -1. */
+  private bracedPairEnd(text: string, open: number, closer: string): number {
+    const stop = this.pairEndTables(text)[PAIR_MARKERS.indexOf(closer[0]!)]?.[open + 2] ?? -1
+
+    return stop === -1 || stop === open + 2 ? -1 : stop + closer.length
+  }
+
+  /**
+   * Critic insertion/deletion pairs do not close on a delimiter escaped inside
+   * an unclosed verbatim run. The forced-emphasis family deliberately does.
+   */
+  private criticPairEnd(text: string, open: number, closer: '+}' | '-}'): number {
+    const end = this.bracedPairEnd(text, open, closer)
+    if (end === -1) return -1
+    const close = end - 2
+    if (text[close - 1] !== '\\') return end
+
+    for (let tick = text.indexOf('`', open + 2); tick !== -1 && tick < close; tick = text.indexOf('`', tick + 1)) {
+      if (tick > open + 2 && text[tick - 1] === '\\') continue
+      const span = verbatimSpanEnd(text.slice(0, close), tick)
+      if (!span.closed) return -1
+      tick = span.end - 1
+    }
+    return end
+  }
+
+  private activeQuoteCharacters: readonly [string, string, string, string] = ['“', '”', '‘', '’']
+
+  private smartToken(
+    text: string,
+    i: number,
+    prev: string,
+  ): { out: string; len: number; kind: string } | null {
+    for (const [tok, out, kind] of SMART_TOKENS) {
+      if (text.startsWith(tok, i)) return { out, len: tok.length, kind }
+    }
+    // A run of 2+ hyphens collapses to em/en dashes (djot allocation). A
+    // lone `-` stays literal.
+    if (text[i] === '-' && text[i + 1] === '-') {
+      let n = 0
+      while (text[i + n] === '-') n++
+      // PART 9 §8 (carve#1443): a run PRECEDED by whitespace (or the start of the
+      // content) and FOLLOWED by a non-whitespace character is a long CLI flag,
+      // not a dash, and stays literal. `git log --oneline` rendered `git log
+      // –oneline` before this - silently, and in the output only.
+      //
+      // The run start is scanned back to, not assumed to be `i`: a literal run is
+      // emitted one hyphen at a time, so the next character re-enters here with
+      // hyphens already behind it. Reading only forward would convert the tail of
+      // `---foo` into an en dash.
+      let start = i
+      while (start > 0 && text[start - 1] === '-') start--
+      const before = start > 0 ? text[start - 1]! : ''
+      const after = text[i + n] ?? ''
+      //
+      // The whole run is consumed as literal text rather than declined, so the
+      // arrow token cannot pick up what the dash rule put down: declining left
+      // `-->` as a stray `-` plus a live `->`, and the flag rendered `-→`.
+      if ((before === '' || isFlankSpace(before)) && after !== '' && !isFlankSpace(after)) {
+        return { out: text.slice(i, i + n), len: n, kind: 'literal_hyphen_run' }
+      }
+      return { out: allocateDashes(n), len: n, kind: 'dash_run' }
+    }
+    const c = text[i]!
+    if (c === '"') {
+      const open = isQuoteOpenContext(prev)
+      return { out: open ? this.activeQuoteCharacters[0] : this.activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
+    }
+    if (c === "'") {
+      // Contextual single quote (matches djot): an apostrophe / closing
+      // quote `’` when the previous char is alphanumeric (`it's`,
+      // `John's`) OR the next char is a digit (decade elision `'70s`, and
+      // `'24'` -> `’24’` as djot does); an opening quote `‘` in an open
+      // context (`'word'`, `rock 'n' roll`); otherwise `’`.
+      const next = text[i + 1] ?? ''
+      const open = isQuoteOpenContext(prev)
+      const apostrophe = /[0-9]/.test(next) || (!open && isAlnum(next))
+      return {
+        out: apostrophe ? '’' : open ? this.activeQuoteCharacters[2] : this.activeQuoteCharacters[3],
+        len: 1,
+        kind: open && !apostrophe ? 'left_single_quote' : 'right_single_quote',
+      }
+    }
+    return null
+  }
+
+  /**
+   * The inline nodes of a REFERENCE LABEL, for PART 9R R1's heading-index lookup.
+   *
+   * R1 keys the heading index by each heading's RENDERED PLAIN TEXT, and says the
+   * LABEL enters that same comparison as its rendered plain text - its inline
+   * markup stripped exactly as the heading's was. So the label has to be PARSED
+   * to be compared: a fixed-character-list strip gets `*bold* heading` right and
+   * `` `code()` heading `` wrong, which is why the corpus pins both.
+   *
+   * Neither the abbreviation table nor `linkDefs` is applied. The label is being
+   * read for its plain text, not published: a nested reference inside it must not
+   * resolve, and an abbreviation renders as its own text under `inlineText`
+   * anyway.
+   */
+  parseRefLabelInlines(label: string): InlineNode[] {
+    return this.scanInline(label, inlineSource(), false)
+  }
+
+  private parseInline(
+    text: string,
+    abbrDefs: Map<string, string>,
+    linkDefs: Map<string, LinkDef> = new Map(),
+    source: InlineSource = inlineSource(),
+    captionContext = false,
+  ): InlineNode[] {
+    const nodes = applyAbbreviations(this.scanInline(text, source, false, captionContext), abbrDefs)
+    return applyLinkDefs(nodes, linkDefs)
+  }
+
+  private openKinds: ReadonlySet<string> = NO_OPEN_KINDS
+
+  /** `openKinds` with `delim` added. */
+  private withOpenKind(delim: string): ReadonlySet<string> {
+    return new Set([...this.openKinds, delim])
+  }
+
+  /** Whether the inline text being scanned is a line block's stanza. */
+  private inLineBlock = false
+
+  /**
+   * An unclosed run's content with the trailing whitespace its end drops. In a
+   * line block a line break is content and is kept (markup-carve/carve#2089); a
+   * stanza's own end leaves nothing there to keep.
+   */
+  private trimUnclosedRun(content: string): string {
+    return this.inLineBlock ? content : content.replace(/[ \t\n\r]+$/, '')
+  }
+
+  private scanInline(
+    text: string,
+    source: InlineSource = inlineSource(),
+    inFootnote = false,
+    captionContext = false,
+    kinds: ReadonlySet<string> = NO_OPEN_KINDS,
+  ): InlineNode[] {
+    if (inlineDepth >= MAX_NESTING_DEPTH) {
+      return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
+    }
+    inlineDepth++
+    const outer = this.openKinds
+    this.openKinds = kinds
+    try {
+      return this.scanInlineInner(text, source, inFootnote, captionContext)
+    } finally {
+      this.openKinds = outer
+      inlineDepth--
+    }
+  }
+
+  private scanInlineInner(
+    text: string,
+    source: InlineSource,
+    inFootnote: boolean,
+    captionContext: boolean,
+  ): InlineNode[] {
+    const out: InlineNode[] = []
+    let i = 0
+    let buf = ''
+    let bufStart = 0
+    // Caption number placeholder: only the first bare `#` in a caption becomes one.
+    let captionNumberEmitted = false
+    // Last char appended to buf. Tracked explicitly because reading
+    // `buf[buf.length - 1]` each char indexes a growing ConsString, which V8 must
+    // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
+    // once the rope gets deep). A scalar keeps the smart-quote context check O(1).
+    let bufLast = ''
+    const emphasisNoClose = newEmphasisMemo()
+
+    // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
+    // branches resolve the close bracket in O(1); see buildBracketMap.
+    const bracketClose: BracketClose = text.includes('[') ? buildBracketMap(text) : () => undefined
+
+    // Suffix tables so a tail regex is only run when its mandatory close
+    // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
+    // fail. See suffixHasChar/suffixHasPair. Built only when the delimiter is
+    // present at all, mirroring the bracketClose guard above.
+    const rparenSuf = text.includes(')') ? suffixHasChar(text, ')') : null
+    const rbraceSuf = text.includes('}') ? suffixHasChar(text, '}') : null
+    const insSuf = text.includes('+}') ? suffixHasPair(text, '+', '}') : null
+    const delSuf = text.includes('-}') ? suffixHasPair(text, '-', '}') : null
+
+    const flush = () => {
+      if (buf) {
+        const node = { type: 'text', value: buf } as Text
+        out.push(this.withPos(node, source, text, bufStart, i))
+        buf = ''
+        bufLast = ''
+      }
+    }
+
+    const append = (value: string) => {
+      if (!buf) bufStart = i
+      buf += value
+      if (value) bufLast = value[value.length - 1]!
+    }
+
+    while (i < text.length) {
+      const c = text[i]!
+      if (c === '\0' && this.inLineBlock) {
+        flush()
+        out.push(this.withPos({ type: 'non_breaking_space' }, source, text, i, i + 1))
+        i++
+        continue
+      }
+
+      // Core inline constructs all begin with punctuation. When no extension
+      // matcher can claim an arbitrary offset, append ordinary ASCII prose as a
+      // run instead of asking smart typography, emphasis and every other inline
+      // recognizer about each letter and space individually.
+      const code = text.charCodeAt(i)
+      if (
+        this.activeMatchers.length === 0 &&
+        ((code >= 48 && code <= 57) ||
+          (code >= 65 && code <= 90) ||
+          (code >= 97 && code <= 122) ||
+          code === 32 ||
+          code === 9)
+      ) {
+        const start = i
+        do {
+          i++
+          if (i >= text.length) break
+          const next = text.charCodeAt(i)
+          if (
+            !(
+              (next >= 48 && next <= 57) ||
+              (next >= 65 && next <= 90) ||
+              (next >= 97 && next <= 122) ||
+              next === 32 ||
+              next === 9
+            )
+          ) {
+            break
+          }
+        } while (true)
+        const value = text.slice(start, i)
+        if (!buf) bufStart = start
+        buf += value
+        bufLast = value[value.length - 1]!
+        continue
+      }
+      const rest = text.slice(i)
+
+      // Hard line break: a backslash at end of line (before a newline).
+      if (c === '\\' && text[i + 1] === '\n') {
+        flush()
+        out.push(this.withPos({ type: 'hard_break' }, source, text, i, i + 2))
+        i += 2
+        continue
+      }
+      // A backslash at the very end of the content (no following character) is
+      // still a hard break, mirroring the `\`-before-newline rule at end of
+      // input (`para\` at EOF -> `<br>`), matching djot and carve's cheatsheet.
+      if (c === '\\' && i + 1 >= text.length) {
+        flush()
+        out.push(this.withPos({ type: 'hard_break' }, source, text, i, i + 1))
+        i++
+        continue
+      }
+      // Non-breaking space: a backslash followed by a space (djot). Emit the
+      // internal placeholder (U+E000) rather than a literal U+00A0 so it is
+      // converted per renderer (HTML &nbsp;, Markdown U+00A0, plain/ANSI a
+      // space) and never confused with an author's literal non-breaking space.
+      if (c === '\\' && text[i + 1] === ' ') {
+        flush()
+        out.push(this.withPos({ type: 'non_breaking_space' }, source, text, i, i + 2))
+        i += 2
+        continue
+      }
+
+      // Escape: a backslash before any ASCII punctuation yields that literal
+      // character (djot / grammar `ascii_punctuation` — the full set, including
+      // `& : ; ?`).
+      if (c === '\\' && i + 1 < text.length) {
+        const nxt = text[i + 1]!
+        if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/.test(nxt)) {
+          // The escape is its own node: the backslash carries intent the literal
+          // character does not. `\-\-` was written precisely so a downstream
+          // processor would not read an en dash, and flattening it into text lost
+          // that (carve#350).
+          const escStart = i
+          flush()
+          out.push(
+            this.withPos({ type: 'escaped_text', value: nxt } as EscapedText, source, text, escStart, i + 2),
+          )
+          i += 2
+          continue
+        }
+      }
+
+      // Smart typography (grammar.ebnf §"Smart Typography", PART 9 §8).
+      // Runs after the escape check, so `\->` etc. are already absorbed
+      // into buf as literals and never reach here. Inside code is handled
+      // by the opaque code branch below (continues before this on a
+      // backtick). Multi-char tokens are matched longest-first.
+      {
+        // Quote context: the char in buf, else (buf flushed by a prior
+        // inline node like code/emphasis/link) treat it as word-adjacent
+        // so a closing quote stays closing; only true start is "".
+        const prevForQuote = buf.length
+          ? bufLast
+          : out.length
+            ? lastEmittedGlyph(out)
+            : ''
+        const st = this.smartToken(text, i, prevForQuote)
+        if (st && st.kind === 'literal_hyphen_run') {
+          // A flag-shaped hyphen run (carve#1443) is ordinary text: it joins the
+          // buffer rather than becoming a node, so it renders and round-trips as
+          // the hyphens the author wrote.
+          buf += st.out
+          bufLast = st.out[st.out.length - 1]!
+          i += st.len
+          continue
+        }
+        if (st) {
+          flush()
+          // A dash run resolves to one or more glyphs; each consumes a fixed
+          // number of source hyphens (3 for em, 2 for en), so the run partitions
+          // into one node per glyph carrying the hyphens it came from.
+          if (st.kind === 'dash_run') {
+            let consumed = 0
+            for (const glyph of st.out) {
+              const width = glyph === '—' ? 3 : 2
+              out.push(
+                this.withPos(
+                  {
+                    type: 'smart_punctuation',
+                    kind: glyph === '—' ? 'em_dash' : 'en_dash',
+                    value: text.slice(i + consumed, i + consumed + width),
+                  } as SmartPunctuation,
+                  source,
+                  text,
+                  i + consumed,
+                  i + consumed + width,
+                ),
+              )
+              consumed += width
+            }
+          } else {
+            const node = {
+              type: 'smart_punctuation',
+              kind: st.kind,
+              value: text.slice(i, i + st.len),
+            } as SmartPunctuation
+            // Quote glyphs are locale-dependent and decided here, so record the
+            // resolved character; other kinds resolve through the glyph table.
+            if (st.kind.endsWith('_quote')) node.glyph = st.out
+            out.push(this.withPos(node, source, text, i, i + st.len))
+          }
+          i += st.len
+          continue
+        }
+      }
+
+      // Trailing (inline) line comment: `%%` preceded by whitespace or at the
+      // start of the run consumes to the next newline (or end of input). The
+      // preceding whitespace is absorbed so the visible text keeps no trailing
+      // space; the terminating newline stays and becomes a soft break. `%%`
+      // inside a code span never reaches here (code is consumed opaquely), and
+      // `\%%` is already handled by the escape branch. (§4.13, grammar
+      // inline_comment.)
+      // A NEWLINE counts as the whitespace before it: `%%` at the start of a
+      // later line is a comment exactly as it is on the first. A paragraph never
+      // showed the difference - a comment-only line is handled at the block layer
+      // there - but inside a line block the whole stanza is inline content, so
+      // the verse kept `%% c` as text where the other engines drop it, and this
+      // one dropped it on the first line and not the second (carve#574).
+      if (c === '%' && text[i + 1] === '%' && (i === 0 || /[ \t\n]/.test(text[i - 1]!))) {
+        // Absorb the whitespace run immediately before `%%` so the visible text
+        // keeps no trailing space. Flush the trimmed buffer with a source span
+        // that ends where that whitespace begins, and start the comment node
+        // there too, keeping inline source spans contiguous.
+        const trimmed = buf.replace(/[ \t]+$/, '')
+        const commentStart = i - (buf.length - trimmed.length)
+        if (trimmed) {
+          const node = { type: 'text', value: trimmed } as Text
+          out.push(this.withPos(node, source, text, bufStart, commentStart))
+        }
+        buf = ''
+        const nl = text.indexOf('\n', i)
+        const end = nl === -1 ? text.length : nl
+        const content = text.slice(i + 2, end).replace(/^[ \t]/, '').replace(/[ \t]+$/, '')
+        out.push(
+          this.withPos({ type: 'comment', block: false, content } as Comment, source, text, i, end),
+        )
+        i = end
+        continue
+      }
+
+      // Explicitly delimited inline comment (PART 9 §21a). The first `%}` wins;
+      // an opener in the content is ordinary text, and an opener with no closer
+      // stays literal. Unlike `%%`, surrounding whitespace is ordinary visible
+      // text and scanning resumes after the closer.
+      if (c === '{' && text[i + 1] === '%') {
+        const close = text.indexOf('%}', i + 2)
+        if (close !== -1) {
+          flush()
+          const content = text.slice(i + 2, close).replace(/^ /, '').replace(/ $/, '')
+          out.push(
+            this.withPos(
+              { type: 'comment', block: false, delimited: true, content } as Comment,
+              source,
+              text,
+              i,
+              close + 2,
+            ),
+          )
+          i = close + 2
+          continue
+        }
+      }
+
+      // Inline verbatim (code span). The opening run is the MAXIMAL run of
+      // backticks; it closes only on a run of EXACTLY the same length (a shorter
+      // OR longer run is content). An opener with no equal-length closer still
+      // opens a verbatim span that runs to the END of the block — matches djot
+      // upstream + carve-php (grammar code_span, "UNCLOSED RUN"). Uses the shared
+      // verbatimSpanEnd helper so the tokenizer, findEmphasisClose, and
+      // buildBracketMap stay in lockstep on span boundaries.
+      if (c === '`') {
+        const { end, closed, openLen } = verbatimSpanEnd(text, i)
+        flush()
+        if (!closed) {
+          // Unclosed: verbatim to end of block, with the block's trailing
+          // whitespace stripped (no surrounding single-space strip — that applies
+          // only to a closed span).
+          // PART 7's four characters (the run may cross a line, so `\n` and `\r`
+          // are in). `\s` ate a trailing vertical tab out of the span's content.
+          const value = this.trimUnclosedRun(text.slice(i + openLen))
+          out.push(this.withPos({ type: 'code', value }, source, text, i, text.length))
+          i = text.length
+          continue
+        }
+        const inner = stripVerbatimPadding(text.slice(i + openLen, end - openLen))
+        // A verbatim span tagged `{=format}` is raw inline passthrough.
+        const raw = RE_RAW_INLINE.exec(text.slice(end))
+        if (raw) {
+          const len = end - i + raw[0].length
+          out.push(this.withPos({ type: 'raw_inline', format: raw[1]!, content: inner } as RawInline, source, text, i, i + len))
+          i += len
+          continue
+        }
+        out.push(this.withPos({ type: 'code', value: inner }, source, text, i, end))
+        i = end
+        continue
+      }
+
+      // Math (djot form): inline $`x`, display $$`x`. A bare `$` not
+      // followed by a backtick run (e.g. currency `$5`) stays literal.
+      if (c === '$') {
+        const display = text[i + 1] === '$'
+        const dollarLen = display ? 2 : 1
+        const tick = i + dollarLen
+        if (text[tick] === '`') {
+          const { end, closed, openLen } = verbatimSpanEnd(text, tick)
+          const innerEnd = end - openLen
+          const hasContent = closed
+            ? innerEnd > tick + openLen && text[innerEnd - 1] !== '`'
+            : text.length > tick + openLen
+          if (hasContent && (!closed || text[end] !== '`')) {
+            flush()
+            const content = closed
+              ? stripVerbatimPadding(text.slice(tick + openLen, innerEnd))
+              : this.trimUnclosedRun(text.slice(tick + openLen))
+            const len = end - i
+            out.push(this.withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
+            i += len
+            continue
+          }
+        }
+      }
+
+      // Inline literal (§27): a `!` prefix on a verbatim code span, mirroring
+      // the `$`-math prefix above. The span content is captured verbatim, later
+      // HTML-escaped and emitted by every renderer with the `<code>` wrapper
+      // dropped; a trailing `{…}` attaches below as an ordinary inline attribute
+      // block (no special first-token sigil). Like code and math, an unclosed
+      // span reaches the end of the containing block.
+      if (c === '!' && text[i + 1] === '`') {
+        const { end, closed, openLen } = verbatimSpanEnd(text, i + 1)
+        flush()
+        const content = closed
+          ? stripVerbatimPadding(text.slice(i + 1 + openLen, end - openLen))
+          : this.trimUnclosedRun(text.slice(i + 1 + openLen))
+        out.push(this.withPos({ type: 'literal_inline', content } as LiteralInline, source, text, i, end))
+        i = end
+        continue
+      }
+
+      // Image ![alt](src) — the alt text allows nested balanced [...], so the
+      // close `]` is found by balance, not a [^\]]* regex that would mis-split
+      // a nested bracket (e.g. `![a [b] c](/u)`). Alt is raw text, not inline.
+      if (c === '!' && text[i + 1] === '[') {
+        const closeAbs = bracketClose(i + 1)
+        const close = closeAbs === undefined ? -1 : closeAbs - i
+        if (close > 1) {
+          const alt = rest.slice(2, close)
+          const tail = rest.slice(close + 1)
+          // A link/image tail needs a literal `)`; skip when none lies ahead.
+          const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
+          if (ml) {
+            flush()
+            const img: Image = { type: 'image', src: ml[1]!, alt }
+            const title = ml[2] ?? ml[3]
+            if (title !== undefined) img.title = unescapeAttrValue(title)
+            let len = close + 1 + ml[0].length
+            if (ml[4]) {
+              // An invalid payload (`{2=v}`) is literal (§14), and an
+              // empty-attr `{…}` is literal too -- neither is consumed.
+              if (!isValidInlineAttrPayload(ml[4])) {
+                len -= ml[4].length + 2
+              } else {
+                const a = parseAttrs(ml[4])
+                if (isEmptyAttrs(a)) len -= ml[4].length + 2
+                else img.attrs = a
+              }
+            }
+            out.push(this.withPos(img, source, text, i, i + len))
+            i += len
+            continue
+          }
+          // Reference image `![alt][ref]{attrs}`; collapsed `![alt][]` reuses the
+          // alt as the label. The image form of a reference link — same explicit
+          // `[label]: url` resolution (applyLinkDefs), src instead of href. Alt
+          // must be non-empty (as for a reference link's text).
+          const mref = RE_REF_TAIL.exec(tail)
+          // Full `![alt][ref]` allows an empty alt (`![][ref]`, label = ref);
+          // collapsed `![alt][]` needs a non-empty alt to use as the label.
+          if (mref && (mref[1]! !== '' || alt !== '')) {
+            flush()
+            let len = close + 1 + mref[0].length
+            let attrs: Attrs | undefined
+            if (mref[2]) {
+              if (!isValidInlineAttrPayload(mref[2])) {
+                len -= mref[2].length + 2
+              } else {
+                const a = parseAttrs(mref[2])
+                if (isEmptyAttrs(a)) len -= mref[2].length + 2
+                else attrs = a
+              }
+            }
+            const img: Image = {
+              type: 'image',
+              src: '',
+              alt,
+              ref: mref[1]! !== '' ? mref[1]! : alt,
+              rawRef: this.rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
+            }
+            if (attrs) img.attrs = attrs
+            out.push(this.withPos(img, source, text, i, i + len))
+            i += len
+            continue
+          }
+        }
+      }
+
+      // Inline footnote `^[content]` (pandoc-style; design §2-§5). The caret must
+      // immediately precede `[` and must not be inside footnote content (no notes
+      // inside notes, §3.1). A `^` anywhere else is literal text (there is no bare
+      // superscript), so `^^[x]` is a literal `^` followed by a note. The matching
+      // `]` is the balanced close from bracketClose (escape/code-span aware).
+      // Empty or whitespace-only content is literal. Content is inline-only,
+      // parsed with footnote recognition disabled.
+      if (!inFootnote && c === '^' && text[i + 1] === '[') {
+        const close = bracketClose(i + 1)
+        if (close !== undefined && trimStructural(text.slice(i + 2, close)) !== '') {
+          flush()
+          const inner = text.slice(i + 2, close)
+          const children = this.scanInline(inner, this.shiftSource(source, text, i + 2), true)
+          out.push(this.withPos({ type: 'inline_footnote', inline: children } as InlineFootnote, source, text, i, close + 1))
+          i = close + 1
+          continue
+        }
+      }
+
+      // Link / reference link / footnote / span. The bracket text may contain
+      // nested balanced [...] (djot: `[a [b] c](/u)`, `[[x](y)](z)`), so the
+      // matching close `]` is found by balance — not a [^\]]* regex that would
+      // mis-split at the first inner `]`. The (url) / [ref] / {attrs} tail is
+      // then parsed by the same sub-patterns the old fast-path regexes used.
+      if (c === '[') {
+        const closeAbs = bracketClose(i)
+        const close = closeAbs === undefined ? -1 : closeAbs - i
+        if (close > 0) {
+          const innerText = rest.slice(1, close)
+          const tail = rest.slice(close + 1)
+          // Footnote reference [^label] -- before reference links so adjacent
+          // refs like `[^a][^a]` are two notes, not one unresolved `[text][ref]`.
+          // Inside footnote content a `[^x]` is literal, not a reference
+          // (no notes inside notes, design §3.1).
+          const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
+          if (mfn) {
+            flush()
+            out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
+            i += mfn[0].length
+            continue
+          }
+          // Inline link [text](url "title"){attrs}
+          const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
+          if (ml) {
+            flush()
+            const link: Link = {
+              type: 'link',
+              href: ml[1]!,
+              children: this.scanInline(innerText, this.shiftSource(source, text, i + 1), inFootnote),
+            }
+            const title = ml[2] ?? ml[3]
+            if (title !== undefined) link.title = unescapeAttrValue(title)
+            let len = close + 1 + ml[0].length
+            if (ml[4]) {
+              // An invalid payload (`{2=v}`) is literal (§14), and an
+              // empty-attr `{…}` is literal too -- neither is consumed.
+              if (!isValidInlineAttrPayload(ml[4])) {
+                len -= ml[4].length + 2
+              } else {
+                const a = parseAttrs(ml[4])
+                if (isEmptyAttrs(a)) len -= ml[4].length + 2
+                else link.attrs = a
+              }
+            }
+            out.push(this.withPos(link, source, text, i, i + len))
+            i += len
+            continue
+          }
+          const mref = RE_REF_TAIL.exec(tail)
+          if (mref && (innerText !== '' || !mref[1]!.startsWith('@'))) {
+            flush()
+            let len = close + 1 + mref[0].length
+            let attrs: Attrs | undefined
+            if (mref[2]) {
+              // An invalid payload (`{2=v}`) is literal (§14), and an
+              // empty-attr `{…}` is literal too -- neither is consumed.
+              if (!isValidInlineAttrPayload(mref[2])) {
+                len -= mref[2].length + 2
+              } else {
+                const a = parseAttrs(mref[2])
+                if (isEmptyAttrs(a)) len -= mref[2].length + 2
+                else attrs = a
+              }
+            }
+            const refLink: Link = {
+              type: 'link',
+              href: '',
+              children: this.scanInline(innerText, this.shiftSource(source, text, i + 1), inFootnote),
+              ref: mref[1]! !== '' ? mref[1]! : innerText,
+              // rawRef includes any consumed trailing {attrs} so the literal
+              // fallback for an unresolved ref preserves the full source, and it
+              // is read from the DOCUMENT where the scanner's own text is not
+              // that source (carve-js#1183).
+              rawRef: this.rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
+            }
+            if (attrs) refLink.attrs = attrs
+            out.push(this.withPos(refLink, source, text, i, i + len))
+            i += len
+            continue
+          }
+        }
+        // Footnote reference [^label] -- before span, so `[^x]{.c}` stays a
+        // footnote ref (the `{.c}` then attaches via the inline-attr pass)
+        // rather than becoming a <span> of `^x`. Footnote labels hold no
+        // nested brackets, so its own regex stays authoritative.
+        const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
+        if (mfn) {
+          flush()
+          out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
+          i += mfn[0].length
+          continue
+        }
+        // Inline span `[text]{attrs}` (PART 9 §14). After links so `[t](u)` /
+        // `[t][r]` win; the `{` must directly abut `]`. A bracket followed by a
+        // VALID attribute block forms a span -- including an empty one (`[x]{}`,
+        // `[x]{ }` -> empty <span>, matching djot). An INVALID block (`{???}`,
+        // `{=y=}`) is not an attribute block, so it stays literal.
+        if (close > 0) {
+          const innerText = rest.slice(1, close)
+          // A span tail needs a literal `}` ahead; and its `{…}` content must be
+          // able to form a valid attribute payload. Skip RE_SPAN_TAIL (which would
+          // otherwise scan to a far `}` at every `[` -> O(n^2) on `[x]{[x]{…}`)
+          // when no `}` lies ahead or the payload is provably invalid.
+          const ms =
+            rbraceSuf && rbraceSuf[i + close + 1] && !spanAttrProvablyInvalid(text, i + close + 1)
+              ? RE_SPAN_TAIL.exec(rest.slice(close + 1))
+              : null
+          if (ms && isValidInlineAttrPayload(ms[1]!)) {
+            flush()
+            out.push(
+              this.withPos(
+                {
+                  type: 'span',
+                  children: this.scanInline(innerText, this.shiftSource(source, text, i + 1), inFootnote),
+                  attrs: parseAttrs(ms[1]!),
+                } as Span,
+                source,
+                text,
+                i,
+                i + close + 1 + ms[0].length,
+              ),
+            )
+            i += close + 1 + ms[0].length
+            continue
+          }
+        }
+      }
+
+      // Inline extension :type[content]{attrs}
+      if (c === ':') {
+        const m = RE_EXTENSION.exec(rest)
+        if (m) {
+          flush()
+          const ext: Extension = {
+            type: 'inline_extension',
+            name: m[1]!,
+            content: this.scanInline(m[2]!, this.shiftSource(source, text, i + m[0].indexOf('[') + 1), inFootnote),
+          }
+          // THE ONLY INLINE ATTRIBUTE SURFACE WITH NO VALIDITY GATE, until now: a
+          // trailing block here went straight to `parseAttrs`, so `{#1a}` became
+          // `a=""` where §14 makes it literal on every sibling surface, a tab
+          // separated two attributes after markup-carve/carve#906 narrowed the
+          // rest, and a quoted value carried a line break past
+          // markup-carve/carve#888. An invalid payload is not consumed - the
+          // extension parses without attributes and the braces stay literal
+          // text, exactly as the link and image tails already do.
+          let consumed = m[0].length
+          if (m[3] !== undefined) {
+            if (isValidInlineAttrPayload(m[3])) ext.attrs = parseAttrs(m[3])
+            else consumed -= m[3].length + 2
+          }
+          out.push(this.withPos(ext, source, text, i, i + consumed))
+          i += consumed
+          continue
+        }
+        // Symbol shortcode `:name:` (after extension, which needs `[`).
+        const sym = symbolOpensAt(text, i) ? RE_SYMBOL.exec(rest) : null
+        if (sym) {
+          flush()
+          out.push(this.withPos({ type: 'symbol', name: sym[1]! } as SymbolInline, source, text, i, i + sym[0].length))
+          i += sym[0].length
+          continue
+        }
+      }
+
+      // Autolink <url>
+      if (c === '<') {
+        const cr = RE_CROSSREF.exec(rest)
+        if (cr) {
+          flush()
+          const cref: CrossRef = { type: 'heading_ref', target: cr[1]! }
+          out.push(this.withPos(cref, source, text, i, i + cr[0].length))
+          i += cr[0].length
+          continue
+        }
+        const m = RE_AUTOLINK.exec(rest)
+        if (m) {
+          flush()
+          const href = m[1]!
+          const auto: AutoLink = {
+            type: 'autolink',
+            href: href.includes('@') && !href.includes(':') ? `mailto:${href}` : href,
+            // Display is the raw `<...>` content: a URI autolink keeps its scheme
+            // (`<mailto:a@b>` -> `mailto:a@b`), an email autolink shows the address.
+            text: href,
+          }
+          let consumed = m[0].length
+          // Optional trailing {attrs} (djot): `<url>{.c}`. An explicit
+          // `href` in the block is ignored -- the structural href wins
+          // (djot + carve-php), so it never produces a duplicate attribute.
+          // An invalid payload (`{2=v}`) is literal (§14), not an
+          // attribute block -- leave it for normal text processing.
+          const am = /^\{([^}\n]+)\}/.exec(text.slice(i + consumed))
+          if (am && isValidInlineAttrPayload(am[1]!)) {
+            const attrs = parseAttrs(am[1]!)
+            if (!isEmptyAttrs(attrs)) {
+              // A real attribute block: consume it (so it is not
+              // re-processed). Drop a structural `href` so it never
+              // duplicates the autolink's own href (djot + carve-php).
+              if (attrs.keyValues?.href !== undefined) {
+                delete attrs.keyValues.href
+                if (attrs.order) attrs.order = attrs.order.filter((s) => s !== 'href')
+              }
+              if (!isEmptyAttrs(attrs)) auto.attrs = attrs
+              consumed += am[0].length
+            }
+          }
+          out.push(this.withPos(auto, source, text, i, i + consumed))
+          i += consumed
+          continue
+        }
+      }
+
+      // CriticMarkup family
+      if (c === '{') {
+        // Each `{…}` tail regex requires its own literal close (`}`, `+}`, `-}`);
+        // skip it when that delimiter is absent from the rest of the input, which
+        // would otherwise force a backtrack to EOF at every `{` (quadratic on
+        // runs like `{+`×n or `{~`×n). O(1) suffix lookups; output-identical.
+        const hasBrace = !!(rbraceSuf && rbraceSuf[i])
+        const sub = hasBrace ? this.substitutionAt(text, i) : null
+        if (sub) {
+          flush()
+          out.push(
+            this.withPos(
+              {
+                type: 'substitution',
+                old: this.scanInline(text.slice(i + 2, sub.arrow), this.shiftSource(source, text, i + 2), inFootnote),
+                new: this.scanInline(text.slice(sub.arrow + 2, sub.end - 2), this.shiftSource(source, text, sub.arrow + 2), inFootnote),
+              } as CriticSubstitute,
+              source,
+              text,
+              i,
+              sub.end,
+            ),
+          )
+          i = sub.end
+          continue
+        }
+        const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? this.criticPairEnd(text, i, '+}') : -1
+        if (ins !== -1) {
+          flush()
+          out.push(this.withPos({ type: 'insert', children: this.scanInline(text.slice(i + 2, ins - 2), this.shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, ins))
+          i = ins
+          continue
+        }
+        const del = delSuf && delSuf[i] && text[i + 1] === '-' ? this.criticPairEnd(text, i, '-}') : -1
+        if (del !== -1) {
+          flush()
+          out.push(this.withPos({ type: 'delete', children: this.scanInline(text.slice(i + 2, del - 2), this.shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, del))
+          i = del
+          continue
+        }
+        if (hasBrace && RE_BRACED_EN_DASH.test(rest)) {
+          // The SAME node the bare run produces, carrying the authored spelling
+          // in `value` - so the AST says "an en dash was written here" rather
+          // than holding a glyph in a text run, and `fmt` writes `{--}` back
+          // instead of the literal character. PART 12's vocabulary already has
+          // the kind; the braced form is a second spelling of it, not a second
+          // construct.
+          flush()
+          out.push(
+            this.withPos(
+              { type: 'smart_punctuation', kind: 'en_dash', value: '{--}' } as SmartPunctuation,
+              source,
+              text,
+              i,
+              i + 4,
+            ),
+          )
+          i += 4
+          continue
+        }
+        const cmt = hasBrace ? RE_CRITIC_CMT.exec(rest) : null
+        if (cmt) {
+          flush()
+          out.push(this.withPos({ type: 'critic_comment', text: cmt[1]! } as CriticComment, source, text, i, i + cmt[0].length))
+          i += cmt[0].length
+          continue
+        }
+        // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
+        // bare delimiter, but with no word-boundary condition.
+        const delim = text[i + 1]
+        const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined && !this.openKinds.has(delim)
+          ? this.bracedPairEnd(text, i, `${delim}}`)
+          : -1
+        if (forced !== -1) {
+          flush()
+          out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!])) } as Emphasis, source, text, i, forced))
+          i = forced
+          continue
+        }
+        // Inline attribute block — attaches to preceding node. It must be GLUED:
+        // a non-empty `buf` means unflushed text (e.g. a space) sits between the
+        // preceding node and the `{`, so the block is NOT attached -- it stays
+        // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
+        const attr = !buf && hasBrace ? RE_INLINE_ATTR.exec(rest) : null
+        // A digit-leading key or otherwise invalid payload (`{2=v}`) makes the
+        // whole block literal (§14), same strict rule as block/span attrs — so
+        // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.
+        if (attr && out.length && isValidInlineAttrPayload(attr[1]!)) {
+          const prev = out[out.length - 1]!
+          const parsed = parseAttrs(attr[1]!)
+          // A `{...}` that yields no real attribute is literal text (PART 9
+          // §15), not an empty attribute block to attach. Without this guard a
+          // payload like `{=hl=}`, `{ }`, or `{???}` after a non-text node is
+          // silently consumed and dropped.
+          // The block also stays literal after an inert node whose renderer emits
+          // NO attributes -- a soft/hard break, a mention, or a tag -- otherwise
+          // the attrs attach and are silently discarded at render (mentions/tags
+          // are stable inert spans that do not take attributes). Matches
+          // carve-rs / carve-php, which keep the `{...}` literal in these cases.
+          if (!ATTR_INERT_PREV.has(prev.type) && !isEmptyAttrs(parsed)) {
+            ;(prev as { attrs?: Attrs }).attrs = mergeAttrs(
+              (prev as { attrs?: Attrs }).attrs,
+              parsed,
+            )
+            // A TRAILING ATTRIBUTE BLOCK IS THE NODE'S OWN MARKUP (PART 12 §4,
+            // carve#521), so the span covers it: `*x*{#i}` gives the `strong`
+            // offsets 0..7, not 0..3. The braces are where the node's `attrs`
+            // came from, and a span stopping at `*x*` says the node ends before
+            // the markup that gave it half its content -- the same reading that
+            // already puts a break's backslash inside the break.
+            this.extendPosTo(prev, source, text, i + attr[0].length)
+            i += attr[0].length
+            continue
+          }
+        }
+      }
+
+      // Mention
+      if (c === '@' && (i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!))) {
+        const m = RE_MENTION.exec(rest)
+        if (m) {
+          flush()
+          out.push(this.withPos({ type: 'mention', user: m[1]! } as Mention, source, text, i, i + m[0].length))
+          i += m[0].length
+          continue
+        }
+      }
+      // Tag
+      if (c === '#') {
+        const m = RE_TAG.exec(rest)
+        const tagBoundary = i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!)
+        if (m && tagBoundary) {
+          flush()
+          out.push(this.withPos({ type: 'tag', name: m[1]! } as Tag, source, text, i, i + m[0].length))
+          i += m[0].length
+          continue
+        }
+        // Bare `#` (not a tag) in a caption = number placeholder, first only.
+        // `\#` never reaches here (the escape branch consumes it as literal).
+        if (!m && captionContext && !captionNumberEmitted) {
+          flush()
+          out.push(this.withPos({ type: 'caption_number' } as CaptionNumber, source, text, i, i + 1))
+          captionNumberEmitted = true
+          i += 1
+          continue
+        }
+      }
+
+      // Emphasis-family delimiters
+      const em = this.matchEmphasis(text, i, source, inFootnote, emphasisNoClose)
+      if (em) {
+        flush()
+        out.push(this.withPos(em.node, source, text, i, em.end))
+        i = em.end
+        continue
+      }
+
+      // Soft break (single newline inside paragraph)
+      if (c === '\n') {
+        flush()
+        out.push(this.withPos({ type: 'soft_break' }, source, text, i, i + 1))
+        i++
+        continue
+      }
+
+      // Extension inline matchers run only here, where every core construct has
+      // declined position i: extensions add syntax, they never hijack core.
+      if (this.activeMatchers.length) {
+        const xm = this.tryInlineMatchers(text, i)
+        if (xm) {
+          flush()
+          const node = this.withPos(xm.node, source, text, i, xm.end)
+          if (node.type === 'citation_group') this.positionCitationItems(node, source, text, i)
+          out.push(node)
+          i = xm.end
+          continue
+        }
+      }
+
+      append(c)
+      i++
+    }
+    flush()
+    return out
+  }
+
+  private matchEmphasis(
+    text: string,
+    i: number,
+    source: InlineSource,
+    inFootnote = false,
+    noClose: EmphasisMemo = newEmphasisMemo(),
+  ): EmphasisMatch | null {
+    const c = text[i]!
+
+    // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
+    if (c === '/' && text[i + 1] === '*') {
+      const start = i + 2
+      // A bold-italic span requires a non-whitespace char right after `/*`
+      // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
+      // (`/* x*/`) content is not bold-italic and falls through to `/` emphasis,
+      // matching carve-php parseBoldItalic.
+      // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
+      // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
+      if (start < text.length && !isCarveWhitespace(text[start])) {
+        let searchPos = start
+        for (;;) {
+          const close = findClose(text, searchPos, '*/')
+          if (close === -1) break
+          const inner = text.slice(start, close)
+          // The content must not end in whitespace (nor be empty). A trailing
+          // space closer like `/*x */` is not bold-italic; skip this `*/` and
+          // look for a later one before giving up (parity with carve-php).
+          if (inner === '' || isCarveWhitespace(inner[inner.length - 1])) {
+            searchPos = close + 1
+            continue
+          }
+          const children = this.scanInline(inner, this.shiftSource(source, text, start), inFootnote, false, new Set([...this.openKinds, '/', '*']))
+          return {
+            // `boldItalic` records that the author used the combined form. The
+            // nested spelling `*/x/*` yields the same tree, so the writer needs the
+            // mark to reproduce what was written (PART 11 §6).
+            node: {
+              type: 'strong',
+              boldItalic: true,
+              // The inner emphasis is synthesized from the single `/*…*/` token
+              // rather than scanned as its own delimiter pair, so nothing else
+              // assigns it a span. PART 12 §4 requires one on every node but the
+              // document root, and a consumer cannot tell a synthesized node from
+              // a parsed one. It spans the CONTENT; the outer strong spans the
+              // delimiters too.
+              children: [this.withPos({ type: 'emphasis', children }, source, text, start, close)],
+            },
+            end: close + 2,
+          }
+        }
+      }
+    }
+    // Single-char delimiters. Highlight `=` is single-char like the rest; a
+    // doubled `==` is therefore literal by same-delimiter adjacency (handled
+    // below), exactly like `**x**`. There is NO bare `^`/`,` delimiter:
+    // superscript and subscript exist only in the braced forms `{^x^}`/`{,x,}`
+    // (grammar PART 9 §9 rationale note) -- a bare caret or comma is literal.
+    const pairs: Array<[string, Emphasis['type']]> = [
+      ['/', 'emphasis'],
+      ['*', 'strong'],
+      ['_', 'underline'],
+      ['~', 'strike'],
+      ['=', 'highlight'],
+    ]
+    for (const [delim, type] of pairs) {
+      if (c === delim) {
+        const after = text[i + 1]
+        const before = text[i - 1]
+        // Opener must be followed by a non-whitespace character (CARVE-P3-013;
+        // a tab counts, PART 7).
+        if (!after || isCarveWhitespace(after)) continue
+        // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
+        // same delimiter (before OR after) does not open, so a doubled
+        // delimiter is literal text. `**x**`, `~~x~~`, `==x==` stay literal,
+        // uniformly with `//x//` and `__x__`. Applies to all five.
+        if (after === delim || before === delim) continue
+        // E3: a second opener of an open kind is content.
+        if (this.openKinds.has(delim)) continue
+        // Word-boundary opener (spec §9): every bare delimiter can't open after
+        // an alphanumeric or `_`, keeping paths/identifiers/numbers literal
+        // (a/b/c, foo*bar*baz, snake_case, x = 5, key=value, 1,2,3). Use the
+        // forced `{X…X}` family for deliberate intraword emphasis.
+        if (before && /[A-Za-z0-9_]/.test(before)) continue
+        // A HIGHLIGHT DOES NOT OPEN BEFORE `>` (markup-carve/carve#1442). `=>`
+        // stopped being an arrow, which exposed its `=` to this machinery for the
+        // first time: `d => e; x != y` opened here and closed on the `=` of `!=`,
+        // rendering `<mark>&gt; e; x !</mark>` out of two things that are not
+        // emphasis at all. The spec's Ohm grammar carries the same guard, and it
+        // costs nothing real - a highlight whose content starts with `>` is a
+        // shape nobody writes, while `=>` in prose about code is everywhere.
+        if (delim === '=' && after === '>') continue
+        // Italic/underline additionally can't open after `/` (path protection,
+        // e.g. snake_/case/).
+        if ((delim === '/' || delim === '_') && before === '/') continue
+        // Find closer that's not preceded by space
+        const close = this.cachedFindEmphasisClose(text, i + 1, delim, noClose)
+        if (close !== -1) {
+          const inner = text.slice(i + 1, close)
+          return {
+            node: { type, children: this.scanInline(inner, this.shiftSource(source, text, i + 1), inFootnote, false, this.withOpenKind(delim)) },
+            end: close + 1,
+          }
+        }
+      }
+    }
+    return null
+  }
+
+  private cachedFindEmphasisClose(
+    text: string,
+    from: number,
+    delim: string,
+    memo: EmphasisMemo,
+  ): number {
+    const failed = memo.failed.get(delim)
+    if (failed !== undefined && failed[from] === 1) return -1
+    const visited: number[] = []
+    const close = this.findEmphasisClose(text, from, delim, memo, failed, visited)
+    if (close === -1) {
+      const marks = failed ?? new Uint8Array(text.length + 1)
+      for (const j of visited) marks[j] = 1
+      memo.failed.set(delim, marks)
+    }
+    return close
+  }
+
+  private withPos<T extends InlineNode>(
+    node: T,
+    source: InlineSource,
+    text: string,
+    start: number,
+    end: number,
+  ): T {
+    if (source.anchored === false) return node
+    const pos = this.sourcePos(source, text, start, end)
+    if (pos) node.pos = pos
+    return node
+  }
+
+  /** Give each semicolon-delimited citation item its own authored span. */
+  private positionCitationItems(
+    node: CitationGroup,
+    source: InlineSource,
+    text: string,
+    groupStart: number,
+  ): void {
+    if (source.anchored === false) return
+    const innerStart = node.mode === 'integral' ? 2 : 1
+    const inner = node.raw.slice(innerStart, -1)
+    let cursor = 0
+    const parts = inner.split(';')
+    for (let index = 0; index < node.items.length; index++) {
+      const part = parts[index]
+      if (part === undefined) return
+      const leading = part.length - part.trimStart().length
+      const trailing = part.length - part.trimEnd().length
+      const start = groupStart + innerStart + cursor + leading
+      const end = groupStart + innerStart + cursor + part.length - trailing
+      const pos = this.sourcePos(source, text, start, end)
+      if (pos) node.items[index]!.pos = pos
+      cursor += part.length + 1
+    }
+  }
+
+  /**
+   * Move a node's span end out to `end`, keeping its start where it was.
+   *
+   * Used when markup that belongs to an already-emitted node is read after it -
+   * a trailing attribute block. A node parsed with `anchored: false` carries no
+   * `pos` at all, and there is nothing to extend.
+   */
+  private extendPosTo(node: InlineNode, source: InlineSource, text: string, end: number): void {
+    const pos = (node as { pos?: Position }).pos
+    if (!pos) return
+    const point = this.pointAt(source, text, end)
+    // The markup read after the node is outside every anchored range, so the
+    // extended span would end somewhere the text does not map. A span that cannot
+    // state its own end is not a span; the node keeps none.
+    if (!point) {
+      delete (node as { pos?: Position }).pos
+      return
+    }
+    pos.endLine = point.line
+    pos.endColumn = point.column
+    pos.endOffset = point.offset
+  }
+
+  private sourcePos(
+    source: InlineSource,
+    text: string,
+    start: number,
+    end: number,
+  ): Position | undefined {
+    const startPoint = this.pointAt(source, text, start)
+    const endPoint = this.pointAt(source, text, end)
+    if (!startPoint || !endPoint) return undefined
+    // BOTH ENDS IN THE SAME RANGE. Two ends that each map is not enough when the
+    // text is assembled: a node reaching from one fragment into the next covers
+    // source it does not own - the row boundary between them - and one span for
+    // two non-adjacent regions is the invented value PART 12 section 4 forbids.
+    if (source.anchoredRanges && startPoint.range !== endPoint.range) return undefined
+    return {
+      startLine: startPoint.line,
+      endLine: endPoint.line,
+      startColumn: startPoint.column,
+      endColumn: endPoint.column,
+      startOffset: startPoint.offset,
+      endOffset: endPoint.offset,
+    }
+  }
+
+  /**
+   * The AUTHORED SOURCE of `text[start..end)`, for a field that promises verbatim.
+   */
+  private rawSourceSlice(
+    source: InlineSource,
+    text: string,
+    start: number,
+    end: number,
+  ): string | undefined {
+    // ONLY ANCHORED TEXT CAN BE ASKED. Without `lineAnchors` a span is a single
+    // base offset plus a local one, which is the document only when the two never
+    // diverge - and a bare `inlineSource()` scanning a detached label has no
+    // document behind it at all.
+    if (!source.lineAnchors || this.activeDocument === null) return undefined
+    const pos = this.sourcePos(source, text, start, end)
+    if (pos?.startOffset === undefined || pos.endOffset === undefined) return undefined
+    const candidate = normalizeNewlines(this.activeDocument.slice(pos.startOffset, pos.endOffset))
+    const local = text.slice(start, end)
+    if (candidate === local) return undefined
+    const candidateLines = candidate.split('\n')
+    const localLines = local.split('\n')
+    if (candidateLines.length !== localLines.length) return undefined
+    for (const [i, localLine] of localLines.entries()) {
+      if (localLine !== '' && localLine !== candidateLines[i]) return undefined
+    }
+
+    return candidate
+  }
+
+  private shiftSource(source: InlineSource, text: string, by: number): InlineSource {
+    const point = this.pointAt(source, text, by)
+    const shifted: InlineSource = {
+      // THE ANCHORED BASE, NOT THE LINEAR ONE. `baseOffset + by` walks the LOCAL
+      // text, which is the document only while the two have the same length. A
+      // line block's joined text is shorter than its source by every comment line
+      // the block layer emptied, so past the first such line the linear sum lands
+      // mid-comment: `*a` / `%% secret` / `c*` measured `c` at the second `%`
+      // (carve-js#1182). `pointAt` already resolved the anchored answer.
+      baseOffset: point?.offset ?? source.baseOffset + by,
+      startLine: point?.line ?? source.startLine,
+      startColumn: point?.column ?? source.startColumn,
+    }
+    if (source.anchoredRanges) {
+      shifted.anchoredRanges = source.anchoredRanges
+      shifted.rangeShift = (source.rangeShift ?? 0) + by
+    }
+    if (source.lineAnchors) {
+      // CARRIED INWARD, which is the whole defect: the anchors reached the
+      // stanza's top-level nodes and stopped at the first inline container, so a
+      // node nested under one was measured from the joined text. Shared, with the
+      // starting LINE carried as a delta - the array belongs to the whole stanza,
+      // and copying a suffix per nested construct is quadratic in a tall stanza
+      // that also carries markup.
+      shifted.lineAnchors = source.lineAnchors
+      shifted.anchorShift = (source.anchorShift ?? 0) + this.newlinesUpTo(text, by)
+    }
+    return shifted
+  }
+
+  /** How many newlines of `text` sit strictly before `offset`. */
+  private newlinesUpTo(text: string, offset: number): number {
+    const indices = this.newlineIndices(text)
+    let lo = 0
+    let hi = indices.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (indices[mid]! < offset) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
+  // Per-document cache of newline offsets for each inline text. pointAt() used to
+  // rescan `text` from 0 to `offset` on every token, which is O(offset) per call
+  // and O(n^2) across a token-dense or many-line paragraph. Caching the sorted
+  // newline indices once per distinct text and binary-searching makes each lookup
+  // O(log n). Cleared at the start of every parse() so it never outlives a
+  // document.
+  private newlineIndexCache = new Map<string, number[]>()
+
+  private newlineIndices(text: string): number[] {
+    let indices = this.newlineIndexCache.get(text)
+    if (indices === undefined) {
+      indices = []
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === '\n') indices.push(i)
+      }
+      this.newlineIndexCache.set(text, indices)
+    }
+    return indices
+  }
+
+  /**
+   * Map a local offset in the inline text to its document line, column and
+   * offset.
+   *
+   * With `lineAnchors` each line carries its own origin, so a continuation line is
+   * measured from where that line actually starts in the document rather than by
+   * adding a single base offset to a local one.
+   *
+   * With `anchoredRanges` the text was assembled from regions the scanner cannot
+   * see the boundaries of, and an offset OUTSIDE every range has no document
+   * position at all - undefined, rather than a number computed from the wrong
+   * origin. The range is reported alongside so a caller can require both ends of a
+   * span to come from the same one.
+   */
+  private pointAt(
+    source: InlineSource,
+    text: string,
+    offset: number,
+  ): { line: number; column: number; offset: number; range?: AnchorRange } | undefined {
+    if (source.anchoredRanges) {
+      const cellOffset = offset + (source.rangeShift ?? 0)
+      const range = anchorRangeAt(source.anchoredRanges, cellOffset)
+      if (!range) return undefined
+      const within = cellOffset - range.from
+      return {
+        line: range.line,
+        column: range.column + within,
+        offset: range.offset + within,
+        range,
+      }
+    }
+    const indices = this.newlineIndices(text)
+    const newlinesBefore = this.newlinesUpTo(text, offset)
+    // A FALLBACK ONLY. `startLine + newlinesBefore` assumes the stripped text has
+    // one newline per source line, which an anchored text need not: see
+    // `lineAnchors`. Where anchors exist the anchor's own line wins below.
+    const line = source.startLine + newlinesBefore
+    // Offset of this line's start within the LOCAL text.
+    const lineStart = newlinesBefore === 0 ? 0 : indices[newlinesBefore - 1]! + 1
+    const withinLine = offset - lineStart
+
+    // A NESTED SCAN STARTS PART WAY INTO THE ANCHORED TEXT, so its first line is
+    // whichever line of the outer text it began on. `anchorShift` carries that
+    // index rather than a re-based copy of the array, for the reason `rangeShift`
+    // carries one: an inline construct per line would otherwise copy the whole
+    // anchor list per construct.
+    const anchor = source.lineAnchors?.[newlinesBefore + (source.anchorShift ?? 0)]
+    if (anchor) {
+      // THE FIRST LINE MAY BEGIN MID-LINE and the rest never do. A shifted text
+      // starts wherever its opener left off, so its origin is the source's own
+      // base, which `shiftSource` already resolved through this function; only a
+      // line reached by crossing a newline starts where the anchor says. For an
+      // unshifted source the two agree by construction, since its first anchor IS
+      // its base.
+      if (newlinesBefore === 0) {
+        return { line, column: source.startColumn + offset, offset: source.baseOffset + offset }
+      }
+      return {
+        line: anchor.line,
+        column: anchor.column + withinLine,
+        offset: anchor.offset + withinLine,
+      }
+    }
+
+    // Column resets to 1 right after the most recent newline; with none, it
+    // continues from the source's starting column.
+    const column =
+      newlinesBefore === 0
+        ? source.startColumn + offset
+        : offset - indices[newlinesBefore - 1]!
+    return { line, column, offset: source.baseOffset + offset }
+  }
+
+  private findEmphasisClose(
+    text: string,
+    from: number,
+    delim: string,
+    memo: EmphasisMemo = newEmphasisMemo(),
+    failed?: Uint8Array,
+    visited?: number[],
+  ): number {
+    for (let j = from; j < text.length; j++) {
+      if (failed !== undefined && failed[j] === 1) return -1
+      visited?.push(j)
+      const ch = text[j]!
+      // Skip escapes
+      if (ch === '\\' && j + 1 < text.length) {
+        j++
+        continue
+      }
+      // Skip verbatim (code) spans. An unclosed run is opaque to the end of the
+      // block, so no emphasis closer can follow it — the opener cannot close.
+      if (ch === '`') {
+        const span = verbatimSpanEnd(text, j)
+        if (!span.closed) return -1
+        j = span.end - 1
+        continue
+      }
+      // An unbounded comment consumes the rest of its line before the delimiter
+      // stack can claim a closer there. A later line can still close the span.
+      if (
+        ch === '%' &&
+        text[j + 1] === '%' &&
+        (j === 0 || /[ \t\n]/.test(text[j - 1]!))
+      ) {
+        const newline = text.indexOf('\n', j + 2)
+        if (newline === -1) return -1
+        j = newline
+        continue
+      }
+      // Comment contents are transparent to the surrounding emphasis structure.
+      // Only a closed form is a comment; an unterminated opener remains literal.
+      if (ch === '{' && text[j + 1] === '%') {
+        const close = text.indexOf('%}', j + 2)
+        if (close !== -1) {
+          j = close + 1
+          continue
+        }
+      }
+      // A raw inline's format token is opaque as itself, not as a braced
+      // highlight: the main loop builds it together with the code span in front
+      // of it, so a closer after it stays reachable (E2a, carve-js#1745).
+      if (ch === '{' && text[j - 1] === '`') {
+        RE_RAW_INLINE_STICKY.lastIndex = j
+        const m = RE_RAW_INLINE_STICKY.exec(text)
+        if (m) {
+          j += m[0].length - 1
+          continue
+        }
+      }
+      // Braced inlines are opaque too (E2a, markup-carve/carve#2027).
+      if (ch === '{') {
+        const end = this.bracedInlineEnd(text, j, memo, delim)
+        if (end !== -1) {
+          j = end
+          continue
+        }
+      }
+      // A link or image destination, title included, and an autolink (E2a,
+      // markup-carve/carve#2046). The label is NOT opaque and stays as it is.
+      if (ch === '(' && text[j - 1] === ']') {
+        const end = linkDestinations(text, memo).get(j)
+        if (end !== undefined) {
+          j = end
+          continue
+        }
+      }
+      if (ch === '<') {
+        RE_AUTOLINK_STICKY.lastIndex = j
+        const m = RE_AUTOLINK_STICKY.exec(text)
+        if (m) {
+          j += m[0].length - 1
+          continue
+        }
+      }
+      if (ch === delim) {
+        // Closer must not be preceded by whitespace (CARVE-P3-013).
+        const prev = text[j - 1]
+        if (prev === undefined || isCarveWhitespace(prev)) continue
+        const next = text[j + 1]
+        // Word-boundary closer (spec §9): no bare delimiter closes when followed
+        // by an alphanumeric. Applies to every delimiter, not just / and _.
+        if (next && /[A-Za-z0-9]/.test(next)) continue
+        return j
+      }
+    }
+    return -1
+  }
+
+  // The last index of the braced inline opening at `open`, or -1.
+  private bracedInlineEnd(text: string, open: number, memo: EmphasisMemo, scanning?: string): number {
+    if (memo.lastBrace === -2) memo.lastBrace = text.lastIndexOf('}')
+    if (memo.lastBrace < open) return -1
+    // The pairs whose closer the parser searches for across the block are asked
+    // the same question here, so the scan hides the region the parser builds.
+    const marker = text[open + 1]
+    // A forced opener of an open kind is not a span, so it hides nothing. The
+    // kind whose closer this scan is looking for counts as open: the span it
+    // belongs to is open across its own content. A substitution is a construct
+    // of its own rather than a second strike, so it stays opaque.
+    if (
+      marker !== undefined &&
+      FORCED_TYPE[marker] !== undefined &&
+      (this.openKinds.has(marker) || marker === scanning) &&
+      !(marker === '~' && this.substitutionAt(text, open) !== null)
+    ) {
+      return -1
+    }
+    if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-')) {
+      const end = this.bracedPairEnd(text, open, `${marker}}`)
+      if (end !== -1) return end - 1
+    }
+    for (const re of BRACED_INLINE_STICKY) {
+      re.lastIndex = open
+      const m = re.exec(text)
+      if (m) return open + m[0].length - 1
+    }
+    return -1
+  }
 }
