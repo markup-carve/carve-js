@@ -14,24 +14,28 @@ import { carveToMarkdown } from '../src/index.js'
  * All three engines agreed on the wider row, which is why the cross-engine
  * render comparison scored it green throughout; the evidence that settles it is
  * an external reader, not another engine.
+ *
+ * PART 11 §10n (carve#2408) later padded a header row narrower than the table,
+ * since GFM drops every body cell past the header's width. The delimiter still
+ * matches the header cell for cell; both are now as wide as the widest row.
  */
 const lines = (src: string): string[] => carveToMarkdown(src).split('\n')
 const cellCount = (row: string): number => row.split('|').slice(1, -1).length
 
 describe('the Markdown delimiter row is sized from the header row', () => {
-  it('does not widen the delimiter to reach a wider body row', () => {
+  it('pads a narrow header and its delimiter to a wider body row', () => {
     // Corpus 284-a-ragged-table-keeps-each-row-s-cell-count-3: a one-cell header
     // over a two-cell body row.
     const out = lines('| h |\n|---|\n| |x |\n')
-    expect(out[0]).toBe('| h |')
-    expect(out[1]).toBe('| --- |')
+    expect(out[0]).toBe('| h |  |')
+    expect(out[1]).toBe('| --- | --- |')
     expect(out[2]).toBe('|  | x |')
   })
 
   it('reaches the span-free shape too', () => {
     const out = lines('|= a |\n| x | y |\n')
-    expect(out[0]).toBe('| a |')
-    expect(out[1]).toBe('| --- |')
+    expect(out[0]).toBe('| a |  |')
+    expect(out[1]).toBe('| --- | --- |')
     expect(out[2]).toBe('| x | y |')
   })
 
@@ -44,9 +48,9 @@ describe('the Markdown delimiter row is sized from the header row', () => {
     expect(out[2]).toBe('| y |')
   })
 
-  it('keeps the header alignment while narrowing', () => {
+  it('keeps the header alignment and gives a padded column none', () => {
     const out = lines('|=> h |\n| x | y |\n')
-    expect(out[1]).toBe('| ---: |')
+    expect(out[1]).toBe('| ---: | --- |')
   })
 
   it('always matches the delimiter to the header it promotes', () => {

@@ -44,8 +44,8 @@ describe('the Markdown delimiter row carries the column alignment', () => {
     expect(delimiterRow('|= A |= B |\n| 1 | 2 |\n')).toBe('| --- | --- |')
   })
 
-  it('sizes the delimiter from a narrow header rather than a wider body row', () => {
-    expect(carveToMarkdown('| h |\n|---|\n| |x |\n')).toBe('| h |\n| --- |\n|  | x |\n')
+  it('pads a narrow header and its delimiter to a wider body row', () => {
+    expect(carveToMarkdown('| h |\n|---|\n| |x |\n')).toBe('| h |  |\n| --- | --- |\n|  | x |\n')
   })
 
   it('keeps every authored row when multiple rows are headers', () => {

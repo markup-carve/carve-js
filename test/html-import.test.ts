@@ -1239,6 +1239,15 @@ describe('table row groups on import', () => {
     expect(groupsOf('<table><tr><td>a</td></tr><tr><td>b</td></tr></table>')).toBeUndefined()
   })
 
+  it('says nothing for a single body whose only departure is a row-head count', () => {
+    // The count is read off the cells' own header flags, so it states nothing
+    // the rows do not (CARVE-P12-034), and the writing exit reports no loss.
+    const html = '<table><tr><th>A</th><th>B</th></tr><tr><th>1</th><td>x</td></tr></table>'
+    expect(groupsOf(html)).toBeUndefined()
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(groupsOf('<table><thead><tr><th>h</th><th>x</th></tr></thead><tbody><tr><th>r</th><td>1</td></tr><tr><th>s</th><td>2</td></tr></tbody></table>')).toBeUndefined()
+  })
+
   const nonTrivial: Array<[string, string, unknown]> = [
     [
       'a foot',
@@ -1251,9 +1260,9 @@ describe('table row groups on import', () => {
       { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 },
     ],
     [
-      'row-head columns',
-      '<table><thead><tr><th>h</th><th>x</th></tr></thead><tbody><tr><th>r</th><td>1</td></tr><tr><th>s</th><td>2</td></tr></tbody></table>',
-      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 0 },
+      'row-head columns beside a foot',
+      '<table><thead><tr><th>h</th><th>x</th></tr></thead><tbody><tr><th>r</th><td>1</td></tr><tr><th>s</th><td>2</td></tr></tbody><tfoot><tr><td>f</td><td>g</td></tr></tfoot></table>',
+      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 1 },
     ],
     [
       'a head that is not header cells',
@@ -1290,16 +1299,16 @@ describe('table row groups on import', () => {
     // `<th colspan="2">` is one element and two columns; a `<th rowspan="2">`
     // leaves the row below it starting with a data ELEMENT while a header still
     // occupies the column. Counting elements got both wrong.
-    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th colspan="2">r</th><td>1</td></tr><tr><th colspan="2">s</th><td>2</td></tr></tbody></table>'))
-      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 0 })
-    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><th rowspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody></table>'))
-      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 0 })
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th colspan="2">r</th><td>1</td></tr><tr><th colspan="2">s</th><td>2</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 1 })
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><th rowspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 1 })
     // Both dimensions at once. A carried `^` occupies ONE slot however many
     // columns its origin covers - that is the array-index model the renderer
     // resolves - so the row below a `<th rowspan="2" colspan="2">` has a single
     // slot standing for two columns, and counting slots reported one.
-    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th rowspan="2" colspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody></table>'))
-      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 0 })
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th rowspan="2" colspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 1 })
   })
 
   it('partitions the rows it was built from, in every shape that emits one', () => {

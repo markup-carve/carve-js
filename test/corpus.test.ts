@@ -834,6 +834,7 @@ const IMPLEMENTED = new Set([
   // Arrives with carve 34e9333 and already reads the ruled way: the comment
   // trailing-whitespace rule landed on carve-js#2080.
   'a-comment-line-s-text-is-content-and-a-block-body-is-payload',
+  'an-attribute-line-under-an-attributed-sub-item-stays-in-that-item',
 ])
 
 /**
