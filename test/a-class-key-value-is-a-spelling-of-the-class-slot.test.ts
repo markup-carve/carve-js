@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToHtml, parse, renderCarve, toAstJson } from '../src/index.js'
+import { carveToHtml, parse, renderCarve, renderMarkdown, toAstJson, type Document, type InlineNode } from '../src/index.js'
 
 /*
  * A `class` KEY-VALUE IS A SPELLING OF THE CLASS SLOT (CARVE-P4-007,
@@ -89,6 +89,19 @@ describe('one element renders ONE class attribute', () => {
     ['{class="w-1/2" .grid}\npara', '<p class="w-1/2 grid">para</p>'],
     ['[t]{class=a .b}', '<p><span class="a b">t</span></p>'],
     ['[t]{class=-col}', '<p><span class="-col">t</span></p>'],
+    ['{class=a class}\n:::\ny\n:::', '<div class="a">\n  <p>y</p>\n</div>'],
+    ['{class .b}\n:::\ny\n:::', '<div class="b">\n  <p>y</p>\n</div>'],
+    ['{class class=a}\n:::\ny\n:::', '<div class="a">\n  <p>y</p>\n</div>'],
+    ['{class="javascript:alert(1)"}\n:::\ny\n:::', '<div class="">\n  <p>y</p>\n</div>'],
+    ['{class="javascript:alert(1)" .b}\n:::\ny\n:::', '<div class="b">\n  <p>y</p>\n</div>'],
+    ['{class}\n:::\ny\n:::', '<div class="">\n  <p>y</p>\n</div>'],
+    ['{class="" class="javascript:alert(1)" class}\n:::\ny\n:::', '<div class="">\n  <p>y</p>\n</div>'],
+    ['{class="a:b"}\n:::\ny\n:::', '<div class="a:b">\n  <p>y</p>\n</div>'],
+    ['{class="" .b class=b class=a .b}\n:::\ny\n:::', '<div class="b a">\n  <p>y</p>\n</div>'],
+    ['[t]{class .b}', '<p><span class="b">t</span></p>'],
+    ['[t]{class="javascript:alert(1)" class}', '<p><span class="">t</span></p>'],
+    ['{class .b}\n::: note\ny\n:::', '<aside class="admonition note b" aria-label="Note">\n  <p>y</p>\n</aside>'],
+    ['{class="javascript:alert(1)" .b .b}\n::: note\ny\n:::', '<aside class="admonition note b" aria-label="Note">\n  <p>y</p>\n</aside>'],
   ]
 
   for (const [source, html] of shapes) {
@@ -140,4 +153,42 @@ describe('the writer spells a class the shorthand cannot', () => {
       expect(renderCarve(parse(written))).toBe(written)
     })
   }
+})
+
+/*
+ * The Markdown target reaches the same class slot through its raw-HTML escape
+ * hatch, which only `ruby` and `small_caps` open. No source spells either, so
+ * the tree is built here.
+ */
+describe('the Markdown target filters the same class slot', () => {
+  const paragraph = (node: InlineNode): Document => ({
+    type: 'document',
+    children: [{ type: 'paragraph', children: [node] }],
+  })
+  const ruby = (classes: string[]): InlineNode => ({
+    type: 'ruby',
+    attrs: { classes },
+    pairs: [{ base: [{ type: 'text', value: 'x' }], annotation: [{ type: 'text', value: 'y' }] }],
+  })
+  const smallCaps = (classes: string[]): InlineNode => ({
+    type: 'small_caps',
+    attrs: { classes },
+    children: [{ type: 'text', value: 'x' }],
+  })
+
+  it('drops an empty and a refused value and dedups the rest', () => {
+    const classes = ['', 'javascript:alert(1)', 'b', 'b', 'a:b']
+    expect(renderMarkdown(paragraph(ruby(classes)))).toBe(
+      '<ruby class="b a:b">x<rp>(</rp><rt>y</rt><rp>)</rp></ruby>\n',
+    )
+    expect(renderMarkdown(paragraph(smallCaps(classes)))).toBe('<span class="smallcaps b a:b">x</span>\n')
+  })
+
+  it('keeps the slot when nothing survives', () => {
+    const classes = ['', 'javascript:alert(1)']
+    expect(renderMarkdown(paragraph(ruby(classes)))).toBe(
+      '<ruby class="">x<rp>(</rp><rt>y</rt><rp>)</rp></ruby>\n',
+    )
+    expect(renderMarkdown(paragraph(smallCaps(classes)))).toBe('<span class="smallcaps">x</span>\n')
+  })
 })

@@ -477,6 +477,16 @@ export function renderedAttrValue(name: string, value: string): string {
   return sanitizeAttrValue(name, value)
 }
 
+/**
+ * The class tokens a target writes for `attrs.classes`, deduped in first-occurrence
+ * order. An empty or sanitizer-refused value contributes no token but leaves the slot
+ * claimed, so `{class}` alone still renders `class=""` (CARVE-P4-007).
+ */
+export function renderedClasses(classes: readonly string[]): string[] {
+  const kept = classes.map((value) => sanitizeAttrValue('class', value)).filter((value) => value !== '')
+  return [...new Set(kept)]
+}
+
 /** How this renderer escapes a value it writes inside `name="…"`. */
 export function escapeAttrValue(value: string): string {
   return escapeAttr(value)
@@ -1082,7 +1092,7 @@ function renderAttrs(raw?: Attrs, tag?: string): string {
     attrs.classes && attrs.classes.length
       ? // Merge into one class attribute, deduping repeats keeping first-
         // occurrence order (`{.a .a}` -> `class="a"`), matching carve-php (§15).
-        `class="${[...new Set(attrs.classes)].map(escapeAttr).join(' ')}"`
+        `class="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"`
       : ''
   // Escape the id value: an `#id` is identifier-restricted (escaping is a
   // no-op), but `id=value` (which now also feeds this slot, last-wins §15) can
@@ -1962,7 +1972,7 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
   // Leading block attributes (§15) merge with the admonition's own
   // wrapper class: extra classes append, id/key attach to the wrapper.
   const baseClass = canonical ? `admonition ${node.kind}` : node.kind
-  const classValue = [baseClass, ...(node.attrs?.classes ?? [])].map(escapeAttr).join(' ')
+  const classValue = [baseClass, ...renderedClasses(node.attrs?.classes ?? [])].map(escapeAttr).join(' ')
   const restAttrs: Attrs = {}
   if (node.attrs?.id !== undefined) restAttrs.id = node.attrs.id
   if (node.attrs?.keyValues) restAttrs.keyValues = node.attrs.keyValues
