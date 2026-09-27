@@ -2981,6 +2981,14 @@ class Importer {
         this.add('attribute-dropped', `Dropped ${name} on <dl>: a definition list holding no entry is not written`, 'warning', path, node)
       }
     }
+    // A leading `<dd>` can end in a definition list, which this list would
+    // join on the reparse, so it joins here the way a sibling `<dl>` does.
+    const lead = before.at(-1)
+    if (items.length && !attrs && lead?.type === 'definition_list') {
+      lead.items.push(...items)
+      this.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
+      return [...before, ...this.blocks(trailing, path, depth + 1, trailingPaths)]
+    }
     return [...before, ...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
   }
 
