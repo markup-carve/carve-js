@@ -661,6 +661,17 @@ const LINEAR_MATH_TOKENS = new Set(['mi', 'mn', 'mo', 'mtext'])
 const isBlankOrComment = (node: P5Node): boolean =>
   node.nodeName === '#comment' || (node.nodeName === '#text' && /^[ \t\n\r\f]*$/.test(node.value ?? ''))
 
+/** No text an author wrote, anywhere below `root`. */
+function holdsNoText(root: P5Node): boolean {
+  const stack: P5Node[] = [root]
+  while (stack.length) {
+    const node = stack.pop()!
+    if (node.nodeName === '#text' && !/^[ \t\n\r\f]*$/.test(node.value ?? '')) return false
+    stack.push(...(node.childNodes ?? []))
+  }
+  return true
+}
+
 /**
  * The text of a `<math>` with no TeX, when flattening cannot change its value
  * (carve#2361): tokens in order, inside grouping elements only. A fraction or a
@@ -2196,7 +2207,7 @@ class Importer {
         buffered.every(
           (node) => node.nodeName === '#comment' || isLayoutOnlyText(node),
         )
-      if (commentsOnly) {
+      if (commentsOnly || this.commentsBesideNothing(buffered, bufferedPaths, bufferedDepths)) {
         buffered.forEach((node, index) => {
           if (node.nodeName !== '#comment') return
           out.push({ type: 'comment', block: true, content: node.data ?? '' })
@@ -4898,6 +4909,31 @@ class Importer {
    */
   private visible(nodes: InlineNode[]): boolean {
     return nodes.some((node) => node.type !== 'text' || trimNonNbsp(node.value) !== '')
+  }
+
+  /**
+   * A run of comments whose other members are elements importing to nothing
+   * is still a block comment run: the elements leave no inline run behind
+   * (markup-carve/carve-rs#2029). The elements are converted here, once, so
+   * their own rows stand; a probe that finds content rolls its rows back.
+   */
+  private commentsBesideNothing(buffered: P5Node[], paths: string[], depths: number[]): boolean {
+    if (!buffered.some((node) => node.nodeName === '#comment')) return false
+    const elements = buffered.flatMap((node, index) => (node.tagName ? [index] : []))
+    if (!elements.length) return false
+    if (!buffered.every((node) => node.tagName ? ACTIVE.has(node.tagName) || holdsNoText(node) : isBlankOrComment(node))) return false
+    const entries = this.entries.length
+    const unspellable = this.unspellable.length
+    const counted = this.nodes
+    for (const index of elements) {
+      if (this.visible(this.inlines([buffered[index]!], paths[index]!, depths[index]!, [paths[index]!], [depths[index]!]))) {
+        this.entries.length = entries
+        this.unspellable.length = unspellable
+        this.nodes = counted
+        return false
+      }
+    }
+    return true
   }
 
   /**

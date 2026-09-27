@@ -149,3 +149,31 @@ describe('an HTML comment imports as a Carve comment', () => {
     expect(result.report.diagnostics.map((entry) => entry.code)).toEqual(['attribute-preserved', 'raw-preserved'])
   })
 })
+
+// An element that imports to nothing leaves no inline run, so the comment
+// beside it stays among blocks (markup-carve/carve-rs#2029).
+describe('a comment beside an element that imports to nothing', () => {
+  it('is a block comment', () => {
+    const result = htmlToCarve('<section>\n<h2>T</h2><!--/lit-part-->\n<x-el></x-el>\n<p>y</p></section>')
+    expect(result.value).toBe('## T\n\n%%%\n/lit-part\n%%%\n\ny\n')
+    expect(result.report.diagnostics.map((d) => [d.code, d.path])).toEqual([
+      ['element-unwrapped', '/section[1]'],
+      ['element-dropped', '/section[1]/x-el[5]'],
+    ])
+  })
+
+  it('is a block comment beside a dropped <noscript>', () => {
+    const result = htmlToCarve('<div class="a"><p>x</p></div><!--\nA b\n--><noscript><img src="a.png" alt=""></noscript>\n<div class="b"><p>y</p></div>')
+    expect(result.value).toBe('::: a\nx\n:::\n\n%%%\n\nA b\n\n%%%\n\n::: b\ny\n:::\n')
+    expect(result.report.diagnostics.map((d) => [d.code, d.path])).toEqual([['element-dropped', '/noscript[3]']])
+  })
+
+  it.each([
+    ['text inside the element', '<div><!--c--> <x-el>w</x-el></div>', '{% c %} w\n'],
+    ['an attribute the element keeps', '<div><!--a--><span id="s"></span></div>', '{% a %}[]{#s}\n'],
+  ])('stays inline beside %s', (_, html, carve) => {
+    const result = htmlToCarve(html)
+    expect(result.value).toBe(carve)
+    expect(result.report.diagnostics.filter((d) => d.code === 'element-dropped')).toEqual([])
+  })
+})
