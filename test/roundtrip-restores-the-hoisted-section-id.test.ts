@@ -17,9 +17,9 @@ import { carveToHtml, htmlToAst, htmlToCarve } from '../src/index.js'
  *
  * ## Four qualifiers, and each one is load-bearing
  *
- * - **`roundtrip` only.** That mode's input is Carve-produced HTML by
- *   definition, so a `<section id>` there IS the hoist. In arbitrary HTML it is
- *   a landmark's own id, naming the REGION rather than the heading.
+ * - **every mode.** This was `roundtrip` only at first; the contract's
+ *   section-wrapper clause widened it, because dropping the id loses an anchor
+ *   the heading it opens can carry.
  * - **`<section>` only.** `renderHtml` hoists onto that tag alone; the other
  *   six sectioning names that unwrap here never carry a heading's id.
  * - **the id only.** A class or a data attribute on a wrapper is somebody
@@ -42,19 +42,19 @@ const written = (html: string) =>
 const codes = (html: string) =>
   htmlToCarve(html, { mode: 'roundtrip' }).report.diagnostics.map((d) => d.code)
 
-describe('roundtrip restores the id the renderer hoisted onto a section', () => {
+describe('an import restores the id the renderer hoisted onto a section', () => {
   it('hands an authored id back to the heading it was hoisted off', () => {
     expect(written('<section id="install"><h2 class="featured">Setup</h2></section>')).toEqual({
-      safe: '{.featured}\n## Setup\n',
-      semantic: '{.featured}\n## Setup\n',
+      safe: '{#install .featured}\n## Setup\n',
+      semantic: '{#install .featured}\n## Setup\n',
       roundtrip: '{#install .featured}\n## Setup\n',
     })
   })
 
   it('hands it back when it is the only thing the wrapper carried', () => {
     expect(written('<section id="install"><h2>Setup</h2></section>')).toEqual({
-      safe: '## Setup\n',
-      semantic: '## Setup\n',
+      safe: '{#install}\n## Setup\n',
+      semantic: '{#install}\n## Setup\n',
       roundtrip: '{#install}\n## Setup\n',
     })
   })
@@ -182,16 +182,13 @@ describe('roundtrip restores the id the renderer hoisted onto a section', () => 
     },
   )
 
-  it('leaves a section id dropped and reported in the other two modes', () => {
-    // Outside `roundtrip` the input is arbitrary HTML, where a `<section id>`
-    // is the region's own.
+  it('hands the id back in the other two modes as well', () => {
+    // The contract's section-wrapper clause reads every `<section>` opened by a
+    // heading as the renderer's wrapper, in every mode.
     for (const mode of ['safe', 'semantic'] as const) {
       const report = htmlToCarve('<section id="install"><h2 class="featured">Setup</h2></section>', { mode })
-      expect(report.value).toBe('{.featured}\n## Setup\n')
-      expect(report.report.diagnostics.map((d) => d.code)).toEqual([
-        'element-unwrapped',
-        'attribute-dropped',
-      ])
+      expect(report.value).toBe('{#install .featured}\n## Setup\n')
+      expect(report.report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped'])
     }
   })
 

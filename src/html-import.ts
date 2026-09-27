@@ -2670,7 +2670,7 @@ class Importer {
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          this.mode === 'roundtrip' ? restoreHoistedSectionId(tag, attrs, children) : attrs,
+          restoreHoistedSectionId(tag, attrs, children),
           tag,
           path,
           unwrapped,
