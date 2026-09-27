@@ -5,6 +5,7 @@
  * over each block's text content. No backtracking.
  */
 
+import { dropPositions, toCodepointPositions } from './source-positions.js'
 import type {
   SmartPunctuation,
   Abbreviation,
@@ -1216,160 +1217,6 @@ function declinePositions(sub: Lexer): void {
 }
 
 /**
- * Every field on the tree that holds a source position.
- *
- * `pos` is the one PART 12 section 4 names, and the other four are the same
- * information under other names: the root map from a footnote label to where
- * its definition was written, and a definition item's per-term spans, per-body
- * spans and per-marker lines. A caller who asked for no positions and got a
- * document still carrying four of these has the defect the option is meant to
- * end, one field further along.
- */
-const POSITION_FIELDS = [
-  'pos',
-  'footnoteDefPos',
-  'termSpans',
-  'definitionSpans',
-  'definitionLines',
-] as const
-
-/**
- * Drop every source position from a finished document.
- *
- * ONE gate at the boundary, not a flag threaded through the parse. The two
- * existing gates cannot carry this: `suppressPositions` reaches only the block
- * layer, and the inline layer's is a field on an `InlineSource`, which is built
- * in seven places from text that has no lexer in scope. Setting the block one
- * from the option as well was tried and reverted - the walk covers those nodes
- * anyway, so the line changed nothing any test could see, which is the shape of
- * defect this ticket is about.
- *
- * The consequence is stated rather than smoothed over: the positions are still
- * TRACKED, and `positions: false` buys a smaller tree rather than a faster
- * parse. It is not free either - it replaces `toCodepointPositions`, which
- * walks the same fields, so the cost is one boundary walk in both directions.
- */
-function dropPositions(doc: Document): void {
-  const seen = new Set<object>()
-  const walk = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return
-    if (seen.has(value)) return
-    seen.add(value)
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item)
-      return
-    }
-    const record = value as Record<string, unknown>
-    for (const field of POSITION_FIELDS) delete record[field]
-    for (const key of Object.keys(record)) {
-      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
-    }
-  }
-  walk(doc)
-}
-
-
-/**
- * Rewrite every `pos` from UTF-16 code units to CODEPOINT positions.
- *
- * PART 12 section 4 pins the unit. The scanner counts UTF-16 code units, because
- * that is how JavaScript indexes strings, and the two agree for everything in
- * the Basic Multilingual Plane - so `é` and `한` are already right and only
- * astral characters (emoji, rare CJK extensions) differ. That is why nothing
- * caught this: a fixture has to contain a surrogate pair to tell them apart.
- *
- * Codepoints rather than bytes or UTF-16 because a codepoint index always lands
- * on a character boundary. A byte offset can point into the middle of a UTF-8
- * sequence and a UTF-16 offset into the middle of a surrogate pair; both let a
- * consumer slice a document into garbage. It also matches djot.lua, which builds
- * a byte-to-charpos table specifically so it can report characters from a
- * byte-indexed language.
- *
- * Columns are recomputed from the converted offset rather than converted
- * separately, so a column can never disagree with the offset on the same node.
- *
- * Documents with no surrogate pairs take an identity fast path: one scan, no
- * allocation, which is the overwhelmingly common case.
- */
-function toCodepointPositions(doc: Document, source: string): void {
-  let hasAstral = false
-  for (let i = 0; i < source.length; i++) {
-    const code = source.charCodeAt(i)
-    if (code >= 0xd800 && code <= 0xdbff) {
-      hasAstral = true
-      break
-    }
-  }
-  if (!hasAstral) return
-
-  // codepointAt[i] is the number of CODEPOINTS before UTF-16 index i.
-  const codepointAt = new Uint32Array(source.length + 1)
-  let count = 0
-  for (let i = 0; i < source.length; i++) {
-    codepointAt[i] = count
-    const code = source.charCodeAt(i)
-    if (code >= 0xd800 && code <= 0xdbff && i + 1 < source.length) {
-      // A surrogate pair is one codepoint; the low half shares its index.
-      codepointAt[i + 1] = count
-      i++
-    }
-    count++
-  }
-  codepointAt[source.length] = count
-
-  const map = (offset: number): number => codepointAt[Math.min(offset, source.length)] ?? count
-
-  // Codepoint index of each line's start, so a column can be recomputed from an
-  // offset instead of converted on its own.
-  const lineStartCodepoint: number[] = [0]
-  for (let i = 0; i < source.length; i++) {
-    if (source.charCodeAt(i) === 10) lineStartCodepoint.push(map(i + 1))
-  }
-
-  const convert = (pos: Position): void => {
-    const startOffset = pos.startOffset
-    const endOffset = pos.endOffset
-    if (typeof startOffset === 'number') {
-      pos.startOffset = map(startOffset)
-      const lineStart = lineStartCodepoint[pos.startLine - 1]
-      if (lineStart !== undefined && pos.startColumn !== undefined) {
-        pos.startColumn = pos.startOffset - lineStart + 1
-      }
-    }
-    if (typeof endOffset === 'number') {
-      pos.endOffset = map(endOffset)
-      const lineStart = lineStartCodepoint[pos.endLine - 1]
-      if (lineStart !== undefined && pos.endColumn !== undefined) {
-        pos.endColumn = pos.endOffset - lineStart + 1
-      }
-    }
-  }
-
-  const seen = new Set<object>()
-  const walk = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return
-    if (seen.has(value as object)) return
-    seen.add(value as object)
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item)
-      return
-    }
-    const record = value as Record<string, unknown>
-    if (typeof record['startLine'] === 'number' && typeof record['endLine'] === 'number') {
-      // A Position and nothing else: no node type in this engine carries
-      // `startLine` directly, they all carry it inside a `pos`. Its fields are
-      // scalars, so there is nothing below it to walk.
-      convert(record as unknown as Position)
-      return
-    }
-    for (const key of Object.keys(record)) {
-      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
-    }
-  }
-  walk(doc)
-}
-
-/**
  * True when `source` would be read as OPENING A FRONTMATTER BLOCK.
  *
  * The Carve writer needs this to decide the spelling of a thematic break from
@@ -1458,7 +1305,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
     if (opts.positions === false) dropPositions(doc)
-    else toCodepointPositions(doc, source)
+    else toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
     return doc
   } finally {
     activeMatchers = prevMatchers
