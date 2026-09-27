@@ -150,9 +150,14 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       }
       if (wrote) out.push('\n')
       const base = slugify(title, headingIdSlugOpts(opts))
-      const count = (ids.get(base) ?? 0) + 1
-      ids.set(base, count)
-      const id = count === 1 ? base : `${base}-${count}`
+      let count = ids.get(base) ?? 2
+      let id = base
+      if (ids.has(base)) {
+        while (ids.has(`${base}-${count}`)) count++
+        id = `${base}-${count}`
+        ids.set(base, count + 1)
+      }
+      ids.set(id, 2)
       out.push(indent(sections.length), '<section id="', escapeAttrValue(id), '">\n',
         indent(sections.length + 1), `<h${level}>`, escapeHtml(title), `</h${level}>`)
       if (stats) accept(stats, 'headings', i, i + 1)

@@ -1461,7 +1461,7 @@ function dropTrailingWs(line: string): string {
  * does not contain.
  */
 const SENTINEL_BASE = 0xe001
-const SENTINEL_COUNT = 6
+const SENTINEL_COUNT = 7
 
 function trimNonNbsp(text: string): string {
   return trimEndNonNbsp(trimStartNonNbsp(text))
@@ -3213,7 +3213,7 @@ class CarveRenderSession {
    * (carve-js#1280).
    */
   private markerColumnTag(): string {
-    return this.sentinels[SENTINEL_COUNT - 1]!
+    return this.sentinels[5]!
   }
 
   /** Mark the next line for §11 N1a's boundary. `normalize` expands it with the container prefix. */
@@ -3675,6 +3675,9 @@ class CarveRenderSession {
 
   private renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
     const rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
+    if (rawBody.split('\n').some((line) => line.replace(/^[ \t]*/, '').startsWith(this.sentinels[6]! + '>'))) {
+      throw new SourceUnspellableError('code', 'a block-marker continuation cannot stay inside a footnote paragraph')
+    }
     const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
     if (body === '') {
       return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
@@ -4319,8 +4322,12 @@ class CarveRenderSession {
   }
 
   private guardCodeLines(written: string, ctx: CarveContext): string {
-    if (ctx.lineBlockDepth > 0 || this.termKeepsLineIndent) return written
-    return written.replace(/\n(?=> |\[[^\]\n]+\]:[ \t])/g, '\n ')
+    const marker = /\n(?=>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/g
+    if (this.termKeepsLineIndent && marker.test(written)) {
+      throw new SourceUnspellableError('code', 'a block marker on a continuation line ends the definition term')
+    }
+    if (ctx.lineBlockDepth > 0) return written
+    return written.replace(marker, `\n${this.sentinels[6]}`)
   }
 
   private renderCode(content: string, allowUnclosed = false, nodeType = 'code'): string {
@@ -4348,6 +4355,7 @@ class CarveRenderSession {
     // trip on a tree the renderer accepts.
     const unspellable = this.unspellableVerbatimReason(content, needsPad)
     if (unspellable !== undefined) throw new SourceUnspellableError(nodeType, unspellable)
+    if (content.includes('\r')) content = content.replace(/\r\n?/g, '\n')
     // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
     // the closed form has no spelling and the bare opener is the one that does
     // (carve-js#1338). Only the caller knows whether the opener may run to the
@@ -4441,6 +4449,10 @@ class CarveRenderSession {
   private restoreVerbatim(text: string): string {
     return (
       text
+        .replace(new RegExp(`^([ \\t>]*)${this.sentinels[6]}([>\\[])`, 'gm'), (_match, prefix: string, marker: string) =>
+          (marker === '[' ? prefix + ' ' : prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
+        )
+        .replaceAll(this.sentinels[6]!, '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
           dropTrailingWs(prefix),
         )
