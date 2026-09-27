@@ -1470,7 +1470,8 @@ function protectParagraphListMarkers(text: string): string {
     if (codeFence === 0) {
       line = line
         .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
-        .replace(/^([ \t]{0,3}\d{1,9})([.)])(?=[ \t])/, '$1\\$2')
+        // A text `.` may still be a section 8i carrier; it opens a list all the same.
+        .replace(new RegExp(`^([ \\t]{0,3}\\d{1,9})([.)${CONTEXT_SENTINEL['.']}])(?=[ \\t])`), (_, lead: string, mark: string) => `${lead}\\${sentinelCharacter(mark)}`)
         .replace(/^([ \t]{0,3})>/, '$1\\>')
       line = protectBlockShapes(line, lineIndex === 0)
       lines[lineIndex] = line
