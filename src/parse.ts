@@ -5,6 +5,8 @@
  * over each block's text content. No backtracking.
  */
 
+import { mapInlineChildren } from './inline-children.js'
+import { isUnresolvedReference } from './unresolved-reference.js'
 import { dropPositions, toCodepointPositions } from './source-positions.js'
 import type {
   SmartPunctuation,
@@ -6472,39 +6474,7 @@ function applyAbbreviations(
   const abbrRe = new RegExp(`\\b(${[...defs.keys()].join('|')})\\b`, 'g')
   for (const node of nodes) {
     if (node.type !== 'text') {
-      // Recurse where applicable
-      const anyChildren = (node as unknown as { children?: InlineNode[] }).children
-      if (Array.isArray(anyChildren)) {
-        ;(node as unknown as { children: InlineNode[] }).children = applyAbbreviations(
-          anyChildren,
-          defs,
-        )
-      }
-      // Inline-footnote content lives in `.inline` (design §3); recurse there too.
-      const anyInline = (node as unknown as { inline?: InlineNode[] }).inline
-      if (Array.isArray(anyInline)) {
-        ;(node as unknown as { inline: InlineNode[] }).inline = applyAbbreviations(
-          anyInline,
-          defs,
-        )
-      }
-      // A substitution's halves are inline content too (carve-js#1827).
-      if (node.type === 'substitution') {
-        node.old = applyAbbreviations(node.old, defs)
-        node.new = applyAbbreviations(node.new, defs)
-      }
-      // An inline_extension keeps its inlines under `content`, not `children`,
-      // so the generic recursion above never reached them and `:kbd[HTML]`
-      // silently dropped an expansion that `*HTML*` and `[HTML](/u)` got.
-      // PART 9R R3 matches a term in RENDERED TEXT at word boundaries and says
-      // nothing about the container it sits in (carve#1151).
-      const anyContent = (node as unknown as { content?: InlineNode[] }).content
-      if (Array.isArray(anyContent)) {
-        ;(node as unknown as { content: InlineNode[] }).content = applyAbbreviations(
-          anyContent,
-          defs,
-        )
-      }
+      mapInlineChildren(node, applyAbbreviations, defs)
       out.push(node)
       continue
     }
@@ -6553,27 +6523,8 @@ function applyLinkDefs(
 ): InlineNode[] {
   const out: InlineNode[] = []
   for (const node of nodes) {
-    const anyChildren = (node as unknown as { children?: InlineNode[] }).children
-    if (Array.isArray(anyChildren)) {
-      ;(node as unknown as { children: InlineNode[] }).children = applyLinkDefs(
-        anyChildren,
-        defs,
-      )
-    }
-    // Inline-footnote content lives in `.inline` (design §3); recurse there too.
-    const anyInline = (node as unknown as { inline?: InlineNode[] }).inline
-    if (Array.isArray(anyInline)) {
-      ;(node as unknown as { inline: InlineNode[] }).inline = applyLinkDefs(
-        anyInline,
-        defs,
-      )
-    }
-    // A substitution's halves are inline content too (carve-js#1827).
-    if (node.type === 'substitution') {
-      node.old = applyLinkDefs(node.old, defs)
-      node.new = applyLinkDefs(node.new, defs)
-    }
-    if (node.type === 'link' && node.ref !== undefined) {
+    mapInlineChildren(node, applyLinkDefs, defs)
+    if (node.type === 'link' && isUnresolvedReference(node)) {
       // Normalization does not make a multiline label syntactically valid.
       // The inline scanner may retain such a bracket run as a placeholder so
       // it can degrade byte-for-byte, but it must never enter the symbol table.
@@ -6603,7 +6554,7 @@ function applyLinkDefs(
       out.push(node)
       continue
     }
-    if (node.type === 'image' && node.ref !== undefined) {
+    if (node.type === 'image' && isUnresolvedReference(node)) {
       const def = /[\r\n]/.test(node.ref) ? undefined : defs.get(normalizeRefLabel(node.ref))
       if (def) {
         node.src = def.href

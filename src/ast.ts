@@ -713,30 +713,17 @@ export interface InlineCode extends BaseNode {
 export interface Link extends BaseNode {
   type: 'link'
   /**
-   * Resolved hyperlink target. Always meaningful after `resolve()`.
-   * Between parse() and resolve() this may be `''` on a Link node whose
-   * `ref` is still set — that placeholder shape means "unresolved
-   * reference; the resolve pass will finalize it" (see `ref` below).
-   * After `resolve()`, any Link surviving in the tree has `ref` cleared
-   * and a meaningful `href`.
+   * Hyperlink destination. An unresolved reference has an empty destination;
+   * successful resolution retains its authored `ref` and `rawRef` metadata.
    */
   href: string
   title?: string
   children: InlineNode[]
   /**
-   * Internal placeholder: an unresolved reference label, set by the
-   * inline scanner for `[text][ref]` / collapsed `[text][]`. The
-   * resolution lifecycle is:
-   *   1. applyLinkDefs (inside parse) matches against the document's
-   *      explicit `[label]: url` defs; on hit it sets `href`/`title`
-   *      and deletes `ref`/`rawRef`.
-   *   2. resolveHeadingIds (inside resolve) matches still-unresolved
-   *      refs against the document's headings (implicit references);
-   *      on hit it sets `href` and deletes `ref`/`rawRef`.
-   *   3. Anything still unresolved at the end of resolveHeadingIds is
-   *      replaced with a Text node carrying `rawRef` (literal source).
-   * Consumers that call parse() without resolve() will see a Link node
-   * with `ref` set and `href: ''` for any genuinely-unresolvable input.
+   * Authored reference label. Parsing resolves explicit definitions; the
+   * resolve pass also checks collapsed references against heading text.
+   * A reference that still has no destination stays in the tree, and renderers
+   * emit its literal `rawRef` source. Use isUnresolvedReference to test its phase.
    */
   ref?: string
   rawRef?: string
@@ -748,12 +735,9 @@ export interface Image extends BaseNode {
   alt: string
   title?: string
   /**
-   * Internal placeholder for a reference image `![alt][ref]` / collapsed
-   * `![alt][]`, mirroring {@link Link.ref}. applyLinkDefs matches it against
-   * the document's explicit `[label]: url` defs (case-sensitively): on hit it
-   * sets `src`/`title` and clears `ref`/`rawRef`; anything still unresolved
-   * after resolve() becomes a Text node carrying `rawRef` (literal source).
-   * Unlike a link ref, an image ref does NOT match heading text.
+   * Authored reference-image label, retained with `rawRef` after resolution.
+   * Explicit definitions provide the destination; images do not use implicit
+   * heading references. Unresolved images render their literal source.
    */
   ref?: string
   rawRef?: string
