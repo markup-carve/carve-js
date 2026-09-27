@@ -1928,11 +1928,14 @@ function composeContainerPrefix(
   // The column the container behind the walk hands its body out at. The
   // document hands out column 0.
   let handed = 0
+  // Set once a marker closes the open container it stands at: past that the
+  // line is inside the new item, and no deeper open container is re-entered.
+  let closed = false
   for (;;) {
     const rest = raw.slice(pos)
     const ind = leadingWhitespace(rest)
     const col = pos + ind
-    while (depth < open.length && !open[depth]!.quote && open[depth]!.col <= col) {
+    while (!closed && depth < open.length && !open[depth]!.quote && open[depth]!.col <= col) {
       handed = open[depth]!.col
       depth++
     }
@@ -1958,7 +1961,7 @@ function composeContainerPrefix(
       return { column: col, peeled, depth }
     }
     const content = col + marker[0].length
-    const matched = depth < open.length && !open[depth]!.quote && open[depth]!.col === content
+    const matched = !closed && depth < open.length && !open[depth]!.quote && open[depth]!.col === content
     // THE CONTAINER THIS MARKER IS WRITTEN INSIDE, if the walk is still
     // standing in one. An ITEM folds the marker into its lead text over the
     // columns strictly between its base and its content column, and nowhere
@@ -1966,10 +1969,11 @@ function composeContainerPrefix(
     // from the window: the marker is that quote's lazy text whatever its
     // column, but the container stack still moves under it. Past the last open
     // container there is no owner and the marker nests.
-    const owner = depth < open.length ? open[depth]! : null
+    const owner = !closed && depth < open.length ? open[depth]! : null
     const behindQuote = owner !== null && owner.quote
     const folds = owner !== null && !owner.quote && col > owner.base && col < owner.col
     if (matched) depth++
+    else if (owner !== null && !owner.quote && !folds) closed = true
     peeled.push({ content, quote: false, matched, marker: col, folds, behindQuote })
     handed = content
     pos = content
