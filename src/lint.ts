@@ -891,10 +891,11 @@ function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning
       for (const [k, span] of (item.termSpans ?? []).entries()) {
         if (!span?.endLine || span.endLine <= span.startLine) continue
         // A line inside a multi-line code, math, raw or literal span, at any
-        // inline depth, is verbatim content.
+        // inline depth, is verbatim content, and so is a folded comment.
         const spans: [number, number][] = []
         walkDocument({ children: item.terms?.[k] ?? [] } as unknown as Document, (child) => {
           const p = (child as Positioned).pos
+          if (p && child.type === 'comment') spans.push([p.startLine - 1, p.endLine ?? p.startLine])
           if (p && (child.type === 'code' || child.type === 'math' || child.type === 'raw_inline' || child.type === 'literal_inline')) {
             spans.push([p.startLine, p.endLine ?? p.startLine])
           }

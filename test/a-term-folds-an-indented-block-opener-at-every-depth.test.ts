@@ -95,10 +95,57 @@ describe('lintCarve - definition-term-block-folded', () => {
   })
 })
 
-describe('what ends a nested term before an indented opener', () => {
-  it('keeps a comment or a definition as the term boundary', () => {
-    const heading = '<dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl><h1 id="H">H</h1></dd></dl>'
-    expect(flat(':: a\n: b\n  :: c\n    %% note\n    # H\n')).toBe(heading)
-    expect(flat(':: a\n: b\n  :: c\n    [r]: /u\n    # H\n')).toBe(heading)
+describe('a comment or a definition under a term', () => {
+  it('keeps a comment past the column invisible and the term open', () => {
+    expect(flat(':: c\n  %% note\n  more\n')).toBe('<dl><dt>cmore</dt></dl>')
+    expect(flat(':: c\n  %%%\n  hidden\n  %%%\n  more\n')).toBe('<dl><dt>cmore</dt></dl>')
+    expect(flat(':: a\n: b\n  :: c\n    %% note\n    # H\n')).toBe(
+      '<dl><dt>a</dt><dd><p>b</p><dl><dt>c# H</dt></dl></dd></dl>',
+    )
+  })
+
+  it('ends the term at a comment at the container column', () => {
+    expect(flat(':: c\n%% note\nmore\n')).toBe('<dl><dt>c</dt></dl><p>more</p>')
+  })
+
+  it('folds a definition past the column as text, and registers one at the column', () => {
+    expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n    [r]: /u\n')).toBe(
+      '<p>[t][r]</p><dl><dt>a</dt><dd><p>b</p><dl><dt>c[r]: /u</dt></dl></dd></dl>',
+    )
+    expect(flat('x[^n]\n\n- item\n\n  :: c\n    [^n]: y\n')).toBe(
+      '<p>x[^n]</p><ul><li>item<dl><dt>c[^n]: y</dt></dl></li></ul>',
+    )
+    expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n  [r]: /u\n')).toBe(
+      '<p><a href="/u">t</a></p><dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl></dd></dl>',
+    )
+  })
+
+  it('keeps inline content from reaching across a folded comment', () => {
+    expect(carveToHtml(':: a `code\n  %% note\n  end`\n')).toBe(
+      '<dl>\n  <dt>a <code>code</code>\n\n  end<code></code></dt>\n</dl>',
+    )
+  })
+
+  it('reads a comment fence body as opaque when deciding what a term folds', () => {
+    // A `::` inside a comment opens no term, so the definition after it registers.
+    expect(flat('[t][r]\n\n:: a\n: b\n  %%%\n  :: fake\n    %%%\n    [r]: /u\n')).toBe(
+      '<p><a href="/u">t</a></p><dl><dt>a</dt><dd>b</dd></dl>',
+    )
+    // Nor does a `::` inside a code fence.
+    expect(flat('[t][r]\n\n```\n:: fake\n  %%%\n```\n[r]: /u\n%%%\n')).toBe(
+      '<p><a href="/u">t</a></p><pre><code>:: fake\n  %%%\n</code></pre>'.replace(/\n\s*/g, ''),
+    )
+    // A blank line inside a folded comment does not end the term.
+    expect(flat('[t][r]\n\n:: a\n: b\n  :: c\n    %%%\n\n    hidden\n    %%%\n    [r]: /u\n')).toBe(
+      '<p>[t][r]</p><dl><dt>a</dt><dd><p>b</p><dl><dt>c[r]: /u</dt></dl></dd></dl>',
+    )
+  })
+
+  it('formats a folded comment back to itself', () => {
+    for (const source of [':: c\n  %% note\n  more\n', ':: a\n: b\n  :: c\n    %%%\n    x\n    %%%\n    # H\n']) {
+      const once = renderCarve(parse(source))
+      expect(carveToHtml(once)).toBe(carveToHtml(source))
+      expect(renderCarve(parse(once))).toBe(once)
+    }
   })
 })
