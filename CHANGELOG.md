@@ -15,6 +15,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Reference and abbreviation passes visit extension content, ruby pairs and citation fields. Resolved references retain their metadata without receiving definition attributes again.
+
 - Parser options and caches belong to each call. Failed option getters no longer leak quote settings, and independent nested calls use their own options. Extension context helpers retain the enclosing settings and recursion limit.
 
 - Source positions count lone surrogates separately and map BOM-prefixed text containing astral characters against the original source. Astral text after a lone carriage return also receives codepoint columns.
