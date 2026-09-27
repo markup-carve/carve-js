@@ -519,14 +519,6 @@ function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
 }
 
 /**
- * The whitespace at the edges of a BLOCK's inline content, dropped.
- *
- * Only at a block boundary, never around an inline element: `a <em> b </em>c`
- * renders with the space between the words, so trimming inside the `<em>`
- * would join them. The caller says which it is - `inlines()` itself cannot
- * know, since it serves both.
- */
-/**
  * Is this text node LAYOUT rather than content (PART 11 §7,
  * markup-carve/carve#1628)?
  *
@@ -545,6 +537,7 @@ function isLayoutOnlyText(node: P5Node): boolean {
   return node.nodeName === '#text' && trimNonNbsp(node.value ?? '') === ''
 }
 
+/** Trim block-edge padding and redundant padding inside formatting. */
 function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
   return trimFormattingEdges(nodes, true, true)
 }
@@ -571,7 +564,7 @@ function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: bo
   }
   const endsWithSpace = (node: InlineNode | undefined): boolean => {
     if (node === undefined) return false
-    if (node.type === 'hard_break' || textEdge(node, 'end')) return true
+    if (textEdge(node, 'end')) return true
     if (node.type === 'link' || node.type === 'span' || isFormatting(node)) return endsWithSpace(node.children.at(-1))
     return false
   }
@@ -581,7 +574,7 @@ function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: bo
     const next = out[index + 1]
     node.children = trimFormattingEdges(
       node.children,
-      index === 0 ? leading : endsWithSpace(out[index - 1]),
+      index === 0 ? leading : out[index - 1]?.type === 'hard_break' || endsWithSpace(out[index - 1]),
       next === undefined ? trailing : next.type === 'hard_break' || textEdge(next, 'start'),
     )
   }

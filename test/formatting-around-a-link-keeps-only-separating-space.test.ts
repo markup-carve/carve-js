@@ -1,8 +1,7 @@
 import { expect, it } from 'vitest'
 import { htmlToCarve, parse, renderCarve } from '../src/index.js'
 
-it.each(
-[
+it.each([
   [
     "block edges",
     "<p><strong>\n <a href=\"/x\">mk</a>\n </strong></p>",
@@ -62,6 +61,16 @@ it.each(
     "hard break",
     "<p>a<br><strong> <a href=\"/x\">mk</a> </strong>b</p>",
     "a\\\n{*[mk](/x) *}b\n"
+  ],
+  [
+    "nested hard break",
+    "<p><strong>x<br></strong><em> y</em></p>",
+    "{*x\\\n*}{/ y/}\n"
+  ],
+  [
+    "nonbreaking space",
+    "<p>a <strong>&nbsp;<a href=\"/x\">mk</a>&nbsp;</strong> b</p>",
+    "a * [mk](/x) * b\n"
   ]
 ]
 )('formatting around a link: %s', (_, html, expected) => {
