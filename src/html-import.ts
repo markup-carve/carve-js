@@ -29,8 +29,10 @@ import {
   SCHEME_PROBE_STRIP_RE,
   decodedStyleValue,
   isDangerousAttrName,
+  isUrlListAttribute,
   renderedAttrValue,
   sanitizeUrl,
+  urlListHasDeniedToken,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
@@ -1517,7 +1519,9 @@ class Importer {
           // written second.
           this.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', false)
         } else {
-          const laundered = launderableScheme(attr.value)
+          // A URL-list value is probed at every candidate on render
+          // (CARVE-P9-055), so a later denied token is reached there.
+          const laundered = isUrlListAttribute(name) ? undefined : launderableScheme(attr.value)
           if (laundered !== undefined) {
             this.refuseAttribute(node, path, name, `: its value carries a ${laundered} URL the renderer does not reach`, 'warning', true)
           } else {
@@ -1529,7 +1533,7 @@ class Importer {
           }
         }
       }
-      if (this.mode === 'roundtrip' && destinationIsDenied(attr.value) && !this.entries.slice(refusedBefore).some((entry) => entry.owner === node)) {
+      if (this.mode === 'roundtrip' && (destinationIsDenied(attr.value) || urlListHasDeniedToken(name, attr.value)) && !this.entries.slice(refusedBefore).some((entry) => entry.owner === node)) {
         this.refuseIfKept(node, path, `${name} with a denied URL scheme`)
       }
     }

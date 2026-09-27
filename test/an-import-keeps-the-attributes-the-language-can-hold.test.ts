@@ -220,24 +220,13 @@ describe('an import keeps the attributes the language can hold', () => {
     }
   })
 
-  it('refuses a value that hides a dangerous URL where the renderer cannot see it', () => {
-    /*
-     * §25 blanks a value whose scheme LEADS it, which covers every attribute
-     * holding one URL. A list-valued attribute holds several, and a safe first
-     * entry hides the rest - so `srcset` was the shape where "keep the rest"
-     * would have become a vulnerability rather than a fidelity win.
-     */
-    // Bare for the same reason as above: the `<p>` would add a row about the
-    // paragraph to a list that is asserting what happens to the ATTRIBUTE.
+  it('keeps a URL-list value whose later candidate the renderer blanks', () => {
+    // §25 probes a URL-list attribute at every candidate (CARVE-P9-055), so the
+    // import carries it and the render blanks it, as carve-rs does.
     const result = htmlToCarve('<img src="a.png" alt="a" srcset="safe.png 1x, javascript:alert(1) 2x">')
-    expect(result.value).toBe('![a](a.png)\n')
-    expect(result.report.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'attribute-dropped',
-        severity: 'warning',
-        message: 'Dropped srcset on <img>: its value carries a javascript URL the renderer does not reach',
-      }),
-    ])
+    expect(result.value).toBe('![a](a.png){srcset="safe.png 1x, javascript:alert(1) 2x"}\n')
+    expect(result.report.diagnostics).toEqual([])
+    expect(carveToHtml(result.value)).toContain('srcset=""')
     // A LEADING dangerous scheme is not refused here - the renderer blanks it,
     // and refusing it too would be a second copy of that rule.
     const leading = htmlToCarve('<blockquote foo="javascript:alert(1)">q</blockquote>')
