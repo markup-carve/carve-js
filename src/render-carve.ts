@@ -1309,7 +1309,7 @@ function quoteAttrValue(value: string): string {
   // tripped to the shorter spelling the parser accepts.
   // A pipe is quoted and escaped: `\|` is the only pipe a table row's cell
   // cut leaves in place ([CARVE-P2-019]).
-  if (/^[^ \t\n\r"'{}|]+$/.test(value)) return value
+  if (/^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
   return `"${value.replace(/[\\"|]/g, '\\$&')}"`
 }
 
