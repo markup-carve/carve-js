@@ -81,6 +81,12 @@ describe('lintCarve - definition-term-block-folded', () => {
     expect(reports('\uFEFF:: c\n # H\n')).toMatchObject([{ line: 2, column: 2 }])
   })
 
+  it('stays quiet inside a multi-line code span', () => {
+    expect(reports(':: a\n  `code\n  # H\n  end`\n')).toEqual([])
+    expect(reports(':: *`code\n  # H\n  end`*\n')).toEqual([])
+    expect(lintCarve('- item\n\n  :: a\n    `code\n    # H\n    end`\n')).toEqual([])
+  })
+
   it('stays quiet for plain continuation text, list markers, and openers that open', () => {
     expect(reports(':: c\n  more text\n')).toEqual([])
     expect(reports(':: c\n  - x\n')).toEqual([])

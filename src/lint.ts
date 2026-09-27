@@ -846,7 +846,7 @@ interface LintItemColumn {
 /**
  * A block opener indented past a term's marker folds into the term as text,
  * because a term has no content column (carve#2411). Reports the first such
- * line per term and returns every opener-shaped folded line, so the other
+ * line per term and returns every term continuation line, so the other
  * indentation rules stay quiet about them.
  */
 function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning[]): Set<number> {
@@ -886,21 +886,34 @@ function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning
   const folded = new Set<number>()
   walkDocument(doc, (node) => {
     if (node.type !== 'definition_list') return
-    for (const item of (node.items as { termSpans?: (Positioned['pos'] | undefined)[] }[] | undefined) ?? []) {
-      for (const span of item.termSpans ?? []) {
+    type TermItem = { terms?: Positioned[][]; termSpans?: (Positioned['pos'] | undefined)[] }
+    for (const item of (node.items as TermItem[] | undefined) ?? []) {
+      for (const [k, span] of (item.termSpans ?? []).entries()) {
         if (!span?.endLine || span.endLine <= span.startLine) continue
+        // A line inside a multi-line code, math, raw or literal span, at any
+        // inline depth, is verbatim content.
+        const spans: [number, number][] = []
+        walkDocument({ children: item.terms?.[k] ?? [] } as unknown as Document, (child) => {
+          const p = (child as Positioned).pos
+          if (p && (child.type === 'code' || child.type === 'math' || child.type === 'raw_inline' || child.type === 'literal_inline')) {
+            spans.push([p.startLine, p.endLine ?? p.startLine])
+          }
+        })
+        const verbatim = (ln: number): boolean => spans.some(([first, last]) => first < ln && ln <= last)
         const termLine = lines[span.startLine - 1] ?? ''
         const markerIndex = unitIndex(termLine, Math.max(0, (span.startColumn ?? 1) - 1))
         const quotes = (termLine.slice(0, markerIndex).match(/>/g) ?? []).length
         const markerColumn = visualColumn(termLine, markerIndex)
         let reported = false
         for (let ln = span.startLine + 1; ln <= span.endLine; ln++) {
+          // Every continuation line is term text, so no other indentation rule
+          // may describe it as a block.
+          folded.add(ln)
+          if (reported || verbatim(ln)) continue
           const line = lines[ln - 1] ?? ''
           const v = view(line, quotes)
           if (!v || visualColumn(line, v.chars) <= markerColumn) continue
           if (!LINT_BLOCK_OPENER.test(v.rest) && !isTableRow(v.rest)) continue
-          folded.add(ln)
-          if (reported) continue
           reported = true
           out.push({
             line: ln,
