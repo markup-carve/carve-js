@@ -15,6 +15,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Source positions count lone surrogates separately and map BOM-prefixed text containing astral characters against the original source. Astral text after a lone carriage return also receives codepoint columns.
+
 - AST JSON ingest handles lists with hundreds of thousands of items, and export handles equally wide block lists, without overflowing the JavaScript argument stack (#2153).
 
 ### Changed
