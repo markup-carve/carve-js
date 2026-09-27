@@ -176,4 +176,10 @@ describe('a comment beside an element that imports to nothing', () => {
     expect(result.value).toBe(carve)
     expect(result.report.diagnostics.filter((d) => d.code === 'element-dropped')).toEqual([])
   })
+
+  it('keeps the diagnostic cap after a probe finds content', () => {
+    const html = '<!--c--><span id="s" style="text-align:left"></span><p onclick="x()">a</p><p onclick="y()">b</p>'
+    const { report } = htmlToCarve(html, { mode: 'roundtrip', maxDiagnostics: 1 })
+    expect(report.diagnostics.map((d) => d.code)).toEqual(['diagnostics-truncated'])
+  })
 })

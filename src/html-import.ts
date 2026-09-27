@@ -4937,13 +4937,11 @@ class Importer {
     const elements = buffered.flatMap((node, index) => (node.tagName ? [index] : []))
     if (!elements.length) return false
     if (!buffered.every((node) => node.tagName ? ACTIVE.has(node.tagName) || holdsNoText(node) : isBlankOrComment(node))) return false
-    const entries = this.entries.length
-    const unspellable = this.unspellable.length
+    const before = this.mark()
     const counted = this.nodes
     for (const index of elements) {
       if (this.visible(this.inlines([buffered[index]!], paths[index]!, depths[index]!, [paths[index]!], [depths[index]!]))) {
-        this.entries.length = entries
-        this.unspellable.length = unspellable
+        this.restore(before)
         this.nodes = counted
         return false
       }
