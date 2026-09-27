@@ -31,15 +31,7 @@ type Target = keyof typeof targets
  * It is declared in this file rather than beside the `.fmt` map because only
  * this suite reads a `.md` sidecar.
  */
-const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map([
-  [
-    '284-a-ragged-table-keeps-each-row-s-cell-count-3',
-    {
-      reason: 'PART 11 section 10n pads a header row narrower than the widest row (carve#2408); the sidecar predates it',
-      md: '| h |  |\n| --- | --- |\n|  | x |\n',
-    },
-  ],
-])
+const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map()
 
 /** The bytes this engine is ahead of the pinned sidecar with, if it is. */
 const aheadOfPin = (fixture: { slug: string; target: Target }) => {
