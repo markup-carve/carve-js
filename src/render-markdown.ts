@@ -979,7 +979,12 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'non_breaking_space':
       return '\u00a0'
     case 'soft_break':
-      return '\n'
+      // ONE SPACE IN A CELL (PART 11 §10q, markup-carve/carve#2421). A cell is a
+      // single-line slot, so the raw newline ended the GFM row and split the
+      // table. Not `<br>`: a soft break is the break that does not render as a
+      // break, and inventing a visible one is what CARVE-P11-008 forbids. §9a
+      // gives the identical reasoning for the hard break below.
+      return insideTableCell ? ' ' : '\n'
     case 'hard_break':
       // A BACKSLASH, not two trailing spaces (PART 11 section 9). Both mean
       // `<br />` to a CommonMark reader, but trailing whitespace is removed by
