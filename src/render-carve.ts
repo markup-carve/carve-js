@@ -4180,7 +4180,7 @@ class CarveRenderSession {
         if (node.delimited) return `{% ${node.content} %}`
         // A comment fence folded into a term: every line one column past the
         // term's, so the fence stays in the term (carve#2411).
-        if (node.block) return ` ${this.renderBlockComment(node.content).split('\n').join('\n ')}`
+        if (node.block) return ` ${renderSession.renderBlockComment(node.content).split('\n').join('\n ')}`
         // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
         // joins the opener rather than being separated from it by a space: a
         // comment whose content is `%` is written ` %%%`, not ` %% %`, which

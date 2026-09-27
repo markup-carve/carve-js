@@ -5279,24 +5279,6 @@ function leadingWhitespace(line: string): number {
 
 
 /**
- * Apply an over-indented list block opener's authored column as a temporary
- * local block base (PART 9 §24 C3, carve#1705).
- *
- * The item collector has already removed `content_column`, so a positive
- * leading indent here is exactly the authored over-indent.  Single-line block
- * openers are rebased independently.  Containers and definitions carry the
- * same base through their body/closer; treating every line independently would
- * let an accidentally dedented fence close or would corrupt opaque payload.
- *
- * This is one forward pass.  A line is stripped at most once and container
- * scans advance the outer cursor, keeping flat and deeply nested input linear.
- *
- * Every line this pass moves ends up spelled exactly as the same block would be
- * spelled AT the content column, which is what keeps an over-indented opener
- * and its exact-column twin parsing identically from here on.  Nothing
- * downstream needs to know a rebase happened.
- */
-/**
  * The next line after `index` holding a comment fence of exactly `width`, or
  * -1. Indexed once, so a closer is found without rescanning per opener.
  */
@@ -5325,6 +5307,24 @@ function commentCloserLookup(lines: readonly string[]): (width: number, index: n
   }
 }
 
+/**
+ * Apply an over-indented list block opener's authored column as a temporary
+ * local block base (PART 9 §24 C3, carve#1705).
+ *
+ * The item collector has already removed `content_column`, so a positive
+ * leading indent here is exactly the authored over-indent.  Single-line block
+ * openers are rebased independently.  Containers and definitions carry the
+ * same base through their body/closer; treating every line independently would
+ * let an accidentally dedented fence close or would corrupt opaque payload.
+ *
+ * This is one forward pass.  A line is stripped at most once and container
+ * scans advance the outer cursor, keeping flat and deeply nested input linear.
+ *
+ * Every line this pass moves ends up spelled exactly as the same block would be
+ * spelled AT the content column, which is what keeps an over-indented opener
+ * and its exact-column twin parsing identically from here on.  Nothing
+ * downstream needs to know a rebase happened.
+ */
 function rebaseOverindentedBlocks(
   lines: string[],
   eligible?: ReadonlySet<number>,
@@ -7400,7 +7400,7 @@ class ParseSession {
       if (commentFence === null && verse === null) {
         const view = raw.replace(/^(?:[ \t]*>(?: |$))+/, '')
         const rest = view.replace(/^[ \t]+/, '')
-        const col = indentColumns(view)
+        const col: number = term !== null || RE_DEFLIST_TERM.test(rest) ? indentColumns(view) : 0
         if (isBlankLine(view)) {
           term = null
         } else if (term && rawQuoteDepth === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
