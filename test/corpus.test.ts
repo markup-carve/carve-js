@@ -838,6 +838,9 @@ const IMPLEMENTED = new Set([
   // Arrives with carve 9f88255d and all ten documents already render
   // byte-exact: a definition term has no content column at any depth.
   'a-block-opener-indented-under-a-definition-term-is-term-text-at-every-depth',
+  // Arrives with carve cd289cf4 and all twenty-five documents already render
+  // byte-exact: the term-folded comment span landed on carve-js#2202.
+  'a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth',
 ])
 
 /**

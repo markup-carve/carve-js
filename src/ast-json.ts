@@ -323,13 +323,20 @@ function definitionListsFromWire<T>(node: T): T {
     // nested inside a description. Returning here without this left that inner
     // list in its wire shape, and `promoteIngestedBlockImages` then read
     // `entry.definitions` off a `definition_description` (carve-js#1616).
-    // `terms` needs no pass: it holds inline content, which no definition list
-    // can appear in.
-    record['items'] = entries.map((entry) =>
-      Array.isArray(entry.definitions)
+    // `terms` gets the pass too, for the INLINE rewrites below rather than for a
+    // nested list: no definition list can appear in a term, but a footnote
+    // reference can, and skipping the pass left `label` unmapped to `id` there
+    // while the same node decoded correctly one field over. A footnote
+    // definition indented under a term folds into the term
+    // (markup-carve/carve#2458), so `[^n]: y` came back written `[^]: y`.
+    record['items'] = entries.map((entry) => {
+      const mapped: DefinitionItem = Array.isArray(entry.definitions)
         ? { ...entry, definitions: definitionListsFromWire(entry.definitions) }
-        : entry,
-    )
+        : entry
+      return Array.isArray(mapped.terms)
+        ? { ...mapped, terms: definitionListsFromWire(mapped.terms) }
+        : mapped
+    })
     return record as T
   }
 
