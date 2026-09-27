@@ -607,11 +607,15 @@ function listTableAsTable(node: Admonition): Table | undefined {
   const headerRows = listTableCount(kv['header-rows'])
   const headerCols = listTableCount(kv['header-cols'])
   const aligns = kv.aligns === undefined ? [] : kv.aligns.split(',').map((value) => value.trim())
+  // A row whose leading list is EMPTY has no cell for a following block to join,
+  // and an AST from `fromAstJson` can carry one, so the grid does not exist.
+  let ungridded = false
   const rows = outer.items.map((row, r) => {
     // Every list in the row gives cells; any other block joins the cell before it.
     const entries: Array<{ item: ListItem; blocks: BlockNode[] }> = []
     for (const block of row.children) {
       if (block.type === 'list') for (const item of block.items) entries.push({ item, blocks: [...item.children] })
+      else if (entries.length === 0) ungridded = true
       else entries.at(-1)!.blocks.push(block)
     }
     const items = entries.map((entry) => entry.item)
@@ -636,6 +640,7 @@ function listTableAsTable(node: Admonition): Table | undefined {
     })
     return { type: 'table_row' as const, cells }
   })
+  if (ungridded) return undefined
   return { type: 'table', rows, ...(node.title && node.title.length > 0 ? { caption: node.title } : {}) }
 }
 
