@@ -3911,7 +3911,9 @@ class Importer {
       headRows2 === leadingHeaderRows &&
       footRows === 0 &&
       bodies.length <= 1 &&
-      bodies.every((body) => body.headRows === 0 && (body.rowHeadColumns ?? 0) === 0 && body.attrs === undefined)
+      // A single body's row-head count is read off its cells' own header flags,
+      // so it states nothing the rows do not (PART 12 §15, CARVE-P12-034).
+      bodies.every((body) => body.headRows === 0 && body.attrs === undefined)
     if (derivable) return undefined
     // Carve SOURCE has no spelling for the field, so a writer loses it. The
     // AST keeps it and `htmlToCarve` reports it, which is the split §16 draws.
