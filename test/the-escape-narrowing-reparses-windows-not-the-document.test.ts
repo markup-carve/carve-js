@@ -39,7 +39,9 @@ describe('the escape narrowing search', () => {
   it('windows the descriptions of a definition list', () => {
     parsed.bytes = 0
     const carve = htmlToCarve(glossary(300)).value
-    expect(parsed.bytes / carve.length).toBeLessThan(40)
+    // A deterministic parser-input budget catches loss of window reuse.
+    // Changes to the search or output require remeasuring this bound.
+    expect(parsed.bytes / carve.length).toBeLessThan(11.5)
   })
 
   it('keeps only the escapes each paragraph needs', () => {

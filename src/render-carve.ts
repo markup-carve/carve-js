@@ -356,18 +356,34 @@ function windowedProbe(
         escalatedUnits = null
       }
     })
+  // Keep the latest two window parses across a probe and its successor.
+  // Failed relaxations often revisit the same source; the cache is local to
+  // this escape narrowing and never retains more than two windows.
+  const windowTrees = new Map<string, string | null>()
+  const windowTree = (source: string): string | null => {
+    if (windowTrees.has(source)) {
+      const tree = windowTrees.get(source)!
+      windowTrees.delete(source)
+      windowTrees.set(source, tree)
+      return tree
+    }
+    const tree = treeOf(source)
+    windowTrees.set(source, tree)
+    if (windowTrees.size > 2) windowTrees.delete(windowTrees.keys().next().value!)
+    return tree
+  }
   return {
     keeps(local, units, apply, undo) {
       if (local && windows === undefined) windows = new EscapeWindows(ast)
       const window = local && windows ? windows.windowFor(units) : null
       const before = window === null ? null : renderWindow(window)
       // A window near the document's size saves nothing over the whole-document probe.
-      const beforeTree = before === null || before.length * 2 > conservative.length ? null : treeOf(before)
+      const beforeTree = before === null || before.length * 2 > conservative.length ? null : windowTree(before)
       apply()
       if (beforeTree !== null) {
         const after = renderWindow(window!)
         if (after !== null) {
-          if (treeOf(after) === beforeTree) return true
+          if (windowTree(after) === beforeTree) return true
           undo()
           return false
         }

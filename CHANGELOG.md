@@ -17,6 +17,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 - AST JSON ingest handles lists with hundreds of thousands of items, and export handles equally wide block lists, without overflowing the JavaScript argument stack (#2153).
 
+### Changed
+
+- Canonical rendering reuses the two most recent escape-window parses, reducing parser work without changing output (#2154).
+
 ## [0.1.8] - 2026-09-25
 
 ### Breaking
