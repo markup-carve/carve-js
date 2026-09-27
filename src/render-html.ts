@@ -403,6 +403,17 @@ const URL_LIST_SEPARATORS = new Map<string, RegExp>([
   ['attributionsrc', new RegExp(`[${ASCII_WHITESPACE}]+`)],
 ])
 
+/** Whether the renderer probes every candidate of `name`'s value (PART 9 §25). */
+export function isUrlListAttribute(name: string): boolean {
+  return URL_LIST_SEPARATORS.has(name.toLowerCase())
+}
+
+/** Whether a candidate of a URL-list value carries a denied scheme the renderer blanks. */
+export function urlListHasDeniedToken(name: string, value: string): boolean {
+  const separator = URL_LIST_SEPARATORS.get(name.toLowerCase())
+  return separator !== undefined && value.split(separator).some((token) => token !== '' && hasDeniedValueScheme(token))
+}
+
 /**
  * Whether the LEADING scheme of `value` is denylisted. Control characters and
  * Unicode whitespace are stripped from the scheme before comparison, because a

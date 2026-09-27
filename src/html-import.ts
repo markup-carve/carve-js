@@ -29,8 +29,10 @@ import {
   SCHEME_PROBE_STRIP_RE,
   decodedStyleValue,
   isDangerousAttrName,
+  isUrlListAttribute,
   renderedAttrValue,
   sanitizeUrl,
+  urlListHasDeniedToken,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
@@ -393,8 +395,9 @@ function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
   const first = after[0]
   if (last === undefined || first === undefined) return false
   if (last.type === 'hard_break' || first.type === 'hard_break') return false
-  if (last.type === 'text' && /\s$/.test(last.value)) return false
-  if (first.type === 'text' && /^\s/.test(first.value)) return false
+  // ASCII layout only: U+00A0 is content, so it is a side and not a separator.
+  if (last.type === 'text' && /[ \t\n\r\f]$/.test(last.value)) return false
+  if (first.type === 'text' && /^[ \t\n\r\f]/.test(first.value)) return false
 
   return true
 }
@@ -1517,7 +1520,9 @@ class Importer {
           // written second.
           this.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', false)
         } else {
-          const laundered = launderableScheme(attr.value)
+          // A URL-list value is probed at every candidate on render
+          // (CARVE-P9-055), so a later denied token is reached there.
+          const laundered = isUrlListAttribute(name) ? undefined : launderableScheme(attr.value)
           if (laundered !== undefined) {
             this.refuseAttribute(node, path, name, `: its value carries a ${laundered} URL the renderer does not reach`, 'warning', true)
           } else {
@@ -1529,7 +1534,7 @@ class Importer {
           }
         }
       }
-      if (this.mode === 'roundtrip' && destinationIsDenied(attr.value) && !this.entries.slice(refusedBefore).some((entry) => entry.owner === node)) {
+      if (this.mode === 'roundtrip' && (destinationIsDenied(attr.value) || urlListHasDeniedToken(name, attr.value)) && !this.entries.slice(refusedBefore).some((entry) => entry.owner === node)) {
         this.refuseIfKept(node, path, `${name} with a denied URL scheme`)
       }
     }
@@ -2670,7 +2675,7 @@ class Importer {
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          this.mode === 'roundtrip' ? restoreHoistedSectionId(tag, attrs, children) : attrs,
+          restoreHoistedSectionId(tag, attrs, children),
           tag,
           path,
           unwrapped,
@@ -4049,16 +4054,20 @@ class Importer {
     const captionAt = children.findIndex((n) => n.tagName === 'figcaption')
     const captionNode = captionAt < 0 ? undefined : children[captionAt]
     const captionPath = `${path}/figcaption[${captionAt + 1}]`
-    const bodyPaths: string[] = []
-    const body: P5Node[] = []
+    // Split at the caption, so an unwrapped figure can put it back where it was.
+    const halves: { body: P5Node[]; paths: string[] }[] = [{ body: [], paths: [] }, { body: [], paths: [] }]
     children.forEach((child, index) => {
       if (child === captionNode) return
-      body.push(child)
-      bodyPaths.push(this.childPath(path, child, index))
+      const half = halves[captionAt >= 0 && index > captionAt ? 1 : 0]!
+      half.body.push(child)
+      half.paths.push(this.childPath(path, child, index))
     })
     const before = this.mark()
-    const targets = this.blocks(body, path, depth + 1, bodyPaths)
-    const target = this.captionHost(targets[0])
+    const ahead = this.blocks(halves[0]!.body, path, depth + 1, halves[0]!.paths)
+    const targets = [...ahead, ...this.blocks(halves[1]!.body, path, depth + 1, halves[1]!.paths)]
+    // One caption line captions one block: a second body block would have to
+    // move past the caption, so such a figure is not rebuilt (as in carve-rs).
+    const target = targets.length === 1 ? this.captionHost(targets[0]) : undefined
     const captionable = target !== undefined && FIGURE_REBUILDS.has(target.type)
     const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
     /*
@@ -4196,7 +4205,8 @@ class Importer {
      */
     this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
     this.reportUnwrappedAttributes(node, attrs, 'figure', path)
-    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: caption }] : [])]
+    if (!captionNode) return targets
+    return [...ahead, { type: 'paragraph' as const, children: caption }, ...targets.slice(ahead.length)]
   }
 
   private inlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[], depths?: number[]): InlineNode[] {

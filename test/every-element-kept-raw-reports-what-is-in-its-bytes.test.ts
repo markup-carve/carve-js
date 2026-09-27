@@ -111,13 +111,13 @@ describe('every element kept raw reports what is in its bytes', () => {
     expect(rows('<form><button formaction="javascript:x">b</button></form>')).toEqual([
       ['attribute-preserved', 'error', '/form[1]/button[1]', 'Preserved injection-sink attribute formaction on <button> inside the raw HTML <form> is kept as'],
     ])
-    // A list-valued destination hides a denied scheme past the first entry,
-    // where the renderer's leading-scheme sanitizer does not reach it.
+    // A list-valued destination with a denied candidate past the first entry:
+    // the renderer blanks it (CARVE-P9-055), and the kept bytes still owe a row.
     expect(rows('<form><img srcset="a.png 1x, javascript:alert(1) 2x" alt="a"></form>')).toEqual([
-      ['attribute-preserved', 'error', '/form[1]/img[1]', 'Preserved srcset on <img> inside the raw HTML <form> is kept as: its value carries a javascript URL the renderer does not reach'],
+      ['attribute-preserved', 'error', '/form[1]/img[1]', 'Preserved srcset with a denied URL scheme on <img> inside the raw HTML <form> is kept as'],
     ])
     expect(rows('<form><a href="/ok" ping="/log javascript:alert(1)">t</a></form>')).toEqual([
-      ['attribute-preserved', 'error', '/form[1]/a[1]', 'Preserved ping on <a> inside the raw HTML <form> is kept as: its value carries a javascript URL the renderer does not reach'],
+      ['attribute-preserved', 'error', '/form[1]/a[1]', 'Preserved ping with a denied URL scheme on <a> inside the raw HTML <form> is kept as'],
     ])
     expect(rows('<form><div 9x="1">x</div></form>')).toEqual([
       ['attribute-preserved', 'info', '/form[1]/div[1]', 'Preserved unsupported attribute 9x on <div> inside the raw HTML <form> is kept as: not spellable as a Carve attribute name'],

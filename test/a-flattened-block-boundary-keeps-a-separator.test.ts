@@ -160,3 +160,17 @@ describe('a flattened boundary beside layout', () => {
     expect(carveToCarve(result.value)).toBe(result.value)
   })
 })
+
+// U+00A0 is content, so it is a side of the boundary and never stands in for
+// the separator (as in carve-rs).
+describe('a flattened boundary beside a no-break space', () => {
+  it.each([
+    ['a block holding only one', '<p>a</p><p> </p><p>b</p>', 'a   b'],
+    ['one ending a block', '<p>a </p><p>b</p>', 'a  b'],
+    ['one starting a block', '<p>a</p><p> b</p>', 'a  b'],
+  ])('%s', (_, cell, text) => {
+    const result = htmlToCarve(`<table><tr><td>${cell}</td></tr></table>`)
+    expect(result.value).toBe(`| ${text} |\n`)
+    expect(carveToCarve(result.value)).toBe(result.value)
+  })
+})
