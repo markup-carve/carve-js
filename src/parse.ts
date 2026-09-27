@@ -9045,6 +9045,8 @@ class ParseSession {
       const contentCol = markerContentCol
       const bodyLines: string[] = []
       const bodyLineNumbers: number[] = []
+      const bodySourceLines: (string | undefined)[] = []
+      const bufferedBlanks = new Set<number>()
       const lazyState: ItemLazyState = {
         inFence: false,
         fenceClose: null,
@@ -9159,11 +9161,13 @@ class ParseSession {
         const firstBlock = parseSession.collectAttachedBlock(lexer, isDefBodyBoundary)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
+        bodySourceLines.push(...firstBlock.lines)
         bodyLineNumbers.push(...firstBlock.lineNumbers)
         for (const a of firstBlock.lines) track(a)
       } else {
         bodyBaseEligible.add(bodyLines.length)
         bodyLines.push(first)
+        bodySourceLines.push(first)
         bodyLineNumbers.push(lexer.lineNumber(firstLineIndex))
         // The MARKER LINE never goes through the tracker in the list either, and
         // for the same reason it is seeded by hand here: nothing precedes it, so
@@ -9229,11 +9233,13 @@ class ParseSession {
           if (attached.length > 0) {
             bodyBaseEligible.add(bodyLines.length)
             bodyLines.push('')
+            bodySourceLines.push(undefined)
             bodyLineNumbers.push(lexer.lineNumber(plusLineIndex))
             track('')
             for (const a of attached) {
               bodyBaseEligible.add(bodyLines.length)
               bodyLines.push(a)
+              bodySourceLines.push(a)
               track(a)
             }
             bodyLineNumbers.push(...attachedLineNumbers)
@@ -9254,6 +9260,7 @@ class ParseSession {
           const dedented = sliceColumns(ln, contentCol, true)
           bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(dedented)
+          bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
           // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
           // (markup-carve/carve#1911). `sliceColumns` removes the body's content
@@ -9354,7 +9361,9 @@ class ParseSession {
             for (let k = 0; k < look; k++) {
               const lineIndex = lexer.pos
               bodyBaseEligible.add(bodyLines.length)
+              bufferedBlanks.add(bodyLines.length)
               bodyLines.push('')
+              bodySourceLines.push(lexer.peek())
               bodyLineNumbers.push(lexer.lineNumber(lineIndex))
               track('')
               lexer.consume()
@@ -9386,6 +9395,7 @@ class ParseSession {
             lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
           }
           bodyLines.push(ln)
+          bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
           track(ln, undefined, false)
           lexer.consume()
@@ -9397,6 +9407,11 @@ class ParseSession {
       // coordinate system after its own content margin was removed - plus
       // Definition entries use the same exact block extent in every container.
       rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true)
+      restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
+        index === 0 && !/^\+[ \t]*$/.test(first)
+          ? contentCol
+          : indentColumns(bodySourceLines[index] ?? ''),
+      )
       const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
@@ -10052,6 +10067,8 @@ class ParseSession {
 
       const nested: string[] = []
       const nestedLineNumbers: number[] = []
+      const nestedSourceLines: (string | undefined)[] = []
+      const bufferedBlanks = new Set<number>()
       // Lines admitted by reaching this item's content column. A below-column
       // lazy line can retain a positive residual indent for recursive safety,
       // but that must never be mistaken for #1705 over-indentation.
@@ -10071,8 +10088,6 @@ class ParseSession {
       let bodyHasBelowColumnLine = false
       let pendingBlanks = 0
       let pendingBlankLineNumbers: number[] = []
-      // What each buffered blank leaves past the content column. Inside an open
-      // fence a line of spaces is body, so its residue is content (CARVE-P11-016).
       let pendingBlankTexts: string[] = []
       // Indices in `nested` that hold a `+`-injected blank separator. These keep
       // the attached block parsing standalone but never loosen the list (Bug B).
@@ -10153,7 +10168,7 @@ class ParseSession {
         if (isBlankLine(l)) {
           pendingBlanks++
           pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
-          pendingBlankTexts.push(insideOpenFence(lazyState) ? sliceColumns(l, contentCol, true) : '')
+          pendingBlankTexts.push(l)
           lexer.consume()
           continue
         }
@@ -10179,6 +10194,7 @@ class ParseSession {
           if (!attachesAtDocumentColumnZero(lexer)) continue
           plusSeparators.add(nested.length)
           nested.push('')
+          nestedSourceLines.push(undefined)
           nestedLineNumbers.push(plusLineNumber)
           trackItemLazyState('', lazyState)
           // A boundary line inside a fence THIS attached block opened is that
@@ -10195,6 +10211,7 @@ class ParseSession {
           )
           for (let k = 0; k < attachedLines.length; k++) {
             nested.push(attachedLines[k]!)
+            nestedSourceLines.push(attachedLines[k])
             nestedLineNumbers.push(attachedLineNumbers[k]!)
             // The attached block's lines are the item's, so the item's own
             // tracker sees them: what they leave open decides how a later
@@ -10274,7 +10291,12 @@ class ParseSession {
           const placed = sliceColumns(l, contentCol, true)
           if (!RE_ADMONITION_CLOSE.test(placed)) bodyHasContentColumnLine = true
           for (let k = 0; k < pendingBlanks; k++) {
-            nested.push(pendingBlankTexts[k] ?? '')
+            // Emptied here, a nested item's own collector would have no residue
+            // left to measure its opener against, so the container keeps what it
+            // does not own.
+            bufferedBlanks.add(nested.length + 1)
+            nestedSourceLines.push(pendingBlankTexts[k])
+            nested.push(sliceColumns(pendingBlankTexts[k] ?? '', contentCol, true))
             nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
             trackItemLazyState('', lazyState)
           }
@@ -10327,6 +10349,7 @@ class ParseSession {
             if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
           }
           nested.push(dedented)
+          nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           const fenceLineIndex = lexer.pos
           trackItemLazyState(
@@ -10422,6 +10445,7 @@ class ParseSession {
             lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
           }
           nested.push(lazyLine)
+          nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           // The item's own reparse cannot see this from the column alone - the
           // clamp above rewrote it - so record the FACT for the arm below.
@@ -10465,6 +10489,7 @@ class ParseSession {
           // the run closing the block it was written inside.
           const framed = l.startsWith(LAZY_FRAME) ? l : LAZY_FRAME + l.replace(/^[ \t]+/, '')
           nested.push(framed)
+          nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           trackItemLazyState(framed, lazyState, () => true, false)
           lexer.consume()
@@ -10536,7 +10561,9 @@ class ParseSession {
       // and the item's end position (markup-carve/carve-js#988).
       if (pendingBlanks > 0 && (lazyState.inFence || lazyState.inComment)) {
         for (let k = 0; k < pendingBlanks; k++) {
-          nested.push(pendingBlankTexts[k] ?? '')
+          bufferedBlanks.add(nested.length + 1)
+          nestedSourceLines.push(pendingBlankTexts[k])
+          nested.push(sliceColumns(pendingBlankTexts[k] ?? '', contentCol, true))
           nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
         }
         // `pendingBlanks` is NOT cleared. The loose-list test below reads it to
@@ -10544,6 +10571,13 @@ class ParseSession {
         // blank is both at once: the fence's content AND the separator that
         // loosens the list. Clearing it made `- a\n  %%% x\n b\n\n- c\n` tight.
       }
+
+      const restoredLines = [content, ...nested]
+      const sourceLines = [line, ...nestedSourceLines]
+      restoreVerbatimBlanks(restoredLines, sourceLines, bufferedBlanks, (index) =>
+        index === 0 ? contentCol : indentColumns(sourceLines[index] ?? ''),
+      )
+      for (let index = 0; index < nested.length; index++) nested[index] = restoredLines[index + 1]!
 
       // Blank line(s) before the next sibling marker make the list loose.
       // The next marker must be a real sibling of THIS list: same kind and
@@ -10740,7 +10774,7 @@ class ParseSession {
         let last = k
         for (let j = k + 1; j < nested.length; j++) {
           const next = nested[j]!
-          if (next === '') continue
+          if (isBlankLine(next)) continue
           // The same `FOOTNOTE_BODY_COLUMN` boundary the tracker uses, so the two
           // agree about where the definition's block ends.
           if (indentColumns(next, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
@@ -10772,7 +10806,7 @@ class ParseSession {
         if (inFence[k + 1]!) continue
         if (inFootnoteRun[k]!) continue
         if (authoredBlockBlanks.has(k)) continue
-        if (nested[k] !== '') continue
+        if (!isBlankLine(nested[k])) continue
         // A `+`-injected separator never loosens, even when the block it attaches
         // is a plain paragraph -- it keeps the item tight like a `+`-attached
         // quote/code/table (Bug B, corpus 83-list-continuation-marker family).
@@ -10785,7 +10819,7 @@ class ParseSession {
         // tight, which is the opposite error - the item does hold a second
         // paragraph, it just has a comment in front of it (carve#621).
         while (j < nested.length) {
-          if (nested[j] === '') {
+          if (isBlankLine(nested[j])) {
             j++
             continue
           }
