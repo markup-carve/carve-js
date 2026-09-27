@@ -10,6 +10,13 @@ import type { InlineNode } from './ast.js'
 export type LoneBrackets = WeakMap<object, Set<number>>
 
 /**
+ * A PAIRED `]` in bracketed content, keyed like `LoneBrackets`, to the `[` it
+ * pairs with. Escaping either one alone re-pairs the construct's own brackets,
+ * so the closer is written with the escape decision its opener took.
+ */
+export type PairedClosers = WeakMap<object, Map<number, Site>>
+
+/**
  * Text nodes of a run holding an empty code span. Neither §5 half selects a
  * bracket or `(` in them; the escape search decides them instead.
  */
@@ -19,7 +26,7 @@ const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 
 const TRANSPARENT = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
 
-interface Site {
+export interface Site {
   owner: object
   offset: number
   char: string
@@ -39,12 +46,19 @@ export function collectLoneBrackets(
   bracketed: boolean,
   into: LoneBrackets,
   leftToSearch: LeftToSearch,
+  pairs?: PairedClosers,
 ): void {
   const scopes: Scope[] = [{ content: nodes, bracketed }]
-  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into, leftToSearch)
+  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into, leftToSearch, pairs)
 }
 
-function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: LoneBrackets, leftToSearch: LeftToSearch): void {
+function collectScope(
+  { content, bracketed }: Scope,
+  scopes: Scope[],
+  into: LoneBrackets,
+  leftToSearch: LeftToSearch,
+  pairs: PairedClosers | undefined,
+): void {
   const sites: Site[] = []
   const owners: object[] = []
   // A run holding an empty code span is left to the escape search whole: the
@@ -125,6 +139,7 @@ function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: Lone
 
   for (const owner of owners) {
     into.delete(owner)
+    pairs?.delete(owner)
     if (hasEmptyCode) leftToSearch.add(owner)
     else leftToSearch.delete(owner)
   }
@@ -133,8 +148,19 @@ function collectScope({ content, bracketed }: Scope, scopes: Scope[], into: Lone
   const lone: Site[] = []
   const open: Site[] = []
   for (const site of sites) {
-    if (site.char === '[') open.push(site)
-    else if (open.pop() === undefined) lone.push(site)
+    if (site.char === '[') {
+      open.push(site)
+      continue
+    }
+    const opener = open.pop()
+    if (opener === undefined) {
+      lone.push(site)
+      continue
+    }
+    if (pairs === undefined) continue
+    let closers = pairs.get(site.owner)
+    if (closers === undefined) pairs.set(site.owner, (closers = new Map()))
+    closers.set(site.offset, opener)
   }
   for (const site of open) lone.push(site)
 
