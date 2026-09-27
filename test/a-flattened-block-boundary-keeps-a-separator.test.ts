@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { htmlToCarve, carveToHtml } from '../src/index.js'
+import { htmlToCarve, carveToHtml, carveToCarve } from '../src/index.js'
 
 /**
  * PART 11 §1b: where two former sibling blocks each contribute at least one
@@ -145,5 +145,18 @@ describe('a flattened block boundary keeps a separator', () => {
 
   it('adds nothing between two inline siblings', () => {
     expect(htmlToCarve(caption('<strong>a</strong><em>b</em>')).value).toBe('![x](/i)\n^ *a*/b/\n')
+  })
+})
+
+// The separator is ONE space: pretty-printed layout on either side merges
+// into it (botmonster page 03).
+describe('a flattened boundary beside layout', () => {
+  it.each([
+    ['a cell holding a pretty-printed list', '<table><tr><td>\n  In this order:\n  <ol>\n <li>an optional <a href="/c"><code>&lt;caption&gt;</code></a> element,</li>\n <li>\n either one of the following:\n <ul>\n <li>zero or more x</li></ul></li></ol></td></tr></table>', '| In this order: an optional [`<caption>`](/c) element, either one of the following: zero or more x |\n'],
+    ['a caption with layout around a paragraph', '<figure><img src="/i" alt="x"><figcaption>\n one\n <p> two </p>\n three </figcaption></figure>', '![x](/i)\n^ one two three\n'],
+  ])('%s', (_, html, carve) => {
+    const result = htmlToCarve(html)
+    expect(result.value).toBe(carve)
+    expect(carveToCarve(result.value)).toBe(result.value)
   })
 })

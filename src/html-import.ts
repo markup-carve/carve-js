@@ -4217,6 +4217,13 @@ class Importer {
       for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) out.push({ type: 'text', value: ' ' })
+      // The separator is ONE space, merging with layout already on both sides.
+      const first = produced[0]
+      if (atBoundary && first?.type === 'text' && textEdge(out.at(-1), 'end')) {
+        const value = first.value.replace(/^ +/, '')
+        if (value === '') produced.shift()
+        else first.value = value
+      }
       out.push(...produced)
       // A BLOCK THAT CONTRIBUTES NO TOKEN IS NOT A SIDE, so it neither takes a
       // separator of its own nor leaves one owing to the block after it:
