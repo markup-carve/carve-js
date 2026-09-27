@@ -22,13 +22,8 @@ import { carveToCarve, carveToHtml, parse, renderCarve } from '../src/index.js'
  * What came back was the value plus the TRAILING pad, so the space re-rendered
  * as content inside the code span.
  *
- * WIDENING THE FENCE IS NOT THE FIX, and measuring says so: an opener of any
- * length D sits against a content-final run of N and reads back as a single run
- * of N+D, which is never D, so a wider fence does not close at all. `safeFence`
- * was already picking the right width. The spelling that works is the parser's
- * own - "an opener with no equal-length closer is opaque to the end of the
- * string" - so the bare opener spells it, which is also how the source that
- * produces this tree was written in the first place.
+ * An unclosed span keeps the value without padding. A one- or two-backtick
+ * opener avoids becoming a block fence when its run is absent from the value.
  *
  * WHY NOTHING CAUGHT IT. `fmt(fmt(x)) == fmt(x)` holds, so the bad form is
  * stable; both renders are plausible HTML; and only a BYTE comparison of
@@ -48,9 +43,7 @@ describe('a verbatim span touching a fence run round-trips', () => {
   describe('a code fence whose payload holds a wider run', () => {
     it('round-trips with a three-backtick fence over a four-backtick run', () => {
       const out = invariant('```\n````\nx\n````\n```\n')
-      // The leftovers are written as the bare opener they were authored as,
-      // NOT as a same-width fence plus a separator space.
-      expect(out.endsWith('x\n````\n```\n')).toBe(true)
+      expect(out.endsWith('x\n`\n```\n')).toBe(true)
       expect(out).not.toContain('``` ````')
     })
 
@@ -106,16 +99,18 @@ describe('a verbatim span touching a fence run round-trips', () => {
     })
   })
 
-  describe('where the bare opener is NOT the spelling', () => {
+  describe('block boundaries and attributed spans', () => {
     /*
      * The form is offered only where it cannot mean something else. These pin
      * the guards, so a later widening has to move a test rather than a comment.
      */
-    it('refuses a span at the start of a block, where the open run is a fence', () => {
-      expect(() => renderCarve({
+    it('uses a short opener at the start of a block to avoid a block fence', () => {
+      const out = renderCarve({
         type: 'document',
         children: [{ type: 'paragraph', children: [{ type: 'code', value: '\n```' }] }],
-      })).toThrow(/cannot spell code/)
+      })
+      expect(out).toBe('`\n```\n')
+      expect(requireParagraph(parse(out).children[0]).children).toMatchObject([{ type: 'code', value: '\n```' }])
     })
 
     it('refuses a span whose attributes need a closing fence', () => {

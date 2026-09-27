@@ -1349,7 +1349,8 @@ export function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false)
       // (markup-carve/carve-js#1870). `RE_PREPASS_MARKER` beside it always
       // spelled the separator this way. The leading run keeps its tab: there a
       // tab is indentation, which is the one place PART 7 makes it syntax.
-      .replace(/^[ \t]*(?:[-*]|\d+[.)]) +(?:\[[ xX\-_>?]\] +)?/, '') // list/task (NBSP and U+FEFF are content)
+    const marker = prepassMarker(line, RE_PREPASS_MARKER_STRIP)
+    if (marker) line = line.slice(marker[0].length)
     if (afterTerm) line = line.replace(RE_DESCRIPTION_PREFIX, '')
   } while (line !== prev)
   return line
@@ -7204,6 +7205,7 @@ class ParseSession {
         // parser folds it into the item lazily, so popping the column there
         // rejected the definition below it as top-level indentation.
         isColonFenceOpener(rawTrimmed) ||
+        isBlockAttributeLine(rawTrimmed) ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
       if (marker && /\S/.test(raw.slice(marker[0].length))) {
         // Every marker on the line, not just the first: `- - see` opens TWO
