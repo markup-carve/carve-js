@@ -4197,14 +4197,7 @@ class Importer {
       // `<p>a</p><p></p><p>b</p>` is `a b`, never `a  b`.
       if (produced.length > 0) previousWasBlock = isFlattenedBlock(node)
     })
-    const merged: InlineNode[] = []
-    for (const node of hoistEdgeSpace(out)) {
-      const last = merged.at(-1)
-      if (node.type === 'text' && last?.type === 'text') last.value += node.value
-      else merged.push(node)
-    }
-
-    return dropSpaceAfterHardBreak(merged)
+    return dropSpaceAfterHardBreak(hoistEdgeSpace(out))
   }
 
   /**

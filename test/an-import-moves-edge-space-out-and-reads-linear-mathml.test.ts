@@ -24,10 +24,28 @@ describe('a link or span keeps its edge whitespace outside it', () => {
     ['code keeps its spaces', '<p>a<a href="/s"><code> x </code></a>b</p>', 'a[`  x  `](/s)b\n'],
     ['whitespace-only formatting', '<p>a<a href="/s">x<b> </b>y</a>b</p>', 'a[x{* *}y](/s)b\n'],
     ['a padded nested span', '<p>a<a href="/s"><span id="s"><b> x </b></span></a>b</p>', 'a [[*x*]{#s}](/s) b\n'],
+    ['an image inside formatting', '<p>a<a href="/s"><b> <img src="i.png" alt="i"> </b></a>b</p>', 'a [*![i](i.png)*](/s) b\n'],
+    ['a link inside standalone formatting', '<p>a<b><a href="/s"><i> x </i></a></b>b</p>', 'a{* [/x/](/s) *}b\n'],
   ])('moves it out at %s', (_, html, carve) => {
     const result = htmlToCarve(html)
     expect(result.value).toBe(carve)
     expect(result.report.diagnostics).toEqual([])
+  })
+
+  it('keeps math inside formatting and attributes its diagnostic to the authored node', () => {
+    const result = htmlToCarve('<p>a<a href="/s"><b> <math alttext="x"></math> </b></a>b</p>')
+    expect(result.value).toBe('a [*$`x`*](/s) b\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'encoding-assumed', path: '/p[1]/a[2]/b[1]/math[2]' }),
+    ])
+  })
+
+  it('attributes an unspellable nested insertion to its authored node', () => {
+    const result = htmlToCarve('<p>a<a href="/s"><ins><ins> x </ins></ins></a>b</p>')
+    expect(result.value).toBe('a [{+x+}](/s) b\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'structure-unspellable', path: '/p[1]/a[2]/ins[1]/ins[1]' }),
+    ])
   })
 
   it.each([
