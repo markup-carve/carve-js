@@ -1028,7 +1028,9 @@ An extension can add new syntax with a `matchInline` or `matchBlock` matcher
 constructs are dispatched first at each position; a matcher is offered only
 where core declined, so extensions add syntax and never hijack core. The `ctx`
 exposes recursive `parseInlines` / `parseBlocks` plus the link/abbr definition
-tables.
+tables. Its optional `inLinkLabel` flag is true while parsing an authored link
+label, including nested markup. Matchers that generate links can decline there;
+the autolink extension uses this flag to keep formatting idempotent.
 
 ```ts
 import { carveToHtml, type CarveExtension } from '@markup-carve/carve'
