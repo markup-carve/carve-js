@@ -5392,6 +5392,7 @@ function rebaseOverindentedBlocks(
   // authored column - see the flatten note at the dedent below. Every other
   // host still rebases an over-indented note so it registers (corpus 447).
   hostIsFootnoteBody = false,
+  onCodeBodyLine?: (index: number) => void,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   // One index for the whole pass; a dedent only moves leading whitespace.
@@ -5549,6 +5550,7 @@ function rebaseOverindentedBlocks(
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         end = j
+        onCodeBodyLine?.(j)
         if (isBlankLine(candidate)) continue
         const column = indentColumns(candidate, base)
         if (column < base) {
@@ -10091,15 +10093,7 @@ class ParseSession {
       // but that must never be mistaken for #1705 over-indentation.
       const authoredBaseEligible = new Set<number>()
       let hasOverindentedBlockCandidate = false
-      // Index in `nested` where an indented ORDERED sub-list begins. Ordered
-      // markers do not interrupt a paragraph (§10), so if the sub-list is joined
-      // with the lead text it folds into the lead paragraph instead of nesting
-      // (`1. a` / `   1. b` -> `<li>a\n1. b</li>`). Splitting it into its own block
-      // stream lets it nest. Unordered/task sub-lists interrupt and already nest
-      // via the join, and lazy continuation / block-attribute lines must stay on
-      // the join, so only an indented ordered marker triggers the split.
-      let firstBlockIdx = -1
-      // Every `nested` index whose line opens a sub-list item, not only the first.
+      // Candidate sublist markers, resolved after authored fence bases are applied.
       const subListMarkers = new Set<number>()
       let bodyHasContentColumnLine = false
       let bodyHasBelowColumnLine = false
@@ -10331,9 +10325,6 @@ class ParseSession {
               // interrupt), so the sub-list nesting path must recognize it
               // directly to keep nesting.
               extractItemAttr(l) !== null)
-          if (firstBlockIdx === -1 && isMarker) {
-            firstBlockIdx = nested.length
-          }
           if (isMarker) subListMarkers.add(nested.length)
           // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
           // CONTENT COLUMN (markup-carve/carve-js#1645). It carries no `>`, so its
@@ -10536,11 +10527,17 @@ class ParseSession {
           rebaseLines,
           rebaseEligible,
           leadIsMarker ? markerContentColumn(content) : -1,
+          false,
+          false,
+          (index) => subListMarkers.delete(leadIsTerm ? index - 1 : index),
         )
         : new Set<number>()
       if (leadIsTerm) {
         for (let index = 0; index < nested.length; index++) nested[index] = rebaseLines[index + 1]!
       }
+      // Rebasing can reveal a fence opened past the item's content column.
+      // Its payload markers must not split the collected stream (#2212).
+      const firstBlockIdx = subListMarkers.values().next().value ?? -1
       const authoredBlockBlanks = leadIsTerm
         ? new Set(Array.from(rebasedBlanks, (index) => index - 1))
         : rebasedBlanks
