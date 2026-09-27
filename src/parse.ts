@@ -7661,6 +7661,9 @@ class ParseSession {
       const rawIndent = leadingWhitespace(unquoted)
       if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
       else if (isBlankLine(raw)) plusColumn = null
+      // Container ownership below matters only for a definition candidate.
+      const matched = matchLinkDef(line)
+      if (matched === null) continue
       // Inside a footnote body the minimum is column two. After carve#1729 a
       // recognized opener at or past it establishes an authored local base, so
       // an over-indented link definition registers just like the exact-column
@@ -7722,7 +7725,6 @@ class ParseSession {
       // `composed.column` is where the definition really sits, and on a marker
       // line that is the column the marker just handed out.
       const notAtContentColumn = !atAnOpenContentColumn
-      const matched = matchLinkDef(line)
       // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0). Once the block parser would
       // fold this marker into the paragraph above, its definition-shaped content
       // is visible text and cannot also define a reference.
@@ -7737,10 +7739,10 @@ class ParseSession {
       // reaches its own reading and, where that one says "definition", removes
       // the line on the strength of a collection that never happened. Recording
       // the decline is what lets the strip ask instead of assume.
-      if (declines && matched !== null) {
+      if (declines) {
         lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
       }
-      if (!declines && matched !== null) {
+      if (!declines) {
         const def: LinkDef = { href: matched.href }
         if (matched.title !== undefined) def.title = unescapeAttrValue(matched.title)
         if (matched.attrText !== null) def.attrs = parseAttrs(matched.attrText)
