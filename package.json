@@ -66,14 +66,17 @@
     "test:watch": "vitest",
     "test:includes": "vitest run test/include-conformance.test.ts",
     "ledger:render": "UPDATE_RENDER_LEDGER=1 vitest run test/corpus-render-ledger.test.ts",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.boundaries.json",
+    "lint": "eslint src/html-import-dom.ts src/own-property.ts src/source-positions.ts --max-warnings=0 && node scripts/check-lint.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.boundaries.json && npm run lint",
     "test:package": "node scripts/check-package.mjs"
   },
   "devDependencies": {
     "@djot/djot": "^0.3.2",
     "@types/node": "^22.19.20",
+    "eslint": "^9.39.5",
     "prettier": "^3.9.6",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^2.1.8",
     "yaml": "^2.9.0"
   },

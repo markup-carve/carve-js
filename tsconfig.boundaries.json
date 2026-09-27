@@ -4,5 +4,5 @@
     "noEmit": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src/source-positions.ts", "src/own-property.ts"]
+  "include": ["src/source-positions.ts", "src/own-property.ts", "src/html-import-dom.ts"]
 }
