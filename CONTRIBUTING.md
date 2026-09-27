@@ -15,21 +15,30 @@ If you cloned without `--recurse-submodules`, run `git submodule update --init`.
 The spec corpus lives in `spec/` as a submodule, and the conformance tests read
 it from there.
 
-Node 20 or newer. `engines.node` in `package.json` says `>=20`, and CI runs the
-test matrix on 20 and 22, so 20 is a floor the project actually exercises rather
-than an aspiration. The other CI jobs pin 22.
+The runtime requires Node 20 or newer. For development, use Node
+`^20.19.0 || ^22.13.0 || >=24`, as required by the lint toolchain. CI runs the
+current Node 20 and 22 releases; the browser jobs use Node 22.
 
 ## Running the tests
 
 ```bash
 npm test               # vitest over test/**/*.test.ts
-npm run typecheck      # tsc --noEmit
+npm run typecheck      # source, test and boundary types, then typed lint
+npm run lint           # type-aware rules on boundary modules
 npm run build          # tsc, into dist/
 ```
 
 Typechecking is a gate, not a convenience: CI runs `npm run typecheck` before the
 suite on both Node versions, and `npm run build` after it, so a type error fails
 the run even when every test passes.
+
+Typed linting starts with the DOM adapter, source-position conversion and own-
+property helper. It checks unsafe values, promise handling and exhaustive
+switches. The standard typecheck command includes this pass, so CI uses the same
+command as local development. The lint pass uses `tsconfig.boundaries.json`.
+Expand that config, `eslint.config.mjs` and `scripts.lint` together as
+boundaries become ready. A negative probe verifies that all eight rules reject
+deliberately invalid input.
 
 To narrow a run, name the file or the test:
 
