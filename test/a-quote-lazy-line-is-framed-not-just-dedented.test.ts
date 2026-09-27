@@ -200,23 +200,17 @@ describe('the frame never leaks into rendered text', () => {
   })
 })
 
-describe('lines the quote did not fold in do not move', () => {
-  it('carries its own marker, so the item reads it by column', () => {
-    // PRE-EXISTING divergence from the oracle, unchanged by this commit: the
-    // oracle puts `tail` outside the item. Pinned as carve-js reads it today so
-    // that a fix which reaches past the quote's lazy lines is visible here.
+describe('marked and unquoted term continuations follow their column', () => {
+  it('folds a marked heading past the term column', () => {
     expect(carveToHtml('> - :: t\n>     # h\ntail\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n' +
-        '      </dl>\n      <h1 id="h">h</h1>\n      tail\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n  # h\ntail</dt>\n' +
+        '      </dl>\n    </li>\n  </ul>\n</blockquote>',
     )
   })
 
-  it('an unquoted item is untouched', () => {
-    // Also a pre-existing divergence on `tail`, and the control that localizes
-    // everything above to the QUOTE prefix.
+  it('folds the same heading in an unquoted item', () => {
     expect(carveToHtml('- :: t\n    # h\ntail\n')).toBe(
-      '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n    </dl>\n' +
-        '    <h1 id="h">h</h1>\n    tail\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <dl>\n      <dt>t\n  # h\ntail</dt>\n    </dl>\n  </li>\n</ul>',
     )
   })
 

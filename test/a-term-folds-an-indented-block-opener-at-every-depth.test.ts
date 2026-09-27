@@ -39,6 +39,12 @@ describe('a term folds an indented block opener at every depth', () => {
     expect(flat(source)).toBe(html.replace(/\n\s*/g, ''))
   })
 
+  it('keeps the heading inside a marker-line term description', () => {
+    expect(flat('* :: c\n  : d\n    # H\n')).toBe(
+      '<ul><li><dl><dt>c</dt><dd><p>d</p><h1 id="H">H</h1></dd></dl></li></ul>',
+    )
+  })
+
   it('opens the block at the container content column', () => {
     expect(flat(':: a\n: b\n  :: c\n  # H\n')).toBe(
       '<dl><dt>a</dt><dd><p>b</p><dl><dt>c</dt></dl><h1 id="H">H</h1></dd></dl>',
@@ -74,6 +80,12 @@ describe('lintCarve - definition-term-block-folded', () => {
   it('reports at top level and inside a quote', () => {
     expect(reports(':: c\n  # H\n')).toMatchObject([{ line: 2, column: 3 }])
     expect(reports('> :: c\n>   # H\n')).toMatchObject([{ line: 2, column: 5 }])
+  })
+
+  it.each(['# H', '```\n   body\n   ```'])('reports folded task-term blocks: %s', (opener) => {
+    expect(reports(`- [x] :: c\n   ${opener}\n`)).toMatchObject([{ line: 2, column: 4 }])
+    expect(reports(`> - [ ] :: c\n>    ${opener.replaceAll('\n', '\n> ')}\n`)).toMatchObject([{ line: 2, column: 6 }])
+    expect(reports('- [x] :: c\n  # H\n')).toEqual([])
   })
 
   it('reports through a carriage return or a byte order mark', () => {
