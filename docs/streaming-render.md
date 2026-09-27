@@ -17,5 +17,12 @@ On `needs-ast`, the sink has not been called, so fallback cannot duplicate or
 leak partial output. That makes the fast-path hit rate measurable and gives
 servers a safe integration point.
 
-The draft currently emits one complete chunk after acceptance. Borrowed events,
-multi-chunk delivery, Web Streams, and WASM adapters remain follow-up work.
+Accepted HTML is delivered in newline-terminated chunks, with any final
+unterminated line delivered last. Concatenating the chunks reproduces the
+renderer output exactly. Empty accepted output calls the sink once with an
+empty string. Sink failures propagate to the caller.
+
+The complete HTML string is buffered before the first callback. This API
+measures acceptance and controls delivery; parsing and rendering still finish
+before delivery starts. Borrowed events and unbuffered rendering remain future
+work.
