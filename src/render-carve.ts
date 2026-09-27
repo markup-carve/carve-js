@@ -4545,6 +4545,25 @@ export function flattenHardBreaks(children: InlineNode[], onBreak: (hardBreak: I
     }
     list.splice(0, list.length, ...merged)
   }
+  if (edited.size > 0) trimTrailingLayout(children)
+}
+
+// A break at the cell's end is written as nothing, so layout before it would
+// be the cell's own trailing space (PART 11 §1b). A construct's closer stands
+// between its own space and the cell edge, so only direct text is trimmed
+// (markup-carve/carve#2067).
+function trimTrailingLayout(list: InlineNode[]): void {
+  const last = list.at(-1)
+  if (last === undefined || last === null || typeof last !== 'object') return
+  if (last.type === 'text') {
+    const trimmed = last.value.replace(/[ \t]+$/, '')
+    if (trimmed !== '') last.value = trimmed
+    else if (list.length > 1) {
+      list.pop()
+      trimTrailingLayout(list)
+    }
+    return
+  }
 }
 
 /**
