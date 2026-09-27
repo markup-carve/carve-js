@@ -9363,9 +9363,13 @@ class ParseSession {
           }
         }
         const termInlines: InlineNode[] = []
+        const partBoundaryBreaks: number[] = []
         parts.forEach((part, index) => {
           // Preserve each source line boundary, including either side of a comment.
-          if (index > 0) termInlines.push({ type: 'soft_break' })
+          if (index > 0) {
+            partBoundaryBreaks.push(termInlines.length)
+            termInlines.push({ type: 'soft_break' })
+          }
           if (!('lines' in part)) {
             termInlines.push(part)
             return
@@ -9381,6 +9385,23 @@ class ParseSession {
             }),
           )
         })
+        // A part-boundary break is placed once both its neighbours exist: from the
+        // preceding sibling's end to the following sibling's start, the span the
+        // fold's own in-part breaks already publish (carve#2469).
+        for (const i of partBoundaryBreaks) {
+          const prev = termInlines[i - 1]?.pos
+          const next = termInlines[i + 1]?.pos
+          if (prev && next) {
+            termInlines[i]!.pos = {
+              startLine: prev.endLine,
+              endLine: next.startLine,
+              ...(prev.endOffset !== undefined ? { startOffset: prev.endOffset } : {}),
+              ...(next.startOffset !== undefined ? { endOffset: next.startOffset } : {}),
+              ...(prev.endColumn !== undefined ? { startColumn: prev.endColumn } : {}),
+              ...(next.startColumn !== undefined ? { endColumn: next.startColumn } : {}),
+            }
+          }
+        }
         terms.push(termInlines)
         termSpans.push(
           lexer.hasDocumentOffsets
