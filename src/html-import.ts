@@ -1,4 +1,5 @@
-import { parseFragment, serializeOuter } from 'parse5'
+import { parseFragment, serializeOuter, defaultTreeAdapter, html as p5html } from 'parse5'
+import { domAttrs, domContainer, domChild, domChildren, domData, domParent, domTag, domValue, type P5Node } from './html-import-dom.js'
 import type {
   Admonition,
   Attrs,
@@ -222,21 +223,10 @@ export class HtmlImportLimitError extends Error {
   }
 }
 
-interface P5Node {
-  nodeName: string
-  tagName?: string
-  value?: string
-  /** A comment node's text. parse5 spells a comment's payload `data`, not `value`. */
-  data?: string
-  attrs?: Array<{ name: string; value: string }>
-  childNodes?: P5Node[]
-  parentNode?: P5Node
-}
-
 const HTML_SPACE = /[\t\n\f\r ]+/
 
 function codeLanguage(pre: P5Node, code: P5Node | undefined, wrappers: WeakMap<P5Node, P5Node | null>): string | undefined {
-  const attr = (node: P5Node, name: string): string => node.attrs?.find((a) => a.name === name)?.value ?? ''
+  const attr = (node: P5Node, name: string): string => domAttrs(node)?.find((a) => a.name === name)?.value ?? ''
   const classes = (node: P5Node): string[] => attr(node, 'class').split(HTML_SPACE)
   const valid = (value: string): boolean => value.length > 0 && !/[^a-zA-Z0-9_+#./-]/.test(value)
   const prefixed = (tokens: string[], prefix: string): string | undefined =>
@@ -259,35 +249,35 @@ function codeLanguage(pre: P5Node, code: P5Node | undefined, wrappers: WeakMap<P
   }
   // Lookup does not consume wrapper attributes or change their import policy.
   const wraps = (parent: P5Node | undefined, child: P5Node): parent is P5Node => {
-    if (parent?.tagName !== 'div') return false
+    if (!parent || domTag(parent) !== 'div') return false
     if (!wrappers.has(parent)) {
       let element: P5Node | null = null
-      const eligible = (parent.childNodes ?? []).every((node) => {
-        if (node.tagName !== undefined) {
+      const eligible = (domChildren(parent) ?? []).every((node) => {
+        if (domTag(node) !== undefined) {
           if (element !== null) return false
           element = node
           return true
         }
         return node.nodeName === '#comment'
-          || (node.nodeName === '#text' && !/[^\t\n\f\r ]/.test(node.value ?? ''))
+          || (node.nodeName === '#text' && !/[^\t\n\f\r ]/.test(domValue(node) ?? ''))
       })
       wrappers.set(parent, eligible ? element : null)
     }
     return wrappers.get(parent) === child
   }
-  const parent = pre.parentNode
+  const parent = domParent(pre)
   if (!wraps(parent, pre)) return undefined
   const tokens = classes(parent)
   const direct = (tokens.includes('highlight') ? prefixed(tokens, 'highlight-source-') : undefined)
     ?? (tokens.includes('mw-highlight') ? prefixed(tokens, 'mw-highlight-lang-') : undefined)
   if (direct !== undefined) return direct
-  const outer = parent.parentNode
+  const outer = domParent(parent)
   return tokens.includes('highlight') && wraps(outer, parent) ? prefixed(classes(outer), 'highlight-') : undefined
 }
 
 /** A `<template>` holds its children in `content`, and they serialize too. */
 function serializedChildren(node: P5Node): P5Node[] {
-  return (node as { content?: P5Node }).content?.childNodes ?? node.childNodes ?? []
+  return 'content' in node ? node.content.childNodes : domChildren(node) ?? []
 }
 
 const EMPTY_DROPPED_MARKS = new Set(['del', 'ins', 'em', 'i', 'strong', 'b', 's', 'strike', 'u', 'mark', 'sub', 'sup'])
@@ -340,7 +330,7 @@ function isReadableTaskState(value: string | undefined): value is NonNullable<Li
  * an importer can reach, not over the caption it was first measured in.
  */
 function isFlattenedBlock(node: P5Node): boolean {
-  const tag = node.tagName
+  const tag = domTag(node)
   if (!tag) return false
 
   return BLOCK.has(tag) || FLATTENED_BLOCK_EXTRA.has(tag)
@@ -534,7 +524,7 @@ function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
  * two answers, in one file.
  */
 function isLayoutOnlyText(node: P5Node): boolean {
-  return node.nodeName === '#text' && trimNonNbsp(node.value ?? '') === ''
+  return node.nodeName === '#text' && trimNonNbsp(domValue(node) ?? '') === ''
 }
 
 /** Trim block-edge padding and redundant padding inside formatting. */
@@ -686,15 +676,15 @@ const LINEAR_MATH_CONTAINERS = new Set(['mrow', 'mstyle', 'mpadded'])
 const LINEAR_MATH_TOKENS = new Set(['mi', 'mn', 'mo', 'mtext'])
 
 const isBlankOrComment = (node: P5Node): boolean =>
-  node.nodeName === '#comment' || (node.nodeName === '#text' && /^[ \t\n\r\f]*$/.test(node.value ?? ''))
+  node.nodeName === '#comment' || (node.nodeName === '#text' && /^[ \t\n\r\f]*$/.test(domValue(node) ?? ''))
 
 /** No text an author wrote, anywhere below `root`. */
 function holdsNoText(root: P5Node): boolean {
   const stack: P5Node[] = [root]
   while (stack.length) {
     const node = stack.pop()!
-    if (node.nodeName === '#text' && !/^[ \t\n\r\f]*$/.test(node.value ?? '')) return false
-    for (const child of node.childNodes ?? []) stack.push(child)
+    if (node.nodeName === '#text' && !/^[ \t\n\r\f]*$/.test(domValue(node) ?? '')) return false
+    for (const child of domChildren(node) ?? []) stack.push(child)
   }
   return true
 }
@@ -710,16 +700,16 @@ function linearMathText(math: P5Node): string | undefined {
   const read = (nodes: P5Node[]): boolean => {
     for (const node of nodes) {
       if (isBlankOrComment(node)) continue
-      const tag = node.tagName
+      const tag = domTag(node)
       if (tag === 'semantics') {
-        const first = (node.childNodes ?? []).find((child) => !isBlankOrComment(child))
+        const first = (domChildren(node) ?? []).find((child) => !isBlankOrComment(child))
         if (!first || !read([first])) return false
       } else if (tag !== undefined && LINEAR_MATH_CONTAINERS.has(tag)) {
-        if (!read(node.childNodes ?? [])) return false
+        if (!read(domChildren(node) ?? [])) return false
       } else if (tag !== undefined && LINEAR_MATH_TOKENS.has(tag)) {
-        const children = node.childNodes ?? []
+        const children = domChildren(node) ?? []
         if (children.some((child) => child.nodeName !== '#text')) return false
-        const token = children.map((child) => child.value ?? '').join('').replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
+        const token = children.map((child) => domValue(child) ?? '').join('').replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
         // A space keeps two words or numbers apart, so 1, space, 2 is not 12.
         if (spaced && /[\p{L}\p{N}]$/u.test(text) && /^[\p{L}\p{N}]/u.test(token)) text += ' '
         text += token
@@ -732,14 +722,14 @@ function linearMathText(math: P5Node): string | undefined {
     }
     return true
   }
-  return read(math.childNodes ?? []) && text !== '' ? text : undefined
+  return read(domChildren(math) ?? []) && text !== '' ? text : undefined
 }
 
 /** The effective inline `display` is `none`: the last declaration wins, an `!important` one first. */
 const hidden = (node: P5Node | undefined): boolean => {
   let display: string | undefined
   let important = false
-  for (const declaration of (node?.attrs?.find((a) => a.name.toLowerCase() === 'style')?.value ?? '').split(';')) {
+  for (const declaration of (domAttrs(node)?.find((a) => a.name.toLowerCase() === 'style')?.value ?? '').split(';')) {
     const colon = declaration.indexOf(':')
     if (colon < 0 || declaration.slice(0, colon).trim().toLowerCase() !== 'display') continue
     const value = declaration.slice(colon + 1).toLowerCase()
@@ -754,10 +744,10 @@ const hidden = (node: P5Node | undefined): boolean => {
 /** Sibling positions, built once per parent so a run of formulas stays linear. */
 const siblingIndex = new WeakMap<P5Node, Map<P5Node, number>>()
 const indexIn = (parent: P5Node, node: P5Node): number => {
-  const children = parent.childNodes ?? []
+  const children = domChildren(parent) ?? []
   let index = siblingIndex.get(parent)?.get(node)
   if (index === undefined || children[index] !== node) {
-    const positions = new Map(children.map((child, at) => [child, at]))
+    const positions = new Map<P5Node, number>(children.map((child, at) => [child, at]))
     siblingIndex.set(parent, positions)
     index = positions.get(node)
   }
@@ -766,8 +756,8 @@ const indexIn = (parent: P5Node, node: P5Node): number => {
 
 /** A `<math>` hidden by `display: none`, on itself or on the `<span>` holding only it. */
 function mathIsHidden(math: P5Node): boolean {
-  const wrapper = math.parentNode
-  return hidden(math) || (wrapper?.tagName === 'span' && hidden(wrapper) && (wrapper.childNodes ?? []).every((child) => child === math || isBlankOrComment(child)))
+  const wrapper = domParent(math)
+  return hidden(math) || (domTag(wrapper) === 'span' && hidden(wrapper) && (domChildren(wrapper) ?? []).every((child) => child === math || isBlankOrComment(child)))
 }
 
 /**
@@ -776,18 +766,18 @@ function mathIsHidden(math: P5Node): boolean {
  */
 function fallbackImage(math: P5Node): P5Node | undefined {
   const next = (node: P5Node): P5Node | undefined => {
-    const parent = node.parentNode
+    const parent = domParent(node)
     if (!parent) return undefined
-    const siblings = parent.childNodes ?? []
+    const siblings = domChildren(parent) ?? []
     for (let index = indexIn(parent, node) + 1; index < siblings.length; index += 1) {
       if (!isBlankOrComment(siblings[index]!)) return siblings[index]
     }
     return undefined
   }
   let found = next(math)
-  const wrapper = math.parentNode
-  if (found === undefined && wrapper?.tagName === 'span' && wrapper.childNodes?.every((child) => child === math || isBlankOrComment(child))) found = next(wrapper)
-  return found?.tagName === 'img' ? found : undefined
+  const wrapper = domParent(math)
+  if (found === undefined && wrapper !== undefined && domTag(wrapper) === 'span' && domChildren(wrapper)?.every((child) => child === math || isBlankOrComment(child))) found = next(wrapper)
+  return domTag(found) === 'img' ? found : undefined
 }
 
 /**
@@ -917,7 +907,7 @@ function slotOrderFromElement(node: P5Node, held: Attrs): string[] {
     if (!order.includes(slot)) order.push(slot)
   }
   const keyValues = held.keyValues ?? {}
-  for (const attr of node.attrs ?? []) {
+  for (const attr of domAttrs(node) ?? []) {
     const name = attr.name.toLowerCase()
     if (name === 'id') {
       if (held.id !== undefined) push('#id')
@@ -942,7 +932,7 @@ function slotOrderFromElement(node: P5Node, held: Attrs): string[] {
  * it last on purpose (`injectSourceLine`).
  */
 function idInGeneratedPosition(node: P5Node): boolean {
-  const names = (node.attrs ?? []).map((attr) => attr.name.toLowerCase())
+  const names = (domAttrs(node) ?? []).map((attr) => attr.name.toLowerCase())
   while (names[names.length - 1] === 'data-source-line') names.pop()
   return names[names.length - 1] === 'id'
 }
@@ -1171,7 +1161,7 @@ class Importer {
   }
 
   import(html: string): Document {
-    const fragment = parseFragment(html, { sourceCodeLocationInfo: true }) as unknown as P5Node
+    const fragment = parseFragment(html, { sourceCodeLocationInfo: true })
     this.root = fragment
     // BEFORE the adapter pass, which rewrites footnote-shaped HTML and imports
     // the definitions it finds: the numbers have to be on the tree as the
@@ -1192,7 +1182,7 @@ class Importer {
       fragment,
       FOOTNOTE_SHAPED_ADAPTERS.has(this.adapter),
     )
-    const children = this.blocks(fragment.childNodes ?? [], '', 0)
+    const children = this.blocks(domChildren(fragment) ?? [], '', 0)
     const doc: Document = { type: 'document', children }
     if (footnoteDefs && Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
     return doc
@@ -1256,7 +1246,7 @@ class Importer {
   ): void {
     // No row means the cap turned this one away, and there is nothing to record
     // the preserve reading on.
-    if (!this.add('attribute-dropped', `Dropped ${subject} on <${node.tagName}>${reason}`, severity, path, node)) return
+    if (!this.add('attribute-dropped', `Dropped ${subject} on <${domTag(node)}>${reason}`, severity, path, node)) return
     const entry = this.entries[this.entries.length - 1]!
     entry.owner = node
     entry.refusal = { subject, reason, live }
@@ -1321,7 +1311,7 @@ class Importer {
   /** Restate a refusal row as what the kept bytes make it (markup-carve/carve-js#1468). */
   private preserveRow(entry: (typeof this.entries)[number], kept: P5Node | undefined): void {
     const { subject, reason, live } = entry.refusal!
-    const where = kept ? `inside the raw HTML <${kept.tagName}> is kept as` : 'in the raw HTML this element is kept as'
+    const where = kept ? `inside the raw HTML <${domTag(kept)}> is kept as` : 'in the raw HTML this element is kept as'
     // A latent row promoted past the cap stays latent, so it stays out of the
     // report and the marker below says a row was turned away.
     if (entry.latent) {
@@ -1334,7 +1324,7 @@ class Importer {
       code: 'attribute-preserved',
       fidelity: diagnosticFidelity('attribute-preserved'),
       confidence: diagnosticConfidence('attribute-preserved'),
-      message: `Preserved ${subject} on <${entry.owner!.tagName}> ${where}${reason}`,
+      message: `Preserved ${subject} on <${domTag(entry.owner!)}> ${where}${reason}`,
       severity: live ? 'error' : 'info',
     }
   }
@@ -1367,7 +1357,7 @@ class Importer {
     queueChildren(node, path)
     while (pending.length > 0) {
       const [child, childPath] = pending.pop()!
-      if (child.tagName === undefined) continue
+      if (domTag(child) === undefined) continue
       // `attrs()` is the own-attribute policy; only its refusal rows are kept,
       // so the rows it discards are not charged against the cap.
       const start = this.entries.length
@@ -1446,7 +1436,7 @@ class Importer {
    * content begins.
    */
   private positionOf(node: P5Node | undefined): number {
-    for (let current = node; current !== undefined; current = current.parentNode) {
+    for (let current = node; current !== undefined; current = domParent(current)) {
       const at = this.documentOrder.get(current)
       if (at !== undefined) return at
     }
@@ -1494,7 +1484,7 @@ class Importer {
     const attrs: Attrs = {}
     const classes: string[] = []
     const keyValues: Record<string, string> = {}
-    for (const attr of node.attrs ?? []) {
+    for (const attr of domAttrs(node) ?? []) {
       const name = attr.name.toLowerCase()
       if (isDangerousAttrName(name)) {
         // `srcdoc` and `formaction` are not event handlers, so they get their
@@ -1515,7 +1505,7 @@ class Importer {
         // A serializer's own marker rather than the author's content, so it is
         // not re-emitted as an attribute of the imported document.
         this.refuseAttribute(node, path, `round-trip marker ${name}`, '', 'info', false)
-      } else if (this.isConsumedHtmlAttribute(node, node.tagName ?? '', name)) {
+      } else if (this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name)) {
         // Read as content or as an instruction somewhere else in this importer,
         // so keeping it here as well would give the same source two spellings.
       } else if (!isAttrIdentifier(name)) {
@@ -1608,7 +1598,7 @@ class Importer {
    * spot the default-only label match already accepts.
    */
   private derivedAttributes(node: P5Node, classes: string[]): Record<string, string[]> | undefined {
-    const tag = node.tagName ?? ''
+    const tag = domTag(node) ?? ''
     const has = (name: string): boolean => classes.includes(name)
 
     // A DIAGRAM FENCE names itself after its own class word, which is why
@@ -1684,7 +1674,7 @@ class Importer {
       }
       // A TITLED one points at its title paragraph instead, and the renderer
       // writes one form or the other rather than both.
-      const title = (node.childNodes ?? []).find((child) => this.isCountedAdmonitionTitle(child))
+      const title = (domChildren(node) ?? []).find((child) => this.isCountedAdmonitionTitle(child))
       const titleId = title === undefined ? undefined : this.attr(title, 'id')
       if (titleId !== undefined) derived['aria-labelledby'] = [titleId]
       if (Object.keys(derived).length > 0) return derived
@@ -1710,12 +1700,12 @@ class Importer {
    * nothing writes back.
    */
   private precedingLabelText(node: P5Node, labelClass: string): string | undefined {
-    const siblings = node.parentNode?.childNodes ?? []
-    const at = siblings.indexOf(node)
+    const siblings = domChildren(domParent(node)) ?? []
+    const at = siblings.findIndex(child => child === node)
     for (let i = at - 1; i >= 0; i--) {
       const previous = siblings[i]!
-      if (previous.nodeName === '#text' && (previous.value ?? '').trim() === '') continue
-      if (previous.tagName === undefined) continue
+      if (previous.nodeName === '#text' && (domValue(previous) ?? '').trim() === '') continue
+      if (domTag(previous) === undefined) continue
       const classes = (this.attr(previous, 'class') ?? '').split(/\s+/)
       return classes.includes(labelClass) ? this.text(previous) : undefined
     }
@@ -1729,14 +1719,14 @@ class Importer {
    * can truncate a numbered run down to one, leaving `… 1` on the survivor.
    */
   private indexBackrefNames(node: P5Node): string[] | undefined {
-    const parent = node.parentNode
+    const parent = domParent(node)
     if (!parent) return undefined
     const isBackref = (child: P5Node): boolean =>
-      child.tagName === 'a' && (this.attr(child, 'class') ?? '').split(/\s+/).includes('index-backref')
-    const backrefs = (parent.childNodes ?? []).filter(isBackref)
-    const ordinal = backrefs.indexOf(node) + 1
+      domTag(child) === 'a' && (this.attr(child, 'class') ?? '').split(/\s+/).includes('index-backref')
+    const backrefs = (domChildren(parent) ?? []).filter(isBackref)
+    const ordinal = backrefs.findIndex(child => child === node) + 1
     if (ordinal === 0) return undefined
-    const term = (parent.childNodes ?? [])
+    const term = (domChildren(parent) ?? [])
       .filter((child) => !isBackref(child))
       .map((child) => this.text(child))
       .join('')
@@ -1791,7 +1781,7 @@ class Importer {
           const id = this.attr(current, 'id')
           if (id !== undefined) reserved.push(id)
         }
-        const children = current.childNodes ?? []
+        const children = domChildren(current) ?? []
         for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!)
       }
       // THE PREDICTION IS THE RENDERER'S ALLOCATION, NOT ITS COUNTER. The
@@ -1839,14 +1829,14 @@ class Importer {
    */
   private isAdmonitionTitle(node: P5Node): boolean {
     return (
-      node.tagName === 'p' &&
+      domTag(node) === 'p' &&
       (this.attr(node, 'class') ?? '').split(/\s+/).includes('admonition-title')
     )
   }
 
   private isDivLabel(node: P5Node): boolean {
     return (
-      node.tagName === 'p' && (this.attr(node, 'class') ?? '').split(/\s+/).includes('div-label')
+      domTag(node) === 'p' && (this.attr(node, 'class') ?? '').split(/\s+/).includes('div-label')
     )
   }
 
@@ -1860,7 +1850,7 @@ class Importer {
    * ADDING markup rather than removing it.
    */
   private chargeSubtree(node: P5Node, depth: number): void {
-    for (const child of node.childNodes ?? []) {
+    for (const child of domChildren(node) ?? []) {
       this.enter(depth + 1)
       this.chargeSubtree(child, depth + 1)
     }
@@ -1888,7 +1878,7 @@ class Importer {
     bodyPaths: string[],
     depth: number,
   ): { label: string; body: P5Node[]; bodyPaths: string[] } | undefined {
-    const at = body.findIndex((child) => child.tagName !== undefined)
+    const at = body.findIndex((child) => domTag(child) !== undefined)
     if (at < 0 || !this.isDivLabel(body[at]!)) return undefined
     /*
      * TEXT BEFORE IT IS ALSO "FURTHER DOWN". The search finds the first ELEMENT,
@@ -1902,16 +1892,16 @@ class Importer {
      * not text an author wrote, so a pretty-printed container still lifts.
      */
     for (const before of body.slice(0, at)) {
-      if (before.nodeName === '#text' && (before.value ?? '').trim() !== '') return undefined
+      if (before.nodeName === '#text' && (domValue(before) ?? '').trim() !== '') return undefined
     }
     /*
      * TEXT ONLY. `Div.label` is a raw string and the writer emits it raw, so
      * lifting a paragraph holding markup would flatten the markup and lose it
      * without a word.
      */
-    const kids = body[at]!.childNodes ?? []
+    const kids = domChildren(body[at]!) ?? []
     if (kids.some((kid) => kid.nodeName !== '#text')) return undefined
-    const label = kids.map((kid) => kid.value ?? '').join('')
+    const label = kids.map((kid) => domValue(kid) ?? '').join('')
     /*
      * AND NOTHING THE OPENER CANNOT SPELL. `]` closes the label and a newline
      * ends the opener line, so neither can ride back out - a label carrying one
@@ -1965,8 +1955,8 @@ class Importer {
     if (!this.isAdmonitionTitle(node)) return false
     const id = this.attr(node, 'id')
     if (id === undefined) return false
-    const parent = node.parentNode
-    if (!parent || parent.tagName !== 'aside') return false
+    const parent = domParent(node)
+    if (!parent || domTag(parent) !== 'aside') return false
     if (!(this.attr(parent, 'class') ?? '').split(/\s+/).includes('admonition')) return false
     return this.attr(parent, 'aria-labelledby') === id
   }
@@ -2007,7 +1997,7 @@ class Importer {
     attrs: Attrs | undefined,
     path: string,
   ): InlineNode[] {
-    this.add('attribute-dropped', `Dropped ${name} with a denied URL scheme on <${node.tagName}>`, 'warning', path, node)
+    this.add('attribute-dropped', `Dropped ${name} with a denied URL scheme on <${domTag(node)}>`, 'warning', path, node)
     if (!attrs) return children
     return [{ type: 'span', children, attrs }]
   }
@@ -2024,8 +2014,8 @@ class Importer {
 
   /** The item's task-list checkbox, which carries half of its state. */
   private taskCheckbox(li: P5Node): P5Node | undefined {
-    return li.childNodes?.find(
-      (n) => n.tagName === 'input' && this.isEnumeratedKeyword(this.attr(n, 'type'), 'checkbox'),
+    return domChildren(li)?.find(
+      (n) => domTag(n) === 'input' && this.isEnumeratedKeyword(this.attr(n, 'type'), 'checkbox'),
     )
   }
 
@@ -2112,7 +2102,7 @@ class Importer {
    * mapping rows it stands in for.
    */
   private styles(node: P5Node, value: string, keyValues: Record<string, string>, path: string): void {
-    const cell = node.tagName === 'td' || node.tagName === 'th'
+    const cell = domTag(node) === 'td' || domTag(node) === 'th'
     if (this.mode === 'roundtrip') {
       const { subject, live } = styleRefusal(value)
       this.refuseIfKept(node, path, subject, live)
@@ -2150,7 +2140,7 @@ class Importer {
   }
 
   private attr(node: P5Node, name: string): string | undefined {
-    return node.attrs?.find((a) => a.name.toLowerCase() === name)?.value
+    return domAttrs(node)?.find((a) => a.name.toLowerCase() === name)?.value
   }
 
   /**
@@ -2170,7 +2160,7 @@ class Importer {
 
   private childPath(parent: string, node: P5Node, index: number): string {
     const name =
-      node.tagName ??
+      domTag(node) ??
       (node.nodeName === '#text' ? 'text()' : node.nodeName === '#comment' ? 'comment()' : node.nodeName)
     return `${parent}/${name}[${index + 1}]`
   }
@@ -2239,7 +2229,7 @@ class Importer {
       if (commentsOnly || this.commentsBesideNothing(buffered, bufferedPaths, bufferedDepths)) {
         buffered.forEach((node, index) => {
           if (node.nodeName !== '#comment') return
-          out.push({ type: 'comment', block: true, content: node.data ?? '' })
+          out.push({ type: 'comment', block: true, content: domData(node) ?? '' })
           void bufferedPaths[index]
         })
         return
@@ -2253,8 +2243,8 @@ class Importer {
         // The wrapper's children take its place in this stream, so an inline
         // run around it stays one run and a block inside it stays a block.
         this.enter(depth + level)
-        const unwrapped = this.reportUnsupportedElement(node, node.tagName!, path)
-        this.reportUnwrappedAttributes(node, this.attrs(node, path), node.tagName!, path, unwrapped)
+        const unwrapped = this.reportUnsupportedElement(node, domTag(node)!, path)
+        this.reportUnwrappedAttributes(node, this.attrs(node, path), domTag(node)!, path, unwrapped)
         continue
       }
       if (isLayoutOnlyText(node)) {
@@ -2272,12 +2262,13 @@ class Importer {
        * ruling is applied here, at the one position where the children have
        * somewhere block-shaped to go.
        */
-      if (node.tagName && MEDIA_FALLBACK.has(node.tagName) && this.mode !== 'roundtrip') {
+      const tag = domTag(node)
+      if (tag && MEDIA_FALLBACK.has(tag) && this.mode !== 'roundtrip') {
         flush()
-        out.push(...this.mediaFallback(node, node.tagName, path, depth + level + 1))
+        out.push(...this.mediaFallback(node, tag, path, depth + level + 1))
         continue
       }
-      if (!node.tagName || !BLOCK.has(node.tagName)) {
+      if (!tag || !BLOCK.has(tag)) {
         inlineBuffer.push(node)
         inlinePaths.push(path)
         inlineDepths.push(depth + level + 1)
@@ -2321,7 +2312,7 @@ class Importer {
     }
     const holdsBlock = new Map<P5Node, boolean>()
     const spliceable = (node: P5Node): boolean => {
-      const tag = node.tagName
+      const tag = domTag(node)
       if (!tag || BLOCK.has(tag) || ACTIVE.has(tag) || MEDIA_FALLBACK.has(tag)) return false
       if (INLINE_HANDLED.has(tag) || SEMANTIC_SPAN_TAGS.has(tag) || FLATTENED_BLOCK_EXTRA.has(tag)) return false
       return true
@@ -2334,7 +2325,7 @@ class Importer {
         pending.pop()
         continue
       }
-      const children = top.node.childNodes ?? []
+      const children = domChildren(top.node) ?? []
       if (!top.expanded) {
         top.expanded = true
         for (const child of children) if (spliceable(child) && !holdsBlock.has(child)) pending.push({ node: child, expanded: false })
@@ -2344,7 +2335,7 @@ class Importer {
       holdsBlock.set(
         top.node,
         children.some((child) => {
-          const tag = child.tagName
+          const tag = domTag(child)
           return tag !== undefined && (BLOCK.has(tag) || MEDIA_FALLBACK.has(tag) || holdsBlock.get(child) === true)
         }),
       )
@@ -2363,7 +2354,7 @@ class Importer {
       const path = frame.paths?.[index] ?? this.childPath(frame.parentPath, node, index)
       if (holdsBlock.get(node) === true) {
         out.push({ node, path, level: frame.level + 1, splice: true })
-        frames.push({ nodes: node.childNodes ?? [], parentPath: path, level: frame.level + 1, index: 0 })
+        frames.push({ nodes: domChildren(node) ?? [], parentPath: path, level: frame.level + 1, index: 0 })
         continue
       }
       out.push({ node, path, level: frame.level, splice: false })
@@ -2380,12 +2371,12 @@ class Importer {
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
     this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
 
-    return this.blocks(node.childNodes ?? [], path, depth)
+    return this.blocks(domChildren(node) ?? [], path, depth)
   }
 
   private block(node: P5Node, path: string, depth: number): BlockNode[] {
     this.enter(depth)
-    const tag = node.tagName!
+    const tag = domTag(node)!
     if (ACTIVE.has(tag)) {
       this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
@@ -2395,7 +2386,7 @@ class Importer {
       this.headingDepth++
       let children: InlineNode[]
       try {
-        children = this.blockInlines(node.childNodes ?? [], path, depth + 1)
+        children = this.blockInlines(domChildren(node) ?? [], path, depth + 1)
       } finally {
         this.headingDepth--
       }
@@ -2458,7 +2449,7 @@ class Importer {
        * point: §7 weighs the characters a block holds, and an empty one
        * holds none for the clause to call layout.
        */
-      const raw = this.inlines(node.childNodes ?? [], path, depth + 1)
+      const raw = this.inlines(domChildren(node) ?? [], path, depth + 1)
       const children = trimBlockEdges(raw)
       if (children.length === 0 && raw.length > 0) {
         this.add(
@@ -2507,11 +2498,11 @@ class Importer {
       }
       return [paragraph]
     }
-    if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
+    if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(domChildren(node) ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'ul' || tag === 'ol') return this.list(node, path, depth, tag === 'ol', attrs)
     if (tag === 'dl') return this.definitionList(node, path, depth, attrs)
     if (tag === 'pre') {
-      const code = node.childNodes?.find((n) => n.tagName === 'code')
+      const code = domChildren(node)?.find((n) => domTag(n) === 'code')
       const source = code ?? node
       const lang = codeLanguage(node, code, this.codeLanguageWrappers)
       // Rendered code blocks conventionally carry one newline before </code>.
@@ -2571,7 +2562,7 @@ class Importer {
          * dropped as derived, so nothing is left naming an element that no
          * longer exists.
          */
-        const children0 = node.childNodes ?? []
+        const children0 = domChildren(node) ?? []
         // A directive has NO title slot (CARVE-P12-057 closes the node without
         // one), so nothing is lifted out of a generated-content container: a
         // `<p class="admonition-title">` inside one stays the ordinary paragraph
@@ -2625,7 +2616,7 @@ class Importer {
               titleNode,
             )
           }
-          title = this.blockInlines(titleNode.childNodes ?? [], titlePath, depth + 3)
+          title = this.blockInlines(domChildren(titleNode) ?? [], titlePath, depth + 3)
         }
         // THE GROUPING LABEL IS THE CONTAINER'S TOO, and it sits after the
         // title the renderer wrote, so it is lifted off what the title lift
@@ -2675,7 +2666,7 @@ class Importer {
       // THE LABEL IS LIFTED FIRST, because it is half of the test below. This
       // arm never had a lift at all - it lived only on the container-CLASS arm
       // above, so `::: figure [g]` reached it and a plain `<div>` never did.
-      const own = node.childNodes ?? []
+      const own = domChildren(node) ?? []
       const lifted =
         tag === 'div'
           ? this.containerLabel(
@@ -2730,11 +2721,11 @@ class Importer {
     // that covers them is written down.
     if (this.mode === 'roundtrip') {
       this.keepRaw(node, path, `Preserved unsupported <${tag}> element as raw HTML`)
-      return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
+      return [{ type: 'raw_block', format: 'html', content: serializeOuter(node) }]
     }
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
     this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
-    return this.blocks(node.childNodes ?? [], path, depth + 1)
+    return this.blocks(domChildren(node) ?? [], path, depth + 1)
   }
 
   /**
@@ -2749,13 +2740,13 @@ class Importer {
     const listItems: P5Node[] = []
     const stray: P5Node[] = []
     const strayPaths: string[] = []
-    ;(node.childNodes ?? []).forEach((child, index) => {
-      if (child.tagName === 'li') {
+    ;(domChildren(node) ?? []).forEach((child, index) => {
+      if (domTag(child) === 'li') {
         listItems.push(child)
         return
       }
       const childPath = this.childPath(path, child, index)
-      const strayTag = child.tagName
+      const strayTag = domTag(child)
       if (strayTag !== undefined) {
         if (!ACTIVE.has(strayTag)) {
           this.add(
@@ -2788,7 +2779,7 @@ class Importer {
           childPath,
           child,
         )
-      } else if ((child.value ?? '').trim() !== '') {
+      } else if ((domValue(child) ?? '').trim() !== '') {
         this.add(
           'element-unwrapped',
           `Text directly inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as a paragraph ahead of the list`,
@@ -2839,18 +2830,18 @@ class Importer {
           'structure-unspellable',
           ORDERED_TASK_ITEM_UNSPELLABLE,
           'warning',
-          this.childPath(liPath, input, (li.childNodes ?? []).indexOf(input)),
+          this.childPath(liPath, input, (domChildren(li) ?? []).findIndex(child => child === input)),
           input,
         )
       }
-      const content = (li.childNodes ?? []).flatMap((child) => {
+      const content = (domChildren(li) ?? []).flatMap((child) => {
         if (child !== input) return [child]
         // PART 11 §6g's default, and the `data-task-state` character where the
         // renderer wrote one: the bracket pair the writer would have spelled
         // behind a bullet. It stands where the `<input>` stood rather than at
         // the head of the item, so `before <input> after` keeps its order.
         return orderedTask
-          ? [{ nodeName: '#text', value: `[${taskState ?? (checked ? 'x' : ' ')}]`, parentNode: li } satisfies P5Node]
+          ? [{ nodeName: '#text', value: `[${taskState ?? (checked ? 'x' : ' ')}]`, parentNode: domContainer(li) } satisfies P5Node]
           : []
       })
       return {
@@ -2880,7 +2871,7 @@ class Importer {
     // either.
     // Seen through the unsupported wrappers `blocks()` splices away.
     const tight = !listItems.some((li) =>
-      this.spliceUnsupported(li.childNodes ?? [], path).some((entry) => !entry.splice && entry.node.tagName === 'p'),
+      this.spliceUnsupported(domChildren(li) ?? [], path).some((entry) => !entry.splice && domTag(entry.node) === 'p'),
     )
     const start = this.listStart(node, path, ordered)
     const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
@@ -2934,8 +2925,8 @@ class Importer {
     const visit = (children: P5Node[], parentPath: string, level: number): void => {
       children.forEach((child, index) => {
         const childPath = this.childPath(parentPath, child, index)
-        if (child.nodeName === '#text' && !(child.value ?? '').trim()) return
-        if (child.tagName === 'div') {
+        if (child.nodeName === '#text' && !(domValue(child) ?? '').trim()) return
+        if (domTag(child) === 'div') {
           this.enter(level)
           this.entryAttributes(child, childPath, 'div')
           // The wrapper IS the group boundary (HTML 5.2), so an entry never
@@ -2943,17 +2934,17 @@ class Importer {
           // wrapper attached to the first wrapper's term, which both merges two
           // groups and suppresses the no-term diagnostic it is owed.
           current = undefined
-          visit(child.childNodes ?? [], childPath, level + 1)
+          visit(domChildren(child) ?? [], childPath, level + 1)
           current = undefined
           return
         }
-        if (child.tagName === 'dt') {
+        if (domTag(child) === 'dt') {
           this.enter(level)
           // A term after a definition starts the next entry; a term after a
           // term joins the one being opened.
           if (current === undefined || current.definitions.length > 0) current = openEntry()
           this.entryAttributes(child, childPath, 'dt')
-          const term = this.blockInlines(child.childNodes ?? [], childPath, level + 1)
+          const term = this.blockInlines(domChildren(child) ?? [], childPath, level + 1)
           if (!this.visible(term)) {
             this.unspellable.push({
               node: child,
@@ -2964,7 +2955,7 @@ class Importer {
           current.terms.push(term)
           return
         }
-        if (child.tagName === 'dd') {
+        if (domTag(child) === 'dd') {
           this.enter(level)
           // A description before the list's first term: its content is written
           // as blocks ahead of the list, in both exits, because `: text` with
@@ -2978,7 +2969,7 @@ class Importer {
               child,
             )
             this.entryAttributes(child, childPath, 'dd')
-            before.push(...this.blocks(child.childNodes ?? [], childPath, level + 1))
+            before.push(...this.blocks(domChildren(child) ?? [], childPath, level + 1))
             return
           }
           // A description with no term in a later group: kept in the AST, where
@@ -2993,19 +2984,19 @@ class Importer {
             })
           }
           this.entryAttributes(child, childPath, 'dd')
-          const definition = this.blocks(child.childNodes ?? [], childPath, level + 1)
+          const definition = this.blocks(domChildren(child) ?? [], childPath, level + 1)
           // A `<dd>` that writes nothing takes the `{empty}` sentinel, which
           // reads back as a description holding no blocks, so the entry
           // survives the round trip and owes no row (markup-carve/carve#1827).
           current.definitions.push(definition)
           return
         }
-        this.add('element-unwrapped', `Moved <${child.tagName ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath, child)
+        this.add('element-unwrapped', `Moved <${domTag(child) ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath, child)
         trailing.push(child)
         trailingPaths.push(childPath)
       })
     }
-    visit(node.childNodes ?? [], path, depth + 1)
+    visit(domChildren(node) ?? [], path, depth + 1)
     const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
     if (!items.length && attrs) {
       for (const name of this.attrNames(attrs)) {
@@ -3080,7 +3071,7 @@ class Importer {
    */
   private captionInlines(node: P5Node, path: string, depth: number, tag: 'figcaption' | 'caption'): InlineNode[] {
     this.entryAttributes(node, path, tag, 'a caption line')
-    return trimBlockEdges(this.inlines(node.childNodes ?? [], path, depth))
+    return trimBlockEdges(this.inlines(domChildren(node) ?? [], path, depth))
   }
 
   private attrNames(attrs: Attrs): string[] {
@@ -3137,13 +3128,13 @@ class Importer {
    * exists to match.
    */
   private hasContentToUnwrap(node: P5Node): boolean {
-    for (const child of node.childNodes ?? []) {
-      const childTag = child.tagName
+    for (const child of domChildren(node) ?? []) {
+      const childTag = domTag(child)
       if (childTag !== undefined) {
         if (!ACTIVE.has(childTag)) return true
         continue
       }
-      if (trimNonNbsp(child.value ?? child.data ?? '') !== '') return true
+      if (trimNonNbsp(domValue(child) ?? domData(child) ?? '') !== '') return true
     }
     return false
   }
@@ -3293,8 +3284,8 @@ class Importer {
    * which is what the element itself does in a browser.
    */
   private disclosure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
-    const children0 = node.childNodes ?? []
-    const summaryIndex = children0.findIndex((n) => n.tagName === 'summary')
+    const children0 = domChildren(node) ?? []
+    const summaryIndex = children0.findIndex((n) => domTag(n) === 'summary')
     const summary = summaryIndex < 0 ? undefined : children0[summaryIndex]
     // The paths stay the ones the elements arrived under. Filtering the summary
     // out renumbers everything after it, so a `<script>` at `/details[1]/
@@ -3315,7 +3306,7 @@ class Importer {
       // it let a document process more nodes than the limit allows.
       this.enter(depth + 1)
       this.entryAttributes(summary, summaryPath, 'summary', 'a disclosure label')
-      title = this.blockInlines(summary.childNodes ?? [], summaryPath, depth + 2)
+      title = this.blockInlines(domChildren(summary) ?? [], summaryPath, depth + 2)
     }
     const children = this.blocks(body, path, depth + 1, bodyPaths)
     if (title && this.visible(title) && !this.spellableTitle(title)) {
@@ -3557,9 +3548,9 @@ class Importer {
      * the element was skipped and the caption left the document silently -
      * pandoc emits exactly this shape for every captioned table.
      */
-    const captions = (node.childNodes ?? [])
+    const captions = (domChildren(node) ?? [])
       .map((n, index) => ({ node: n, index }))
-      .filter(({ node: n }) => n.tagName === 'caption')
+      .filter(({ node: n }) => domTag(n) === 'caption')
     const captionNode = captions[0]?.node
     // The PARSER keeps the first `^ ` line and reads the second as a paragraph,
     // so a table that arrives with two captions loses one either way. Reported
@@ -3588,8 +3579,8 @@ class Importer {
      * here could match nothing on any input - the check that cannot fail
      * (carve#755) - so the shape is pinned by a test instead.
      */
-    ;(node.childNodes ?? []).forEach((child, index) => {
-      if (child.tagName !== 'colgroup') return
+    ;(domChildren(node) ?? []).forEach((child, index) => {
+      if (domTag(child) !== 'colgroup') return
       this.add(
         'element-dropped',
         "Dropped <colgroup>: Carve has no column model, and a table's columns are only the cells its rows carry",
@@ -3606,14 +3597,14 @@ class Importer {
     // unread and unreported.
     const sectionNodes: P5Node[] = []
     const walk = (n: P5Node, section?: P5Node): void => {
-      if (n.tagName === 'tr') {
+      if (domTag(n) === 'tr') {
         tr.push(n)
         if (section) group.set(n, section)
         return
       }
-      const isSection = ['thead', 'tbody', 'tfoot'].includes(n.tagName ?? '')
+      const isSection = ['thead', 'tbody', 'tfoot'].includes(domTag(n) ?? '')
       if (isSection) sectionNodes.push(n)
-      for (const child of n.childNodes ?? []) walk(child, isSection ? n : section)
+      for (const child of domChildren(n) ?? []) walk(child, isSection ? n : section)
     }
     walk(node)
     // The attributes of the SECTIONS, read once and in document order. Only a
@@ -3623,7 +3614,7 @@ class Importer {
     // empty `attrs` slot with no diagnostic at all (carve#1210).
     const sectionAttrs = new Map<P5Node, { attrs: Attrs; path: string }>()
     for (const section of sectionNodes) {
-      const sectionPath = this.childPath(path, section, (node.childNodes ?? []).indexOf(section))
+      const sectionPath = this.childPath(path, section, (domChildren(node) ?? []).findIndex(child => child === section))
       const sectionOwn = this.attrs(section, sectionPath)
       if (sectionOwn) sectionAttrs.set(section, { attrs: sectionOwn, path: sectionPath })
     }
@@ -3632,11 +3623,11 @@ class Importer {
     // than per cell, because the run ENDS at the first row carrying a `td` and
     // a cell cannot see that on its own.
     const headerCells = (row: P5Node): P5Node[] =>
-      (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+      (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th')
     let leadingHeaderRows = 0
     for (const row of tr) {
       const cells = headerCells(row)
-      if (cells.length === 0 || !cells.every((n) => n.tagName === 'th')) break
+      if (cells.length === 0 || !cells.every((n) => domTag(n) === 'th')) break
       leadingHeaderRows += 1
     }
 
@@ -3657,8 +3648,8 @@ class Importer {
     const listForm = this.listTableForBlockCells && tr.some((row) => headerCells(row).some(holdsBlocks))
     const ownAlignment = new Map<TableCell, Pick<TableCell, 'align' | 'valign'>>()
     const built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>> = tr.map((row, r) =>
-      (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c) => {
-        const cellPath = `${path}/tr[${r + 1}]/${cell.tagName}[${c + 1}]`
+      (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th').map((cell, c) => {
+        const cellPath = `${path}/tr[${r + 1}]/${domTag(cell)}[${c + 1}]`
         const colspan = this.spanCount(cell, 'colspan', 1000, 1)
         // A rowspan stops at its ROW GROUP in HTML, and `rowspan="0"` means
         // exactly "to the end of it". Both are resolved against the group the
@@ -3722,18 +3713,18 @@ class Importer {
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
         let content: Pick<TableCell, 'children' | 'blocks'>
         if (listForm) {
-          content = { children: [], blocks: this.blocks(cell.childNodes ?? [], cellPath, depth + 1) }
+          content = { children: [], blocks: this.blocks(domChildren(cell) ?? [], cellPath, depth + 1) }
         } else {
           this.cellDepth++
           try {
-            content = { children: this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1) }
+            content = { children: this.blockInlines(domChildren(cell) ?? [], cellPath, depth + 1) }
           } finally {
             this.cellDepth--
           }
         }
         const built: TableCell = {
           type: 'table_cell' as const,
-          header: cell.tagName === 'th',
+          header: domTag(cell) === 'th',
           ...content,
           ...(alignment?.align ? { align: alignment.align as 'left' | 'right' | 'center' } : {}),
           ...(alignment?.valign ? { valign: alignment.valign as 'top' | 'middle' | 'bottom' } : {}),
@@ -3771,7 +3762,7 @@ class Importer {
     // `<tbody>`'s attributes reach nothing when the field itself is not kept.
     const sectionsWithRows = new Set(tr.map((row) => group.get(row)))
     for (const [section, own] of sectionAttrs) {
-      const tag = section.tagName ?? 'tbody'
+      const tag = domTag(section) ?? 'tbody'
       // A body group IS the run of rows it consumes, so a section with none is
       // not a group and has nowhere to put them. Stating it as a zero-count
       // group would put a body in the partition that describes no rows.
@@ -3858,10 +3849,10 @@ class Importer {
     path: string,
     sectionAttrs: Map<P5Node, { attrs: Attrs; path: string }>,
   ): TableRowGroups | undefined {
-    const sectionOf = (row: P5Node): string => group.get(row)?.tagName ?? 'tbody'
+    const sectionOf = (row: P5Node): string => domTag(group.get(row)) ?? 'tbody'
     const isHeaderRow = (row: P5Node): boolean => {
-      const cells = (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
-      return cells.length > 0 && cells.every((n) => n.tagName === 'th')
+      const cells = (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th')
+      return cells.length > 0 && cells.every((n) => domTag(n) === 'th')
     }
     // The head is a PREFIX of `rows` and the foot a SUFFIX, which is what the
     // field can express. A `<thead>` that is not first, or a `<tfoot>` with
@@ -3883,7 +3874,7 @@ class Importer {
     }
 
     const takeSectionAttrs = (tag: string): Attrs | undefined => {
-      const sections = (node.childNodes ?? []).filter(section => section.tagName === tag)
+      const sections = (domChildren(node) ?? []).filter(section => domTag(section) === tag)
       if (sections.length !== 1) return undefined
       const section = sections[0]!
       const own = sectionAttrs.get(section)
@@ -3927,11 +3918,11 @@ class Importer {
       }
     }
 
-    const orderedSections = node.childNodes ?? []
+    const orderedSections = domChildren(node) ?? []
     for (const [section, own] of [...sectionAttrs]) {
-      if (section.tagName !== 'tbody' || tr.some(row => group.get(row) === section)) continue
-      const sourceIndex = orderedSections.indexOf(section)
-      const at = bodySections.findIndex(body => body !== undefined && orderedSections.indexOf(body) > sourceIndex)
+      if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section)) continue
+      const sourceIndex = orderedSections.findIndex(child => child === section)
+      const at = bodySections.findIndex(body => body !== undefined && orderedSections.findIndex(child => child === body) > sourceIndex)
       const index = at < 0 ? bodies.length : at
       bodies.splice(index, 0, { headRows: 0, bodyRows: 0, attrs: own.attrs })
       bodySections.splice(index, 0, section)
@@ -4076,8 +4067,8 @@ class Importer {
      * author put it, which is second here and fourth in a pretty-printed
      * figure.
      */
-    const children = node.childNodes ?? []
-    const captionAt = children.findIndex((n) => n.tagName === 'figcaption')
+    const children = domChildren(node) ?? []
+    const captionAt = children.findIndex((n) => domTag(n) === 'figcaption')
     const captionNode = captionAt < 0 ? undefined : children[captionAt]
     const captionPath = `${path}/figcaption[${captionAt + 1}]`
     // Split at the caption, so an unwrapped figure can put it back where it was.
@@ -4115,7 +4106,7 @@ class Importer {
     if (this.mode === 'roundtrip' && this.captionSpellsSomething(caption) && (!captionable || doubleCaption)) {
       this.restore(before)
       this.keepRaw(node, path, 'Preserved a <figure> as raw HTML: no Carve spelling reproduces a figure around this target')
-      return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
+      return [{ type: 'raw_block', format: 'html', content: serializeOuter(node) }]
     }
     if (captionable) {
       /*
@@ -4294,7 +4285,7 @@ class Importer {
     // way round - a no-break space is CONTENT - so the collapse names the
     // characters HTML actually collapses and leaves every other one alone.
     if (node.nodeName === '#text') {
-      return [{ type: 'text', value: (node.value ?? '').replace(/[ \t\n\r\f]+/g, ' ') }]
+      return [{ type: 'text', value: (domValue(node) ?? '').replace(/[ \t\n\r\f]+/g, ' ') }]
     }
     /*
      * AN HTML COMMENT IS A CARVE COMMENT, and this is the INLINE position of it
@@ -4308,7 +4299,7 @@ class Importer {
      * the source.
      */
     if (node.nodeName === '#comment') return this.comment(node, path)
-    const tag = node.tagName
+    const tag = domTag(node)
     if (!tag) return []
     if (ACTIVE.has(tag)) {
       this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
@@ -4341,13 +4332,13 @@ class Importer {
       this.budget(node, depth)
       const math = this.mathml(node, path)
       if (math) return [math]
-      if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node as never)))) {
+      if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node)))) {
         // The same answer the generic arm below gave a `<math>` before this
         // branch existed, and byte for byte the same output. Reported once for
         // the element rather than once per descendant, because the descendants
         // are not preserved separately - they are inside this one raw span.
         this.keepRaw(node, path, 'Preserved unsupported <math> element as raw HTML')
-        return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
+        return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node) }]
       }
       const text = this.mode === 'roundtrip' ? undefined : linearMathText(node)
       if (text !== undefined) {
@@ -4359,7 +4350,7 @@ class Importer {
     }
     if (tag === 'ruby') return this.ruby(node, path, depth)
     const beforeWalk = this.mark()
-    const children = this.inlines(node.childNodes ?? [], path, depth + 1)
+    const children = this.inlines(domChildren(node) ?? [], path, depth + 1)
     const walked = this.mark()
     const attrs = this.attrs(node, path)
     // An element the HTML left empty holds nothing a reader sees, so it is
@@ -4488,11 +4479,11 @@ class Importer {
      * for exactly this case, says what it dropped, and keeps the markup
      * verbatim in the mode whose contract is Carve-produced HTML.
      */
-    if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node as never)))) {
+    if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node)))) {
       // The walk into the children reported bytes this arm keeps.
       this.discardWalk(beforeWalk, walked)
       this.keepRaw(node, path, `Preserved unsupported <${tag}> element as raw HTML`)
-      return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
+      return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node) }]
     }
     const unwrapped = this.reportUnsupportedElement(node, tag, path)
     this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
@@ -4506,7 +4497,7 @@ class Importer {
 
     const dropComponentAttrs = (component: P5Node, componentPath: string): void => {
       const held = this.attrs(component, componentPath)
-      this.reportUnwrappedAttributes(component, held, component.tagName ?? 'ruby component', componentPath)
+      this.reportUnwrappedAttributes(component, held, domTag(component) ?? 'ruby component', componentPath)
     }
     const acceptRp = (rp: P5Node, rpPath: string, rpDepth: number): void => {
       this.enter(rpDepth)
@@ -4518,29 +4509,29 @@ class Importer {
       }
     }
 
-    ;(node.childNodes ?? []).forEach((child, index) => {
+    ;(domChildren(node) ?? []).forEach((child, index) => {
       const childPath = this.childPath(path, child, index)
-      if (child.tagName === 'rb') {
+      if (domTag(child) === 'rb') {
         this.enter(depth + 1)
         dropComponentAttrs(child, childPath)
-        ;(child.childNodes ?? []).forEach((nested, nestedIndex) => {
+        ;(domChildren(child) ?? []).forEach((nested, nestedIndex) => {
           input.push({ node: nested, path: this.childPath(childPath, nested, nestedIndex) })
         })
         return
       }
-      if (child.tagName === 'rtc') {
+      if (domTag(child) === 'rtc') {
         this.enter(depth + 1)
         dropComponentAttrs(child, childPath)
         const content: InlineNode[] = []
-        ;(child.childNodes ?? []).forEach((nested, nestedIndex) => {
+        ;(domChildren(child) ?? []).forEach((nested, nestedIndex) => {
           const nestedPath = this.childPath(childPath, nested, nestedIndex)
-          if (nested.tagName === 'rp') acceptRp(nested, nestedPath, depth + 2)
+          if (domTag(nested) === 'rp') acceptRp(nested, nestedPath, depth + 2)
           else {
-            if (nested.tagName === 'rt') {
+            if (domTag(nested) === 'rt') {
               this.enter(depth + 2)
               dropComponentAttrs(nested, nestedPath)
             }
-            content.push(...this.inlines(nested.tagName === 'rt' ? (nested.childNodes ?? []) : [nested], nestedPath, depth + 1))
+            content.push(...this.inlines(domTag(nested) === 'rt' ? (domChildren(nested) ?? []) : [nested], nestedPath, depth + 1))
           }
         })
         retainedRtc.push(content)
@@ -4572,14 +4563,14 @@ class Importer {
     for (let index = 0; index < input.length; index++) {
       const item = input[index]!
       if (item.node.nodeName === '#comment') continue
-      if (item.node.tagName === 'rp') {
+      if (domTag(item.node) === 'rp') {
         acceptRp(item.node, item.path, depth + 1)
         continue
       }
-      if (item.node.tagName === 'rt') {
+      if (domTag(item.node) === 'rt') {
         this.enter(depth + 1)
         dropComponentAttrs(item.node, item.path)
-        const annotation = this.inlines(item.node.childNodes ?? [], item.path, depth + 1)
+        const annotation = this.inlines(domChildren(item.node) ?? [], item.path, depth + 1)
         if (hasAssociatedBase) {
           flushRun()
           output.push({ type: 'text', value: '(' }, ...annotation, { type: 'text', value: ')' })
@@ -4598,15 +4589,15 @@ class Importer {
       if (
         hasAssociatedBase &&
         item.node.nodeName === '#text' &&
-        /^[\t\n\f\r ]*$/.test(item.node.value ?? '')
+        /^[\t\n\f\r ]*$/.test(domValue(item.node) ?? '')
       ) {
         let lookahead = index + 1
         while (
           lookahead < input.length &&
           input[lookahead]!.node.nodeName === '#text' &&
-          /^[\t\n\f\r ]*$/.test(input[lookahead]!.node.value ?? '')
+          /^[\t\n\f\r ]*$/.test(domValue(input[lookahead]!.node) ?? '')
         ) lookahead++
-        if (lookahead === input.length || input[lookahead]!.node.tagName === 'rt' || input[lookahead]!.node.tagName === 'rp') continue
+        if (lookahead === input.length || domTag(input[lookahead]!.node) === 'rt' || domTag(input[lookahead]!.node) === 'rp') continue
       }
       hasAssociatedBase = false
       base.push(...this.inline(item.node, item.path, depth + 1))
@@ -4707,9 +4698,9 @@ class Importer {
    */
   private directText(node: P5Node): string | undefined {
     let out = ''
-    for (const child of node.childNodes ?? []) {
+    for (const child of domChildren(node) ?? []) {
       if (child.nodeName !== '#text') return undefined
-      out += child.value ?? ''
+      out += domValue(child) ?? ''
     }
     return out
   }
@@ -4774,10 +4765,10 @@ class Importer {
    * and stopping at the empty one would answer with the wrong tier.
    */
   private texAnnotation(node: P5Node): string | undefined {
-    for (const semantics of node.childNodes ?? []) {
-      if (semantics.tagName !== 'semantics') continue
-      for (const child of semantics.childNodes ?? []) {
-        if (child.tagName !== 'annotation') continue
+    for (const semantics of domChildren(node) ?? []) {
+      if (domTag(semantics) !== 'semantics') continue
+      for (const child of domChildren(semantics) ?? []) {
+        if (domTag(child) !== 'annotation') continue
         const encoding = this.attr(child, 'encoding')
         if (encoding === undefined || !TEX_ANNOTATION_ENCODINGS.has(encoding.trim().toLowerCase())) continue
         const text = this.flatText(child).trim()
@@ -4807,8 +4798,8 @@ class Importer {
     const pending: P5Node[] = [node]
     while (pending.length) {
       const current = pending.pop()!
-      if (current.nodeName === '#text') text += current.value ?? ''
-      const children = current.childNodes ?? []
+      if (current.nodeName === '#text') text += domValue(current) ?? ''
+      const children = domChildren(current) ?? []
       for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]!)
     }
     return text
@@ -4818,7 +4809,7 @@ class Importer {
     const pending: Array<[P5Node, number]> = [[node, depth]]
     while (pending.length) {
       const [current, currentDepth] = pending.pop()!
-      for (const child of current.childNodes ?? []) {
+      for (const child of domChildren(current) ?? []) {
         this.enter(currentDepth + 1)
         pending.push([child, currentDepth + 1])
       }
@@ -4847,7 +4838,7 @@ class Importer {
     const [open, close] = this.quoteDepth % 2 === 0 ? ['\u201c', '\u201d'] : ['\u2018', '\u2019']
     this.quoteDepth += 1
     try {
-      const children = this.inlines(node.childNodes ?? [], path, depth + 1)
+      const children = this.inlines(domChildren(node) ?? [], path, depth + 1)
       const attrs = this.attrs(node, path)
       const quoted: InlineNode[] = [{ type: 'text', value: open! }, ...children, { type: 'text', value: close! }]
       this.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path, node)
@@ -4897,8 +4888,8 @@ class Importer {
   }
 
   private text(node: P5Node): string {
-    if (node.nodeName === '#text') return node.value ?? ''
-    return (node.childNodes ?? []).map((child) => this.text(child)).join('')
+    if (node.nodeName === '#text') return domValue(node) ?? ''
+    return (domChildren(node) ?? []).map((child) => this.text(child)).join('')
   }
 
   /**
@@ -4921,7 +4912,7 @@ class Importer {
    * (markup-carve/carve#1709).
    */
   private comment(node: P5Node, path: string): InlineNode[] {
-    const content = node.data ?? ''
+    const content = domData(node) ?? ''
     const closesEarly = content.includes('%}')
     const endsTheRun = /\n[ \t]*\n/.test(content)
     if (closesEarly || endsTheRun) {
@@ -4970,9 +4961,12 @@ class Importer {
    */
   private commentsBesideNothing(buffered: P5Node[], paths: string[], depths: number[]): boolean {
     if (!buffered.some((node) => node.nodeName === '#comment')) return false
-    const elements = buffered.flatMap((node, index) => (node.tagName ? [index] : []))
+    const elements = buffered.flatMap((node, index) => (domTag(node) ? [index] : []))
     if (!elements.length) return false
-    if (!buffered.every((node) => node.tagName ? ACTIVE.has(node.tagName) || holdsNoText(node) : isBlankOrComment(node))) return false
+    if (!buffered.every((node) => {
+      const tag = domTag(node)
+      return tag ? ACTIVE.has(tag) || holdsNoText(node) : isBlankOrComment(node)
+    })) return false
     const before = this.mark()
     const counted = this.nodes
     for (const index of elements) {
@@ -5242,10 +5236,10 @@ class Importer {
    * stay its own.
    */
   private figureGroup(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
-    const groupChildren = node.childNodes ?? []
+    const groupChildren = domChildren(node) ?? []
     let captionAt = -1
     groupChildren.forEach((child, index) => {
-      if (child.tagName === 'figcaption') captionAt = index
+      if (domTag(child) === 'figcaption') captionAt = index
     })
     const captionNode = captionAt < 0 ? undefined : groupChildren[captionAt]
     const bodyNodes: P5Node[] = []
@@ -5345,13 +5339,10 @@ class Importer {
 
       for (const reference of definition.refs) {
         const site = this.footnoteReferenceSite(reference)
-        const replacement: P5Node = {
-          nodeName: 'carve-footnote-ref',
-          tagName: 'carve-footnote-ref',
-          attrs: [{ name: 'label', value: label }],
-          childNodes: [],
-        }
-        if (site.parentNode !== undefined) replacement.parentNode = site.parentNode
+        const replacement = defaultTreeAdapter.createElement(
+          'carve-footnote-ref', p5html.NS.HTML, [{ name: 'label', value: label }],
+        )
+        replacement.parentNode = domParent(site) ?? null
         this.replaceP5Node(site, replacement)
       }
     })
@@ -5360,8 +5351,9 @@ class Importer {
     // same reason: a body detached early is a body another note cannot reach.
     definitions.forEach((definition, index) => {
       const block = definition.block
-      defs[String(index + 1)] = this.blocks(block.childNodes ?? [], `footnote[${String(index + 1)}]`, 1)
-      if (block.parentNode) containers.add(block.parentNode)
+      defs[String(index + 1)] = this.blocks(domChildren(block) ?? [], `footnote[${String(index + 1)}]`, 1)
+      const parent = domParent(block)
+      if (parent) containers.add(parent)
       this.detachP5Node(block)
     })
 
@@ -5387,9 +5379,9 @@ class Importer {
     while (stack.length > 0) {
       const node = stack.pop()!
       if (node !== root) elements.push(node)
-      const children = node.childNodes ?? []
+      const children = domChildren(node) ?? []
       for (let i = children.length - 1; i >= 0; i--) {
-        if (children[i]!.tagName !== undefined) stack.push(children[i]!)
+        if (domTag(children[i]!) !== undefined) stack.push(children[i]!)
       }
     }
     return elements
@@ -5408,7 +5400,7 @@ class Importer {
       if (id && !targets.has(id)) targets.set(id, element)
     }
     for (const element of elements) {
-      if (element.tagName !== 'a') continue
+      if (domTag(element) !== 'a') continue
       const name = this.attr(element, 'name')
       if (name && !targets.has(name)) targets.set(name, element)
     }
@@ -5431,7 +5423,7 @@ class Importer {
     const anchors: Array<{ anchor: P5Node; fragment: string }> = []
     const used = new Set<string>()
     for (const element of elements) {
-      if (element.tagName !== 'a') continue
+      if (domTag(element) !== 'a') continue
       const href = this.attr(element, 'href') ?? ''
       if (!href.startsWith('#')) continue
       const fragment = href.slice(1)
@@ -5474,17 +5466,20 @@ class Importer {
    */
   private resolveFootnoteDefinitionBlock(target: P5Node, used: Set<string>): P5Node | null {
     let block = target
-    while (block.tagName === undefined || !FOOTNOTE_DEFINITION_BLOCKS.has(block.tagName)) {
-      const parent = block.parentNode
-      if (parent === undefined || parent.tagName === undefined) return null
+    while (true) {
+      const tag = domTag(block)
+      if (tag !== undefined && FOOTNOTE_DEFINITION_BLOCKS.has(tag)) break
+      const parent = domParent(block)
+      if (parent === undefined || domTag(parent) === undefined) return null
       block = parent
     }
 
-    const parent = block.parentNode
+    const parent = domParent(block)
+    const parentTag = domTag(parent)
     if (
       parent !== undefined &&
-      parent.tagName !== undefined &&
-      FOOTNOTE_WRAPPER_BLOCKS.has(parent.tagName) &&
+      parentTag !== undefined &&
+      FOOTNOTE_WRAPPER_BLOCKS.has(parentTag) &&
       (this.attr(parent, 'id') ?? '') !== '' &&
       this.countFootnoteTargets(parent, used) === 1
     ) {
@@ -5500,8 +5495,8 @@ class Importer {
     while (stack.length > 0) {
       const current = stack.pop()!
       if (this.isFootnoteFragmentTarget(current, used)) count++
-      for (const child of current.childNodes ?? []) {
-        if (child.tagName !== undefined) stack.push(child)
+      for (const child of domChildren(current) ?? []) {
+        if (domTag(child) !== undefined) stack.push(child)
       }
     }
     return count
@@ -5510,7 +5505,7 @@ class Importer {
   private isFootnoteFragmentTarget(node: P5Node, used: Set<string>): boolean {
     const id = this.attr(node, 'id')
     if (id && used.has(id)) return true
-    if (node.tagName !== 'a') return false
+    if (domTag(node) !== 'a') return false
     const name = this.attr(node, 'name')
     return name !== undefined && name !== '' && used.has(name)
   }
@@ -5599,10 +5594,10 @@ class Importer {
     }
 
     for (const group of [...groups.values()]) {
-      let ancestor = group.block.parentNode
+      let ancestor = domParent(group.block)
       while (ancestor !== undefined) {
         if (groups.has(ancestor)) groups.delete(ancestor)
-        ancestor = ancestor.parentNode
+        ancestor = domParent(ancestor)
       }
     }
 
@@ -5639,11 +5634,11 @@ class Importer {
     while (stack.length > 0) {
       const node = stack.pop()!
       inside.add(node)
-      for (const child of node.childNodes ?? []) stack.push(child)
+      for (const child of domChildren(node) ?? []) stack.push(child)
     }
 
     for (const element of elements) {
-      if (element.tagName !== 'a') continue
+      if (domTag(element) !== 'a') continue
       // Outside the heuristic an unmarked anchor addressing a note is a LINK,
       // not a reference: the role is the whole signal, and a content link to
       // `#fn1` in a role-marked document keeps the author's shape. (The
@@ -5677,11 +5672,11 @@ class Importer {
     const stack: P5Node[] = [node]
     while (stack.length > 0) {
       const current = stack.pop()!
-      const children = current.childNodes ?? []
+      const children = domChildren(current) ?? []
       for (let i = children.length - 1; i >= 0; i--) {
         const child = children[i]!
-        if (child.tagName === 'a') anchors.push(child)
-        if (child.tagName !== undefined) stack.push(child)
+        if (domTag(child) === 'a') anchors.push(child)
+        if (domTag(child) !== undefined) stack.push(child)
       }
     }
     return anchors
@@ -5703,26 +5698,26 @@ class Importer {
   }
 
   private p5Contains(ancestor: P5Node, node: P5Node): boolean {
-    let current = node.parentNode
+    let current = domParent(node)
     while (current !== undefined) {
       if (current === ancestor) return true
-      current = current.parentNode
+      current = domParent(current)
     }
     return false
   }
 
   private detachP5Node(node: P5Node): void {
-    const siblings = node.parentNode?.childNodes
+    const siblings = domChildren(domParent(node))
     if (siblings === undefined) return
-    const index = siblings.indexOf(node)
+    const index = siblings.findIndex(child => child === node)
     if (index !== -1) siblings.splice(index, 1)
   }
 
   private replaceP5Node(node: P5Node, replacement: P5Node): void {
-    const siblings = node.parentNode?.childNodes
+    const siblings = domChildren(domParent(node))
     if (siblings === undefined) return
-    const index = siblings.indexOf(node)
-    if (index !== -1) siblings[index] = replacement
+    const index = siblings.findIndex(child => child === node)
+    if (index !== -1) siblings[index] = domChild(replacement)
   }
 
   /**
@@ -5744,22 +5739,22 @@ class Importer {
         previous = this.p5PreviousSibling(previous)
       }
 
-      if (previous !== undefined && (previous.tagName === 'hr' || previous.tagName === 'br')) {
+      if (previous !== undefined && (domTag(previous) === 'hr' || domTag(previous) === 'br')) {
         this.detachP5Node(previous)
         continue
       }
       if (previous !== undefined) return
 
-      const parent = node.parentNode
-      if (parent === undefined || parent.tagName === undefined) return
+      const parent = domParent(node)
+      if (parent === undefined || domTag(parent) === undefined) return
       node = parent
     }
   }
 
   private p5PreviousSibling(node: P5Node): P5Node | undefined {
-    const siblings = node.parentNode?.childNodes
+    const siblings = domChildren(domParent(node))
     if (siblings === undefined) return undefined
-    const index = siblings.indexOf(node)
+    const index = siblings.findIndex(child => child === node)
     return index > 0 ? siblings[index - 1] : undefined
   }
 
@@ -5776,7 +5771,7 @@ class Importer {
   private isFootnoteChromeNode(node: P5Node): boolean {
     if (node.nodeName === '#comment') return true
     if (node.nodeName !== '#text') return false
-    const text = (node.value ?? '').trim()
+    const text = (domValue(node) ?? '').trim()
     return text === '' || RE_DOWNLEVEL_CONDITIONAL.test(text)
   }
 
@@ -5798,13 +5793,13 @@ class Importer {
       const isMarker = href.startsWith('#') && fragments.includes(this.footnoteAnchorIdentity(anchor))
       if (!this.isFootnoteBacklinkMarked(anchor) && !pointsBack && !isMarker) continue
 
-      const parent = anchor.parentNode
+      const parent = domParent(anchor)
       this.detachP5Node(anchor)
       if (
         parent !== undefined &&
-        (parent.tagName === 'sup' || parent.tagName === 'span') &&
-        !(parent.childNodes ?? []).some(
-          (child) => child.tagName !== undefined || (child.nodeName === '#text' && (child.value ?? '').trim() !== ''),
+        (domTag(parent) === 'sup' || domTag(parent) === 'span') &&
+        !(domChildren(parent) ?? []).some(
+          (child) => domTag(child) !== undefined || (child.nodeName === '#text' && (domValue(child) ?? '').trim() !== ''),
         )
       ) {
         this.detachP5Node(parent)
@@ -5822,11 +5817,11 @@ class Importer {
    * content, and the reference binds inside it.
    */
   private footnoteReferenceSite(reference: P5Node): P5Node {
-    const parent = reference.parentNode
-    if (parent === undefined || parent.tagName !== 'sup') return reference
-    for (const child of parent.childNodes ?? []) {
-      if (child.tagName !== undefined && child !== reference) return reference
-      if (child.nodeName === '#text' && (child.value ?? '').trim() !== '') return reference
+    const parent = domParent(reference)
+    if (parent === undefined || domTag(parent) !== 'sup') return reference
+    for (const child of domChildren(parent) ?? []) {
+      if (domTag(child) !== undefined && child !== reference) return reference
+      if (child.nodeName === '#text' && (domValue(child) ?? '').trim() !== '') return reference
     }
     return parent
   }
@@ -5842,15 +5837,15 @@ class Importer {
     // there. Recorded at every level the walk detaches, so it names the
     // outermost thing that actually left rather than the note list inside it.
     let removedFrom: { parent: P5Node; index: number } | undefined
-    outer: while (node !== undefined && node.tagName !== undefined) {
-      if (node.tagName === 'body' || node.tagName === 'html') break
-      for (const child of node.childNodes ?? []) {
+    outer: while (node !== undefined && domTag(node) !== undefined) {
+      if (domTag(node) === 'body' || domTag(node) === 'html') break
+      for (const child of domChildren(node) ?? []) {
         if (this.isFootnoteChromeNode(child)) continue
-        if (child.tagName === 'hr' || child.tagName === 'br') continue
+        if (domTag(child) === 'hr' || domTag(child) === 'br') continue
         break outer
       }
-      const parent = node.parentNode
-      const index = parent?.childNodes?.indexOf(node) ?? -1
+      const parent = domParent(node)
+      const index = domChildren(parent)?.findIndex(child => child === node) ?? -1
       this.detachP5Node(node)
       if (parent !== undefined && index !== -1) removedFrom = { parent, index }
       node = parent
@@ -5865,15 +5860,10 @@ class Importer {
     if (removedFrom === undefined) return
     if (this.footnotePlacementMarked) return
     if (!this.contentFollows(removedFrom.parent, removedFrom.index)) return
-    const siblings = removedFrom.parent.childNodes
+    const siblings = domChildren(removedFrom.parent)
     if (siblings === undefined) return
-    const marker: P5Node = {
-      nodeName: 'carve-footnote-placement',
-      tagName: 'carve-footnote-placement',
-      attrs: [],
-      childNodes: [],
-      parentNode: removedFrom.parent,
-    }
+    const marker = defaultTreeAdapter.createElement('carve-footnote-placement', p5html.NS.HTML, [])
+    marker.parentNode = domContainer(removedFrom.parent)
     siblings.splice(Math.min(removedFrom.index, siblings.length), 0, marker)
     this.footnotePlacementMarked = true
   }
@@ -5883,13 +5873,13 @@ class Importer {
     let node: P5Node | undefined = parent
     let from = index
     while (node !== undefined) {
-      const siblings = node.childNodes ?? []
+      const siblings = domChildren(node) ?? []
       for (let i = from; i < siblings.length; i++) {
         if (!this.isFootnoteChromeNode(siblings[i]!)) return true
       }
-      const up: P5Node | undefined = node.parentNode
+      const up: P5Node | undefined = domParent(node)
       if (up === undefined) return false
-      from = (up.childNodes?.indexOf(node) ?? -1) + 1
+      from = (domChildren(up)?.findIndex(child => child === node) ?? -1) + 1
       if (from === 0) return false
       node = up
     }
@@ -5958,14 +5948,14 @@ function reachableObjects(root: unknown): Set<object> {
 function holdsBlocks(cell: P5Node): boolean {
   let paragraphs = 0
   // Iterative: the scan runs before the walk that enforces the depth limit.
-  const stack = [...(cell.childNodes ?? [])]
+  const stack = [...(domChildren(cell) ?? [])]
   while (stack.length > 0) {
     const node = stack.pop()!
-    const tag = node.tagName
+    const tag = domTag(node)
     if (tag === undefined) continue
     if (tag === 'ul' || tag === 'ol' || tag === 'pre' || tag === 'blockquote' || tag === 'table' || tag === 'dl') return true
     if (tag === 'p' && ++paragraphs > 1) return true
-    stack.push(...(node.childNodes ?? []))
+    stack.push(...(domChildren(node) ?? []))
   }
   return false
 }
