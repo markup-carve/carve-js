@@ -733,7 +733,9 @@ export function lintCarve(
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc)) unrendered.add(ln)
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
-  const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out)
+  const termFoldLines = collectTermFoldWarnings(source, doc, out)
+  const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)
+  for (const ln of termFoldLines) listIndentLines.add(ln)
   collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
@@ -842,6 +844,81 @@ interface LintItemColumn {
 }
 
 /**
+ * A block opener indented past a term's marker folds into the term as text,
+ * because a term has no content column (carve#2411). Reports the first such
+ * line per term and returns every opener-shaped folded line, so the other
+ * indentation rules stay quiet about them.
+ */
+function collectTermFoldWarnings(source: string, doc: Document, out: LintWarning[]): Set<number> {
+  const lines = source.split(/\r\n?|\n/)
+  const starts: number[] = []
+  for (let offset = 0, i = 0; i < lines.length; i++) {
+    starts[i] = offset
+    offset += lines[i]!.length + (source.slice(offset + lines[i]!.length, offset + lines[i]!.length + 2) === '\r\n' ? 2 : 1)
+  }
+  const visualColumn = (line: string, end: number): number => {
+    let column = 0
+    for (let i = 0; i < end && i < line.length; ) {
+      column = line[i] === '\t' ? Math.floor(column / 4 + 1) * 4 : column + 1
+      i += (line.codePointAt(i) ?? 0) > 0xffff ? 2 : 1
+    }
+    return column
+  }
+  const unitIndex = (line: string, codepoints: number): number => {
+    let index = 0
+    for (let n = 0; n < codepoints && index < line.length; n++) {
+      index += (line.codePointAt(index) ?? 0) > 0xffff ? 2 : 1
+    }
+    return index
+  }
+  // Peel the quote markers the term's own line carries, then the indent.
+  const view = (line: string, quotes: number): { chars: number; rest: string } | undefined => {
+    let chars = 0
+    for (let q = 0; q < quotes; q++) {
+      const m = /^[ \t]*>(?: |$)/.exec(line.slice(chars))
+      if (!m) return undefined
+      chars += m[0].length
+    }
+    while (chars < line.length && (line[chars] === ' ' || line[chars] === '\t')) chars++
+    return { chars, rest: line.slice(chars) }
+  }
+  const folded = new Set<number>()
+  walkDocument(doc, (node) => {
+    if (node.type !== 'definition_list') return
+    for (const item of (node.items as { termSpans?: (Positioned['pos'] | undefined)[] }[] | undefined) ?? []) {
+      for (const span of item.termSpans ?? []) {
+        if (!span?.endLine || span.endLine <= span.startLine) continue
+        const termLine = lines[span.startLine - 1] ?? ''
+        const markerIndex = unitIndex(termLine, Math.max(0, (span.startColumn ?? 1) - 1))
+        const quotes = (termLine.slice(0, markerIndex).match(/>/g) ?? []).length
+        const markerColumn = visualColumn(termLine, markerIndex)
+        let reported = false
+        for (let ln = span.startLine + 1; ln <= span.endLine; ln++) {
+          const line = lines[ln - 1] ?? ''
+          const v = view(line, quotes)
+          if (!v || visualColumn(line, v.chars) <= markerColumn) continue
+          if (!LINT_BLOCK_OPENER.test(v.rest) && !isTableRow(v.rest)) continue
+          folded.add(ln)
+          if (reported) continue
+          reported = true
+          out.push({
+            line: ln,
+            column: Array.from(line.slice(0, v.chars)).length + 1,
+            rule: 'definition-term-block-folded',
+            message:
+              'This block opener is indented under a definition term, which has no content column, so it folds into the term as text. ' +
+              "Dedent it to the container's content column to open the block, or put it in the term's \": \" description.",
+            start: (starts[ln - 1] ?? 0) + v.chars,
+            end: (starts[ln - 1] ?? 0) + line.length,
+          })
+        }
+      }
+    }
+  })
+  return folded
+}
+
+/**
  * Report block-shaped lines below an item's minimum column, and compatibility
  * spellings authored past its canonical column. The AST supplies item ownership/ranges; source is read only for the
  * marker width and the authored indentation. That keeps this diagnostic in
@@ -852,6 +929,7 @@ function collectListItemIndentWarnings(
   doc: Document,
   _unrendered: ReadonlySet<number>,
   out: LintWarning[],
+  termFoldLines: ReadonlySet<number> = new Set(),
 ): Set<number> {
   const lines = source.split(/\r\n?|\n/)
   const starts: number[] = []
@@ -967,6 +1045,7 @@ function collectListItemIndentWarnings(
     // remains a compatibility finding: old readers treated it as literal.
     // The set still suppresses generic diagnostics after this collector has
     // classified the source line.
+    if (termFoldLines.has(lineNo)) continue
     const owner = containing ?? lastEnded
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
     if (owner?.markerLineDeepestColumn === authored.column) continue
