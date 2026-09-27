@@ -429,7 +429,7 @@ function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean 
  * merges with whitespace already there (carve#2361). Whitespace-only content
  * stays, and so does U+00A0, which is content rather than layout.
  */
-function hoistEdgeSpace(nodes: InlineNode[]): InlineNode[] {
+function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNode[] {
   const out: InlineNode[] = []
   let owed = false
   // Through nested inlines: a strong ending in a space already has one there.
@@ -443,7 +443,20 @@ function hoistEdgeSpace(nodes: InlineNode[]): InlineNode[] {
     owed = false
   }
   for (const node of nodes) {
-    if ((node.type !== 'link' && node.type !== 'span') || !node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
+    const linkOrSpan = !withinLinkOrSpan && (node.type === 'link' || node.type === 'span')
+    const formatting = withinLinkOrSpan && (
+      node.type === 'strong' || node.type === 'emphasis' || node.type === 'underline'
+      || node.type === 'strike' || node.type === 'highlight' || node.type === 'insert'
+      || node.type === 'delete' || node.type === 'superscript' || node.type === 'subscript'
+    )
+    if (!(linkOrSpan || formatting) || !('children' in node)) {
+      pay(node)
+      out.push(node)
+      continue
+    }
+    // Nested links and spans have already hoisted their children.
+    node.children = hoistEdgeSpace(node.children, true)
+    if (!node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
       pay(node)
       out.push(node)
       continue
@@ -471,7 +484,14 @@ function hoistEdgeSpace(nodes: InlineNode[]): InlineNode[] {
   }
   pay(undefined)
 
-  return out
+  const merged: InlineNode[] = []
+  for (const node of out) {
+    const last = merged.at(-1)
+    if (node.type === 'text' && last?.type === 'text') last.value += node.value
+    else merged.push(node)
+  }
+
+  return merged
 }
 
 /**
