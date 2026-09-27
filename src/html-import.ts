@@ -1486,6 +1486,16 @@ class Importer {
     const attrs: Attrs = {}
     const classes: string[] = []
     const keyValues: Record<string, string> = {}
+    const styleSlots = new Set<string>()
+    {
+      const cell = domTag(node) === 'td' || domTag(node) === 'th'
+      for (const declaration of (this.attr(node, 'style') ?? '').split(';')) {
+        const split = declaration.indexOf(':')
+        if (split < 0) continue
+        const mapped = this.mappedStyleDeclaration(declaration.slice(0, split).trim().toLowerCase(), declaration.slice(split + 1).trim().toLowerCase(), cell)
+        if (mapped && (cell || mapped.key === 'align')) styleSlots.add(mapped.key)
+      }
+    }
     for (const attr of domAttrs(node) ?? []) {
       const name = attr.name.toLowerCase()
       if (isDangerousAttrName(name)) {
@@ -1507,11 +1517,13 @@ class Importer {
         // A serializer's own marker rather than the author's content, so it is
         // not re-emitted as an attribute of the imported document.
         this.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
+      } else if (styleSlots.has(name) && (rawKept || !this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name))) {
+        this.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', destinationIsDenied(attr.value))
       } else if (this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name)) {
         // Read as content or as an instruction somewhere else in this importer,
         // so keeping it here as well would give the same source two spellings.
-      } else if (rawKept && SEMANTIC_SPAN_TAGS.has(domTag(node) ?? '') && name === domTag(node)) {
-        this.refuseAttribute(node, path, name, ": the semantic span's marker owns that key", 'info', destinationIsDenied(attr.value))
+      } else if (SEMANTIC_SPAN_TAGS.has(domTag(node) ?? '') && name === domTag(node)) {
+        this.refuseAttribute(node, path, name, ": the semantic span's marker owns that key", rawKept ? 'info' : 'warning', destinationIsDenied(attr.value))
       } else if (!isAttrIdentifier(name)) {
         this.refuseAttribute(node, path, `unsupported attribute ${name}`, ': not spellable as a Carve attribute name', 'info', false)
       } else if (/[\r\n]/.test(attr.value)) {
@@ -4489,7 +4501,7 @@ class Importer {
     if (tag === 'carve-footnote-ref') {
       return [{ type: 'footnote_ref', id: this.attr(node, 'label') ?? '' }]
     }
-    if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, path, attrs)]
+    if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, attrs)]
     if (tag === 'span') {
       const math = this.carveMath(node, attrs)
       if (math) return [math]
@@ -4901,7 +4913,7 @@ class Importer {
    * strictly better than the unwrap it replaces, where the semantic was
    * discarded outright, but it is a real difference and the tests show it.
    */
-  private semanticSpan(tag: string, node: P5Node, children: InlineNode[], path: string, attrs?: Attrs): InlineNode {
+  private semanticSpan(tag: string, node: P5Node, children: InlineNode[], attrs?: Attrs): InlineNode {
     const source = SEMANTIC_SPAN_VALUE_SOURCE.get(tag)
     const value = source === undefined ? '' : this.attr(node, source) ?? ''
     const keyValues: Record<string, string> = { ...attrs?.keyValues }
@@ -4909,14 +4921,6 @@ class Importer {
     // along: `attrs()` collected it before the tag was known, and keeping both
     // would render the same attribute onto the element twice over.
     if (source === 'title') delete keyValues.title
-    // The span's own key is the semantic marker, so an attribute of the SAME
-    // name cannot also be carried - `<kbd kbd="literal">` has one slot and two
-    // claims on it. It used to be dropped by the keep-list before it got here;
-    // now it arrives, so the collision has to be named rather than overwritten
-    // in silence (markup-carve/carve-js#1156).
-    if (hasOwnKey(keyValues, tag) && keyValues[tag] !== value) {
-      this.add('attribute-dropped', `Dropped ${tag} on <${tag}>: the name is this span's own semantic marker`, 'warning', path, node)
-    }
     keyValues[tag] = value
     return { type: 'span', children, attrs: { ...attrs, keyValues } }
   }
