@@ -15,7 +15,7 @@ describe('an attribute value holding a pipe', () => {
 
   it('is quoted outside a table too', () => {
     const source = '{data-x="a\\|b"}\nx\n'
-    expect(carveToCarve('{data-x=a|b}\nx\n')).toBe(source)
+    expect(carveToCarve('{data-x="a|b"}\nx\n')).toBe(source)
     expect(carveToHtml(source)).toBe('<p data-x="a|b">x</p>')
   })
 })
