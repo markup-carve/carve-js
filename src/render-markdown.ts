@@ -1346,17 +1346,24 @@ function escapeUnresolvedCrossrefs(value: string): string {
 }
 
 /**
- * Carriers for the `:` and `.` that may open a GFM autolink (PART 11 section
- * 8i). The line decides; a character whose own node already rules the form out
- * stays bare, which keeps the carriers rare. GFM links nothing in link text.
+ * Carriers for the `:`, `.` and `@` that may open a GFM autolink (PART 11
+ * section 8i). The line decides; a character whose own node already rules the
+ * form out stays bare, which keeps the carriers rare. GFM links nothing in link
+ * text.
  */
 function autolinkCarriers(text: string): string {
-  return text.replace(/[:.]/g, (ch, i: number) => {
+  return text.replace(/[:.@]/g, (ch, i: number) => {
     if (ch === ':') {
       const after = text.slice(i + 1, i + 3)
       const before = text.slice(Math.max(0, i - 5), i)
       const possible = '//'.startsWith(after) && (i < 5 || /(?:https?|ftp)$/i.test(before))
       return possible ? CONTEXT_SENTINEL[':']! : ch
+    }
+    if (ch === '@') {
+      // The character in front of the `@` is this node's own when it has one,
+      // so a `@handle` after a space is decided here and needs no carrier.
+      const before = i > 0 ? text[i - 1]! : ''
+      return before === '' || EMAIL_LOCAL_CHARACTER.test(before) ? CONTEXT_SENTINEL['@']! : ch
     }
     const before = text.slice(Math.max(0, i - 3), i)
     return 'www'.endsWith(before) && (i >= 3 || before.length === i) ? CONTEXT_SENTINEL['.']! : ch
@@ -1687,8 +1694,9 @@ let HAS_UNDECIDED_HASH = /(?!)/
 /**
  * Carriers for the escapes decided by the characters that FOLLOW on the emitted
  * line, whichever node writes them (PART 11 section 8d): `<` before a tag or
- * autolink opener (M1e), `&` completing a character reference (section 8e) and
- * `!` before a link opener the writer emits (section 8f).
+ * autolink opener (M1e), `&` completing a character reference (section 8e), `!`
+ * before a link opener the writer emits (section 8f) and section 8i's three
+ * autolink carriers.
  */
 let CONTEXT_SENTINEL: Record<string, string> = {}
 let CONTEXT_CHARACTER: Record<string, string> = {}
@@ -1697,10 +1705,11 @@ let HAS_CONTEXT_SENTINEL = /(?!)/
 let RE_ANY_SENTINEL = /(?!)/g
 
 const CARRIER_BASE = 0xe004
-const CARRIER_COUNT = 9
+const CARRIER_COUNT = 10
 
 function setCarriers(run: string[]): void {
-  const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang, colon, dot] = run as [
+  const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang, colon, dot, at] = run as [
+    string,
     string,
     string,
     string,
@@ -1711,10 +1720,10 @@ function setCarriers(run: string[]): void {
     string,
     string,
   ]
-  CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang, ':': colon, '.': dot }
-  CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!', [colon]: ':', [dot]: '.' }
-  RE_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}]`, 'g')
-  HAS_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}]`)
+  CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang, ':': colon, '.': dot, '@': at }
+  CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!', [colon]: ':', [dot]: '.', [at]: '@' }
+  RE_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}${at}]`, 'g')
+  HAS_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}${at}]`)
   RE_ANY_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`, 'g')
 
   NARROWED_SENTINEL = { _: underscore, '[': bracket }
@@ -1750,6 +1759,10 @@ function resolveContextEscapes(text: string): string {
 
   return text.replace(RE_CONTEXT_SENTINEL, (s, offset: number) => {
     const ch = CONTEXT_CHARACTER[s]!
+    // Section 8i E1: the email form takes an empty comment, since both readers
+    // link the address whether the `@` or the `.` carries a backslash. The
+    // comment reaches the output; no other spelling in this section does.
+    if (ch === '@') return opensEmailAutolink(line, offset) ? '<!---->@' : '@'
     let keep: boolean
     if (ch === '<') keep = /[A-Za-z/!?]/.test(line[offset + 1] ?? '')
     else if (ch === '&') keep = CHARACTER_REFERENCE.test(line.slice(offset, offset + 40))
@@ -1777,6 +1790,44 @@ function opensWwwAutolink(line: string, offset: number): boolean {
   if (line.slice(Math.max(0, offset - 3), offset) !== 'www') return false
 
   return !/[A-Za-z0-9]/.test(line[offset - 4] ?? '')
+}
+
+const EMAIL_LOCAL_CHARACTER = /[A-Za-z0-9._+-]/
+const EMAIL_DOMAIN_CHARACTER = /[A-Za-z0-9_-]/
+
+/**
+ * PART 11 section 8i E1: whether GFM's email extension matches an address whose
+ * `@` stands at `offset`. A local part of one or more of `[A-Za-z0-9._+-]`, then
+ * labels of `[A-Za-z0-9_-]` separated by periods, at least one period, and a
+ * last character that is neither `-` nor `_`. A `mailto:` or `xmpp:` prefix
+ * needs no clause of its own: the scheme's colon is not a local-part character,
+ * so the address after it is the one matched either way.
+ *
+ * CHARACTER BY CHARACTER rather than a regex over the tail. The line is the
+ * whole assembled document, so slicing it per candidate is quadratic in the
+ * number of addresses it holds.
+ */
+function opensEmailAutolink(line: string, offset: number): boolean {
+  if (!EMAIL_LOCAL_CHARACTER.test(line[offset - 1] ?? '')) return false
+  let i = offset + 1
+  let periods = 0
+  while (i < line.length) {
+    if (EMAIL_DOMAIN_CHARACTER.test(line[i]!)) {
+      i++
+      continue
+    }
+    // A period continues the domain only with a label on either side of it, so
+    // `a@b.co.` matches `b.co` and the sentence's full stop stays outside it.
+    if (line[i] === '.' && i > offset + 1 && EMAIL_DOMAIN_CHARACTER.test(line[i + 1] ?? '')) {
+      periods++
+      i++
+      continue
+    }
+    break
+  }
+  if (periods === 0) return false
+
+  return !/[_-]/.test(line[i - 1]!)
 }
 
 /**
