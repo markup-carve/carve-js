@@ -145,3 +145,25 @@ describe('PART 11 §10j: a block that spells nothing keeps the list boundary', (
     expect(lists(null)).toBe(2)
   })
 })
+
+// An empty paragraph's attribute line would attach to the next block, so the
+// paragraph is dropped with one row (markup-carve/carve-php#2526).
+describe('an empty paragraph carrying attributes', () => {
+  it.each([
+    ['empty', '<p>a</p><p class="mw-empty-elt" id="x"></p><p>b</p>', []],
+    ['holding an empty span', '<p>a</p><p id="x"><span></span></p><p>b</p>', ['/p[2]/span[1]']],
+  ])('is dropped when %s', (_, html, extra) => {
+    const result = htmlToCarve(html)
+    expect(result.value).toBe('a\n\nb\n')
+    const rows = result.report.diagnostics.map((d) => [d.code, d.message, d.severity, d.path])
+    expect(rows[0]).toEqual(['element-dropped', 'Dropped <p> holding no content', 'warning', '/p[2]'])
+    expect(rows.slice(1).map((row) => row[3])).toEqual(extra)
+    expect(htmlToAst(html).value.children).toHaveLength(2)
+  })
+
+  it('is silent without attributes, and keeps an <hr> attribute', () => {
+    const result = htmlToCarve('<p>a</p><p></p><hr id="h">')
+    expect(result.value).toBe('a\n\n{#h}\n---\n')
+    expect(result.report.diagnostics).toEqual([])
+  })
+})

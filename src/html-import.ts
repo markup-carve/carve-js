@@ -661,6 +661,17 @@ const LINEAR_MATH_TOKENS = new Set(['mi', 'mn', 'mo', 'mtext'])
 const isBlankOrComment = (node: P5Node): boolean =>
   node.nodeName === '#comment' || (node.nodeName === '#text' && /^[ \t\n\r\f]*$/.test(node.value ?? ''))
 
+/** No text an author wrote, anywhere below `root`. */
+function holdsNoText(root: P5Node): boolean {
+  const stack: P5Node[] = [root]
+  while (stack.length) {
+    const node = stack.pop()!
+    if (node.nodeName === '#text' && !/^[ \t\n\r\f]*$/.test(node.value ?? '')) return false
+    for (const child of node.childNodes ?? []) stack.push(child)
+  }
+  return true
+}
+
 /**
  * The text of a `<math>` with no TeX, when flattening cannot change its value
  * (carve#2361): tokens in order, inside grouping elements only. A fraction or a
@@ -2196,7 +2207,7 @@ class Importer {
         buffered.every(
           (node) => node.nodeName === '#comment' || isLayoutOnlyText(node),
         )
-      if (commentsOnly) {
+      if (commentsOnly || this.commentsBesideNothing(buffered, bufferedPaths, bufferedDepths)) {
         buffered.forEach((node, index) => {
           if (node.nodeName !== '#comment') return
           out.push({ type: 'comment', block: true, content: node.data ?? '' })
@@ -2428,6 +2439,12 @@ class Importer {
           path,
           node,
         )
+        return []
+      }
+      // An empty paragraph has no spelling, and its attribute line alone would
+      // attach to the next block, so it is dropped with one row covering them.
+      if (children.length === 0 && attrs) {
+        this.add('element-dropped', `Dropped <${tag}> holding no content`, 'warning', path, node)
         return []
       }
       const paragraph: BlockNode = { type: 'paragraph', children, ...(attrs ? { attrs } : {}) }
@@ -2963,6 +2980,14 @@ class Importer {
       for (const name of this.attrNames(attrs)) {
         this.add('attribute-dropped', `Dropped ${name} on <dl>: a definition list holding no entry is not written`, 'warning', path, node)
       }
+    }
+    // A leading `<dd>` can end in a definition list, which this list would
+    // join on the reparse, so it joins here the way a sibling `<dl>` does.
+    const lead = before.at(-1)
+    if (items.length && !attrs && lead?.type === 'definition_list') {
+      lead.items.push(...items)
+      this.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
+      return [...before, ...this.blocks(trailing, path, depth + 1, trailingPaths)]
     }
     return [...before, ...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
   }
@@ -4192,6 +4217,13 @@ class Importer {
       for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) out.push({ type: 'text', value: ' ' })
+      // The separator is ONE space, merging with layout already on both sides.
+      const first = produced[0]
+      if (atBoundary && first?.type === 'text' && textEdge(out.at(-1), 'end')) {
+        const value = first.value.replace(/^ +/, '')
+        if (value === '') produced.shift()
+        else first.value = value
+      }
       out.push(...produced)
       // A BLOCK THAT CONTRIBUTES NO TOKEN IS NOT A SIDE, so it neither takes a
       // separator of its own nor leaves one owing to the block after it:
@@ -4892,6 +4924,29 @@ class Importer {
    */
   private visible(nodes: InlineNode[]): boolean {
     return nodes.some((node) => node.type !== 'text' || trimNonNbsp(node.value) !== '')
+  }
+
+  /**
+   * A run of comments whose other members are elements importing to nothing
+   * is still a block comment run: the elements leave no inline run behind
+   * (markup-carve/carve-rs#2029). The elements are converted here, once, so
+   * their own rows stand; a probe that finds content rolls its rows back.
+   */
+  private commentsBesideNothing(buffered: P5Node[], paths: string[], depths: number[]): boolean {
+    if (!buffered.some((node) => node.nodeName === '#comment')) return false
+    const elements = buffered.flatMap((node, index) => (node.tagName ? [index] : []))
+    if (!elements.length) return false
+    if (!buffered.every((node) => node.tagName ? ACTIVE.has(node.tagName) || holdsNoText(node) : isBlankOrComment(node))) return false
+    const before = this.mark()
+    const counted = this.nodes
+    for (const index of elements) {
+      if (this.visible(this.inlines([buffered[index]!], paths[index]!, depths[index]!, [paths[index]!], [depths[index]!]))) {
+        this.restore(before)
+        this.nodes = counted
+        return false
+      }
+    }
+    return true
   }
 
   /**
