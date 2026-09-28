@@ -5369,7 +5369,7 @@ function rebaseOverindentedBlocks(
   // authored column - see the flatten note at the dedent below. Every other
   // host still rebases an over-indented note so it registers (corpus 447).
   hostIsFootnoteBody = false,
-  onCodeBodyLine?: (index: number) => void,
+  onFenceBodyLine?: (index: number) => void,
   onUnclosedCodeFence?: () => void,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
@@ -5526,7 +5526,7 @@ function rebaseOverindentedBlocks(
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         end = j
-        onCodeBodyLine?.(j)
+        onFenceBodyLine?.(j)
         if (isBlankLine(candidate)) continue
         const column = indentColumns(candidate, base)
         if (column < base) {
@@ -5558,6 +5558,9 @@ function rebaseOverindentedBlocks(
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         end = j
+        // The container parses its own list markers after paragraph folding.
+        // They must not split the host item's collected stream (carve#2474).
+        onFenceBodyLine?.(j)
         if (isBlankLine(candidate)) continue
         const column = indentColumns(candidate, base)
         // A below-base run is payload unless it closes at the container's own column.
