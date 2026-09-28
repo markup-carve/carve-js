@@ -4897,7 +4897,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     let body = dedent ? containerPad + line.slice(indent) : line
     // Strip an ATX heading's optional closing `#` run (Carve keeps it as text).
     if (isHeading) body = body.replace(/^([ \t]*#{1,6})[ \t]+/, '$1 ').replace(/[ \t]+#+[ \t]*$/, '')
-    if (isHeading && /^(#{1,6})(?:[ \t]+#*)?[ \t]*$/.test(trimmed)) {
+    if (isHeading && /^[ \t]*(#{1,6})(?:[ \t]+#*)?[ \t]*$/.test(line)) {
       const level = /^#+/.exec(trimmed)![0].length
       if (out.length && out.at(-1)!.trim() !== '') out.push('')
       out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text), '')
