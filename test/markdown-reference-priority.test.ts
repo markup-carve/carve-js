@@ -2,6 +2,14 @@ import { expect, it } from 'vitest'
 import { carveToHtml, markdownToCarve } from '../src/index.js'
 
 it.each([
+  ['[a](b\nc)\n\n[a]: /u', '<p><a href="/u">a</a>(b\nc)</p>'],
+  ['[a](\n\n[a]: /u', '<p><a href="/u">a</a>(</p>'],
+  ['[a](b(c(d)))\n\n[a]: /u', '<p><a href="b(c(d))">a</a></p>'],
+  ['a](<b>)', '<p>a](<b>)</p>'],
+  ['[a]b](<c>)', '<p>[a]b](<c>)</p>'],
+  ['[a&amp;b][]\n\n[a&amp;b]: /u', '<p><a href="/u">a&amp;b</a></p>'],
+  ['<span title="[x](<b>)">text</span>', '<p><span title="[x](<b>)">text</span></p>'],
+
   ['[x](\\&amp;)', '<p><a href="&amp;amp;">x</a></p>'],
   ['[x]\n\n[x]: \\&amp;', '<p><a href="&amp;amp;">x</a></p>'],
   ['[a](<b)c)', '<p>[a](&lt;b)c)</p>'],
@@ -35,4 +43,9 @@ it.each([
 
 it('does not resolve an escaped reference label against a different spelling', () => {
   expect(carveToHtml(markdownToCarve('[bar][foo\\!]\n\n[foo!]: /url'))).not.toContain('<a ')
+})
+
+it('does not duplicate escaped bracket labels', () => {
+  const converted = markdownToCarve('[a\\]b][]\n\n[a\\]b]: /u')
+  expect(converted.split('\n')[0]).toBe('[a\\]b][]')
 })

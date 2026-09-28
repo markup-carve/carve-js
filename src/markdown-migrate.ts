@@ -1,5 +1,6 @@
 import { parseFragment } from 'parse5'
 import { isValidAttrPayload } from './attribute-parser.js'
+import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
 /*
  * Markdown -> Carve converter.
@@ -1013,29 +1014,49 @@ function convertInline(
     const encoded = encodeDest(dest)
     return encoded === undefined ? alt + '\\(' + dest.slice(1) : protect(alt + encoded)
   }
+  const protectDestinations = (pattern: RegExp): void => {
+    const subject = line
+    let cursor = 0, depth = 0, pairedEnd = -1
+    let commentEnd = subject.indexOf('-->')
+    const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+    line = subject.replace(pattern, (match, label: string, dest: string, offset: number) => {
+      while (cursor < offset) {
+        if (subject[cursor] === '<') {
+          autolink.lastIndex = cursor
+          const auto = autolink.exec(subject)
+          const tag = scanHtmlTag(subject, cursor)
+          if (subject.startsWith('<!--', cursor) && commentEnd >= 0 && commentEnd < cursor + 4) commentEnd = subject.indexOf('-->', cursor + 4)
+          const comment = subject.startsWith('<!--', cursor) ? commentEnd : -1
+          const end = auto ? cursor + auto[0].length : tag?.end ?? (comment >= 0 ? comment + 3 : cursor)
+          if (end > cursor) { cursor = end; continue }
+        }
+        if (subject[cursor] === '[') depth++
+        else if (subject[cursor] === ']' && depth > 0) { depth--; pairedEnd = cursor }
+        cursor++
+      }
+      if (cursor > offset || (label === '' && pairedEnd !== offset - 1)) return match
+      const image = label.startsWith('!')
+      const written = protectDestination(image ? label : '', dest)
+      if (written.startsWith('\x00P')) cursor = offset + match.length
+      return (image ? '' : label) + written
+    })
+  }
+
   const pointyDestination = String.raw`\([ \t]*<[^<>\n]*>(?:[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'))?[ \t]*\)`
-  line = line.replace(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^\]]*\])*\])(${pointyDestination})`, 'g'),
-    (_match, alt: string, dest: string) => protectDestination(alt, dest))
-  line = line.replace(new RegExp(String.raw`(?<=\])(${pointyDestination})`, 'g'),
-    (_match, dest: string) => protectDestination('', dest))
+  protectDestinations(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^\]]*\])*\])(${pointyDestination})`, 'g'))
+  protectDestinations(new RegExp(String.raw`(?<=\])()(${pointyDestination})`, 'g'))
 
   const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\((?:[^()\s]|\([^()\n]*\))+[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*')[ \t]*\))/g
-  line = line.replace(multilineTitle, (_match, label: string, destination: string) =>
-    label.startsWith('!') ? protectDestination(label, destination) : label + protectDestination('', destination))
+  protectDestinations(multilineTitle)
 
   // Images `![alt](dest)`: Carve renders the alt as raw text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
-  line = line.replace(
-    /(!\[(?:[^[\]]|\[[^\]]*\])*\])(\((?:[^()\n]|\([^()\n]*\))*\))/g,
-    (_m, alt: string, dest: string) => protectDestination(alt, dest),
-  )
+  protectDestinations(/(!\[(?:[^[\]]|\[[^\]]*\])*\])(\((?:[^()\n]|\([^()\n]*\))*\))/g)
 
   // Link destinations `](dest "title")`. (Images already handled above.) The
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
-  line = line.replace(/(?<=\])(\((?:[^()\n]|\([^()\n]*\))*\))/g, (_m, dest: string) =>
-    protectDestination('', dest),
-  )
+  protectDestinations(/(?<=\])()(\((?:[^()\n]|\([^()\n]*\))*\))/g)
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
@@ -1043,10 +1064,10 @@ function convertInline(
     const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
-    const canonical = label !== undefined && !/[\\&\x00]/.test(label)
+    const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label))
       ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) : undefined
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
-    return protect(canonical === undefined || keepCollapsed ? match : `[${canonical}]`)
+    return protect(canonical === undefined || /[\[\]]/.test(canonical) || keepCollapsed ? match : `[${canonical}]`)
   })
 
   // Autolinks `<scheme:...>` and `<email>`: the URL/address is literal, so a
@@ -1079,7 +1100,9 @@ function convertInline(
     protect(url.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))),
   )
 
+  const destinationOpeners = completeDestinationOpeners(line)
   line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
+    if (destinationOpeners.has(offset + match.length)) return match
     const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
     if (following) {
       const protectedTail = protectedSpans[Number(following[1])] ?? ''
@@ -1092,7 +1115,7 @@ function convertInline(
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
     const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans)
-    if (destinationLabel === undefined) return match
+    if (destinationLabel === undefined || /[\[\]]/.test(destinationLabel)) return match
     return `${match}${protect(label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
