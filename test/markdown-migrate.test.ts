@@ -54,7 +54,7 @@ describe('markdownToCarve — inline construct mapping', () => {
   })
 
   it('converts emphasis nested inside ***bold italic***', () => {
-    expect(conv('***outer _inner_ end***')).toBe('{/*outer /inner/ end*/}')
+    expect(conv('***outer _inner_ end***')).toBe('/{*outer /inner/ end*}/')
   })
 
   it('converts Markdown ~~strike~~ to Carve ~strike~', () => {
