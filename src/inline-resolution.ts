@@ -1,9 +1,7 @@
-import { resolveReferenceDestination } from './reference-state.js'
 import type { Abbreviation, Attrs, InlineNode, Position, Text } from './ast.js'
-import { mergeAttrs } from './attribute-merge.js'
 import { mapInlineChildren } from './inline-children.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
-import { normalizeRefLabel } from './label-key.js'
+import { applyReferenceDefinition } from './reference-resolution.js'
 
 export interface LinkDef {
   /** Label spelling carried by the winning definition for canonical output. */
@@ -114,64 +112,9 @@ export function applyLinkDefs(
   const out: InlineNode[] = []
   for (let node of nodes) {
     mapInlineChildren(node, applyLinkDefs, defs)
-    if (node.type === 'link' && isUnresolvedReference(node)) {
-      // Normalization does not make a multiline label syntactically valid.
-      // The inline scanner may retain such a bracket run as a placeholder so
-      // it can degrade byte-for-byte, but it must never enter the symbol table.
-      const def = /[\r\n]/.test(node.ref) ? undefined : defs.get(normalizeRefLabel(node.ref))
-      if (def) {
-        node = resolveReferenceDestination(node, def.href)
-        if (def.title !== undefined) node.title = def.title
-        // PART 9R R1: the definition's attributes transfer to the link, and
-        // the link's own override per key. "Per key" is §15 A3's merge - the
-        // one stacked attribute lists already use - so a repeated id or key
-        // takes the LAST value (the link's) and classes ACCUMULATE across the
-        // two. Definition first, link second (carve#604).
-        if (def.attrs) node.attrs = mergeAttrs(def.attrs, node.attrs ?? {})
-      }
-        // PART 12 §3a, A RESOLVED REFERENCE KEEPS ITS DESTINATION: `ref` and
-        // `rawRef` stay BESIDE `href`, exactly as §5 has footnote numbering
-        // added alongside rather than in place of the reference. Deleting them
-        // made `[a][]` and `[a](#a)` the same tree, which is the distinction
-        // the clause exists to protect - and the clause names all three
-        // engines as missing this half (carve#596).
-
-      // If unresolved, KEEP the placeholder so a post-parse pass
-      // (resolveImplicitHeadingRefs in heading-ids.ts) can match it
-      // against the document's parsed headings, or finalize it to
-      // literal text. Falling back here would lose the link node
-      // before that pass ever sees it.
-      out.push(node)
-      continue
-    }
-    if (node.type === 'image' && isUnresolvedReference(node)) {
-      const def = /[\r\n]/.test(node.ref) ? undefined : defs.get(normalizeRefLabel(node.ref))
-      if (def) {
-        node = resolveReferenceDestination(node, def.href)
-        if (def.title !== undefined) node.title = def.title
-        // AN IMAGE REFERENCE RESOLVES THE SAME ENTRY - NORMATIVE. It looks the
-        // label up in the same table and takes the same three fields, so a
-        // definition's attributes reach the image exactly as they reach a link:
-        // `[ex]: /i.png {.wide}` gives `class="wide"`. This took `href` and
-        // `title` and stopped, which is not a rule, it is where the
-        // implementation stopped (carve#697).
-        //
-        // Same §15 A3 merge as the link branch above - definition first, use
-        // site second, so a repeated key takes the LAST value and classes
-        // ACCUMULATE in source order.
-        if (def.attrs) node.attrs = mergeAttrs(def.attrs, node.attrs ?? {})
-      }
-        // PART 12 §3a, A RESOLVED REFERENCE KEEPS ITS DESTINATION: `ref` and
-        // `rawRef` stay BESIDE `href`, exactly as §5 has footnote numbering
-        // added alongside rather than in place of the reference. Deleting them
-        // made `[a][]` and `[a](#a)` the same tree, which is the distinction
-        // the clause exists to protect - and the clause names all three
-        // engines as missing this half (carve#596).
-
-      // Unresolved image refs do NOT match heading text; the resolve pass
-      // finalizes any survivor to literal source (rawRef).
-      out.push(node)
-      continue
+    if (isUnresolvedReference(node)) {
+      node = applyReferenceDefinition(node, defs)
+      // Unresolved links remain available to the later heading-reference pass.
     }
     out.push(node)
   }

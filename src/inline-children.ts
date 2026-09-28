@@ -47,6 +47,53 @@ export function mapInlineChildren<T>(
   }
 }
 
+/** Visit each authored child list without replacing it. */
+export function visitInlineChildren<T>(
+  node: InlineNode,
+  visit: (children: InlineNode[], context: T) => void,
+  context: T,
+): void {
+  switch (node.type) {
+    case 'emphasis': case 'strong': case 'underline': case 'strike':
+    case 'superscript': case 'subscript': case 'highlight':
+    case 'link': case 'span': case 'small_caps': case 'insert': case 'delete':
+      visit(node.children, context)
+      return
+    case 'inline_footnote':
+      visit(node.inline, context)
+      return
+    case 'substitution':
+      visit(node.old, context)
+      visit(node.new, context)
+      return
+    case 'inline_extension':
+      visit(node.content, context)
+      return
+    case 'ruby':
+      for (const pair of node.pairs) {
+        visit(pair.base, context)
+        visit(pair.annotation, context)
+      }
+      return
+    case 'citation_group':
+      for (const item of node.items) {
+        if (item.prefix) visit(item.prefix, context)
+        if (item.locator) visit(item.locator, context)
+        if (item.suffix) visit(item.suffix, context)
+      }
+      return
+    case 'text': case 'escaped_text': case 'smart_punctuation': case 'code':
+    case 'image': case 'math': case 'raw_inline': case 'literal_inline':
+    case 'symbol': case 'autolink': case 'heading_ref': case 'caption_number':
+    case 'mention': case 'tag': case 'abbreviation': case 'footnote_ref':
+    case 'non_breaking_space': case 'soft_break': case 'hard_break':
+    case 'critic_comment': case 'comment':
+      return
+    default:
+      return assertNever(node)
+  }
+}
+
 function assertNever(_node: never): never {
   throw new Error('Unsupported inline node type')
 }
