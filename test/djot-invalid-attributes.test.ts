@@ -2,6 +2,8 @@ import { expect, it } from 'vitest'
 import { carveToHtml, djotToCarve } from '../src/index.js'
 
 it.each([
+  ["[hi]{#id key=\"<x:y>\"}", "<p><span id=\"id\" key=\"&lt;x:y&gt;\">hi</span></p>"],
+  ["[hi]{#id key=\"a `b` c\"}", "<p><span id=\"id\" key=\"a `b` c\">hi</span></p>"],
   [
     "[not a span]{#a<b}\n",
     "<p>[not a span]{#a&lt;b}</p>"

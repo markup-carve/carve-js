@@ -208,13 +208,13 @@ function escapeInvalidAttributeHashes(source: string): string {
     for (; end < source.length; end++) {
       const ch = source[end]!
       if (ch === '\n' && /^[ \t]*\n/.test(source.slice(end + 1))) break
-      if (masked[end] !== source[end]) { invalid = true; continue }
       if (quote) {
-        if (ch === '\\') end++
+        if (ch === '\\' && source[end + 1] !== '\n') end++
         else if (ch === quote) quote = ''
         continue
       }
-      if (ch === '\\') { invalid = true; end++; continue }
+      if (masked[end] !== source[end]) { invalid = true; continue }
+      if (ch === '\\') { invalid = true; if (source[end + 1] !== '\n') end++; continue }
       if (ch === '}') break
       if (ch === '%') { comment = !comment; continue }
       if (comment) continue
