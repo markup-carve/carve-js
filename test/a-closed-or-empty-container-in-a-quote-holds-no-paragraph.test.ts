@@ -195,11 +195,11 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
   })
 
   it('does not count a fence closer that sits OUTSIDE the quote', () => {
-    // `quotedFenceHasCloser` stops at the first unquoted line, for the reason
-    // `quotedCommentHasCloser` gives: it has to agree with a sub-lexer that
-    // only ever sees this quote's own lines.
+    // `quotedFenceHasCloser` stops at the first unquoted line. The lazy lines
+    // join the paragraph as text, so the last one closes no fence either
+    // (markup-carve/carve-js#2272).
     expect(html('> quote\n> ```\ntail\n```\n')).toBe(
-      '<blockquote>\n  <p>quote</p>\n  <pre><code>tail\n</code></pre>\n</blockquote>',
+      '<blockquote><p>quote\n<code>\ntail\n</code></p></blockquote>',
     )
   })
 

@@ -174,4 +174,12 @@ describe('blockquote lazy list marker only folds into an OPEN paragraph', () => 
       '<blockquote>\n  <blockquote>\n    <p>a</p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>',
     )
   })
+
+  it('a lazy line spliced into a nested quote closes no fence', () => {
+    // `> ```` has no inner marker, so the inner fence has no closer and stays
+    // inline text; the lazy line and `y` continue its paragraph.
+    expect(html('> > a\n> > ```\n> ```\ny\n')).toBe(
+      '<blockquote>\n  <blockquote><p>a\n<code>\n</code>\ny</p></blockquote>\n</blockquote>',
+    )
+  })
 })
