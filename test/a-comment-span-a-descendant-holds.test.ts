@@ -18,9 +18,8 @@ import { carveToHtml } from '../src/index.js'
 // holds walked out of the child, and the blank in front of it was credited to
 // the host.
 //
-// The band between two ancestors' content columns is NOT fixed here and has no
-// row below: a closer written there still reaches the host's rebase as a run of
-// its own. That is the residue this family leaves.
+// The bands between ancestor content columns are covered separately in
+// comment-closer-between-content-columns.test.ts.
 
 describe('a comment span a descendant holds', () => {
   it.each([
