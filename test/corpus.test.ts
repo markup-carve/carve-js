@@ -310,6 +310,7 @@ const IMPLEMENTED = new Set([
   'unresolved-footnote-reference-with-a-trailing-attribute-stays-literal',
   'tight-list-item-keeps-trailing-text-after-a-block-bare',
   'quote-flanking-after-an-escaped-character',
+  'comment-columns-and-surviving-list-items',
   'comment-fence-with-trailing-text',
   'unterminated-comment-fence',
   'widened-verbatim-fences',
