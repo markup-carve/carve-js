@@ -1685,8 +1685,9 @@ function runEndsAtEmptyCodeSpan(code: object, parents: WeakMap<object, Parent>):
  * So the guard sits on the rendered line instead, where it does not care which
  * node produced the hyphens.
  */
-function guardThematicBreakLines(body: string): string {
-  if (!body.includes('-')) return body
+function guardThematicBreakLines(body: string, inLineBlock: boolean): string {
+  // Line-block bodies parse as inline content; padding would add a no-break space.
+  if (inLineBlock || !body.includes('-')) return body
   return body
     .split('\n')
     .map((line) => (/^-{3,}[ \t]*$/.test(line) ? ` ${line}` : line))
@@ -2847,6 +2848,7 @@ class CarveRenderSession {
             attrs === '' && ctx.paragraphStartsAfterCaptionHost,
             ctx.lineBlockDepth > 0,
           ),
+          ctx.lineBlockDepth > 0,
         )
         // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
         // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
