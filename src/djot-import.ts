@@ -196,8 +196,46 @@ function collapseFalseListBoundaries(source: string): string {
   return result.join('\n')
 }
 
+function escapeInvalidAttributeHashes(source: string): string {
+  const masked = maskDjotCodeAndDestinations(source).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length))
+  const escapes: number[] = []
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] !== '{' || masked[i] !== '{') continue
+    let slashes = 0
+    for (let before = i - 1; before >= 0 && source[before] === '\\'; before--) slashes++
+    if (slashes % 2) continue
+    let end = i + 1, quote = '', comment = false, invalid = false
+    for (; end < source.length; end++) {
+      const ch = source[end]!
+      if (ch === '\n' && /^[ \t]*\n/.test(source.slice(end + 1))) break
+      if (masked[end] !== source[end]) { invalid = true; continue }
+      if (quote) {
+        if (ch === '\\') end++
+        else if (ch === quote) quote = ''
+        continue
+      }
+      if (ch === '\\') { invalid = true; end++; continue }
+      if (ch === '}') break
+      if (ch === '%') { comment = !comment; continue }
+      if (comment) continue
+      if (ch === '"') { quote = ch; continue }
+      if (ch === '{') break
+      if (ch === '<' || ch === '>') invalid = true
+    }
+    if (source[i + 1] === '#' && (source[end] !== '}' || invalid)) escapes.push(i)
+    i = Math.max(i, end - (source[end] === '{' ? 1 : 0))
+  }
+  let output = '', cursor = 0
+  for (const at of escapes) {
+    output += source.slice(cursor, at) + '\\{\\#'
+    cursor = at + 2
+  }
+  return output + source.slice(cursor)
+}
+
 /** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
 function escapePlainDjotText(source: string): string {
+  source = escapeInvalidAttributeHashes(source)
   const masked = maskDjotCodeAndDestinations(source)
   let output = ''
   let plain = ''
