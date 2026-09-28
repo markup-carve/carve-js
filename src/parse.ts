@@ -5905,6 +5905,21 @@ function rebaseOverindentedBlocks(
           }
           continue
         }
+        // A FOLDED LINE IS NOT AT THIS GROUP'S BASE, the same reading the colon
+        // arm below takes: its leading run is the host's alignment clamp, not an
+        // authored column, and at an over-indent of ONE the clamp leaves exactly
+        // the single residual column the rebased opener carries. So a run the
+        // host folded in from below its own content column closed a fence it was
+        // never written inside, and the paragraph that had folded it lost its
+        // inline verbatim run to a code block (markup-carve/carve-js#2243).
+        //
+        // Held rather than skipped, so the dedent leaves it where the host put
+        // it. CARVE-P0-004 re-bases a verbatim closer, so an unterminated run is
+        // what the author wrote here and §10 I4 keeps it inside the paragraph.
+        if (takenBelowColumn?.has(j) === true) {
+          heldFoldedLines.add(j)
+          continue
+        }
         if (close.test(sliceColumns(candidate, base, true))) {
           closed = true
           break
