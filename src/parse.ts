@@ -11372,9 +11372,11 @@ class ParseSession {
         }
       }
 
-      const leadOpensColonFence =
-        (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
-        RE_DIV_OPEN.test(content)
+      // ALL FIVE COLON KINDS, via the dispatcher's own predicate. Spelling two
+      // of them here left `::: |`, `::: >` and `::: \` in a marker window
+      // opening their block off a body line that never reached the item's
+      // content column (carve-js#2236).
+      const leadOpensColonFence = isColonFenceOpener(content)
       // Parse the lead text together with its continuation/nested lines as one
       // block sequence (lazy continuation merges into the lead paragraph). An
       // indented ordered sub-list, however, is parsed as its own block stream so
