@@ -121,12 +121,18 @@ interface AnsiContext {
 }
 
 /**
- * Charge a rendered cross-reference label against the per-render expansion
- * budget, degrading an over-budget label to the authored target. Same rule and
- * same budget as the abbreviation expansion below; see abbr-budget.ts.
+ * Render a cross-reference label against the per-render expansion budget,
+ * degrading an over-budget label to the authored target. Same rule and same
+ * budget as the abbreviation expansion below; see abbr-budget.ts. Both arms
+ * render in the link context, so one measured cost answers for both.
  */
-function chargeCrossrefLabel(label: string, target: string, ctx: AnsiContext): string {
-  return ctx.abbrBudget.charge(utf8ByteLength(label)) ? label : stripControls(target)
+function chargeCrossrefLabel(
+  display: InlineNode[] | undefined,
+  render: () => string,
+  target: string,
+  ctx: AnsiContext,
+): string {
+  return ctx.abbrBudget.chargeRenderedLabel(display, render) ?? stripControls(target)
 }
 
 function style(text: string, codes: string): string {
@@ -641,7 +647,12 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // Same expansion budget the abbreviation arm spends, degrading to the
       // authored target (markup-carve/carve-js#892). See abbr-budget.ts.
       if (node.href && insideLink)
-        return chargeCrossrefLabel(renderInlines(node.resolvedText ?? [], ctx), node.target, ctx)
+        return chargeCrossrefLabel(
+          node.resolvedText,
+          () => renderInlines(node.resolvedText ?? [], ctx),
+          node.target,
+          ctx,
+        )
       // Resolved: styled like the link this crossref always rendered as. The
       // href is a same-document `#id`, which the link arm above deliberately
       // does not print, so neither does this.
@@ -652,7 +663,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       if (node.href) {
         return style(
           chargeCrossrefLabel(
-            withinLink(() => renderInlines(node.resolvedText ?? [], ctx)),
+            node.resolvedText,
+            () => withinLink(() => renderInlines(node.resolvedText ?? [], ctx)),
             node.target,
             ctx,
           ),

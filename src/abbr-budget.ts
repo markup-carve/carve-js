@@ -135,6 +135,16 @@ export function expansionBudgetLength(ast: { srcByteLength?: number }): number {
 export class AbbrBudget {
   private remaining: number
 
+  /**
+   * What rendering one shared display-text clone costs, keyed by that clone.
+   *
+   * Keyed by the node list's IDENTITY, not by the authored target: two
+   * references can name the same target and carry different display text on a
+   * tree that arrived through PART 12, and a cost read across those two would
+   * be a prediction rather than a measurement.
+   */
+  private readonly labelCost = new WeakMap<readonly object[], number>()
+
   constructor(srcByteLength: number | undefined) {
     this.remaining = abbrBudget(srcByteLength)
   }
@@ -149,5 +159,32 @@ export class AbbrBudget {
     if (cost > this.remaining) return false
     this.remaining -= cost
     return true
+  }
+
+  /**
+   * Render a derived label that exists only to be emitted, and charge it.
+   *
+   * Returns the label when it fit, `undefined` when the caller must degrade.
+   *
+   * `render` is skipped once `display` is known not to fit: `remaining` never
+   * grows, so a cost that overflowed the budget cannot fit later, and rendering
+   * it again only produces bytes the caller throws away
+   * (markup-carve/carve-js#2250). `display` is the node list the label is
+   * rendered from, and the resolver shares one display-text clone across every
+   * reference to a target, so its cost is measured once per target rather than
+   * once per reference.
+   */
+  chargeRenderedLabel(
+    display: readonly object[] | undefined,
+    render: () => string,
+  ): string | undefined {
+    const known = display === undefined ? undefined : this.labelCost.get(display)
+    if (known !== undefined && known > this.remaining) return undefined
+
+    const label = render()
+    const cost = utf8ByteLength(label)
+    if (display !== undefined) this.labelCost.set(display, cost)
+
+    return this.charge(cost) ? label : undefined
   }
 }
