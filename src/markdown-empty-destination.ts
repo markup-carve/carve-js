@@ -46,7 +46,7 @@ const LABEL = String.raw`((?:${BRACKET_0}|${BRACKET_3})*)`
 const TITLE = String.raw`("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\((?:[^()\\\n]|\\.)*\))`
 
 function normalizeReferenceLabel(label: string): string {
-  return label.trim().replace(/\s+/gu, ' ').toUpperCase().toLowerCase()
+  return label.trim().replace(/\s+/gu, ' ').toLowerCase().toUpperCase().toLowerCase()
 }
 
 /** A title's text: backslash escapes and character references decoded, placeholders read back. */
