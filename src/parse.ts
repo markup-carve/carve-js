@@ -2572,13 +2572,28 @@ function commentScopeEnd(
 }
 
 /**
- * Whether a comment fence of width `fence` closes LATER IN THIS QUOTE.
+ * A line's content `depth` quotes below the quote being collected, or null when
+ * the line leaves that quote first.
  */
-function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
+function quotedContentAt(line: string, depth: number): string | null {
+  const terminatorFree = !/[\n\r\u2028\u2029]/.test(line)
+  let text: string | null = line
+  for (let level = 0; level <= depth && text !== null; level++) {
+    text = quotedLineText(text, terminatorFree)
+  }
+
+  return text
+}
+
+/**
+ * Whether a comment fence of width `fence`, `depth` quotes below this one,
+ * closes LATER IN ITS QUOTE.
+ */
+function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number, depth = 0): boolean {
   for (let i = fromIndex + 1; i < lexer.lines.length; i++) {
-    const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
-    if (!quoted) return false
-    const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
+    const content = quotedContentAt(lexer.lines[i]!, depth)
+    if (content === null) return false
+    const run = RE_COMMENT_BLOCK_ANY.exec(content)
     if (run && run[1]!.length === fence) return true
   }
 
@@ -2838,21 +2853,23 @@ function quotedFenceHasCloser(
   marker: string,
   fromIndex: number,
   memo: QuotedFenceCloserMemo,
+  depth = 0,
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
-  if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
+  // Each depth scans its own text, so each keeps its own entries.
+  const key = depth === 0 ? char : `${depth}${char}`
+  if (fenceCloserMemoRefutes(memo, key, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
   for (let i = start; i < lexer.lines.length; i++) {
-    const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
-    if (!quoted) break
-    const content = quoted[1] ?? ''
+    const content = quotedContentAt(lexer.lines[i]!, depth)
+    if (content === null) break
     if (closeRe.test(content)) return true
     const closer = RE_FENCE_CLOSER.exec(content)
     if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  memo.set(char, { from: start, maxRun })
+  memo.set(key, { from: start, maxRun })
 
   return false
 }
@@ -3256,35 +3273,30 @@ const closeBlockQuoteParagraph = (state: BlockQuoteLazyState): void => {
 function trackBlockQuoteLazyState(
   content: string,
   state: BlockQuoteLazyState,
-  hasCommentCloser: (fence: number) => boolean,
-  hasFenceCloser: (marker: string) => boolean,
+  hasCommentCloser: (fence: number, depth: number) => boolean,
+  hasFenceCloser: (marker: string, depth: number) => boolean,
   descent?: QuoteDescent,
 ): void {
   let text = content
   let level = state
   const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
-  let commentCloser = hasCommentCloser
-  let fenceCloser = hasFenceCloser
   if (descent) descent.levels = 0
-  for (;;) {
-    const descend = classifyQuotedLine(text, level, commentCloser, fenceCloser, terminatorFree)
+  // A fence below the top level looks for its closer at its own depth, over
+  // the same lines the nested quote will scan, so the state it leaves is the
+  // nested quote's own and can be handed down.
+  for (let depth = 0; ; depth++) {
+    const below = depth
+    const descend = classifyQuotedLine(
+      text,
+      level,
+      (fence) => hasCommentCloser(fence, below),
+      (marker) => hasFenceCloser(marker, below),
+      terminatorFree,
+    )
     if (descend === null) return
     text = descend.text
     level = descend.state
-    if (!descent) continue
-    descent.levels++
-    if (commentCloser === hasCommentCloser) {
-      // The lookups scan the CALLER's lines, so below the top level they may
-      // answer for the wrong depth. A chain that asked one is not handed down.
-      commentCloser = (fence) => {
-        descent.askedBelowTop = true
-        return hasCommentCloser(fence)
-      }
-      fenceCloser = (marker) => {
-        descent.askedBelowTop = true
-        return hasFenceCloser(marker)
-      }
-    }
+    if (descent) descent.levels++
   }
 }
 
@@ -3307,8 +3319,6 @@ function quotedLineText(content: string, terminatorFree: boolean): string | null
 interface QuoteDescent {
   /** Quote levels the line descended through. */
   levels: number
-  /** Sticky: a closer lookup ran below the top level on some line. */
-  askedBelowTop: boolean
 }
 
 /**
@@ -9746,7 +9756,7 @@ class ParseSession {
     const untracked: Array<[content: string, lineIndex: number]> = []
     const given = firstLineIndex === 0 ? lexer.quoteLazyHint : null
     lexer.quoteLazyHint = null
-    const descent: QuoteDescent = { levels: 0, askedBelowTop: false }
+    const descent: QuoteDescent = { levels: 0 }
     // The state this quote hands its own nested quote; see `QuoteLazyHint`.
     let handDown = null as QuoteLazyHint | null
     let trackedBefore = false
@@ -9756,8 +9766,8 @@ class ParseSession {
       trackBlockQuoteLazyState(
         content,
         state,
-        (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
+        (fence, depth) => quotedCommentHasCloser(lexer, fence, lineIndex, depth),
+        (marker, depth) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo, depth),
         descent,
       )
       // A later line that continues the handed-down quote would change the
@@ -9785,7 +9795,6 @@ class ParseSession {
           trackLine(content, lineIndex)
           depth = Math.min(depth, descent.levels)
         }
-        if (descent.askedBelowTop) depth = 0
       }
       untracked.length = 0
       if (depth >= 1 && state.mode.kind === 'quote') {

@@ -12,7 +12,7 @@ import {
   type Document,
 } from '../src/index.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from '../src/render-depth.js'
-import { expectScansLinearly, perfIt } from './helpers/scaling.js'
+import { expectBuiltInputScansLinearly, expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // Regression guard: deeply nested block containers must not overflow the call
 // stack. Each `>` level recurses parseBlocks -> parseBlock -> parseBlockQuote,
@@ -42,6 +42,28 @@ describe('deep nesting does not overflow the stack', () => {
     // rather than descending the chain again (markup-carve/carve-js#2251).
     expectScansLinearly((input) => void parse(input + 'x\ny'), '> ', {
       label: 'nested quote chain with a lazy line',
+      smallRepeats: 2000,
+    })
+  })
+
+  perfIt('refutes repeated unclosed fences in a nested quote in linear time', () => {
+    // Each opener asks for a closer one quote down; the answer is remembered.
+    expectBuiltInputScansLinearly(
+      (input) => void parse(input),
+      (n) => '> > a\n' + '> > ```lang\n'.repeat(n) + 'y',
+      { label: 'unclosed nested fences', smallRepeats: 2000 },
+    )
+  })
+
+  perfIt('looks for a deep fence closer in linear time', () => {
+    // Each level's closer lookup reads only the quote markers it strips, not
+    // the rest of the line.
+    const deepFence = (n: number): string => {
+      const prefix = '> '.repeat(n)
+      return [prefix + 'a', prefix + '```', prefix + '```', prefix + 'b', 'y'].join('\n')
+    }
+    expectBuiltInputScansLinearly((input) => void parse(input), deepFence, {
+      label: 'deep quote chain holding a closed fence',
       smallRepeats: 2000,
     })
   })
