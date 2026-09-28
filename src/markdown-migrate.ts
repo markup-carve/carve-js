@@ -638,7 +638,7 @@ function scanHtmlTag(
       quote = ch
       continue
     }
-    if (ch === '<') return null
+    if (ch === '<' || ch === '`' || ch === '\x00') return null
     if (ch === '>') {
       const beforeClose = s.slice(start, i).replace(/\s+$/, '').endsWith('/')
       return {
@@ -663,7 +663,7 @@ function convertInlineHtml(input: string, protect: (s: string) => string): strin
       continue
     }
     if (input.startsWith('<!--', i)) {
-      const end = input.indexOf('-->', i + 4)
+      const end = input.indexOf('-->', i + 2)
       if (end !== -1) {
         const html = input.slice(i, end + 3)
         out += protect(rawInlineHtml(html))
@@ -704,7 +704,7 @@ function convertInlineHtml(input: string, protect: (s: string) => string): strin
  * backticks (so a span may embed shorter runs, e.g. `` `a `b` c` ``). An
  * unterminated run is literal and left alone.
  */
-function protectCodeSpans(s: string, repl: (span: string) => string): string {
+function protectCodeSpans(s: string, repl: (span: string, offset: number) => string): string {
   const runLen = (idx: number): number => {
     let n = 0
     while (s[idx + n] === '`') n++
@@ -713,15 +713,30 @@ function protectCodeSpans(s: string, repl: (span: string) => string): string {
   const autolink = /<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*>/y
   let out = ''
   let i = 0
+  let commentEnd = s.indexOf('-->')
   while (i < s.length) {
     if (s[i] === '\\' && /[!-/:-@\[-`{-~]/.test(s[i + 1] ?? '')) {
       out += s.slice(i, i + 2)
       i += 2
       continue
     }
+    if (s.startsWith('<!--', i)) {
+      if (commentEnd >= 0 && commentEnd < i + 2) commentEnd = s.indexOf('-->', i + 2)
+      if (commentEnd >= 0) {
+        out += s.slice(i, commentEnd + 3)
+        i = commentEnd + 3
+        continue
+      }
+    }
     if (s[i] === '<') {
       autolink.lastIndex = i
       const match = autolink.exec(s)
+      const tag = scanHtmlTag(s, i)
+      if (tag) {
+        out += s.slice(i, tag.end)
+        i = tag.end
+        continue
+      }
       if (match) {
         out += match[0]
         i += match[0].length
@@ -737,6 +752,11 @@ function protectCodeSpans(s: string, repl: (span: string) => string): string {
     let j = i + len
     let closed = -1
     while (j < s.length) {
+      if (len < 3 && s[j] === '\n') {
+        const end = s.indexOf('\n', j + 1)
+        const next = s.slice(j + 1, end < 0 ? s.length : end)
+        if (next.trim() === '' || (indentColumns(next) < 4 && !isParagraphRunLine([next], 0, 'text'))) break
+      }
       // Close only at the start of a run of *exactly* len backticks, so a
       // longer inner run (```) never closes a shorter span (``) on its suffix.
       if (s[j] === '`' && s[j - 1] !== '`' && runLen(j) === len) {
@@ -750,7 +770,7 @@ function protectCodeSpans(s: string, repl: (span: string) => string): string {
       i += len
       continue
     }
-    out += repl(s.slice(i, closed + len))
+    out += repl(s.slice(i, closed + len), i)
     i = closed + len
   }
   return out
@@ -955,6 +975,7 @@ function convertInline(
   dialect: MarkdownDialect = COMMONMARK_GFM,
   holdsFenceBody = false,
   taskBox = false,
+  joinedLines?: Set<number>,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -968,7 +989,19 @@ function convertInline(
     protectedSpans.push(s)
     return `\x00P${protectedSpans.length - 1}\x00`
   }
-  let line = protectCodeSpans(input, protect)
+  let codeCursor = 0, codeLine = 0
+  let line = protectCodeSpans(input, (span, offset) => {
+    const fence = /^`+/.exec(span)?.[0] ?? ''
+    if (fence.length > 2 || !span.includes('\n')) return protect(span)
+    if (joinedLines) {
+      while (codeCursor < offset) if (input[codeCursor++] === '\n') codeLine++
+      while (codeCursor < offset + span.length) if (input[codeCursor++] === '\n') joinedLines.add(++codeLine)
+    }
+    let value = span.slice(fence.length, -fence.length).replace(/\n[ \t]*/g, ' ')
+    if (value.startsWith(' ') && value.endsWith(' ') && /[^ ]/.test(value)) value = value.slice(1, -1)
+    const rendered = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
+    return protect(rendered.replace(/\n$/, ''))
+  })
   line = escapeCarveOnlyMarker(line)
   // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
   // Carve one, so a continuation line shaped like one is escaped (carve-js#1812).
@@ -2035,12 +2068,15 @@ function restorePrefixedInlineRun(
   dialect: MarkdownDialect,
 ): string[] {
   const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
+  const joinedLines = new Set<number>()
   const converted = convertInline(
     run.map((part) => part.text).join('\n'),
     dialect,
     opensFence,
     /^\s*(?:[-*+]|\d{1,9}[.)])\s+$/.test(run[0]?.prefix ?? ''),
+    joinedLines,
   ).split('\n')
+  run = run.filter((_, index) => !joinedLines.has(index))
   const held = heldByItem(run)
   // Only a run whose lines this function can place in a container gets the
   // escape at all. What `prefix` holds is up to the collector, and a run can
