@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { perfIt } from './helpers/scaling.js'
 import { carveToHtml, parse, renderCarve } from '../src/index.js'
 
 describe('trailing line comments', () => {
@@ -101,7 +102,7 @@ describe('block comment fence lines (PART 9 §28)', () => {
     expect(carveToHtml('%%% TODO\nx\n%%%\n\nafter').trim()).toBe('<p>after</p>')
   })
 
-  it('does not rescan the document per fence opener', () => {
+  perfIt('does not rescan the document per fence opener', () => {
     // Every line is an opener of a DISTINCT width, so no line can close any
     // other and each one has to answer "is there a closer ahead?". Scanning to
     // end of input per opener made this superlinear: ~1.9 MiB of it took 8.5s,
