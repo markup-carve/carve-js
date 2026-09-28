@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createEditorSession as createInternalSession } from '../src/editor-session.js'
 import { createEditorSession, EditorChangeError, parse, toAstJson } from '../src/index.js'
 
 const fresh = (source: string) => toAstJson(parse(source, { positions: true }))
@@ -76,4 +77,47 @@ describe('editor session', () => {
       ['fence-open', '```js\n'], ['fence-close', '\n```'],
     ])
   })
+})
+
+
+it('reuses untouched paragraphs and parses only the edited Unicode paragraph', () => {
+  const session = createEditorSession('één\n\nMitte\n\n終わり\n')
+  const before = session.snapshot()
+  const update = session.update([{ from: 5, to: 10, insert: '日本語' }])
+  expect(update.ast).toEqual(fresh(update.source))
+  expect(update.reusedPreviousTree).toBe(true)
+  expect(update.parsedSourceBytes).toBe(9)
+  expect(update.ast.children[0]).toBe(before.ast.children[0])
+  expect(() => { update.ast.children.length = 0 }).toThrow()
+})
+
+it('matches fresh parses after repeated local edits and structural fallbacks', () => {
+  const session = createEditorSession('first\n\ntext\n\nlast')
+  for (let index = 0; index < 100; index++) {
+    const old = session.snapshot().source
+    const end = old.indexOf('\n', 7)
+    const update = session.update([{ from: 7, to: end, insert: `paragraph ${index} é` }])
+    expect(update.ast).toEqual(fresh(update.source))
+    expect(update.reusedPreviousTree).toBe(true)
+    expect(update.parsedSourceBytes).toBeLessThan(new TextEncoder().encode(update.source).length)
+  }
+  for (const insert of ['# Heading', '[ref]: /url', 'first\n\nsecond', '1. item', '']) {
+    const session = createEditorSession('before\n\ntext\n\nafter')
+    const update = session.update([{ from: 8, to: 12, insert }])
+    expect(update.ast).toEqual(fresh(update.source))
+    expect(update.reusedPreviousTree).toBe(false)
+  }
+})
+
+
+it('requires explicit core-parser opt-in for injected parser callbacks', () => {
+  const calls: string[] = []
+  const parser = (source: string) => { calls.push(source); return fresh(source) }
+  const custom = createInternalSession('first\n\ntext\n\nlast', parser)
+  expect(custom.update([{ from: 7, to: 11, insert: 'edited' }]).reusedPreviousTree).toBe(false)
+  expect(calls.at(-1)).toBe('first\n\nedited\n\nlast')
+  calls.length = 0
+  const core = createInternalSession('first\n\ntext\n\nlast', parser, {}, true)
+  core.update([{ from: 7, to: 11, insert: 'edited' }])
+  expect(calls).toEqual(['first\n\ntext\n\nlast', 'edited'])
 })

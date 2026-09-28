@@ -1,4 +1,4 @@
-import type { AstJsonDocument } from './ast-json.js'
+import type { AstJsonBlock, AstJsonDocument } from './ast-json.js'
 import type { ParseOptions } from './parse.js'
 import { astNodePaths, toNodeIdentity, type NodeIdentitySidecar } from './ast-sidecars.js'
 
@@ -9,6 +9,8 @@ export interface EditorToken extends EditorRange {
 export interface EditorMappedNode extends EditorRange { path: string; type?: string; tokens: readonly EditorToken[] }
 export interface EditorChange { from: number; to: number; insert: string }
 export interface EditorSnapshot {
+  readonly parsedSourceBytes: number
+  readonly reusedPreviousTree: boolean
   readonly revision: number
   readonly source: string
   readonly ast: AstJsonDocument
@@ -159,6 +161,65 @@ function changedPaths(before: ReadonlyMap<string, string>, after: ReadonlyMap<st
   return [...changed].sort()
 }
 
+function reusableParagraphs(source: string, ast: AstJsonDocument): boolean {
+  return /^[\p{L}\p{N}\p{M} .,!?\n]*$/u.test(source) && ast.children.length > 0 && ast.children.every(block =>
+    block.type === 'paragraph' && !block.attrs && block.pos?.startColumn === 1 && block.pos.startLine === block.pos.endLine &&
+    typeof block.pos.startOffset === 'number' && typeof block.pos.endOffset === 'number' &&
+    block.children.every(inline => inline.type === 'text' && typeof inline.pos?.startOffset === 'number' && typeof inline.pos?.endOffset === 'number'))
+}
+
+function shiftParagraph(block: AstJsonBlock, offset: number, lines: number): void {
+  if (block.type !== 'paragraph') return
+  for (const node of [block, ...block.children]) {
+    if (node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined) {
+      node.pos.startOffset += offset; node.pos.endOffset += offset
+      node.pos.startLine += lines; node.pos.endLine += lines
+    }
+  }
+}
+
+function freezeAst(ast: AstJsonDocument): void {
+  const pending: object[] = [ast]
+  while (pending.length) {
+    const value = pending.pop()!
+    if (Object.isFrozen(value)) continue
+    for (const child of Object.values(value)) if (child && typeof child === 'object') pending.push(child)
+    Object.freeze(value)
+  }
+}
+
+function reparseParagraph(
+  source: string, previous: EditorSnapshot, changes: readonly EditorChange[],
+  parseDocument: (source: string) => AstJsonDocument,
+): AstJsonDocument | undefined {
+  if (!reusableParagraphs(previous.source, previous.ast)) return undefined
+  if (!changes.length) return previous.ast
+  if (changes.length !== 1) return undefined
+  const change = changes[0]!
+  if (!/^[\p{L}\p{N}\p{M} .,!?]*$/u.test(change.insert) || change.insert.includes('\n')) return undefined
+  const offsets = codepointToUtf16(previous.source)
+  for (const [index, block] of previous.ast.children.entries()) {
+    if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined || block.pos.endOffset === undefined) return undefined
+    const start = offsets[block.pos.startOffset]!, end = offsets[block.pos.endOffset]!
+    if (change.from < start || change.to > end) continue
+    const fragment = previous.source.slice(start, change.from) + change.insert + previous.source.slice(change.to, end)
+    if (!fragment || fragment.includes('\n') || fragment.startsWith(' ') || fragment.endsWith(' ')) return undefined
+    const replacement = parseDocument(fragment)
+    if (replacement.children.length !== 1 || !reusableParagraphs(fragment, replacement)) return undefined
+    const delta = [...fragment].length - (block.pos.endOffset - block.pos.startOffset)
+    const children = [...previous.ast.children]
+    const edited = replacement.children[0]!
+    shiftParagraph(edited, block.pos.startOffset, block.pos.startLine - 1)
+    children[index] = edited
+    for (let following = index + 1; following < children.length; following++) {
+      children[following] = structuredClone(children[following]!)
+      shiftParagraph(children[following]!, delta, 0)
+    }
+    return { ...previous.ast, children, srcByteLength: new TextEncoder().encode(source).length }
+  }
+  return undefined
+}
+
 /**
  * Create a source-authoritative editing session. Updates use UTF-16 offsets,
  * apply atomically, and always produce the same AST/map as a fresh parse.
@@ -167,11 +228,21 @@ export function createEditorSession(
   initialSource: string,
   parseDocument: (source: string, options?: ParseOptions) => AstJsonDocument,
   options: ParseOptions = {},
+  allowParagraphReuse = false,
 ): EditorSession {
   const session = globalThis.crypto?.randomUUID?.() ?? `s${Date.now().toString(36)}-${(++sessionCounter).toString(36)}`
   let nextId = 0
   const build = (source: string, revision: number, previous?: EditorSnapshot, changes: readonly EditorChange[] = []): EditorSnapshot => {
-    const ast = parseDocument(source, { ...options, positions: true })
+    let parsedSourceBytes = 0
+    const parse = (text: string): AstJsonDocument => {
+      parsedSourceBytes += new TextEncoder().encode(text).length
+      return parseDocument(text, { ...options, positions: true })
+    }
+    const incremental = allowParagraphReuse && previous && !options.extensions?.length && !options.onUnclosedContainer
+      ? reparseParagraph(source, previous, changes, parse) : undefined
+    const ast = incremental ?? parse(source)
+    const reusedPreviousTree = incremental !== undefined && (changes.length === 0 || ast.children.length > 1)
+    if (allowParagraphReuse) freezeAst(ast)
     const nodes = Object.freeze(mappedNodes(source, ast))
     const ids = new Map<string, string>()
     if (previous) {
@@ -201,7 +272,7 @@ export function createEditorSession(
     }
     for (const path of astNodePaths(ast)) if (!ids.has(path)) ids.set(path, `n${nextId++}`)
     const identity = toNodeIdentity(ast, session, ids)
-    return Object.freeze({ revision, source, ast, nodes, identity })
+    return Object.freeze({ revision, source, ast, nodes, identity, parsedSourceBytes, reusedPreviousTree })
   }
   let current = build(initialSource, 0)
   let signatures = nodeSignatures(current.ast)
