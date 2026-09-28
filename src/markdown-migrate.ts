@@ -1728,7 +1728,7 @@ function isParagraphRunLine(
   const trimmed = line.trim()
   if (trimmed === '') return false
   if (isMarkdownFenceLine(line)) return false
-  if (/^#{1,6}\s/.test(trimmed) || trimmed.startsWith('>')) return false
+  if (/^#{1,6}(?:[ \t]|$)/.test(trimmed) || trimmed.startsWith('>')) return false
   if (RE_MD_THEMATIC.test(line) || hasFollowingSetextUnderline(lines, index)) return false
   if (startsTableHeader(lines, index) || isStandardTableRow(line)) return false
   // An HTML block whose condition may interrupt a paragraph ends the run, the
@@ -4694,7 +4694,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     inTableBody = false
 
     const isBlank = trimmed === ''
-    const isHeading = /^#{1,6}\s/.test(trimmed)
+    const isHeading = /^#{1,6}(?:[ \t]|$)/.test(trimmed)
     const indent = line.length - line.replace(/^\s+/, '').length
     // How far the line sits PAST its container's content column - the measure
     // Markdown's 0-3 space slack and its four-column code rule are both stated
@@ -4870,6 +4870,13 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     let body = dedent ? containerPad + line.slice(indent) : line
     // Strip an ATX heading's optional closing `#` run (Carve keeps it as text).
     if (isHeading) body = body.replace(/^([ \t]*#{1,6})[ \t]+/, '$1 ').replace(/[ \t]+#+[ \t]*$/, '')
+    if (isHeading && /^(#{1,6})(?:[ \t]+#*)?[ \t]*$/.test(trimmed)) {
+      const level = /^#+/.exec(trimmed)![0].length
+      if (out.length && out.at(-1)!.trim() !== '') out.push('')
+      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text), '')
+      prevType = 'heading'
+      continue
+    }
     if (isBlockquote) {
       const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
       quoteCol = contentCol
