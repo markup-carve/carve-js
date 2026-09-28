@@ -9240,12 +9240,19 @@ class ParseSession {
        * fence degraded to inline verbatim and its paragraph stayed open one column
        * past where the same fence ends the body.
        */
+      let commentPayloadState: ItemLazyState | null = null
       const track = (
         content: string,
         atLineIndex?: number,
         atContentColumn = true,
         openerCol = contentCol,
       ): void => {
+        // Keep payload classification separate from the actual span state.
+        // An unfinished prefix can leave a paragraph open for S4, but blocks
+        // inside a completed comment must not change the surrounding state.
+        if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
+          commentPayloadState = { ...lazyState, quoteInner: null }
+        }
         trackItemLazyState(
           content,
           lazyState,
@@ -9263,13 +9270,13 @@ class ParseSession {
             return answer
           },
           atContentColumn,
-          // The description collector classifies the prefix collected so far.
-          // A comment opener has no closer in that prefix yet, so its following
-          // lines can leave a paragraph open for S4. The body parse pairs the
-          // delimiters after collection; the span scan keeps a below-column
-          // closer with its opener (carve-js#2237).
-          () => false,
         )
+        if (lazyState.opaque?.kind === 'comment' && commentPayloadState !== null) {
+          trackItemLazyState(content, commentPayloadState, () => true, atContentColumn, () => false)
+          lazyState.lazyFoldable = commentPayloadState.lazyFoldable
+        } else {
+          commentPayloadState = null
+        }
       }
       // Lines admitted by REACHING the body's content column, mirroring the list
       // item's `authoredBaseEligible` one collector over. A below-column lazy line
@@ -9551,7 +9558,9 @@ class ParseSession {
           bodyLines.push(atDocumentColumn ? ln : ' ' + below)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-          track(below, undefined, false)
+          // A span delimiter is a comment boundary, even below the column.
+          // It leaves no paragraph for the next below-column line to continue.
+          track(below)
           lexer.consume()
           continue
         }

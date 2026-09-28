@@ -20,6 +20,20 @@ describe('a comment payload below a description column', () => {
     }
   }
 
+  for (const closer of [0, 1, 2]) {
+    for (const payload of ['', '   p\n']) {
+      for (const follower of ['z', ' z', '  z']) {
+        it(`ends the body after closer ${closer}, payload ${JSON.stringify(payload)}, follower ${JSON.stringify(follower)}`, () => {
+          const source = ':: t\n:  d\n\n   %%%\n' + payload +
+            ' '.repeat(closer) + '%%%\n' + follower + '\n'
+          expect(carveToHtml(source)).toBe(
+            '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>z</p>',
+          )
+        })
+      }
+    }
+  }
+
   it('folds plain text after an unterminated comment opener', () => {
     expect(carveToHtml(':: t\n:  d\n\n   %%%\n   p\nz\n')).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>p\nz</p>\n  </dd>\n</dl>',
