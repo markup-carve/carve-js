@@ -219,4 +219,121 @@ describe('a raised fence keeps a below-column run as payload', () => {
   ])('control: %s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })
+
+  // FAMILY 1, THE OTHER TWELVE. With NO BLANK before it, an opener over-indented
+  // by exactly ONE column reaches the paragraph the child item already holds
+  // open, and the host's clamp leaves a run folded in from below its own content
+  // column at that same single column. The rebase moved the folded run onto the
+  // group's base, where it closed a fence it was never written inside, so the
+  // paragraph lost its inline verbatim run to a code block.
+  //
+  // Measured against the oracle in markup-carve/carve at `66d4ed19`, run rather
+  // than read: the block opens only where a closer reaches the child's content
+  // column or the fence's own base, and every other column folds.
+  it.each([
+    [
+      'a closer at column zero, trailing line at the outer column',
+      '- outer\n  - head\n     ```\n     a\n```\n\n  tail\n',
+      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at column zero, trailing line at the child column',
+      '- outer\n  - head\n     ```\n     a\n```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at column zero, trailing line past the child column',
+      '- outer\n  - head\n     ```\n     a\n```\n\n      tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at column one, trailing line at the outer column',
+      '- outer\n  - head\n     ```\n     a\n ```\n\n  tail\n',
+      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at column one, trailing line at the child column',
+      '- outer\n  - head\n     ```\n     a\n ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at column one, trailing line past the child column',
+      '- outer\n  - head\n     ```\n     a\n ```\n\n      tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at the outer column, trailing line at the outer column',
+      '- outer\n  - head\n     ```\n     a\n  ```\n\n  tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    tail\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at the outer column, trailing line at the child column',
+      '- outer\n  - head\n     ```\n     a\n  ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at the outer column, trailing line past the child column',
+      '- outer\n  - head\n     ```\n     a\n  ```\n\n      tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer one column above the outer, trailing line at the outer column',
+      '- outer\n  - head\n     ```\n     a\n   ```\n\n  tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    tail\n  </li>\n</ul>',
+    ],
+    [
+      'a closer one column above the outer, trailing line at the child column',
+      '- outer\n  - head\n     ```\n     a\n   ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code></li>\n    </ul>\n    tail\n  </li>\n</ul>',
+    ],
+    [
+      'a closer one column above the outer, trailing line past the child column',
+      '- outer\n  - head\n     ```\n     a\n   ```\n\n      tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+  ])('family 1 with no blank: %s', (_name, source, expected) => {
+    expect(carveToHtml(source)).toBe(expected)
+  })
+
+  // CONTROLS for the hold. Each agreed with the oracle before it, and each is
+  // what a hold reaching one line too far would break.
+  it.each([
+    [
+      'a closer at the child column still opens the block',
+      '- outer\n  - head\n     ```\n     a\n    ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer at the fence base still opens the block',
+      '- outer\n  - head\n     ```\n     a\n     ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a closer past the fence base folded already',
+      '- outer\n  - head\n     ```\n     a\n      ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'the fence at the child column with a flush closer folded already',
+      '- outer\n  - head\n    ```\n    a\n```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n<code>\na\n</code>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a tilde fence over-indented by one folds the same way',
+      '- outer\n  - head\n     ~~~\n     a\n ~~~\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n~~~\na\n~~~\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+    [
+      'a blank before the opener keeps the block',
+      '- outer\n  - head\n\n     ```\n     a\n ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>\n<p>tail</p>',
+    ],
+    [
+      'a body line at the fence base still rebases with it',
+      '- outer\n  - head\n     ```\n     a\n     b\n     ```\n\n    tail\n',
+      '<ul>\n  <li>outer\n    <ul>\n      <li><p>head</p>\n        <pre><code>a\nb\n</code></pre>\n        <p>tail</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    ],
+  ])('control: %s', (_name, source, expected) => {
+    expect(carveToHtml(source)).toBe(expected)
+  })
 })
