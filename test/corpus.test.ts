@@ -846,6 +846,31 @@ const IMPLEMENTED = new Set([
   // byte-exact: the residue measured from the fence opener landed on
   // carve-js#2201.
   'a-verbatim-line-keeps-what-sits-past-its-fence-opener-not-past-its-container',
+  // Arrives with carve 5e2683cb and all sixteen documents already render
+  // byte-exact: raised colon paragraph folding landed on carve-js#2242, and the
+  // folded lines held out of the group's dedent on carve-js#2257.
+  'a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph',
+  // Arrives with carve 774eb404 and all six documents already render
+  // byte-exact: the comment span's closer stayed with its span in every host on
+  // carve-js#2262.
+  'a-comment-span-s-closer-below-its-host-s-column-stays-a-delimiter',
+  // Arrives with carve 40d5922a and all twelve documents already render
+  // byte-exact: a below-base fence run ends containers down to the owner its
+  // column selects on carve-js#2265, and the descendant's fence state goes with
+  // them on carve-js#2266.
+  'a-fence-closer-below-a-nested-item-s-column-ends-containers-down-to-its-owner',
+  // Arrives with carve 2e93e3ff and its one document already renders
+  // byte-exact: a nested quote is handed its lazy state on carve-js#2259 and
+  // keeps it across a lazy paragraph line on carve-js#2268.
+  'a-nested-quoted-term-leaves-no-paragraph-for-a-lazy-line',
+  // Arrives with carve 78b26d77 and all seven documents already render
+  // byte-exact. PART 0's CARVE-P0-006 gives a closed fence no continuation
+  // claim, so an unmarked line after one leaves every quote; the deferred
+  // lazy-continuation tracking on carve-js#2252 reads it that way already, and
+  // the row carve's engine-pin-drift.txt declared for the pinned 0.1.8 passes
+  // here without engine work. Measured by reverting carve-js#2277's hunk: all
+  // seven still pass, so that merge is not what carries them.
+  'a-fence-in-a-quote-stores-no-continuation-claim',
 ])
 
 /**
