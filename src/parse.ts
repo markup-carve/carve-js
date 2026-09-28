@@ -9749,15 +9749,22 @@ class ParseSession {
             return
           }
           const origin = anchorOf(part.lines[0]!)
-          termInlines.push(
-            ...parseSession.parseInline(dropTrailingWhitespace(part.text), lexer.abbrDefs, lexer.linkDefs, {
-              anchored: lexer.hasDocumentOffsets,
-              baseOffset: origin.offset,
-              startLine: origin.line,
-              startColumn: origin.column,
-              ...(part.lines.length > 1 ? { lineAnchors: part.lines.map(anchorOf) } : {}),
-            }),
-          )
+          // Only the first part opens on the `::` line itself, and only there can a
+          // leading `%%` run be term text rather than a comment (carve-js#2293).
+          parseSession.termMarkerLine = index === 0
+          try {
+            termInlines.push(
+              ...parseSession.parseInline(dropTrailingWhitespace(part.text), lexer.abbrDefs, lexer.linkDefs, {
+                anchored: lexer.hasDocumentOffsets,
+                baseOffset: origin.offset,
+                startLine: origin.line,
+                startColumn: origin.column,
+                ...(part.lines.length > 1 ? { lineAnchors: part.lines.map(anchorOf) } : {}),
+              }),
+            )
+          } finally {
+            parseSession.termMarkerLine = false
+          }
         })
         // A part-boundary break is placed once both its neighbours exist: from the
         // preceding sibling's end to the following sibling's start, the span the
@@ -12229,6 +12236,15 @@ class ParseSession {
   private inLineBlock = false
 
   /**
+   * Whether the next inline scan opens on a definition TERM's own `::` line.
+   *
+   * Read once, by the outermost scan only: the exception it carries is about the
+   * marker line's own first run, and a run that opens a nested span is a
+   * different question (markup-carve/carve-js#2293).
+   */
+  private termMarkerLine = false
+
+  /**
    * An unclosed run's content with the trailing whitespace its end drops. In a
    * line block a line break is content and is kept (markup-carve/carve#2089); a
    * stanza's own end leaves nothing there to keep.
@@ -12250,8 +12266,11 @@ class ParseSession {
     inlineDepth++
     const outer = this.openKinds
     this.openKinds = kinds
+    // Consumed here, so a nested run starts from the ordinary rule.
+    const onTermMarkerLine = this.termMarkerLine
+    this.termMarkerLine = false
     try {
-      return this.scanInlineInner(text, source, inFootnote, captionContext)
+      return this.scanInlineInner(text, source, inFootnote, captionContext, onTermMarkerLine)
     } finally {
       this.openKinds = outer
       inlineDepth--
@@ -12263,8 +12282,20 @@ class ParseSession {
     source: InlineSource,
     inFootnote: boolean,
     captionContext: boolean,
+    onTermMarkerLine = false,
   ): InlineNode[] {
     const out: InlineNode[] = []
+    // A RUN THAT BEGINS A DEFINITION TERM'S OWN LINE IS TERM TEXT, so the comment
+    // arm below skips every index up to and including this one. A term has no
+    // content column of its own, so nothing written on the `::` line opens a block
+    // there (markup-carve/carve#2411) and the line-comment form cannot be spelled
+    // on it at all. Read as one, `:: %%%` published neither the run nor the body it
+    // fenced and left the fold's leading space standing in the `dt`
+    // (carve-js#2293). The exception reaches the FIRST run and nothing else: a run
+    // later on the same line is the ordinary inline comment, one on a continuation
+    // line never arrives here, and one that opens a nested span is a separate
+    // question this does not answer.
+    const termTextRunEnd = onTermMarkerLine ? /^[ \t]*/.exec(text)![0].length : -1
     let i = 0
     let buf = ''
     let bufStart = 0
@@ -12476,7 +12507,12 @@ class ParseSession {
       // there - but inside a line block the whole stanza is inline content, so
       // the verse kept `%% c` as text where the other engines drop it, and this
       // one dropped it on the first line and not the second (carve#574).
-      if (c === '%' && text[i + 1] === '%' && (i === 0 || /[ \t\n]/.test(text[i - 1]!))) {
+      if (
+        c === '%' &&
+        text[i + 1] === '%' &&
+        (i === 0 || /[ \t\n]/.test(text[i - 1]!)) &&
+        i > termTextRunEnd
+      ) {
         // Absorb the whitespace run immediately before `%%` so the visible text
         // keeps no trailing space. Flush the trimmed buffer with a source span
         // that ends where that whitespace begins, and start the comment node
