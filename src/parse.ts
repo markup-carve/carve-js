@@ -364,6 +364,15 @@ const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
 const RE_DEFLIST_DEF = /^:( +)(?=.*[^ \t])([^ ].*)$/
 
 /**
+ * Whether `line`, read at its own content, is a definition TERM or DESCRIPTION
+ * marker line. Both patterns are anchored, so the indentation comes off first.
+ */
+const deflistMarkerLine = (line: string): boolean => {
+  const flush = line.replace(/^[ \t]+/, '')
+  return RE_DEFLIST_TERM.test(flush) || RE_DEFLIST_DEF.test(flush)
+}
+
+/**
  * The content column a description marker hands its body out at: `:` plus the
  * width of its separator run.
  *
@@ -544,6 +553,40 @@ const commentFenceRun = (line: string): number | undefined => {
   return m ? m[1]!.length : undefined
 }
 const RE_COMMENT_LINE = /^[ \t]*%%/
+
+/**
+ * Whether the `%%` at `i` opens the trailing inline comment form.
+ *
+ * TWO CHARACTERS DECIDE IT, and the one in front is the separator: a literal
+ * space, or the line break that puts `%%` first on a later line. A tab is not
+ * that separator - `space` is U+0020 and the clause that refuses a tab after a
+ * footnote, link or abbreviation definition marker refuses one here.
+ *
+ * THE START OF A RUN IS NOT THE START OF A LINE. A nested span, a table cell, a
+ * caption, an admonition title and a definition term all begin mid-line, so `%%`
+ * written first in one is ordinary text; the line-start spelling reaches the
+ * inline layer only behind the newline in front of it, which the separator
+ * already covers.
+ *
+ * `tabSeparates` AND `atLineStart` ARE THE HEADING, whose separator is not the
+ * inline one: the spec's own heading path strips `(^|[ \t])%%` from the line
+ * before anything reads it as inline content, so a tab and the line's own start
+ * both separate there. The tab half is a whole-line strip and so reaches a nested
+ * run inside the heading; the line-start half is the heading text's own index 0,
+ * which only its outermost run has.
+ */
+const opensInlineComment = (
+  text: string,
+  i: number,
+  tabSeparates = false,
+  atLineStart = false,
+): boolean =>
+  text[i] === '%' &&
+  text[i + 1] === '%' &&
+  (text[i - 1] === ' ' ||
+    text[i - 1] === '\n' ||
+    (tabSeparates && text[i - 1] === '\t') ||
+    (atLineStart && i === 0))
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
 const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_TRAILING_WS)
@@ -1586,13 +1629,23 @@ function scopeHoldsLine(
  * Does the prepass's view of a line START A BLOCK, so that no paragraph is left
  * open below it?
  */
-function prepassOpensBlock(line: string): boolean {
+function prepassOpensBlock(
+  line: string,
+  // A BARE `+` NAMES A BLOCK ONLY INSIDE SOMETHING. §17 L3 attaches it to the
+  // container that holds it, and at document level nothing holds it: every reader
+  // renders a lone `+` as prose there, whatever stands above it. Read as an
+  // opener anyway, it declared the paragraph over, so the marker below it opened
+  // a real item and that item's definition registered while the page printed the
+  // whole run as text (carve-js#2310). Only the caller holding the container
+  // stack passes this; everywhere else the line is all there is.
+  plusOpens = true,
+): boolean {
   return (
     line === '' ||
     lineOpensBlock(line) ||
     RE_COMMENT_LINE.test(line) ||
     isBlockAttributeLine(line) ||
-    isContinuationMarker(line) ||
+    (plusOpens && isContinuationMarker(line)) ||
     RE_TABLE_CONT.test(line) ||
     RE_ABBR_DEF.test(line)
   )
@@ -7320,6 +7373,10 @@ class ParseSession {
     let plusColumn: number | null = null
     let paraState: 'no' | 'yes' | 'ask' = 'no'
     let paraLine = ''
+    // Whether a bare `+` on the line above named a block - see
+    // `prepassOpensBlock`. Recorded there rather than re-derived from the string a
+    // line later, because the container stack that decides it has moved by then.
+    let paraLinePlusOpens = true
     // Number of composed quote/list containers that own the open paragraph.
     // This separates a real sibling marker after item prose from a marker that
     // merely looks like a new item while folding into document/quote prose.
@@ -7486,6 +7543,12 @@ class ParseSession {
         // definition site.
         fence = null
       }
+      // WHAT WAS OPEN WHEN THIS LINE ARRIVED, for the `+` verdict at the bottom of
+      // the body. Both stacks are popped below on a line that follows a blank, and
+      // a `+` still attaches to the item those pops just dropped - a list item is
+      // transparent across a blank, so the container is there whether or not its
+      // column survived the read.
+      const containerOpenAbove = openCols.length > 0 || listCols.length > 0
       const marker = prepassMarker(unquoted)
       if (RE_DEFLIST_TERM.test(unquoted)) sawDeflistTerm = true
       const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
@@ -7750,6 +7813,7 @@ class ParseSession {
         paraState !== 'no' && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
       const paraAsk = paraState === 'ask'
       const paraLineAbove = paraLine
+      const paraLineAbovePlusOpens = paraLinePlusOpens
       const paraDepthAbove = paraDepth
       // Lists do not interrupt an open paragraph AT DOCUMENT LEVEL. Inside an
       // item they do: §24 C3 folds a marker only where it is below the item's
@@ -7805,7 +7869,9 @@ class ParseSession {
       // clause still licenses there.
       const folds: boolean =
         probed === 'unknown'
-          ? !paraAsk || foldedAbove || !prepassOpensBlock(paraLineAbove)
+          ? !paraAsk ||
+            foldedAbove ||
+            !prepassOpensBlock(paraLineAbove, paraLineAbovePlusOpens)
           : probed
       // ONE `folds` FEEDS EVERY CONSUMER (R1a), the collection gates and
       // `paraDepth` alike. Giving the depth a narrower answer than the gate leaked
@@ -7848,6 +7914,7 @@ class ParseSession {
       paragraphFoldedAbove =
         paragraphReallyOpen && composed.peeled.some((one) => !one.quote)
       paraLine = line
+      paraLinePlusOpens = containerOpenAbove || divs.length > 0 || inFootnoteBody
       const quoteIndent = leadingWhitespace(raw)
       const quoteAtWrongColumn =
         !inFootnoteBody &&
@@ -8398,12 +8465,17 @@ class ParseSession {
     // at the end of the heading text is therefore ordinary inline content.
     // Column where the content starts on the first line (the marker + spaces).
     const textColumn = line.length - line.replace(/^#{1,6} +/, '').length + 1
-    node.children = this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
-      anchored: lexer.hasDocumentOffsets,
-      baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
-      startLine: lexer.lineNumber(lineIndex),
-      startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
-    })
+    this.wideCommentSeparator = true
+    try {
+      node.children = this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+        anchored: lexer.hasDocumentOffsets,
+        baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
+        startLine: lexer.lineNumber(lineIndex),
+        startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
+      })
+    } finally {
+      this.wideCommentSeparator = false
+    }
     return node
   }
 
@@ -10927,7 +10999,26 @@ class ParseSession {
             lazyLine = l.startsWith(LAZY_FRAME)
               ? l
               : LAZY_FRAME + l.replace(/^[ \t]+/, '')
-          } else if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
+          } else if (
+            lazyState.inDefList &&
+            indentColumns(l, contentCol) < contentCol &&
+            // A LINE THAT WOULD OPEN A BLOCK KEEPS THE CLAMP BELOW. The full
+            // flush exists so an under-indented `:  def` or `:: term` attaches to
+            // the def list this item already holds (carve-js#384), and a wrapped
+            // term continuation reaches the `dt` without its indent (corpus 156).
+            // Neither reason covers a line that opens something at column 0: the
+            // flush handed a definition-shaped one exactly that, so `* : |` over
+            // ` [^f]: t` split the item's paragraph where the same pair under
+            // `* x` folds (carve-js#2311). The clamp below exists for that hazard,
+            // and it answers for every definition kind rather than the one whose
+            // decline the prepass records.
+            //
+            // A DEFINITION MARKER STILL FLUSHES, since re-aligning it is the
+            // point and `:: term` is an opener. The pair is the tracker's own -
+            // `trackItemLazyState` opens `inDefList` on exactly these two - so one
+            // spelling answers both.
+            (deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')))
+          ) {
             lazyLine = l.replace(/^[ \t]+/, '')
           } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
             // A block-SHAPED line below the content column opens nothing (§24 C3:
@@ -12271,6 +12362,14 @@ class ParseSession {
   private termMarkerLine = false
 
   /**
+   * Whether the inline text being scanned is a heading's own line, whose
+   * trailing-comment separator is the wider one - see `opensInlineComment`. Held
+   * for the whole heading rather than consumed by the outermost scan, because the
+   * strip it stands in for runs before any delimiter on the line is read.
+   */
+  private wideCommentSeparator = false
+
+  /**
    * An unclosed run's content with the trailing whitespace its end drops. In a
    * line block a line break is content and is kept (markup-carve/carve#2089); a
    * stanza's own end leaves nothing there to keep.
@@ -12322,6 +12421,10 @@ class ParseSession {
     // line never arrives here, and one that opens a nested span is a separate
     // question this does not answer.
     const termTextRunEnd = onTermMarkerLine ? /^[ \t]*/.exec(text)![0].length : -1
+    // The heading's own separator - see `opensInlineComment`. Read once here, so
+    // the emphasis-closer scan below agrees with the builder on the same line.
+    const wideComment = this.wideCommentSeparator
+    const wideCommentAtStart = wideComment && inlineDepth === 1
     let i = 0
     let buf = ''
     let bufStart = 0
@@ -12520,30 +12623,32 @@ class ParseSession {
         }
       }
 
-      // Trailing (inline) line comment: `%%` preceded by whitespace or at the
-      // start of the run consumes to the next newline (or end of input). The
-      // preceding whitespace is absorbed so the visible text keeps no trailing
-      // space; the terminating newline stays and becomes a soft break. `%%`
-      // inside a code span never reaches here (code is consumed opaquely), and
-      // `\%%` is already handled by the escape branch. (§4.13, grammar
-      // inline_comment.)
-      // A NEWLINE counts as the whitespace before it: `%%` at the start of a
+      // Trailing (inline) line comment: `%%` behind its separator consumes to the
+      // next newline (or end of input). The separator is absorbed so the visible
+      // text keeps no trailing space; the terminating newline stays and becomes a
+      // soft break. `%%` inside a code span never reaches here (code is consumed
+      // opaquely), and `\%%` is already handled by the escape branch. (§4.13,
+      // grammar inline_comment.)
+      // A NEWLINE counts as the separator before it: `%%` at the start of a
       // later line is a comment exactly as it is on the first. A paragraph never
       // showed the difference - a comment-only line is handled at the block layer
       // there - but inside a line block the whole stanza is inline content, so
       // the verse kept `%% c` as text where the other engines drop it, and this
       // one dropped it on the first line and not the second (carve#574).
-      if (
-        c === '%' &&
-        text[i + 1] === '%' &&
-        (i === 0 || /[ \t\n]/.test(text[i - 1]!)) &&
-        i > termTextRunEnd
-      ) {
-        // Absorb the whitespace run immediately before `%%` so the visible text
-        // keeps no trailing space. Flush the trimmed buffer with a source span
-        // that ends where that whitespace begins, and start the comment node
-        // there too, keeping inline source spans contiguous.
-        const trimmed = buf.replace(/[ \t]+$/, '')
+      if (opensInlineComment(text, i, wideComment, wideCommentAtStart) && i > termTextRunEnd) {
+        // Absorb the ONE separator so the visible text keeps no trailing space.
+        // Flush the trimmed buffer with a source span that ends where the
+        // separator begins, and start the comment node there too, keeping inline
+        // source spans contiguous. The separator is one character, so whatever
+        // whitespace stands in front of it is ordinary text - `a  %% c` keeps one
+        // space in the `a` beside the comment. The heading absorbs the whole run
+        // instead, because the strip its wider separator stands for trims the
+        // line's trailing whitespace after cutting the comment off.
+        const trimmed = wideComment
+          ? buf.replace(/[ \t]+$/, '')
+          : buf.endsWith(' ')
+            ? buf.slice(0, -1)
+            : buf
         const commentStart = i - (buf.length - trimmed.length)
         if (trimmed) {
           const node = { type: 'text', value: trimmed } as Text
@@ -13540,11 +13645,9 @@ class ParseSession {
       }
       // An unbounded comment consumes the rest of its line before the delimiter
       // stack can claim a closer there. A later line can still close the span.
-      if (
-        ch === '%' &&
-        text[j + 1] === '%' &&
-        (j === 0 || /[ \t\n]/.test(text[j - 1]!))
-      ) {
+      // ONE PREDICATE WITH THE BUILDER: a closer this scan hides and the builder
+      // publishes, or the reverse, is a span whose two halves disagree.
+      if (opensInlineComment(text, j, this.wideCommentSeparator)) {
         const newline = text.indexOf('\n', j + 2)
         if (newline === -1) return -1
         j = newline
