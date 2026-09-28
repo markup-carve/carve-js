@@ -168,11 +168,10 @@ describe('blockquote lazy list marker only folds into an OPEN paragraph', () => 
   })
 
   it('a nested quote answers its own fence closer lookahead', () => {
-    // The outer quote's tracker looks for the closer one level too shallow, so
-    // its copy of the inner state reads the fence as unterminated. The inner
-    // quote must not inherit that copy: its fence closes, and `y` leaves it.
+    // The closed inner fence leaves no paragraph for an unmarked line.
+    // The closer lookup must use the inner quote's depth.
     expect(html('> > a\n> > ```\n> > ```\ny\n')).toBe(
-      '<blockquote>\n  <blockquote>\n    <p>a</p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n  <p>y</p>\n</blockquote>',
+      '<blockquote>\n  <blockquote>\n    <p>a</p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>',
     )
   })
 })

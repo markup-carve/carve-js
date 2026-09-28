@@ -1,0 +1,112 @@
+[
+  {
+    "name": "quote 2 lazy 1 ```",
+    "source": "> > a\n> a\n> > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote><p>a\na\n<code>\ny</code></p></blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 2 lazy 1 ~~~",
+    "source": "> > a\n> a\n> > ~~~\ny\n",
+    "html": "<blockquote>\n  <blockquote><p>a\na\n~~~\ny</p></blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 3 lazy 1 ```",
+    "source": "> > > a\n> a\n> > > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote><p>a\na\n<code>\ny</code></p></blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 3 lazy 1 ~~~",
+    "source": "> > > a\n> a\n> > > ~~~\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote><p>a\na\n~~~\ny</p></blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 3 lazy 2 ```",
+    "source": "> > > a\n> > a\n> > > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote><p>a\na\n<code>\ny</code></p></blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 3 lazy 2 ~~~",
+    "source": "> > > a\n> > a\n> > > ~~~\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote><p>a\na\n~~~\ny</p></blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 4 lazy 1 ```",
+    "source": "> > > > a\n> a\n> > > > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <blockquote><p>a\na\n<code>\ny</code></p></blockquote>\n    </blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 4 lazy 1 ~~~",
+    "source": "> > > > a\n> a\n> > > > ~~~\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <blockquote><p>a\na\n~~~\ny</p></blockquote>\n    </blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 4 lazy 2 ```",
+    "source": "> > > > a\n> > a\n> > > > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <blockquote><p>a\na\n<code>\ny</code></p></blockquote>\n    </blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 4 lazy 2 ~~~",
+    "source": "> > > > a\n> > a\n> > > > ~~~\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <blockquote><p>a\na\n~~~\ny</p></blockquote>\n    </blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 4 lazy 3 ```",
+    "source": "> > > > a\n> > > a\n> > > > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <blockquote><p>a\na\n<code>\ny</code></p></blockquote>\n    </blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "quote 4 lazy 3 ~~~",
+    "source": "> > > > a\n> > > a\n> > > > ~~~\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <blockquote><p>a\na\n~~~\ny</p></blockquote>\n    </blockquote>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "a heading ends the inner paragraph",
+    "source": "> > a\n> a\n> > # h\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <p>a\na</p>\n    <h1 id=\"h\">h</h1>\n  </blockquote>\n</blockquote>\n<p>y</p>"
+  },
+  {
+    "name": "a blank starts a fresh nested quote",
+    "source": "> > a\n>\n> > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote><p>a</p></blockquote>\n  <blockquote>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
+  },
+  {
+    "name": "a closed inner fence ends the lazy claim",
+    "source": "> > a\n> a\n> > ```\n> > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <p>a\na</p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
+  },
+  {
+    "name": "a closed outer fence ends the lazy claim",
+    "source": "> > a\n> a\n> ```\n> ```\ny\n",
+    "html": "<blockquote>\n  <blockquote><p>a\na</p></blockquote>\n  <pre><code>\n</code></pre>\n</blockquote>\n<p>y</p>"
+  },
+  {
+    "name": "malformed colon text absorbs a later bare fence",
+    "source": "> > a\n> a\n> > :::bad\n> > :::\ny\n",
+    "html": "<blockquote>\n  <blockquote><p>a\na\n:::bad\n:::\ny</p></blockquote>\n</blockquote>"
+  },
+  {
+    "name": "closer lookup after a shallower lazy line",
+    "source": "> > a\n> > ````js\n> a\n> > ```\n> > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote>\n    <p>a\n<code>js\na</code></p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
+  },
+  {
+    "name": "lazy fence-shaped line",
+    "source": "> > a\n> ```\n> > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote><p>a\n<code>\n</code>\ny</p></blockquote>\n</blockquote>"
+  },
+  {
+    "name": "lazy malformed colon fence",
+    "source": "> > a\n> :::note\n> > ```\ny\n",
+    "html": "<blockquote>\n  <blockquote><p>a\n:::note\n<code>\ny</code></p></blockquote>\n</blockquote>"
+  },
+  {
+    "name": "nested quote inside a list item",
+    "source": "- > > a\n  > a\n  > > ```\n  y\n",
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <blockquote><p>a\na\n<code>\ny</code></p></blockquote>\n    </blockquote>\n  </li>\n</ul>"
+  },
+  {
+    "name": "lazy fence inside a list item",
+    "source": "- > > a\n  > ```\n  > > ```\n  y\n",
+    "html": "<ul>\n  <li>\n    <blockquote>\n      <blockquote><p>a\n<code>\n</code>\ny</p></blockquote>\n    </blockquote>\n  </li>\n</ul>"
+  }
+]
