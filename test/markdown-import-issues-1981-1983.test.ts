@@ -142,7 +142,7 @@ describe('Markdown import list and reference boundaries', () => {
     const source = '<http://a.b/[x]>\n\n[t](/p[x]q "see [x]")\n\n<span title="[x]">ok</span>\n\n[x]: /u'
     const imported = markdownToCarve(source)
     expect(imported).toContain('<http://a.b/[x]>')
-    expect(imported).toContain('/p[x]q')
+    expect(imported).toContain('/p%5Bx%5Dq')
     expect(imported).toContain('see [x]')
     expect(imported).toContain('title="[x]"')
     expect(imported).not.toContain('[x][]q')
