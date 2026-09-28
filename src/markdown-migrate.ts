@@ -1043,6 +1043,17 @@ function convertInline(
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
+  const writeLiteralAutolink = (body: string): string => {
+    for (let pass = 0; pass < protectedSpans.length; pass++) {
+      const restored = body.replace(/\x00P(\d+)\x00/g, (_token, index: string) => protectedSpans[Number(index)] ?? _token)
+      if (restored === body) break
+      body = restored
+    }
+    const href = body.replace(/[\\[\]()`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
+    return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
+      { type: 'link', href, children: [{ type: 'text', value: body }] },
+    ] }] }).replace(/\n$/, '')
+  }
   let escaped = ''
   const opaqueEnd = opaqueHtmlScanner(line)
   for (let i = 0; i < line.length;) {
@@ -1193,6 +1204,36 @@ function convertInline(
     return protect(canonical === undefined || /[\[\]]/.test(canonical) || keepCollapsed ? match : `[${canonical}]`)
   })
 
+  // Reference-link definition `[label]: dest "title"` (optional space after
+  // the colon). The whole line is consumed literally by Carve's ref-link
+  // parser, so protect it. A footnote definition `[^id]: body` is excluded —
+  // its body is normal inline content that must still be converted.
+  // The destination and title are entity-decoded here for the same reason the
+  // inline form is (encodeDest): protecting the line puts it out of reach of
+  // the later decode pass, and a literal `&amp;` in the definition points the
+  // link somewhere the Markdown source did not.
+  // Destination boundaries use ASCII whitespace; a BOM remains URL data.
+  line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:[ \t]*)((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
+    referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) === undefined
+      ? match
+      : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
+  )
+
+  const autolinkSubject = line
+  let htmlCursor = 0
+  line = line.replace(/<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*/g, (match, offset: number) => {
+    while (htmlCursor < offset) {
+      const tag = autolinkSubject[htmlCursor] === '<' ? scanHtmlTag(autolinkSubject, htmlCursor, protectedSpans) : undefined
+      htmlCursor = tag?.end ?? htmlCursor + 1
+    }
+    if (htmlCursor > offset) return match
+    for (const token of match.matchAll(/\x00P(\d+)\x00/g)) {
+      if (protectedSpans[Number(token[1])] !== '\\>') continue
+      return protect(writeLiteralAutolink(match.slice(1, token.index) + '\\')) + match.slice(token.index + token[0].length)
+    }
+    return match
+  })
+
   // Autolinks `<scheme:...>` and `<email>`: the URL/address is literal, so a
   // `_` or `*` inside it (e.g. /_v1_/) must not be rewritten as markup.
   line = line.replace(/<([A-Za-z][A-Za-z0-9+.-]*):[^<>\s]*>/g, (match, scheme: string) => {
@@ -1204,12 +1245,9 @@ function convertInline(
       body = restored
     }
     if (!/[\\`]/.test(body)) return protect(match)
-    const href = body.replace(/[\\[\]()`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
-    return protect(renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
-      { type: 'link', href, children: [{ type: 'text', value: body }] },
-    ] }] }).replace(/\n$/, ''))
+    return protect(writeLiteralAutolink(body))
   })
-  line = line.replace(/<[^>\s@]+@[^>\s]+>/g, protect)
+  line = line.replace(/<[^>\s@]+@[^>\s]+>/g, match => /[\\\x00]/.test(match) ? match : protect(match))
 
   // Markdown inline HTML is live markup. Protect tags that have no lossless
   // Carve-native equivalent as explicit raw HTML before delimiter rewrites.
@@ -1241,21 +1279,6 @@ function convertInline(
     if (destinationLabel === undefined || /[\[\]]/.test(destinationLabel)) return match
     return `${match}${protect(label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
-
-  // Reference-link definition `[label]: dest "title"` (optional space after
-  // the colon). The whole line is consumed literally by Carve's ref-link
-  // parser, so protect it. A footnote definition `[^id]: body` is excluded —
-  // its body is normal inline content that must still be converted.
-  // The destination and title are entity-decoded here for the same reason the
-  // inline form is (encodeDest): protecting the line puts it out of reach of
-  // the later decode pass, and a literal `&amp;` in the definition points the
-  // link somewhere the Markdown source did not.
-  // Destination boundaries use ASCII whitespace; a BOM remains URL data.
-  line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:[ \t]*)((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
-    referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) === undefined
-      ? match
-      : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
-  )
 
   // Math, converted and protected before the emphasis passes so a formula
   // body containing * _ ~ (e.g. $*x*$) is not rewritten as markup. Opt-in:
