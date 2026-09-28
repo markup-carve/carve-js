@@ -10387,6 +10387,32 @@ class ParseSession {
       // increasing width that cannot close, each opener repeats the suffix scan.
       // The stack below runs `findColonCloser`'s nesting model once, left to right,
       // keeping the whole pass linear (ranges never overlap).
+
+      // The content column of the sub-list item each line sits in. A marker at
+      // the item's content column opens a sibling sub-list item or a new sibling
+      // sub-list (§24 C3, carve-js#1951), whose own column then applies; one
+      // indented below the current column folds into the open paragraph instead.
+      // Built on first use: most items never reach the check below.
+      let subColAt: number[] | null = null
+      const subListColumnAt = (at: number): number => {
+        if (subColAt === null) {
+          subColAt = new Array(nested.length).fill(-1)
+          let col = leadIsMarker ? markerContentColumn(content) : -1
+          for (let k = 0; k < nested.length; k++) {
+            if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
+              col = markerContentColumn(nested[k]!)
+            }
+            subColAt[k] = col
+          }
+        }
+        return subColAt[at]!
+      }
+      // Does the SUB-LIST hold the line at `at`, rather than this item? Same
+      // threshold, asked of one line. Built on first use like the table it reads.
+      const subListOwns = (at: number): boolean => {
+        const subCol = subListColumnAt(at)
+        return subCol >= 0 && indentColumns(nested[at]!, subCol) >= subCol
+      }
       const fenceLines = [content, ...nested]
       const inFence: boolean[] = new Array(fenceLines.length).fill(false)
       // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
@@ -10449,6 +10475,25 @@ class ParseSession {
       }
       for (let k = 0; k < fenceLines.length; k++) {
         const line = fenceLines[k]!
+        // §10'S CLOSER LOOKAHEAD ASKS ABOUT *THIS* ITEM'S PARAGRAPH, and one the
+        // SUB-LIST holds open is not one (carve-js#2230). A run that dedents back
+        // out of a child follows the child's own opener, which this pass reads as
+        // paragraph text at its own column, so the run refused to latch and the
+        // blank inside the block it opens loosened the item.
+        //
+        // Asked only at a run, only with a paragraph open, and only with none of
+        // this item's own already open, so an item without a fence pays nothing.
+        // Answering it for every line instead fails the counted guard in
+        // test/nested-container-rescan.test.ts: the table it reads is O(body).
+        if (
+          fenceState.lazyFoldable &&
+          open.length === 0 &&
+          k > 1 &&
+          (RE_FENCE.test(line) || RE_RAW_FENCE.test(line)) &&
+          subListOwns(k - 2)
+        ) {
+          fenceState.lazyFoldable = false
+        }
         const paragraphOpen = fenceState.lazyFoldable
         trackItemLazyState(
           line,
@@ -10544,25 +10589,6 @@ class ParseSession {
         }
         for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
         k = last
-      }
-      // The content column of the sub-list item each line sits in. A marker at
-      // the item's content column opens a sibling sub-list item or a new sibling
-      // sub-list (§24 C3, carve-js#1951), whose own column then applies; one
-      // indented below the current column folds into the open paragraph instead.
-      // Built on first use: most items never reach the check below.
-      let subColAt: number[] | null = null
-      const subListColumnAt = (at: number): number => {
-        if (subColAt === null) {
-          subColAt = new Array(nested.length).fill(-1)
-          let col = leadIsMarker ? markerContentColumn(content) : -1
-          for (let k = 0; k < nested.length; k++) {
-            if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
-              col = markerContentColumn(nested[k]!)
-            }
-            subColAt[k] = col
-          }
-        }
-        return subColAt[at]!
       }
       for (let k = 0; k < nested.length; k++) {
         if (inFence[k + 1]!) continue
