@@ -3027,7 +3027,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     paragraphOpen = !isBlankLine(text) && !interruptsParagraph && (paragraphOpen || !lineOpensBlock(text))
   }
 
-  for (const unclosed of stack) {
+  for (const unclosed of stack.slice(0, Math.max(0, MAX_NESTING_DEPTH - lexer.depth))) {
     lexer.reportUnclosedContainer(unclosedContainerFromOpener(lexer, unclosed))
   }
   return lines
