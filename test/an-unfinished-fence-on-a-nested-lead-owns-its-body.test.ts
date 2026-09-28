@@ -38,10 +38,8 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
     )
   })
 
-  it("a quote as the host container", () => {
-    expect(carveToHtml("> - ``` x\ncode\n```\n")).toBe(
-      "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\">code\n```\n</code></pre>\n    </li>\n  </ul>\n</blockquote>",
-    )
+  it('a quoted fence leaves unmarked lines outside', () => {
+    expect(carveToHtml("> - ``` x\ncode\n```\n")).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\">\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>")
   })
 
   it("ordered markers", () => {

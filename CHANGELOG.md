@@ -18,6 +18,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Fences inside quoted lists and footnotes no longer absorb following unmarked lines (markup-carve/carve#2550).
+
 - Unfinished code fences in nested list items retain every trailing blank line when the item ends.
 
 - Attribute blocks reject unquoted values containing pipes, backslashes or quotes. Formatting quotes and escapes backslashes so attribute values survive reparsing (#2191).
