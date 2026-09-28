@@ -55,6 +55,26 @@ describe('a comment payload below a description column', () => {
     )
   })
 
+  it.each([
+    [
+      'a colon opener before the closer',
+      '    ::: note\n    %%%\n     ```\n [r]: /url\n  > p\n  :::\n',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <pre><code>\n</code></pre>\n  </dd>\n</dl>\n<p>[r]: /url\n&gt; p\n:::</p>',
+    ],
+    [
+      'a code opener inside the comment',
+      '   ::: note\n     ```\n    - item\n    %%%\n     :::\n ```\n',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <div>\n\n    </div>\n  </dd>\n</dl>\n<p><code></code></p>',
+    ],
+    [
+      'a definition and a colon opener inside the comment',
+      '     [r]: /url\n   ::: note\n     %%%\n     ~~~\n   > p\n  p\n',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <pre><code>&gt; p\n</code></pre>\n  </dd>\n</dl>\n<p>p</p>',
+    ],
+  ])('discards payload state after %s', (_name, body, expected) => {
+    expect(carveToHtml(':: t\n:  d\n\n   %%%\n' + body)).toBe(expected)
+  })
+
   it('keeps the list-item boundary at a below-column payload line', () => {
     expect(carveToHtml('- d\n\n  %%%\n  p\nz\n  %%%\n')).toBe(
       '<ul>\n  <li>d\n    p\n  </li>\n</ul>\n<p>z</p>',
