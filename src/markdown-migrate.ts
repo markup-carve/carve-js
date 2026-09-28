@@ -967,14 +967,7 @@ function convertInline(
   // is handled by convertInlineHtml as raw HTML so attributes are not lost.
   line = line.replace(/<code>([^<]+)<\/code>/gi, (_m, inner) => protect(`\`${inner}\``))
 
-  // A Markdown HARD BREAK is two or more spaces before a newline; Carve spells
-  // it with a trailing backslash. Trailing spaces mean NOTHING in Carve, so
-  // carrying them across dropped the break: `a  \nb` migrated to a `<p>a\nb</p>`
-  // with no `<br>`. Runs are joined before this call, so a newline here means
-  // another line of the same paragraph follows - which is exactly CommonMark's
-  // condition, a hard break being impossible at a paragraph's end. Code spans
-  // are already protected, so a multi-line span keeps its own spacing.
-  line = line.replace(/ {2,}\n/g, '\\\n')
+
 
   line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw)
 
@@ -1001,7 +994,7 @@ function convertInline(
     return `(${enc}${decodeEntitiesInTitle(rest)})`
   }
 
-  const multilineTitle = /(!?\[(?:[^\[\]\n]|\[[^\]\n]*\])*\])(\((?:[^()\s]|\([^()\n]*\))+[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*')[ \t]*\))/g
+  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\((?:[^()\s]|\([^()\n]*\))+[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*')[ \t]*\))/g
   line = line.replace(multilineTitle, (_match, label: string, destination: string) =>
     label.startsWith('!') ? protect(label + encodeDest(destination)) : label + protect(encodeDest(destination)))
 
@@ -1079,6 +1072,15 @@ function convertInline(
       /^[\d.,]+$/.test(inner) ? m : protect(`$\`${inner}\``),
     )
   }
+
+  // A Markdown HARD BREAK is two or more spaces before a newline; Carve spells
+  // it with a trailing backslash. Trailing spaces mean NOTHING in Carve, so
+  // carrying them across dropped the break: `a  \nb` migrated to a `<p>a\nb</p>`
+  // with no `<br>`. Runs are joined before this call, so a newline here means
+  // another line of the same paragraph follows - which is exactly CommonMark's
+  // condition, a hard break being impossible at a paragraph's end. Code spans
+  // are already protected, so a multi-line span keeps its own spacing.
+  line = line.replace(/ {2,}\n/g, '\\\n')
 
   // Carve-only inline syntax in what is, in Markdown, plain text. Runs after
   // the protection block (so code, destinations and URLs are placeholders) and
@@ -1177,8 +1179,12 @@ function convertInline(
   if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
 
   if (!holdsFenceBody) {
-    if (dialect.attributes) line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
-      (match, inner: string) => isValidAttrPayload(inner) ? protect(match) : match)
+    if (dialect.attributes) {
+      const wholeLine = line.trim()
+      line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+        (match, inner: string, offset: number, source: string) =>
+          (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
+    }
     line = line.replace(/["']/g, '\\$&')
   }
   line = decodeHtmlEntities(line)

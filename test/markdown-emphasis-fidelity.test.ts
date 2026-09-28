@@ -2,6 +2,9 @@ import { expect, it } from 'vitest'
 import { carveToHtml, markdownToCarve } from '../src/index.js'
 
 it.each([
+  ["[a\nb](/u \"t\nx\")", "<p><a href=\"/u\" title=\"t\nx\">a\nb</a></p>"],
+  ["> [a\n> b](/u \"t\n> x\")", "<blockquote><p><a href=\"/u\" title=\"t\nx\">a\nb</a></p></blockquote>"],
+
   ["[l](/u \"t\nx\")", "<p><a href=\"/u\" title=\"t\nx\">l</a></p>"],
   ["![a](/i \"t\nx\")", "<img src=\"/i\" alt=\"a\" title=\"t\nx\">"],
   ["[a](/u?q=&quot;x&quot;)", "<p><a href=\"/u?q=&quot;x&quot;\">a</a></p>"],
@@ -33,4 +36,15 @@ it('preserves explicitly enabled attribute syntax', () => {
 it('preserves prose quotes with attributes enabled', () => {
   const source = '\"hello\" \'x\' *word*{title="two words"}'
   expect(carveToHtml(markdownToCarve(source, { attributes: true }))).toBe('<p>"hello" \'x\' <em title="two words">word</em></p>')
+})
+
+it.each(['<span title="x  \ny">b</span>', '<!-- x  \ny -->'])('preserves spaces in raw HTML: %s', (html) => {
+  const written = markdownToCarve('*a ' + html + '\nc*')
+  expect(written).toContain(html)
+  expect(written).not.toContain('x\\\ny')
+})
+
+it('keeps unattached attribute-looking text literal', () => {
+  const source = '\"a\" {.c title="x y"} \'b\''
+  expect(carveToHtml(markdownToCarve(source, { attributes: true }))).toBe('<p>"a" {.c title="x y"} \'b\'</p>')
 })
