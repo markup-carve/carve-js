@@ -601,6 +601,8 @@ export const layoutWork = {
 }
 
 class Lexer {
+  attachmentBoundaries = new Set<number>()
+  prefixMemoLines?: boolean[]
   lines: string[]
   lineOffsets: number[]
   lineNumberOffset: number
@@ -1051,6 +1053,7 @@ function nestedSubLexer(
   sub.linkDefs = parent.linkDefs
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
+  sub.attachmentBoundaries = parent.attachmentBoundaries
   sub.itemLazyLines = parent.itemLazyLines
   sub.fenceLookaheadAnswers = parent.fenceLookaheadAnswers
   sub.descendantFenceAnswers = parent.descendantFenceAnswers
@@ -1093,6 +1096,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   if (!parent.hasDocumentOffsets) return
   const offsets: number[] = []
   const widths: number[] = []
+  const prefixMemoLines: boolean[] = []
 
   // Where a sub-line came from, when its lines are NOT a contiguous run of the
   // parent's. A `+` continuation splices a flush-left block into a quote body
@@ -1166,6 +1170,8 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // the synthetic run fits inside the prefix the strip removed. Where it does
     // not, there is no honest offset to record and this declines - which now
     // means NO positions rather than local ones (see below).
+    const isLiteralSuffix = literalSuffix ?? parentLine.endsWith(subLine)
+    prefixMemoLines.push(isLiteralSuffix && (parent.prefixMemoLines?.[parentIndex] ?? true))
     let prefix = parentLine.length - subLine.length
     if (framed && parentLine.endsWith(unframed)) {
       // The frame occupies no source, so the anchor is the unframed content's
@@ -1174,7 +1180,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       // collector strips it as it pushes, which is where a framed line becomes
       // text.
       prefix = parentLine.length - unframed.length
-    } else if (!(literalSuffix ?? parentLine.endsWith(subLine))) {
+    } else if (!isLiteralSuffix) {
       // Only reached when the line is NOT a literal suffix, which is the
       // straddling-tab case alone - so the synthetic-indent trim is computed
       // here rather than for every line.
@@ -1200,6 +1206,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     widths.push(width)
   }
 
+  sub.prefixMemoLines = prefixMemoLines
   sub.sourceOffsetMap = offsets
   sub.linePrefixWidths = widths
 }
@@ -2220,6 +2227,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
   const closeRe = fenceCloseRe(marker)
   const lines: string[] = []
   while (!lexer.eof()) {
+    if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
     const ln = lexer.peek()!
     if (closeRe.test(ln)) {
       lexer.consume()
@@ -3217,17 +3225,23 @@ function trackBlockQuoteLazyState(
   hasCommentCloser: (fence: number) => boolean,
   hasFenceCloser: (marker: string, depth?: number) => boolean,
   descent?: QuoteDescent,
+  prefixMemo?: Map<number, number>,
 ): void {
   let text = content
   let level = state
   const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
   let commentCloser = hasCommentCloser
   let fenceCloser = hasFenceCloser
-  if (descent) descent.levels = 0
+  if (descent) {
+    descent.levels = 0
+    descent.preserved = false
+  }
   let paragraphOpen: boolean | undefined
   const continuesParagraph = (): boolean => paragraphOpen ??= blockQuoteParagraphOpen(state)
   for (;;) {
-    const descend = classifyQuotedLine(text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree)
+    const descend = classifyQuotedLine(
+      text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree, descent, prefixMemo,
+    )
     if (descend === null) return
     text = descend.text
     level = descend.state
@@ -3269,6 +3283,8 @@ interface QuoteDescent {
   levels: number
   /** Sticky: a closer lookup ran below the top level on some line. */
   askedBelowTop: boolean
+  /** The line left the existing nested paragraph state unchanged. */
+  preserved?: boolean
 }
 
 /**
@@ -3295,6 +3311,8 @@ function classifyQuotedLine(
   hasFenceCloser: (marker: string) => boolean,
   continuesParagraph: () => boolean,
   terminatorFree = false,
+  descent?: QuoteDescent,
+  prefixMemo?: Map<number, number>,
 ): { text: string; state: BlockQuoteLazyState } | null {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
@@ -3492,7 +3510,19 @@ function classifyQuotedLine(
     return null
   }
   // Lazy text preserves the inner paragraph for the next marked line.
-  if (state.mode.kind === 'quote' && continuesParagraph()) return null
+  if (state.mode.kind === 'quote' && continuesParagraph()) {
+    if (descent && descent.levels === 0) descent.preserved = true
+    return null
+  }
+  // A list at block start carries its first block's continuation state.
+  // A marker in an existing paragraph is still ordinary paragraph text.
+  if (!blockQuoteParagraphOpen(state) && isListMarkerLine(content)) {
+    const nested = markerLineState(content, prefixMemo)
+    if (!nested.leavesParagraphOpen) {
+      closeBlockQuoteParagraph(state)
+      return null
+    }
+  }
   // Everything else (plain prose, a folded list-marker line, div body text, or
   // a fence/comment-looking line while a paragraph is open) leaves an open
   // paragraph that a following list marker or plain text folds into.
@@ -4316,19 +4346,29 @@ function markerPrefixLength(content: string, from: number, bound: number): numbe
  * How much of `content` is container prefix - any interleaving of block quote
  * markers and list item markers, in any order and to any depth.
  */
-function walkContainerPrefix(content: string): number {
+function walkContainerPrefix(content: string, memo?: Map<number, number>): number {
+  const cached = memo?.get(content.length)
+  if (cached !== undefined) return cached
   const bound = prefixWalkBound(content)
+  const offsets: number[] = []
   let at = 0
   for (;;) {
+    const suffix = memo?.get(content.length - at)
+    if (suffix !== undefined) { at += suffix; break }
+    if (memo) offsets.push(at)
     const quote = quotePrefixLength(content, at, bound)
     if (quote > 0) {
       at += quote
       continue
     }
     const marker = markerPrefixLength(content, at, bound)
-    if (marker === 0) return at
+    if (marker === 0) break
     at += marker
   }
+  // Descendant items receive these same suffixes after stripping their marker.
+  // Share only offsets; each item creates its own mutable continuation state.
+  for (const offset of offsets) memo!.set(content.length - offset, at - offset)
+  return at
 }
 
 /**
@@ -4339,7 +4379,7 @@ function walkContainerPrefix(content: string): number {
  * div it was holding: `:  > | a |` / `   > + b |` read the continuation row
  * with no row above it (markup-carve/carve#1348, corpus 349-5).
  */
-function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
+function markerLineQuoteState(content: string, memo?: Map<number, number>): BlockQuoteLazyState | null {
   const quoted = RE_BLOCKQUOTE.exec(content)
   if (!quoted) return null
   const inner: BlockQuoteLazyState = {
@@ -4353,6 +4393,8 @@ function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
     inner,
     () => true,
     () => true,
+    undefined,
+    memo,
   )
 
   return inner
@@ -4371,13 +4413,13 @@ function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
  * end on - are answered from ONE walk. Asking them separately walked the prefix
  * twice per marker line.
  */
-function markerLineBottomBlock(content: string): string {
+function markerLineBottomBlock(content: string, memo?: Map<number, number>): string {
   // `> > # H` is the quote's question twice over, and `- - # H` is the
   // sub-item's, whose first block is the heading exactly as a bare `- # H`'s
   // is - so the strip runs to the bottom of the stack. It is a WALK BY OFFSET:
   // every regex it consults is anchored with `$`, so re-slicing the remainder
   // per marker cost O(N * line length) on a line of N markers (carve-js#1190).
-  const walked = walkContainerPrefix(content)
+  const walked = walkContainerPrefix(content, memo)
 
   return walked === 0 ? content : content.slice(walked)
 }
@@ -4389,18 +4431,20 @@ function markerLineBottomBlock(content: string): string {
  * `quote` carries it there. Claiming it at this level as well would let a
  * continuation row written outside the quote join a table that is not there.
  */
-function markerLineState(content: string): {
+function markerLineState(content: string, memo?: Map<number, number>): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
   bottomIsContinuationMarker: boolean
   wrappedAttributeRun: string | null
   quote: BlockQuoteLazyState | null
 } {
-  const bottom = markerLineBottomBlock(content)
-  const quote = markerLineQuoteState(content)
+  const bottom = markerLineBottomBlock(content, memo)
+  const quote = markerLineQuoteState(content, memo)
 
   return {
-    leavesParagraphOpen: bottomBlockLeavesParagraphOpen(bottom),
+    leavesParagraphOpen: quote !== null &&
+      (RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) || colonFenceShapeEndsLazyContinuation(bottom))
+      ? false : bottomBlockLeavesParagraphOpen(bottom),
     endsOnTableRow: quote === null && isTableRow(bottom),
     // A bare `+` at the bottom of the marker line is the CONTINUATION MARKER
     // (§17 L3), and what it names is a document-column-0 block. It is not
@@ -6902,6 +6946,19 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
 
 /** State owned by one synchronous parse operation. */
 class ParseSession {
+  private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
+
+  // Only literal source suffixes share numeric offsets; reconstructed lines do not.
+  private markerPrefixMemo(lexer: Lexer, index: number): Map<number, number> | undefined {
+    if (!lexer.hasDocumentOffsets || lexer.prefixMemoLines?.[index] === false) return undefined
+    const root = lexer.rootLines ?? lexer.lines
+    let lines = this.markerPrefixMemos.get(root)
+    if (!lines) this.markerPrefixMemos.set(root, lines = new Map())
+    const line = lexer.lineNumber(index)
+    let memo = lines.get(line)
+    if (!memo) lines.set(line, memo = new Map())
+    return memo
+  }
   private linkLabelDepth = 0
 
   // Matchers belong to this parse; fragment parsing scopes its matcher context.
@@ -6921,6 +6978,7 @@ class ParseSession {
 
   parse(source: string, opts: ParseOptions = {}): Document {
     this.newlineIndexCache.clear()
+    this.markerPrefixMemos = new WeakMap()
     this.activeQuoteCharacters = opts.extensions
       ?.map((extension) => extension.quoteCharacters)
       .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
@@ -8316,6 +8374,7 @@ class ParseSession {
     const closeRe = fenceCloseRe(marker)
     const lines: string[] = []
     while (!lexer.eof()) {
+      if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
       if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
         lexer.consume()
@@ -9245,7 +9304,7 @@ class ParseSession {
         // PARAMETER (carve#920): a heading, a table or an attribute block written
         // on the `:  ` marker leaves no paragraph open for exactly the reason it
         // leaves none on a `- ` marker.
-        const firstState = markerLineState(first)
+        const firstState = markerLineState(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
         const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
         lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
         lazyState.inTable = firstState.endsOnTableRow
@@ -9745,10 +9804,10 @@ class ParseSession {
           !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
           quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo, depth),
         descent,
+        this.markerPrefixMemo(lexer, lineIndex),
       )
-      // A later line that continues the handed-down quote would change the
-      // state after the nested quote's prefix.
-      if (handDown && state.mode.kind === 'quote' && state.mode.inner === handDown.state) handDown = null
+      // Reuse the handed-down state only while lazy text leaves it unchanged.
+      if (!descent.preserved && handDown && state.mode.kind === 'quote' && state.mode.inner === handDown.state) handDown = null
     }
     const trackUntracked = (): void => {
       if (trackedBefore) {
@@ -9804,6 +9863,7 @@ class ParseSession {
           (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
         )
         if (attached.length > 0) {
+          lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
           // `inner` always holds the quote's first content line, so a leading
           // blank separates the attached block from it.
           // The separators are SYNTHETIC - no such blank line exists in the
@@ -10422,7 +10482,7 @@ class ParseSession {
         bottomIsContinuationMarker: false,
         wrappedAttributeRun: null,
         quote: null,
-      } : markerLineState(content)
+      } : markerLineState(content, this.markerPrefixMemo(lexer, itemStartLineIndex))
       const lazyState: ItemLazyState = {
         opaque: null,
         invisibleAtColumn: false,
@@ -10509,7 +10569,8 @@ class ParseSession {
           // first-block form above. Nothing is attached from another column, and
           // the marker line itself is still consumed, so the candidate falls
           // through to the ordinary rules on the next turn of this loop.
-          if (!attachesAtDocumentColumnZero(lexer)) continue
+          if (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) continue
+          lexer.attachmentBoundaries.add(plusLineNumber)
           plusSeparators.add(nested.length)
           nested.push('')
           nestedSourceLines.push(undefined)

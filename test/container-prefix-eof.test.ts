@@ -11,13 +11,14 @@ function count(source: string): number {
   try { parse(source) } finally { RegExp.prototype.exec = exec }
   return calls
 }
-describe('container prefix classification at EOF', () => {
-  for (const marker of ['> ', '- ', '1. ']) it(`${marker} grows with depth`, () => {
-    const source = (depth: number): string => marker.repeat(depth) + 'end\n'
-    const small = count(source(64)), large = count(source(128))
+describe('container prefix classification', () => {
+  for (const marker of ['> ', '- ', '1. ', '> - ', '- > ', '1. > ']) for (const follower of ['', 'tail\n']) it(`${marker} with ${JSON.stringify(follower)} grows with depth`, () => {
+    const source = (depth: number): string => marker.repeat(depth) + 'end\n' + follower
+    const depth = marker.includes('>') && marker.trim() !== '>' ? 32 : 64
+    const small = count(source(depth)), large = count(source(depth * 2))
     expect(small).toBeGreaterThan(64)
     expect(large / small).toBeLessThan(2.25)
-    expect(count(source(128))).toBe(large)
+    expect(count(source(depth * 2))).toBe(large)
   })
   it('retains a following lazy paragraph and closed-block boundaries', () => {
     expect(carveToHtml('- - a\ntail\n')).toContain('a\ntail')
