@@ -1,3 +1,4 @@
+import { resolveReferenceDestination } from './reference-state.js'
 import type { Abbreviation, Attrs, InlineNode, Position, Text } from './ast.js'
 import { mergeAttrs } from './attribute-merge.js'
 import { mapInlineChildren } from './inline-children.js'
@@ -111,7 +112,7 @@ export function applyLinkDefs(
   defs: Map<string, LinkDef>,
 ): InlineNode[] {
   const out: InlineNode[] = []
-  for (const node of nodes) {
+  for (let node of nodes) {
     mapInlineChildren(node, applyLinkDefs, defs)
     if (node.type === 'link' && isUnresolvedReference(node)) {
       // Normalization does not make a multiline label syntactically valid.
@@ -119,7 +120,7 @@ export function applyLinkDefs(
       // it can degrade byte-for-byte, but it must never enter the symbol table.
       const def = /[\r\n]/.test(node.ref) ? undefined : defs.get(normalizeRefLabel(node.ref))
       if (def) {
-        node.href = def.href
+        node = resolveReferenceDestination(node, def.href)
         if (def.title !== undefined) node.title = def.title
         // PART 9R R1: the definition's attributes transfer to the link, and
         // the link's own override per key. "Per key" is §15 A3's merge - the
@@ -146,7 +147,7 @@ export function applyLinkDefs(
     if (node.type === 'image' && isUnresolvedReference(node)) {
       const def = /[\r\n]/.test(node.ref) ? undefined : defs.get(normalizeRefLabel(node.ref))
       if (def) {
-        node.src = def.href
+        node = resolveReferenceDestination(node, def.href)
         if (def.title !== undefined) node.title = def.title
         // AN IMAGE REFERENCE RESOLVES THE SAME ENTRY - NORMATIVE. It looks the
         // label up in the same table and takes the same three fields, so a

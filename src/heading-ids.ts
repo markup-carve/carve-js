@@ -1,3 +1,4 @@
+import { resolveReferenceDestination } from './reference-state.js'
 import { forEachChildBlockList, withClonedChildBlockLists } from './block-children.js'
 /*
  * Heading identifier generation + cross-reference resolution.
@@ -666,7 +667,7 @@ function resolveHeadingIdsImpl(
   /** Pass 1: finalize unresolved reference links in-place. */
   const resolveRefs = (nodes: InlineNode[]): void => {
     for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i]!
+      let n = nodes[i]!
       // A link that ALREADY has a destination was resolved by an explicit
       // `[label]: url` definition, and an explicit definition wins over the
       // implicit heading index. It used to be told apart by `ref` being gone;
@@ -679,12 +680,12 @@ function resolveHeadingIdsImpl(
             // PART 12 §3a - see the note in parse.ts: the authored `ref` and
             // `rawRef` survive beside the resolved destination. The label as
             // written IS the key here, so there is nothing to derive.
-            n.href = `#${asWritten}`
+            n = resolveReferenceDestination(n, `#${asWritten}`)
           } else {
             const derived = derivedRefLabel(n.ref)
             const id = headingRefs.get(normalizeHeadingRefLabel(derived))
             if (id !== undefined) {
-              n.href = `#${id}`
+              n = resolveReferenceDestination(n, `#${id}`)
               n.ref = derived
             }
           }
