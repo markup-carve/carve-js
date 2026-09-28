@@ -1042,10 +1042,10 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // (PART 12 §3a, markup-carve/carve#817).
       // Same expansion budget the abbreviation arm spends, degrading to the
       // authored target (markup-carve/carve-js#892). See abbr-budget.ts.
-      const rendered = withinLink(() => renderInlines(node.resolvedText ?? [], ctx))
-      const crossrefText = ctx.abbrBudget.charge(utf8ByteLength(rendered))
-        ? rendered
-        : escapeText(node.target)
+      const crossrefText =
+        ctx.abbrBudget.chargeRenderedLabel(node.resolvedText, () =>
+          withinLink(() => renderInlines(node.resolvedText ?? [], ctx)),
+        ) ?? escapeText(node.target)
       // Inside a link's text, and for a target this format cannot anchor: the
       // display text alone. Markdown can carry `{#id}` on a heading and
       // nothing else, so a crossref to a figure or a table renders as the

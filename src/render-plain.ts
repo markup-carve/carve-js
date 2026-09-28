@@ -514,8 +514,11 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // Same expansion budget the other targets spend on this label, degrading
       // to the authored target (markup-carve/carve-js#892).
       if (node.href) {
-        const label = renderInlines(node.resolvedText ?? [], ctx)
-        return ctx.abbrBudget.charge(utf8ByteLength(label)) ? label : stripControls(node.target)
+        return (
+          ctx.abbrBudget.chargeRenderedLabel(node.resolvedText, () =>
+            renderInlines(node.resolvedText ?? [], ctx),
+          ) ?? stripControls(node.target)
+        )
       }
       return `</#${stripControls(node.target)}>`
     case 'caption_number':

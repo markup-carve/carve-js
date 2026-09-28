@@ -2118,8 +2118,9 @@ function renderImage(img: Image, opts: RenderOptions): string {
 let insideLink = false
 
 /**
- * Charge a rendered cross-reference label against the per-render expansion
- * budget, degrading an over-budget label to the authored target.
+ * Render a cross-reference label against the per-render expansion budget,
+ * degrading an over-budget label to the authored target. Both arms render in
+ * the link context, so one measured cost answers for both.
  *
  * A crossref republishes the target heading's whole display text while the
  * reference costs only the slug, so K references to one long heading amplify
@@ -2128,10 +2129,14 @@ let insideLink = false
  * degrades the way that one does: to the text the author actually typed
  * (markup-carve/carve-js#892).
  */
-function chargeCrossrefLabel(label: string, target: string): string {
-  if (abbrBudget?.charge(utf8ByteLength(label)) ?? true) return label
+function chargeCrossrefLabel(
+  display: InlineNode[] | undefined,
+  render: () => string,
+  target: string,
+): string {
+  if (abbrBudget === null) return render()
 
-  return escapeHtml(target)
+  return abbrBudget.chargeRenderedLabel(display, render) ?? escapeHtml(target)
 }
 
 function withinLink<T>(fn: () => T): T {
@@ -2418,7 +2423,11 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // suppression is here, at the point of rendering, rather than by
       // dropping the node during resolution.
       if (node.href && insideLink)
-        return chargeCrossrefLabel(renderInlines(node.resolvedText ?? [], opts), node.target)
+        return chargeCrossrefLabel(
+          node.resolvedText,
+          () => renderInlines(node.resolvedText ?? [], opts),
+          node.target,
+        )
       // Resolved: the anchor this crossref always rendered as. The node keeps
       // the authored `target` (PART 12 §3a) and carries the destination in
       // `href`, so the rendering is unchanged - only the tree moved.
@@ -2430,7 +2439,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
         // it; with that pass gone (markup-carve/carve#817) the seam has to say
         // so itself, exactly as the `link` arm does for an authored label.
         const label = chargeCrossrefLabel(
-          withinLink(() => renderInlines(node.resolvedText ?? [], opts)),
+          node.resolvedText,
+          () => withinLink(() => renderInlines(node.resolvedText ?? [], opts)),
           node.target,
         )
         return `<a href="${crossrefHref}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
