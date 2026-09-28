@@ -10685,6 +10685,9 @@ class ParseSession {
         // below the content column ends the item body and parses at document level
         // (falling through to the lazy-fold / detach branch below). Intentional
         // divergence from djot, which attaches at any indent past the marker.
+        // An ancestor's folded text needs an open paragraph in this item.
+        // A comment can retain the ancestor's frame after closing this leaf.
+        if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
         // A MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT COLUMN HERE
         // (markup-carve/carve#1904). It carried no `>`, so it is not inside the
@@ -10951,6 +10954,10 @@ class ParseSession {
             // staying the paragraph's inline verbatim run (carve-js#540).
             const flushed = l.replace(/^[ \t]+/, '')
             lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
+          } else if (lazyState.commentAtColumn && !RE_COMMENT_LINE.test(l)) {
+            // The comment retained this item's frame, but closed its paragraph.
+            // Keep the fold explicit so a closed descendant cannot claim it.
+            lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           }
           takenBelowColumn.add(nested.length)
           nested.push(lazyLine)
@@ -11032,6 +11039,12 @@ class ParseSession {
         ? new Set(Array.from(takenBelowColumn, (index) => index + 1))
         : takenBelowColumn
       let authoredCodeFenceOpen = false
+      // Tightness uses the columns at which the collector admitted the lines.
+      // Rebasing a block can move its continuation below a sublist's column.
+      let hasBlank = nested.some(isBlankLine)
+      const beforeRebase = hasOverindentedBlockCandidate && hasBlank
+        ? nested.slice()
+        : nested
       const rebasedBlanks = hasOverindentedBlockCandidate
         ? rebaseOverindentedBlocks(
           rebaseLines,
@@ -11087,6 +11100,7 @@ class ParseSession {
       if (pendingBlanks > 0 && (
         lazyState.opaque !== null || authoredCodeFenceOpen || firstBlockIdx >= 0 || leadIsMarker
       )) {
+        hasBlank = true
         for (let k = 0; k < pendingBlanks; k++) {
           bufferedBlanks.add(nested.length + 1)
           nestedSourceLines.push(pendingBlankTexts[k])
@@ -11111,24 +11125,24 @@ class ParseSession {
       // (for unordered) same marker character. A blank line before a
       // different marker (`- a\n\n+ b`) separates two distinct lists
       // (§11), so it must not loosen this one.
-      if ((pendingBlanks > 0 || blankBeforeInvisible) && !lexer.eof()) {
-        const nextLine = lexer.peek()!
+      const nextIsSibling = (): boolean => {
+        const nextLine = lexer.peek()
+        if (nextLine === undefined) return false
         const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
-        if (
-          indentColumns(nextLine, baseIndent + 1) === baseIndent &&
-          matchListMarker(nextStripped, isTask, isOrdered) &&
+        return indentColumns(nextLine, baseIndent + 1) === baseIndent &&
+          matchListMarker(nextStripped, isTask, isOrdered) !== null &&
           (isOrdered
             ? orderedContinues(nextStripped, orderedKind, orderedDelim)
             : unorderedMarkerChar(nextStripped) === firstMarkerChar)
-        ) {
-          // A run of THREE OR MORE blank lines is a hard boundary (§11 N1): the
-          // sibling marker after it opens a new list instead of joining this
-          // one. One or two blank lines remain the ordinary loose separator
-          // (§17 L1). `blankBeforeInvisible` is deliberately not counted here -
-          // a run broken by a comment is not a run of blank lines.
-          if (pendingBlanks >= 3) hardBoundary = true
-          else loose = true
-        }
+      }
+      if ((pendingBlanks > 0 || blankBeforeInvisible) && nextIsSibling()) {
+        // A run of THREE OR MORE blank lines is a hard boundary (§11 N1): the
+        // sibling marker after it opens a new list instead of joining this
+        // one. One or two blank lines remain the ordinary loose separator
+        // (§17 L1). `blankBeforeInvisible` is deliberately not counted here -
+        // a run broken by a comment is not a run of blank lines.
+        if (pendingBlanks >= 3) hardBoundary = true
+        else loose = true
       }
 
       // Compact list blocks (Carve): an internal blank line loosens the item only
@@ -11195,7 +11209,7 @@ class ParseSession {
       // Fence membership is read only for blank lines in the tightness pass.
       // Without a blank, classifying every descendant on the marker line has
       // no consumer and repeats the prefix walk at every nesting level.
-      const fenceLines = nested.some((line) => isBlankLine(line)) ? [content, ...nested] : []
+      const fenceLines = hasBlank ? [content, ...nested] : []
       const inFence: boolean[] = new Array(fenceLines.length).fill(false)
       // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
       // must not latch this pass either: an unterminated `%%%` swallowed every
@@ -11432,7 +11446,7 @@ class ParseSession {
         // first item (carve-js#1938); a later sibling sub-list brings its own
         // column (carve-js#1951).
         const subCol = subListColumnAt(k)
-        if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
+        if (subCol >= 0 && indentColumns(beforeRebase[j]!, subCol) >= subCol) continue
         // AN INVISIBLE BLOCK THE SUB-LIST HOLDS MAKES THE BLANK THE SUB-LIST'S
         // TOO (markup-carve/carve-js#2243). The skip above looks past a comment to
         // find the paragraph §17 L1 asks for, and looking past one the CHILD holds
@@ -11445,7 +11459,16 @@ class ParseSession {
         // Asked of the line the blank's own sequence resumes at, which the walk
         // above already visited, so an item without a blank pays nothing.
         if (resumesAt >= 0 && resumesAt !== j && subCol >= 0 &&
-          indentColumns(nested[resumesAt]!, subCol) >= subCol) continue
+          indentColumns(beforeRebase[resumesAt]!, subCol) >= subCol) continue
+        // A folded continuation starts no block at this item's column. The
+        // blank still separates this item from a following sibling (§17 L1).
+        if (takenBelowColumn.has(j)) {
+          if (nextIsSibling()) {
+            loose = true
+            break
+          }
+          continue
+        }
         // `j` can no longer be an invisible line (skipped above), so this is the
         // plain "is the next visible thing a paragraph" test it always was.
         //
