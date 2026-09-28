@@ -2613,6 +2613,7 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
  */
 interface FenceCloserMemoEntry {
   from: number
+  end?: number
   maxRun: number
 }
 type QuotedFenceCloserMemo = Map<string, FenceCloserMemoEntry>
@@ -2841,30 +2842,43 @@ function fenceCloserMemoRefutes(
 ): boolean {
   const cached = memo.get(char)
 
-  return cached !== undefined && start >= cached.from && len > cached.maxRun
+  return cached !== undefined && start >= cached.from &&
+    (cached.end === undefined || start <= cached.end) && len > cached.maxRun
 }
 
-/** Strip one `>` per line and stop at the first unquoted line. Cache misses by fence character. */
+/** Search within one quote depth; cache misses only through its next boundary. */
 function quotedFenceHasCloser(
   lexer: Lexer,
   marker: string,
   fromIndex: number,
   memo: QuotedFenceCloserMemo,
+  depth = 0,
 ): boolean {
   const char = marker[0]!
+  const key = `${depth}:${char}`
   const start = fromIndex + 1
-  if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
+  if (fenceCloserMemoRefutes(memo, key, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
-  for (let i = start; i < lexer.lines.length; i++) {
-    const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
-    if (!quoted) break
-    const content = quoted[1] ?? ''
+  let end = start
+  for (; end < lexer.lines.length; end++) {
+    const line = lexer.lines[end]!
+    let at = 0
+    for (let level = 0; level <= depth; level++) {
+      const width = quotePrefixLength(line, at, line.length)
+      if (width === 0) {
+        at = -1
+        break
+      }
+      at += width
+    }
+    if (at < 0) break
+    const content = line.slice(at)
     if (closeRe.test(content)) return true
     const closer = RE_FENCE_CLOSER.exec(content)
     if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  memo.set(char, { from: start, maxRun })
+  memo.set(key, { from: start, end, maxRun })
 
   return false
 }
@@ -3269,7 +3283,7 @@ function trackBlockQuoteLazyState(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
-  hasFenceCloser: (marker: string) => boolean,
+  hasFenceCloser: (marker: string, depth?: number) => boolean,
   descent?: QuoteDescent,
 ): void {
   let text = content
@@ -3278,8 +3292,10 @@ function trackBlockQuoteLazyState(
   let commentCloser = hasCommentCloser
   let fenceCloser = hasFenceCloser
   if (descent) descent.levels = 0
+  let paragraphOpen: boolean | undefined
+  const continuesParagraph = (): boolean => paragraphOpen ??= blockQuoteParagraphOpen(state)
   for (;;) {
-    const descend = classifyQuotedLine(text, level, commentCloser, fenceCloser, terminatorFree)
+    const descend = classifyQuotedLine(text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree)
     if (descend === null) return
     text = descend.text
     level = descend.state
@@ -3294,7 +3310,7 @@ function trackBlockQuoteLazyState(
       }
       fenceCloser = (marker) => {
         descent.askedBelowTop = true
-        return hasFenceCloser(marker)
+        return hasFenceCloser(marker, descent.levels)
       }
     }
   }
@@ -3345,6 +3361,7 @@ function classifyQuotedLine(
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
   hasFenceCloser: (marker: string) => boolean,
+  continuesParagraph: () => boolean,
   terminatorFree = false,
 ): { text: string; state: BlockQuoteLazyState } | null {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
@@ -3499,6 +3516,12 @@ function classifyQuotedLine(
   // (`:::note` fails §12's opener test - a type word needs a space), and from
   // here the paragraph absorbs the next bare fence-shaped line as well.
   if (/^:{3,}/.test(content)) {
+    if (state.mode.kind === 'quote' && continuesParagraph()) {
+      let inner = state.mode.inner
+      while (inner.mode.kind === 'quote') inner = inner.mode.inner
+      inner.mode = { kind: 'paragraph', absorbingFence: true }
+      return null
+    }
     state.mode = { kind: 'paragraph', absorbingFence: true }
     return null
   }
@@ -3536,6 +3559,8 @@ function classifyQuotedLine(
     }
     return null
   }
+  // Lazy text preserves the inner paragraph for the next marked line.
+  if (state.mode.kind === 'quote' && continuesParagraph()) return null
   // Everything else (plain prose, a folded list-marker line, div body text, or
   // a fence/comment-looking line while a paragraph is open) leaves an open
   // paragraph that a following list marker or plain text folds into.
@@ -5383,6 +5408,8 @@ function startsInterruptingBlock(
       return isTableRow(ln)
     case '`':
     case '~':
+      // A line already admitted as quote continuation remains paragraph text.
+      if (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) return false
       // Raw passthrough / fenced code: interrupt only with a matching closer.
       if (RE_RAW_FENCE.test(ln)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(ln)![1]!)
       if (RE_FENCE.test(ln)) return fenceHasCloser(lexer, RE_FENCE.exec(ln)![2]!)
@@ -9785,7 +9812,9 @@ class ParseSession {
         content,
         state,
         (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
+        (marker, depth) =>
+          !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
+          quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo, depth),
         descent,
       )
       // A later line that continues the handed-down quote would change the
