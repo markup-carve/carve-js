@@ -99,7 +99,26 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return stripBidiControls(normalize(`${out}${footnotes}`))
+  const body = normalize(`${out}${footnotes}`)
+  const frontmatter = renderFrontmatter(ast.frontmatter)
+  // A document that is only frontmatter has no body to separate it from, and
+  // `normalize` returns a bare newline for one.
+  if (frontmatter !== '' && body === '\n') return stripBidiControls(frontmatter.trimEnd() + '\n')
+  return stripBidiControls(`${frontmatter}${body}`)
+}
+
+/**
+ * PART 11 section 10r: frontmatter is emitted first, with the format token
+ * wherever the format is not `yaml`, and the content verbatim.
+ *
+ * Built outside `normalize`, which collapses a run of blank lines and resolves
+ * escape placeholders - neither of which may reach metadata the clause requires
+ * verbatim.
+ */
+function renderFrontmatter(frontmatter: Document['frontmatter']): string {
+  if (!frontmatter) return ''
+  const format = frontmatter.format === 'yaml' ? '' : frontmatter.format
+  return `---${format}\n${frontmatter.content}\n---\n\n`
 }
 
 interface MarkdownContext {
