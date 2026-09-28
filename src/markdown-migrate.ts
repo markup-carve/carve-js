@@ -3449,16 +3449,15 @@ function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | nu
   if (/^<![A-Z]/.test(trimmed)) return collectUntil(/>/, false)
   if (trimmed.startsWith('<![CDATA[')) return collectUntil(/\]\]>/, false)
 
+  const raw = /^<([A-Za-z][A-Za-z0-9-]*)(?=[ \t>]|$)/.exec(trimmed)
+  if (raw && RAWTEXT_HTML_BLOCK_TAGS.has(raw[1]!.toLowerCase())) {
+    return collectUntil(/<\/(?:script|pre|style|textarea)>/i, false)
+  }
+  // Known block tags run to a blank line, even after a closing tag.
+  const block = /^<\/?([A-Za-z][A-Za-z0-9-]*)(?=[ \t>]|\/>|$)/.exec(trimmed)
+  if (block && HTML_BLOCK_TAGS.has(block[1]!.toLowerCase())) return collectUntil(RE_NEVER, true)
   const tag = scanHtmlTag(trimmed, 0)
   if (!tag) return null
-  if (RAWTEXT_HTML_BLOCK_TAGS.has(tag.name)) {
-    return collectUntil(new RegExp(`</${tag.name}\\s*>`, 'i'), false)
-  }
-  // Condition 6: a known block tag name. The block ends at the next blank line,
-  // NOT at the element's closing tag - `<div>x</div>` followed by prose is one
-  // HTML block holding both, and ending at the tag migrated that prose as a
-  // paragraph outside the block the source put it in.
-  if (HTML_BLOCK_TAGS.has(tag.name)) return collectUntil(RE_NEVER, true)
   // Condition 7: a complete tag, alone on the line. The block runs to the next
   // blank line - taking only the opening line split `<span>`/`text`/`</span>`
   // into a fence, a paragraph and an inline span, which is three readings of
