@@ -22,7 +22,8 @@
  * for this to key on.
  */
 
-import type { Image, InlineNode, Link } from './ast.js'
+import type { InlineNode } from './ast.js'
+import type { UnresolvedReference } from './reference-state.js'
 
 /**
  * True when `node` is a reference link/image that matched no definition.
@@ -31,7 +32,7 @@ import type { Image, InlineNode, Link } from './ast.js'
  * a string: an unresolved reference is exactly one that has a label, so the
  * predicate can say so rather than leave every call site to re-test it.
  */
-export function isUnresolvedReference(node: InlineNode): node is (Link | Image) & { ref: string } {
+export function isUnresolvedReference(node: InlineNode): node is UnresolvedReference {
   if (node.type === 'link') return node.ref !== undefined && !node.href
   if (node.type === 'image') return node.ref !== undefined && !node.src
   return false

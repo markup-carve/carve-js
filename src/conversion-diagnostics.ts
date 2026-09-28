@@ -63,7 +63,7 @@ export function renderCarveWithConversionReport(
         ...groups.bodies.map((body, i): [string, object | undefined] => [`rowGroups.bodies[${i}].attrs`, body.attrs]),
       ]
       for (const [field, attrs] of fields) {
-        if (attrs && Object.values(attrs).some((value) => typeof value === 'string' || Object.keys(value ?? {}).length > 0)) {
+        if (attrs && Object.values(attrs).some((value: unknown) => typeof value === 'string' || (value !== null && typeof value === 'object' && Object.keys(value).length > 0))) {
           report('field-unspellable', 'Carve source cannot spell table section attributes', field)
         }
       }

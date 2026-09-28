@@ -12,6 +12,24 @@
     "src/inline-resolution.ts",
     "src/inline-children.ts",
     "src/unresolved-reference.ts",
-    "src/block-children.ts"
+    "src/block-children.ts",
+    "src/attribute-parser.ts",
+    "src/html-import-code-language.ts",
+    "src/label-key.ts",
+    "src/link-destination.ts",
+    "src/source-layout.ts",
+    "src/tab-normalize.ts",
+    "src/paragraph-indent.ts",
+    "src/thematic-break-marker.ts",
+    "src/colon-fences.ts",
+    "src/math-block.ts",
+    "src/smart-quotes.ts",
+    "src/trim-non-nbsp.ts",
+    "src/sentinel-run.ts",
+    "src/table-spans.ts",
+    "src/import-report-messages.ts",
+    "src/conversion-diagnostics.ts",
+    "src/deny-listed-destination.ts",
+    "src/reference-state.ts"
   ]
 }

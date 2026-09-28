@@ -302,7 +302,7 @@ export function sanitizeUrl(url: string, opts: RenderOptions): string {
   const probe = url.replace(SCHEME_PROBE_STRIP_RE, '')
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
   if (!scheme) return url
-  const s = scheme[1].toLowerCase()
+  const s = scheme[0].slice(0, -1).toLowerCase()
   // Explicit allowlist (opt-in): only the listed schemes pass.
   if (opts.allowedUrlSchemes) {
     return opts.allowedUrlSchemes.some((a) => a.toLowerCase() === s) ? url : ''
