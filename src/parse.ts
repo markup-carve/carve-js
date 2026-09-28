@@ -9263,6 +9263,12 @@ class ParseSession {
             return answer
           },
           atContentColumn,
+          // The description collector classifies the prefix collected so far.
+          // A comment opener has no closer in that prefix yet, so its following
+          // lines can leave a paragraph open for S4. The body parse pairs the
+          // delimiters after collection; the span scan keeps a below-column
+          // closer with its opener (carve-js#2237).
+          () => false,
         )
       }
       // Lines admitted by REACHING the body's content column, mirroring the list
