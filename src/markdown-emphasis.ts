@@ -89,7 +89,8 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
   }
   for (const run of runs) {
     const before = source[run.start - 1] ?? '', after = source[run.end] ?? ''
-    if ((run.char === '_' && /[^\x00-\x7f]/u.test(before + after)) || /\u00a0/u.test(before + after)) {
+    const partiallyClaimed = claimed.has(run.start) || claimed.has(run.end - 1)
+    if (partiallyClaimed || (run.char === '_' && /[^\x00-\x7f]/u.test(before + after)) || /\u00a0/u.test(before + after)) {
       for (let i = run.start; i < run.end; i++) if (!claimed.has(i)) literalEscapes.add(i)
     }
   }

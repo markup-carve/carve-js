@@ -5,6 +5,7 @@ import { markdownEmphasis } from '../src/markdown-emphasis.js'
 import { djotToCarve } from '../src/djot-import.js'
 
 it.each([
+  ['***foo**', '<p>*<strong>foo</strong></p>'],
   ['*(*word*)*', '<p><em>(word)</em></p>'],
   ['__one __two__ three__', '<p><strong>one two three</strong></p>'],
   ['alpha*beta*gamma', '<p>alpha<em>beta</em>gamma</p>'],
