@@ -419,7 +419,7 @@ default. The threat model and every knob is in [docs/security.md](https://github
 - [Rendering behavior](https://github.com/markup-carve/carve-js/blob/main/docs/rendering.md) - heading ids, section wrappers, depth limits.
 - [Browser use](https://github.com/markup-carve/carve-js/blob/main/docs/browser.md) - script tag and module.
 - [Accessibility lint](https://github.com/markup-carve/carve-js/blob/main/docs/accessibility-lint.md) - the accessibility rules.
-- [Streaming render](https://github.com/markup-carve/carve-js/blob/main/docs/streaming-render.md) - rendering without buffering.
+- [Streaming render](https://github.com/markup-carve/carve-js/blob/main/docs/streaming-render.md) - acceptance-aware chunk delivery.
 - [Reversible patches](https://github.com/markup-carve/carve-js/blob/main/docs/reversible-patches.md) - editing an AST in place.
 - [AST sidecars](https://github.com/markup-carve/carve-js/blob/main/docs/ast-sidecars.md) - node identity, annotation ranges, provenance, and source conversion diagnostics.
 - [Source-preserving patches](https://github.com/markup-carve/carve-js/blob/main/docs/source-patches.md) - stale-safe UTF-8 edits.

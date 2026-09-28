@@ -4,6 +4,16 @@ import { createEditorSession, EditorChangeError, parse, toAstJson } from '../src
 const fresh = (source: string) => toAstJson(parse(source, { positions: true }))
 
 describe('editor session', () => {
+  it('reports same-length text and reference destination changes', () => {
+    const text = createEditorSession('one')
+    expect(text.update([{ from: 0, to: 3, insert: 'two' }]).changedPaths).toContain('/children/0/children/0')
+    const source = '[label][r]\n\n[r]: /one\n'
+    const reference = createEditorSession(source)
+    const start = source.indexOf('/one')
+    const update = reference.update([{ from: start, to: start + 4, insert: '/two' }])
+    expect(update.changedPaths).toContain('/children/0/children/0')
+  })
+
   it('turns live heading input into a mapped heading without rewriting source', () => {
     const session = createEditorSession('##')
     const update = session.update([{ from: 2, to: 2, insert: '# Title' }])

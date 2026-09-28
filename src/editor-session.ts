@@ -128,11 +128,35 @@ function validateChanges(source: string, changes: readonly EditorChange[]): void
   })
 }
 
-function changedPaths(before: readonly EditorMappedNode[], after: readonly EditorMappedNode[]): string[] {
-  const signature = (node: EditorMappedNode): string => `${node.type ?? ''}:${node.start}:${node.end}:${node.tokens.map((token) => `${token.role}:${token.start}:${token.end}`).join(',')}`
-  const old = new Map(before.map((node) => [node.path, signature(node)]))
-  const next = new Map(after.map((node) => [node.path, signature(node)]))
-  return [...new Set([...old.keys(), ...next.keys()].filter((path) => old.get(path) !== next.get(path)))].sort()
+function nodeSignatures(ast: AstJsonDocument): Map<string, string> {
+  const paths = new Set(astNodePaths(ast))
+  const signatures = new Map<string, string>()
+  const visit = (value: unknown, path: string): unknown => {
+    if (!value || typeof value !== 'object') return value
+    const reduced = Array.isArray(value)
+      ? value.map((child, index) => visit(child, `${path}/${index}`))
+      : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, visit(child, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`)]))
+    if (!paths.has(path)) return reduced
+    signatures.set(path, JSON.stringify(reduced))
+    return { type: (value as { type: string }).type }
+  }
+  visit(ast, '')
+  return signatures
+}
+
+function changedPaths(before: ReadonlyMap<string, string>, after: ReadonlyMap<string, string>): string[] {
+  const changed = new Set<string>()
+  for (const path of new Set([...before.keys(), ...after.keys()])) {
+    if (before.get(path) === after.get(path)) continue
+    let ancestor = path
+    while (true) {
+      if (changed.has(ancestor)) break
+      if (before.has(ancestor) || after.has(ancestor)) changed.add(ancestor)
+      if (ancestor === '') break
+      ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'))
+    }
+  }
+  return [...changed].sort()
 }
 
 /**
@@ -180,6 +204,7 @@ export function createEditorSession(
     return Object.freeze({ revision, source, ast, nodes, identity })
   }
   let current = build(initialSource, 0)
+  let signatures = nodeSignatures(current.ast)
   return {
     snapshot: () => current,
     update(changes) {
@@ -190,7 +215,9 @@ export function createEditorSession(
         source = source.slice(0, change.from) + change.insert + source.slice(change.to)
       }
       const next = build(source, current.revision + 1, current, changes)
-      const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(current.nodes, next.nodes)) })
+      const nextSignatures = nodeSignatures(next.ast)
+      const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(signatures, nextSignatures)) })
+      signatures = nextSignatures
       current = next
       return update
     },
