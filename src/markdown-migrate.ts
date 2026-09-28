@@ -2976,7 +2976,7 @@ function collectIndentedCode(lines: readonly string[], start: number, contentCol
   const body = run
     .slice(0, end - start)
     .map((line) =>
-      line.trim() === '' ? '' : stripColumns(line, contentCol + 4),
+      stripColumns(line, contentCol + 4),
     )
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(body.join('\n')) + 1))
   const pad = ' '.repeat(contentCol)
@@ -3003,6 +3003,8 @@ function closeFence(out: string[], openerAt: number, pad: string, info: string):
  * nothing when a backtick in its first word stops it being an info string.
  */
 function fenceInfo(rest: string): string {
+  const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
+  rest = rest.replace(escapesAndEntities, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
   const firstInfoWord = rest.trim().split(/[ \t]/, 1)[0] ?? ''
   return firstInfoWord.includes('`') ? '' : (rest.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? '')
 }
@@ -3526,7 +3528,7 @@ function quotedIndentedCodeAt(
     // A change of quote depth is a different container, so the run ends.
     if (!parsed || parsed.prefix !== head.prefix) break
     if (parsed.text.trim() === '') {
-      body.push('')
+      body.push(stripColumns(parsed.text, base + 4))
       end++
       continue
     }
@@ -3536,7 +3538,7 @@ function quotedIndentedCodeAt(
   }
   // A blank line does not end an indented code block, but trailing blanks
   // belong to the quote rather than to the code.
-  while (body.length > 0 && body[body.length - 1] === '') {
+  while (body.length > 0 && body[body.length - 1]!.trim() === '') {
     body.pop()
     end--
   }
