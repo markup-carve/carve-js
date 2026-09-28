@@ -213,6 +213,37 @@ function escapePlainDjotText(source: string): string {
   return output + escapePlainCarveInlineSyntax(plain, HANDLED_DJOT)
 }
 
+function foldHeadingContinuations(source: string): string {
+  const lines = source.split('\n')
+  const masked = maskDjotCodeAndDestinations(source).split('\n')
+  const block = /^(?:[#>|{]|[-*+][ \t]|[0-9]+[.)][ \t]|:[ \t]|:{2,}|\([0-9a-zA-Z]+\)[ \t]|[`~]{3,}|\^[ \t]|%{3,}|\[[^\]\n]*\]:|(?:\*[ \t]*){3,}$|(?:-[ \t]*){3,}$)/
+  const result: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]!
+    const heading = /^(#{1,6}) +\S/.exec(line)
+    if (!heading || (i > 0 && lines[i - 1]!.trim() !== '') || !masked[i]!.startsWith('#')) {
+      result.push(line)
+      continue
+    }
+    const marker = new RegExp(`^${heading[1]} +`)
+    while (i + 1 < lines.length && (line.match(/\\+$/)?.[0].length ?? 0) % 2 === 0) {
+      const next = lines[i + 1]!.replace(/^[ \t]+/, '')
+      let part: string
+      if (marker.test(next)) {
+        part = next.replace(marker, '')
+        if (!part.trim()) break
+      } else {
+        if (!next.trim() || block.test(next)) break
+        part = next
+      }
+      line += ` ${part}`
+      i++
+    }
+    result.push(line)
+  }
+  return result.join('\n')
+}
+
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   const normalized = djot.replace(/\r\n?/g, '\n')
@@ -223,7 +254,8 @@ export function djotToCarve(djot: string): string {
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
-  const held = attributedDjotStrong(body, maskDjotCodeAndDestinations(body), convert, (span) => {
+  const folded = foldHeadingContinuations(body)
+  const held = attributedDjotStrong(folded, maskDjotCodeAndDestinations(folded), convert, (span) => {
     spans.push(span)
     return `${prefix}${spans.length - 1}\x00`
   })
