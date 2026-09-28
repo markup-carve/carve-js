@@ -194,6 +194,18 @@ describe('carve render — loss reporting', () => {
   })
 })
 
+describe('migration literal-text evidence', () => {
+  it('passes the loss check only for verified complete literal text', async () => {
+    for (const format of ['markdown', 'djot', 'bbcode']) {
+      for (const [source, expected] of [['hello', 0], ['hello!', 1]] as const) {
+        const t = makeIO({ stdin: source })
+        expect(await run(['migrate', '--from', format, '--report', 'report.json', '--check-loss'], t.io)).toBe(expected)
+        expect(JSON.parse(t.files['report.json']!).diagnostics[0].code).toBe(expected === 0 ? 'literal-text-verified' : 'fidelity-unverified')
+      }
+    }
+  })
+})
+
 describe('carve migrate — HTML import', () => {
   it('writes Carve plus a machine-readable loss report', async () => {
     const t = makeIO({ stdin: '<p onclick="x()">Hello</p>' })

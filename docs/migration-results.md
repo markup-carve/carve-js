@@ -19,11 +19,13 @@ source format and use the same `preserved`, `normalized`, `degraded`, or
 confidence. Format-specific codes and messages remain explicit.
 
 Version 2 renames version 1's `carried` fidelity to `preserved`, adds
-`normalized`, and adds non-HTML diagnostics. Markdown, Djot, and BBCode emit
-`fidelity-unverified` as dropped/fallback on
-every import until those paths expose construct-level loss information. The
-report does not infer exact outcomes by rescanning source independently of the
-importer.
+`normalized`, and adds non-HTML diagnostics. 
+
+Markdown, Djot, and BBCode verify a narrow literal-text subset: empty input or
+Unicode letters and numbers separated by single ASCII spaces, with optional
+trailing line endings. When the imported text matches and no known loss was
+reported, `literal-text-verified` records preserved/exact evidence. All other
+inputs retain the dropped/fallback `fidelity-unverified` warning.
 
 Markdown adds the construct-level losses it can prove beside that row. A table
 row whose every cell is blank has no Carve spelling, so it is dropped and

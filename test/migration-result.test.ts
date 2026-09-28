@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { migrateBbcode, migrateDjot, migrateHtml, migrateMarkdown } from '../src/index.js'
 
 describe('shared migration result', () => {
+  it('verifies complete literal-text inputs and leaves syntax outside that coverage unverified', () => {
+    const importers = [migrateMarkdown, migrateDjot, migrateBbcode]
+    for (const migrate of importers) {
+      for (const source of ['', 'hello', 'plain text', 'Grüße 123', '日本語', 'hello\r\n\r\n']) {
+        expect(migrate(source).report.diagnostics).toEqual([
+          expect.objectContaining({ code: 'literal-text-verified', fidelity: 'preserved', confidence: 'exact', severity: 'info' }),
+        ])
+      }
+      for (const source of ['# heading', '*bold*', '[b]text[/b]', 'a\nb', '    code', '1. item', 'a  b', 'a\tb', 'hello!', ' hello', 'hello ', 'a\u00a0b', 'e\u0301', 'a\r\nb', 'a\rb']) {
+        expect(migrate(source).report.diagnostics).toContainEqual(expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped' }))
+      }
+    }
+  })
+
   it('uses one result shape for every source format', () => {
     expect(migrateMarkdown('**strong**')).toMatchObject({
       value: '*strong*',
@@ -51,7 +65,7 @@ describe('shared migration result', () => {
   })
 
   it('does not mistake byte equality or whitespace rewrites for verified fidelity', () => {
-    for (const source of ['plain text', 'plain text\r\n\r\n', 'term\n: definition']) {
+    for (const source of ['plain text!', 'plain text!\r\n\r\n', 'term\n: definition']) {
       expect(migrateMarkdown(source).report.diagnostics).toContainEqual(
         expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
       )
