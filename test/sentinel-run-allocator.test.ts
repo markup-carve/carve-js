@@ -86,6 +86,27 @@ describe('occupiedPrivateUse', () => {
     expect(occupied.has(0xe456)).toBe(true)
   })
 
+  it('reads shared objects and arrays once regardless of reference count', () => {
+    let textReads = 0
+    let elementReads = 0
+    const sharedText = { get text() { textReads++; return at(0xe123) } }
+    const sharedArray = [sharedText]
+    Object.defineProperty(sharedArray, '0', {
+      get() { elementReads++; return sharedText },
+      enumerable: true,
+    })
+    const references = Array.from({ length: 1000 }, () => ({ resolved: sharedArray }))
+
+    expect(occupiedPrivateUse(references)).toEqual(new Set([0xe123]))
+    expect(textReads).toBe(1)
+    expect(elementReads).toBe(1)
+  })
+
+  it('keeps distinct objects and direct strings in the scan', () => {
+    expect(occupiedPrivateUse([{ text: at(0xe123) }, { text: at(0xe456) }])).toEqual(new Set([0xe123, 0xe456]))
+    expect(occupiedPrivateUse(at(0xe789))).toEqual(new Set([0xe789]))
+  })
+
   it('records nothing outside the allocatable area', () => {
     // U+E000 is never allocated, so whether the document holds it is not this
     // set's business, and an ordinary character is not either.

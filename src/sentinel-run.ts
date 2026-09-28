@@ -24,10 +24,12 @@ const PRIVATE_USE_END = 0xf8ff
  * ITERATIVE on purpose: `JSON.stringify` would be one line, and it recurses - so
  * on an AST deeper than the JS stack it throws a RangeError before a writer can
  * reach its own §25 depth REFUSAL, which is a documented behaviour with tests on
- * it. An explicit stack has no such limit.
+ * it. An explicit stack has no such limit. Shared objects and arrays are visited
+ * once: resolved references can share a long display-text subtree.
  */
 export function occupiedPrivateUse(root: unknown): Set<number> {
   const occupied = new Set<number>()
+  const visited = new WeakSet<object>()
   const stack: unknown[] = [root]
   while (stack.length > 0) {
     const node = stack.pop()
@@ -39,6 +41,8 @@ export function occupiedPrivateUse(root: unknown): Set<number> {
       continue
     }
     if (node === null || typeof node !== 'object') continue
+    if (visited.has(node)) continue
+    visited.add(node)
     if (Array.isArray(node)) {
       for (const item of node) stack.push(item)
       continue
