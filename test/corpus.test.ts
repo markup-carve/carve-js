@@ -871,6 +871,13 @@ const IMPLEMENTED = new Set([
   // here without engine work. Measured by reverting carve-js#2277's hunk: all
   // seven still pass, so that merge is not what carries them.
   'a-fence-in-a-quote-stores-no-continuation-claim',
+  // Arrives with carve 9b938e8a. Eleven of its thirteen documents render
+  // byte-exact on carve-js#2287; the two whose span opens on the MARKER line
+  // needed the span scan seeded there (see the note in `parse.ts`), and all
+  // thirteen pass with it. Two of the six rows carve's engine-pin-drift.txt
+  // declared are those two. The band between two content columns stays open on
+  // carve-js#2289 and no document of this category writes its closer there.
+  'a-comment-span-s-closer-column-does-not-move-the-item-s-ownership',
 ])
 
 /**

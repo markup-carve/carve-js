@@ -10587,6 +10587,17 @@ class ParseSession {
       if (leadComment !== undefined) {
         lazyState.opaque = { kind: 'comment', length: leadComment, paragraphBefore: lazyState.lazyFoldable, atColumn: false }
         lazyState.lazyFoldable = false
+        // THE MARKER LINE IS A COLLECTED LINE TO THE SPAN SCAN TOO. The scan walks
+        // `nested`, which the lead line never enters, so a span opened here was
+        // invisible where the below-column test asks who holds one - and §28's
+        // closer, written at any column, ended the item instead of closing the
+        // span. The item's own parse then read an opener with no closer, which §28
+        // degrades to one `%%` line, and the payload reached the page
+        // (markup-carve/carve#2527, corpus 512-11 and 512-12). Seeded as state
+        // rather than by walking `[content]`, so the resumable cursor still starts
+        // at `nested[0]`.
+        itemSpanScan.opaque = { comment: true, char: '%', run: leadComment }
+        itemSpanScan.atBlockStart = false
       }
       // The lead line may itself be the malformed fence (`- :::note`), and then
       // the paragraph it opens is already absorbing: the `:::` below it is text,
