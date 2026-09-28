@@ -2714,6 +2714,112 @@ function itemCommentHasCloser(
   return at[at.length - 1]! >= start
 }
 
+/**
+ * A line's content with every leading list marker walked off.
+ *
+ * AN OPENER MAY BE WRITTEN ON A MARKER LINE, and only where a block may begin:
+ * `:  - ``` ` opens a code block, while the same marker-shaped line with no blank
+ * above it folds into the open paragraph (§10 I2) and opens nothing.
+ */
+function markerFreeContent(line: string): string {
+  // A CHARACTER OFFSET, not a column strip. `markerContentColumn` measures the
+  // marker's width on the flushed line, and `sliceColumns` only removes
+  // whitespace, so it cannot walk a marker off.
+  let content = line.replace(/^[ \t]+/, '')
+  for (;;) {
+    // AN ABUTTING ATTRIBUTE COMES OFF FIRST, because that is the spelling
+    // `markerContentColumn` measures: it reports the width of `-{.x} ` with the
+    // braces already gone, so slicing the ORIGINAL line by it lands inside the
+    // attribute and the rest of the line reads as prose.
+    const attr = extractItemAttr(content)
+    const marked = attr ? attr.stripped : content
+    // THE CHECKBOX GOES WITH THE MARKER. `markerContentColumn` reports a task's
+    // content column as the bullet's width, which is what §17 measures a body
+    // against - but the box is part of what the marker writes, and a fence behind
+    // one opens the same block a bare bullet's does.
+    const task = RE_TASK.exec(marked)
+    if (task !== null) {
+      content = task[task.length - 1]!.replace(/^[ \t]+/, '')
+      continue
+    }
+    const width = markerContentColumn(marked)
+    if (width <= 0) return content
+    content = marked.slice(width).replace(/^[ \t]+/, '')
+  }
+}
+
+/**
+ * Does a container's own collected stream hold an OPEN comment span? -- §28,
+ * markup-carve/carve#2488.
+ *
+ * A container ends at a comment written below its content column, which is right
+ * for an OPENER and for the `%%` line form and wrong INSIDE a span the container
+ * already holds: §28 pairs the delimiters, indentation is part of neither
+ * (markup-carve/carve#2471), and everything between them is payload. Ending there
+ * split the span, the container's own parse then read an opener with no closer -
+ * one `%%` line comment - and PUBLISHED the payload while dropping both
+ * delimiters.
+ *
+ * The caller still asks the SHAPE. Only a comment-shaped line is exempt: a payload
+ * line below the column is not comment-shaped, so §24 C3 still hands it to the
+ * enclosing parse.
+ *
+ * ASKED OF THE COLLECTED LINES, not of a fence tracker's flag. The trackers read
+ * each line at the container's dedent and their opener tests refuse an indented
+ * run, so a span a DESCENDANT holds is invisible to them.
+ *
+ * A verbatim fence's payload is opaque, so a `%%%` written inside one is content.
+ */
+/**
+ * One container's resumable walk. A collector only ever APPENDS to its own line
+ * array, so a walk that read the first `index` of them needs to read no line
+ * twice - which is what keeps a container holding many spans linear instead of
+ * re-reading its whole body per delimiter.
+ */
+interface CommentSpanScan {
+  index: number
+  opaque: { comment: boolean; char: string; run: number } | null
+  atBlockStart: boolean
+}
+
+const newCommentSpanScan = (): CommentSpanScan => ({ index: 0, opaque: null, atBlockStart: true })
+
+function bodyHoldsOpenCommentSpan(lines: readonly string[], scan: CommentSpanScan): boolean {
+  for (; scan.index < lines.length; scan.index++) {
+    const line = stripLazyFrame(lines[scan.index]!).replace(/^[ \t]+/, '')
+    const open = scan.opaque
+    if (open !== null) {
+      let closed = false
+      if (open.comment) closed = commentFenceRun(line) === open.run
+      else {
+        const run = RE_FENCE_CLOSER.exec(line)
+        closed = run !== null && run[1]![0] === open.char && run[1]!.length >= open.run
+      }
+      if (closed) {
+        scan.opaque = null
+        scan.atBlockStart = true
+      }
+      continue
+    }
+    if (line === '') {
+      scan.atBlockStart = true
+      continue
+    }
+    const opener = scan.atBlockStart ? markerFreeContent(line) : line
+    scan.atBlockStart = false
+    const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+    if (code !== null) {
+      const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
+      scan.opaque = { comment: false, char: marker[0]!, run: marker.length }
+      continue
+    }
+    const comment = commentFenceRun(opener)
+    if (comment !== undefined) scan.opaque = { comment: true, char: '%', run: comment }
+  }
+
+  return scan.opaque?.comment === true
+}
+
 /** Whether the memo already proves no closer for `len` of `char` from `start`. */
 function fenceCloserMemoRefutes(
   memo: QuotedFenceCloserMemo,
@@ -8308,6 +8414,7 @@ class ParseSession {
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
     let pendingBlankSources: string[] = []
+    const noteSpanScan = newCommentSpanScan()
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) {
@@ -8371,6 +8478,27 @@ class ParseSession {
         pendingBlankLineNumbers = []
         pendingBlankSources = []
         bodyLines.push(sliceColumns(ln, bodyColumn, true))
+        bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+        bodySourceLines.push(ln)
+        lexer.consume()
+      } else if (
+        // A COMMENT INSIDE A SPAN THIS BODY ALREADY HOLDS IS NOT ONE OF THE
+        // COMMENTS THAT END IT (markup-carve/carve-js#2255,
+        // markup-carve/carve#2488). The note ends at a comment below its column,
+        // and the other half of a span the body opened is not that comment - see
+        // `bodyHoldsOpenCommentSpan`. The reported host hides the payload at a
+        // delimiter REACHING column two and did not at column zero or one, which is
+        // the band this covers.
+        pendingBlanks === 0 &&
+        commentFenceRun(ln.replace(/^[ \t]+/, '')) !== undefined &&
+        bodyHoldsOpenCommentSpan(bodyLines, noteSpanScan)
+      ) {
+        // ONE COLUMN of the authored indentation is kept, as the list collector
+        // keeps it, so the body's own parse cannot read a delimiter written below
+        // its column back as an authored column-0 one. A delimiter already AT
+        // column 0 keeps it (markup-carve/carve-js#1623).
+        const flush = ln.replace(/^[ \t]+/, '')
+        bodyLines.push(flush === ln ? ln : ' ' + flush)
         bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
         bodySourceLines.push(ln)
         lexer.consume()
@@ -9074,6 +9202,7 @@ class ParseSession {
       // definition registers, an attribute attaches - and the fold §10 I5 asks for
       // has not happened (markup-carve/carve-js#1550).
       const bodyBaseEligible = new Set<number>()
+      const bodySpanScan = newCommentSpanScan()
       // Has any line of this body been a block QUOTE?
       //
       // Once one has, the body's paragraph is no longer necessarily the innermost
@@ -9331,6 +9460,24 @@ class ParseSession {
         if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
         const below = ln.replace(/^[ \t]+/, '')
         const atDocumentColumn = below === ln
+        // A COMMENT INSIDE A SPAN THIS BODY ALREADY HOLDS IS NOT "A COMMENT BELOW
+        // THE COLUMN" (markup-carve/carve-js#2255, markup-carve/carve#2488). The
+        // body ends at one of those, which is right for an opener and for the `%%`
+        // line form; the other half of a span the body opened belongs to it, and
+        // ending here split the pair so the payload reached the page.
+        if (commentFenceRun(below) !== undefined && bodyHoldsOpenCommentSpan(bodyLines, bodySpanScan)) {
+          const lineIndex = lexer.pos
+          // ONE COLUMN of the authored indentation is kept, as the list collector
+          // keeps it, so the body's own parse cannot read a delimiter written below
+          // the column back as an authored column-0 one. A delimiter already AT
+          // column 0 keeps it (markup-carve/carve-js#1623).
+          bodyLines.push(atDocumentColumn ? ln : ' ' + below)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+          track(below, undefined, false)
+          lexer.consume()
+          continue
+        }
         if (
           lazyState.lazyFoldable &&
           !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
@@ -10102,6 +10249,7 @@ class ParseSession {
       // lazy line can retain a positive residual indent for recursive safety,
       // but that must never be mistaken for #1705 over-indentation.
       const authoredBaseEligible = new Set<number>()
+      const itemSpanScan = newCommentSpanScan()
       // Lines the item took from BELOW its content column, a narrower fact than
       // `authoredBaseEligible`'s complement: that set also excludes a fence
       // body, which reached the column and carries authored indentation.
@@ -10476,6 +10624,19 @@ class ParseSession {
             // that separates 358 from 357-2.
             (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
             !lazyContinuationEndsList(l, lexer)) ||
+            // A COMMENT INSIDE A SPAN THIS ITEM ALREADY HOLDS IS NOT A COMMENT THAT
+            // ENDS IT (markup-carve/carve-js#2255, markup-carve/carve#2488). §28
+            // pairs the delimiters and indentation is part of neither, so ending the
+            // item on the closer split the span: the item's own parse then read an
+            // opener with no closer, which §28 makes one `%%` line, and the payload
+            // reached the page while both delimiters did not.
+            //
+            // Asked of the COLLECTED LINES rather than of the tracker's opaque flag,
+            // because the tracker reads each line at the item's dedent and its
+            // opener test refuses an indented run - so a span a descendant holds is
+            // invisible to it (`bodyHoldsOpenCommentSpan`).
+            (commentFenceRun(l.replace(/^[ \t]+/, '')) !== undefined &&
+              bodyHoldsOpenCommentSpan(nested, itemSpanScan)) ||
             // A list marker indented past the base column but BELOW the content
             // column folds into the lead text rather than ending the list. Under
             // symmetric §10 no list marker interrupts a paragraph, so on the
