@@ -1623,9 +1623,33 @@ function renderListItem(
   tight: boolean,
 ): string {
   const pad = indent(level)
-  const first = item.children[0]
-  const taskName = first?.type === 'paragraph'
-    ? inlineText(first.children).replace(/[ \t\n\r\f\v]+/g, ' ').trim()
+  // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING. A comment (§4.13) and a
+  // raw block for another target both render '', and an invisible child was
+  // enough to push a single-paragraph item into the expanded form:
+  // `- %% c` then `  y` gave `<li>\n    y\n  </li>` where the oracle and
+  // carve-php give `<li>y</li>` (carve-js#990).
+  //
+  // "Renders nothing" is decided by rendering, not by a type list, because two
+  // unrelated node types reach it - a comment and a non-HTML raw block - and a
+  // third would be added silently otherwise. The result is cached so no child
+  // is rendered twice.
+  const prerendered = item.children.map((child) =>
+    child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
+  )
+  const visible = item.children.filter((_, i) => prerendered[i] !== '')
+
+  // THE BOX IS NAMED BY THE BLOCK IT SITS BESIDE (PART 2 `task_marker`,
+  // carve#1468), which is the first child that renders something rather than
+  // index 0. Read from index 0 the name went missing whenever the marker line
+  // held an invisible block: `- [ ] %%` with a folded line under it put a
+  // comment first, so a disabled checkbox reached a screen reader with no
+  // accessible name while the word beside it was ordinary prose
+  // (carve-js#2292). The lead below already skips such a child to pick the text
+  // that shares the <li> line, and a name derived from another block would
+  // announce something the reader cannot see.
+  const lead = visible[0]
+  const taskName = lead?.type === 'paragraph'
+    ? inlineText(lead.children).replace(/[ \t\n\r\f\v]+/g, ' ').trim()
     : ''
   const taskNameAttr = taskName === '' ? '' : ` aria-label="${escapeAttr(taskName)}"`
   const checkbox =
@@ -1650,21 +1674,6 @@ function renderListItem(
     if (tight && isLead && !p.attrs) return inner
     return `<p${renderAttrs(p.attrs, 'p')}${sourceLineAttr(opts, p.pos?.startLine, p.attrs)}>${inner}</p>`
   }
-
-  // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING. A comment (§4.13) and a
-  // raw block for another target both render '', and an invisible child was
-  // enough to push a single-paragraph item into the expanded form:
-  // `- %% c` then `  y` gave `<li>\n    y\n  </li>` where the oracle and
-  // carve-php give `<li>y</li>` (carve-js#990).
-  //
-  // "Renders nothing" is decided by rendering, not by a type list, because two
-  // unrelated node types reach it - a comment and a non-HTML raw block - and a
-  // third would be added silently otherwise. The result is cached so no child
-  // is rendered twice.
-  const prerendered = item.children.map((child) =>
-    child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
-  )
-  const visible = item.children.filter((_, i) => prerendered[i] !== '')
 
   // Single paragraph: stays on the <li> line. Tight omits <p>, loose keeps it.
   if (visible.length === 1 && visible[0]!.type === 'paragraph') {
