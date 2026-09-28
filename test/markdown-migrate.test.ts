@@ -121,7 +121,7 @@ describe('markdownToCarve — inline construct mapping', () => {
 
   it('percent-encodes parentheses in a link destination (Carve truncates at `)`)', () => {
     expect(conv('[wiki](https://host/Titan_(moon))')).toBe(
-      '[wiki](https://host/Titan_%28moon%29)',
+      '[wiki](https://host/Titan_\\(moon\\))',
     )
   })
 

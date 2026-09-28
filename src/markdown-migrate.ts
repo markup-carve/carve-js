@@ -448,8 +448,8 @@ function decodeHtmlEntitiesRaw(s: string): string {
   )
 }
 
-/** Decode Markdown destination text and encode bytes that cannot remain in a URL. */
-function decodeEntitiesInDestination(url: string, protectedSpans: readonly string[] = []): string {
+/** Decode a Markdown URL and escape it for a Carve destination. */
+function writeMarkdownDestination(url: string, protectedSpans: readonly string[] = []): string {
   let restored = url
   for (let pass = 0; pass <= protectedSpans.length; pass++) {
     const next = restored.replace(/\x00P(\d+)\x00/g, (token, index: string) => protectedSpans[Number(index)] ?? token)
@@ -461,7 +461,7 @@ function decodeEntitiesInDestination(url: string, protectedSpans: readonly strin
   return decoded.replace(/[^\x21-\x7e]|["<>[\\\]`{|}]/gu, (char) => {
     const point = char.codePointAt(0)!
     return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
-  })
+  }).replace(/[()]/g, '\\$&')
 }
 
 /** A quoted title and the whitespace around it: ` "a & b"` / ` 'a & b'`. */
@@ -987,9 +987,6 @@ function convertInline(
 
   line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw)
 
-  // Normalize a `(dest "title")` part: Carve's link parser closes the
-  // destination at the first `)`, so balanced parens in the URL are
-  // percent-encoded (Titan_(moon) -> Titan_%28moon%29).
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
     const inner = paren.slice(1, -1).replace(/^[ \t]+|[ \t]+$/g, '')
@@ -1004,7 +1001,7 @@ function convertInline(
     // and this whole construct is protected from the later decode pass, so it
     // happens here or not at all. `&amp;` in a query string is the canonical
     // case: left literal, the migrated link points somewhere else.
-    const enc = decodeEntitiesInDestination(url, protectedSpans).replace(/[()<> \t"`]/g, char =>
+    const enc = writeMarkdownDestination(url, protectedSpans).replace(/[<> \t"`]/g, char =>
       '%' + char.charCodeAt(0).toString(16).toUpperCase(),
     )
     return `(${enc}${decodeEntitiesInTitle(rest)})`
@@ -1131,7 +1128,7 @@ function convertInline(
   line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:[ \t]*)((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
     referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) === undefined
       ? match
-      : protect(head + decodeEntitiesInDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
+      : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
   )
 
   // Math, converted and protected before the emphasis passes so a formula
