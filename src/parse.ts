@@ -9225,6 +9225,7 @@ class ParseSession {
         RE_DEFLIST_TERM.test(line) ||
         RE_DEFLIST_DEF.test(line) ||
         (afterBlank && indentColumns(line, contentCol) < contentCol)
+      let commentPayloadState: ItemLazyState | null = null
       /**
        * Feed one collected body line to the S4 tracker.
        *
@@ -9246,24 +9247,32 @@ class ParseSession {
         atContentColumn = true,
         openerCol = contentCol,
       ): void => {
-        trackItemLazyState(
-          content,
-          lazyState,
-          (marker) => {
-            if (atLineIndex === undefined) return true
-            const answer = itemFenceHasCloser(
-              lexer,
-              marker,
-              atLineIndex,
-              openerCol,
-              defFenceMemo,
-              bodyEndsAt,
-            )
-            lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
-            return answer
-          },
-          atContentColumn,
-        )
+        // Keep payload classification separate from the actual span state.
+        // An unfinished prefix can leave a paragraph open for S4, but blocks
+        // inside a completed comment must not change the surrounding state.
+        if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
+          commentPayloadState = { ...lazyState, quoteInner: null }
+        }
+        const hasFenceCloser = (marker: string): boolean => {
+          if (atLineIndex === undefined) return true
+          const answer = itemFenceHasCloser(
+            lexer,
+            marker,
+            atLineIndex,
+            openerCol,
+            defFenceMemo,
+            bodyEndsAt,
+          )
+          lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
+          return answer
+        }
+        trackItemLazyState(content, lazyState, hasFenceCloser, atContentColumn)
+        if (lazyState.opaque?.kind === 'comment' && commentPayloadState !== null) {
+          trackItemLazyState(content, commentPayloadState, hasFenceCloser, atContentColumn, () => false)
+          lazyState.lazyFoldable = commentPayloadState.lazyFoldable
+        } else {
+          commentPayloadState = null
+        }
       }
       // Lines admitted by REACHING the body's content column, mirroring the list
       // item's `authoredBaseEligible` one collector over. A below-column lazy line
@@ -9545,7 +9554,9 @@ class ParseSession {
           bodyLines.push(atDocumentColumn ? ln : ' ' + below)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-          track(below, undefined, false)
+          // A span delimiter is a comment boundary, even below the column.
+          // It leaves no paragraph for the next below-column line to continue.
+          track(below)
           lexer.consume()
           continue
         }
