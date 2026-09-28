@@ -1928,7 +1928,12 @@ function renderTableRowFlat(
  * when no group extension (tabs / code-group) consumed it.
  */
 function labelFloor(label: string | undefined, level: number): string {
-  if (label === undefined || label === '') return ''
+  // UNDEFINED means no grouping was written; `''` means `[]` was, and the two are
+  // different documents - the parser keeps them apart and so does every other
+  // target. Collapsing them here dropped the one element `:::[]` renders, which
+  // is the same distinction the title a line below already draws for
+  // `::: note ""` (carve-js#2236).
+  if (label === undefined) return ''
   return `${indent(level)}<p class="div-label">${escapeHtml(label)}</p>`
 }
 
