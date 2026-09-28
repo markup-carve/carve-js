@@ -5385,17 +5385,124 @@ function isParentAuthoredBlock(line: string, firstMarkerColumn: number): boolean
  * opens none. A code or raw fence closes on a run of at least its own length, a
  * comment fence on one of exactly its own (PART 9 §28).
  */
-function opaqueGroupCloser(line: string): ((candidate: string) => boolean) | null {
+interface OpaqueGroup {
+  closes: (candidate: string) => boolean
+  /** The delimiter character and run length, for the closerless memo. */
+  char: string
+  run: number
+  /**
+   * Does a closing run below the group's base still close it?
+   *
+   * The `%%%` fence's closer is indentation-insensitive (PART 9 §28's grammar
+   * note), so it does. A verbatim fence re-bases its closer on the column it
+   * opened at, and a run below that reaches neither its base nor the container's
+   * own column is payload (CARVE-P0-004).
+   */
+  belowBaseCloses: boolean
+}
+
+function opaqueGroupCloser(line: string): OpaqueGroup | null {
   const code = RE_FENCE.exec(line) ?? RE_RAW_FENCE.exec(line)
   if (code !== null) {
-    const close = fenceCloseRe(RE_FENCE.test(line) ? code[2]! : code[1]!)
+    const marker = RE_FENCE.test(line) ? code[2]! : code[1]!
+    const close = fenceCloseRe(marker)
 
-    return (candidate) => close.test(candidate)
+    return {
+      closes: (candidate) => close.test(candidate),
+      char: marker[0]!,
+      run: marker.length,
+      belowBaseCloses: false,
+    }
   }
   const comment = commentFenceRun(line)
-  if (comment !== undefined) return (candidate) => commentFenceRun(candidate) === comment
+  if (comment !== undefined) {
+    return {
+      closes: (candidate) => commentFenceRun(candidate) === comment,
+      char: '%',
+      run: comment,
+      belowBaseCloses: true,
+    }
+  }
 
   return null
+}
+
+/**
+ * What a group's closer scan has already proved absent, so a RUN of unterminated
+ * openers costs one walk rather than one each.
+ *
+ * `from` only grows inside a group, so a scan that found no closer from an
+ * earlier line found none from a later one either. A verbatim closer matches on
+ * AT LEAST its own length, so the longest same-character run seen refutes every
+ * longer one; a comment closer matches on exactly its own, so that key is the
+ * length itself. The same bound `fenceCloserMemoRefutes` carries one collector up.
+ */
+interface GroupCloserMemo {
+  verbatim: Map<string, { from: number; maxRun: number }>
+  comment: Map<number, number>
+}
+
+/**
+ * Read a line of a rebase group at the content its delimiters are measured from.
+ * Indentation is part of neither a fence's opener nor its closer (PART 9 §28), so
+ * a run written below the base still reads as one.
+ */
+const groupLineContent = (line: string, base: number): string =>
+  indentColumns(line, base) >= base ? sliceColumns(line, base, true) : line.replace(/^[ \t]+/, '')
+
+/** Does an opaque group opened here find its closer further down? */
+function opaqueGroupCloses(
+  group: OpaqueGroup,
+  lines: readonly string[],
+  from: number,
+  base: number,
+  folded: ReadonlySet<number> | undefined,
+  memo: GroupCloserMemo,
+): boolean {
+  const cached = group.belowBaseCloses ? memo.comment.get(group.run) : memo.verbatim.get(group.char)
+  if (group.belowBaseCloses) {
+    if (cached !== undefined && from >= (cached as number)) return false
+  } else {
+    const seen = cached as { from: number; maxRun: number } | undefined
+    if (seen !== undefined && from >= seen.from && group.run > seen.maxRun) return false
+  }
+  let maxRun = 0
+  for (let k = from; k < lines.length; k++) {
+    const line = lines[k]!
+    if (isBlankLine(line)) continue
+    if (!group.belowBaseCloses && !closerReachesBase(line, k, base, folded)) continue
+    const content = groupLineContent(line, base)
+    if (group.closes(content)) return true
+    if (!group.belowBaseCloses) {
+      const run = RE_FENCE_CLOSER.exec(content)
+      if (run !== null && run[1]![0] === group.char) maxRun = Math.max(maxRun, run[1]!.length)
+    }
+  }
+  if (group.belowBaseCloses) memo.comment.set(group.run, from)
+  else memo.verbatim.set(group.char, { from, maxRun })
+
+  return false
+}
+
+/**
+ * Does this line stand where a closer for the group can stand?
+ *
+ * A FOLDED LINE NEVER DOES, whatever residue the host's clamp left on it: the
+ * host kept one column so the line could not re-classify, and reading that column
+ * as the base is the collision at an over-indent of one all over again. Otherwise
+ * the group's own base and the container's column both close it, which is the
+ * pair the verbatim arm above already accepts (CARVE-P0-004).
+ */
+const closerReachesBase = (
+  line: string,
+  index: number,
+  base: number,
+  folded: ReadonlySet<number> | undefined,
+): boolean => {
+  if (folded?.has(index) === true) return false
+  const column = indentColumns(line, base)
+
+  return column >= base || column === 0
 }
 
 /**
@@ -5618,10 +5725,12 @@ function rebaseOverindentedBlocks(
       }
     } else if (colon !== null) {
       const stack = [colon]
+      const holdsFoldedLines = base > 0 && takenBelowColumn !== undefined && takenBelowColumn.size > 0
+      const closerMemo: GroupCloserMemo = { verbatim: new Map(), comment: new Map() }
       // The opaque group open inside this container, if any. Only the hold below
       // consults it: a folded line inside a verbatim or comment payload is that
       // payload's, and its delimiter has to travel with the dedent.
-      let opaque: ((line: string) => boolean) | null = null
+      let opaque: OpaqueGroup | null = null
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         end = j
@@ -5632,10 +5741,13 @@ function rebaseOverindentedBlocks(
         const column = indentColumns(candidate, base)
         // THE OPAQUE GROUP IS TRACKED BEFORE THE COLUMN TEST, because its closing
         // run may be written below the base and this pass still has to know the
-        // payload ended there. Read flush, since indentation is part of neither
-        // delimiter (PART 9 §28).
+        // payload ended there.
         const insideOpaque = opaque !== null
-        if (opaque !== null && opaque(column >= base ? sliceColumns(candidate, base, true) : candidate.replace(/^[ \t]+/, ''))) {
+        if (
+          opaque !== null &&
+          (opaque.belowBaseCloses || closerReachesBase(candidate, j, base, takenBelowColumn)) &&
+          opaque.closes(groupLineContent(candidate, base))
+        ) {
           opaque = null
         }
         // A below-base run is payload unless it closes at the container's own column.
@@ -5648,7 +5760,7 @@ function rebaseOverindentedBlocks(
         const local = column === 0 ? candidate : sliceColumns(candidate, base, true)
         if (insideOpaque) {
           // Inside a payload, so nothing here opens or holds.
-        } else if (base > 0 && takenBelowColumn?.has(j) === true) {
+        } else if (holdsFoldedLines && takenBelowColumn?.has(j) === true) {
           // A FOLDED LINE IS NOT AT THIS GROUP'S BASE. Its leading run is
           // alignment under the host that folded it in from below that host's own
           // content column, not an authored column - and at an over-indent of ONE
@@ -5666,8 +5778,19 @@ function rebaseOverindentedBlocks(
           // payload open and the container's own closer nested inside it.
           heldFoldedLines.add(j)
           continue
-        } else if (column >= base) {
-          opaque = opaqueGroupCloser(local)
+        } else if (holdsFoldedLines && column >= base) {
+          // ONLY A FENCE THAT CLOSES OPENS A PAYLOAD (§10 I4 for the verbatim
+          // kinds, §28 for the comment one). Without the lookahead an
+          // unterminated run made every line after it payload, which handed a
+          // folded heading, rule or quote marker to the dedent again.
+          //
+          // Asked only for a group that HOLDS a folded line, which is the one
+          // question the payload state answers here, so a document with none
+          // pays nothing for it.
+          const group = opaqueGroupCloser(local)
+          if (group !== null && opaqueGroupCloses(group, lines, j + 1, base, takenBelowColumn, closerMemo)) {
+            opaque = group
+          }
         }
         const run = RE_ADMONITION_CLOSE.exec(local)
         if (!run) continue

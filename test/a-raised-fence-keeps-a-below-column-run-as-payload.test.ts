@@ -174,6 +174,46 @@ describe('a raised fence keeps a below-column run as payload', () => {
       '- item\n\n   :::\n\n   %%%\n   a\n%%%\n :::\n\n  tail\n',
       '<ul>\n  <li>item\n    <div>\n      <p>:::</p>\n      <p>tail</p>\n    </div>\n  </li>\n</ul>',
     ],
+    // AN UNTERMINATED FENCE OPENS NO PAYLOAD, so the hold still reaches a folded
+    // line below it. The first attempt at the opaque arm marked everything after
+    // any fence-shaped line as payload, which handed the folded heading back to
+    // the dedent.
+    [
+      'a degraded comment fence leaves the folded heading as text',
+      '- item\n\n   :::\n   a\n   %%%\n   b\n # heading\n   :::\n',
+      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <p>b\n# heading</p>\n    </div>\n  </li>\n</ul>',
+    ],
+    [
+      'a degraded tilde fence leaves it as text too',
+      '- item\n\n   :::\n   a\n   ~~~\n   b\n # heading\n   :::\n',
+      '<ul>\n  <li>item\n    <div>\n      <p>a\n~~~\nb\n# heading</p>\n    </div>\n  </li>\n</ul>',
+    ],
+    [
+      'a terminated comment fence still leaves it as text',
+      '- item\n\n   :::\n   a\n   %%%\n   b\n   %%%\n # heading\n   :::\n',
+      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <p># heading</p>\n    </div>\n  </li>\n</ul>',
+    ],
+    // A VERBATIM CLOSER RE-BASES AND A COMMENT ONE DOES NOT, so a folded run is
+    // the comment fence's closer and never the code fence's. Reading it as one
+    // turned the paragraph's inline verbatim run into a block.
+    [
+      'a folded code run is not a closer at column zero',
+      '- item\n\n   :::\n   a\n   ```\n   b\n```\n   :::\n\n  tail\n',
+      '<ul>\n  <li>item\n    <div>\n      <p>a\n<code>\nb\n</code></p>\n    </div>\n    tail\n  </li>\n</ul>',
+    ],
+    [
+      'nor in the band',
+      '- item\n\n   :::\n   a\n   ```\n   b\n ```\n   :::\n\n  tail\n',
+      '<ul>\n  <li>item\n    <div>\n      <p>a\n<code>\nb\n</code></p>\n    </div>\n    tail\n  </li>\n</ul>',
+    ],
+    // A closer that REACHED the container's column is not folded, and it still
+    // closes from there. The lookahead accepts the group's own base and the
+    // container's column, the pair the verbatim arm above already accepts.
+    [
+      'a closer at the container column still closes the payload',
+      '- item\n\n   :::\n   ```\n   x\n  ```\n   :::\n',
+      '<ul>\n  <li>item\n    <div>\n      <pre><code>x\n</code></pre>\n    </div>\n  </li>\n</ul>',
+    ],
   ])('control: %s', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })
