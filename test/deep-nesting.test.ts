@@ -12,7 +12,7 @@ import {
   type Document,
 } from '../src/index.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from '../src/render-depth.js'
-import { perfIt } from './helpers/scaling.js'
+import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // Regression guard: deeply nested block containers must not overflow the call
 // stack. Each `>` level recurses parseBlocks -> parseBlock -> parseBlockQuote,
@@ -25,6 +25,15 @@ describe('deep nesting does not overflow the stack', () => {
       const src = '> '.repeat(depth) + 'x'
       expect(() => parse(src)).not.toThrow()
     }
+  })
+
+  perfIt('parses a deep quote chain in linear time', () => {
+    // The lazy-continuation tracker used to run on every quoted line at every
+    // level, descending the rest of the chain each time: 26 s at 16,000 levels.
+    expectScansLinearly((input) => void parse(input + 'x'), '> ', {
+      label: 'nested quote chain',
+      smallRepeats: 2000,
+    })
   })
 
   it('parses deeply nested divs without throwing', () => {
