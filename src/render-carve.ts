@@ -1521,6 +1521,17 @@ const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
 
 /**
+ * The candidates whose construct opens on ONE character, so a repeat of one
+ * takes its own decision instead of inheriting the run's.
+ *
+ * `occurrenceIsRelaxed` escapes a run as a whole because a heading opens on the
+ * whole `##`. An image opens on ONE `!` before a bracket and §27's inline
+ * literal on ONE before a backtick run, so in `!!` the second character is the
+ * opener and the first is content sitting against the backslash that guards it.
+ */
+const SINGLE_CHARACTER_OPENERS = '!'
+
+/**
  * Whether a descendant has a kind in `kinds`. A braced inline starts its own
  * E3 scope (markup-carve/carve#2091), so such a span is written braced and
  * the descendant nests inside it.
@@ -4757,7 +4768,7 @@ class CarveRenderSession {
       if (
         mode === 'conservative' &&
         !NOT_OFFERED_PER_OCCURRENCE.includes(char) &&
-        this.occurrenceIsRelaxed(call, offset, offset > 0 && subject[offset - 1] === char)
+        this.occurrenceIsRelaxed(call, offset, offset > 0 && subject[offset - 1] === char && !SINGLE_CHARACTER_OPENERS.includes(char))
       ) {
         return char
       }

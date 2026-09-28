@@ -5694,7 +5694,7 @@ function rebaseOverindentedBlocks(
     if (!keepsAuthoredColumn) {
       for (let j = i; j <= end; j++) {
         // A payload line below the base keeps the residue the collector left it.
-        if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base) {
+        if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && (colon === null || !eligible || eligible.has(j))) {
           lines[j] = sliceColumns(lines[j]!, base, true)
         }
       }
@@ -10266,7 +10266,6 @@ class ParseSession {
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else if (
-          (leadFence !== null || authoredFenceBase > 0) &&
           lazyState.opaque?.kind === 'code' &&
           pendingBlanks === 0 &&
           indentColumns(l, contentCol) < contentCol &&
@@ -10284,6 +10283,12 @@ class ParseSession {
           // container folded anything - must keep ending the item and leaking the
           // body to the document, which is what the executable spec does there
           // and what every engine already agreed on.
+          //
+          // WHERE THE FENCE OPENED IS NOT PART OF THAT RULE. This also demanded
+          // the fence be on the marker line or past the item's column, so a fence
+          // opened AT the content column ended the item on the folded line
+          // instead: the run leaked out and reached the page as an empty inline
+          // verbatim span (markup-carve/carve-js#2243).
           //
           // The leading whitespace goes: it is the enclosing item's one-column
           // clamp, not the author's indentation, and the fence's body is measured
