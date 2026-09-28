@@ -31,7 +31,9 @@
  * §2b's own corpus document arrived (markup-carve/carve#1549). §2's
  * per-OPENER-OCCURRENCE test retires the 47 that were one unit written
  * conservatively in full, and leaves 12 across 5 (markup-carve/carve#1533).
- * carve-php measures the same 5 with the same counts.
+ * carve-php measures the same 5 with the same counts. The pin then carried it
+ * to 15 across 6 when corpus 509's eighth document arrived
+ * (markup-carve/carve#2509): another opener run, and the fourth of them.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -85,7 +87,7 @@ const IDLE_ESCAPE_CAUSES = ['opener run: ', 'minimal class: ']
  * writer now runs the same halving search one level finer: 20 documents and 47
  * escapes retired, `\\{.note}` where the unit-scoped form wrote `\\{\\.note\\}`.
  *
- * OPENER RUN, three documents: §2's THE UNIT IS THE OPENER requires the WHOLE
+ * OPENER RUN, four documents: §2's THE UNIT IS THE OPENER requires the WHOLE
  * opener run escaped - `\\#\\# H` and not `\\## H`, `\\*\\*\\*` and not `\\***` - and
  * PART 11 §2b names the first of those as its own worked example. The sweep
  * below removes ONE backslash at a time, so it reads the second `\\#` as idle:
@@ -95,8 +97,20 @@ const IDLE_ESCAPE_CAUSES = ['opener run: ', 'minimal class: ']
  * search is why they are a floor rather than an accident: it offers a RUN back
  * whole, so the half-escaped run §2 forbids is not a state it can reach.
  *
+ * TWO OF THE FOUR ARRIVED WITH A PIN rather than with the writer, so the count
+ * moves when the corpus does and not when the escape logic does.
+ * `509-a-fence-closer-below-a-nested-item-s-column-ends-containers-down-to-its-owner-8`
+ * is the newer one (markup-carve/carve#2509). Its `~~~` line sits below the
+ * nested item's column, so it ends the containers and is a top-level paragraph
+ * whose whole text is a verbatim fence opener. CARVE-P11-006 rules the
+ * spelling outright - "the escaped form of a suppressed opener is the whole
+ * opener escaped" - so `\\~\\~\\~` is canonical and `\\~~~` is the half-escaped
+ * run it forbids, even though the parse comes out the same. Removing all three
+ * backslashes reopens the fence, which is what makes the run load bearing and
+ * every single removal idle.
+ *
  * `396-an-idle-escape-does-not-spread-from-the-block-that-needed-one` is the
- * third of them and arrived with the PIN rather than with the writer
+ * other and arrived with the PIN rather than with the writer
  * (markup-carve/carve#1549): it is §2b's own corpus document, `  ## H` plus a
  * second paragraph, and the writer emits the spec's `.fmt` golden for it byte
  * for byte. §2b's prose still counts two opener-run documents because its
@@ -113,6 +127,7 @@ const IDLE_ESCAPE_RATCHET = new Map<string, [number, string]>([
   ['132-thematic-break-requires-contiguous-markers-3', [3, 'opener run: the break opener `***` is escaped in full, and removing any one backslash alone still leaves a paragraph']],
   ['390-a-table-cell-s-marker-run-ends-at-a-space-5', [1, 'minimal class: an authored `\\=` is kept after the writer\'s own cell padding retired it - padded, the `=` no longer starts the cell']],
   ['396-an-idle-escape-does-not-spread-from-the-block-that-needed-one', [2, 'opener run: the heading opener `##` is escaped in full, and removing either backslash alone still leaves a paragraph']],
+  ['509-a-fence-closer-below-a-nested-item-s-column-ends-containers-down-to-its-owner-8', [3, 'opener run: the verbatim fence opener `~~~` is escaped in full, and removing any one backslash alone still leaves a paragraph']],
   ['72-escape-coverage-2', [4, 'minimal class: a literal backslash is written doubled, and a lone backslash before a non-escapable character re-parses the same bare']],
 ])
 
@@ -299,8 +314,8 @@ describe('the idle-escape ratchet', () => {
     // line that moves when the debt does.
     let total = 0
     for (const [, [count]] of IDLE_ESCAPE_RATCHET) total += count
-    expect(total).toBeLessThanOrEqual(12)
-    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(5)
+    expect(total).toBeLessThanOrEqual(15)
+    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(6)
   })
 })
 
