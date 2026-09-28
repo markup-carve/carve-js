@@ -305,6 +305,35 @@ const RULES: Rule[] = [
 const blanks = (s: string) => s.replace(/[^\n]/g, ' ')
 
 /**
+ * Codepoints before each UTF-16 index of `src`, or undefined when the two units
+ * coincide - which they do for every source without an astral character, so the
+ * common case allocates nothing.
+ */
+function codepointPrefix(src: string): Uint32Array | undefined {
+  let astral = false
+  for (let i = 0; i < src.length; i++) {
+    const code = src.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdbff) { astral = true; break }
+  }
+  if (!astral) return undefined
+  const before = new Uint32Array(src.length + 1)
+  let count = 0
+  for (let i = 0; i < src.length; i++) {
+    before[i] = count
+    const code = src.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdbff && i + 1 < src.length) {
+      // A surrogate pair is ONE codepoint; the low half shares the count, so an
+      // index landing between the halves does not report a phantom column.
+      before[i + 1] = count
+      i++
+    }
+    count++
+  }
+  before[src.length] = count
+  return before
+}
+
+/**
  * Return a copy of `src` with every code character (fenced blocks and
  * inline code spans, including multi-line ones) replaced by spaces, and
  * newlines preserved so line/column positions are unchanged. Delimiter
@@ -514,6 +543,19 @@ function scanHits(source: string): ScanHit[] {
   // index -> {line, column} (both 1-based), via newline prefix sums.
   const nlAt: number[] = []
   for (let k = 0; k < masked.length; k++) if (masked[k] === '\n') nlAt.push(k)
+  // CODEPOINTS before each UTF-16 index of `norm`, built only when the source
+  // has an astral character. `column` counts codepoints, the unit every other
+  // diagnostic in this package reports and the one PART 12 §4 pins; `start` and
+  // `end` stay UTF-16 because they are splice targets. Reporting UTF-16 here
+  // put the column one past the construct for every emoji on the line
+  // (carve-js#2240).
+  //
+  // Counted over `norm`, NOT `masked`: masking replaces each code UNIT with a
+  // space, so a surrogate pair inside a code span becomes two codepoints and
+  // the count would drift exactly where the two strings stop agreeing.
+  const cpBefore = codepointPrefix(norm)
+  const columnOf = (lineStart: number, idx: number) =>
+    cpBefore ? cpBefore[idx]! - cpBefore[lineStart]! + 1 : idx - lineStart + 1
   const posOf = (idx: number) => {
     let lo = 0
     let hi = nlAt.length
@@ -523,7 +565,7 @@ function scanHits(source: string): ScanHit[] {
       else hi = mid
     }
     const lineStart = lo === 0 ? 0 : nlAt[lo - 1]! + 1
-    return { line: lo + 1, column: idx - lineStart + 1 }
+    return { line: lo + 1, column: columnOf(lineStart, idx) }
   }
 
   // Accept matches in RULES order. Drop a later match only if it

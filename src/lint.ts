@@ -36,6 +36,7 @@ import {
   opensCodeFence,
   RE_AFTER_TERM,
   TABLE_ALIGNMENT_MARKERS,
+  type DanglingBlockAttributes,
   type UnclosedContainer,
 } from './parse.js'
 import { normalizeRefLabel } from './label-key.js'
@@ -51,7 +52,7 @@ import {
 } from './heading-ids.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
-import { hasOwnKey } from './own-property.js'
+import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue } from './render-html.js'
 import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
@@ -347,9 +348,11 @@ export function lintCarve(
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
+  const danglingBlockAttributes: DanglingBlockAttributes[] = []
   const doc = parse(source, {
     positions: true,
     onUnclosedContainer: (container) => unclosedContainers.push(container),
+    onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
   })
   // The AST carries codepoint positions over line-ending-normalized text; a
   // LintWarning reports UTF-16 into the source the caller passed, so a JS
@@ -424,6 +427,24 @@ export function lintCarve(
         `the end of the document. Add a bare fence of ${container.fenceWidth} colons to close it.`,
       start: container.startOffset,
       end: container.endOffset,
+    })
+  }
+
+  // PART 9 §15 A4. `docs/validation.md` has listed this rule since the clause
+  // landed and carve-js emitted it nowhere, so a floating attribute that reached
+  // no block was reported by carve-rs on 38 corpus documents and by carve-js on
+  // none (carve-js#2240). The parser is the only place the fact exists: nothing
+  // is emitted for the run, so no node carries it.
+  for (const run of danglingBlockAttributes) {
+    out.push({
+      line: run.line,
+      column: run.column,
+      rule: 'unattached-block-attribute',
+      message:
+        'This block attribute reaches no block - the document or the container holding it ends ' +
+        'first - so nothing is emitted for it. Move it above the block it describes, or delete it.',
+      start: run.startOffset,
+      end: run.endOffset,
     })
   }
 
@@ -748,7 +769,7 @@ export function lintCarve(
   const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out, termFoldLines)
   for (const ln of termFoldLines) listIndentLines.add(ln)
   collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
-  collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
+  collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out, toUtf16)
   if (opts.platforms?.length) {
     // Fenced code blocks and raw blocks are reliably safe; comments are never
     // published at all. Inline code spans are NOT in this set, deliberately -
@@ -1768,6 +1789,7 @@ function collectFootnoteDefinitionWarnings(
   verbatimLines: Set<number>,
   referenced: Set<string>,
   out: LintWarning[],
+  toUtf16: (offset: number) => number,
 ): void {
   const lines = source.split('\n')
   const lineStart: number[] = []
@@ -1855,13 +1877,20 @@ function collectFootnoteDefinitionWarnings(
   for (const label of Object.keys(doc.footnoteDefs ?? {})) {
     if (referenced.has(label)) continue
     const site = firstSites.get(label)
+    // The line scan above is anchored at column 1, so it cannot see a
+    // definition indented inside a list item or a description - and the report
+    // then pointed at line 1, a line with nothing to do with the definition
+    // (carve-js#2240). The parser records where it collected each one, so use
+    // that rather than widening the scan: a regex allowing any indent would
+    // also match an over-indented literal and read it as a duplicate, which is
+    // why the indentation is kept in the first place.
+    const recorded = ownValue(doc.footnoteDefPos, label)
     out.push({
-      line: site?.line ?? 1,
-      column: site?.col ?? 1,
+      ...(site
+        ? { line: site.line, column: site.col, start: site.start, end: site.end }
+        : locate(recorded ? { pos: recorded } : {}, toUtf16)),
       rule: 'unused-footnote-definition',
       message: `Footnote definition [^${label}] is never referenced, so it is omitted from the rendered document.`,
-      start: site?.start ?? 0,
-      end: site?.end ?? 0,
     })
   }
 }
