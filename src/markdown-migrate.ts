@@ -1,3 +1,4 @@
+import { isValidAttrPayload } from './attribute-parser.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
 /*
  * Markdown -> Carve converter.
@@ -1000,6 +1001,10 @@ function convertInline(
     return `(${enc}${decodeEntitiesInTitle(rest)})`
   }
 
+  const multilineTitle = /(!?\[(?:[^\[\]\n]|\[[^\]\n]*\])*\])(\((?:[^()\s]|\([^()\n]*\))+[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*')[ \t]*\))/g
+  line = line.replace(multilineTitle, (_match, label: string, destination: string) =>
+    label.startsWith('!') ? protect(label + encodeDest(destination)) : label + protect(encodeDest(destination)))
+
   // Images `![alt](dest)`: Carve renders the alt as raw text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
@@ -1055,8 +1060,10 @@ function convertInline(
   // link somewhere the Markdown source did not.
   // Destination split on the White_Space property, for the reason `encodeDest`
   // gives above: `\S` cuts a destination at a BOM.
-  line = line.replace(/^(\s*\[[^^\]][^\]]*\]:\s*)(\P{White_Space}+)([\s\S]*)$/u, (_m, head, dest, rest) =>
-    protect(head + decodeEntitiesInDestination(dest) + decodeEntitiesInTitle(rest)),
+  line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:\s*)(\P{White_Space}+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
+    referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) === undefined
+      ? match
+      : protect(head + decodeEntitiesInDestination(dest) + decodeEntitiesInTitle(rest)),
   )
 
   // Math, converted and protected before the emphasis passes so a formula
@@ -1169,7 +1176,11 @@ function convertInline(
 
   if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
 
-  if (!dialect.attributes && !holdsFenceBody) line = line.replace(/["']/g, '\\$&')
+  if (!holdsFenceBody) {
+    if (dialect.attributes) line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+      (match, inner: string) => isValidAttrPayload(inner) ? protect(match) : match)
+    line = line.replace(/["']/g, '\\$&')
+  }
   line = decodeHtmlEntities(line)
 
   const maxRestorePasses = protectedSpans.length + 1
