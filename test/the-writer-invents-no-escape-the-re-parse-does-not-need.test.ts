@@ -16,11 +16,11 @@
  * (markup-carve/carve-php#1522) - both reached a human reading output, because
  * no automated check could see them.
  *
- * THE MEASUREMENT. For each corpus document take `carveToCarve`, then remove
- * each backslash on its own; a backslash whose removal leaves BOTH the render
- * and the canonical tree unchanged is an escape the re-parse never needed. The
- * same count is taken on the SOURCE and subtracted, so an escape the author
- * wrote and the writer merely carried through is not charged to the writer.
+ * THE MEASUREMENT. For each corpus document take `carveToCarve`, then remove each
+ * opener run whole; a run whose removal leaves BOTH the render and the canonical
+ * tree unchanged is escapes the re-parse never needed, counted at its length. The
+ * same count is taken on the SOURCE and subtracted, so an escape the author wrote
+ * and the writer merely carried through is not charged to the writer.
  *
  * THE READING, and how it moved. Seeded at 72 invented escapes across 28 of
  * 1341 documents - the same slugs with the same counts carve-php measured in
@@ -31,9 +31,9 @@
  * §2b's own corpus document arrived (markup-carve/carve#1549). §2's
  * per-OPENER-OCCURRENCE test retires the 47 that were one unit written
  * conservatively in full, and leaves 12 across 5 (markup-carve/carve#1533).
- * carve-php measures the same 5 with the same counts. The pin then carried it
- * to 15 across 6 when corpus 509's eighth document arrived
- * (markup-carve/carve#2509): another opener run, and the fourth of them.
+ * Asking §2's question of the OPENER rather than of the byte then took it to 3
+ * across 2, which is where it stands; carve-php measures the same 2 with the same
+ * counts (markup-carve/carve-php#2645).
  */
 
 import { describe, it, expect } from 'vitest'
@@ -50,21 +50,22 @@ if (!existsSync(corpusDir)) {
 }
 
 /**
- * The three causes measured here, one of which every ratchet entry must name.
+ * The one cause measured here, which every ratchet entry must name.
  *
- * They were classified against THIS engine rather than inherited from carve-php:
- * the writer was instrumented to report, per document, whether its minimal and
- * conservative passes agreed and which form it returned. An entry belonging to
- * none of them is a cause nobody has looked at yet, which is a finding rather
- * than a resident.
+ * It was classified against THIS engine rather than inherited from carve-php: the
+ * writer was instrumented to report, per document, whether its minimal and
+ * conservative passes agreed and which form it returned. An entry belonging to no
+ * measured cause is one nobody has looked at yet, which is a finding rather than a
+ * resident.
  *
- * TWO HAVE BEEN RETIRED BY WORK. `escalation: ` went when PART 11 §2b narrowed
- * the fallback from the document to the failing unit, and `unit scope: ` went
- * when §2's test was taken per opener occurrence inside that unit
- * (markup-carve/carve#1533). What is left is the two causes that are not scope
- * questions at all.
+ * THREE HAVE BEEN RETIRED. `escalation: ` went when PART 11 §2b narrowed the
+ * fallback from the document to the failing unit, and `unit scope: ` went when
+ * §2's test was taken per opener occurrence inside that unit
+ * (markup-carve/carve#1533). `opener run: ` went when the sweep started asking
+ * §2's question of the opener rather than of the byte, which is the only one of
+ * the three the WRITER never had a part in.
  */
-const IDLE_ESCAPE_CAUSES = ['opener run: ', 'minimal class: ']
+const IDLE_ESCAPE_CAUSES = ['minimal class: ']
 
 /**
  * THE DEBT, NOT A BLESSING: documents where the writer emits an escape the
@@ -87,48 +88,36 @@ const IDLE_ESCAPE_CAUSES = ['opener run: ', 'minimal class: ']
  * writer now runs the same halving search one level finer: 20 documents and 47
  * escapes retired, `\\{.note}` where the unit-scoped form wrote `\\{\\.note\\}`.
  *
- * OPENER RUN, four documents: §2's THE UNIT IS THE OPENER requires the WHOLE
+ * `opener run` WAS THE OTHER FOUR AND IS GONE TOO, as an artifact of the sweep
+ * rather than of the writer. §2's THE UNIT IS THE OPENER requires the WHOLE
  * opener run escaped - `\\#\\# H` and not `\\## H`, `\\*\\*\\*` and not `\\***` - and
  * PART 11 §2b names the first of those as its own worked example. The sweep
- * below removes ONE backslash at a time, so it reads the second `\\#` as idle:
- * with the first still there no heading forms either way. These entries are
- * therefore a floor this measurement cannot go below while §2 says what it
- * says, and they are here to be seen rather than to be fixed. The occurrence
- * search is why they are a floor rather than an accident: it offers a RUN back
- * whole, so the half-escaped run §2 forbids is not a state it can reach.
+ * removed ONE backslash at a time, so every backslash in a load-bearing run
+ * answered "idle" on its own: with the others still there no heading formed
+ * either way. What that scored was the half-escaped run §2 forbids, which the
+ * occurrence search cannot even reach, so the four entries measured a spelling
+ * no writer was allowed to emit. The sweep now puts §2's own question to the run
+ * whole (see `escapedOpenerRuns`) and all four read 0.
  *
- * TWO OF THE FOUR ARRIVED WITH A PIN rather than with the writer, so the count
- * moves when the corpus does and not when the escape logic does.
+ * The fourth of them was the one this repository had just raised the ratchet for.
  * `509-a-fence-closer-below-a-nested-item-s-column-ends-containers-down-to-its-owner-8`
- * is the newer one (markup-carve/carve#2509). Its `~~~` line sits below the
- * nested item's column, so it ends the containers and is a top-level paragraph
- * whose whole text is a verbatim fence opener. CARVE-P11-006 rules the
- * spelling outright - "the escaped form of a suppressed opener is the whole
- * opener escaped" - so `\\~\\~\\~` is canonical and `\\~~~` is the half-escaped
- * run it forbids, even though the parse comes out the same. Removing all three
- * backslashes reopens the fence, which is what makes the run load bearing and
- * every single removal idle.
+ * (markup-carve/carve#2509) writes a top-level paragraph whose whole text is
+ * `~~~`, and CARVE-P11-006 rules that spelling outright: the escaped form of a
+ * suppressed opener is the whole opener escaped. Raising the ceiling to 15 / 6
+ * for it read the artifact as debt; carve-php reached the same wall and corrected
+ * the measure instead (markup-carve/carve-php#2645).
  *
- * `396-an-idle-escape-does-not-spread-from-the-block-that-needed-one` is the
- * other and arrived with the PIN rather than with the writer
- * (markup-carve/carve#1549): it is §2b's own corpus document, `  ## H` plus a
- * second paragraph, and the writer emits the spec's `.fmt` golden for it byte
- * for byte. §2b's prose still counts two opener-run documents because its
- * reading was taken on a pin that predated the case it shipped.
- *
- * MINIMAL CLASS, the other two: both passes agree, so nothing escalated, and
- * the escape is still idle - once because a literal backslash is written
+ * MINIMAL CLASS, the two that are left: both passes agree, so nothing escalated,
+ * and the escape is still idle - once because a literal backslash is written
  * doubled where the bare one re-parses the same, once because the writer's own
- * cell padding retired an authored escape it then kept. Both are §2 defects in
- * the escape logic and are fixed on their own merits.
+ * cell padding retired an authored escape it then kept. Grouping cost
+ * `72-escape-coverage-2` two of its four as well, because a doubled backslash is
+ * ONE escape and was being judged as two. Both are §2 defects in the escape
+ * logic and are fixed on their own merits.
  */
 const IDLE_ESCAPE_RATCHET = new Map<string, [number, string]>([
-  ['103-heading-marker-column-zero-2', [2, 'opener run: the heading opener `##` is escaped in full, and removing either backslash alone still leaves a paragraph']],
-  ['132-thematic-break-requires-contiguous-markers-3', [3, 'opener run: the break opener `***` is escaped in full, and removing any one backslash alone still leaves a paragraph']],
   ['390-a-table-cell-s-marker-run-ends-at-a-space-5', [1, 'minimal class: an authored `\\=` is kept after the writer\'s own cell padding retired it - padded, the `=` no longer starts the cell']],
-  ['396-an-idle-escape-does-not-spread-from-the-block-that-needed-one', [2, 'opener run: the heading opener `##` is escaped in full, and removing either backslash alone still leaves a paragraph']],
-  ['509-a-fence-closer-below-a-nested-item-s-column-ends-containers-down-to-its-owner-8', [3, 'opener run: the verbatim fence opener `~~~` is escaped in full, and removing any one backslash alone still leaves a paragraph']],
-  ['72-escape-coverage-2', [4, 'minimal class: a literal backslash is written doubled, and a lone backslash before a non-escapable character re-parses the same bare']],
+  ['72-escape-coverage-2', [2, 'minimal class: a literal backslash is written doubled, and a lone backslash before a non-escapable character re-parses the same bare']],
 ])
 
 /**
@@ -205,22 +194,60 @@ function fingerprint(source: string): string | null {
 /**
  * A document's IDLE escapes, counted PER ESCAPED CHARACTER - §2's "only if".
  *
- * Each backslash is removed on its own and the document re-measured. One whose
- * removal leaves both the render and the canonical tree unchanged is counted
- * under the character it was escaping. A removal that makes the document
- * unparseable is not idle: the fingerprint is null, which matches nothing.
+ * Each opener run is removed whole and the document re-measured. A run whose
+ * removal leaves both the render and the canonical tree unchanged is idle, and
+ * counts its whole length under the character it was escaping. A removal that
+ * makes the document unparseable is not idle: the fingerprint is null, which
+ * matches nothing.
  */
 function idleEscapes(source: string): Map<string, number> {
   const idle = new Map<string, number>()
   const base = fingerprint(source)
   if (base === null) return idle
-  for (let i = 0; i < source.length; i++) {
-    if (source[i] !== '\\') continue
-    if (fingerprint(source.slice(0, i) + source.slice(i + 1)) !== base) continue
-    const escaped = i + 1 < source.length ? source[i + 1]! : ''
-    idle.set(escaped, (idle.get(escaped) ?? 0) + 1)
+  for (const [offsets, escaped] of escapedOpenerRuns(source)) {
+    let without = source
+    for (const offset of [...offsets].reverse()) {
+      without = without.slice(0, offset) + without.slice(offset + 1)
+    }
+    if (fingerprint(without) !== base) continue
+    idle.set(escaped, (idle.get(escaped) ?? 0) + offsets.length)
   }
   return idle
+}
+
+/**
+ * The backslash offsets of a source, grouped into OPENER RUNS.
+ *
+ * §2's "only if" is asked of the OPENER, not of the byte: where a construct
+ * opens on a RUN of characters the whole run is escaped, so a run's backslashes
+ * stand or fall together and the question to put to the re-parse is whether the
+ * run is load bearing.
+ *
+ * Removing them one at a time cannot ask that. Every backslash in a load-bearing
+ * run answers "idle" on its own, because the run is still broken by the ones
+ * that remain: `\~\~\~` at column zero scored three idle escapes, and the
+ * half-escaped `\~~~` that score implies is the spelling CARVE-P11-006 forbids
+ * rather than one the writer may emit.
+ *
+ * A run is maximal and same-character: `\~\~\~` is one, `\~\-` is two. A doubled
+ * backslash is consumed whole, because reading its second half as another opener
+ * would pair it with whatever follows.
+ */
+function escapedOpenerRuns(source: string): Array<[number[], string]> {
+  const runs: Array<[number[], string]> = []
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] !== '\\') continue
+    const escaped = i + 1 < source.length ? source[i + 1]! : ''
+    const offsets = [i]
+    i += escaped === '' ? 1 : 2
+    while (escaped !== '' && i + 1 < source.length && source[i] === '\\' && source[i + 1] === escaped) {
+      offsets.push(i)
+      i += 2
+    }
+    i--
+    runs.push([offsets, escaped])
+  }
+  return runs
 }
 
 /**
@@ -233,10 +260,9 @@ function idleEscapes(source: string): Map<string, number> {
  * Per character, the invented `|` still counts. Clamping per character is what
  * keeps that sound: retiring an author's escape is §2's job, not credit.
  *
- * BOTH READINGS WERE TAKEN before this was seeded, and on this corpus they agree
- * exactly - 28 documents and 72 escapes, per character and as a document total.
- * The per-character one is kept because it is the one that stays honest when
- * they stop agreeing.
+ * BOTH READINGS WERE TAKEN before this was seeded, and on the corpus of the day
+ * they agreed exactly, per character and as a document total. The per-character
+ * one is kept because it is the one that stays honest when they stop agreeing.
  *
  * What is left is a FLOOR, not an exact count. THE RESIDUAL BLIND SPOT is two
  * idle escapes of the SAME character, one retired and one invented elsewhere in
@@ -310,12 +336,12 @@ describe('the idle-escape ratchet', () => {
     // raising an entry already fails as stale and adding one for a clean
     // document already fails at 0 - the shrink-only rule is enforced entry by
     // entry, not by this ceiling. What this adds is a single place the reading
-    // is written down, so a reader does not have to sum 28 numbers, and one
+    // is written down, so a reader does not have to sum the entries, and one
     // line that moves when the debt does.
     let total = 0
     for (const [, [count]] of IDLE_ESCAPE_RATCHET) total += count
-    expect(total).toBeLessThanOrEqual(15)
-    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(6)
+    expect(total).toBeLessThanOrEqual(3)
+    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(2)
   })
 })
 
@@ -329,6 +355,15 @@ describe('the idle sweep', () => {
 
     // Needed: at column zero, bare it opens a quote.
     expect([...idleEscapes('\\> a\n')]).toEqual([])
+
+    // AND THE SAME BOTH WAYS FOR A RUN, which is the half a per-byte sweep could
+    // not ask: §2 escapes the whole opener, so the run stands or falls together.
+    // Mid-line `##` opens nothing and both escapes are idle; at column zero the
+    // run opens a heading and neither is.
+    expect([...idleEscapes('a \\#\\# b\n')]).toEqual([['#', 2]])
+    expect([...idleEscapes('\\#\\# H\n')]).toEqual([])
+    expect([...idleEscapes('a \\~\\~\\~ b\n')]).toEqual([['~', 3]])
+    expect([...idleEscapes('\\~\\~\\~\n\ntail\n')]).toEqual([])
 
     // And the count is backslashes that do nothing, not backslashes.
     expect([...idleEscapes('a > b\n')]).toEqual([])

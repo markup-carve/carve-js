@@ -7490,7 +7490,14 @@ class ParseSession {
         isColonFenceOpener(rawTrimmed) ||
         isBlockAttributeLine(rawTrimmed) ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
-      if (marker && /\S/.test(raw.slice(marker[0].length))) {
+      // SNAPSHOT FOR THE RETRACTION at the end of this loop body. This branch
+      // cannot ask whether the marker folds into an open paragraph: that answer
+      // is `paragraphReallyOpen`, and it is not computed until both column
+      // stacks have already moved. Taken only on a marker line, so an ordinary
+      // line allocates nothing.
+      const markerOpensItems = marker !== null && /\S/.test(raw.slice(marker[0].length))
+      const listColsBeforeMarker = markerOpensItems ? listCols.slice() : null
+      if (markerOpensItems) {
         // Every marker on the line, not just the first: `- - see` opens TWO
         // items and its content column is 4, not 2. Tracking only the first
         // understated the column, and a definition written at the real one
@@ -7786,6 +7793,24 @@ class ParseSession {
       const paragraphReallyOpen: boolean =
         paraWasOpen && !markerInterruptsParagraph && folds
       const collectsNothing = paragraphReallyOpen
+      // A MARKER THE BLOCK PARSER FOLDS OPENS NO ITEM, so the content column it
+      // pushed above is a phantom. The definition on the next line then read as
+      // that phantom item's lazy continuation and the collection gate, which asks
+      // for an empty `listCols`, rejected it - so an abbreviation, a reference or
+      // a footnote written under a folded marker registered nowhere
+      // (carve-js#2236). `openCols` already applies this rule, but only inside an
+      // open item's marker window (§24 C3); at document level every marker's
+      // `folds` is false by construction, so the stack this gate reads needs the
+      // verdict that exists only here.
+      //
+      // RETRACTED RATHER THAN NEVER PUSHED. Everything between the push and this
+      // point still measures THIS line against its own column, which is what the
+      // readings recorded on that branch depend on. Only the next line sees the
+      // stack restored, and the next line is where the phantom did its damage.
+      if (listColsBeforeMarker !== null && paragraphReallyOpen) {
+        listCols.length = 0
+        for (const entry of listColsBeforeMarker) listCols.push(entry)
+      }
       if (matcherProbeCandidate && paraWasOpen && !markerInterruptsParagraph) {
         lazyProbeBudget = spendLazyProbeBudget(lexer, idx, lazyProbeBudget)
       }
@@ -11372,9 +11397,11 @@ class ParseSession {
         }
       }
 
-      const leadOpensColonFence =
-        (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
-        RE_DIV_OPEN.test(content)
+      // ALL FIVE COLON KINDS, via the dispatcher's own predicate. Spelling two
+      // of them here left `::: |`, `::: >` and `::: \` in a marker window
+      // opening their block off a body line that never reached the item's
+      // content column (carve-js#2236).
+      const leadOpensColonFence = isColonFenceOpener(content)
       // Parse the lead text together with its continuation/nested lines as one
       // block sequence (lazy continuation merges into the lead paragraph). An
       // indented ordered sub-list, however, is parsed as its own block stream so
