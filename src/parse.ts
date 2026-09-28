@@ -5326,6 +5326,9 @@ function fenceHasCloser(lexer: Lexer, marker: string): boolean {
   let maxRun = 0
   for (let i = start; i < lexer.lines.length; i++) {
     const l = lexer.lines[i]!
+    // A quote's lazy line is paragraph text wherever it was spliced, so it
+    // closes no fence it lands inside (markup-carve/carve-js#2272).
+    if (lexer.quoteLazyLines.has(lexer.lineNumber(i))) continue
     if (closeRe.test(l)) return true
     const closer = RE_FENCE_CLOSER.exec(l)
     if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
