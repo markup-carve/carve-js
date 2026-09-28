@@ -11,3 +11,7 @@ it.each([
 ])('preserves Djot emphasis with escaped delimiters: %s', (source, expected) => {
   expect(carveToHtml(djotToCarve(source))).toBe(expected)
 })
+
+it.each(['_a\\\n\nb_', '_a\\\n  \nb_', 'a_b\\\n\nc_d'])('keeps paragraph boundaries after escaped newlines: %s', source => {
+  expect(djotToCarve(source)).toBe(source)
+})
