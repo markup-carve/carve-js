@@ -1,3 +1,4 @@
+import { markdownEmphasis } from './markdown-emphasis.js'
 /*
  * Markdown -> Carve converter.
  */
@@ -1119,14 +1120,6 @@ function convertInline(
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
   if (!holdsFenceBody) line = escapeTypographicDashes(line)
 
-  // Converted strong / bold-italic are stashed behind placeholders so their
-  // single `*` / `/` are not re-matched by the emphasis passes below.
-  const stash: string[] = []
-  const hold = (s: string) => {
-    stash.push(s)
-    return `\x00S${stash.length - 1}\x00`
-  }
-
   // Whether a run at `offset` has an alphanumeric neighbor, so it opens or
   // closes INTRAWORD. Carve's bare markers do not open there and its braced
   // forms do, so that is the spelling Markdown's intraword emphasis takes
@@ -1136,71 +1129,10 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
-  // Whether a bare slash would be glued to a star at either end of `body`. Glued,
-  // the two are ONE token opening Carve's `bold_italic`, which carries `strong`
-  // outside `emphasis` from a single run of delimiters. cmark-gfm reads the
-  // Markdown the other way round, and the braced form is `forced_emphasis`
-  // holding a bare strong, which is the nesting the source meant
-  // (carve-js#2041). Asked past the placeholders, the strong passes having
-  // stashed their output before an emphasis pass wraps it.
-  const glued = (body: string): boolean => {
-    let inner = body
-    for (let depth = 0; depth < 8 && inner.includes('\x00S'); depth++) {
-      inner = inner.replace(/\x00S(\d+)\x00/g, (_m, index: string) => stash[Number(index)] ?? '')
-    }
-    return inner.startsWith('*') || inner.endsWith('*')
-  }
-
-  // Recursively convert *em* / _em_ nested inside a strong/bold-italic span to
-  // /em/ (so a nested `_x_` becomes `/x/`, not Carve underline).
-  const convertNestedEm = (inner: string): string =>
-    inner
-      .replace(/(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)/g, (match, body: string, at: number, full: string) =>
-        wrap('/', body, '/', intraword(full, at, match.length)))
-      .replace(/(?<![A-Za-z0-9_])_(?!\s)([^_]+?)(?<!\s)_(?![A-Za-z0-9_])/g, '/$1/')
-
-  // ***bold italic*** / ___bold italic___ -> `{/*x*/}`, ALWAYS braced. cmark-gfm
-  // reads both as `<em><strong>`, and bare `/*x*/` is one run of delimiters
-  // carrying `strong` outside `emphasis` - normatively so, which is why this is
-  // the importer's spelling to change and not the renderer's (carve-js#2041).
-  // The braced form is `forced_emphasis` holding a bare strong, the nesting the
-  // source meant, and it survives `fmt` unchanged.
-  //
-  // The underscore form needs word boundaries: CommonMark `_` cannot open or
-  // close emphasis intraword (foo___bar___baz stays literal).
-  line = line.replace(/\*{3}(?!\s)([\s\S]+?)(?<!\s)\*{3}/g, (_m, inner: string) =>
-    hold(`{/*${convertNestedEm(inner)}*/}`),
-  )
-  line = line.replace(
-    /(?<![A-Za-z0-9])___(?!\s)([\s\S]+?)(?<!\s)___(?![A-Za-z0-9])/g,
-    (_m, inner: string) => hold(`{/*${convertNestedEm(inner)}*/}`),
-  )
-
-  // **strong** -> *strong*, braced where it opens intraword. Written bare there
-  // it was no strong at all AND the run came out one star shorter, so a reader
-  // saw `a*b*c` where the source said `a**b**c` (carve-js#2031).
-  line = line.replace(/\*\*(?!\s)([\s\S]+?)(?<!\s)\*\*/g, (match, inner: string, at: number, full: string) =>
-    hold(wrap('*', convertNestedEm(inner), '*', intraword(full, at, match.length))),
-  )
-
-  // __strong__ -> *strong* (word-boundary: intraword `_` is literal)
-  line = line.replace(
-    /(?<![A-Za-z0-9])__(?!\s)([\s\S]+?)(?<!\s)__(?![A-Za-z0-9])/g,
-    (_m, inner: string) => hold(`*${convertNestedEm(inner)}*`),
-  )
-
-  // *emphasis* -> /emphasis/, and `{/emphasis/}` where it opens intraword, which
-  // `/` cannot do bare. `2 * 3` stays literal on the whitespace guards alone.
-  line = line.replace(/(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)/g, (match, body: string, at: number, full: string) =>
-    wrap('/', body, '/', intraword(full, at, match.length) || glued(body)))
-
-  // _emphasis_ -> /emphasis/ (word-boundary, so snake_case is left alone), and
-  // `{/emphasis/}` where a strong sits at either end: `*__x__*` is an emphasis
-  // AROUND a strong in cmark-gfm, and bare it came back the other way round.
-  line = line.replace(
-    /(?<![A-Za-z0-9_])_(?!\s)([^_]+?)(?<!\s)_(?![A-Za-z0-9_])/g,
-    (_m, body: string) => wrap('/', body, '/', glued(body)),
-  )
+  line = markdownEmphasis(line, () => importLosses.push({
+    code: 'structure-unspellable',
+    message: 'Unwrapped nested emphasis of the same kind; its text is preserved',
+  }), undefined, protectedSpans)
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
   // strikethrough and the run lost a tilde as well.
@@ -1239,7 +1171,7 @@ function convertInline(
 
   line = decodeHtmlEntities(line)
 
-  const maxRestorePasses = protectedSpans.length + stash.length + 1
+  const maxRestorePasses = protectedSpans.length + 1
   for (let pass = 0; pass < maxRestorePasses; pass++) {
     const prev = line
     line = line
@@ -1250,7 +1182,6 @@ function convertInline(
       // replacement above - kept because it is the post-condition of the whole
       // restore, and the cost of being wrong about that is a document with
       // "undefined" written into it.
-      .replace(/\x00S(\d+)\x00/g, (m, i) => stash[Number(i)] ?? m)
       .replace(/\x00P(\d+)\x00/g, (m, i) => protectedSpans[Number(i)] ?? m)
     if (line === prev) break
   }
@@ -4731,7 +4662,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const dedent = relIndent >= 1 && relIndent <= 3 && (isHeading || isBlockquote || ((reachesMovedItem || listCols.length > 0) && !isList))
     let body = dedent ? containerPad + line.slice(indent) : line
     // Strip an ATX heading's optional closing `#` run (Carve keeps it as text).
-    if (isHeading) body = body.replace(/[ \t]+#+[ \t]*$/, '')
+    if (isHeading) body = body.replace(/^([ \t]*#{1,6})[ \t]+/, '$1 ').replace(/[ \t]+#+[ \t]*$/, '')
     if (isBlockquote) {
       const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
       quoteCol = contentCol

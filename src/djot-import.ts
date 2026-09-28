@@ -1,3 +1,4 @@
+import { attributedDjotStrong } from './djot-attributed-strong.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
 import { escapePlainCarveInlineSyntax, HANDLED_DJOT } from './carve-escape.js'
@@ -216,8 +217,16 @@ function escapePlainDjotText(source: string): string {
 export function djotToCarve(djot: string): string {
   const normalized = djot.replace(/\r\n?/g, '\n')
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
-  const converted = collapseFalseListBoundaries(
-    applyMigrationFixes(escapePlainDjotText(convertDefinitionLists(convertDjotBlockMarkers(body)))).output,
+  const convert = (text: string): string => collapseFalseListBoundaries(
+    applyMigrationFixes(escapePlainDjotText(convertDefinitionLists(convertDjotBlockMarkers(text)))).output,
   )
+  const spans: string[] = []
+  let prefix = '\x00DJOTSTRONG'
+  while (body.includes(prefix)) prefix += '\x00'
+  const held = attributedDjotStrong(body, maskDjotCodeAndDestinations(body), convert, (span) => {
+    spans.push(span)
+    return `${prefix}${spans.length - 1}\x00`
+  })
+  const converted = convert(held).replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spans[Number(index)]!)
   return frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`
 }
