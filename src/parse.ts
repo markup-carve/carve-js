@@ -5381,6 +5381,24 @@ function isParentAuthoredBlock(line: string, firstMarkerColumn: number): boolean
 }
 
 /**
+ * The closer test for the opaque group this line opens, or null for a line that
+ * opens none. A code or raw fence closes on a run of at least its own length, a
+ * comment fence on one of exactly its own (PART 9 §28).
+ */
+function opaqueGroupCloser(line: string): ((candidate: string) => boolean) | null {
+  const code = RE_FENCE.exec(line) ?? RE_RAW_FENCE.exec(line)
+  if (code !== null) {
+    const close = fenceCloseRe(RE_FENCE.test(line) ? code[2]! : code[1]!)
+
+    return (candidate) => close.test(candidate)
+  }
+  const comment = commentFenceRun(line)
+  if (comment !== undefined) return (candidate) => commentFenceRun(candidate) === comment
+
+  return null
+}
+
+/**
  * Apply an over-indented list block opener's authored column as a temporary
  * local block base (PART 9 §24 C3, carve#1705).
  *
@@ -5409,6 +5427,10 @@ function rebaseOverindentedBlocks(
   hostIsFootnoteBody = false,
   onFenceBodyLine?: (index: number) => void,
   onUnclosedCodeFence?: () => void,
+  // Lines the HOST took from below its own content column. Their leading run is
+  // alignment under that host rather than an authored column, so a colon group
+  // must not dedent one onto its base - see the dedent below.
+  takenBelowColumn?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   // One index for the whole pass; a dedent only moves leading whitespace.
@@ -5492,6 +5514,9 @@ function rebaseOverindentedBlocks(
       continue
 
     let end = i
+    // Lines this group leaves at the column the host folded them to, so the
+    // dedent below skips them as well. See the colon arm.
+    const heldFoldedLines = new Set<number>()
     const definitionEntry = RE_DEFLIST_TERM.test(opener) || RE_DEFLIST_DEF.test(opener)
     if (definitionEntry) {
       // A definition list is one complete block, including every description
@@ -5593,6 +5618,10 @@ function rebaseOverindentedBlocks(
       }
     } else if (colon !== null) {
       const stack = [colon]
+      // The opaque group open inside this container, if any. Only the hold below
+      // consults it: a folded line inside a verbatim or comment payload is that
+      // payload's, and its delimiter has to travel with the dedent.
+      let opaque: ((line: string) => boolean) | null = null
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         end = j
@@ -5601,6 +5630,14 @@ function rebaseOverindentedBlocks(
         onFenceBodyLine?.(j)
         if (isBlankLine(candidate)) continue
         const column = indentColumns(candidate, base)
+        // THE OPAQUE GROUP IS TRACKED BEFORE THE COLUMN TEST, because its closing
+        // run may be written below the base and this pass still has to know the
+        // payload ended there. Read flush, since indentation is part of neither
+        // delimiter (PART 9 §28).
+        const insideOpaque = opaque !== null
+        if (opaque !== null && opaque(column >= base ? sliceColumns(candidate, base, true) : candidate.replace(/^[ \t]+/, ''))) {
+          opaque = null
+        }
         // A below-base run is payload unless it closes at the container's own column.
         if (column < base) {
           const closesAtColumn =
@@ -5609,6 +5646,29 @@ function rebaseOverindentedBlocks(
           if (!closesAtColumn) continue
         }
         const local = column === 0 ? candidate : sliceColumns(candidate, base, true)
+        if (insideOpaque) {
+          // Inside a payload, so nothing here opens or holds.
+        } else if (base > 0 && takenBelowColumn?.has(j) === true) {
+          // A FOLDED LINE IS NOT AT THIS GROUP'S BASE. Its leading run is
+          // alignment under the host that folded it in from below that host's own
+          // content column, not an authored column - and at an over-indent of ONE
+          // the two spellings collide, because a line written in the band between
+          // column zero and the host's content column keeps exactly the single
+          // residual column the rebased opener carries. So a `:::` there closed a
+          // group the host never placed it in, and a heading, rule or quote there
+          // became a block (markup-carve/carve-js#2243).
+          //
+          // Held rather than skipped, because the dedent below must leave the line
+          // alone too - moving it onto the base is what re-classified it.
+          //
+          // NOT INSIDE AN OPAQUE PAYLOAD, which is the arm above: a fence's own
+          // closing run can be written in that band, and holding it there left the
+          // payload open and the container's own closer nested inside it.
+          heldFoldedLines.add(j)
+          continue
+        } else if (column >= base) {
+          opaque = opaqueGroupCloser(local)
+        }
         const run = RE_ADMONITION_CLOSE.exec(local)
         if (!run) continue
         const width = run[1]!.length
@@ -5694,7 +5754,7 @@ function rebaseOverindentedBlocks(
     if (!keepsAuthoredColumn) {
       for (let j = i; j <= end; j++) {
         // A payload line below the base keeps the residue the collector left it.
-        if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && (colon === null || !eligible || eligible.has(j))) {
+        if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
           lines[j] = sliceColumns(lines[j]!, base, true)
         }
       }
@@ -9824,6 +9884,10 @@ class ParseSession {
       // lazy line can retain a positive residual indent for recursive safety,
       // but that must never be mistaken for #1705 over-indentation.
       const authoredBaseEligible = new Set<number>()
+      // Lines the item took from BELOW its content column, a narrower fact than
+      // `authoredBaseEligible`'s complement: that set also excludes a fence
+      // body, which reached the column and carries authored indentation.
+      const takenBelowColumn = new Set<number>()
       let hasOverindentedBlockCandidate = false
       let authoredFenceBase = 0
       let nestedOwnerColumn = markerContentColumn(content)
@@ -10251,6 +10315,7 @@ class ParseSession {
             const flushed = l.replace(/^[ \t]+/, '')
             lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
           }
+          takenBelowColumn.add(nested.length)
           nested.push(lazyLine)
           nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -10326,6 +10391,9 @@ class ParseSession {
       const rebaseEligible = leadIsTerm
         ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
         : authoredBaseEligible
+      const rebaseTakenBelowColumn = leadIsTerm
+        ? new Set(Array.from(takenBelowColumn, (index) => index + 1))
+        : takenBelowColumn
       let authoredCodeFenceOpen = false
       const rebasedBlanks = hasOverindentedBlockCandidate
         ? rebaseOverindentedBlocks(
@@ -10336,6 +10404,7 @@ class ParseSession {
           false,
           (index) => subListMarkers.delete(leadIsTerm ? index - 1 : index),
           () => { authoredCodeFenceOpen = true },
+          rebaseTakenBelowColumn,
         )
         : new Set<number>()
       if (leadIsTerm) {
