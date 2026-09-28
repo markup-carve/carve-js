@@ -602,6 +602,7 @@ export const layoutWork = {
 
 class Lexer {
   attachmentBoundaries = new Set<number>()
+  prefixMemoLines?: boolean[]
   lines: string[]
   lineOffsets: number[]
   lineNumberOffset: number
@@ -1095,6 +1096,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   if (!parent.hasDocumentOffsets) return
   const offsets: number[] = []
   const widths: number[] = []
+  const prefixMemoLines: boolean[] = []
 
   // Where a sub-line came from, when its lines are NOT a contiguous run of the
   // parent's. A `+` continuation splices a flush-left block into a quote body
@@ -1168,6 +1170,8 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // the synthetic run fits inside the prefix the strip removed. Where it does
     // not, there is no honest offset to record and this declines - which now
     // means NO positions rather than local ones (see below).
+    const isLiteralSuffix = literalSuffix ?? parentLine.endsWith(subLine)
+    prefixMemoLines.push(isLiteralSuffix && (parent.prefixMemoLines?.[parentIndex] ?? true))
     let prefix = parentLine.length - subLine.length
     if (framed && parentLine.endsWith(unframed)) {
       // The frame occupies no source, so the anchor is the unframed content's
@@ -1176,7 +1180,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       // collector strips it as it pushes, which is where a framed line becomes
       // text.
       prefix = parentLine.length - unframed.length
-    } else if (!(literalSuffix ?? parentLine.endsWith(subLine))) {
+    } else if (!isLiteralSuffix) {
       // Only reached when the line is NOT a literal suffix, which is the
       // straddling-tab case alone - so the synthetic-indent trim is computed
       // here rather than for every line.
@@ -1202,6 +1206,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     widths.push(width)
   }
 
+  sub.prefixMemoLines = prefixMemoLines
   sub.sourceOffsetMap = offsets
   sub.linePrefixWidths = widths
 }
@@ -3506,7 +3511,7 @@ function classifyQuotedLine(
   }
   // Lazy text preserves the inner paragraph for the next marked line.
   if (state.mode.kind === 'quote' && continuesParagraph()) {
-    if (descent) descent.preserved = true
+    if (descent && descent.levels === 0) descent.preserved = true
     return null
   }
   // A list at block start carries its first block's continuation state.
@@ -6945,7 +6950,7 @@ class ParseSession {
 
   // Only literal source suffixes share numeric offsets; reconstructed lines do not.
   private markerPrefixMemo(lexer: Lexer, index: number): Map<number, number> | undefined {
-    if (!lexer.hasDocumentOffsets) return undefined
+    if (!lexer.hasDocumentOffsets || lexer.prefixMemoLines?.[index] === false) return undefined
     const root = lexer.rootLines ?? lexer.lines
     let lines = this.markerPrefixMemos.get(root)
     if (!lines) this.markerPrefixMemos.set(root, lines = new Map())
