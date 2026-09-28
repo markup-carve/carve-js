@@ -36,6 +36,16 @@ describe('deep nesting does not overflow the stack', () => {
     })
   })
 
+  perfIt('parses a deep quote chain with a lazy line in linear time', () => {
+    // The lazy line makes every level ask whether its paragraph is still open.
+    // Each nested quote takes the answer and its state from the quote around it
+    // rather than descending the chain again (markup-carve/carve-js#2251).
+    expectScansLinearly((input) => void parse(input + 'x\ny'), '> ', {
+      label: 'nested quote chain with a lazy line',
+      smallRepeats: 2000,
+    })
+  })
+
   it('parses deeply nested divs without throwing', () => {
     const src = ':::\n'.repeat(5000) + 'x\n' + ':::\n'.repeat(5000)
     expect(() => parse(src)).not.toThrow()

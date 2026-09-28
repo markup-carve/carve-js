@@ -713,6 +713,8 @@ class Lexer {
    * (markup-carve/carve-js#1606).
    */
   quoteLazyLines: Set<number> = new Set()
+  /** See `QuoteLazyHint`. Set by the enclosing quote, taken by the first quote parsed here. */
+  quoteLazyHint: QuoteLazyHint | null = null
   /**
    * Definition-shaped lines the pre-pass looked at and DID NOT collect.
    *
@@ -3150,15 +3152,74 @@ function trackBlockQuoteLazyState(
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
   hasFenceCloser: (marker: string) => boolean,
+  descent?: QuoteDescent,
 ): void {
   let text = content
   let level = state
+  const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
+  let commentCloser = hasCommentCloser
+  let fenceCloser = hasFenceCloser
+  if (descent) descent.levels = 0
   for (;;) {
-    const descend = classifyQuotedLine(text, level, hasCommentCloser, hasFenceCloser)
+    const descend = classifyQuotedLine(text, level, commentCloser, fenceCloser, terminatorFree)
     if (descend === null) return
     text = descend.text
     level = descend.state
+    if (!descent) continue
+    descent.levels++
+    if (commentCloser === hasCommentCloser) {
+      // The lookups scan the CALLER's lines, so below the top level they may
+      // answer for the wrong depth. A chain that asked one is not handed down.
+      commentCloser = (fence) => {
+        descent.askedBelowTop = true
+        return hasCommentCloser(fence)
+      }
+      fenceCloser = (marker) => {
+        descent.askedBelowTop = true
+        return hasFenceCloser(marker)
+      }
+    }
   }
+}
+
+/**
+ * `RE_BLOCKQUOTE`'s captured text, or null. On a line holding no line
+ * terminator the regex's `.*` cannot fail, so the marker alone decides and the
+ * rest of the line is not re-read at every level of a deep quote chain.
+ */
+function quotedLineText(content: string, terminatorFree: boolean): string | null {
+  if (!terminatorFree) {
+    const quoted = RE_BLOCKQUOTE.exec(content)
+    return quoted ? (quoted[1] ?? '') : null
+  }
+  if (content === '>') return ''
+
+  return content.startsWith('> ') ? content.slice(2) : null
+}
+
+/** What one `trackBlockQuoteLazyState` call did below the level it was given. */
+interface QuoteDescent {
+  /** Quote levels the line descended through. */
+  levels: number
+  /** Sticky: a closer lookup ran below the top level on some line. */
+  askedBelowTop: boolean
+}
+
+/**
+ * A nested quote's lazy state, computed by the quote around it.
+ *
+ * The enclosing quote's tracker feeds its inner quote exactly the lines the
+ * nested parse will feed its own tracker, so the nested quote can start from
+ * that state instead of replaying its lines, which would descend the whole
+ * chain again at every level. Valid for the quote at line 0 of the sub-lexer,
+ * over its first `lines` quoted lines, and `depth` levels down.
+ */
+interface QuoteLazyHint {
+  state: BlockQuoteLazyState
+  lines: number
+  depth: number
+  /** `blockQuoteParagraphOpen` of the state, once asked: the walk is as long as the chain. */
+  paragraphOpen?: boolean
 }
 
 function classifyQuotedLine(
@@ -3166,6 +3227,7 @@ function classifyQuotedLine(
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
   hasFenceCloser: (marker: string) => boolean,
+  terminatorFree = false,
 ): { text: string; state: BlockQuoteLazyState } | null {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
@@ -3245,15 +3307,15 @@ function classifyQuotedLine(
   // quote ends on is what this one ends on. Asked by carrying an inner tracker
   // rather than by re-reading the line, so a nested table, fence or div spanning
   // several lines is one block there as it is here.
-  const quoted = RE_BLOCKQUOTE.exec(content)
-  if (quoted) {
+  const quoted = quotedLineText(content, terminatorFree)
+  if (quoted !== null) {
     const inner: BlockQuoteLazyState =
       state.mode.kind === 'quote'
         ? state.mode.inner
         : { mode: { kind: 'closed' }, inTable: false, colonWidths: [], attrRun: null }
     state.mode = { kind: 'quote', inner }
 
-    return { text: quoted[1] ?? '', state: inner }
+    return { text: quoted, state: inner }
   }
   // Two more kinds that leave no paragraph, for the same S4 reason. A
   // definition TERM is bounded like a heading - it holds inline content, not a
@@ -9535,16 +9597,53 @@ class ParseSession {
     // quote on the line, and a quote that ends at EOF or a blank line would
     // otherwise pay that at every level - quadratic in the nesting depth.
     const untracked: Array<[content: string, lineIndex: number]> = []
+    const given = firstLineIndex === 0 ? lexer.quoteLazyHint : null
+    lexer.quoteLazyHint = null
+    const descent: QuoteDescent = { levels: 0, askedBelowTop: false }
+    // The state this quote hands its own nested quote; see `QuoteLazyHint`.
+    let handDown = null as QuoteLazyHint | null
+    let trackedBefore = false
+    let paragraphOpen: boolean | undefined
+    const trackLine = (content: string, lineIndex: number): void => {
+      paragraphOpen = undefined
+      trackBlockQuoteLazyState(
+        content,
+        state,
+        (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
+        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
+        descent,
+      )
+      // A later line that continues the handed-down quote would change the
+      // state after the nested quote's prefix.
+      if (handDown && state.mode.kind === 'quote' && state.mode.inner === handDown.state) handDown = null
+    }
     const trackUntracked = (): void => {
-      for (const [content, lineIndex] of untracked) {
-        trackBlockQuoteLazyState(
-          content,
-          state,
-          (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-          (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
-        )
+      if (trackedBefore) {
+        for (const [content, lineIndex] of untracked) trackLine(content, lineIndex)
+        untracked.length = 0
+        return
+      }
+      trackedBefore = true
+      const prefix = untracked.length
+      let depth: number
+      if (given !== null && given.lines === prefix) {
+        Object.assign(state, given.state)
+        paragraphOpen = given.paragraphOpen
+        depth = given.depth - 1
+      } else {
+        // Each line continues the inner quotes the line before it opened, so
+        // the chain is one set of states down to the shallowest line's depth.
+        depth = Infinity
+        for (const [content, lineIndex] of untracked) {
+          trackLine(content, lineIndex)
+          depth = Math.min(depth, descent.levels)
+        }
+        if (descent.askedBelowTop) depth = 0
       }
       untracked.length = 0
+      if (depth >= 1 && state.mode.kind === 'quote') {
+        handDown = { state: state.mode.inner, lines: prefix, depth }
+      }
     }
     while (!lexer.eof()) {
       const ln = lexer.peek()!
@@ -9605,7 +9704,9 @@ class ParseSession {
       // instead of being swallowed. This is also what ends the quote on a lazy
       // list marker when no open paragraph precedes it.
       trackUntracked()
-      if (!blockQuoteParagraphOpen(state)) break
+      paragraphOpen ??= blockQuoteParagraphOpen(state)
+      if (handDown && handDown.paragraphOpen === undefined) handDown.paragraphOpen = paragraphOpen
+      if (!paragraphOpen) break
       const lineIndex = lexer.pos
       lexer.consume()
       const lazyLinkDef = isLinkDefLine(ln)
@@ -9631,16 +9732,10 @@ class ParseSession {
       lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
       inner.push(ln)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
-      if (!lazyLinkDef) {
-        trackBlockQuoteLazyState(
-          ln,
-          state,
-          (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-          (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
-        )
-      }
+      if (!lazyLinkDef) trackLine(ln, lineIndex)
     }
     const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
+    subLexer.quoteLazyHint = handDown
     // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
     // stops here. A footnote body absorbs residual indentation because its blocks
     // are REBASED to an authored base; a quote is not rebased, and an indented
