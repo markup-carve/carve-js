@@ -178,7 +178,7 @@ const RULES: Rule[] = [
     category: 'djot-shift',
     family: '_',
     pattern:
-      /(?<![A-Za-z0-9_])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?![A-Za-z0-9_])/gd,
+      /(?<![A-Za-z0-9_])_(?![ \t\n\r\f])((?:(?!\n[ \t]*\n)(?:\\(?!\n[ \t]*\n)[\s\S]|[^_\\]))+?)(?<![ \t\n\r\f])_(?![A-Za-z0-9_])/gd,
     message: () =>
       'Djot emphasis `_x_` renders as *underline* in Carve.',
     suggestion: (m) => `/${m[1]}/`,
@@ -213,7 +213,7 @@ const RULES: Rule[] = [
     category: 'djot-shift',
     family: '_',
     pattern:
-      /(?<=[A-Za-z0-9])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?=[A-Za-z0-9])/gd,
+      /(?<=[A-Za-z0-9])_(?![ \t\n\r\f])((?:(?!\n[ \t]*\n)(?:\\(?!\n[ \t]*\n)[\s\S]|[^_\\]))+?)(?<![ \t\n\r\f])_(?=[A-Za-z0-9])/gd,
     message: () =>
       'Djot emphasizes this intraword `_x_`; the migration leaves it literal, so the emphasis is lost. Brace it as `{/x/}` if it was meant.',
     // `{/x/}`, NOT `{_x_}`: Carve's `_` is UNDERLINE, so the braced underscore
