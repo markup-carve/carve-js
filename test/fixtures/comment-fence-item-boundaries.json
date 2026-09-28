@@ -1,7 +1,7 @@
 [
   {
     "source": "- a\n  %%%\n  p\n%%%\ntail\n",
-    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- a\n  %%%\n  p\nx\n%%%\ntail\n",
@@ -9,7 +9,7 @@
   },
   {
     "source": "- a\n  %%%\n  p\n %%%\ntail\n",
-    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- a\n  %%%\n  p\nx\n %%%\ntail\n",
@@ -33,7 +33,7 @@
   },
   {
     "source": "- a\n  - a\n    %%%\n    p\n  %%%\n  tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    %%%\n    p\n  x\n  %%%\n  tail\n",
@@ -41,7 +41,7 @@
   },
   {
     "source": "- a\n  - a\n    %%%\n    p\n   %%%\n  tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    %%%\n    p\n  x\n   %%%\n  tail\n",
@@ -65,7 +65,7 @@
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%\n      p\n    %%%\n    tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%\n      p\n    x\n    %%%\n    tail\n",
@@ -73,7 +73,7 @@
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%\n      p\n     %%%\n    tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%\n      p\n    x\n     %%%\n    tail\n",
@@ -97,7 +97,7 @@
   },
   {
     "source": "- a\n  %%%%\n  p\n%%%%\ntail\n",
-    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- a\n  %%%%\n  p\nx\n%%%%\ntail\n",
@@ -105,7 +105,7 @@
   },
   {
     "source": "- a\n  %%%%\n  p\n %%%%\ntail\n",
-    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- a\n  %%%%\n  p\nx\n %%%%\ntail\n",
@@ -129,7 +129,7 @@
   },
   {
     "source": "- a\n  - a\n    %%%%\n    p\n  %%%%\n  tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    %%%%\n    p\n  x\n  %%%%\n  tail\n",
@@ -137,7 +137,7 @@
   },
   {
     "source": "- a\n  - a\n    %%%%\n    p\n   %%%%\n  tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    %%%%\n    p\n  x\n   %%%%\n  tail\n",
@@ -161,7 +161,7 @@
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    %%%%\n    tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    x\n    %%%%\n    tail\n",
@@ -169,7 +169,7 @@
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%%\n      p\n     %%%%\n    tail\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    x\n     %%%%\n    tail\n",
@@ -197,7 +197,7 @@
   },
   {
     "source": "- a\n  %%%\n  c\n%%%\ntail\n",
-    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
   },
   {
     "source": "- a\n  %%%\n  p\nx\n\n```\n%%%\n```\n",

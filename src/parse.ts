@@ -4628,10 +4628,13 @@ function trackItemLazyState(
     const run = commentFenceRun(content)
     if (run === comment.length) {
       state.opaque = null
-      // A span whose opener and closer both reach the content column ends
-      // the paragraph. A delimiter folded below that column retains the
-      // paragraph claim from before the span.
-      state.lazyFoldable = comment.paragraphBefore && !(comment.atColumn && atContentColumn)
+      // THE OPENER'S COLUMN DECIDES, NOT THE CLOSER'S (PART 9 §53,
+      // markup-carve/carve#2527). A span opened at the content column is a block
+      // of this container and its paragraph is over; where the closer is written
+      // is not a parameter of that. Reading the closer's column too let
+      // `- a` / `  - b` / `    %%%` / `    x` / `%%%` / `  tail` fold `tail` into
+      // the CHILD's paragraph, so authored text landed one item too deep.
+      state.lazyFoldable = comment.paragraphBefore && !comment.atColumn
       state.invisibleAtColumn = comment.atColumn
       state.commentAtColumn = comment.atColumn
     } else {
@@ -11367,7 +11370,11 @@ class ParseSession {
         // the invisible line instead of looking past it kept `%% n` / `text`
         // tight, which is the opposite error - the item does hold a second
         // paragraph, it just has a comment in front of it (carve#621).
+        // Where the blank's own block sequence resumes, before any invisible line
+        // is skipped. The ownership test below is asked of it as well as of `j`.
+        let resumesAt = -1
         while (j < nested.length) {
+          if (resumesAt < 0 && !isBlankLine(nested[j])) resumesAt = j
           // A definition's body belongs to the note, including visible blocks.
           if (inFootnoteRun[j]) {
             j++
@@ -11408,6 +11415,19 @@ class ParseSession {
         // column (carve-js#1951).
         const subCol = subListColumnAt(k)
         if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
+        // AN INVISIBLE BLOCK THE SUB-LIST HOLDS MAKES THE BLANK THE SUB-LIST'S
+        // TOO (markup-carve/carve-js#2243). The skip above looks past a comment to
+        // find the paragraph §17 L1 asks for, and looking past one the CHILD holds
+        // walked out of the child: the next visible line is then this item's own
+        // block, and the blank in front of the child's comment was credited to this
+        // item. `- a` / `  - b` / blank / `    %%%` / `    x` / `%%%` / `  tail`
+        // loosened here where the executable spec keeps it tight, and the `%%`
+        // line form at the child's column did the same.
+        //
+        // Asked of the line the blank's own sequence resumes at, which the walk
+        // above already visited, so an item without a blank pays nothing.
+        if (resumesAt >= 0 && resumesAt !== j && subCol >= 0 &&
+          indentColumns(nested[resumesAt]!, subCol) >= subCol) continue
         // `j` can no longer be an invisible line (skipped above), so this is the
         // plain "is the next visible thing a paragraph" test it always was.
         //
