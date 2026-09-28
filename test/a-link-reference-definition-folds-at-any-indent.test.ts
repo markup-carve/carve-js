@@ -42,7 +42,7 @@ describe('a link reference definition folds into a setext heading at any indent'
     ['zero columns, equals', `foo\n[a]: /u\n===\n`, '<h1>foo [a]: /u</h1>'],
     ['three columns, equals', `foo\n${sp(3)}[a]: /u\n===\n`, '<h1>foo [a]: /u</h1>'],
     ['four columns, equals', `foo\n${sp(4)}[a]: /u\n===\n`, '<h1>foo [a]: /u</h1>'],
-    ['a definition carrying a title', `foo\n[a]: /u "t"\n---\n`, '<h2>foo [a]: /u “t”</h2>'],
+    ['a definition carrying a title', `foo\n[a]: /u "t"\n---\n`, '<h2>foo [a]: /u "t"</h2>'],
     ['two definitions in a row', `foo\n[a]: /u\n[b]: /v\n---\n`, '<h2>foo [a]: /u [b]: /v</h2>'],
   ]
 

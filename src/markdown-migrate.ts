@@ -1169,6 +1169,7 @@ function convertInline(
 
   if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
 
+  if (!dialect.attributes && !holdsFenceBody) line = line.replace(/["']/g, '\\$&')
   line = decodeHtmlEntities(line)
 
   const maxRestorePasses = protectedSpans.length + 1

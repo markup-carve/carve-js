@@ -94,11 +94,11 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       for (let i = run.start; i < run.end; i++) if (!claimed.has(i)) literalEscapes.add(i)
     }
   }
-  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean }
+  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean }
   let flattened = false
   const output: string[] = []
   const stack: Frame[] = []
-  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false }
+  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false }
   const record = (first: string, last: string): void => {
     if (frame.first === '') frame.first = first
     if (last !== '') frame.last = last
@@ -110,7 +110,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         frame.i = pair.close + pair.width
         stack.push(frame)
         frame = { i: pair.open + pair.width, end: pair.close, kind: pair.kind, pair, parent: frame.kind,
-          slot: output.length, first: '', last: '', strong: false }
+          slot: output.length, first: '', last: '', strong: false, italic: false }
         output.push('')
       } else {
         const ch = source[frame.i++]!
@@ -122,12 +122,13 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     if (!frame.pair) break
     const { pair } = frame
     let first = frame.first, last = frame.last
-    let strong = frame.strong
+    let strong = frame.strong, italic = frame.italic
     if (frame.parent !== frame.kind) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
       const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => /[*_]/.test(source[i] ?? '') && !claimed.has(i))
-      const braced = intraword || besideLiteral || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const braced = intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
       strong ||= pair.kind === '*'
+      italic ||= pair.kind === '/'
       output[frame.slot] = braced ? `{${pair.kind}` : pair.kind
       output.push(braced ? `${pair.kind}}` : pair.kind)
       first = braced ? '{' : pair.kind
@@ -135,6 +136,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     } else flattened = true
     frame = stack.pop()!
     frame.strong ||= strong
+    frame.italic ||= italic
     record(first, last)
   }
   if (flattened) onFlatten()
