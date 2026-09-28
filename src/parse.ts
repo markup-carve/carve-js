@@ -3220,17 +3220,23 @@ function trackBlockQuoteLazyState(
   hasCommentCloser: (fence: number) => boolean,
   hasFenceCloser: (marker: string, depth?: number) => boolean,
   descent?: QuoteDescent,
+  prefixMemo?: Map<number, number>,
 ): void {
   let text = content
   let level = state
   const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
   let commentCloser = hasCommentCloser
   let fenceCloser = hasFenceCloser
-  if (descent) descent.levels = 0
+  if (descent) {
+    descent.levels = 0
+    descent.preserved = false
+  }
   let paragraphOpen: boolean | undefined
   const continuesParagraph = (): boolean => paragraphOpen ??= blockQuoteParagraphOpen(state)
   for (;;) {
-    const descend = classifyQuotedLine(text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree)
+    const descend = classifyQuotedLine(
+      text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree, descent, prefixMemo,
+    )
     if (descend === null) return
     text = descend.text
     level = descend.state
@@ -3272,6 +3278,8 @@ interface QuoteDescent {
   levels: number
   /** Sticky: a closer lookup ran below the top level on some line. */
   askedBelowTop: boolean
+  /** The line left the existing nested paragraph state unchanged. */
+  preserved?: boolean
 }
 
 /**
@@ -3298,6 +3306,8 @@ function classifyQuotedLine(
   hasFenceCloser: (marker: string) => boolean,
   continuesParagraph: () => boolean,
   terminatorFree = false,
+  descent?: QuoteDescent,
+  prefixMemo?: Map<number, number>,
 ): { text: string; state: BlockQuoteLazyState } | null {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
@@ -3495,11 +3505,14 @@ function classifyQuotedLine(
     return null
   }
   // Lazy text preserves the inner paragraph for the next marked line.
-  if (state.mode.kind === 'quote' && continuesParagraph()) return null
+  if (state.mode.kind === 'quote' && continuesParagraph()) {
+    if (descent) descent.preserved = true
+    return null
+  }
   // A list at block start carries its first block's continuation state.
   // A marker in an existing paragraph is still ordinary paragraph text.
   if (!blockQuoteParagraphOpen(state) && isListMarkerLine(content)) {
-    const nested = markerLineState(content)
+    const nested = markerLineState(content, prefixMemo)
     if (!nested.leavesParagraphOpen) {
       closeBlockQuoteParagraph(state)
       return null
@@ -4328,14 +4341,14 @@ function markerPrefixLength(content: string, from: number, bound: number): numbe
  * How much of `content` is container prefix - any interleaving of block quote
  * markers and list item markers, in any order and to any depth.
  */
-function walkContainerPrefix(content: string, memo?: Map<string, number>): number {
-  const cached = memo?.get(content)
+function walkContainerPrefix(content: string, memo?: Map<number, number>): number {
+  const cached = memo?.get(content.length)
   if (cached !== undefined) return cached
   const bound = prefixWalkBound(content)
   const offsets: number[] = []
   let at = 0
   for (;;) {
-    const suffix = memo?.get(content.slice(at))
+    const suffix = memo?.get(content.length - at)
     if (suffix !== undefined) { at += suffix; break }
     if (memo) offsets.push(at)
     const quote = quotePrefixLength(content, at, bound)
@@ -4349,7 +4362,7 @@ function walkContainerPrefix(content: string, memo?: Map<string, number>): numbe
   }
   // Descendant items receive these same suffixes after stripping their marker.
   // Share only offsets; each item creates its own mutable continuation state.
-  for (const offset of offsets) memo!.set(content.slice(offset), at - offset)
+  for (const offset of offsets) memo!.set(content.length - offset, at - offset)
   return at
 }
 
@@ -4361,7 +4374,7 @@ function walkContainerPrefix(content: string, memo?: Map<string, number>): numbe
  * div it was holding: `:  > | a |` / `   > + b |` read the continuation row
  * with no row above it (markup-carve/carve#1348, corpus 349-5).
  */
-function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
+function markerLineQuoteState(content: string, memo?: Map<number, number>): BlockQuoteLazyState | null {
   const quoted = RE_BLOCKQUOTE.exec(content)
   if (!quoted) return null
   const inner: BlockQuoteLazyState = {
@@ -4375,6 +4388,8 @@ function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
     inner,
     () => true,
     () => true,
+    undefined,
+    memo,
   )
 
   return inner
@@ -4393,7 +4408,7 @@ function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
  * end on - are answered from ONE walk. Asking them separately walked the prefix
  * twice per marker line.
  */
-function markerLineBottomBlock(content: string, memo?: Map<string, number>): string {
+function markerLineBottomBlock(content: string, memo?: Map<number, number>): string {
   // `> > # H` is the quote's question twice over, and `- - # H` is the
   // sub-item's, whose first block is the heading exactly as a bare `- # H`'s
   // is - so the strip runs to the bottom of the stack. It is a WALK BY OFFSET:
@@ -4411,7 +4426,7 @@ function markerLineBottomBlock(content: string, memo?: Map<string, number>): str
  * `quote` carries it there. Claiming it at this level as well would let a
  * continuation row written outside the quote join a table that is not there.
  */
-function markerLineState(content: string, memo?: Map<string, number>): {
+function markerLineState(content: string, memo?: Map<number, number>): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
   bottomIsContinuationMarker: boolean
@@ -4419,7 +4434,7 @@ function markerLineState(content: string, memo?: Map<string, number>): {
   quote: BlockQuoteLazyState | null
 } {
   const bottom = markerLineBottomBlock(content, memo)
-  const quote = markerLineQuoteState(content)
+  const quote = markerLineQuoteState(content, memo)
 
   return {
     leavesParagraphOpen: quote !== null &&
@@ -6151,8 +6166,10 @@ function sliceColumns(line: string, cols: number, keepResidual = false): string 
   return line.slice(i)
 }
 
-// =====================================================================// Inline parsing
-// =====================================================================
+// ============================================================================
+// Inline parsing
+// ============================================================================
+
 // Footnote reference `[^label]`. A label is a physical-line identifier: it
 // contains neither `]` nor a source newline. Letting this cross a soft break
 // creates an id no definition marker (which is necessarily one line) can bind.
@@ -6918,11 +6935,25 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
   return found
 }
 
-// =====================================================================// Attribute block parsing — {#id .class key=value key="value with spaces"}
-// =====================================================================
+// ============================================================================
+// Attribute block parsing — {#id .class key=value key="value with spaces"}
+// ============================================================================
+
 /** State owned by one synchronous parse operation. */
 class ParseSession {
-  private markerPrefixMemo = new Map<string, number>()
+  private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
+
+  // Only literal source suffixes share numeric offsets; reconstructed lines do not.
+  private markerPrefixMemo(lexer: Lexer, index: number): Map<number, number> | undefined {
+    if (!lexer.hasDocumentOffsets) return undefined
+    const root = lexer.rootLines ?? lexer.lines
+    let lines = this.markerPrefixMemos.get(root)
+    if (!lines) this.markerPrefixMemos.set(root, lines = new Map())
+    const line = lexer.lineNumber(index)
+    let memo = lines.get(line)
+    if (!memo) lines.set(line, memo = new Map())
+    return memo
+  }
   private linkLabelDepth = 0
 
   // Matchers belong to this parse; fragment parsing scopes its matcher context.
@@ -6942,7 +6973,7 @@ class ParseSession {
 
   parse(source: string, opts: ParseOptions = {}): Document {
     this.newlineIndexCache.clear()
-    this.markerPrefixMemo.clear()
+    this.markerPrefixMemos = new WeakMap()
     this.activeQuoteCharacters = opts.extensions
       ?.map((extension) => extension.quoteCharacters)
       .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
@@ -9268,7 +9299,7 @@ class ParseSession {
         // PARAMETER (carve#920): a heading, a table or an attribute block written
         // on the `:  ` marker leaves no paragraph open for exactly the reason it
         // leaves none on a `- ` marker.
-        const firstState = markerLineState(first, parseSession.markerPrefixMemo)
+        const firstState = markerLineState(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
         const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
         lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
         lazyState.inTable = firstState.endsOnTableRow
@@ -9768,10 +9799,10 @@ class ParseSession {
           !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
           quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo, depth),
         descent,
+        this.markerPrefixMemo(lexer, lineIndex),
       )
-      // A later line that continues the handed-down quote would change the
-      // state after the nested quote's prefix.
-      if (handDown && state.mode.kind === 'quote' && state.mode.inner === handDown.state) handDown = null
+      // Reuse the handed-down state only while lazy text leaves it unchanged.
+      if (!descent.preserved && handDown && state.mode.kind === 'quote' && state.mode.inner === handDown.state) handDown = null
     }
     const trackUntracked = (): void => {
       if (trackedBefore) {
@@ -10446,7 +10477,7 @@ class ParseSession {
         bottomIsContinuationMarker: false,
         wrappedAttributeRun: null,
         quote: null,
-      } : markerLineState(content, this.markerPrefixMemo)
+      } : markerLineState(content, this.markerPrefixMemo(lexer, itemStartLineIndex))
       const lazyState: ItemLazyState = {
         opaque: null,
         invisibleAtColumn: false,
