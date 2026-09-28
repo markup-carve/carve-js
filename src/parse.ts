@@ -2660,74 +2660,6 @@ function itemFenceHasCloser(
 }
 
 /**
- * The item-local COMMENT closer index, built once per scope.
- *
- * `from`/`end` are the half-open line range it covers and `byWidth` maps a
- * delimiter run to the ASCENDING lines carrying it there. Every opener inside
- * one scope shares the range - the scope ends at the first line that leaves the
- * item, which does not move as the opener does - so one walk answers all of
- * them and a run of unterminated openers stays linear.
- *
- * A NEGATIVE cache of the widths seen - the shape the code fence's `maxRun`
- * bound takes - cannot do this job: §28 matches the closer on EXACT length, so
- * openers of DISTINCT widths put every width into the cache and it refutes
- * none of them, leaving one walk per opener. This one is positive, so it
- * answers them all from the same walk.
- */
-interface ItemCommentCloserIndex {
-  from: number
-  end: number
-  byWidth: Map<number, number[]>
-}
-type ItemCommentCloserMemo = { index: ItemCommentCloserIndex | null }
-
-/**
- * Whether a comment fence of width `fence` closes LATER IN THIS ITEM.
- *
- * PART 9 §28's closer lookahead, restated over the item's own content stream -
- * the same question `quotedCommentHasCloser` asks for a quote, and the reason
- * is the same: the tracker runs while the item is still being collected, so it
- * cannot defer to the block parser's document-wide index.
- *
- * THE SCOPE ENDS WHERE THE ITEM DOES. A run written below the item's content
- * column is not inside the fence's container and closes nothing - the bound
- * `commentCloserInScope` applies in the definition prepass - so the walk STOPS
- * at the first such line rather than skipping it. Blanks are transparent: a
- * blank followed by an indented line has not left the item, and inside a
- * comment body it is body.
- */
-function itemCommentHasCloser(
-  lexer: Lexer,
-  fence: number,
-  fromIndex: number,
-  contentCol: number,
-  memo: ItemCommentCloserMemo,
-): boolean {
-  const start = fromIndex + 1
-  let index = memo.index
-  if (index === null || start < index.from || start >= index.end) {
-    const byWidth = new Map<number, number[]>()
-    let i = start
-    for (; i < lexer.lines.length; i++) {
-      const line = lexer.lines[i]!
-      if (isBlankLine(line)) continue
-      if (indentColumns(line, contentCol) < contentCol) break
-      const run = commentFenceRun(sliceColumns(line, contentCol, true))
-      if (run === undefined) continue
-      const at = byWidth.get(run)
-      if (at === undefined) byWidth.set(run, [i])
-      else at.push(i)
-    }
-    index = { from: start, end: i, byWidth }
-    memo.index = index
-  }
-  const at = index.byWidth.get(fence)
-  if (at === undefined) return false
-
-  return at[at.length - 1]! >= start
-}
-
-/**
  * A line's content with every leading list marker walked off.
  *
  * AN OPENER MAY BE WRITTEN ON A MARKER LINE, and only where a block may begin:
@@ -4591,7 +4523,7 @@ function trackItemLazyState(
    */
   atContentColumn = true,
   /**
-   * Does a comment fence of this width close later in this item (PART 9 §28)?
+   * Does a comment fence of this width have a closer ahead (PART 9 §28)?
    *
    * The default answers "yes" for the same reason `hasFenceCloser`'s does: the
    * callers that cannot look ahead - the synthetic blank at a `+` marker and an
@@ -4652,13 +4584,10 @@ function trackItemLazyState(
     const run = commentFenceRun(content)
     if (run === comment.length) {
       state.opaque = null
-      // A CLOSED COMMENT FENCE AT THE COLUMN IS A CLOSED BLOCK, so the paragraph
-      // it interrupted is gone and does not come back: `- a` / `  %%% c` /
-      // `  %%%` / `tail` leaves the item on a block, and `tail` at column 0
-      // reaches no container (markup-carve/carve#1364, corpus 357-3). Restoring
-      // the pre-comment state is still right for a fence collected BELOW the
-      // column, where the whole run adds no block.
-      state.lazyFoldable = comment.paragraphBefore && !comment.atColumn
+      // A span whose opener and closer both reach the content column ends
+      // the paragraph. A delimiter folded below that column retains the
+      // paragraph claim from before the span.
+      state.lazyFoldable = comment.paragraphBefore && !(comment.atColumn && atContentColumn)
       state.invisibleAtColumn = comment.atColumn
       state.commentAtColumn = comment.atColumn
     } else {
@@ -10526,7 +10455,6 @@ class ParseSession {
       const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
         (isListMarkerLine(line) && indentColumns(line) <= baseIndent) ||
         (afterBlank && indentColumns(line, contentCol) < contentCol)
-      const itemCommentMemo: ItemCommentCloserMemo = { index: null }
       const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
       if (leadFence) {
         lazyState.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!) }
@@ -10795,7 +10723,10 @@ class ParseSession {
               return answer
             },
             true,
-            (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
+            // Classify the span before applying the item's column boundary.
+            // A below-column payload line still ends the item; its own parse
+            // then sees an unclosed opener and publishes the former payload.
+            (fence) => commentBlockHasCloser(lexer, fence, fenceLineIndex),
           )
           // The item holds no paragraph a below-column line can continue while a
           // descendant holds a fence open. PART 1 S4 asks about the open STACK.
@@ -10806,7 +10737,7 @@ class ParseSession {
           pendingBlanks === 0 &&
           !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
           (((lazyState.lazyFoldable ||
-            (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore) ||
+            (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore && !lazyState.opaque.atColumn) ||
             // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
             // (markup-carve/carve#1364). The item goes on collecting, so a line
             // still indented belongs to it and starts a paragraph of its own
