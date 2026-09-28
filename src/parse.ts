@@ -12,6 +12,8 @@ export type { LinkDef } from './inline-resolution.js'
 import { mergeAttrs } from './attribute-merge.js'
 export { mergeAttrs } from './attribute-merge.js'
 import { applyAbbreviations, applyLinkDefs } from './inline-resolution.js'
+import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
+import { referenceLink, referenceImage } from './reference-resolution.js'
 import { dropPositions, toCodepointPositions } from './source-positions.js'
 import type {
   SmartPunctuation,
@@ -2769,19 +2771,13 @@ function parseCommentBlock(lexer: Lexer): Comment {
  * cell reported the document's first three characters for every cell.
  */
 function stripPositions(nodes: InlineNode[]): InlineNode[] {
-  const walk = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item)
-      return
+  for (const node of nodes) {
+    delete node.pos
+    if (node.type === 'citation_group') {
+      for (const item of node.items) delete item.pos
     }
-    const record = value as Record<string, unknown>
-    delete record['pos']
-    for (const key of Object.keys(record)) {
-      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
-    }
+    visitInlineChildren(node, stripPositions, undefined)
   }
-  walk(nodes)
   return nodes
 }
 
@@ -3694,23 +3690,12 @@ function isLiteralColonFenceLine(line: string): boolean {
  */
 type DefListOpening = false | 'term' | 'description'
 
+type ItemOpaqueState =
+  | { kind: 'code'; close: RegExp }
+  | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean }
+
 interface ItemLazyState {
-  inFence: boolean
-  fenceClose: RegExp | null
-  inComment: boolean
-  commentLen: number
-  // `lazyFoldable` as it stood when the comment block opened. A comment renders
-  // NOTHING, so closing one may not change whether the item ends in an open
-  // paragraph - it has to restore what was there before the fence.
-  lazyFoldableBeforeComment: boolean
-  /**
-   * Did the open comment fence start AT the container's content column?
-   *
-   * A fence at the column is a BLOCK, so the paragraph it interrupted does not
-   * come back when it closes; one collected below the column adds no block, and
-   * the paragraph above it is still open when the run ends.
-   */
-  openedCommentAtColumn: boolean
+  opaque: ItemOpaqueState | null
   // Whether the item's collected content currently ends in an OPEN paragraph
   // that a dedented (below content-column) non-blank line lazily continues
   // (CommonMark family-D rule). True after plain prose, a blockquote line, or
@@ -3810,18 +3795,13 @@ interface ItemLazyState {
  * `:::` body severed on a marker where a code fence's body did not.
  */
 function insideOpenFence(state: ItemLazyState): boolean {
-  return state.inFence || state.inComment || state.divDepth > 0
+  return state.opaque !== null || state.divDepth > 0
 }
 
 /** An `ItemLazyState` that has seen nothing, for a collector that only reads fences. */
 function verbatimOnlyLazyState(): ItemLazyState {
   return {
-    inFence: false,
-    fenceClose: null,
-    inComment: false,
-    commentLen: 0,
-    lazyFoldableBeforeComment: false,
-    openedCommentAtColumn: false,
+    opaque: null,
     invisibleAtColumn: false,
     commentAtColumn: false,
     inFootnoteBody: false,
@@ -4408,32 +4388,33 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
-  if (state.inComment) {
+  if (state.opaque?.kind === 'comment') {
+    const comment = state.opaque
     // A CLOSER IS NOT A BARE RUN. This said it was - "so this test stays
     // anchored, unlike the opener below, which may carry an info string" - and
     // PART 9 §28 gives the closer the same insignificant tail as the opener:
     // `%%% end` closes one. It also matches on EXACT length, where this read
     // `>=`.
     const run = commentFenceRun(content)
-    if (run === state.commentLen) {
-      state.inComment = false
+    if (run === comment.length) {
+      state.opaque = null
       // A CLOSED COMMENT FENCE AT THE COLUMN IS A CLOSED BLOCK, so the paragraph
       // it interrupted is gone and does not come back: `- a` / `  %%% c` /
       // `  %%%` / `tail` leaves the item on a block, and `tail` at column 0
       // reaches no container (markup-carve/carve#1364, corpus 357-3). Restoring
       // the pre-comment state is still right for a fence collected BELOW the
       // column, where the whole run adds no block.
-      state.lazyFoldable = state.lazyFoldableBeforeComment && !state.openedCommentAtColumn
-      state.invisibleAtColumn = state.openedCommentAtColumn
-      state.commentAtColumn = state.openedCommentAtColumn
+      state.lazyFoldable = comment.paragraphBefore && !comment.atColumn
+      state.invisibleAtColumn = comment.atColumn
+      state.commentAtColumn = comment.atColumn
     } else {
       state.lazyFoldable = false
     }
     state.inDefList = false
     return
   }
-  if (state.inFence) {
-    if (state.fenceClose!.test(content)) state.inFence = false
+  if (state.opaque?.kind === 'code') {
+    if (state.opaque.close.test(content)) state.opaque = null
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -4480,8 +4461,7 @@ function trackItemLazyState(
   const raw = fence ? null : RE_RAW_FENCE.exec(content)
   const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
   if (fenceMarker !== null && (!state.lazyFoldable || hasFenceCloser(fenceMarker))) {
-    state.inFence = true
-    state.fenceClose = fenceCloseRe(fenceMarker)
+    state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker) }
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -4515,10 +4495,7 @@ function trackItemLazyState(
   // here would take carve-js away from the executable spec, carve-rs and
   // carve-php at once.
   if (commentRun !== undefined && hasCommentCloser(commentRun)) {
-    state.inComment = true
-    state.commentLen = commentRun
-    state.lazyFoldableBeforeComment = state.lazyFoldable
-    state.openedCommentAtColumn = atContentColumn
+    state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: atContentColumn }
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -8402,10 +8379,11 @@ class ParseSession {
                 return true
               }
             }
-            for (const key of ['children', 'inline', 'content'] as const) {
-              const value = record[key]
-              if (Array.isArray(value) && removeGuard(value as InlineNode[])) return true
-            }
+            let removed = false
+            visitInlineChildren(node, (children) => {
+              if (!removed) removed = removeGuard(children)
+            }, undefined)
+            if (removed) return true
           }
           return false
         }
@@ -8426,11 +8404,7 @@ class ParseSession {
                 pos.endColumn = guardColumn
                 pos.endLine = guardLineNumber
               }
-              const record = node as unknown as Record<string, unknown>
-              for (const key of ['children', 'inline', 'content'] as const) {
-                const value = record[key]
-                if (Array.isArray(value)) clampToGuard(value as InlineNode[])
-              }
+              visitInlineChildren(node, clampToGuard, undefined)
             }
           }
           clampToGuard(parsed)
@@ -8445,17 +8419,6 @@ class ParseSession {
       // as much a surviving line end - and the comment reinsertion asks that
       // question, not the conversion's.
       const boundaryLines = new Set<number>()
-      // EVERY SLOT AN INLINE NODE HOLDS OTHER INLINES IN, not just `children`: an
-      // inline footnote carries its body in `inline` and an inline extension in
-      // `content`, and a walk that knows only one name misses two containers.
-      // Named once so the two passes below cannot drift apart on it.
-      const INLINE_SLOTS = ['children', 'inline', 'content'] as const
-      const slotsOf = (node: InlineNode): InlineNode[][] => {
-        const record = node as unknown as Record<string, unknown>
-        // `content` is a STRING on a comment and on an inline literal, so the
-        // array test is the discriminator rather than the name.
-        return INLINE_SLOTS.map((slot) => record[slot]).filter(Array.isArray) as InlineNode[][]
-      }
       // AT EVERY DEPTH. An inline container that opens on one body line and
       // closes on a later one holds the boundaries between them as its OWN
       // children, so a walk over the stanza's top-level nodes never sees them
@@ -8469,44 +8432,46 @@ class ParseSession {
             if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
             continue
           }
-          for (const slot of slotsOf(node)) readBoundaries(slot)
+          visitInlineChildren(node, readBoundaries, undefined)
         }
       }
       readBoundaries(parsed)
       if (!anchorable) stripPositions(parsed)
       else if (!unchangedColumns || lines.some((line) => lexer.lineStartColumn(line.lineIndex) < 1)) {
         const byLine = new Map(lines.map((line) => [lexer.lineNumber(line.lineIndex), line]))
+        const remapPosition = (node: { pos?: Position; type?: string }): void => {
+          const pos = node.pos
+          if (pos && typeof pos === 'object' && typeof pos.startLine === 'number' && typeof pos.endLine === 'number') {
+            const first = byLine.get(pos.startLine)
+            const last = byLine.get(pos.endLine)
+            const start = first && pos.startColumn !== undefined
+              ? pos.startColumn - lexer.lineStartColumn(first.lineIndex) : -1
+            const end = last && pos.endColumn !== undefined
+              ? pos.endColumn - lexer.lineStartColumn(last.lineIndex) : -1
+            const sourceStart = first?.sourceOffsets[start]
+            const sourceLast = end === 0 && last
+              ? -1 : last?.sourceOffsets[end - 1]
+            const contiguousText = !('type' in node) || node.type !== 'text' || (first === last &&
+              sourceStart !== undefined && sourceLast !== undefined &&
+              sourceLast - sourceStart === end - start - 1 &&
+              first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined))
+            if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText ||
+              lexer.lineStartColumn(first.lineIndex) + sourceStart < 1) {
+              delete node.pos
+            } else {
+              pos.startColumn = lexer.lineStartColumn(first.lineIndex) + sourceStart
+              pos.endColumn = lexer.lineStartColumn(last.lineIndex) + sourceLast + 1
+              pos.startOffset = lexer.lineOffset(first.lineIndex) + sourceStart
+              pos.endOffset = lexer.lineOffset(last.lineIndex) + sourceLast + 1
+            }
+          }
+        }
         const remap = (nodes: InlineNode[]): void => {
           for (const node of nodes) {
-            const pos = node.pos
-            if (pos && typeof pos === 'object' && typeof pos.startLine === 'number' && typeof pos.endLine === 'number') {
-              const first = byLine.get(pos.startLine)
-              const last = byLine.get(pos.endLine)
-              const start = first && pos.startColumn !== undefined
-                ? pos.startColumn - lexer.lineStartColumn(first.lineIndex) : -1
-              const end = last && pos.endColumn !== undefined
-                ? pos.endColumn - lexer.lineStartColumn(last.lineIndex) : -1
-              const sourceStart = first?.sourceOffsets[start]
-              const sourceLast = end === 0 && last
-                ? -1 : last?.sourceOffsets[end - 1]
-              const contiguousText = node.type !== 'text' || (first === last &&
-                sourceStart !== undefined && sourceLast !== undefined &&
-                sourceLast - sourceStart === end - start - 1 &&
-                first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined))
-              if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText ||
-                lexer.lineStartColumn(first.lineIndex) + sourceStart < 1) {
-                delete node.pos
-              } else {
-                pos.startColumn = lexer.lineStartColumn(first.lineIndex) + sourceStart
-                pos.endColumn = lexer.lineStartColumn(last.lineIndex) + sourceLast + 1
-                pos.startOffset = lexer.lineOffset(first.lineIndex) + sourceStart
-                pos.endOffset = lexer.lineOffset(last.lineIndex) + sourceLast + 1
-              }
-            }
-            for (const [key, value] of Object.entries(node)) {
-              if (key !== 'pos' && (key !== 'attrs' || typeof node.type !== 'string') && value && typeof value === 'object') {
-                remap((Array.isArray(value) ? value : [value]) as InlineNode[])
-              }
+            remapPosition(node)
+            visitInlineChildren(node, remap, undefined)
+            if (node.type === 'citation_group') {
+              for (const item of node.items) remapPosition(item)
             }
           }
         }
@@ -8521,11 +8486,7 @@ class ParseSession {
         const out: InlineNode[] = []
         for (const node of nodes) {
           if (node.type !== 'soft_break') {
-            const record = node as unknown as Record<string, unknown>
-            for (const slot of INLINE_SLOTS) {
-              const value = record[slot]
-              if (Array.isArray(value)) record[slot] = place(value as InlineNode[])
-            }
+            mapInlineChildren(node, place, undefined)
             out.push(node)
             continue
           }
@@ -8747,12 +8708,7 @@ class ParseSession {
       const bodySourceLines: (string | undefined)[] = []
       const bufferedBlanks = new Set<number>()
       const lazyState: ItemLazyState = {
-        inFence: false,
-        fenceClose: null,
-        inComment: false,
-        commentLen: 0,
-        lazyFoldableBeforeComment: false,
-        openedCommentAtColumn: false,
+        opaque: null,
         inTable: false,
         invisibleAtColumn: false,
         commentAtColumn: false,
@@ -8894,8 +8850,7 @@ class ParseSession {
         if (firstIsColonContainer) lazyState.divDepth = 1
         const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
         if (leadFence) {
-          lazyState.inFence = true
-          lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(first) ? leadFence[2]! : leadFence[1]!)
+          lazyState.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(first) ? leadFence[2]! : leadFence[1]!) }
           lazyState.lazyFoldable = false
         }
       }
@@ -9868,12 +9823,7 @@ class ParseSession {
       // ONE WALK for the three questions the lead line answers.
       const leadState = markerLineState(content)
       const lazyState: ItemLazyState = {
-        inFence: false,
-        fenceClose: null,
-        inComment: false,
-        commentLen: 0,
-        lazyFoldableBeforeComment: false,
-        openedCommentAtColumn: false,
+        opaque: null,
         invisibleAtColumn: false,
         commentAtColumn: false,
         inFootnoteBody: false,
@@ -9907,8 +9857,7 @@ class ParseSession {
       const itemCommentMemo: ItemCommentCloserMemo = { index: null }
       const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
       if (leadFence) {
-        lazyState.inFence = true
-        lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!)
+        lazyState.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!) }
         lazyState.lazyFoldable = false
       }
       // A COMMENT FENCE OPENED ON THE MARKER LINE IS AN OPEN COMMENT, for the
@@ -9919,9 +9868,7 @@ class ParseSession {
       // tracker has to know the comment is open before it reads the next line.
       const leadComment = leadFence ? undefined : commentFenceRun(content)
       if (leadComment !== undefined) {
-        lazyState.inComment = true
-        lazyState.commentLen = leadComment
-        lazyState.lazyFoldableBeforeComment = lazyState.lazyFoldable
+        lazyState.opaque = { kind: 'comment', length: leadComment, paragraphBefore: lazyState.lazyFoldable, atColumn: false }
         lazyState.lazyFoldable = false
       }
       // The lead line may itself be the malformed fence (`- :::note`), and then
@@ -9988,7 +9935,7 @@ class ParseSession {
             // tracker sees them: what they leave open decides how a later
             // dedented line folds.
             trackItemLazyState(attachedLines[k]!, lazyState)
-            if (!lazyState.inFence) authoredFenceBase = 0
+            if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           }
           continue
         }
@@ -10102,7 +10049,7 @@ class ParseSession {
           // is not quote-lazy and keeps the content-column dedent that preserves
           // its authored indentation.
           const dedented =
-            lazyState.inFence && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
+            lazyState.opaque?.kind === 'code' && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
               ? l.startsWith(LAZY_FRAME)
                 ? l
                 : LAZY_FRAME + l.replace(/^[ \t]+/, '')
@@ -10114,7 +10061,7 @@ class ParseSession {
           // and is not in `nested`), dedented it to column 0, and parseFence then
           // closed the fence there, losing the rest of its body
           // (markup-carve/carve-js#1636). carve-rs keeps it as body already.
-          if (!lazyState.inFence) {
+          if (lazyState.opaque?.kind !== 'code') {
             authoredBaseEligible.add(nested.length)
             if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
             if (firstBodyMarkerColumn === undefined) {
@@ -10127,7 +10074,7 @@ class ParseSession {
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           const fenceLineIndex = lexer.pos
           let trackedContent = dedented
-          if (lazyState.inFence) {
+          if (lazyState.opaque?.kind === 'code') {
             if (authoredFenceBase > 0 && indentColumns(dedented, authoredFenceBase) >= authoredFenceBase) {
               trackedContent = sliceColumns(dedented, authoredFenceBase, true)
             }
@@ -10164,13 +10111,13 @@ class ParseSession {
             true,
             (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
           )
-          if (!lazyState.inFence) authoredFenceBase = 0
+          if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else if (
           pendingBlanks === 0 &&
           !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
           (((lazyState.lazyFoldable ||
-            (lazyState.inComment && lazyState.lazyFoldableBeforeComment) ||
+            (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore) ||
             // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
             // (markup-carve/carve#1364). The item goes on collecting, so a line
             // still indented belongs to it and starts a paragraph of its own
@@ -10248,11 +10195,11 @@ class ParseSession {
           // is the lazy continuation of the paragraph above it, which stays open
           // behind it (corpus 183, 197, 358).
           trackItemLazyState(lazyLine, lazyState, () => true, false)
-          if (!lazyState.inFence) authoredFenceBase = 0
+          if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else if (
           (leadFence !== null || authoredFenceBase > 0) &&
-          lazyState.inFence &&
+          lazyState.opaque?.kind === 'code' &&
           pendingBlanks === 0 &&
           indentColumns(l, contentCol) < contentCol &&
           (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
@@ -10283,7 +10230,7 @@ class ParseSession {
           nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           trackItemLazyState(framed, lazyState, () => true, false)
-          if (!lazyState.inFence) authoredFenceBase = 0
+          if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else {
           break
@@ -10359,7 +10306,7 @@ class ParseSession {
       // A child item receives the run too: its parser owns any fence hidden
       // from this item's tracker. Other trailing blanks remain spacing.
       if (pendingBlanks > 0 && (
-        lazyState.inFence || lazyState.inComment || authoredCodeFenceOpen || firstBlockIdx >= 0 || leadIsMarker
+        lazyState.opaque !== null || authoredCodeFenceOpen || firstBlockIdx >= 0 || leadIsMarker
       )) {
         for (let k = 0; k < pendingBlanks; k++) {
           bufferedBlanks.add(nested.length + 1)
@@ -11883,14 +11830,11 @@ class ParseSession {
                 else attrs = a
               }
             }
-            const img: Image = {
-              type: 'image',
-              src: '',
-              alt,
-              ref: mref[1]! !== '' ? mref[1]! : alt,
-              rawRef: this.rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
-            }
-            if (attrs) img.attrs = attrs
+            const img = referenceImage(
+              mref[1]! !== '' ? mref[1]! : alt,
+              this.rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
+              alt, attrs,
+            )
             out.push(this.withPos(img, source, text, i, i + len))
             i += len
             continue
@@ -11982,18 +11926,12 @@ class ParseSession {
                 else attrs = a
               }
             }
-            const refLink: Link = {
-              type: 'link',
-              href: '',
-              children: this.scanLinkLabel(innerText, this.shiftSource(source, text, i + 1), inFootnote),
-              ref: mref[1]! !== '' ? mref[1]! : innerText,
-              // rawRef includes any consumed trailing {attrs} so the literal
-              // fallback for an unresolved ref preserves the full source, and it
-              // is read from the DOCUMENT where the scanner's own text is not
-              // that source (carve-js#1183).
-              rawRef: this.rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
-            }
-            if (attrs) refLink.attrs = attrs
+            const refLink = referenceLink(
+              mref[1]! !== '' ? mref[1]! : innerText,
+              this.rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
+              this.scanLinkLabel(innerText, this.shiftSource(source, text, i + 1), inFootnote),
+              attrs,
+            )
             out.push(this.withPos(refLink, source, text, i, i + len))
             i += len
             continue

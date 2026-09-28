@@ -51,127 +51,9 @@ export type HtmlImportAdapter =
   | 'word'
   | 'google-docs'
 
-/**
- * The diagnostic codes, as the `code` enum of the published report schema
- * (`spec/resources/html-import-schema.json`) lists them.
- *
- * A runtime list rather than a hand-written union, because the union alone is
- * a constraint nothing can check: types are gone by the time a test runs, so
- * a code added here and not to the schema - or to the schema and not here -
- * diverged in silence. Deriving `HtmlImportDiagnosticCode` from this array
- * makes the two one thing, and a test then holds this array against the
- * schema's own enum.
- *
- * Not re-exported from `index.ts`: the package publishes the TYPE, and this
- * is the machinery the type is built from.
- */
-export const HTML_IMPORT_DIAGNOSTIC_CODES = [
-  'element-dropped',
-  'element-unwrapped',
-  'attribute-dropped',
-  /**
-   * An attribute the policy refused to represent as a Carve attribute, and
-   * that reached the output ANYWAY, inside the bytes of an element `roundtrip`
-   * keeps whole (markup-carve/carve-js#1468).
-   *
-   * NOT `attribute-dropped` carrying a different message. The two are opposite
-   * facts about the same attribute, and a consumer that filters on the code
-   * rather than reading the prose would be told a drop happened that did not -
-   * which is the row somebody acts on, because `roundtrip` is the mode that is
-   * not safe for untrusted input.
-   */
-  'attribute-preserved',
-  'style-unmapped',
-  'table-degraded',
-  'structure-unspellable',
-  'raw-preserved',
-  'encoding-assumed',
-  'diagnostics-truncated',
-] as const
-
-export type HtmlImportDiagnosticCode = (typeof HTML_IMPORT_DIAGNOSTIC_CODES)[number]
-
-/** How much of the source survived this decision (format-bridges, v2). */
-export type HtmlImportFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
-
-/** How sure the importer is that the decision was the right one. */
-export type HtmlImportConfidence = 'exact' | 'inferred' | 'fallback'
-
-export interface HtmlImportDiagnostic {
-  code: HtmlImportDiagnosticCode
-  message: string
-  severity: 'info' | 'warning' | 'error'
-  /**
-   * Fidelity and confidence are a property of the CODE, so they are stamped
-   * here rather than recomputed by each consumer. The migration report used to
-   * derive them on its way out, which meant the plain import report - the one
-   * the shared fixtures compare - carried a decision the format defines and
-   * this engine knew.
-   */
-  fidelity: HtmlImportFidelity
-  confidence: HtmlImportConfidence
-  path?: string
-  line?: number
-  column?: number
-}
-
-/**
- * The default fidelity of a diagnostic code, from the v2 contract. A mapping
- * may override it when the same operation has a narrower declared outcome.
- *
- * Ordered `preserved < normalized < degraded < dropped`, and the producer's
- * answer is FINAL: a binding must not reclassify it, and it must never be
- * inferred from the message text.
- */
-function diagnosticFidelity(code: HtmlImportDiagnosticCode): HtmlImportFidelity {
-  switch (code) {
-    // Nothing of the attribute was lost: it reached the output inside the bytes
-    // of an element kept whole.
-    case 'attribute-preserved':
-      return 'preserved'
-    // The bytes survive but structured editing does not.
-    case 'raw-preserved':
-    case 'element-unwrapped':
-    case 'style-unmapped':
-    case 'table-degraded':
-    case 'encoding-assumed':
-      return 'degraded'
-    // The cap hides findings that may include irreversible loss, so it reports
-    // the worst case rather than the state it could see.
-    case 'diagnostics-truncated':
-    case 'element-dropped':
-    case 'attribute-dropped':
-    case 'structure-unspellable':
-      return 'dropped'
-  }
-}
-
-/** The confidence of a diagnostic code, from the v2 contract. */
-function diagnosticConfidence(code: HtmlImportDiagnosticCode): HtmlImportConfidence {
-  switch (code) {
-    // The importer assumed an encoding the source never declared.
-    case 'encoding-assumed':
-      return 'inferred'
-    // Every code whose decision the importer can see for itself.
-    case 'element-dropped':
-    case 'attribute-dropped':
-    case 'attribute-preserved':
-    case 'element-unwrapped':
-    case 'style-unmapped':
-    case 'table-degraded':
-    case 'raw-preserved':
-    case 'structure-unspellable':
-      return 'exact'
-    // FAILS CLOSED. `diagnostics-truncated` reports a sample, so nothing about
-    // the omitted findings is known - and a code a future version adds, arriving
-    // here through a cast or a bindings boundary, says nothing about how sure
-    // anyone can be either. Both take the weakest answer rather than the
-    // strongest, which is what carve-php's own test for an unknown code
-    // requires.
-    default:
-      return 'fallback'
-  }
-}
+export { HTML_IMPORT_DIAGNOSTIC_CODES } from './html-import-report.js'
+export type { HtmlImportDiagnostic, HtmlImportDiagnosticCode, HtmlImportFidelity, HtmlImportConfidence } from './html-import-report.js'
+import { HtmlImportReportCollector, type DiagnosticMark, type HtmlImportDiagnostic } from './html-import-report.js'
 
 export interface HtmlImportOptions {
   mode?: HtmlImportMode
@@ -942,35 +824,7 @@ class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
   private readonly listTableForBlockCells: boolean
-  /**
-   * Every diagnostic, with what it takes to put it in the order the page
-   * promises: `at` is the document position of the LOSING ELEMENT and `seq`
-   * the order this one was constructed in, which only ever breaks a tie.
-   */
-  private readonly entries: Array<{
-    diagnostic: HtmlImportDiagnostic
-    at: number
-    seq: number
-    /**
-     * The element this row is ABOUT, and the row it becomes if that element
-     * ends up preserved whole as raw HTML (markup-carve/carve-js#1468).
-     *
-     * Only `attrs()` fills these in, and only for an attribute it refused: a
-     * refusal is a claim about what the OUTPUT lost, and the walk cannot know
-     * yet whether the output keeps the element verbatim. Recording both
-     * readings at the point that knows the attribute, and swapping at the point
-     * that knows the outcome, is what keeps the two from drifting - the
-     * alternative is a second copy of the wording next to every preserve arm.
-     */
-    owner?: P5Node
-    refusal?: { subject: string; reason: string; live: boolean }
-    /** Reported only if its element ends up kept raw (markup-carve/carve#2261). */
-    latent?: boolean
-  }> = []
-  private latentCount = 0
-  private capSuspended = false
-  /** Whether the diagnostic cap turned a row away (carve-js#2034). */
-  private truncated = false
+  private readonly report: HtmlImportReportCollector
   /**
    * Every node of the parsed tree, numbered in DOCUMENT ORDER
    * (markup-carve/carve#1586).
@@ -987,31 +841,7 @@ class Importer {
   private readonly codeLanguageWrappers = new WeakMap<P5Node, P5Node | null>()
   private readonly documentOrder = new Map<P5Node, number>()
 
-  /** The report, in the order docs/html-import.md states. */
-  get diagnostics(): HtmlImportDiagnostic[] {
-    // An element's own row comes before its other rows, so a reader learns the
-    // element is gone before its attributes are (carve-php#1737).
-    const rank = (entry: { diagnostic: HtmlImportDiagnostic }) => (entry.diagnostic.code.startsWith('element-') ? 0 : 1)
-    const rows = this.entries
-      .filter((entry) => !entry.latent)
-      .sort((a, b) => a.at - b.at || rank(a) - rank(b) || a.seq - b.seq)
-      .map((entry) => entry.diagnostic)
-    if (!this.truncated) return rows
-    // LAST, and it REPLACES the row it stands behind: the marker reports the
-    // state of the report rather than a loss at a place, so it has no element
-    // to be ordered by, and replacing keeps the cap a bound on the rows a
-    // reader gets. With a cap of zero there is no row to replace and the marker
-    // is the whole report, a truncated report having to be able to say so.
-    rows.pop()
-    rows.push({
-      code: 'diagnostics-truncated',
-      message: 'HTML import diagnostics limit reached',
-      severity: 'error',
-      fidelity: diagnosticFidelity('diagnostics-truncated'),
-      confidence: diagnosticConfidence('diagnostics-truncated'),
-    })
-    return rows
-  }
+  get diagnostics(): HtmlImportDiagnostic[] { return this.report.diagnostics }
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
   /** The element each empty code span came from, for `dropUnspellableEmptyCodeSpans`. */
@@ -1077,7 +907,6 @@ class Importer {
   private root: P5Node | undefined
   private readonly maxDepth: number
   private readonly maxNodes: number
-  private readonly maxDiagnostics: number
 
   private readonly labels: Record<LabelKey, string>
 
@@ -1106,7 +935,7 @@ class Importer {
     if (!ADAPTERS.has(this.adapter)) throw new TypeError(`Unknown HTML import adapter: ${this.adapter}`)
     this.maxDepth = options.maxDepth ?? 128
     this.maxNodes = options.maxNodes ?? 1_000_000
-    this.maxDiagnostics = options.maxDiagnostics ?? 1_000
+    this.report = new HtmlImportReportCollector(options.maxDiagnostics ?? 1_000, (node) => this.positionOf(node))
     this.labels = { ...LABEL_DEFAULTS, ...options.labels }
     this.listTableForBlockCells = options.listTableForBlockCells === true
   }
@@ -1144,142 +973,6 @@ class Importer {
     if (++this.nodes > this.maxNodes) throw new HtmlImportLimitError('nodes')
   }
 
-  private add(
-    code: HtmlImportDiagnosticCode,
-    message: string,
-    severity: HtmlImportDiagnostic['severity'],
-    path: string,
-    node: P5Node,
-    fidelity = diagnosticFidelity(code),
-  ): boolean {
-    if (this.capReached()) return false
-    this.entries.push({
-      diagnostic: {
-        code,
-        message,
-        severity,
-        fidelity,
-        confidence: diagnosticConfidence(code),
-        path,
-      },
-      at: this.positionOf(node),
-      seq: this.entries.length,
-    })
-    return true
-  }
-
-  /**
-   * An attribute this importer will not write as a Carve attribute, reported
-   * in BOTH of the readings the walk cannot yet choose between
-   * (markup-carve/carve-js#1468).
-   *
-   * The row goes out as `attribute-dropped`, which is what it is for every
-   * element the import rewrites. `keepRaw` turns it into
-   * `attribute-preserved` where the element turned out to be kept whole, from
-   * the same subject and the same reason - so the pair cannot say two
-   * different things about one attribute.
-   *
-   * `live` is the half that decides severity, and it is the SAFETY test rather
-   * than the old severity: an event handler, an injection sink or a value
-   * carrying a denied scheme is in the output and executable, in a mode
-   * `docs/html-import.md` calls unsafe for untrusted input. A dropped handler
-   * already spends `warning`, so a preserved one spending `warning` too would
-   * tell a filter nothing about which of the two it is looking at. `error` is
-   * not a failed import here; it is the only level left that separates them.
-   */
-  private refuseAttribute(
-    node: P5Node,
-    path: string,
-    subject: string,
-    reason: string,
-    severity: HtmlImportDiagnostic['severity'],
-    live: boolean,
-  ): void {
-    // No row means the cap turned this one away, and there is nothing to record
-    // the preserve reading on.
-    if (!this.add('attribute-dropped', `Dropped ${subject} on <${domTag(node)}>${reason}`, severity, path, node)) return
-    const entry = this.entries[this.entries.length - 1]!
-    entry.owner = node
-    entry.refusal = { subject, reason, live }
-  }
-
-  /**
-   * A value the renderer's URL sanitizer blanks. Kept or consumed on an element
-   * the import rewrites, so it is only a row where the element is kept raw
-   * (markup-carve/carve#2261).
-   */
-  private refuseIfKept(node: P5Node, path: string, subject: string, live = true): void {
-    this.entries.push({
-      diagnostic: {
-        code: 'attribute-dropped',
-        message: '',
-        severity: live ? 'error' : 'info',
-        fidelity: diagnosticFidelity('attribute-dropped'),
-        confidence: diagnosticConfidence('attribute-dropped'),
-        path,
-      },
-      at: this.positionOf(node),
-      seq: this.entries.length,
-      owner: node,
-      refusal: { subject, reason: '', live },
-      latent: true,
-    })
-    this.latentCount++
-  }
-
-  /**
-   * Hold a row out of the report without dropping the entry, for a row the
-   * kept bytes supersede rather than contradict.
-   */
-  private withhold(entry: (typeof this.entries)[number]): void {
-    if (entry.latent) return
-    entry.latent = true
-    this.latentCount++
-  }
-
-  /**
-   * Whether the diagnostic cap has been reached, marking the report truncated
-   * where it has.
-   *
-   * The cap bounds the REPORT, not the document: what it turns away is a row,
-   * not a node, so refusing the conversion threw away a conversion that had
-   * already succeeded. PART 9 lets a diagnostic cap replace its last entry with
-   * the `diagnostics-truncated` row instead, which is what a consumer can act
-   * on and what carve-rs writes (carve-js#2034). The depth and node caps stay
-   * a refusal, the document itself being what they bound.
-   */
-  private capReached(): boolean {
-    if (this.capSuspended) return false
-    if (this.entries.length - this.latentCount < this.maxDiagnostics) return false
-    this.truncated = true
-    return true
-  }
-
-  private recountLatent(): void {
-    this.latentCount = this.entries.filter((entry) => entry.latent).length
-  }
-
-  /** Restate a refusal row as what the kept bytes make it (markup-carve/carve-js#1468). */
-  private preserveRow(entry: (typeof this.entries)[number], kept: P5Node | undefined): void {
-    const { subject, reason, live } = entry.refusal!
-    const where = kept ? `inside the raw HTML <${domTag(kept)}> is kept as` : 'in the raw HTML this element is kept as'
-    // A latent row promoted past the cap stays latent, so it stays out of the
-    // report and the marker below says a row was turned away.
-    if (entry.latent) {
-      if (this.capReached()) return
-      entry.latent = false
-      this.latentCount--
-    }
-    entry.diagnostic = {
-      ...entry.diagnostic,
-      code: 'attribute-preserved',
-      fidelity: diagnosticFidelity('attribute-preserved'),
-      confidence: diagnosticConfidence('attribute-preserved'),
-      message: `Preserved ${subject} on <${domTag(entry.owner!)}> ${where}${reason}`,
-      severity: live ? 'error' : 'info',
-    }
-  }
-
   /**
    * Report an element kept whole as raw HTML: its own refused attributes, the
    * `raw-preserved` row, then every refused attribute of every element inside
@@ -1293,13 +986,8 @@ class Importer {
     // `style-unmapped` names a CSS mapping kept bytes do not run, so it goes
     // first and the refusal row below is the only one the reader gets for a
     // `style` here (markup-carve/carve#2267).
-    for (const entry of this.entries) {
-      if (entry.owner === node && entry.diagnostic.code === 'style-unmapped') this.withhold(entry)
-    }
-    for (const entry of this.entries) {
-      if (entry.owner === node && entry.refusal) this.preserveRow(entry, undefined)
-    }
-    this.add('raw-preserved', message, 'warning', path, node)
+    this.report.preserveOwner(node)
+    this.report.add('raw-preserved', message, 'warning', path, node)
     const pending: Array<[P5Node, string]> = []
     const queueChildren = (parent: P5Node, parentPath: string) => {
       const children = serializedChildren(parent)
@@ -1311,35 +999,17 @@ class Importer {
       if (domTag(child) === undefined) continue
       // `attrs()` is the own-attribute policy; only its refusal rows are kept,
       // so the rows it discards are not charged against the cap.
-      const start = this.entries.length
-      this.capSuspended = true
-      try {
-        this.attrs(child, childPath, true)
-      } finally {
-        this.capSuspended = false
-      }
-      const refused = this.entries.slice(start).filter((entry) => entry.owner === child && entry.refusal)
-      this.entries.length = start
-      for (const entry of refused) {
-        entry.seq = this.entries.length
-        entry.latent = true
-        this.entries.push(entry)
-      }
-      this.recountLatent()
-      for (const entry of refused) this.preserveRow(entry, node)
+      this.report.preserveDescendant(child, node, () => this.attrs(child, childPath, true))
       queueChildren(child, childPath)
     }
   }
 
   /** Drop what the walk into a now-raw element recorded, keeping the rows after `walked`. */
   private discardWalk(before: ReturnType<Importer['mark']>, walked: ReturnType<Importer['mark']>): void {
-    const after = this.entries.slice(walked[0])
-    this.restore(before)
-    for (const entry of after) {
-      entry.seq = this.entries.length
-      this.entries.push(entry)
-    }
-    this.recountLatent()
+    this.report.discardWalk(before[0], walked[0])
+    this.unspellable.length = before[1]
+    this.loneImageParagraphs.length = before[2]
+    this.displacedFigureAttrs.length = before[3]
   }
 
   /**
@@ -1357,23 +1027,20 @@ class Importer {
    * marker replace a row the report does keep - so a document under the cap came
    * back saying it was over it, with a real finding swallowed (carve-js#2034).
    */
-  private mark(): [number, number, number, number, boolean] {
+  private mark(): [DiagnosticMark, number, number, number] {
     return [
-      this.entries.length,
+      this.report.mark(),
       this.unspellable.length,
       this.loneImageParagraphs.length,
       this.displacedFigureAttrs.length,
-      this.truncated,
     ]
   }
 
-  private restore([entries, unspellable, loneImages, displaced, truncated]: [number, number, number, number, boolean]): void {
-    this.entries.length = entries
+  private restore([report, unspellable, loneImages, displaced]: [DiagnosticMark, number, number, number]): void {
+    this.report.restore(report)
     this.unspellable.length = unspellable
     this.loneImageParagraphs.length = loneImages
     this.displacedFigureAttrs.length = displaced
-    this.truncated = truncated
-    this.recountLatent()
   }
 
   /**
@@ -1452,10 +1119,10 @@ class Importer {
         // own wording - but not their own membership test. The set is the
         // renderer's.
         const kind = name.startsWith('on') ? 'event-handler' : 'injection-sink'
-        this.refuseAttribute(node, path, `${kind} attribute ${name}`, '', 'warning', true)
+        this.report.refuseAttribute(node, path, `${kind} attribute ${name}`, '', 'warning', true)
         continue
       }
-      const refusedBefore = this.entries.length
+      const refusedBefore = this.report.mark()
       if (name === 'style') {
         this.styles(node, attr.value, keyValues, path)
       } else if (name === 'id') {
@@ -1465,22 +1132,22 @@ class Importer {
       } else if (ROUND_TRIP_MARKER_ATTRIBUTES.has(name)) {
         // A serializer's own marker rather than the author's content, so it is
         // not re-emitted as an attribute of the imported document.
-        this.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
+        this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
       } else if (styleSlots.has(name) && (rawKept || !this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name))) {
-        this.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', destinationIsDenied(attr.value))
+        this.report.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', destinationIsDenied(attr.value))
       } else if (this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name)) {
         // Read as content or as an instruction somewhere else in this importer,
         // so keeping it here as well would give the same source two spellings.
       } else if (SEMANTIC_SPAN_TAGS.has(domTag(node) ?? '') && name === domTag(node)) {
-        this.refuseAttribute(node, path, name, ": the semantic span's marker owns that key", rawKept ? 'info' : 'warning', destinationIsDenied(attr.value))
+        this.report.refuseAttribute(node, path, name, ": the semantic span's marker owns that key", rawKept ? 'info' : 'warning', destinationIsDenied(attr.value))
       } else if (!isAttrIdentifier(name)) {
-        this.refuseAttribute(node, path, `unsupported attribute ${name}`, ': not spellable as a Carve attribute name', 'info', false)
+        this.report.refuseAttribute(node, path, `unsupported attribute ${name}`, ': not spellable as a Carve attribute name', 'info', false)
       } else if (/[\r\n]/.test(attr.value)) {
         // A quoted attribute value ENDS at the line break, so writing this back
         // produces an attribute block that does not reparse as one: it lands in
         // the document as literal `{name="first` text and the attribute is gone
         // anyway. Refused loudly rather than emitted as corruption.
-        this.refuseAttribute(node, path, name, ': its value spans a line break, which a Carve attribute value cannot', 'warning', false)
+        this.report.refuseAttribute(node, path, name, ': its value spans a line break, which a Carve attribute value cannot', 'warning', false)
       } else {
         // Everything the language can hold, held. `cite` on a block quote,
         // `open` on a `<details>` (PART 11 §6c's bare boolean, which the
@@ -1497,13 +1164,13 @@ class Importer {
           // source orders - a plain assignment let `<p style="text-align:left"
           // align="right">` come out right-aligned purely because `align` was
           // written second.
-          this.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', false)
+          this.report.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', false)
         } else {
           // A URL-list value is probed at every candidate on render
           // (CARVE-P9-055), so a later denied token is reached there.
           const laundered = isUrlListAttribute(name) ? undefined : launderableScheme(attr.value)
           if (laundered !== undefined) {
-            this.refuseAttribute(node, path, name, `: its value carries a ${laundered} URL the renderer does not reach`, 'warning', true)
+            this.report.refuseAttribute(node, path, name, `: its value carries a ${laundered} URL the renderer does not reach`, 'warning', true)
           } else {
             // `setOwn`, not `keyValues[name] = …`: a `<p __proto__="x">` would
             // run the prototype setter, store nothing, and lose the attribute
@@ -1513,8 +1180,8 @@ class Importer {
           }
         }
       }
-      if (this.mode === 'roundtrip' && (destinationIsDenied(attr.value) || urlListHasDeniedToken(name, attr.value)) && !this.entries.slice(refusedBefore).some((entry) => entry.owner === node)) {
-        this.refuseIfKept(node, path, `${name} with a denied URL scheme`)
+      if (this.mode === 'roundtrip' && (destinationIsDenied(attr.value) || urlListHasDeniedToken(name, attr.value)) && !this.report.hasOwnedSince(refusedBefore, node)) {
+        this.report.refuseIfKept(node, path, `${name} with a denied URL scheme`)
       }
     }
     if (classes.length) attrs.classes = classes
@@ -1901,7 +1568,7 @@ class Importer {
     }
     if (leftover && !leftover.classes.length) delete (leftover as Attrs).classes
     if (leftover && (leftover.id || leftover.classes || leftover.keyValues)) {
-      this.add(
+      this.report.add(
         'attribute-dropped',
         `Dropped ${this.attrNames(leftover).join(', ')} on <p>: a container label has no attribute slot`,
         'warning',
@@ -1946,7 +1613,7 @@ class Importer {
     attrs: Attrs | undefined,
     path: string,
   ): InlineNode[] {
-    this.add('element-unwrapped', message, 'info', path, node)
+    this.report.add('element-unwrapped', message, 'info', path, node)
     if (!attrs) return children
     return [{ type: 'span', children, attrs }]
   }
@@ -1962,7 +1629,7 @@ class Importer {
     attrs: Attrs | undefined,
     path: string,
   ): InlineNode[] {
-    this.add('attribute-dropped', `Dropped ${name} with a denied URL scheme on <${domTag(node)}>`, 'warning', path, node)
+    this.report.add('attribute-dropped', `Dropped ${name} with a denied URL scheme on <${domTag(node)}>`, 'warning', path, node)
     if (!attrs) return children
     return [{ type: 'span', children, attrs }]
   }
@@ -2051,8 +1718,8 @@ class Importer {
    * raw-keep path can withhold it where the mapping never runs.
    */
   private styleUnmapped(node: P5Node, path: string, property: string): void {
-    if (!this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)) return
-    this.entries[this.entries.length - 1]!.owner = node
+    if (!this.report.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)) return
+    this.report.ownLast(node)
   }
 
   /**
@@ -2070,7 +1737,7 @@ class Importer {
     const cell = domTag(node) === 'td' || domTag(node) === 'th'
     if (this.mode === 'roundtrip') {
       const { subject, live } = styleRefusal(value)
-      this.refuseIfKept(node, path, subject, live)
+      this.report.refuseIfKept(node, path, subject, live)
     }
     for (const declaration of value.split(';')) {
       const split = declaration.indexOf(':')
@@ -2249,7 +1916,7 @@ class Importer {
         previous.items.push(...next.items)
         if (next.loose) previous.loose = true
         produced.shift()
-        this.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
+        this.report.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
       }
       out.push(...produced)
     }
@@ -2343,7 +2010,7 @@ class Importer {
     this.enter(depth)
     const tag = domTag(node)!
     if (ACTIVE.has(tag)) {
-      this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
+      this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
     const attrs = this.attrs(node, path)
@@ -2358,7 +2025,7 @@ class Importer {
       const children = trimBlockEdges(raw)
       // Carve spells no empty heading; even without attributes, dropping it loses its level.
       if (children.length === 0) {
-        this.add(
+        this.report.add(
           'element-dropped',
           raw.length > 0
             ? `Dropped whitespace-only <${tag}> holding no content character`
@@ -2431,7 +2098,7 @@ class Importer {
       const raw = this.inlines(domChildren(node) ?? [], path, depth + 1)
       const children = trimBlockEdges(raw)
       if (children.length === 0 && raw.length > 0) {
-        this.add(
+        this.report.add(
           'element-dropped',
           `Dropped whitespace-only <${tag}> holding no content character`,
           'warning',
@@ -2443,7 +2110,7 @@ class Importer {
       // An empty paragraph has no spelling, and its attribute line alone would
       // attach to the next block, so it is dropped with one row covering them.
       if (children.length === 0 && attrs) {
-        this.add('element-dropped', `Dropped <${tag}> holding no content`, 'warning', path, node)
+        this.report.add('element-dropped', `Dropped <${tag}> holding no content`, 'warning', path, node)
         return []
       }
       // A bare one carries nothing, and the writer writes nothing for it.
@@ -2587,7 +2254,7 @@ class Importer {
           const leftover = own && { ...own, classes: (own.classes ?? []).filter((c) => c !== 'admonition-title') }
           if (leftover && !leftover.classes.length) delete (leftover as Attrs).classes
           if (leftover && (leftover.id || leftover.classes || leftover.keyValues)) {
-            this.add(
+            this.report.add(
               'attribute-dropped',
               `Dropped ${this.attrNames(leftover).join(', ')} on <p>: an admonition title has no attribute slot`,
               'warning',
@@ -2728,7 +2395,7 @@ class Importer {
       const strayTag = domTag(child)
       if (strayTag !== undefined) {
         if (!ACTIVE.has(strayTag)) {
-          this.add(
+          this.report.add(
             'element-unwrapped',
             `A <${strayTag}> inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as blocks ahead of the list`,
             'warning',
@@ -2751,7 +2418,7 @@ class Importer {
          * comment being the one exception would make the list's own rule say
          * two things.
          */
-        this.add(
+        this.report.add(
           'element-unwrapped',
           `An HTML comment directly inside <${ordered ? 'ol' : 'ul'}> kept its text but not its place among the items: it is emitted as a comment ahead of the list`,
           'info',
@@ -2759,7 +2426,7 @@ class Importer {
           child,
         )
       } else if ((domValue(child) ?? '').trim() !== '') {
-        this.add(
+        this.report.add(
           'element-unwrapped',
           `Text directly inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as a paragraph ahead of the list`,
           'warning',
@@ -2777,7 +2444,7 @@ class Importer {
     // No item, no list: an empty list has no spelling, and its attributes would
     // be an attribute line with no block under it (carve#2367).
     if (listItems.length === 0) {
-      this.add('element-dropped', `Dropped <${ordered ? 'ol' : 'ul'}> holding no item`, 'warning', path, node)
+      this.report.add('element-dropped', `Dropped <${ordered ? 'ol' : 'ul'}> holding no item`, 'warning', path, node)
       return before
     }
     const items = listItems.map((li, i) => {
@@ -2805,7 +2472,7 @@ class Importer {
       // the row (carve-js#2062).
       const orderedTask = ordered && input !== undefined && this.writing
       if (orderedTask) {
-        this.add(
+        this.report.add(
           'structure-unspellable',
           ORDERED_TASK_ITEM_UNSPELLABLE,
           'warning',
@@ -2940,7 +2607,7 @@ class Importer {
           // as blocks ahead of the list, in both exits, because `: text` with
           // no term re-reads as a paragraph (carve#2384).
           if (current === undefined && items.length === 0) {
-            this.add(
+            this.report.add(
               'element-unwrapped',
               'A <dd> with no <dt> before it kept its content but not its role: it is emitted as blocks ahead of the definition list',
               'warning',
@@ -2970,7 +2637,7 @@ class Importer {
           current.definitions.push(definition)
           return
         }
-        this.add('element-unwrapped', `Moved <${domTag(child) ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath, child)
+        this.report.add('element-unwrapped', `Moved <${domTag(child) ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath, child)
         trailing.push(child)
         trailingPaths.push(childPath)
       })
@@ -2979,7 +2646,7 @@ class Importer {
     const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
     if (!items.length && attrs) {
       for (const name of this.attrNames(attrs)) {
-        this.add('attribute-dropped', `Dropped ${name} on <dl>: a definition list holding no entry is not written`, 'warning', path, node)
+        this.report.add('attribute-dropped', `Dropped ${name} on <dl>: a definition list holding no entry is not written`, 'warning', path, node)
       }
     }
     // A leading `<dd>` can end in a definition list, which this list would
@@ -2987,7 +2654,7 @@ class Importer {
     const lead = before.at(-1)
     if (items.length && !attrs && lead?.type === 'definition_list') {
       lead.items.push(...items)
-      this.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
+      this.report.add('element-unwrapped', 'Merged <dl> into the definition list before it: Carve source has no boundary between two adjacent definition lists', 'info', path, node)
       return [...before, ...this.blocks(trailing, path, depth + 1, trailingPaths)]
     }
     return [...before, ...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
@@ -3014,7 +2681,7 @@ class Importer {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
     const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
-    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path, node)
+    this.report.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path, node)
   }
 
   /**
@@ -3135,11 +2802,11 @@ class Importer {
    */
   private reportUnsupportedElement(node: P5Node, tag: string, path: string): boolean {
     if (this.hasContentToUnwrap(node)) {
-      this.add('element-unwrapped', this.codeSpanDepth > 0 ? `Unwrapped <${tag}> inside <code>` : `Unwrapped unsupported <${tag}> element`, 'info', path, node)
+      this.report.add('element-unwrapped', this.codeSpanDepth > 0 ? `Unwrapped <${tag}> inside <code>` : `Unwrapped unsupported <${tag}> element`, 'info', path, node)
 
       return true
     }
-    this.add('element-dropped', `Dropped empty <${tag}> element`, 'warning', path, node)
+    this.report.add('element-dropped', `Dropped empty <${tag}> element`, 'warning', path, node)
 
     return false
   }
@@ -3149,7 +2816,7 @@ class Importer {
     if (attrs === undefined) return
     for (const name of this.attrNames(attrs)) {
       const what = unwrapped ? `the unwrapped <${tag}>` : `the dropped empty <${tag}>`
-      this.add('attribute-dropped', `Dropped ${name} with ${what}: there is no element left to carry it`, 'info', path, node)
+      this.report.add('attribute-dropped', `Dropped ${name} with ${what}: there is no element left to carry it`, 'info', path, node)
     }
   }
 
@@ -3195,7 +2862,7 @@ class Importer {
     if (raw === undefined) return 1
     const value = Number(raw.trim())
     if (/^[+-]?\d+$/.test(raw.trim()) && Number.isSafeInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647) return value
-    this.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path, node)
+    this.report.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path, node)
     return 1
   }
 
@@ -3203,7 +2870,7 @@ class Importer {
     const value = ordered ? this.attr(node, 'type') : undefined
     if (value === undefined || value === '1') return {}
     if (value !== 'a' && value !== 'A' && value !== 'i' && value !== 'I') {
-      this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path, node)
+      this.report.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path, node)
       return {}
     }
     const alphabetic = value === 'a' || value === 'A'
@@ -3215,7 +2882,7 @@ class Importer {
     // arithmetically, so zero comes out as a BACKTICK and -3 as `]`, putting
     // characters in the document that can pair with a later one.
     if (start < 1) {
-      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path, node)
+      this.report.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path, node)
       return {}
     }
     // Roman notation ends at 3999. Past it the writer has no numeral and
@@ -3228,7 +2895,7 @@ class Importer {
     // which spells any position in its own digits.
     const last = start + Math.max(items, 1) - 1
     if (!alphabetic && last > 3999) {
-      this.add('attribute-dropped', `Dropped type="${value}" on <ol> reaching ${last}: roman notation has no numeral above 3999`, 'warning', path, node)
+      this.report.add('attribute-dropped', `Dropped type="${value}" on <ol> reaching ${last}: roman notation has no numeral above 3999`, 'warning', path, node)
       return {}
     }
     if (alphabetic && start > 26) {
@@ -3296,7 +2963,7 @@ class Importer {
       // ordinary text, and the whole disclosure - body included - re-reads as
       // one paragraph. The label survives as a paragraph instead, which is
       // where it landed before this mapping existed anyway.
-      this.add(
+      this.report.add(
         'element-unwrapped',
         'Unwrapped a <summary> into the body: a disclosure title cannot spell a double quote or a line break, and writing one makes the whole block a paragraph',
         'warning',
@@ -3422,7 +3089,7 @@ class Importer {
         }
       }
       if (invented) {
-        this.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`, tr[r])
+        this.report.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`, tr[r])
       }
       const built: TableRow = { type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) }
       const source = tr[r]
@@ -3536,7 +3203,7 @@ class Importer {
     // rather than dropped in silence, and the same rule as the parser's, so the
     // import and a re-read of its own output agree on which one survives.
     for (const extra of captions.slice(1)) {
-      this.add(
+      this.report.add(
         'table-degraded',
         'Dropped a second <caption>: a table has one caption, and the first one wins',
         'warning',
@@ -3560,7 +3227,7 @@ class Importer {
      */
     ;(domChildren(node) ?? []).forEach((child, index) => {
       if (domTag(child) !== 'colgroup') return
-      this.add(
+      this.report.add(
         'element-dropped',
         "Dropped <colgroup>: Carve has no column model, and a table's columns are only the cells its rows carry",
         'warning',
@@ -3646,7 +3313,7 @@ class Importer {
         // can be reported: the alternative is a document that claims a grid it
         // does not render.
         if (r < leadingHeaderRows && r + rowspan > leadingHeaderRows) {
-          this.add(
+          this.report.add(
             'table-degraded',
             'Clipped a rowspan at the header rows: Carve derives the head from the leading header rows, and a span leaving them crosses a boundary browsers clip anyway',
             'warning',
@@ -3685,7 +3352,7 @@ class Importer {
         for (const key of ['align', 'valign'] as const) {
           if (alignment?.[key] === undefined) continue
           if (cellAttrs?.keyValues?.[key] === undefined) continue
-          this.refuseAttribute(cell, cellPath, key, ': a mapped CSS declaration already sets it', 'info', false)
+          this.report.refuseAttribute(cell, cellPath, key, ': a mapped CSS declaration already sets it', 'info', false)
           delete cellAttrs.keyValues[key]
           if (Object.keys(cellAttrs.keyValues).length === 0) delete cellAttrs.keyValues
         }
@@ -3721,7 +3388,7 @@ class Importer {
       const own = this.attrs(row, `${path}/tr[${r + 1}]`)
       // A list-table row is an outer item, and no renderer reads attributes there.
       if (own && listForm) {
-        this.add('attribute-dropped', `Dropped ${this.attrNames(own).join(', ')} on <tr>: a list table row has no attribute slot`, 'info', `${path}/tr[${r + 1}]`, row)
+        this.report.add('attribute-dropped', `Dropped ${this.attrNames(own).join(', ')} on <tr>: a list table row has no attribute slot`, 'info', `${path}/tr[${r + 1}]`, row)
         return undefined
       }
       return own
@@ -3733,7 +3400,7 @@ class Importer {
     // reports what only the writing exit reports for a pipe table.
     if (listForm && !this.writing) {
       for (const { node: lost, path: lostPath, message } of this.unspellable.splice(unspellableBefore)) {
-        this.add('structure-unspellable', message, 'warning', lostPath, lost)
+        this.report.add('structure-unspellable', message, 'warning', lostPath, lost)
       }
     }
     // Whatever `rowGroups` did not place. A `<thead>` and a `<tfoot>` have no
@@ -3750,7 +3417,7 @@ class Importer {
         : sectionsWithRows.has(section)
           ? 'the row grouping this body belongs to was not kept, and nothing else holds it'
           : 'a body group is the rows it consumes, and this one has none'
-      this.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path, section)
+      this.report.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path, section)
     }
     /*
      * THE CAPTION IS NUMBERED WHERE THE AUTHOR PUT IT (PART 12 §16,
@@ -3782,7 +3449,7 @@ class Importer {
       // A list-table row is the list of its cells, so a row with none has no spelling.
       const kept = rows.filter((row, r) => {
         if (row.cells.length > 0) return true
-        this.add('structure-unspellable', 'Dropped a row with no cells: a list table row is the list of its cells', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
+        this.report.add('structure-unspellable', 'Dropped a row with no cells: a list table row is the list of its cells', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
         return false
       })
       return listTableOf(kept, ownAlignment, caption, attrs, this.writing)
@@ -3842,7 +3509,7 @@ class Importer {
     while (footRows < tr.length - headRows && sections[tr.length - 1 - footRows] === 'tfoot') footRows += 1
     const middle = tr.slice(headRows, tr.length - footRows)
     if (middle.some((row) => sectionOf(row) === 'thead' || sectionOf(row) === 'tfoot')) {
-      this.add(
+      this.report.add(
         'table-degraded',
         'Dropped the row grouping of a table whose <thead> or <tfoot> is not at the edge of its rows: the head is a prefix of the rows and the foot a suffix',
         'warning',
@@ -4097,7 +3764,7 @@ class Importer {
        * (markup-carve/carve-js#1423).
        */
       if (!this.captionSpellsSomething(caption)) {
-        this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
+        this.report.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
         this.reportUnwrappedAttributes(node, attrs, 'figure', path)
         return targets
       }
@@ -4139,7 +3806,7 @@ class Importer {
         if (attrs) {
           ;(target as { attrs?: Attrs }).attrs = mergeAttrs(attrs, (target as { attrs?: Attrs }).attrs ?? {})
         }
-        this.add('element-unwrapped', FIGCAPTION_DETACHED, 'warning', captionPath, captionNode as P5Node)
+        this.report.add('element-unwrapped', FIGCAPTION_DETACHED, 'warning', captionPath, captionNode as P5Node)
         /*
          * DIRECTLY AFTER THE TABLE, which is what the row says and what the
          * ordinary rebuild does: a figure's caption stays with its target, and a
@@ -4199,7 +3866,7 @@ class Importer {
      * paragraph makes it identify something the author never marked. A loss
      * that is declared beats a silent substitution.
      */
-    this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
+    this.report.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
     this.reportUnwrappedAttributes(node, attrs, 'figure', path)
     if (!captionNode) return targets
     return [...ahead, { type: 'paragraph' as const, children: caption }, ...targets.slice(ahead.length)]
@@ -4268,11 +3935,11 @@ class Importer {
     }
     const attrs = this.attrs(node, path)
     if (this.separatorsInserted > before) {
-      this.add('structure-unspellable', "A code span's value cannot hold the block boundary inside <code>", 'warning', path, node)
+      this.report.add('structure-unspellable', "A code span's value cannot hold the block boundary inside <code>", 'warning', path, node)
     }
     const value = this.text(node)
     if (this.cellDepth > 0 && /[\r\n]/.test(value)) {
-      this.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
+      this.report.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
     }
     const code: InlineNode = { type: 'code', value: this.cellDepth > 0 ? value.replace(/\r\n?|\n/g, ' ') : value, ...(attrs ? { attrs } : {}) }
     if (code.value === '') this.emptyCodeSpans.set(code, { node, path })
@@ -4305,11 +3972,11 @@ class Importer {
     const tag = domTag(node)
     if (!tag) return []
     if (ACTIVE.has(tag)) {
-      this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
+      this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
     if (this.formulaImages.has(node)) {
-      this.add('element-dropped', 'Dropped <img>: the fallback image of a formula imported as math', 'info', path, node)
+      this.report.add('element-dropped', 'Dropped <img>: the fallback image of a formula imported as math', 'info', path, node)
       return []
     }
     // Not in `roundtrip`, which raw-preserves what Carve CANNOT express. The
@@ -4345,10 +4012,10 @@ class Importer {
       }
       const text = this.mode === 'roundtrip' ? undefined : linearMathText(node)
       if (text !== undefined) {
-        this.add('element-unwrapped', 'Imported <math> as its text: no TeX annotation and no alttext, and its tokens read in order', 'warning', path, node)
+        this.report.add('element-unwrapped', 'Imported <math> as its text: no TeX annotation and no alttext, and its tokens read in order', 'warning', path, node)
         return [{ type: 'text', value: text }]
       }
-      this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
+      this.report.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
       return []
     }
     if (tag === 'ruby') return this.ruby(node, path, depth)
@@ -4440,7 +4107,7 @@ class Importer {
       // A hard break has no `attrs` slot, so anything `attrs()` kept for this
       // element is lost here and has to say so - the alternative is the silence
       // that carve#1210 exists to kill.
-      if (attrs) this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <br>: a hard break has no attribute slot`, 'warning', path, node)
+      if (attrs) this.report.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <br>: a hard break has no attribute slot`, 'warning', path, node)
       const hardBreak: InlineNode = { type: 'hard_break' }
       this.hardBreaks.set(hardBreak, { node, path })
       return [hardBreak]
@@ -4500,7 +4167,7 @@ class Importer {
       dropComponentAttrs(rp, rpPath)
       const text = this.text(rp).trim()
       if (text !== '' && text !== '(' && text !== ')' && text !== '（' && text !== '）') {
-        this.add('element-dropped', 'Dropped non-standard <rp> fallback content', 'warning', rpPath, rp, 'degraded')
+        this.report.add('element-dropped', 'Dropped non-standard <rp> fallback content', 'warning', rpPath, rp, 'degraded')
       }
     }
 
@@ -4530,7 +4197,7 @@ class Importer {
           }
         })
         retainedRtc.push(content)
-        this.add('element-unwrapped', 'Unwrapped obsolete <rtc> annotation level', 'warning', childPath, child)
+        this.report.add('element-unwrapped', 'Unwrapped obsolete <rtc> annotation level', 'warning', childPath, child)
         return
       }
       input.push({ node: child, path: childPath })
@@ -4551,7 +4218,7 @@ class Importer {
       if (base.length === 0) return
       flushRun()
       output.push(...base)
-      this.add('element-unwrapped', 'Unwrapped ruby base with no annotation', 'info', path, node, 'normalized')
+      this.report.add('element-unwrapped', 'Unwrapped ruby base with no annotation', 'info', path, node, 'normalized')
       base = []
     }
 
@@ -4569,11 +4236,11 @@ class Importer {
         if (hasAssociatedBase) {
           flushRun()
           output.push({ type: 'text', value: '(' }, ...annotation, { type: 'text', value: ')' })
-          this.add('element-unwrapped', 'Flattened an additional ruby annotation level', 'warning', item.path, item.node)
+          this.report.add('element-unwrapped', 'Flattened an additional ruby annotation level', 'warning', item.path, item.node)
         } else if (base.length === 0) {
           flushRun()
           output.push({ type: 'text', value: '(' }, ...annotation, { type: 'text', value: ')' })
-          this.add('element-unwrapped', 'Unwrapped ruby annotation with no base', 'warning', item.path, item.node)
+          this.report.add('element-unwrapped', 'Unwrapped ruby annotation with no base', 'warning', item.path, item.node)
         } else {
           run.push({ base, annotation })
           base = []
@@ -4739,9 +4406,9 @@ class Importer {
     // reading the presence of the element would make that fall-through the one
     // tier-2 read that says nothing.
     if (annotated === undefined && alttext !== undefined) {
-      this.add('encoding-assumed', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path, node)
+      this.report.add('encoding-assumed', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path, node)
     } else if (annotated === undefined) {
-      this.add('encoding-assumed', "Read <math> through its fallback image's alt: nothing declares the encoding of alt, so TeX is assumed", 'info', path, node)
+      this.report.add('encoding-assumed', "Read <math> through its fallback image's alt: nothing declares the encoding of alt, so TeX is assumed", 'info', path, node)
     }
     return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
   }
@@ -4836,7 +4503,7 @@ class Importer {
       const children = this.inlines(domChildren(node) ?? [], path, depth + 1)
       const attrs = this.attrs(node, path)
       const quoted: InlineNode[] = [{ type: 'text', value: open! }, ...children, { type: 'text', value: close! }]
-      this.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path, node)
+      this.report.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path, node)
       return attrs ? [{ type: 'span', children: quoted, attrs }] : quoted
     } finally {
       this.quoteDepth -= 1
@@ -4903,7 +4570,7 @@ class Importer {
     const closesEarly = content.includes('%}')
     const endsTheRun = /\n[ \t]*\n/.test(content)
     if (closesEarly || endsTheRun) {
-      this.add(
+      this.report.add(
         'element-dropped',
         `Dropped an HTML comment: its text ${closesEarly ? 'holds the comment closer' : 'holds a blank line'}, which ends a Carve inline comment early, and the comment is not moved out of the run to make it spellable`,
         'warning',
@@ -4915,12 +4582,12 @@ class Importer {
     // A pipe-table row is one line, so a line break has no spelling in a cell
     // (carve#2372).
     if (this.cellDepth > 0 && /[\r\n]/.test(content)) {
-      this.add('element-dropped', 'Dropped an HTML comment in a table cell: its text holds a line break, and a table row is one line', 'warning', path, node)
+      this.report.add('element-dropped', 'Dropped an HTML comment in a table cell: its text holds a line break, and a table row is one line', 'warning', path, node)
       return []
     }
     // A heading is one line too (carve#2396).
     if (this.headingDepth > 0 && /[\r\n]/.test(content)) {
-      this.add('element-dropped', 'Dropped an HTML comment in a heading: its text holds a line break, and a heading is one line', 'warning', path, node)
+      this.report.add('element-dropped', 'Dropped an HTML comment in a heading: its text holds a line break, and a heading is one line', 'warning', path, node)
       return []
     }
     return [{ type: 'comment', block: false, delimited: true, content }]
@@ -5008,7 +4675,7 @@ class Importer {
         )
         if (table !== undefined) {
           table.rows.splice(table.rows.indexOf(target as TableRow), 1)
-          this.add(
+          this.report.add(
             'structure-unspellable',
             'Dropped a row whose every cell is empty: Carve reads such a row as text',
             'warning',
@@ -5020,7 +4687,7 @@ class Importer {
             // A caption with no row left has nowhere to sit: a lone `^` line
             // reads as a paragraph, not as a table's caption.
             if (table.caption !== undefined) {
-              this.add('element-dropped', 'Dropped a caption whose table has no row left', 'warning', origin.path, origin.node)
+              this.report.add('element-dropped', 'Dropped a caption whose table has no row left', 'warning', origin.path, origin.node)
             }
           }
           return true
@@ -5044,7 +4711,7 @@ class Importer {
         if (index !== -1) {
           node.splice(index, 1, ...((target as { children?: InlineNode[] }).children ?? []))
           const tag = (origin.node as { tagName?: string }).tagName ?? 'element'
-          this.add(
+          this.report.add(
             'structure-unspellable',
             `Unwrapped <${tag}> inside a span of the same kind: two braced spans of one kind cannot nest in Carve`,
             'warning',
@@ -5053,7 +4720,7 @@ class Importer {
           )
           const attrs = (target as InlineNode).attrs
           if (attrs !== undefined && this.attrNames(attrs).length > 0) {
-            this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: the element was unwrapped`, 'warning', origin.path, origin.node)
+            this.report.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: the element was unwrapped`, 'warning', origin.path, origin.node)
           }
           return true
         }
@@ -5076,7 +4743,7 @@ class Importer {
         flattenHardBreaks((node as TableCell).children ?? [], (hardBreak) => {
           const origin = this.hardBreaks.get(hardBreak)
           if (origin === undefined) return
-          this.add(
+          this.report.add(
             'structure-unspellable',
             'Flattened a <br> in a table cell to a space: a table row is one line, so a hard break has no Carve spelling there',
             'warning',
@@ -5130,7 +4797,7 @@ class Importer {
       const origin = this.emptyCodeSpans.get(code)
       if (origin === undefined) continue
       this.dropEmptyCodeSpanAttrs(code as InlineNode, origin)
-      this.add(
+      this.report.add(
         'structure-unspellable',
         'Dropped an empty <code>: its backtick run is closed by the end of a block or by a forced span, and here the run would read what follows it as code instead',
         'warning',
@@ -5145,7 +4812,7 @@ class Importer {
     const names = this.attrNames(code.attrs)
     delete code.attrs
     if (names.length === 0) return
-    this.add(
+    this.report.add(
       'attribute-dropped',
       `Dropped ${names.join(', ')} on <code>: an empty code span has no closing run to attach attributes to`,
       'warning',
@@ -5156,7 +4823,7 @@ class Importer {
 
   reportSerializationLosses(document: Document): void {
     for (const { node, path, message } of this.unspellable) {
-      this.add('structure-unspellable', message, 'warning', path, node)
+      this.report.add('structure-unspellable', message, 'warning', path, node)
     }
     // SURVIVORS ONLY. A candidate whose paragraph an unwrapper took back off is
     // not a loss: the figure target and the table cell both keep the image
@@ -5181,7 +4848,7 @@ class Importer {
         : overwritten.length === 0
           ? `${head}, so the <p> is lost and the attributes it carried are written on the image instead`
           : `${head}, so the <p> is lost and the attributes it carried are written on the image - except ${overwritten.join(', ')}, which the image's own value overwrites`
-      this.add('structure-unspellable', message, 'warning', path, node)
+      this.report.add('structure-unspellable', message, 'warning', path, node)
     }
     // ONE ROW PER DISPLACED NAME, at `info`, which is what this code means
     // everywhere else: an attribute the output does not carry. The figure's
@@ -5189,7 +4856,7 @@ class Importer {
     // is the other half of that ruling - the side that loses is DECLARED rather
     // than resolved in silence (markup-carve/carve#1721).
     for (const { node, path, name } of this.displacedFigureAttrs) {
-      this.add(
+      this.report.add(
         'attribute-dropped',
         `Dropped one ${name} on <figure>: the figure and its target both set ${name}, and their two attribute lines merge into a single value`,
         'info',

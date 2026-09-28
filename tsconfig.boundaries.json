@@ -8,6 +8,8 @@
     "src/source-positions.ts",
     "src/own-property.ts",
     "src/html-import-dom.ts",
+    "src/html-import-report.ts",
+    "src/reference-resolution.ts",
     "src/attribute-merge.ts",
     "src/inline-resolution.ts",
     "src/inline-children.ts",
