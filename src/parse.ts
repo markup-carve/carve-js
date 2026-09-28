@@ -601,6 +601,7 @@ export const layoutWork = {
 }
 
 class Lexer {
+  attachmentBoundaries = new Set<number>()
   lines: string[]
   lineOffsets: number[]
   lineNumberOffset: number
@@ -1051,6 +1052,7 @@ function nestedSubLexer(
   sub.linkDefs = parent.linkDefs
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
+  sub.attachmentBoundaries = parent.attachmentBoundaries
   sub.itemLazyLines = parent.itemLazyLines
   sub.fenceLookaheadAnswers = parent.fenceLookaheadAnswers
   sub.descendantFenceAnswers = parent.descendantFenceAnswers
@@ -2220,6 +2222,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
   const closeRe = fenceCloseRe(marker)
   const lines: string[] = []
   while (!lexer.eof()) {
+    if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
     const ln = lexer.peek()!
     if (closeRe.test(ln)) {
       lexer.consume()
@@ -3493,6 +3496,15 @@ function classifyQuotedLine(
   }
   // Lazy text preserves the inner paragraph for the next marked line.
   if (state.mode.kind === 'quote' && continuesParagraph()) return null
+  // A list at block start carries its first block's continuation state.
+  // A marker in an existing paragraph is still ordinary paragraph text.
+  if (!blockQuoteParagraphOpen(state) && isListMarkerLine(content)) {
+    const nested = markerLineState(content)
+    if (!nested.leavesParagraphOpen) {
+      closeBlockQuoteParagraph(state)
+      return null
+    }
+  }
   // Everything else (plain prose, a folded list-marker line, div body text, or
   // a fence/comment-looking line while a paragraph is open) leaves an open
   // paragraph that a following list marker or plain text folds into.
@@ -4316,19 +4328,29 @@ function markerPrefixLength(content: string, from: number, bound: number): numbe
  * How much of `content` is container prefix - any interleaving of block quote
  * markers and list item markers, in any order and to any depth.
  */
-function walkContainerPrefix(content: string): number {
+function walkContainerPrefix(content: string, memo?: Map<string, number>): number {
+  const cached = memo?.get(content)
+  if (cached !== undefined) return cached
   const bound = prefixWalkBound(content)
+  const offsets: number[] = []
   let at = 0
   for (;;) {
+    const suffix = memo?.get(content.slice(at))
+    if (suffix !== undefined) { at += suffix; break }
+    if (memo) offsets.push(at)
     const quote = quotePrefixLength(content, at, bound)
     if (quote > 0) {
       at += quote
       continue
     }
     const marker = markerPrefixLength(content, at, bound)
-    if (marker === 0) return at
+    if (marker === 0) break
     at += marker
   }
+  // Descendant items receive these same suffixes after stripping their marker.
+  // Share only offsets; each item creates its own mutable continuation state.
+  for (const offset of offsets) memo!.set(content.slice(offset), at - offset)
+  return at
 }
 
 /**
@@ -4371,13 +4393,13 @@ function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
  * end on - are answered from ONE walk. Asking them separately walked the prefix
  * twice per marker line.
  */
-function markerLineBottomBlock(content: string): string {
+function markerLineBottomBlock(content: string, memo?: Map<string, number>): string {
   // `> > # H` is the quote's question twice over, and `- - # H` is the
   // sub-item's, whose first block is the heading exactly as a bare `- # H`'s
   // is - so the strip runs to the bottom of the stack. It is a WALK BY OFFSET:
   // every regex it consults is anchored with `$`, so re-slicing the remainder
   // per marker cost O(N * line length) on a line of N markers (carve-js#1190).
-  const walked = walkContainerPrefix(content)
+  const walked = walkContainerPrefix(content, memo)
 
   return walked === 0 ? content : content.slice(walked)
 }
@@ -4389,18 +4411,20 @@ function markerLineBottomBlock(content: string): string {
  * `quote` carries it there. Claiming it at this level as well would let a
  * continuation row written outside the quote join a table that is not there.
  */
-function markerLineState(content: string): {
+function markerLineState(content: string, memo?: Map<string, number>): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
   bottomIsContinuationMarker: boolean
   wrappedAttributeRun: string | null
   quote: BlockQuoteLazyState | null
 } {
-  const bottom = markerLineBottomBlock(content)
+  const bottom = markerLineBottomBlock(content, memo)
   const quote = markerLineQuoteState(content)
 
   return {
-    leavesParagraphOpen: bottomBlockLeavesParagraphOpen(bottom),
+    leavesParagraphOpen: quote !== null &&
+      (RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) || colonFenceShapeEndsLazyContinuation(bottom))
+      ? false : bottomBlockLeavesParagraphOpen(bottom),
     endsOnTableRow: quote === null && isTableRow(bottom),
     // A bare `+` at the bottom of the marker line is the CONTINUATION MARKER
     // (§17 L3), and what it names is a document-column-0 block. It is not
@@ -6127,10 +6151,8 @@ function sliceColumns(line: string, cols: number, keepResidual = false): string 
   return line.slice(i)
 }
 
-// ============================================================================
-// Inline parsing
-// ============================================================================
-
+// =====================================================================// Inline parsing
+// =====================================================================
 // Footnote reference `[^label]`. A label is a physical-line identifier: it
 // contains neither `]` nor a source newline. Letting this cross a soft break
 // creates an id no definition marker (which is necessarily one line) can bind.
@@ -6896,12 +6918,11 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
   return found
 }
 
-// ============================================================================
-// Attribute block parsing — {#id .class key=value key="value with spaces"}
-// ============================================================================
-
+// =====================================================================// Attribute block parsing — {#id .class key=value key="value with spaces"}
+// =====================================================================
 /** State owned by one synchronous parse operation. */
 class ParseSession {
+  private markerPrefixMemo = new Map<string, number>()
   private linkLabelDepth = 0
 
   // Matchers belong to this parse; fragment parsing scopes its matcher context.
@@ -6921,6 +6942,7 @@ class ParseSession {
 
   parse(source: string, opts: ParseOptions = {}): Document {
     this.newlineIndexCache.clear()
+    this.markerPrefixMemo.clear()
     this.activeQuoteCharacters = opts.extensions
       ?.map((extension) => extension.quoteCharacters)
       .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
@@ -8316,6 +8338,7 @@ class ParseSession {
     const closeRe = fenceCloseRe(marker)
     const lines: string[] = []
     while (!lexer.eof()) {
+      if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
       if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
         lexer.consume()
@@ -9245,7 +9268,7 @@ class ParseSession {
         // PARAMETER (carve#920): a heading, a table or an attribute block written
         // on the `:  ` marker leaves no paragraph open for exactly the reason it
         // leaves none on a `- ` marker.
-        const firstState = markerLineState(first)
+        const firstState = markerLineState(first, parseSession.markerPrefixMemo)
         const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
         lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
         lazyState.inTable = firstState.endsOnTableRow
@@ -9804,6 +9827,7 @@ class ParseSession {
           (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
         )
         if (attached.length > 0) {
+          lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
           // `inner` always holds the quote's first content line, so a leading
           // blank separates the attached block from it.
           // The separators are SYNTHETIC - no such blank line exists in the
@@ -10422,7 +10446,7 @@ class ParseSession {
         bottomIsContinuationMarker: false,
         wrappedAttributeRun: null,
         quote: null,
-      } : markerLineState(content)
+      } : markerLineState(content, this.markerPrefixMemo)
       const lazyState: ItemLazyState = {
         opaque: null,
         invisibleAtColumn: false,
@@ -10509,7 +10533,8 @@ class ParseSession {
           // first-block form above. Nothing is attached from another column, and
           // the marker line itself is still consumed, so the candidate falls
           // through to the ordinary rules on the next turn of this loop.
-          if (!attachesAtDocumentColumnZero(lexer)) continue
+          if (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || isBlankLine(lexer.peek()!)) continue
+          lexer.attachmentBoundaries.add(plusLineNumber)
           plusSeparators.add(nested.length)
           nested.push('')
           nestedSourceLines.push(undefined)

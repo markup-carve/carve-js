@@ -140,11 +140,10 @@ describe('the three gates, pinned from outside', () => {
   })
 
   it('...and ends the item where its lead leaves no paragraph open', () => {
-    // The columnless line reaches no content column, so a table lead ends the
-    // item and the description is a paragraph in the quote - which is the
-    // oracle's answer, and one carve-js used to miss.
+    // Without a quote prefix or an ordinary-line continuation claim, the
+    // description belongs to the document after the table and its containers.
     expect(carveToHtml('> - | a |\n  :  b\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <table>\n        <tbody>\n          <tr><td>a</td></tr>\n        </tbody>\n      </table>\n    </li>\n  </ul>\n  <p>:  b</p>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <table>\n        <tbody>\n          <tr><td>a</td></tr>\n        </tbody>\n      </table>\n    </li>\n  </ul>\n</blockquote>\n<p>:  b</p>',
     )
   })
 

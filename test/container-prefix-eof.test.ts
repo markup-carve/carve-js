@@ -11,9 +11,9 @@ function count(source: string): number {
   try { parse(source) } finally { RegExp.prototype.exec = exec }
   return calls
 }
-describe('container prefix classification at EOF', () => {
-  for (const marker of ['> ', '- ', '1. ']) it(`${marker} grows with depth`, () => {
-    const source = (depth: number): string => marker.repeat(depth) + 'end\n'
+describe('container prefix classification', () => {
+  for (const marker of ['> ', '- ', '1. ']) for (const follower of ['', 'tail\n']) it(`${marker} with ${JSON.stringify(follower)} grows with depth`, () => {
+    const source = (depth: number): string => marker.repeat(depth) + 'end\n' + follower
     const small = count(source(64)), large = count(source(128))
     expect(small).toBeGreaterThan(64)
     expect(large / small).toBeLessThan(2.25)
