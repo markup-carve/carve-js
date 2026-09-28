@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { perfIt } from './helpers/scaling.js'
 import {
   AstJsonDepthError,
   MAX_AST_JSON_DEPTH,
@@ -114,7 +115,7 @@ describe('a payload with no nodes in it at all', () => {
 })
 
 describe('measuring the depth is linear in the payload', () => {
-  it('does not double its work per level of a nested list', () => {
+  perfIt('does not double its work per level of a nested list', () => {
     // `items` sits in CHILD_FIELDS, and pushing it a second time doubled the
     // walk for every list level: 2^depth. A 20-deep list took ~900ms and a
     // 30-deep one never returned - a hang reachable with a few hundred bytes.

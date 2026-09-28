@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { perfIt } from './helpers/scaling.js'
 import { lintCarve, formatLintWarnings } from '../src/lint.js'
 
 const rules = (src: string) => lintCarve(src).map((w) => w.rule)
@@ -287,7 +288,7 @@ describe('lintCarve — verbatim-scan performance (no O(n^2))', () => {
     expect(lintCarve(src)).toEqual([])
   })
 
-  it('scales near-linearly with the number of verbatim regions', () => {
+  perfIt('scales near-linearly with the number of verbatim regions', () => {
     const build = (n: number): string => {
       let s = ''
       for (let i = 0; i < n; i++) s += '```\ncode\n```\n\n'
