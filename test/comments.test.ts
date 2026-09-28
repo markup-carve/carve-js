@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { perfIt } from './helpers/scaling.js'
+import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 import { carveToHtml, parse, renderCarve } from '../src/index.js'
 
 describe('trailing line comments', () => {
@@ -109,32 +109,20 @@ describe('block comment fence lines (PART 9 §28)', () => {
     // growing ~7x per 4x of input. The width -> last-index map answers each in
     // O(1) after one pass.
     //
-    // Note the input's own size grows quadratically with n (the widths get
-    // longer), so this asserts against ELAPSED TIME PER BYTE, which stays flat
-    // for a linear parse. A ratio of raw times would look superlinear even for
-    // a correct implementation.
+    // Line i is 3 + i wide, so bytes grow with the SQUARE of the opener count:
+    // 8x the openers is ~62x the input. Measured per-byte ratio: 0.22-0.39 with
+    // the map, 4.6 with the per-opener scan; at 4x openers the scan read as low
+    // as 2.1, too close to the 2.0 bound.
     const build = (n: number) => {
       const out: string[] = []
       for (let i = 0; i < n; i++) out.push('%'.repeat(3 + i) + '\n')
       return out.join('\n')
     }
-    const timeMin = (fn: () => void, runs = 3) => {
-      let best = Infinity
-      for (let r = 0; r < runs; r++) {
-        const t = performance.now()
-        fn()
-        best = Math.min(best, performance.now() - t)
-      }
-      return best
-    }
-    const small = build(300)
-    const large = build(600)
-    const perByteSmall = timeMin(() => carveToHtml(small)) / small.length
-    const perByteLarge = timeMin(() => carveToHtml(large)) / large.length
-    // Measured on this input: ~1.42 with the per-opener scan, ~0.40 with the
-    // map. The 1.1 bound sits between them with margin on both sides, and the
-    // sizes stay small enough not to starve tests in sibling files.
-    expect(perByteLarge / Math.max(perByteSmall, 1e-9)).toBeLessThan(1.1)
+    expectBuiltInputScansLinearly(carveToHtml, build, {
+      label: 'distinct-width comment fence openers',
+      smallRepeats: 300,
+      largeRepeats: 2400,
+    })
   })
 })
 
