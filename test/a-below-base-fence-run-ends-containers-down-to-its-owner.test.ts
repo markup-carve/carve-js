@@ -21,12 +21,14 @@ import { carveToHtml } from '../src/index.js'
  * root cause markup-carve/carve#2509 found in the oracle, and why every reader
  * agrees at depth 1.
  *
- * The CONTROLS are what a fix reaching one column too far breaks, and three of
- * them came out of a review pass rather than out of the sweep: an over-indented
- * fence whose closer stands at its holding item's column, a closer at an
- * INTERMEDIATE item's column which is neither of the two CARVE-P0-004 allows, and
- * a fence-shaped line inside a descendant's comment payload, which §28 makes
- * verbatim.
+ * The CONTROLS are what a fix reaching one column too far breaks, and six of them
+ * came out of review passes rather than out of the sweep: an over-indented fence
+ * whose closer stands at its holding item's column, a closer at an INTERMEDIATE
+ * item's column which is neither of the two CARVE-P0-004 allows, a fence-shaped
+ * line inside a descendant's COMMENT payload which §28 makes verbatim, a
+ * comment-shaped line inside a descendant's CODE payload which must not hide the
+ * real closer, and an ancestor's own block below the child's column, which ends
+ * the descendant whatever the line says.
  *
  * Every expectation is the oracle's (`scripts/spec/layout.mjs` into
  * `scripts/spec/html.mjs` in markup-carve/carve at `d4c15e82`), run rather than
@@ -103,6 +105,21 @@ describe('a below-base fence run ends containers down to the owner its column se
       'CONTROL: a fence-shaped line inside a descendant comment payload opens nothing',
       "- a\n  - b\n    %%%\n\n    ```\n    p\n    %%%\n    q\nx\n",
       "<ul>\n  <li>a\n    <ul>\n      <li>b\n        q\nx\n      </li>\n    </ul>\n  </li>\n</ul>",
+    ],
+    [
+      "CONTROL: an ancestor's own paragraph below the child column ends the fence",
+      "- a\n  - b\n\n    ```\n    p\n\n   para\nx\n",
+      "<ul>\n  <li><p>a</p>\n    <ul>\n      <li>b\n        <pre><code>p\n\n</code></pre>\n      </li>\n    </ul>\n    <p>para\nx</p>\n  </li>\n</ul>",
+    ],
+    [
+      'CONTROL: a line at an intermediate column ends it at depth three',
+      "- i0\n  - i1\n    - i2\n\n      ```\n      p\n\n    para\nx\n",
+      "<ul>\n  <li>i0\n    <ul>\n      <li><p>i1</p>\n        <ul>\n          <li>i2\n            <pre><code>p\n\n</code></pre>\n          </li>\n        </ul>\n        <p>para\nx</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
+    ],
+    [
+      'CONTROL: a comment-shaped payload line does not stop the real closer',
+      "- a\n  - b\n\n    ```\n    %%%\n    ```\n    %%%\n    q\nx\n",
+      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <pre><code>%%%\n</code></pre>\n        q\nx\n      </li>\n    </ul>\n  </li>\n</ul>",
     ],
     [
       'CONTROL: the run at the outer item column closes nothing and stays there',
