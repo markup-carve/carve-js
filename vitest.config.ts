@@ -8,5 +8,8 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
+    // One module graph per worker instead of per file: re-importing the engine
+    // for each of ~830 files was about 40% of the suite's CPU time.
+    isolate: false,
   },
 })
