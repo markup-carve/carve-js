@@ -762,6 +762,15 @@ class Lexer {
 
   /** Container-scoped §10 fence lookahead answers, keyed by source line. */
   fenceLookaheadAnswers: Map<string, boolean> = new Map()
+  /**
+   * §10 answers a container gave for a fence a DESCENDANT of it owns.
+   *
+   * Separate from `fenceLookaheadAnswers` because the two are written by
+   * different scopes and only this one may outrank a nested re-derivation: the
+   * fence's own container never receives the line that closes it, so it cannot
+   * answer for itself (markup-carve/carve#1399 one level in).
+   */
+  descendantFenceAnswers: Map<string, boolean> = new Map()
   /** This lexer reads a container body whose collector supplied those answers. */
   usesContainerFenceLookahead = false
 
@@ -1042,6 +1051,7 @@ function nestedSubLexer(
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
   sub.itemLazyLines = parent.itemLazyLines
   sub.fenceLookaheadAnswers = parent.fenceLookaheadAnswers
+  sub.descendantFenceAnswers = parent.descendantFenceAnswers
   sub.usesContainerFenceLookahead = true
   sub.quoteLazyLines = parent.quoteLazyLines
   sub.declinedLinkDefLines = parent.declinedLinkDefLines
@@ -3900,6 +3910,17 @@ type ItemOpaqueState =
   | { kind: 'code'; close: RegExp }
   | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean }
 
+/**
+ * A verbatim fence a DESCENDANT of a list item holds open, with its base.
+ *
+ * No comment arm: `commentFenceRun` accepts an INDENTED delimiter
+ * (markup-carve/carve-js#816), so the item's own tracker already opens on a
+ * descendant's `%%%` and a fence-shaped line in that payload is already body.
+ * Tracking it here as well moved nothing over 1968 corpus documents and 13776
+ * generated shapes.
+ */
+interface DescendantOpaque { close: RegExp; base: number }
+
 interface ItemLazyState {
   opaque: ItemOpaqueState | null
   // Whether the item's collected content currently ends in an OPEN paragraph
@@ -5290,7 +5311,12 @@ function splitTableRow(line: string): string[] {
  */
 function fenceHasCloser(lexer: Lexer, marker: string): boolean {
   if (lexer.usesContainerFenceLookahead) {
-    const inherited = lexer.fenceLookaheadAnswers.get(`${lexer.lineNumber(lexer.pos)}:${marker}`)
+    const key = `${lexer.lineNumber(lexer.pos)}:${marker}`
+    // A container above answered for a fence it could see the closer of and this
+    // scope cannot, so that answer outranks the one keyed the same way here.
+    const handed = lexer.descendantFenceAnswers.get(key)
+    if (handed !== undefined) return handed
+    const inherited = lexer.fenceLookaheadAnswers.get(key)
     if (inherited !== undefined) return inherited
   }
   const char = marker[0]!
@@ -10256,6 +10282,15 @@ class ParseSession {
       const takenBelowColumn = new Set<number>()
       let hasOverindentedBlockCandidate = false
       let authoredFenceBase = 0
+      // A verbatim fence a DESCENDANT opened, while it is open.
+      //
+      // The item's tracker reads each collected line at its own dedent and its
+      // opener test is anchored, so a fence written at a CHILD's column reached
+      // no branch of it and the item recorded the open paragraph that line looks
+      // like. A below-column run then folded into a paragraph the deepest
+      // structure did not hold (markup-carve/carve#2509, carve-js#2261).
+      let descendantOpaque: DescendantOpaque | null = null
+      let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       let nestedOwnerColumn = markerContentColumn(content)
       let firstBodyMarkerColumn: number | undefined = RE_DEFLIST_TERM.test(content) ? -1 : undefined
       let hasParentAuthoredBlock = false
@@ -10305,6 +10340,78 @@ class ParseSession {
         }
         ownerPending.length = 0
         return opensFence
+      }
+      /**
+       * Open or close `descendantOpaque` on a line the item took at its column.
+       *
+       * Reached only from a line that is INDENTED inside the item's body and is
+       * fence-shaped or already inside a descendant's fence, so a body with no
+       * such fence walks no indentation run for it.
+       */
+      const trackDescendantOpaque = (
+        line: string,
+        opener: string,
+        lineIndex: number,
+        followsBlank: boolean,
+      ): void => {
+        const child = nestedOwnerColumn
+        // Below a child's column the line is this item's, and `walkOwnership`
+        // owns that case; with no child there is no descendant to track.
+        if (child < 0 || indentColumns(line, child) < child) return
+        if (descendantOpaque !== null) {
+          const base = descendantOpaque.base
+          // A closer stands at its fence's base or at its container's column
+          // (CARVE-P0-004), never below the base and never past it.
+          if (indentColumns(line, base) <= base && descendantOpaque.close.test(opener)) {
+            descendantOpaque = null
+          }
+          return
+        }
+        const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+        if (fence === null) return
+        const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+        const base = indentColumns(line)
+        const key = `${lexer.lineNumber(lineIndex)}:${marker}`
+        // A CONTAINER ABOVE MAY HAVE ANSWERED ALREADY, over lines this item never
+        // received. Re-deriving it here asks a narrower question, so three levels
+        // lost what two kept.
+        const inherited = lexer.descendantFenceAnswers.get(key)
+        const sourceBase = contentCol + base
+        descendantFenceMemos ??= new Map()
+        let memo = descendantFenceMemos.get(sourceBase)
+        if (memo === undefined) {
+          memo = new Map()
+          descendantFenceMemos.set(sourceBase, memo)
+        }
+        const closerAhead = inherited ?? itemFenceHasCloser(
+          lexer,
+          marker,
+          lineIndex,
+          sourceBase,
+          memo,
+          // BOUNDED BY THE FENCE'S OWN CONTAINER, not by this item. A marker above
+          // the fence's column opens a SIBLING of the item holding it, and a
+          // closer written inside that sibling closes nothing here.
+          (candidate, afterBlank) =>
+            (isListMarkerLine(candidate) && indentColumns(candidate) < sourceBase) ||
+            (afterBlank && indentColumns(candidate, sourceBase) < sourceBase),
+        )
+        // HAND THE CLOSER ANSWER DOWN, and only a YES. The item may end at a run
+        // this fence's own parse will never see, so the descendant cannot answer
+        // §10's lookahead for itself (markup-carve/carve#1399 one level in). A yes
+        // names a closer at the fence's own base inside the fence's container, so
+        // it holds however deep that container is. A NO does not: CARVE-P0-004 also
+        // lets the closer stand at the container's content column, and the item
+        // cannot see how many levels lie between its child and the fence, so a no
+        // here would refuse a closer the descendant can see for itself.
+        if (closerAhead) lexer.descendantFenceAnswers.set(key, true)
+        // ASK WHETHER IT REALLY OPENED (§10 CLOSER LOOKAHEAD). With the
+        // descendant's own paragraph still open and no closer ahead the run is an
+        // inline verbatim span inside that paragraph, which stays open - so a
+        // below-column line still folds there and nothing ends.
+        if (followsBlank || closerAhead) {
+          descendantOpaque = { close: fenceCloseRe(marker), base }
+        }
       }
       // Candidate sublist markers, resolved after authored fence bases are applied.
       const subListMarkers = new Set<number>()
@@ -10588,7 +10695,8 @@ class ParseSession {
             }
           } else {
             const opener = dedented.trimStart()
-            const mayOpenFence = opener !== dedented && lazyState.quoteInner === null &&
+            const indented = opener !== dedented
+            const mayOpenFence = indented && lazyState.quoteInner === null &&
               opensCodeFence(opener)
             ownerPending.push({
               line: dedented,
@@ -10597,6 +10705,17 @@ class ParseSession {
               framed: insideOpenFence(lazyState),
             })
             if (mayOpenFence && walkOwnership()) trackedContent = opener
+            // A COMMENT THE ITEM ALREADY HOLDS OWNS ITS PAYLOAD. §28 makes that
+            // body verbatim, so a fence-shaped line inside it opens nothing, and
+            // reading one as a descendant's fence left the state standing past the
+            // comment's closer.
+            else if (indented && lazyState.opaque === null &&
+              (descendantOpaque !== null || mayOpenFence)) {
+              trackDescendantOpaque(dedented, opener, fenceLineIndex, followsBlank)
+            } else if (!indented && !isBlankLine(dedented)) {
+              // A block of THIS item, so no descendant is open behind it.
+              descendantOpaque = null
+            }
           }
           trackItemLazyState(
             trackedContent,
@@ -10619,6 +10738,9 @@ class ParseSession {
             true,
             (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
           )
+          // The item holds no paragraph a below-column line can continue while a
+          // descendant holds a fence open. PART 1 S4 asks about the open STACK.
+          if (descendantOpaque !== null) lazyState.lazyFoldable = false
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else if (
