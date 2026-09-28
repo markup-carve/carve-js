@@ -10976,6 +10976,21 @@ class ParseSession {
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           const fenceLineIndex = lexer.pos
           let trackedContent = dedented
+          if (isMarker && lazyState.opaque === null) {
+            const markerContent = markerFreeContent(dedented)
+            const run = commentFenceRun(markerContent)
+            if (run !== undefined && commentBlockHasCloser(lexer, run)) {
+              const hostColumn = contentCol + markerContentColumn(dedented)
+              for (let at = lexer.pos + 1; at < lexer.lines.length; at++) {
+                const line = lexer.lines[at]!
+                if (commentFenceRun(line) === run) {
+                  trackedContent = markerContent
+                  break
+                }
+                if (!isBlankLine(line) && indentColumns(line, hostColumn) < hostColumn) break
+              }
+            }
+          }
           if (lazyState.opaque?.kind === 'code') {
             if (authoredFenceBase > 0 && indentColumns(dedented, authoredFenceBase) >= authoredFenceBase) {
               trackedContent = sliceColumns(dedented, authoredFenceBase, true)
