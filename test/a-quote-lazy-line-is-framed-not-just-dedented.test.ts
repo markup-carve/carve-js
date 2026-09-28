@@ -135,21 +135,9 @@ describe('the def-list entry matcher is the one consumer that unframes', () => {
   })
 })
 
-describe('an open fence classifies nothing, so the frame stands aside', () => {
-  it('feeds a fence body the line at its own column', () => {
-    expect(carveToHtml('> - ```\n  # h\n\npara\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <pre><code># h\n</code></pre>\n' +
-        '    </li>\n  </ul>\n</blockquote>\n<p>para</p>',
-    )
-  })
-
-  it('leaves a marker the quote folded in to carve#1904, even under a folded fence', () => {
-    // The fence here was FOLDED in rather than owned by the item, and a
-    // quote-lazy MARKER line never reaches the content-column arm regardless.
-    expect(carveToHtml('> - :  d\n> ```\n  - m\n\npara\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>:  d\n<code>\n- m</code></li>\n  </ul>\n' +
-        '</blockquote>\n<p>para</p>',
-    )
+describe('a quoted fence needs marked body lines', () => {
+  it('leaves an unmarked line outside the quote', () => {
+    expect(carveToHtml("> - ```\n  # h\n\npara\n" )).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p># h</p>\n<p>para</p>")
   })
 })
 
@@ -219,6 +207,17 @@ describe('marked and unquoted term continuations follow their column', () => {
       '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n' +
         '      </dl>\n    </li>\n  </ul>\n</blockquote>\n' +
         '<section id="h">\n  <h1>h</h1>\n  <p>tail</p>\n</section>',
+    )
+  })
+})
+
+describe('a lazy marker remains text in its original host', () => {
+  it('leaves a marker the quote folded in to carve#1904, even under a folded fence', () => {
+    // The fence here was FOLDED in rather than owned by the item, and a
+    // quote-lazy MARKER line never reaches the content-column arm regardless.
+    expect(carveToHtml('> - :  d\n> ```\n  - m\n\npara\n')).toBe(
+      '<blockquote>\n  <ul>\n    <li>:  d\n<code>\n- m</code></li>\n  </ul>\n' +
+        '</blockquote>\n<p>para</p>',
     )
   })
 })

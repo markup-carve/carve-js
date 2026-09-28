@@ -2846,9 +2846,10 @@ function quotedFenceHasCloser(
   fromIndex: number,
   memo: QuotedFenceCloserMemo,
   depth = 0,
+  column = 0,
 ): boolean {
   const char = marker[0]!
-  const key = `${depth}:${char}`
+  const key = `${depth}:${column}:${char}`
   const start = fromIndex + 1
   if (fenceCloserMemoRefutes(memo, key, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
@@ -2866,7 +2867,9 @@ function quotedFenceHasCloser(
       at += width
     }
     if (at < 0) break
-    const content = line.slice(at)
+    const residual = line.slice(at)
+    if (indentColumns(residual) !== column) continue
+    const content = sliceColumns(residual, column, true)
     if (closeRe.test(content)) return true
     const closer = RE_FENCE_CLOSER.exec(content)
     if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
@@ -3212,7 +3215,86 @@ type BlockQuoteLazyMode =
   // two of them is one table rather than two first rows.
   | { kind: 'quote'; inner: BlockQuoteLazyState }
 
+interface QuoteFenceHosts {
+  columns: number[]
+  markers: number[]
+  kinds: ('item' | 'note')[]
+  fence: { marker: string; column: number } | null
+  pending: { marker: string; column: number } | null
+}
+
+function trackQuoteHostFence(
+  content: string, state: BlockQuoteLazyState,
+  hasCloser: (marker: string, column?: number) => boolean,
+): boolean {
+  const host = state.hosts ??= { columns: [0], markers: [], kinds: [], fence: null, pending: null }
+  const column = indentColumns(content)
+  const text = content.replace(/^[ \t]*/, '')
+  if (host.fence) {
+    if (text !== '' && column < host.fence.column) host.fence = null
+    else {
+      if (column === host.fence.column && fenceCloseRe(host.fence.marker).test(text)) host.fence = null
+      closeBlockQuoteParagraph(state)
+      return true
+    }
+  }
+  if (text === '') return false
+  if (RE_BLOCKQUOTE.test(content)) {
+    host.columns = [0]; host.markers = []; host.kinds = []; host.pending = null
+    return false
+  }
+  const paragraph = blockQuoteParagraphOpen(state)
+  const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
+  while (host.columns.length > 1 && host.columns.at(-1)! > column) {
+    host.columns.pop(); host.markers.pop(); host.kinds.pop()
+  }
+  const insideItem = host.kinds.at(-1) === 'item'
+  let inner = text
+  let at = column
+  let blockStart = false
+  for (;;) {
+    const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
+    if (width > 0) {
+      if (paragraph && !insideItem && !sibling) break
+      host.markers.push(at)
+      const attrs = extractItemAttr(inner)
+      const markerText = attrs?.stripped ?? inner
+      at += RE_TASK.test(markerText) ? 2 : width - (inner.length - markerText.length)
+      host.columns.push(at)
+      host.kinds.push('item')
+      blockStart = true
+      const tail = inner.slice(width)
+      at += indentColumns(tail)
+      inner = tail.replace(/^[ \t]*/, '')
+      continue
+    }
+    if (RE_FOOTNOTE_DEF.test(inner)) {
+      host.markers.push(at); host.columns.push(at + 2); host.kinds.push('note')
+    }
+    break
+  }
+  const floor = host.columns.at(-1)!
+  if (host.pending && host.pending.column > floor) host.pending = null
+  const code = RE_FENCE.exec(inner)
+  const raw = code ? null : RE_RAW_FENCE.exec(inner)
+  const marker = code?.[2] ?? raw?.[1] ?? null
+  if (host.pending && marker && marker[0] === host.pending.marker[0] && marker.length >= host.pending.marker.length) {
+    host.pending = null
+    return false
+  }
+  if (marker && floor > 0) {
+    if (at === floor && (blockStart || !paragraph || hasCloser(marker, floor))) {
+      host.fence = { marker, column: floor }
+      closeBlockQuoteParagraph(state)
+      return true
+    }
+    if (at !== floor) host.pending = { marker, column: floor }
+  }
+  return false
+}
+
 interface BlockQuoteLazyState {
+  hosts?: QuoteFenceHosts
   mode: BlockQuoteLazyMode
   /**
    * Did the line before this one leave a table open?
@@ -3276,15 +3358,16 @@ function trackBlockQuoteLazyState(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
-  hasFenceCloser: (marker: string, depth?: number) => boolean,
+  hasFenceCloser: (marker: string, depth?: number, column?: number) => boolean,
   descent?: QuoteDescent,
   prefixMemo?: Map<number, number>,
+  atColumn = true,
 ): void {
   let text = content
   let level = state
   const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
   let commentCloser = hasCommentCloser
-  let fenceCloser = hasFenceCloser
+  let fenceCloser = (marker: string, column?: number) => hasFenceCloser(marker, 0, column)
   if (descent) {
     descent.levels = 0
     descent.preserved = false
@@ -3293,7 +3376,7 @@ function trackBlockQuoteLazyState(
   const continuesParagraph = (): boolean => paragraphOpen ??= blockQuoteParagraphOpen(state)
   for (;;) {
     const descend = classifyQuotedLine(
-      text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree, descent, prefixMemo,
+      text, level, commentCloser, fenceCloser, continuesParagraph, terminatorFree, descent, prefixMemo, atColumn,
     )
     if (descend === null) return
     text = descend.text
@@ -3307,9 +3390,9 @@ function trackBlockQuoteLazyState(
         descent.askedBelowTop = true
         return hasCommentCloser(fence)
       }
-      fenceCloser = (marker) => {
+      fenceCloser = (marker, column) => {
         descent.askedBelowTop = true
-        return hasFenceCloser(marker, descent.levels)
+        return hasFenceCloser(marker, descent.levels, column)
       }
     }
   }
@@ -3361,11 +3444,12 @@ function classifyQuotedLine(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
-  hasFenceCloser: (marker: string) => boolean,
+  hasFenceCloser: (marker: string, column?: number) => boolean,
   continuesParagraph: () => boolean,
   terminatorFree = false,
   descent?: QuoteDescent,
   prefixMemo?: Map<number, number>,
+  atColumn = true,
 ): { text: string; state: BlockQuoteLazyState } | null {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
@@ -3389,6 +3473,7 @@ function classifyQuotedLine(
     if (state.mode.close.test(content)) state.mode = { kind: 'closed' }
     return null
   }
+  if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser)) return null
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
@@ -9941,11 +10026,12 @@ class ParseSession {
         content,
         state,
         (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-        (marker, depth) =>
+        (marker, depth, column) =>
           !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
-          quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo, depth),
+          quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo, depth, column),
         descent,
         this.markerPrefixMemo(lexer, lineIndex),
+        !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)),
       )
       // Reuse the handed-down state only while lazy text leaves it unchanged.
       if (!descent.preserved && handDown && state.mode.kind === 'quote' && state.mode.inner === handDown.state) handDown = null
