@@ -2703,11 +2703,11 @@ function itemFenceHasCloser(
   let afterBlank = false
   for (let i = start; i < lexer.lines.length; i++) {
     const line = lexer.lines[i]!
+    if (endsContainer(line, afterBlank)) break
     if (isBlankLine(line)) {
       afterBlank = true
       continue
     }
-    if (endsContainer(line, afterBlank)) break
     afterBlank = false
     if (indentColumns(line, contentCol) < contentCol) continue
     const dedented = sliceColumns(line, contentCol, true)
@@ -5905,7 +5905,7 @@ function rebaseOverindentedBlocks(
           termOpen = false
           let k = j + 1
           while (k < lines.length && isBlankLine(lines[k]!)) k++
-          if (k >= lines.length) break
+          if (k >= lines.length || k - j > 1) break
           const nextColumn = indentColumns(lines[k]!)
           const nextLocal = nextColumn < base ? '' : sliceColumns(lines[k]!, base, true)
           const continues =
@@ -9313,11 +9313,11 @@ class ParseSession {
       }
       const defFenceMemo: QuotedFenceCloserMemo = new Map()
       // The next entry ends the body, and so does a line below its column after a
-      // blank.
+      // blank. A second blank ends it regardless of the following indentation.
       const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
         RE_DEFLIST_TERM.test(line) ||
         RE_DEFLIST_DEF.test(line) ||
-        (afterBlank && indentColumns(line, contentCol) < contentCol)
+        (afterBlank && (isBlankLine(line) || indentColumns(line, contentCol) < contentCol))
       let commentPayloadState: ItemLazyState | null = null
       /**
        * Feed one collected body line to the S4 tracker.
@@ -9603,6 +9603,8 @@ class ParseSession {
         if (isBlankLine(ln)) {
           let look = 1
           while (isBlankLine(lexer.peek(look))) look++
+          // The description ends at two blanks, including any unfinished fence.
+          if (look > 1) break
           const after = lexer.peek(look)
           // The SECOND spelling of the same rule, and it has its own job: this one
           // decides whether the body survives the blank at all, the Form A branch
@@ -10579,7 +10581,7 @@ class ParseSession {
           // closer written inside that sibling closes nothing here.
           (candidate, afterBlank) =>
             (isListMarkerLine(candidate) && indentColumns(candidate) < sourceBase) ||
-            (afterBlank && indentColumns(candidate, sourceBase) < sourceBase),
+            (afterBlank && !isBlankLine(candidate) && indentColumns(candidate, sourceBase) < sourceBase),
         )
         // HAND THE CLOSER ANSWER DOWN, and only a YES. The item may end at a run
         // this fence's own parse will never see, so the descendant cannot answer
@@ -10653,7 +10655,7 @@ class ParseSession {
       // column after a blank (carve#1379).
       const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
         (isListMarkerLine(line) && indentColumns(line) <= baseIndent) ||
-        (afterBlank && indentColumns(line, contentCol) < contentCol)
+        (afterBlank && !isBlankLine(line) && indentColumns(line, contentCol) < contentCol)
       const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
       if (leadFence) {
         lazyState.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!) }
