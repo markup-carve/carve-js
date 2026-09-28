@@ -91,7 +91,7 @@ export function extractReferenceDefinitions(
   let depth = 0
   let listIndent = 0
   const leadingSpaces = (s: string) => /^ */.exec(s)![0].length
-  const lineTitle = new RegExp(String.raw`^[ \t]*(?:<[^<>\n]*>|[^<\s]\S*)(?:[ \t]+${TITLE})?[ \t]*$`)
+  const lineTitle = new RegExp(String.raw`^[ \t]*(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*$`)
   const opensBlock = (text: string): boolean =>
     /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$))/.test(text) ||
     /^[ \t]*(?:=+|[-*_]{3,})[ \t]*$/.test(text)
@@ -165,14 +165,14 @@ export function extractReferenceDefinitions(
     if (
       (canStart || opensItem || lineDepth > depth) &&
       definition &&
-      new RegExp(String.raw`^[ \t]*(?:(?:<[^<>\n]*>|[^<\s]\S*)(?:[ \t]+${TITLE})?[ \t]*)?$`).test(definition[2]!)
+      new RegExp(String.raw`^[ \t]*(?:(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*)?$`).test(definition[2]!)
     ) {
       depth = lineDepth
       const key = normalizeReferenceLabel(decodeLinkTitle(definition[1]!, decodeEntity))
       const continued: string[] = []
       let destination = definition[2]!
       const following = lines[i + 1]
-      if (destination.trim() === '' && following !== undefined && following.startsWith(quotePrefix) &&
+      if (destination.replace(/^[ \t]+|[ \t]+$/g, '') === '' && following !== undefined && following.startsWith(quotePrefix) &&
           !opensBlock(following.slice(quotePrefix.length)) && lineTitle.test(following.slice(quotePrefix.length))) {
         continued.push(following)
         i++
@@ -180,7 +180,7 @@ export function extractReferenceDefinitions(
       }
       const emptied = new RegExp(String.raw`^[ \t]*<>(?:[ \t]+${TITLE})?[ \t]*$`).exec(destination)
       if (!emptied) {
-        const target = destination.trim()
+        const target = destination.replace(/^[ \t]+|[ \t]+$/g, '')
         if (target === '') {
           kept.push(line, ...continued)
           canStart = false

@@ -447,23 +447,20 @@ function decodeHtmlEntitiesRaw(s: string): string {
   )
 }
 
-/**
- * Decode entities in a link/image DESTINATION. Unlike inline text the result is
- * not Carve-escaped: a backslash would be part of the URL. Whitespace a decode
- * introduces (`&#32;`, `&nbsp;`) is percent-encoded through
- * `encodeURIComponent`, so a non-ASCII space becomes its UTF-8 bytes the way
- * cmark writes it (`%C2%A0`, not `%A0`); a raw space would end the destination
- * and turn the rest into a title. A destination holds no raw whitespace before
- * decoding -- it is matched against the White_Space property below -- so every
- * match here came from an entity.
- *
- * The test is that property and NOT `/\s/`, which also holds U+FEFF. A BOM is
- * not whitespace in CommonMark either, so cmark keeps it in the destination;
- * encoding it turned an invisible character the author wrote into the six
- * visible ones `%EF%BB%BF` (markup-carve/carve#806).
- */
-function decodeEntitiesInDestination(url: string): string {
-  return decodeHtmlEntitiesRaw(url).replace(/\p{White_Space}/gu, (c) => encodeURIComponent(c))
+/** Decode Markdown destination text and encode bytes that cannot remain in a URL. */
+function decodeEntitiesInDestination(url: string, protectedSpans: readonly string[] = []): string {
+  let restored = url
+  for (let pass = 0; pass <= protectedSpans.length; pass++) {
+    const next = restored.replace(/\x00P(\d+)\x00/g, (token, index: string) => protectedSpans[Number(index)] ?? token)
+    if (next === restored) break
+    restored = next
+  }
+  const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
+  const decoded = restored.replace(escapesAndEntities, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
+  return decoded.replace(/[^\x21-\x7e]|["<>[\\\]`{|}]/gu, (char) => {
+    const point = char.codePointAt(0)!
+    return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
+  })
 }
 
 /** A quoted title and the whitespace around it: ` "a & b"` / ` 'a & b'`. */
@@ -992,47 +989,65 @@ function convertInline(
   // Normalize a `(dest "title")` part: Carve's link parser closes the
   // destination at the first `)`, so balanced parens in the URL are
   // percent-encoded (Titan_(moon) -> Titan_%28moon%29).
-  const encodeDest = (paren: string): string => {
+  const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
     const inner = paren.slice(1, -1).replace(/^[ \t]+|[ \t]+$/g, '')
-    // Split on the White_Space property, not `\S`: `\S` treats a BOM as the
-    // whitespace that separates destination from title, and it is an ordinary
-    // destination character, so the halves were cut in the wrong place and each
-    // ran through the wrong decoder (markup-carve/carve#806).
-    const m = inner.match(/^(\P{White_Space}+)([\s\S]*)$/u)
-    const url = m ? m[1]! : inner
-    const rest = m ? m[2]! : ''
+    // Non-ASCII spaces and a BOM belong to the URL, not the title separator.
+    const pointyEnd = inner.startsWith('<') ? inner.indexOf('>') : -1
+    if (inner.startsWith('<') && pointyEnd < 0) return undefined
+    const m = pointyEnd < 0 ? inner.match(/^((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u) : null
+    const url = pointyEnd >= 0 ? inner.slice(1, pointyEnd) : m ? m[1]! : inner
+    const rest = pointyEnd >= 0 ? inner.slice(pointyEnd + 1) : m ? m[2]! : ''
+    if (rest.trim() && (!/^[ \t\n]/.test(rest) || !/^(?:"[^"]*"|'[^']*'|\([^()]*\))$/s.test(rest.trim()))) return undefined
     // A destination and title are entity-decoded by cmark like any other text,
     // and this whole construct is protected from the later decode pass, so it
     // happens here or not at all. `&amp;` in a query string is the canonical
     // case: left literal, the migrated link points somewhere else.
-    const enc = decodeEntitiesInDestination(url).replace(/[()]/g, (c) =>
-      c === '(' ? '%28' : '%29',
+    const enc = decodeEntitiesInDestination(url, protectedSpans).replace(/[()<> \t"`]/g, char =>
+      '%' + char.charCodeAt(0).toString(16).toUpperCase(),
     )
     return `(${enc}${decodeEntitiesInTitle(rest)})`
   }
 
+  const protectDestination = (alt: string, dest: string): string => {
+    const encoded = encodeDest(dest)
+    return encoded === undefined ? alt + '\\(' + dest.slice(1) : protect(alt + encoded)
+  }
+  const pointyDestination = String.raw`\([ \t]*<[^<>\n]*>(?:[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'))?[ \t]*\)`
+  line = line.replace(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^\]]*\])*\])(${pointyDestination})`, 'g'),
+    (_match, alt: string, dest: string) => protectDestination(alt, dest))
+  line = line.replace(new RegExp(String.raw`(?<=\])(${pointyDestination})`, 'g'),
+    (_match, dest: string) => protectDestination('', dest))
+
   const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\((?:[^()\s]|\([^()\n]*\))+[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*')[ \t]*\))/g
   line = line.replace(multilineTitle, (_match, label: string, destination: string) =>
-    label.startsWith('!') ? protect(label + encodeDest(destination)) : label + protect(encodeDest(destination)))
+    label.startsWith('!') ? protectDestination(label, destination) : label + protectDestination('', destination))
 
   // Images `![alt](dest)`: Carve renders the alt as raw text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
   line = line.replace(
     /(!\[(?:[^[\]]|\[[^\]]*\])*\])(\((?:[^()\n]|\([^()\n]*\))*\))/g,
-    (_m, alt: string, dest: string) => protect(alt + encodeDest(dest)),
+    (_m, alt: string, dest: string) => protectDestination(alt, dest),
   )
 
   // Link destinations `](dest "title")`. (Images already handled above.) The
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
   line = line.replace(/(?<=\])(\((?:[^()\n]|\([^()\n]*\))*\))/g, (_m, dest: string) =>
-    protect(encodeDest(dest)),
+    protectDestination('', dest),
   )
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
-  line = line.replace(/(?<=\])\[[^\]]*\]/g, protect)
+  line = line.replace(/(?<=\])\[([^\]]*)\]/g, (match, reference: string, offset: number, source: string) => {
+    const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
+    const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
+    const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
+    const canonical = label !== undefined && !/[\\&\x00]/.test(label)
+      ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) : undefined
+    const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
+    return protect(canonical === undefined || keepCollapsed ? match : `[${canonical}]`)
+  })
 
   // Autolinks `<scheme:...>` and `<email>`: the URL/address is literal, so a
   // `_` or `*` inside it (e.g. /_v1_/) must not be rewritten as markup.
@@ -1064,7 +1079,14 @@ function convertInline(
     protect(url.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))),
   )
 
-  line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?![\[(])/g, (match, label: string, offset: number, source: string) => {
+  line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
+    const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
+    if (following) {
+      const protectedTail = protectedSpans[Number(following[1])] ?? ''
+      if (protectedTail.startsWith('(')) return match
+      const reference = /^\[([^\]]*)\]$/.exec(protectedTail)
+      if (reference && (reference[1] !== '' || referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) !== undefined)) return match
+    }
     const before = source.slice(source.lastIndexOf('\n', offset - 1) + 1, offset)
     if (source[offset + match.length] === ':' && /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*$/.test(before)) return match
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
@@ -1082,12 +1104,11 @@ function convertInline(
   // inline form is (encodeDest): protecting the line puts it out of reach of
   // the later decode pass, and a literal `&amp;` in the definition points the
   // link somewhere the Markdown source did not.
-  // Destination split on the White_Space property, for the reason `encodeDest`
-  // gives above: `\S` cuts a destination at a BOM.
-  line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:\s*)(\P{White_Space}+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
+  // Destination boundaries use ASCII whitespace; a BOM remains URL data.
+  line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:[ \t]*)((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
     referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) === undefined
       ? match
-      : protect(head + decodeEntitiesInDestination(dest) + decodeEntitiesInTitle(rest)),
+      : protect(head + decodeEntitiesInDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
   )
 
   // Math, converted and protected before the emphasis passes so a formula

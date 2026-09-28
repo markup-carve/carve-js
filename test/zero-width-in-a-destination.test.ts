@@ -268,28 +268,26 @@ describe('the canonical writer does not percent-encode a BOM', () => {
   })
 })
 
-describe('the Markdown migrator does not percent-encode a BOM', () => {
+describe('the Markdown migrator encodes a BOM as URL data', () => {
   /*
-   * `decodeEntitiesInDestination` percent-encoded `/\s/` on its way out, and
-   * the destination/title split was made with `\S+`. A BOM is not whitespace in
-   * CommonMark either, so cmark keeps it in the destination and the migrated
-   * Carve has to as well.
+   * A BOM remains inside the destination during tokenization. URL encoding
+   * preserves its UTF-8 bytes without treating it as a title separator.
    */
-  it('keeps a leading BOM in an inline destination', () => {
+  it('encodes a leading BOM in an inline destination', () => {
     expect(markdownToCarve(`[x](${BOM}https://e.com/)\n`)).toContain(
-      `[x](${BOM}https://e.com/)`,
+      `[x](%EF%BB%BFhttps://e.com/)`,
     )
   })
 
-  it('keeps a BOM in the middle of an inline destination', () => {
+  it('encodes a BOM in the middle of an inline destination', () => {
     expect(markdownToCarve(`[x](https://e${BOM}.com/)\n`)).toContain(
-      `[x](https://e${BOM}.com/)`,
+      `[x](https://e%EF%BB%BF.com/)`,
     )
   })
 
-  it('keeps a BOM in a reference definition destination', () => {
+  it('encodes a BOM in a reference definition destination', () => {
     expect(markdownToCarve(`[r]: ${BOM}https://e.com/\n`)).toContain(
-      `[r]: ${BOM}https://e.com/`,
+      `[r]: %EF%BB%BFhttps://e.com/`,
     )
   })
 
@@ -300,10 +298,10 @@ describe('the Markdown migrator does not percent-encode a BOM', () => {
     // rest of the URL on the title side, where `&amp;` was left as written and
     // the migrated link pointed somewhere the Markdown source did not.
     expect(markdownToCarve(`[x](https://e${BOM}.com/?a&amp;b)\n`)).toContain(
-      `https://e${BOM}.com/?a&b`,
+      `https://e%EF%BB%BF.com/?a&b`,
     )
     expect(markdownToCarve(`[r]: https://e${BOM}.com/?a&amp;b\n`)).toContain(
-      `https://e${BOM}.com/?a&b`,
+      `https://e%EF%BB%BF.com/?a&b`,
     )
   })
 
