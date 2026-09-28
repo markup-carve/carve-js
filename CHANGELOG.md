@@ -63,9 +63,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
-- Track comment spans opened on nested list markers so a dedented closer does
-  not keep following text in the outer item (carve#2550).
-
 - `applyAstPatch` rejects unknown operations and malformed pointers before applying a patch (#2091).
 - The Markdown target keeps every block a list item holds. A continuation line is
   padded from the item's marker rather than from a task item's checkbox, and a
