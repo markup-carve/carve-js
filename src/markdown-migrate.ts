@@ -1004,6 +1004,7 @@ function convertInline(
   holdsFenceBody = false,
   taskBox = false,
   joinedLines?: Set<number>,
+  terminal = true,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -1058,7 +1059,7 @@ function convertInline(
       escaped += protect(line.slice(i, i + 2))
       i += 2
     } else {
-      escaped += line[i] === '\\' && line[i + 1] === ' ' ? protect('\\\\') : line[i]
+      escaped += line[i] === '\\' && (line[i + 1] === ' ' || (terminal && i + 1 === line.length)) ? protect('\\\\') : line[i]
       i++
     }
   }
@@ -2131,6 +2132,7 @@ function quoteDepth(marker: string): number {
 function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
+  terminal = true,
 ): string[] {
   const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
   const joinedLines = new Set<number>()
@@ -2140,6 +2142,7 @@ function restorePrefixedInlineRun(
     opensFence,
     /^\s*(?:[-*+]|\d{1,9}[.)])\s+$/.test(run[0]?.prefix ?? ''),
     joinedLines,
+    terminal,
   ).split('\n')
   run = run.filter((_, index) => !joinedLines.has(index))
   const held = heldByItem(run)
@@ -2298,7 +2301,8 @@ function paragraphLine(part: PrefixedInlineLine, text: string): { lead: string; 
  * A line of a setext heading's paragraph as a piece of the one-line heading:
  * trimmed, and without the hard break it may end in.
  */
-function headingLine(line: string): string {
+function headingLine(line: string, last = false): string {
+  if (last) return line.trim()
   return line.trim().replace(/(?<!\\)((?:\\\\)*)\\$/, '$1').trimEnd()
 }
 
@@ -2378,7 +2382,7 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
           // The collector's escape guarded a marker standing at the start of a
           // line; in the heading that marker sits in the middle of one line and
           // opens nothing, so the bare body is what gets written.
-          .map((entry) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body))
+          .map((entry, index, entries) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body, index === entries.length - 1))
           .join(' ')
         const heading = `${held.lead}${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} ${body}`
         out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: heading })
@@ -3240,6 +3244,7 @@ function collectListInlineRun(
   // still open: the lines up to it are the fence's content, and no block
   // reading is taken on them.
   let quotedFence = quotedFenceCloser(firstText)
+  let terminal = true
 
   while (end < lines.length) {
     const line = lines[end]!
@@ -3277,7 +3282,7 @@ function collectListInlineRun(
     if (!lazyText && !continues) while (itemCols.length > 1 && itemCols.at(-1)! > indent) itemCols.pop()
 
     if (!continues && !orderedText && RE_ITEM_LINE.test(line)) break
-    if (indent < contentCol) break
+    if (indent < contentCol) { terminal = !lazyText; break }
 
     // Leave fenced code blocks inside list items to the main fence handler.
     //
@@ -3370,7 +3375,7 @@ function collectListInlineRun(
     end++
   }
 
-  return { lines: restorePrefixedInlineRun(foldContainerSetext(run), dialect), end }
+  return { lines: restorePrefixedInlineRun(foldContainerSetext(run), dialect, terminal), end }
 }
 
 /**
@@ -4391,10 +4396,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (lazyQuote !== null) {
         shiftCol = lazyQuote.col
         shiftBy = listMarkers.shiftAt(lazyQuote.col)
-        out.push(convertInline(' '.repeat(lazyQuote.col) + lazyQuote.prefix + text, dialect))
+        out.push(convertInline(' '.repeat(lazyQuote.col) + lazyQuote.prefix + text, dialect, false, false, undefined, i + 1 >= lines.length || !continuesItemParagraph(i + 1, contentCol)))
         itemQuote = lazyQuote
       } else {
-        out.push(convertInline(containerPad + text, dialect))
+        out.push(convertInline(containerPad + text, dialect, false, false, undefined, i + 1 >= lines.length || !continuesItemParagraph(i + 1, contentCol)))
         itemParagraph = true
       }
       prevType = 'list'
@@ -4762,7 +4767,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       const content = slack >= 1 && slack <= 3 ? containerPad + held.trimStart() : line
       const written = convertInline(orderedContinuesItem
         ? content.replace(/^(\s*)(\S.*)$/, (_match, indent: string, body: string) => indent + escapeBlockOpener(body))
-        : content, dialect)
+        : content, dialect, false, false, undefined, i + 1 >= lines.length || !continuesItemParagraph(i + 1, contentCol))
       // No table starts here, so a pipe row is paragraph text, in a quote too
       // unless a delimiter row makes it a quoted table.
       const pipeText = isStandardTableRow(written)
@@ -4803,7 +4808,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     ) {
       if (prevType !== 'blank' && prevType !== 'heading') out.push('')
       out.push(
-        containerPad + convertInline(`${underline[0] === '=' ? '#' : '##'} ${trimmed}`, dialect),
+        containerPad + convertInline(`${underline[0] === '=' ? '#' : '##'} ${headingLine(trimmed, true)}`, dialect),
       )
       i++ // consume the underline line
       if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
@@ -4948,7 +4953,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        out.push(containerPad + convertInline(`${heading} ${bare.map(headingLine).join(' ')}`, dialect))
+        out.push(containerPad + convertInline(`${heading} ${bare.map((text, index) => headingLine(text, index === bare.length - 1)).join(' ')}`, dialect))
         i = end
         if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
         prevType = 'heading'
