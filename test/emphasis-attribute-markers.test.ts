@@ -17,7 +17,7 @@ describe('attribute markers inside emphasis', () => {
     expect(renderCarve(parse(written))).toBe(written)
   })
 
-  it.each(['/*[b]{key="/"}*/', '/*[b]{key="*"}*/', '{_[b]{id="a_"}_}', '{_[b]{class="a_"}_}', '{*[b]{key="*}"}*}', '{*[/b/]{key="*"}*}'])('retains attributes in %s', source => {
+  it.each(['{~x[y]{key="~"}~>z~}', '{~x~>y[z]{key="~"}~}', '/*[b]{key="/"}*/', '/*[b]{key="*"}*/', '{_[b]{id="a_"}_}', '{_[b]{class="a_"}_}', '{*[b]{key="*}"}*}', '{*[/b/]{key="*"}*}'])('retains attributes in %s', source => {
     const written = renderCarve(parse(source))
     expect(renderHtml(parse(written))).toBe(renderHtml(parse(source)))
     expect(renderCarve(parse(written))).toBe(written)

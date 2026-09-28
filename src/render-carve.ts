@@ -4092,7 +4092,7 @@ class CarveRenderSession {
     // E3 pushes no second level of one kind while one is open, and the forced
     // form is on the same stack, so a span of a kind already open has no
     // spelling at all (markup-carve/carve#2078).
-    if (node.type === 'insert' || node.type === 'delete') {
+    if (node.type === 'insert' || node.type === 'delete' || node.type === 'substitution') {
       renderSession.attributeEnclosures.push(node)
       try { return renderInlineDispatch() } finally { renderSession.attributeEnclosures.pop() }
     }
@@ -4657,14 +4657,15 @@ class CarveRenderSession {
   private inlineAttrs(attrs: Attrs | undefined, owner: InlineNode): string {
     const markers: Record<string, string> = {
       emphasis: '/', strong: '*', underline: '_', strike: '~',
-      superscript: '^', subscript: ',', highlight: '=', insert: '+', delete: '-',
+      superscript: '^', subscript: ',', highlight: '=', insert: '+', delete: '-', substitution: '~',
     }
     const enclosures = this.attributeEnclosures.filter(node => node !== owner)
     const delimiters = (node: InlineNode) => node.type === 'strong' && node.boldItalic && !this.expandedBoldItalic.has(node) ? '*/' : markers[node.type] ?? ''
     const active = enclosures.map(delimiters).join('')
     const rendered = renderAttrs(attrs, active)
+    const payload = [attrs?.id ?? '', ...(attrs?.classes ?? []), ...Object.entries(attrs?.keyValues ?? {}).flat()].join('')
     for (const node of enclosures) {
-      if ([...delimiters(node)].some(marker => rendered.includes(marker))) this.bracedForAttributes.add(node)
+      if ([...delimiters(node)].some(marker => payload.includes(marker))) this.bracedForAttributes.add(node)
     }
     return rendered
   }
