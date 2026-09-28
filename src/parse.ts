@@ -189,6 +189,8 @@ const RE_FENCE = new RegExp(
     '|("[^"]*")(?: +(\\[[^\\]]*\\]))?|(\\[[^\\]]*\\]))?' +
     FENCE_TRAILING_WS,
 )
+/** A colon run, whichever of the colon-fence blocks it goes on to open. */
+const RE_COLON_RUN = /^:{3,}/
 /** True when `line`, already at its container's content column, opens a code or raw fence. */
 export function opensCodeFence(line: string): boolean {
   return RE_FENCE.test(line) || RE_RAW_FENCE.test(line)
@@ -10355,16 +10357,42 @@ class ParseSession {
         followsBlank: boolean,
       ): void => {
         const child = nestedOwnerColumn
-        // Below a child's column the line is this item's, and `walkOwnership`
-        // owns that case; with no child there is no descendant to track.
-        if (child < 0 || indentColumns(line, child) < child) return
-        if (descendantOpaque !== null) {
-          const base = descendantOpaque.base
-          // A closer stands at its fence's base or at its container's column
-          // (CARVE-P0-004), never below the base and never past it.
-          if (indentColumns(line, base) <= base && descendantOpaque.close.test(opener)) {
+        if (child < 0) return
+        // BELOW A CHILD'S COLUMN THE CHILD IS OVER, and so is any fence it held:
+        // the base is at or past that column, so such a line is never payload.
+        // What a later below-column line reads is whether an ANCESTOR is left
+        // holding an open paragraph, and the item's own tracker cannot say for a
+        // line that keeps residual indentation, because its block tests are
+        // anchored - an indented heading reads there as prose. So the state stands
+        // in for it where the line opens a block of its own, and is dropped where
+        // the line leaves a paragraph open. `walkOwnership` is drained only at a
+        // fence-shaped line, so without this a plain paragraph left the state
+        // standing and the item stopped continuing.
+        if (indentColumns(line, child) < child) {
+          const bottom = markerLineBottomBlock(opener)
+          if (
+            bottomBlockLeavesParagraphOpen(bottom) &&
+            !opensCodeFence(bottom) &&
+            !RE_COLON_RUN.test(bottom)
+          ) {
             descendantOpaque = null
           }
+          return
+        }
+        if (descendantOpaque !== null) {
+          const base = descendantOpaque.base
+          const column = indentColumns(line, base + 1)
+          // A closer stands at its fence's base or at its container's content
+          // column (CARVE-P0-004), never past the base.
+          if (column <= base && descendantOpaque.close.test(opener)) {
+            descendantOpaque = null
+            return
+          }
+          // ANY OTHER LINE BELOW THE BASE IS NOT PAYLOAD. It ends the fence
+          // unterminated and the containers down to its own owner, so the item's
+          // paragraph state is whatever that line leaves. Only a line AT or PAST
+          // the base is the fence's body.
+          if (column < base) descendantOpaque = null
           return
         }
         const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
@@ -10706,11 +10734,13 @@ class ParseSession {
             })
             if (mayOpenFence && walkOwnership()) trackedContent = opener
             // A COMMENT THE ITEM ALREADY HOLDS OWNS ITS PAYLOAD. §28 makes that
-            // body verbatim, so a fence-shaped line inside it opens nothing, and
-            // reading one as a descendant's fence left the state standing past the
-            // comment's closer.
-            else if (indented && lazyState.opaque === null &&
-              (descendantOpaque !== null || mayOpenFence)) {
+            // body verbatim, so a fence-shaped line inside it OPENS nothing. It
+            // does not stop an open descendant fence CLOSING, though: the item's
+            // tracker reads a `%%%` inside that fence's body as a comment opener,
+            // and holding the walk back there left the state standing past the real
+            // closer.
+            else if (indented &&
+              (descendantOpaque !== null || (lazyState.opaque === null && mayOpenFence))) {
               trackDescendantOpaque(dedented, opener, fenceLineIndex, followsBlank)
             } else if (!indented && !isBlankLine(dedented)) {
               // A block of THIS item, so no descendant is open behind it.
