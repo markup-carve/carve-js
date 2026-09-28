@@ -24,6 +24,61 @@ export type FastHtmlStats = {
 type LayoutEvent = keyof Omit<FastHtmlStats, 'consumedLines' | 'activeDefinitions'>
 export type FastHtmlResult = { html: string; accepted: FastHtmlStats }
 
+
+class HtmlOutput {
+  private parts: string[] = []
+  private pending = ''
+  private wrote = false
+  constructor(private sink?: (chunk: string) => void, private discard = false) {}
+  push(...parts: string[]): void {
+    if (this.discard) return
+    if (!this.sink) { this.parts.push(...parts); return }
+    for (let part of parts) {
+      while (part.length) {
+        let end = Math.min(part.length, 4096 - this.pending.length)
+        const newline = part.slice(0, end).indexOf('\n')
+        if (newline >= 0 && newline < end) end = newline + 1
+        this.pending += part.slice(0, end)
+        part = part.slice(end)
+        if (this.pending.length === 4096 || this.pending.endsWith('\n')) this.flush()
+      }
+    }
+  }
+  text(text: string): void { this.escape(text, escapeHtml) }
+  attr(text: string): void { this.escape(text, escapeAttrValue) }
+  private escape(text: string, escape: (text: string) => string): void {
+    if (this.discard) return
+    if (!this.sink) { this.push(escape(text)); return }
+    for (let i = 0; i < text.length; i += 512) this.push(escape(text.slice(i, i + 512)))
+  }
+  private flush(): void {
+    if (!this.pending) return
+    this.sink!(this.pending)
+    this.pending = ''
+    this.wrote = true
+  }
+  finish(): string {
+    if (this.sink) {
+      this.flush()
+      if (!this.wrote) this.sink('')
+    }
+    return this.parts.join('')
+  }
+}
+
+export function tryFastHtmlStreaming(source: string, options: Options, sink: (chunk: string) => void): boolean {
+  const opts = { ...options,
+    ...(options.extensions ? { extensions: [...options.extensions] } : {}),
+    ...(options.allowedUrlSchemes ? { allowedUrlSchemes: [...options.allowedUrlSchemes] } : {}),
+    ...(options.deniedUrlSchemes ? { deniedUrlSchemes: [...options.deniedUrlSchemes] } : {}),
+  }
+  if (!tryFastHtmlAttempt(source, opts, new HtmlOutput(undefined, true))) return false
+  const out = new HtmlOutput(sink)
+  if (!tryFastHtmlAttempt(source, opts, out)) throw new Error('validated layout changed during rendering')
+  out.finish()
+  return true
+}
+
 function emptyStats(): FastHtmlStats {
   return {
     headings: 0, paragraphs: 0, blockQuotes: 0, codeFences: 0,
@@ -41,17 +96,19 @@ function accept(stats: FastHtmlStats | undefined, event: LayoutEvent, start: num
 
 /** Conservative borrowed renderer for the common stateless HTML subset. */
 export function tryFastHtml(source: string, opts: Options): string | undefined {
-  return tryFastHtmlAttempt(source, opts)
+  const out = new HtmlOutput()
+  return tryFastHtmlAttempt(source, opts, out) ? out.finish() : undefined
 }
 
 /** Test/benchmark observer; normal rendering does not allocate counters. */
 export function tryFastHtmlWithStats(source: string, opts: Options): FastHtmlResult | undefined {
   const accepted = emptyStats()
-  const html = tryFastHtmlAttempt(source, opts, accepted)
+  const out = new HtmlOutput()
+  const html = tryFastHtmlAttempt(source, opts, out, accepted) ? out.finish() : undefined
   return html === undefined ? undefined : { html, accepted }
 }
 
-function tryFastHtmlAttempt(source: string, opts: Options, stats?: FastHtmlStats): string | undefined {
+function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): true | undefined {
   if (
     opts.extensions?.length || opts.profile !== undefined || opts.sourceLine ||
     (opts as RenderOptions & { mode?: unknown }).mode !== undefined ||
@@ -82,7 +139,7 @@ function tryFastHtmlAttempt(source: string, opts: Options, stats?: FastHtmlStats
   const collected = collectDefs(lines, stats !== undefined)
   if (!collected) return undefined
   if (stats) for (const line of collected.definitionLines ?? []) accept(stats, 'linkDefinitions', line, line + 1, true)
-  return renderBlocks(lines, collected.defs, opts, stats)
+  return renderBlocks(lines, collected.defs, opts, out, stats)
 }
 
 function isAscii(source: string): boolean {
@@ -130,8 +187,7 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
   return { defs, ...(definitionLines ? { definitionLines } : {}) }
 }
 
-function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): string | undefined {
-  const out: string[] = []
+function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): true | undefined {
   const sections: number[] = []
   const ids = new Map<string, number>()
   let i = 0
@@ -158,8 +214,9 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
         ids.set(base, count + 1)
       }
       ids.set(id, 2)
-      out.push(indent(sections.length), '<section id="', escapeAttrValue(id), '">\n',
-        indent(sections.length + 1), `<h${level}>`, escapeHtml(title), `</h${level}>`)
+      out.push(indent(sections.length), '<section id="'); out.attr(id)
+      out.push('">\n', indent(sections.length + 1), `<h${level}>`)
+      out.text(title); out.push(`</h${level}>`)
       if (stats) accept(stats, 'headings', i, i + 1)
       sections.push(level); wrote = true; i++; continue
     }
@@ -176,7 +233,7 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       const info = infoSlot.trim()
       if (info && !/^[A-Za-z0-9-]+$/.test(info)) return undefined
       out.push(indent(depth), '<pre><code', info ? ` class="language-${info}"` : '', '>')
-      for (let j = i + 1; j < close; j++) out.push(escapeHtml(lines[j]!), '\n')
+      for (let j = i + 1; j < close; j++) { out.text(lines[j]!); out.push('\n') }
       // AN EMPTY PAYLOAD IS STILL A LINE. With no body lines the loop above emits
       // nothing at all, so an empty fence came back `<pre><code></code></pre>`
       // while the authoritative pipeline renders `<pre><code>\n</code></pre>` -
@@ -187,9 +244,9 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       i = close + 1; wrote = true; continue
     }
     if (line.startsWith('- ')) {
-      const rendered = renderList(lines, i, 0, depth, defs, opts, stats)
+      const rendered = renderList(lines, i, 0, depth, defs, opts, out, stats)
       if (!rendered) return undefined
-      out.push(rendered.html); i = rendered.next; wrote = true; continue
+      i = rendered.next; wrote = true; continue
     }
     if (thematicBreak(line)) {
       out.push(indent(depth), '<hr>')
@@ -197,68 +254,69 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       i++; wrote = true; continue
     }
     if (decimalListItem(line)) {
-      const rendered = renderOrderedList(lines, i, depth, defs, opts, stats)
+      const rendered = renderOrderedList(lines, i, depth, defs, opts, out, stats)
       if (!rendered) return undefined
-      out.push(rendered.html); i = rendered.next; wrote = true; continue
+      i = rendered.next; wrote = true; continue
     }
     if (line.startsWith('> ')) {
-      const start = i, quote: string[] = []
+      const start = i
+      out.push(indent(depth), '<blockquote><p>')
       while (lines[i]?.startsWith('> ')) {
         const text = lines[i]!.slice(2)
         if (blockish(text)) return undefined
-        const html = renderInline(text, defs, opts)
-        if (html === undefined) return undefined
-        quote.push(html); i++
+        if (i > start) out.push('\n')
+        if (!renderInline(text, defs, opts, out)) return undefined
+        i++
       }
       if (lines[i] !== undefined && lines[i]!.trim() !== '') return undefined
-      out.push(indent(depth), '<blockquote><p>', quote.join('\n'), '</p></blockquote>')
+      out.push('</p></blockquote>')
       if (stats) accept(stats, 'blockQuotes', start, i)
       wrote = true; continue
     }
     if (line.startsWith('|')) {
-      const rendered = renderTable(lines, i, depth, defs, opts, stats)
+      const rendered = renderTable(lines, i, depth, defs, opts, out, stats)
       if (!rendered) return undefined
-      out.push(rendered.html); i = rendered.next; wrote = true; continue
+      i = rendered.next; wrote = true; continue
     }
     if (blockish(line)) return undefined
-    const start = i, paragraph: string[] = []
+    const start = i
+    out.push(indent(depth), '<p>')
     while (lines[i] !== undefined && lines[i]!.trim() !== '') {
       if (blockish(lines[i]!)) return undefined
-      const html = renderInline(lines[i]!, defs, opts)
-      if (html === undefined) return undefined
-      paragraph.push(html); i++
+      if (i > start) out.push('\n')
+      if (!renderInline(lines[i]!, defs, opts, out)) return undefined
+      i++
     }
-    out.push(indent(depth), '<p>', paragraph.join('\n'), '</p>')
+    out.push('</p>')
     if (stats) accept(stats, 'paragraphs', start, i)
     wrote = true
   }
   while (sections.length) out.push('\n', indent(sections.length - 1), '</section>'), sections.pop()
-  return out.join('')
+  return true
 }
 
-function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options): string | undefined {
+function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput): true | undefined {
   if (inlineComplex(text)) return undefined
-  const out: string[] = []
   let i = 0, plain = 0
   while (i < text.length) {
     const delimiter = text[i]!
     if (!'*\/`['.includes(delimiter)) { i++; continue }
-    out.push(escapeHtml(text.slice(plain, i)))
+    out.text(text.slice(plain, i))
     if (delimiter === '*' || delimiter === '/') {
       const close = text.indexOf(delimiter, i + 1)
       if (close <= i + 1 || /\s/.test(text[i + 1]!) || /\s/.test(text[close - 1]!) ||
         (i > 0 && (/[A-Za-z0-9]/.test(text[i - 1]!) || text[i - 1] === delimiter)) ||
         /[A-Za-z0-9]/.test(text[close + 1] ?? '')) return undefined
-      const inner = renderInline(text.slice(i + 1, close), defs, opts)
-      if (inner === undefined) return undefined
       const tag = delimiter === '*' ? 'strong' : 'em'
-      out.push(`<${tag}>`, inner, `</${tag}>`); i = close + 1
+      out.push(`<${tag}>`)
+      if (!renderInline(text.slice(i + 1, close), defs, opts, out)) return undefined
+      out.push(`</${tag}>`); i = close + 1
     } else if (delimiter === '`') {
       const close = text.indexOf('`', i + 1)
       if (close < 0) return undefined
       const code = text.slice(i + 1, close)
       if (/^\s|\s$/.test(code)) return undefined
-      out.push('<code>', escapeHtml(code), '</code>'); i = close + 1
+      out.push('<code>'); out.text(code); out.push('</code>'); i = close + 1
     } else {
       const labelEnd = text.indexOf(']', i + 1)
       if (labelEnd < 0) return undefined
@@ -276,16 +334,17 @@ function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options): 
         if (!def) return undefined
         href = def.href; title = def.title; end = close + 1
       } else return undefined
-      const inner = renderInline(label, defs, opts)
-      if (inner === undefined) return undefined
-      out.push('<a href="', escapeAttrValue(sanitizeUrl(href, opts)), '"',
-        title === undefined ? '' : ` title="${escapeAttrValue(title)}"`, '>', inner, '</a>')
+      out.push('<a href="'); out.attr(sanitizeUrl(href, opts)); out.push('"')
+      if (title !== undefined) { out.push(' title="'); out.attr(title); out.push('"') }
+      out.push('>')
+      if (!renderInline(label, defs, opts, out)) return undefined
+      out.push('</a>')
       i = end
     }
     plain = i
   }
-  out.push(escapeHtml(text.slice(plain)))
-  return out.join('')
+  out.text(text.slice(plain))
+  return true
 }
 
 function inlineComplex(text: string): boolean {
@@ -302,8 +361,8 @@ function inlineComplex(text: string): boolean {
   return false
 }
 
-function renderList(lines: string[], start: number, offset: number, depth: number, defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): { html: string; next: number } | undefined {
-  const out: string[] = [indent(depth), '<ul>']
+function renderList(lines: string[], start: number, offset: number, depth: number, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): { next: number } | undefined {
+  out.push(indent(depth), '<ul>')
   let i = start
   while (i < lines.length) {
     const line = lines[i]!, leading = line.length - line.trimStart().length
@@ -311,17 +370,18 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
     if (leading !== offset || !line.slice(leading).startsWith('- ')) return undefined
     const text = line.slice(leading + 2)
     if (!text || text.startsWith(' ') || text === '+' || blockish(text)) return undefined
-    const inline = renderInline(text, defs, opts)
-    if (inline === undefined) return undefined
     if (stats) accept(stats, 'unorderedListItems', i, i + 1)
-    out.push('\n', indent(depth + 1), '<li>', inline); i++
+    out.push('\n', indent(depth + 1), '<li>')
+    if (!renderInline(text, defs, opts, out)) return undefined
+    i++
     if (lines[i] !== undefined) {
       const nextIndent = lines[i]!.length - lines[i]!.trimStart().length
       if (nextIndent > offset) {
         if (nextIndent !== offset + 2 || !lines[i]!.slice(nextIndent).startsWith('- ')) return undefined
-        const nested = renderList(lines, i, offset + 2, depth + 2, defs, opts, stats)
+        out.push('\n')
+        const nested = renderList(lines, i, offset + 2, depth + 2, defs, opts, out, stats)
         if (!nested) return undefined
-        out.push('\n', nested.html, '\n', indent(depth + 1)); i = nested.next
+        out.push('\n', indent(depth + 1)); i = nested.next
       }
     }
     out.push('</li>')
@@ -333,7 +393,7 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
     }
   }
   out.push('\n', indent(depth), '</ul>')
-  return { html: out.join(''), next: i }
+  return { next: i }
 }
 
 function decimalListItem(line: string): { number: number; text: string } | undefined {
@@ -343,18 +403,18 @@ function decimalListItem(line: string): { number: number; text: string } | undef
   return Number.isSafeInteger(number) && number > 0 ? { number, text: match[2]! } : undefined
 }
 
-function renderOrderedList(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): { html: string; next: number } | undefined {
+function renderOrderedList(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): { next: number } | undefined {
   const first = decimalListItem(lines[start]!)
   if (!first) return undefined
-  const out: string[] = [indent(depth), '<ol', first.number === 1 ? '' : ` start="${first.number}"`, '>']
+  out.push(indent(depth), '<ol', first.number === 1 ? '' : ` start="${first.number}"`, '>')
   let i = start, expected = first.number
   while (i < lines.length) {
     const item = decimalListItem(lines[i]!)
     if (!item) break
     if (item.number !== expected || item.text === '+' || blockish(item.text)) return undefined
-    const inline = renderInline(item.text, defs, opts)
-    if (inline === undefined) return undefined
-    out.push('\n', indent(depth + 1), '<li>', inline, '</li>')
+    out.push('\n', indent(depth + 1), '<li>')
+    if (!renderInline(item.text, defs, opts, out)) return undefined
+    out.push('</li>')
     if (stats) accept(stats, 'orderedListItems', i, i + 1)
     expected++; i++
   }
@@ -364,24 +424,23 @@ function renderOrderedList(lines: string[], start: number, depth: number, defs: 
     if (next !== undefined && decimalListItem(next) !== undefined) return undefined
   }
   out.push('\n', indent(depth), '</ol>')
-  return { html: out.join(''), next: i }
+  return { next: i }
 }
 
-function renderTable(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): { html: string; next: number } | undefined {
+function renderTable(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): { next: number } | undefined {
   const heads = cells(lines[start]!), delimiter = cells(lines[start + 1] ?? '')
   if (!heads || !delimiter || !heads.length || heads.length !== delimiter.length) return undefined
   if (heads.some((cell) => cell === '^' || cell === '<')) return undefined
   const aligns = delimiter.map((cell) => alignment(cell))
   if (aligns.some((value) => value === false)) return undefined
-  const renderCell = (tag: 'th' | 'td', cell: string, index: number): string | undefined => {
-    const inline = renderInline(cell, defs, opts)
-    if (inline === undefined) return undefined
+  const renderCell = (tag: 'th' | 'td', cell: string, index: number): true | undefined => {
     const scope = tag === 'th' ? ' scope="col"' : ''
     const style = aligns[index] ? ` style="text-align: ${aligns[index]};"` : ''
-    return `<${tag}${scope}${style}>${inline}</${tag}>`
+    out.push(`<${tag}${scope}${style}>`)
+    if (!renderInline(cell, defs, opts, out)) return undefined
+    out.push(`</${tag}>`)
+    return true
   }
-  const header = heads.map((cell, index) => renderCell('th', cell, index))
-  if (header.some((cell) => cell === undefined)) return undefined
   if (stats) accept(stats, 'tableRows', start, start + 2)
   let i = start + 2
   const rows: string[][] = []
@@ -393,20 +452,16 @@ function renderTable(lines: string[], start: number, depth: number, defs: Map<st
     rows.push(row); i++
   }
   if (!rows.length) return undefined
-  const out = [
-    indent(depth), '<table>\n',
-    indent(depth + 1), '<thead>\n',
-    indent(depth + 2), '<tr>', header.join(''), '</tr>\n',
-    indent(depth + 1), '</thead>\n',
-    indent(depth + 1), '<tbody>',
-  ]
+  out.push(indent(depth), '<table>\n', indent(depth + 1), '<thead>\n', indent(depth + 2), '<tr>')
+  for (const [index, cell] of heads.entries()) if (!renderCell('th', cell, index)) return undefined
+  out.push('</tr>\n', indent(depth + 1), '</thead>\n', indent(depth + 1), '<tbody>')
   for (const row of rows) {
-    const rendered = row.map((cell, index) => renderCell('td', cell, index))
-    if (rendered.some((cell) => cell === undefined)) return undefined
-    out.push('\n', indent(depth + 2), '<tr>', rendered.join(''), '</tr>')
+    out.push('\n', indent(depth + 2), '<tr>')
+    for (const [index, cell] of row.entries()) if (!renderCell('td', cell, index)) return undefined
+    out.push('</tr>')
   }
   out.push('\n', indent(depth + 1), '</tbody>\n', indent(depth), '</table>')
-  return { html: out.join(''), next: i }
+  return { next: i }
 }
 
 function cells(line: string): string[] | undefined {

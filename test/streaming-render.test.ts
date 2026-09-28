@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, tryRenderHtmlStreaming } from '../src/index.js'
+import { carveToHtml, parse, renderHtml, tryRenderHtmlStreaming } from '../src/index.js'
 
 describe('streaming render boundary', () => {
   it('delivers multiple complete UTF-16 chunks with exact concatenation', () => {
@@ -24,4 +24,46 @@ describe('streaming render boundary', () => {
     ).toBe('needs-ast')
     expect(called).toBe(false)
   })
+})
+
+it('bounds large chunks and matches the AST renderer', () => {
+  for (const source of [
+    'word & text '.repeat(20_000).trimEnd(),
+    '```\n' + '<&>'.repeat(30_000) + '\n```\n',
+    '- item with *strong*\n'.repeat(8_000),
+    '| A | B |\n| --- | --- |\n' + '| alpha | beta |\n'.repeat(8_000),
+  ]) {
+    const chunks: string[] = []
+    expect(tryRenderHtmlStreaming(source, {}, (chunk) => {
+      expect(chunk.length).toBeLessThanOrEqual(4096)
+      chunks.push(chunk)
+    })).toBe('complete')
+    expect(chunks.length).toBeGreaterThan(10)
+    expect(chunks.join('')).toBe(renderHtml(parse(source)))
+  }
+})
+
+it('rejects late unsupported syntax without publishing the valid prefix', () => {
+  const source = 'plain paragraph\n\n'.repeat(10_000) + '{unsupported}\n'
+  expect(tryRenderHtmlStreaming(source, {}, () => { throw new Error('unexpected output') })).toBe('needs-ast')
+})
+
+it('snapshots URL options before callbacks can mutate them', () => {
+  const options = { allowedUrlSchemes: ['https'] }
+  const source = 'first\n\n[label](https://example.com)\n'
+  const expected = renderHtml(parse(source), options)
+  let output = ''
+  expect(tryRenderHtmlStreaming(source, options, (chunk) => {
+    options.allowedUrlSchemes.length = 0
+    output += chunk
+  })).toBe('complete')
+  expect(output).toBe(expected)
+})
+
+it('calls once for empty output and propagates sink errors', () => {
+  const chunks: string[] = []
+  expect(tryRenderHtmlStreaming('', {}, (chunk) => chunks.push(chunk))).toBe('complete')
+  expect(chunks).toEqual([''])
+  const failure = new Error('sink failed')
+  expect(() => tryRenderHtmlStreaming('text', {}, () => { throw failure })).toThrow(failure)
 })
