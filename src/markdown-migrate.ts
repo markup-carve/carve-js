@@ -1,3 +1,4 @@
+import { parseFragment } from 'parse5'
 import { isValidAttrPayload } from './attribute-parser.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
 /*
@@ -404,7 +405,7 @@ const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
   zdot: '\u017c',
 })
 
-const RE_HTML_ENTITY = /&(?:#([0-9]+)|#[xX]([0-9A-Fa-f]+)|([A-Za-z][A-Za-z0-9]+));/g
+const RE_HTML_ENTITY = /&(?:#([0-9]{1,7})|#[xX]([0-9A-Fa-f]{1,6})|([A-Za-z][A-Za-z0-9]{1,31}));/g
 const RE_DECODED_CARVE_PUNCTUATION = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$:;?]/g
 
 function decodeCodePoint(n: number): string {
@@ -432,7 +433,9 @@ function resolveEntity(
       : hex !== undefined
         ? decodeCodePoint(Number.parseInt(hex, 16))
         : NAMED_HTML_ENTITIES[named ?? '']
-  return decoded ?? match
+  if (decoded !== undefined) return decoded
+  const first = parseFragment(`<span data-value="${match}"></span>`).childNodes[0]
+  return first && 'attrs' in first ? first.attrs[0]?.value ?? match : match
 }
 
 /** Resolve every entity reference in `s`, with no Carve escaping applied. */
@@ -498,7 +501,7 @@ function decodeHtmlEntities(s: string): string {
       if (resolved === '\n' || resolved === '\r' || resolved === '\r\n') return ' '
       return escapeDecodedForCarve(resolved)
     },
-  )
+  ).replace(/&#/g, '&\\#')
   // Whitespace that a decode put at the START of the line is indentation to
   // every block rule that runs after this: `&#32;- item` is a paragraph in
   // cmark and would become a LIST here. `\ ` keeps it inline. The cost is one
@@ -709,9 +712,24 @@ function protectCodeSpans(s: string, repl: (span: string) => string): string {
     while (s[idx + n] === '`') n++
     return n
   }
+  const autolink = /<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*>/y
   let out = ''
   let i = 0
   while (i < s.length) {
+    if (s[i] === '\\' && /[!-/:-@\[-`{-~]/.test(s[i + 1] ?? '')) {
+      out += s.slice(i, i + 2)
+      i += 2
+      continue
+    }
+    if (s[i] === '<') {
+      autolink.lastIndex = i
+      const match = autolink.exec(s)
+      if (match) {
+        out += match[0]
+        i += match[0].length
+        continue
+      }
+    }
     if (s[i] !== '`') {
       out += s[i]
       i++
@@ -1018,7 +1036,20 @@ function convertInline(
 
   // Autolinks `<scheme:...>` and `<email>`: the URL/address is literal, so a
   // `_` or `*` inside it (e.g. /_v1_/) must not be rewritten as markup.
-  line = line.replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^>\s]+>/g, protect)
+  line = line.replace(/<([A-Za-z][A-Za-z0-9+.-]*):[^<>\s]*>/g, (match, scheme: string) => {
+    if (scheme.length < 2 || scheme.length > 32) return protect('\\<') + match.slice(1)
+    let body = match.slice(1, -1)
+    for (let pass = 0; pass < protectedSpans.length; pass++) {
+      const restored = body.replace(/\x00P(\d+)\x00/g, (_token, index: string) => protectedSpans[Number(index)] ?? _token)
+      if (restored === body) break
+      body = restored
+    }
+    if (!/[\\`]/.test(body)) return protect(match)
+    const href = body.replace(/[\\[\]()`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
+    return protect(renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
+      { type: 'link', href, children: [{ type: 'text', value: body }] },
+    ] }] }).replace(/\n$/, ''))
+  })
   line = line.replace(/<[^>\s@]+@[^>\s]+>/g, protect)
 
   // Markdown inline HTML is live markup. Protect tags that have no lossless

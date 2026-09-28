@@ -768,10 +768,8 @@ describe('markdownToCarve — HTML entities', () => {
     expect(carveToHtml(conv('&ouml;ffnen'))).toBe('<p>\u00f6ffnen</p>')
   })
 
-  // The table is a chosen subset, not the full HTML5 set. A name outside it
-  // must stay literal rather than resolve to something else.
-  it('leaves a name outside the table literal', () => {
-    expect(conv('&angmsdaa;')).toBe('&angmsdaa;')
+  it('decodes an HTML5 name outside the fast lookup table', () => {
+    expect(conv('&angmsdaa;')).toBe('⦨')
   })
 
   it('replaces a NUL entity rather than emitting one', () => {
