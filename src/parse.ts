@@ -1591,7 +1591,7 @@ function prepassOpensBlock(line: string): boolean {
     line === '' ||
     lineOpensBlock(line) ||
     RE_COMMENT_LINE.test(line) ||
-    line.startsWith('{') ||
+    isBlockAttributeLine(line) ||
     isContinuationMarker(line) ||
     RE_TABLE_CONT.test(line) ||
     RE_ABBR_DEF.test(line)
@@ -3414,7 +3414,7 @@ function classifyQuotedLine(
   if (
     RE_DEFLIST_TERM.test(content) ||
     RE_FOOTNOTE_DEF.test(content) ||
-    isLinkDefLine(content)
+    (leadingWhitespace(content) === 0 && isLinkDefLine(content))
   ) {
     closeBlockQuoteParagraph(state)
     return null
@@ -5442,7 +5442,14 @@ function startsInterruptingBlock(
       // anchor does that work for every other pattern here; RE_LINK_DEF is
       // whitespace-tolerant on purpose (other passes need it to see a quoted or
       // nested def) and so needs the test written out (carve-js#597).
-      return invisibleArms && i === 0 && (isLinkDefLine(ln) || RE_FOOTNOTE_DEF.test(ln))
+      // A definition rejected at its source column stays paragraph text after
+      // a container removes that indentation.
+      return (
+        invisibleArms &&
+        i === 0 &&
+        !lexer.declinedLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
+        (isLinkDefLine(ln) || RE_FOOTNOTE_DEF.test(ln))
+      )
     case '%':
       // line or block comment (invisible)
       return RE_COMMENT_LINE.test(ln) || RE_COMMENT_BLOCK.test(ln)
@@ -7318,12 +7325,9 @@ class ParseSession {
     // merely looks like a new item while folding into document/quote prose.
     let paraDepth = 0
     let paragraphFoldedAbove: boolean = false
-    // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
-    // is invisible. `prepassOpensBlock` sees only the leading brace, so the
-    // continuation lines read as prose and reopened a paragraph over a run the
-    // block parser consumes whole. `peekBlockAttributes`
-    // is the real reader and ends the run at the first `}` or a blank line.
-    let attrRun = false
+    // A wrapped attribute run closes the paragraph only once it validates.
+    // An unfinished brace stays prose, including any folded marker below it.
+    const attributeState: { attrRun: string | null } = { attrRun: null }
     const hasBlockMatchers = this.activeMatchers.some((e) => e.matchBlock)
     // Parsing every growing blank-free prefix would be quadratic. Price the two
     // parses in UTF-8 bytes and fail toward collecting when the allowance is
@@ -7832,9 +7836,8 @@ class ParseSession {
       if (matcherProbeCandidate && paraWasOpen && !markerInterruptsParagraph) {
         lazyProbeBudget = spendLazyProbeBudget(lexer, idx, lazyProbeBudget)
       }
-      const inAttrRun = attrRun
-      attrRun = !isBlankLine(raw) && !line.includes('}') && (attrRun || line.startsWith('{'))
-      paraState = isBlankLine(raw) || inAttrRun ? 'no' : 'ask'
+      const closesAttributes = trackWrappedAttributeRun(attributeState, line)
+      paraState = isBlankLine(raw) || closesAttributes ? 'no' : 'ask'
       paraDepth =
         paraState === 'no' ? 0 : paragraphReallyOpen ? paraDepthAbove : openCols.length
       // WHAT CARRIES IS "THIS LINE FOLDED", NOT "A PARAGRAPH WAS OPEN ABOVE IT".
