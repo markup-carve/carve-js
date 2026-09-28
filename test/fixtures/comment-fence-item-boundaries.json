@@ -1,0 +1,214 @@
+[
+  {
+    "source": "- a\n  %%%\n  p\n%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\nx\n%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\n %%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\nx\n %%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\n  %%%\ntail\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\nx\n  %%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\n   %%%\ntail\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\nx\n   %%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n  %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n  x\n  %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n   %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n  x\n   %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n    %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n  x\n    %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n     %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%\n    p\n  x\n     %%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n    %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n    x\n    %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n     %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n    x\n     %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n      %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n    x\n      %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n       %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%\n      p\n    x\n       %%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\n%%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\nx\n%%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\n %%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\nx\n %%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\n  %%%%\ntail\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\nx\n  %%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\n   %%%%\ntail\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  %%%%\n  p\nx\n   %%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<p>tail</p>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n  %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n  x\n  %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n   %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n  x\n   %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n    %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n  x\n    %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n     %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    %%%%\n    p\n  x\n     %%%%\n  tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        p\n      </li>\n    </ul>\n    x\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    x\n    %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n     %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            tail\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    x\n     %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n      %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    x\n      %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n       %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a</li>\n        </ul>\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  - a\n    - a\n      %%%%\n      p\n    x\n       %%%%\n    tail\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            p\n          </li>\n        </ul>\n        x\n        tail\n      </li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  %%%\n  - n\nx\n  %%%\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>n</li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>"
+  },
+  {
+    "source": "- a\n  %%%\n  c\n%%%\ntail\n",
+    "html": "<ul>\n  <li>a\n    tail\n  </li>\n</ul>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\nx\n\n```\n%%%\n```\n",
+    "html": "<ul>\n  <li>a\n    p\n  </li>\n</ul>\n<p>x</p>\n<pre><code>%%%\n</code></pre>"
+  },
+  {
+    "source": "- a\n  %%%\n  [r]: /u\nx\n\n```\n%%%\n```\n\n[r][]\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>x</p>\n<pre><code>%%%\n</code></pre>\n<p><a href=\"/u\">r</a></p>"
+  },
+  {
+    "source": "- a\n  %%%\n  p\n%%%%\n  %%%\ntail\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>"
+  }
+]
