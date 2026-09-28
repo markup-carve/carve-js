@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { autolink, carveToHtml } from '../src/index.js'
+import type { MatcherContext } from '../src/extension.js'
 import { citations } from '../src/citations.js'
 import { index } from '../src/index-terms.js'
 import { perfIt } from './helpers/scaling.js'
@@ -163,8 +164,16 @@ describe('Fix 4: autolink EMAIL scans near-linearly and still matches valid emai
   // position (O(n^2)). Verify (a) near-linear scaling on the adversarial input
   // and (b) identical matches on valid addresses.
   const ext = autolink()
-  const match = (text: string, pos: number) =>
-    (ext.matchInline as (t: string, p: number) => { end: number } | null)(text, pos)
+  // A matcher reads its context, so the cast must not drop it: called without
+  // one, autolink()'s link-label check threw before any scan was measured.
+  const ctx: MatcherContext = {
+    inLinkLabel: false,
+    parseInlines: () => [],
+    parseBlocks: () => [],
+    linkDefs: new Map(),
+    abbrDefs: new Map(),
+  }
+  const match = (text: string, pos: number) => ext.matchInline?.(text, pos, ctx) ?? null
 
   // Cost PER SCANNED POSITION, not total elapsed. That normalization is what
   // makes the assertion meaningful: "linear" means the per-position cost is
