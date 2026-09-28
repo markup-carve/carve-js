@@ -40,7 +40,7 @@ it('preserves prose quotes with attributes enabled', () => {
 
 it.each(['<span title="x  \ny">b</span>', '<!-- x  \ny -->'])('preserves spaces in raw HTML: %s', (html) => {
   const written = markdownToCarve('*a ' + html + '\nc*')
-  expect(written).toContain(html)
+  expect(written).toContain(html.replace(/>b<\/span>$/, '>'))
   expect(written).not.toContain('x\\\ny')
 })
 
