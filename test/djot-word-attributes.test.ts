@@ -3,6 +3,40 @@ import { carveToHtml, djotToCarve } from '../src/index.js'
 
 it.each([
   [
+    "x^a\\^b{.c}^",
+    "<p>x<sup><span class=\"c\">a^b</span></sup></p>"
+  ],
+  [
+    "a\\\\^b{.c}^",
+    "<p>a\\<sup><span class=\"c\">b</span></sup></p>"
+  ],
+  [
+    "x {.c}",
+    "<p>x&nbsp;{.c}</p>"
+  ]
+,
+  [
+    "^b{.c}",
+    "<p><span class=\"c\">^b</span></p>"
+  ],
+  [
+    "a^b{.c}^",
+    "<p>a<sup><span class=\"c\">b</span></sup></p>"
+  ],
+  [
+    "a~b{.c}~ z",
+    "<p>a<sub><span class=\"c\">b</span></sub> z</p>"
+  ],
+  [
+    "| a |b{.c}|",
+    "<table>\n  <tbody>\n    <tr><td>a</td><td><span class=\"c\">b</span></td></tr>\n  </tbody>\n</table>"
+  ],
+  [
+    "x{_a=b_}",
+    "<p>x<em>a=b</em></p>"
+  ]
+,
+  [
     "_b{.c}_",
     "<p><em><span class=\"c\">b</span></em></p>"
   ],
