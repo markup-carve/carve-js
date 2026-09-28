@@ -9346,6 +9346,23 @@ class ParseSession {
       attrRun: null,
     }
     const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
+    // Quoted lines not yet fed to the tracker. `state` is read only when an
+    // unmarked line asks whether the paragraph is still open (or a `+` closes
+    // it), so tracking waits until then. The tracker descends every nested
+    // quote on the line, and a quote that ends at EOF or a blank line would
+    // otherwise pay that at every level - quadratic in the nesting depth.
+    const untracked: Array<[content: string, lineIndex: number]> = []
+    const trackUntracked = (): void => {
+      for (const [content, lineIndex] of untracked) {
+        trackBlockQuoteLazyState(
+          content,
+          state,
+          (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
+          (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
+        )
+      }
+      untracked.length = 0
+    }
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       const m = RE_BLOCKQUOTE.exec(ln)
@@ -9354,13 +9371,8 @@ class ParseSession {
         lexer.consume()
         const content = m[1] ?? ''
         inner.push(content)
+        untracked.push([content, lineIndex])
         innerLineNumbers.push(lexer.lineNumber(lineIndex))
-        trackBlockQuoteLazyState(
-          content,
-          state,
-          (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-          (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
-        )
         continue
       }
       // Continuation marker (Carve, PART 9 §17): a lone `+` at column 0 after a
@@ -9392,6 +9404,7 @@ class ParseSession {
           innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
           // The attached block closed any open paragraph: a following unmarked
           // line no longer lazily continues the quote.
+          trackUntracked()
           closeBlockQuoteParagraph(state)
         }
         continue
@@ -9408,6 +9421,7 @@ class ParseSession {
       // open paragraph (heading/table/fence/thematic/div), terminates the quote
       // instead of being swallowed. This is also what ends the quote on a lazy
       // list marker when no open paragraph precedes it.
+      trackUntracked()
       if (!blockQuoteParagraphOpen(state)) break
       const lineIndex = lexer.pos
       lexer.consume()
