@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markdownToCarve, migrateMarkdown, parse } from '../src/index.js'
+import { markdownToCarve, migrateMarkdown, parse, carveToHtml } from '../src/index.js'
 import type { Document, BlockNode, ListItem, Table } from '../src/index.js'
 
 // A GFM body row whose every cell is blank has no Carve spelling
@@ -48,8 +48,10 @@ describe('an all-blank row in an imported Markdown table', () => {
     expect(drops('| a | b |\n|---|---|\n|   | 4 |\n')).toStrictEqual([])
   })
 
-  it('leaves a cell holding an escaped space alone', () => {
-    expect(markdownToCarve('| a | b |\n|---|---|\n| \\  | \\  |\n')).toBe('|= a |= b |\n| \\ | \\ |\n')
+  it('keeps a backslash before trailing cell spaces literal', () => {
+    const carve = markdownToCarve('| a | b |\n|---|---|\n| \\  | \\  |\n')
+    expect(carve).toBe('|= a |= b |\n| \\\\ | \\\\ |\n')
+    expect(carveToHtml(carve)).toContain('<td>\\</td>')
   })
 })
 
