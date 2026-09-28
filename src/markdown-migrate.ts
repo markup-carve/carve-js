@@ -477,6 +477,11 @@ const RE_QUOTED_TITLE = /^(\s*)(["'])([\s\S]*)\2(\s*)$/
  * this does not recognize is left exactly as it was rather than guessed at.
  */
 function decodeEntitiesInTitle(rest: string): string {
+  const parenthesized = /^(\s*)\(([^()]*)\)(\s*)$/.exec(rest)
+  if (parenthesized) {
+    const decoded = decodeHtmlEntitiesRaw(parenthesized[2]!).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    return `${parenthesized[1]}"${decoded}"${parenthesized[3]}`
+  }
   const m = RE_QUOTED_TITLE.exec(rest)
   if (!m) return rest
   const [, lead, quote, body, trail] = m
@@ -1076,7 +1081,7 @@ function convertInline(
 
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
-    const inner = paren.slice(1, -1).replace(/^[ \t]+|[ \t]+$/g, '')
+    const inner = paren.slice(1, -1).replace(/^[ \t\n]+|[ \t\n]+$/g, '')
     // Non-ASCII spaces and a BOM belong to the URL, not the title separator.
     const pointyEnd = inner.startsWith('<') ? inner.indexOf('>') : -1
     if (inner.startsWith('<') && pointyEnd < 0) return undefined
@@ -1105,6 +1110,8 @@ function convertInline(
   const protectDestinations = (pattern: RegExp): void => {
     const subject = line
     let cursor = 0, depth = 0, pairedEnd = -1
+    let lineCursor = 0, lineNumber = 0
+    const origins = joinedLines ? input.split('\n').map((_text, index) => index).filter(index => !joinedLines.has(index)) : []
     let commentEnd = subject.indexOf('-->')
     const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
     line = subject.replace(pattern, (match, label: string, dest: string, offset: number) => {
@@ -1126,6 +1133,26 @@ function convertInline(
       const image = label.startsWith('!')
       const written = protectDestination(image ? imageLabel(label) : '', dest)
       if (written.startsWith('\x00P')) cursor = offset + match.length
+      if (joinedLines && written.startsWith('\x00P')) {
+        while (lineCursor < offset) {
+          if (subject[lineCursor] === '\x00') {
+            const token = /^\x00P(\d+)\x00/.exec(subject.slice(lineCursor))
+            if (token) {
+              lineNumber += (protectedSpans[Number(token[1])]!.match(/\n/g) ?? []).length
+              lineCursor += token[0].length
+              continue
+            }
+          }
+          if (subject[lineCursor++] === '\n') lineNumber++
+        }
+        const token = /^\x00P(\d+)\x00$/.exec(written)!
+        const result = (image ? '' : label) + protectedSpans[Number(token[1])]!
+        const removed = (match.match(/\n/g) ?? []).length - (result.match(/\n/g) ?? []).length
+        for (let n = 1; n <= removed; n++) {
+          const origin = origins[lineNumber + n]
+          if (origin !== undefined) joinedLines.add(origin)
+        }
+      }
       return (image ? '' : label) + written
     })
   }
@@ -1134,7 +1161,7 @@ function convertInline(
   protectDestinations(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^\]]*\])*\])(${pointyDestination})`, 'g'))
   protectDestinations(new RegExp(String.raw`(?<=\])()(${pointyDestination})`, 'g'))
 
-  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\((?:[^()\s]|\([^()\n]*\))+[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*')[ \t]*\))/g
+  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
   protectDestinations(multilineTitle)
 
   // Images `![alt](dest)`: Carve renders the alt as raw text, so protect the
