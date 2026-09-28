@@ -1101,7 +1101,7 @@ function collectListItemIndentWarnings(
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
     if (owner?.markerLineDeepestColumn === authored.column) continue
     const openFence = owner ? ambiguousFences.get(owner) : undefined
-    if (openFence) {
+    if (openFence && containing === owner) {
       const closes = openFence.kind === 'code'
         ? new RegExp(`^${openFence.run[0] === '`' ? '`' : '~'}{${openFence.run.length},}[ \\t]*$`).test(authored.rest)
         : new RegExp(`^:{${openFence.run.length}}[ \\t]*$`).test(authored.rest)
@@ -1109,6 +1109,7 @@ function collectListItemIndentWarnings(
       reported.add(lineNo)
       continue
     }
+    if (openFence && owner) ambiguousFences.delete(owner)
     // Payload inside an already parsed verbatim/comment/container region is
     // data, even when it happens to begin with `#`, `>` or another block
     // marker. Suggesting a dedent or escape there would corrupt that payload.
