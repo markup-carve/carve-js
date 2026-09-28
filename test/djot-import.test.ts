@@ -111,3 +111,22 @@ describe('djotToCarve', () => {
     expect(carveToHtml(djotToCarve(source))).toContain(needle)
   })
 })
+
+
+describe('Djot heading continuations', () => {
+  it.each([
+    ['# Heading\n# continued\n', '# Heading continued\n'],
+    ['# Heading\nlazy\n', '# Heading lazy\n'],
+    ['# Heading\nlazy\n# more\nlazy\n\ntext\n', '# Heading lazy more lazy\n\ntext\n'],
+  ])('folds %s before inline conversion', (source, expected) => {
+    expect(djotToCarve(source)).toBe(expected)
+  })
+  it.each([
+    '# Heading\n\ntext\n',
+    '# Heading\n## Next\n',
+    '```\n# Heading\nlazy\n```\n',
+    '# Heading\n> quote\n',
+  ])('preserves the boundary in %s', (source) => {
+    expect(djotToCarve(source)).toBe(source)
+  })
+})
