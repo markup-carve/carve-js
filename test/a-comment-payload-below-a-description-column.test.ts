@@ -75,6 +75,12 @@ describe('a comment payload below a description column', () => {
     expect(carveToHtml(':: t\n:  d\n\n   %%%\n' + body)).toBe(expected)
   })
 
+  it.each(['```', '~~~', '``` =html'])('keeps an unclosed %s after payload prose inline', (fence) => {
+    expect(carveToHtml(':: t\n:  d\n\n   %%%\n   p\n   ' + fence + '\nz\n   %%%\n')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',
+    )
+  })
+
   it('keeps the list-item boundary at a below-column payload line', () => {
     expect(carveToHtml('- d\n\n  %%%\n  p\nz\n  %%%\n')).toBe(
       '<ul>\n  <li>d\n    p\n  </li>\n</ul>\n<p>z</p>',

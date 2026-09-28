@@ -9225,6 +9225,7 @@ class ParseSession {
         RE_DEFLIST_TERM.test(line) ||
         RE_DEFLIST_DEF.test(line) ||
         (afterBlank && indentColumns(line, contentCol) < contentCol)
+      let commentPayloadState: ItemLazyState | null = null
       /**
        * Feed one collected body line to the S4 tracker.
        *
@@ -9240,7 +9241,6 @@ class ParseSession {
        * fence degraded to inline verbatim and its paragraph stayed open one column
        * past where the same fence ends the body.
        */
-      let commentPayloadState: ItemLazyState | null = null
       const track = (
         content: string,
         atLineIndex?: number,
@@ -9253,26 +9253,22 @@ class ParseSession {
         if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
           commentPayloadState = { ...lazyState, quoteInner: null }
         }
-        trackItemLazyState(
-          content,
-          lazyState,
-          (marker) => {
-            if (atLineIndex === undefined) return true
-            const answer = itemFenceHasCloser(
-              lexer,
-              marker,
-              atLineIndex,
-              openerCol,
-              defFenceMemo,
-              bodyEndsAt,
-            )
-            lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
-            return answer
-          },
-          atContentColumn,
-        )
+        const hasFenceCloser = (marker: string): boolean => {
+          if (atLineIndex === undefined) return true
+          const answer = itemFenceHasCloser(
+            lexer,
+            marker,
+            atLineIndex,
+            openerCol,
+            defFenceMemo,
+            bodyEndsAt,
+          )
+          lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
+          return answer
+        }
+        trackItemLazyState(content, lazyState, hasFenceCloser, atContentColumn)
         if (lazyState.opaque?.kind === 'comment' && commentPayloadState !== null) {
-          trackItemLazyState(content, commentPayloadState, () => true, atContentColumn, () => false)
+          trackItemLazyState(content, commentPayloadState, hasFenceCloser, atContentColumn, () => false)
           lazyState.lazyFoldable = commentPayloadState.lazyFoldable
         } else {
           commentPayloadState = null
