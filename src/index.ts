@@ -452,7 +452,7 @@ export function parseWithProvenance(source: string, uri: string, opts: ParseOpti
 
 /** Create a source-authoritative, UTF-16-addressed editor session. */
 export function createEditorSession(source: string, opts: ParseOptions = {}) {
-  return createEditorSessionInternal(source, (next, options) => toAstJsonImpl(parse(next, options)), opts)
+  return createEditorSessionInternal(source, (next, options) => toAstJsonImpl(parse(next, options)), opts, true)
 }
 
 /** Render a Carve AST to HTML matching the spec corpus. */
