@@ -10634,6 +10634,11 @@ class ParseSession {
         // tight, which is the opposite error - the item does hold a second
         // paragraph, it just has a comment in front of it (carve#621).
         while (j < nested.length) {
+          // A definition's body belongs to the note, including visible blocks.
+          if (inFootnoteRun[j]) {
+            j++
+            continue
+          }
           if (isBlankLine(nested[j])) {
             j++
             continue
