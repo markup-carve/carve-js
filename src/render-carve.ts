@@ -1094,7 +1094,7 @@ function escapeNoteReferenceLabel(label: string, ctx: CarveContext): string {
   return /^\^[^\]\r\n]/.test(label) ? `\\${label}` : label
 }
 
-function renderImage(node: Image): string {
+function renderImage(node: Image, attrs: string = renderAttrs(node.attrs)): string {
   // An unresolved reference image round-trips via its verbatim source, exactly
   // like an unresolved reference link (renderLink); `![alt]()` would change the
   // rendered text and break the carveToHtml(fmt(x)) == carveToHtml(x) invariant.
@@ -1106,7 +1106,7 @@ function renderImage(node: Image): string {
     return node.rawRef
   }
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
-  return `![${escapeImageAlt(node.alt)}](${escapeDestination(node.src)}${title})${renderAttrs(node.attrs)}`
+  return `![${escapeImageAlt(node.alt)}](${escapeDestination(node.src)}${title})${attrs}`
 }
 
 // Superscript and subscript have no bare delimiter form -- always emit the
@@ -1247,15 +1247,17 @@ function renderBlockAttrs(attrs: Attrs | undefined): string {
   return rendered
 }
 
-function renderAttrs(attrs: Attrs | undefined): string {
+function renderAttrs(attrs: Attrs | undefined, markers: string = ''): string {
+  const conflicts = (value: string) => [...markers].some(marker => value.includes(marker))
+  const quote = (value: string) => quoteAttrValue(value, conflicts(value))
   if (!attrs) return ''
   const parts: string[] = []
   const kv = attrs.keyValues ?? {}
-  const idAsKey = attrs.id !== undefined && !isExplicitIdOrClassIdentifier(attrs.id)
+  const idAsKey = attrs.id !== undefined && (!isExplicitIdOrClassIdentifier(attrs.id) || conflicts(attrs.id))
 
   const emitId = () => {
     if (attrs.id === undefined) return
-    if (idAsKey) parts.push(`id=${quoteAttrValue(attrs.id)}`)
+    if (idAsKey) parts.push(`id=${quote(attrs.id)}`)
     else parts.push(`#${escapeAttrNameValue(attrs.id)}`)
   }
   const emitClasses = () => {
@@ -1266,7 +1268,7 @@ function renderAttrs(attrs: Attrs | undefined): string {
       // ':')+` and cannot hold `w-1/2`. Writing `.` regardless emitted source
       // its own parser reads as a PARAGRAPH - `{.-2col}` came back as text plus
       // a class-less element, losing the class.
-      if (isExplicitIdOrClassIdentifier(cls)) parts.push(`.${escapeAttrNameValue(cls)}`)
+      if (isExplicitIdOrClassIdentifier(cls) && !conflicts(cls)) parts.push(`.${escapeAttrNameValue(cls)}`)
       else parts.push(`class="${cls.replace(/[\\"|]/g, '\\$&')}"`)
     }
   }
@@ -1288,8 +1290,8 @@ function renderAttrs(attrs: Attrs | undefined): string {
     // fallback here at all: `{_u=""}` written as `{_u}` is text and `{_x_=""}`
     // is a forced underline. Either way the writer would change the document,
     // which PART 11 §1 forbids.
-    else if (value === '' && isBooleanAttrName(key)) parts.push(escapeAttrKey(key))
-    else parts.push(`${escapeAttrKey(key)}=${quoteAttrValue(value)}`)
+    else if (value === '' && isBooleanAttrName(key) && !conflicts(key)) parts.push(escapeAttrKey(key))
+    else parts.push(`${escapeAttrKey(key)}=${quote(value)}`)
   }
 
   // Honor the author's source slot order so the reparsed Attrs - and therefore
@@ -1322,12 +1324,12 @@ function isLanguageTag(value: string): boolean {
   return value === '' || /^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value)
 }
 
-function quoteAttrValue(value: string): string {
+function quoteAttrValue(value: string, force: boolean = false): string {
   // Unquoted values exclude space, tab, CR, LF, quotes, pipes and backslashes.
   // Keep braces quoted too. Other whitespace remains valid unquoted text.
   // Quoted backslashes are doubled; pipes are escaped so table cell splitting
   // leaves them inside the value (CARVE-P2-019).
-  if (/^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
+  if (!force && /^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
   return `"${value.replace(/[\\"|]/g, '\\$&')}"`
 }
 
@@ -2691,6 +2693,9 @@ class CarveRenderSession {
     this.writtenBraced = new WeakSet()
     this.openEmphasisKinds = new Set()
     this.bracedForScope = new WeakSet()
+    this.attributeEnclosures = []
+    this.expandedBoldItalic = new WeakSet()
+    this.bracedForAttributes = new WeakSet()
     // "Already written on a description line" is true of THIS PASS, not of the
     // document. renderCarve runs this function twice and picks between the two
     // forms (PART 11 §4), so a set that survives the first pass tells the second
@@ -4065,7 +4070,7 @@ class CarveRenderSession {
     // before dispatch so the switch below only ever sees current types.
     node = normalizeLegacyInline(node)
 
-    const withAttrs = (body: string) => `${renderSession.bracedOnce(node, body)}${renderAttrs(node.attrs)}`
+    const withAttrs = (body: string) => `${renderSession.bracedOnce(node, body)}${renderSession.inlineAttrs(node.attrs, node)}`
     // An empty brace pair is not a construct, and `{--}` is the braced en dash
     // (markup-carve/carve#1608), so an empty mark has no spelling.
     const marked = (children: InlineNode[]): string => {
@@ -4080,13 +4085,17 @@ class CarveRenderSession {
       // An empty code span is written as an unclosed run, which swallows a bare
       // closer; only the braced one ends it.
       const last = children[children.length - 1]
-      return (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node)
+      return (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
         ? renderForcedEmphasis(delim, content)
         : renderEmphasis(delim, content, prevChar, nextChar)
     }
     // E3 pushes no second level of one kind while one is open, and the forced
     // form is on the same stack, so a span of a kind already open has no
     // spelling at all (markup-carve/carve#2078).
+    if (node.type === 'insert' || node.type === 'delete') {
+      renderSession.attributeEnclosures.push(node)
+      try { return renderInlineDispatch() } finally { renderSession.attributeEnclosures.pop() }
+    }
     if (EMPHASIS_KINDS.has(node.type)) {
       if (renderSession.openEmphasisKinds.has(node.type)) {
         throw new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
@@ -4096,9 +4105,11 @@ class CarveRenderSession {
       const scoped = node.type === 'superscript' || node.type === 'subscript' || holdsOpenKind(children, outer)
       if (scoped) renderSession.bracedForScope.add(node)
       renderSession.openEmphasisKinds = scoped ? new Set([node.type]) : new Set([...outer, node.type])
+      renderSession.attributeEnclosures.push(node)
       try {
         return renderInlineDispatch()
       } finally {
+        renderSession.attributeEnclosures.pop()
         renderSession.openEmphasisKinds = outer
       }
     }
@@ -4128,10 +4139,12 @@ class CarveRenderSession {
           const content = renderSession.renderInlines(inner.children, ctx)
           // `/*` needs content that hugs it: `/* x*/` or `/**/` reparses as an
           // emphasis holding literal stars, so fall back to the nested spelling.
-          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content)) {
+          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content) && !renderSession.bracedForAttributes.has(node)) {
             return withAttrs(`/*${content}*/`)
           }
         }
+        renderSession.expandedBoldItalic.add(node)
+        renderSession.bracedForAttributes.delete(node)
         return withAttrs(emphasisOf('*', node.children))
       }
       case 'underline':
@@ -4155,19 +4168,19 @@ class CarveRenderSession {
         // span. An attribute block is written after it, so a code span carrying
         // one keeps the closed form (and `raw_inline` and `literal_inline`, which
         // both append to `renderCode`, never ask for it).
-        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderAttrs(node.attrs) === ''), ctx))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === ''), ctx))
       case 'link':
         return renderSession.renderLink(node, ctx)
       case 'image':
-        return renderImage(node)
+        return renderImage(node, renderSession.inlineAttrs(node.attrs, node))
       case 'span':
-        return `[${escapeNoteReferenceLabel(renderSession.renderInlines(node.children, ctx), ctx)}]${renderAttrs(node.attrs) || '{}'}`
+        return `[${escapeNoteReferenceLabel(renderSession.renderInlines(node.children, ctx), ctx)}]${renderSession.inlineAttrs(node.attrs, node) || '{}'}`
       case 'ruby': {
         return renderSession.renderInlines(flattenRubyForCarve([node]), ctx)
       }
       case 'small_caps': {
         const content = renderSession.renderInlines(node.children, ctx)
-        return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderAttrs(node.attrs)}` : content
+        return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderSession.inlineAttrs(node.attrs, node)}` : content
       }
       case 'math':
         return withAttrs(renderSession.renderMath(node.display, node.content))
@@ -4183,7 +4196,7 @@ class CarveRenderSession {
         // §27: `!` prefix on a verbatim span. A trailing attribute block is the
         // ordinary inline attribute block (same as a code span carries).
         // renderCode widens the backtick fence when the content holds backticks.
-        return `!${renderSession.renderCode(node.content, false, 'literal_inline')}${renderAttrs(node.attrs)}`
+        return `!${renderSession.renderCode(node.content, false, 'literal_inline')}${renderSession.inlineAttrs(node.attrs, node)}`
       case 'symbol':
         return withAttrs(`:${escapeSymbolName(node.name)}:`)
       case 'autolink':
@@ -4193,7 +4206,7 @@ class CarveRenderSession {
       case 'mention':
       case 'tag':
         // An attribute block after a mention or tag stays text (carve-php#2083).
-        if (renderAttrs(node.attrs) !== '') {
+        if (renderSession.inlineAttrs(node.attrs, node) !== '') {
           throw new SourceUnspellableError(node.type, `a ${node.type} carrying attributes has no Carve source spelling`)
         }
         return node.type === 'mention' ? `@${spellableName(node.user, 'mention')}` : `#${spellableName(node.name, 'tag')}`
@@ -4207,7 +4220,7 @@ class CarveRenderSession {
           ? `^[${renderSession.renderInlines(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
           : `[^${writeFlatBracketRun(node.id ?? '')}]`)
       case 'non_breaking_space':
-        return renderAttrs(node.attrs) ? `[${renderSession.sentinels[3]}]${renderAttrs(node.attrs)}` : renderSession.sentinels[3]!
+        return renderSession.inlineAttrs(node.attrs, node) ? `[${renderSession.sentinels[3]}]${renderSession.inlineAttrs(node.attrs, node)}` : renderSession.sentinels[3]!
       case 'soft_break':
         return '\n'
       case 'hard_break':
@@ -4283,7 +4296,7 @@ class CarveRenderSession {
     }
     const text = escapeNoteReferenceLabel(this.renderInlines(node.children, ctx), ctx)
     const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
-    return `[${text}](${escapeDestination(node.href)}${title})${renderAttrs(node.attrs)}`
+    return `[${text}](${escapeDestination(node.href)}${title})${this.inlineAttrs(node.attrs, node)}`
   }
 
   /**
@@ -4635,6 +4648,26 @@ class CarveRenderSession {
 
   /** The inline nodes this pass wrote with a braced opener. */
   private writtenBraced = new WeakSet<object>()
+
+  /** Attribute values must not close an enclosing emphasis span. */
+  private attributeEnclosures: InlineNode[] = []
+  private expandedBoldItalic = new WeakSet<object>()
+  private bracedForAttributes = new WeakSet<object>()
+
+  private inlineAttrs(attrs: Attrs | undefined, owner: InlineNode): string {
+    const markers: Record<string, string> = {
+      emphasis: '/', strong: '*', underline: '_', strike: '~',
+      superscript: '^', subscript: ',', highlight: '=', insert: '+', delete: '-',
+    }
+    const enclosures = this.attributeEnclosures.filter(node => node !== owner)
+    const delimiters = (node: InlineNode) => node.type === 'strong' && node.boldItalic && !this.expandedBoldItalic.has(node) ? '*/' : markers[node.type] ?? ''
+    const active = enclosures.map(delimiters).join('')
+    const rendered = renderAttrs(attrs, active)
+    for (const node of enclosures) {
+      if ([...delimiters(node)].some(marker => rendered.includes(marker))) this.bracedForAttributes.add(node)
+    }
+    return rendered
+  }
 
   /** The emphasis kinds open around the node being written. */
   private openEmphasisKinds = new Set<string>()
