@@ -21,6 +21,17 @@ describe('definition-like lines stay in their paragraph', () => {
     expect(html('> [d]: u\n)\n')).toBe('<blockquote>\n\n</blockquote>\n<p>)</p>')
   })
 
+  it.each([
+    ['> - a\n>   [d]: u\n)\n', 'ul'],
+    ['> 1. a\n>    [d]: u\n)\n', 'ol'],
+    ['> - a\n>\n>   [d]: u\n)\n', 'ul'],
+    ['> - a\n>   [^f]: u\n)\n', 'ul'],
+  ])('matches the oracle for a definition inside a quoted list (%j)', (source, tag) => {
+    expect(html(source)).toBe(
+      `<blockquote>\n  <${tag}>\n    <li>a</li>\n  </${tag}>\n  <p>)</p>\n</blockquote>`,
+    )
+  })
+
   it('keeps an underindented definition in the same tight-list paragraph', () => {
     expect(html('* : |\n [f]: t\n')).toBe('<ul>\n  <li>: |\n[f]: t</li>\n</ul>')
   })
