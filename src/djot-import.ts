@@ -227,7 +227,7 @@ function foldHeadingContinuations(source: string): string {
     }
     const marker = new RegExp(`^${heading[1]} +`)
     while (i + 1 < lines.length && (line.match(/\\+$/)?.[0].length ?? 0) % 2 === 0) {
-      const next = lines[i + 1]!.trimStart()
+      const next = lines[i + 1]!.replace(/^[ \t]+/, '')
       let part: string
       if (marker.test(next)) {
         part = next.replace(marker, '')
