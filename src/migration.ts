@@ -54,11 +54,23 @@ export function migrateHtml(source: string, options: HtmlImportOptions = {}): Mi
   }
 }
 
-function unverified(
+function assessed(
+  source: string,
   value: string,
   sourceFormat: Exclude<SourceFormat, 'html'>,
   known: readonly MigrationDiagnostic[] = [],
 ): MigrationResult {
+  const literal = source.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
+  const written = value.replace(/\n+$/, '')
+  if (known.length === 0 && (literal === '' || /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+)*$/u.test(literal)) && written === literal) {
+    return { value, report: { schemaVersion: 2, sourceFormat, diagnostics: [{
+      code: 'literal-text-verified',
+      message: 'Verified the complete input as literal text.',
+      severity: 'info',
+      fidelity: 'preserved',
+      confidence: 'exact',
+    }] } }
+  }
   const diagnostics: MigrationDiagnostic[] = [{
     code: 'fidelity-unverified',
     message: `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
@@ -78,7 +90,7 @@ export function migrateMarkdown(
   // beside `fidelity-unverified` rather than replacing it: the importer still
   // reports nothing about the constructs it has no answer for, so the
   // conservative worst case still stands for the rest of the document.
-  return unverified(result.value, 'markdown', result.losses.map((loss) => ({
+  return assessed(source, result.value, 'markdown', result.losses.map((loss) => ({
     code: loss.code,
     message: loss.message,
     severity: 'warning',
@@ -88,9 +100,9 @@ export function migrateMarkdown(
 }
 
 export function migrateDjot(source: string): MigrationResult {
-  return unverified(djotToCarve(source), 'djot')
+  return assessed(source, djotToCarve(source), 'djot')
 }
 
 export function migrateBbcode(source: string): MigrationResult {
-  return unverified(bbcodeToCarve(source), 'bbcode')
+  return assessed(source, bbcodeToCarve(source), 'bbcode')
 }
