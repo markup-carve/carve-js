@@ -14,12 +14,13 @@ import {
 } from './carve-escape.js'
 import {
   extractReferenceDefinitions,
+  plainAltText,
   referenceDestinationLabel,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
-import { isTableRow, parse } from './parse.js'
+import { isTableRow, parse, rawBracketRunCloses } from './parse.js'
 import { escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 
 /**
@@ -1037,9 +1038,13 @@ function convertInline(
     const enc = writeMarkdownDestination(url, protectedSpans).replace(/[<> \t"`]/g, char =>
       '%' + char.charCodeAt(0).toString(16).toUpperCase(),
     )
-    return `(${enc}${decodeEntitiesInTitle(rest)})`
+    return `(${enc}${decodeEntitiesInTitle(rest).replace(/^[ \t\n]+/, ' ')})`
   }
 
+  const imageLabel = (label: string): string => {
+    const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw)
+    return rawBracketRunCloses(alt) ? `![${alt}]` : label
+  }
   const protectDestination = (alt: string, dest: string): string => {
     const encoded = encodeDest(dest)
     return encoded === undefined ? alt + '\\(' + dest.slice(1) : protect(alt + encoded)
@@ -1066,7 +1071,7 @@ function convertInline(
       }
       if (cursor > offset || (label === '' && pairedEnd !== offset - 1)) return match
       const image = label.startsWith('!')
-      const written = protectDestination(image ? label : '', dest)
+      const written = protectDestination(image ? imageLabel(label) : '', dest)
       if (written.startsWith('\x00P')) cursor = offset + match.length
       return (image ? '' : label) + written
     })
@@ -1087,6 +1092,14 @@ function convertInline(
   // Link destinations `](dest "title")`. (Images already handled above.) The
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
   protectDestinations(/(?<=\])()(\((?:[^()\n]|\([^()\n]*\))*\))/g)
+
+  line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
+    (match, label: string, reference: string | undefined, offset: number, source: string) => {
+      if (source[offset + match.length] === '(') return match
+      const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans)
+      if (canonical === undefined || /[\[\]]/.test(canonical)) return match
+      return protect(`${imageLabel(`![${label}]`)}[${canonical}]`)
+    })
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.

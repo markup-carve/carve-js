@@ -13,7 +13,7 @@ interface Run {
 interface Pair { open: number; close: number; width: number; kind: '*' | '/' }
 
 /** Pair CommonMark delimiter runs before applying Carve's nesting ceiling. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = []): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -87,6 +87,12 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       if (remaining(closer) === 0) unlink(c)
     }
   }
+  if (plainText) {
+    let text = ''
+    for (let i = 0; i < source.length; i++) if (!claimed.has(i)) text += source[i]
+    return text
+  }
+
   for (const run of runs) {
     const before = source[run.start - 1] ?? '', after = source[run.end] ?? ''
     const partiallyClaimed = claimed.has(run.start) || claimed.has(run.end - 1)

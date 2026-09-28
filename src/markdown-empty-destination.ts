@@ -4,6 +4,7 @@
  * text and such an image as its alt text, matching markup-carve/carve-php#2067.
  */
 
+import { markdownEmphasis } from './markdown-emphasis.js'
 import { htmlToCarve } from './html-import.js'
 
 /** Labels whose first reference definition has an empty destination, to its decoded title. */
@@ -304,19 +305,22 @@ function quoteAttributeValue(value: string): string {
 }
 
 /** CommonMark's alt text: the description's content with its markup removed. */
-function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string): string {
+export function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string): string {
   let previous: string
   const nestedLink = new RegExp(String.raw`!?\[${LABEL}\]\([^()\n]*\)`, 'g')
   const referenceLink = new RegExp(String.raw`!?\[${LABEL}\](?:\[([^[\]\n]*)\])?(?![[(:])`, 'g')
   do {
     previous = label
+    label = label.replace(/\x00P(\d+)\x00/g, (token, index: string) => {
+      const span = placeholders[Number(index)] ?? token
+      return span.startsWith('(') || span.startsWith('![') ? span : token
+    })
     label = label.replace(nestedLink, '$1')
     label = label.replace(referenceLink, (match, text: string, reference: string | undefined) =>
       references.defined.has(normalizeReferenceLabel(decodeLinkTitle(reference ? reference : text, decodeEntity, placeholders))) ? text : match,
     )
-    label = label.replace(/(\*{1,3}|_{1,3}|~~)(?!\s)(.+?)(?<!\s)\1/g, '$2')
   } while (label !== previous)
-  return label.replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
+  return markdownEmphasis(label, undefined, undefined, placeholders, true).replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
     const span = placeholders[Number(index)] ?? ''
     const code = /^(`+)([\s\S]*)\1$/.exec(span)
     if (code) {

@@ -165,12 +165,12 @@ describe('markdownToCarve — inline construct mapping', () => {
     )
   })
 
-  it('does not convert delimiters inside image alt text (raw in Carve)', () => {
-    expect(conv('![*logo*](/x.png)')).toBe('![*logo*](/x.png)')
+  it('removes Markdown formatting from image alt text', () => {
+    expect(conv('![*logo*](/x.png)')).toBe('![logo](/x.png)')
   })
 
   it('protects image alt text containing nested brackets', () => {
-    expect(conv('![*logo* [small]](/x.png)')).toBe('![*logo* [small]](/x.png)')
+    expect(conv('![*logo* [small]](/x.png)')).toBe('![logo [small]](/x.png)')
   })
 
   it('normalizes an extended fence info string and keeps the block as code', () => {
