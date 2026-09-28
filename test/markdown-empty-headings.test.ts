@@ -25,3 +25,7 @@ it.each([
 ])('retains empty Markdown headings: %s', (source, expected) => {
   expect(carveToHtml(markdownToCarve(source))).toBe(expected)
 })
+
+it.each(['\v', '\f', '\u00a0'])('keeps non-padding whitespace in a heading: %j', content => {
+  expect(markdownToCarve('# ' + content)).toBe('# ' + content)
+})
