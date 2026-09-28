@@ -24,11 +24,11 @@
  * `parse()` directly.
  */
 
-import type { BlockNode, DefinitionItem, Document, Image, Paragraph, Position, TableRow } from './ast.js'
+import type { BlockNode, DefinitionItem, Document, Image, InlineNode, Paragraph, Position, TableRow } from './ast.js'
 import { resolveTableSpans } from './table-spans.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
-import { numberCaptionsIn } from './heading-ids.js'
+import { crossrefAutoText, numberCaptionsIn, resolveIngestedCrossrefs } from './heading-ids.js'
 import {
   entriesFromWire,
   entriesToWire,
@@ -1587,8 +1587,12 @@ export function fromAstJson(input: unknown, payloadByteLength?: number): Documen
   if (tree.srcByteLength !== undefined) doc.srcByteLength = tree.srcByteLength
 
   clearUnbackedFootnoteNumbers(doc, footnoteDefs)
-  renumberCaptionsIfPublished(doc)
+  const captionTargets = renumberCaptionsIfPublished(doc)
   promoteIngestedBlockImages(doc)
+  // §3a leaves a cross-reference's display text off the wire, so the reader
+  // derives it from the target in this same document (carve-js#2238). AFTER the
+  // numbering, whose result the auto-text of a numbered caption's target is.
+  resolveIngestedCrossrefs(doc, captionTargets)
 
   // WHAT THE SENDER ACTUALLY HAD TO SEND, recorded so the expansion budgets are
   // not sized from a number the payload supplies about itself. Exact when the
@@ -1622,14 +1626,24 @@ function measurePayload(json: unknown): number {
 /**
  * Re-derive `caption_number.n` when the payload published numbers at all.
  */
-function renumberCaptionsIfPublished(doc: Document): void {
+function renumberCaptionsIfPublished(doc: Document): Map<string, InlineNode[]> {
+  // The crossref targets the numbering registers. Collected here rather than
+  // rebuilt later because the auto-text is "label + number" and the number is
+  // this pass's own result (carve-js#2238).
+  const captionTargets = new Map<string, InlineNode[]>()
   const bodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []
   if (!hasPublishedCaptionNumber(doc.children) && !bodies.some(hasPublishedCaptionNumber) &&
-      !hasPublishedMathNumber(doc.children) && !bodies.some(hasPublishedMathNumber)) return
+      !hasPublishedMathNumber(doc.children) && !bodies.some(hasPublishedMathNumber)) return captionTargets
 
   const counters = new Map<string, number>()
-  numberCaptionsIn(doc.children, counters)
-  for (const body of bodies) numberCaptionsIn(body, counters)
+  const register: Parameters<typeof numberCaptionsIn>[2] = (labelNodes, n, attrs, suffix) => {
+    const id = attrs?.id
+    if (id === undefined || captionTargets.has(id)) return
+    captionTargets.set(id, crossrefAutoText(labelNodes, n, suffix))
+  }
+  numberCaptionsIn(doc.children, counters, register)
+  for (const body of bodies) numberCaptionsIn(body, counters, register)
+  return captionTargets
 }
 
 function hasPublishedMathNumber(blocks: unknown): boolean {

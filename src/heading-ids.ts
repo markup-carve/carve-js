@@ -531,7 +531,14 @@ function resolveHeadingIdsImpl(
   doc: Document,
   opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean } = {},
   documentIds?: DocumentIdRegistry,
+  /**
+   * Crossref targets an INGESTED tree already published, keyed by id. Present
+   * only on the `--from-json` path, where it also means "resolve crossrefs and
+   * nothing else" - see `resolveIngestedCrossrefs`.
+   */
+  ingestedCaptionTargets?: Map<string, InlineNode[]>,
 ): Document {
+  const ingested = ingestedCaptionTargets !== undefined
   const used = new Set<string>()
   const nextCounters = new Map<string, number>()
   const targets = new Map<string, InlineNode[]>()
@@ -554,6 +561,11 @@ function resolveHeadingIdsImpl(
     inBlockquote: boolean,
   ): void => {
     let id: string
+    // An ingested tree publishes the ids it resolved under, and a heading
+    // arriving without one was never a crossref target in the document that
+    // produced it. Slugging it here would invent a target the sender did not
+    // have, so the reference stays unresolved and renders its own source.
+    if (ingested && heading.attrs?.id === undefined) return
     if (heading.attrs?.id !== undefined) {
       // An explicit id wins verbatim, INCLUDING an explicit empty `id=""`
       // (`{id=""}` then `# T` -> `<section id="">`): it suppresses the auto
@@ -641,7 +653,12 @@ function resolveHeadingIdsImpl(
       else if (v && typeof v === 'object') reserveExplicitIds(v)
     }
   }
-  for (const b of doc.children) reserveExplicitIds(b)
+  // Reserving is what keeps a GENERATED slug off an explicit id, and the ingest
+  // path generates none - `used` and `nextCounters` are read only by the branch
+  // it returns before. So the generic deep walk, which visits every key of every
+  // node, is dead there, and skipping it keeps the ingest of a large
+  // reference-free document at its old cost.
+  if (!ingested) for (const b of doc.children) reserveExplicitIds(b)
   // A footnote body is part of the same DOCUMENT and renders into the same
   // page, so its ids share one pool with everything else - two elements with
   // the same DOM id is invalid HTML whichever container they sit in. The map
@@ -649,8 +666,10 @@ function resolveHeadingIdsImpl(
   // id assignment was the one pass that skipped it, so a heading in a note
   // came out with no id at all while the same heading in a quote, a div or a
   // list item got one (carve-js#669).
-  for (const body of Object.values(doc.footnoteDefs ?? {}))
-    for (const b of body) reserveExplicitIds(b)
+  if (!ingested) {
+    for (const body of Object.values(doc.footnoteDefs ?? {}))
+      for (const b of body) reserveExplicitIds(b)
+  }
 
   assignIds(doc.children, false)
   // Not `inBlockquote`: a note body is not quoted material, and the flag only
@@ -1022,30 +1041,34 @@ function resolveHeadingIdsImpl(
     numberCaptionsIn(blocks, counters, (labelNodes, next, attrs, suffix) => {
       const id = attrs?.id
       if (id === undefined || foldedTargets.has(foldId(id))) return
-      // Clean "Label N" auto-text: clone the label inlines, trim trailing
-      // whitespace on the final text node, then append " N". Markup in the
-      // label is preserved. A composite figure's PANEL arrives with a letter
-      // suffix (`Figure 2a`, §4c) on the group's own number.
-      const autoNodes = deriveDisplayNodes(labelNodes, false)
-      const last = autoNodes[autoNodes.length - 1]
-      if (last && last.type === 'text') {
-        last.value = last.value.replace(RE_TRAILING_LABEL_WS, '')
-      }
-      autoNodes.push({ type: 'text', value: ` ${next}${suffix ?? ''}` } as Text)
-      targets.set(id, autoNodes)
+      targets.set(id, crossrefAutoText(labelNodes, next, suffix))
       foldedTargets.set(foldId(id), id)
     })
   }
 
-  for (const block of doc.children) walkBlock(block, resolveRefs)
-  for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveRefs)
+  // An ingested tree arrives with its reference links already finalized (PART
+  // 12 §3a publishes the resolved `href`) and its caption numbers already
+  // drawn, so this path registers the targets the payload published and
+  // resolves crossrefs against them. Re-running either pass would recompute a
+  // result the sender is entitled to own.
+  if (ingested) {
+    for (const [id, autoNodes] of ingestedCaptionTargets) {
+      if (targets.has(id)) continue
+      targets.set(id, autoNodes)
+      const fk = foldId(id)
+      if (!foldedTargets.has(fk)) foldedTargets.set(fk, id)
+    }
+  } else {
+    for (const block of doc.children) walkBlock(block, resolveRefs)
+    for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveRefs)
 
-  // Number captions AFTER ref resolution so a label that contains an
-  // implicit heading reference (`^ [Setup][] #: …`) is cloned into the
-  // crossref auto-text already resolved (no dangling href=""), and BEFORE
-  // crossref resolution so a `</#id>` to a numbered caption resolves.
-  numberBlocks(doc.children)
-  for (const body of footnoteBodies) numberBlocks(body)
+    // Number captions AFTER ref resolution so a label that contains an
+    // implicit heading reference (`^ [Setup][] #: …`) is cloned into the
+    // crossref auto-text already resolved (no dangling href=""), and BEFORE
+    // crossref resolution so a `</#id>` to a numbered caption resolves.
+    numberBlocks(doc.children)
+    for (const body of footnoteBodies) numberBlocks(body)
+  }
 
   // Snapshot each target's children BEFORE any crossref resolution mutates
   // them, so the clone cache can build one-level link text from the target's
@@ -1064,10 +1087,60 @@ function resolveHeadingIdsImpl(
   // Promote paragraphs that are really block images / figures (see
   // promoteBlockImages). Runs at the end of resolve() so reference images are
   // already resolved; also invoked by carveToCarve so `carve fmt` emits an
-  // unescaped `^ …` caption line.
-  promoteBlockImages(doc.children)
-  for (const body of footnoteBodies) promoteBlockImages(body)
+  // unescaped `^ …` caption line. `fromAstJson` promotes on its own, under the
+  // positionless rule an ingested tree needs, so the ingest path skips it here.
+  if (!ingested) {
+    promoteBlockImages(doc.children)
+    for (const body of footnoteBodies) promoteBlockImages(body)
+  }
   return doc
+}
+
+/**
+ * The "Label N" text a crossref to a numbered caption renders.
+ *
+ * Clone the label inlines, trim trailing whitespace on the final text node,
+ * then append " N". Markup in the label is preserved. A composite figure's
+ * PANEL arrives with a letter suffix (`Figure 2a`, PART 9 §4c) on the group's
+ * own number.
+ *
+ * ONE producer, because the parse path and the AST-JSON ingest path both
+ * register these targets and a second spelling would let the same document
+ * render two labels depending on which door it came through.
+ */
+export function crossrefAutoText(
+  labelNodes: InlineNode[],
+  n: number,
+  suffix?: string,
+): InlineNode[] {
+  const autoNodes = deriveDisplayNodes(labelNodes, false)
+  const last = autoNodes[autoNodes.length - 1]
+  if (last && last.type === 'text') {
+    last.value = last.value.replace(RE_TRAILING_LABEL_WS, '')
+  }
+  autoNodes.push({ type: 'text', value: ` ${n}${suffix ?? ''}` } as Text)
+  return autoNodes
+}
+
+/**
+ * Re-derive `heading_ref.resolvedText` on a tree that arrived through PART 12.
+ *
+ * §3a keeps the display text OUT of the wire - the target heading is in the same
+ * document, so copying its inlines into every reference is unbounded where
+ * `href` is fixed-size. The reader therefore has to derive it, and carve-js did
+ * not: every cross-reference in an ingested document rendered as an empty
+ * anchor, losing the text in the one direction PART 12 §6 calls identity
+ * (carve-js#2238). carve-rs and carve-php derive it.
+ *
+ * `captionTargets` carries what the numbering pass already registered for
+ * numbered captions, because those targets' auto-text is "label + number" and
+ * the number is the payload's, not one to recompute here.
+ */
+export function resolveIngestedCrossrefs(
+  doc: Document,
+  captionTargets: Map<string, InlineNode[]>,
+): void {
+  resolveHeadingIdsImpl(doc, {}, undefined, captionTargets)
 }
 
 export function resolveHeadingIds(

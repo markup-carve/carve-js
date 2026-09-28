@@ -914,11 +914,14 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
         }
         break
       case 'figure':
-        add(block.caption)
+        // Body before caption, the order every other target reads it in
+        // (carve-js#2239). A cell flattens to one line, so a caption written
+        // first is indistinguishable from content the author put there.
         if (block.target.type === 'block_quote') descend(block.target.children)
         else if (block.target.type === 'table') descend([block.target])
         else if (block.target.type === 'image') add([block.target])
         else descend([block.target])
+        add(block.caption)
         break
       case 'image':
         add([block])

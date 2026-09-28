@@ -119,6 +119,21 @@ export interface ParseOptions {
    * intentionally not serialized into the AST.
    */
   onUnclosedContainer?: (container: UnclosedContainer) => void
+  /**
+   * Called for each block-attribute run that reached no block, because the
+   * document or the container holding it ended first (PART 9 §15 A4). Like
+   * {@link onUnclosedContainer}, this reports parser state that is intentionally
+   * not serialized: nothing is emitted for the run, so the AST cannot say it was
+   * ever written.
+   */
+  onDanglingBlockAttributes?: (run: DanglingBlockAttributes) => void
+}
+
+export interface DanglingBlockAttributes {
+  line: number
+  column: number
+  startOffset: number
+  endOffset: number
 }
 
 export interface UnclosedContainer {
@@ -902,6 +917,29 @@ class Lexer {
     if (seen?.has(key)) return
     seen?.add(key)
     this.parseOptions.onUnclosedContainer?.(container)
+  }
+
+  /**
+   * A block-attribute run at `lineIndex` that attached to nothing (§15 A4).
+   *
+   * Shares the unclosed-container dedup set, under a prefixed key: a region the
+   * parser re-parses would otherwise report the same dead run once per visit.
+   */
+  reportDanglingBlockAttributes(lineIndex: number): void {
+    if (!this.hasDocumentOffsets) return
+    if (!this.parseOptions.onDanglingBlockAttributes) return
+    const startOffset = this.lineOffset(lineIndex)
+    const endOffset = startOffset + (this.lines[lineIndex]?.length ?? 0)
+    const seen = this.unclosedContainerKeys
+    const key = `attr:${startOffset}:${endOffset}`
+    if (seen?.has(key)) return
+    seen?.add(key)
+    this.parseOptions.onDanglingBlockAttributes({
+      line: this.lineNumber(lineIndex),
+      column: this.lineStartColumn(lineIndex),
+      startOffset,
+      endOffset,
+    })
   }
 }
 
@@ -6565,7 +6603,7 @@ class ParseSession {
       source,
       opts,
       0,
-      opts.onUnclosedContainer ? new Set<string>() : undefined,
+      opts.onUnclosedContainer || opts.onDanglingBlockAttributes ? new Set<string>() : undefined,
     )
     // POSITIONS STILL INDEX THE FILE, not the stripped text. Slicing the mark off
     // shifted every offset in the document by one codepoint, so a consumer that
@@ -7614,6 +7652,9 @@ class ParseSession {
     // this stream is only HALF of one the caller split, in which case the run
     // travels to the other half instead of dying at the seam.
     let pending: Attrs | null = carry?.attrs ?? null
+    // Where the OLDEST line of the current pending run sits, so A4 can say which
+    // `{...}` died rather than only that one did. Null whenever `pending` is.
+    let pendingAt: number | null = null
     while (!lexer.eof()) {
       const line = lexer.peek()!
       if (isBlankLine(line)) {
@@ -7625,9 +7666,11 @@ class ParseSession {
       const indent = leadingWhitespace(line)
       if (indent < baseIndent) break
 
+      const attrLineIndex = lexer.pos
       const ba = tryCollectBlockAttributes(lexer)
       if (ba) {
         pending = pending ? mergeAttrs(pending, ba) : ba
+        if (pendingAt === null) pendingAt = attrLineIndex
         continue
       }
 
@@ -7687,11 +7730,19 @@ class ParseSession {
       }
       // A VISIBLE block absorbs any pending attrs; an invisible one leaves them
       // pending for the next block (A2a, above).
-      if (!invisible) pending = null
+      if (!invisible) {
+        pending = null
+        pendingAt = null
+      }
     }
     // A dangling pending run (no following block) is dropped -- or, when the
     // caller split one stream in two, handed on to the next half.
     if (carry) carry.attrs = pending
+    // Nothing is emitted for a run that died here, so this is the only place the
+    // fact exists. `carry` streams are excluded: there the run lives on in the
+    // other half, and reporting it at the seam would name a loss that is not
+    // happening (carve-js#2240).
+    else if (pending && pendingAt !== null) lexer.reportDanglingBlockAttributes(pendingAt)
     return out
   }
 
