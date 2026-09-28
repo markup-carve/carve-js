@@ -223,10 +223,10 @@ describe('markdownToCarve — multiline paragraph inline mapping', () => {
     expect(carveToHtml(carve)).toBe('<p>a *it</p>\n<p>b* c</p>')
   })
 
-  it('keeps a code span spanning a line break verbatim', () => {
+  it('normalizes a code span line break without rewriting its delimiters', () => {
     const carve = conv('a `*x\n_y_` b')
-    expect(carve).toBe('a `*x\n_y_` b')
-    expect(carveToHtml(carve)).toBe('<p>a <code>*x\n_y_</code> b</p>')
+    expect(carve).toBe('a `*x _y_` b')
+    expect(carveToHtml(carve)).toBe('<p>a <code>*x _y_</code> b</p>')
   })
 
   it('keeps fenced code with multiline delimiter pairs untouched', () => {
