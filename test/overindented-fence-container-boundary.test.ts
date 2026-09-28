@@ -71,14 +71,18 @@ describe('over-indented fence boundary controls', () => {
       '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n    para\ntext\n  </li>\n</ul>',
     )
   })
+  // A FLUSH-LEFT LINE REACHES THE DOCUMENT, not the descendant's fence body.
+  // Re-measured at markup-carve/carve `d4c15e82` after markup-carve/carve#2490:
+  // the fence's host and everything between it and the owner the column selects
+  // end there, and the fence ends unterminated (carve-js#2261).
   it('nested item', () => {
     expect(carveToHtml('- outer\n  - head\n\n        ```\n        a\ntext\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\ntext\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('nested lazy text', () => {
     expect(carveToHtml('- outer\n  - head\n  lazy\n\n        ```\n        a\ntext\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\nlazy\n        <pre><code>a\ntext\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\nlazy\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('nested closed fence', () => {

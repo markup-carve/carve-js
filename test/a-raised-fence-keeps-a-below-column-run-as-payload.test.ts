@@ -7,11 +7,13 @@ import { carveToHtml } from '../src/index.js'
 // markup-carve/carve at 774eb404), run rather than read.
 //
 // FAMILY 1: a code fence opened at a CHILD item's content column, with its
-// closing run written below the OUTER item's column. The outer item folds that
-// run in as lazy text, so it is inside the child's fence and is payload
-// (CARVE-P0-004). The child's collector ended the item there instead, the run
-// leaked back out, and the unterminated fence it then opened reached the page as
-// `<p><code></code></p>` - an element no input asked for.
+// closing run written below the OUTER item's column.
+//
+// RE-MEASURED at markup-carve/carve `d4c15e82` after markup-carve/carve#2490
+// ruled the run's OWNER by column (corpus category 509, carve-js#2261). The run
+// closes nothing, but it ends every container between the fence's host and the
+// ancestor its column reaches, and it is classified in that survivor. These six
+// rows recorded the pre-ruling answer, where the run stayed the child's payload.
 //
 // FAMILY 2: a colon fence over-indented by ONE column, with its closer written
 // in the band between column 0 and the outer item's content column. A line the
@@ -25,32 +27,32 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'family 1: a closer at column 0, trailing line at the outer column',
       '- outer\n  - head\n\n    ```\n    a\n```\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n        <pre><code>a\n```\n\n</code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n  tail\n</code></pre>',
     ],
     [
       'family 1: a closer at column 0, trailing line at the child column',
       '- outer\n  - head\n\n    ```\n    a\n```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n```\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n    tail\n</code></pre>',
     ],
     [
       'family 1: a closer at column 0, trailing line past the child column',
       '- outer\n  - head\n\n    ```\n    a\n```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n```\n\n  tail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n      tail\n</code></pre>',
     ],
     [
       'family 1: a closer at column 1, trailing line at the outer column',
       '- outer\n  - head\n\n    ```\n    a\n ```\n\n  tail\n',
-      '<ul>\n  <li><p>outer</p>\n    <ul>\n      <li>head\n        <pre><code>a\n```\n\n</code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>\n<p>tail</p>',
     ],
     [
       'family 1: a closer at column 1, trailing line at the child column',
       '- outer\n  - head\n\n    ```\n    a\n ```\n\n    tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n```\n\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>\n<p>tail</p>',
     ],
     [
       'family 1: a closer at column 1, trailing line past the child column',
       '- outer\n  - head\n\n    ```\n    a\n ```\n\n      tail\n',
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n```\n\n  tail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p><code></code></p>\n<p>tail</p>',
     ],
     [
       'family 2: a band closer at an over-indent of one, blank before',
