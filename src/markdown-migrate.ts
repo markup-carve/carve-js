@@ -4195,6 +4195,16 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       const prose = prevType === 'text' && ordered !== null && Number(ordered[1]) !== 1 && !listMarkers.hasListAt(at)
       if (at - holder < 4 && !prose) lines[i] = spaceMarkerPadding(lines[i]!)
     }
+    // Carve needs the first-block marker for an empty item. Empty markers
+    // cannot interrupt a paragraph; a dash there remains a setext underline.
+    if (!inCode && /^[ \t]*([-*+]|\d{1,9}[.)])[ \t]*$/.test(lines[i]!)) {
+      const column = indentColumns(lines[i]!)
+      let holder = 0
+      for (const content of listCols) if (content <= column) holder = content
+      if (column - holder < 4 && (prevType !== 'text' || listMarkers.hasListAt(column))) {
+        lines[i] = lines[i]!.trimEnd() + ' +'
+      }
+    }
     const line = lines[i]!
     const trimmed = line.trim()
     const wasPrevBlank = prevBlank
