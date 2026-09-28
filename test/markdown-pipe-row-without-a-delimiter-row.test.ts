@@ -185,7 +185,7 @@ describe('a container is answered by what it holds', () => {
   // cannot widen to it.
   it('does not end the table at inline HTML, which GFM keeps as a body row', () => {
     expect(migrated('| a | b |\n|---|---|\n| c | d |\n<span>x</span>\n| e | f |\n')).toBe(
-      '|= a |= b |\n| c | d |\n| `<span>x</span>`{=html} | |\n| e | f |\n',
+      '|= a |= b |\n| c | d |\n| `<span>`{=html}x`</span>`{=html} | |\n| e | f |\n',
     )
   })
 

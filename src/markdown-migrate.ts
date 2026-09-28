@@ -625,54 +625,82 @@ function rawBlockHtml(lines: readonly string[]): string[] {
 function scanHtmlTag(
   s: string,
   start: number,
+  placeholders: readonly string[] = [],
 ): { end: number; name: string; closing: boolean; selfClosing: boolean; attrs: boolean } | null {
-  const tag = /^<\/?([A-Za-z][A-Za-z0-9-]*)(?=[\s/>])/.exec(s.slice(start))
-  if (!tag) return null
-  let quote = ''
-  for (let i = start + tag[0]!.length; i < s.length; i++) {
-    const ch = s[i]!
-    if (quote !== '') {
-      if (ch === quote) quote = ''
-      continue
+  const head = /^<(\/?)([A-Za-z][A-Za-z0-9-]*)/.exec(s.slice(start))
+  if (!head) return null
+  let i = start + head[0].length
+  const closing = head[1] === '/'
+  let attrs = false
+  while (i < s.length) {
+    const beforeSpace = i
+    while (/[ \t\n\r\f]/.test(s[i] ?? '') && i < s.length) i++
+    if (s[i] === '>' || (!closing && s[i] === '/' && s[i + 1] === '>')) {
+      return { end: i + (s[i] === '/' ? 2 : 1), name: head[2]!.toLowerCase(), closing, selfClosing: s[i] === '/', attrs }
     }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      continue
-    }
-    if (ch === '<' || ch === '`' || ch === '\x00') return null
-    if (ch === '>') {
-      const beforeClose = s.slice(start, i).replace(/\s+$/, '').endsWith('/')
-      return {
-        end: i + 1,
-        name: tag[1]!.toLowerCase(),
-        closing: s[start + 1] === '/',
-        selfClosing: beforeClose,
-        attrs: /\s+\S/.test(s.slice(start + tag[0]!.length, i).replace(/\/\s*$/, '')),
+    if (closing || i === beforeSpace) return null
+    const attribute = /^[A-Za-z_:][A-Za-z0-9_.:-]*/.exec(s.slice(i))
+    if (!attribute) return null
+    attrs = true
+    i += attribute[0].length
+    const afterName = i
+    while (/[ \t\n\r\f]/.test(s[i] ?? '') && i < s.length) i++
+    if (s[i] !== '=') { i = afterName; continue }
+    i++
+    while (/[ \t\n\r\f]/.test(s[i] ?? '') && i < s.length) i++
+    if (s[i] === '"' || s[i] === "'") {
+      const end = s.indexOf(s[i]!, i + 1)
+      if (end < 0) return null
+      for (const token of s.slice(i, end).matchAll(/\x00P(\d+)\x00/g)) {
+        const value = placeholders[Number(token[1])]
+        if (value === undefined || value.startsWith('\\')) return null
       }
+      i = end + 1
+    } else {
+      const value = /^[^ \t\n\r\f"'=<>`\x00]+/.exec(s.slice(i))
+      if (!value) return null
+      i += value[0].length
     }
   }
   return null
 }
 
-function convertInlineHtml(input: string, protect: (s: string) => string): string {
+function opaqueHtmlScanner(s: string): (start: number) => number | undefined {
+  const ends = new Map<string, number>()
+  const forms: [string, string, number][] = [['<!--', '-->', 2], ['<?', '?>', 2], ['<![CDATA[', ']]>', 9]]
+  const closingEnd = (close: string, from: number): number | undefined => {
+    let end = ends.get(close)
+    if (end === undefined || (end >= 0 && end < from)) {
+      end = s.indexOf(close, from)
+      ends.set(close, end)
+    }
+    return end < 0 ? undefined : end + close.length
+  }
+  return start => {
+    for (const [open, close, skip] of forms) {
+      if (s.startsWith(open, start)) return closingEnd(close, start + skip)
+    }
+    return /^<![A-Za-z]/.test(s.slice(start, start + 3)) ? closingEnd('>', start + 3) : undefined
+  }
+}
+
+function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[]): string {
   let out = ''
   let i = 0
+  const opaqueEnd = opaqueHtmlScanner(input)
   while (i < input.length) {
     if (input[i] !== '<') {
       out += input[i]!
       i++
       continue
     }
-    if (input.startsWith('<!--', i)) {
-      const end = input.indexOf('-->', i + 2)
-      if (end !== -1) {
-        const html = input.slice(i, end + 3)
-        out += protect(rawInlineHtml(html))
-        i = end + 3
-        continue
-      }
+    const opaque = opaqueEnd(i)
+    if (opaque !== undefined) {
+      out += protect(rawInlineHtml(input.slice(i, opaque)))
+      i = opaque
+      continue
     }
-    const tag = scanHtmlTag(input, i)
+    const tag = scanHtmlTag(input, i, placeholders)
     if (!tag) {
       out += input[i]!
       i++
@@ -686,7 +714,7 @@ function convertInlineHtml(input: string, protect: (s: string) => string): strin
       if (close) {
         end = tag.end + close.index + close[0].length
         const body = input.slice(tag.end, tag.end + close.index)
-        native = !tag.attrs && NATIVE_INLINE_HTML_TAGS.has(tag.name) && !body.includes('<')
+        native = input.slice(i, tag.end).toLowerCase() === `<${tag.name}>` && close[0].toLowerCase() === `</${tag.name}>` && NATIVE_INLINE_HTML_TAGS.has(tag.name) && !body.includes('<')
       }
     }
     if (native) {
@@ -694,8 +722,8 @@ function convertInlineHtml(input: string, protect: (s: string) => string): strin
       i = end
       continue
     }
-    out += protect(rawInlineHtml(input.slice(i, end)))
-    i = end
+    out += protect(rawInlineHtml(input.slice(i, tag.end)))
+    i = tag.end
   }
   return out}
 
@@ -714,22 +742,21 @@ function protectCodeSpans(s: string, repl: (span: string, offset: number) => str
   const autolink = /<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*>/y
   let out = ''
   let i = 0
-  let commentEnd = s.indexOf('-->')
+  const opaqueEnd = opaqueHtmlScanner(s)
   while (i < s.length) {
     if (s[i] === '\\' && /[!-/:-@\[-`{-~]/.test(s[i + 1] ?? '')) {
       out += s.slice(i, i + 2)
       i += 2
       continue
     }
-    if (s.startsWith('<!--', i)) {
-      if (commentEnd >= 0 && commentEnd < i + 2) commentEnd = s.indexOf('-->', i + 2)
-      if (commentEnd >= 0) {
-        out += s.slice(i, commentEnd + 3)
-        i = commentEnd + 3
+    if (s[i] === '<') {
+      const opaque = opaqueEnd(i)
+      if (opaque !== undefined) {
+        out += s.slice(i, opaque)
+        i = opaque
         continue
       }
-    }
-    if (s[i] === '<') {
+
       autolink.lastIndex = i
       const match = autolink.exec(s)
       const tag = scanHtmlTag(s, i)
@@ -1010,7 +1037,32 @@ function convertInline(
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
-  line = line.replace(/\\[^A-Za-z0-9\s]/g, protect)
+  let escaped = ''
+  const opaqueEnd = opaqueHtmlScanner(line)
+  for (let i = 0; i < line.length;) {
+    if (line[i] === '<') {
+      const opaque = opaqueEnd(i)
+      if (opaque !== undefined) {
+        escaped += protect(rawInlineHtml(line.slice(i, opaque)))
+        i = opaque
+        continue
+      }
+      const tag = scanHtmlTag(line, i)
+      if (tag) {
+        escaped += line.slice(i, tag.end)
+        i = tag.end
+        continue
+      }
+    }
+    if (line[i] === '\\' && /[!-/:-@\[-`{-~]/.test(line[i + 1] ?? '')) {
+      escaped += protect(line.slice(i, i + 2))
+      i += 2
+    } else {
+      escaped += line[i] === '\\' && line[i + 1] === ' ' ? protect('\\\\') : line[i]
+      i++
+    }
+  }
+  line = escaped
 
   // <code>...</code> without attributes has a Carve-native equivalent. Protect
   // it before delimiter rewrites so its body stays verbatim. Attributed code
@@ -1133,7 +1185,7 @@ function convertInline(
 
   // Markdown inline HTML is live markup. Protect tags that have no lossless
   // Carve-native equivalent as explicit raw HTML before delimiter rewrites.
-  line = convertInlineHtml(line, protect)
+  line = convertInlineHtml(line, protect, protectedSpans)
 
   // Bare/GFM autolink URLs in prose (https://example.com/api/_v1_/x): the
   // path is literal, so protect it before the emphasis passes. Carve does not

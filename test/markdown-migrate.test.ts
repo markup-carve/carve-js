@@ -421,21 +421,21 @@ describe('markdownToCarve — raw HTML migration', () => {
 
   it('preserves inline HTML in a sentence as raw html', () => {
     const md = 'a <span class="x">hi</span> c'
-    const carve = 'a `<span class="x">hi</span>`{=html} c'
+    const carve = 'a `<span class="x">`{=html}hi`</span>`{=html} c'
     expect(conv(md)).toBe(carve)
     expect(carveToHtml(carve)).toBe('<p>a <span class="x">hi</span> c</p>')
   })
 
   it('keeps attributed mappable inline tags as raw html', () => {
     const md = '<b class="x">y</b>'
-    const carve = '`<b class="x">y</b>`{=html}'
+    const carve = '`<b class="x">`{=html}y`</b>`{=html}'
     expect(conv(md)).toBe(carve)
     expect(carveToHtml(carve)).toBe('<p><b class="x">y</b></p>')
   })
 
   it('preserves attributed inline code HTML as raw html', () => {
     const md = 'a <code v-pre>{{ x }}</code> c'
-    const carve = 'a `<code v-pre>{{ x }}</code>`{=html} c'
+    const carve = 'a `<code v-pre>`{=html}\\{{ x }}`</code>`{=html} c'
     expect(conv(md)).toBe(carve)
     expect(carveToHtml(carve)).toBe('<p>a <code v-pre>{{ x }}</code> c</p>')
   })

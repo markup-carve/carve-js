@@ -70,7 +70,7 @@ describe('a block-level HTML element inside a container', () => {
       // The `<p>` here is the reader's, not the importer's invention, so it is
       // correct - this is what proves the fix discriminates.
       const carve = markdownToCarve('> quoted\n>\n> <span>Socrates</span>\n')
-      expect(carve).toBe('> quoted\n>\n> `<span>Socrates</span>`{=html}\n')
+      expect(carve).toBe('> quoted\n>\n> `<span>`{=html}Socrates`</span>`{=html}\n')
       expect(carveToHtml(carve)).toContain('<p><span>Socrates</span></p>')
     })
   })
@@ -115,7 +115,7 @@ describe('a block-level HTML element inside a container', () => {
     it('CONTROL: an inline element in the same position stays inline', () => {
       // marked: <ul><li><p>item</p><p><span>x</span></p></li></ul>
       const carve = markdownToCarve('- item\n\n  <span>x</span>\n')
-      expect(carve).toBe('- item\n\n  `<span>x</span>`{=html}\n')
+      expect(carve).toBe('- item\n\n  `<span>`{=html}x`</span>`{=html}\n')
       expect(carveToHtml(carve)).toContain('<p><span>x</span></p>')
     })
   })
@@ -177,7 +177,7 @@ describe('a block-level HTML element inside a container', () => {
       // barred from interrupting, and that is the whole difference between
       // this case and the `<div>` above.
       const carve = markdownToCarve('para\n<span>\nb\n</span>\n')
-      expect(carve).toBe('para\n`<span>\nb\n</span>`{=html}\n')
+      expect(carve).toBe('para\n`<span>`{=html}\nb\n`</span>`{=html}\n')
     })
   })
 
@@ -185,7 +185,7 @@ describe('a block-level HTML element inside a container', () => {
     it('a table cell holds inline content, so the element stays a span', () => {
       // marked: <td><footer>x</footer></td> - inside the cell, inline.
       const carve = markdownToCarve('| a |\n|---|\n| <footer>x</footer> |\n')
-      expect(carve).toContain('| `<footer>x</footer>`{=html} |')
+      expect(carve).toContain('| `<footer>`{=html}x`</footer>`{=html} |')
       expect(carveToHtml(carve)).toContain('<td><footer>x</footer></td>')
     })
 
