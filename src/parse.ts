@@ -10319,7 +10319,17 @@ class ParseSession {
       // Track whether the item's collected content currently ends in an open
       // paragraph (family-D lazy continuation). The lead text opens one.
       // ONE WALK for the three questions the lead line answers.
-      const leadState = markerLineState(content)
+      // At EOF no following line can consult the item's continuation state.
+      // Descendants parse the marker content themselves; walking their prefixes
+      // here repeats the same classification once per enclosing item.
+      const noFollower = lexer.eof() || (lexer.peek() === '' && lexer.peek(1) === undefined)
+      const leadState = noFollower ? {
+        leavesParagraphOpen: false,
+        endsOnTableRow: false,
+        bottomIsContinuationMarker: false,
+        wrappedAttributeRun: null,
+        quote: null,
+      } : markerLineState(content)
       const lazyState: ItemLazyState = {
         opaque: null,
         invisibleAtColumn: false,
@@ -10934,7 +10944,10 @@ class ParseSession {
         const subCol = subListColumnAt(at)
         return subCol >= 0 && indentColumns(nested[at]!, subCol) >= subCol
       }
-      const fenceLines = [content, ...nested]
+      // Fence membership is read only for blank lines in the tightness pass.
+      // Without a blank, classifying every descendant on the marker line has
+      // no consumer and repeats the prefix walk at every nesting level.
+      const fenceLines = nested.some((line) => isBlankLine(line)) ? [content, ...nested] : []
       const inFence: boolean[] = new Array(fenceLines.length).fill(false)
       // A COMMENT OPENER WITH NO CLOSER AHEAD OPENS NOTHING (PART 9 §28), so it
       // must not latch this pass either: an unterminated `%%%` swallowed every
