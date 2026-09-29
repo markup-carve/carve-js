@@ -29,8 +29,11 @@ describe('PART 11 §5 destination-opening parentheses', () => {
     expect(carveToCarve(out)).toBe(out)
   })
 
+  // A pair whose brackets sit under different hosts escapes its OPENER, so the
+  // closer closes no run and the `(` behind it keeps its bare form. The shared
+  // fixture `tests/html-import/paren-after-a-closed-bracket` spells it.
   it.each([
-    ['[<em>a](b)</em>', '[/a\\]\\(b)/'],
+    ['[<em>a](b)</em>', '\\[/a](b)/'],
     ['<em>[a](b</em>)', '/[a]\\(b/)'],
     ['[<em>a</em>](b)', '[/a/]\\(b)'],
     ['[a](<em>b</em>)', '[a]\\(/b/)'],
