@@ -27,6 +27,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- Braced formatting spans respect bracket-run boundaries. HTML import now escapes crossing brackets beside reference-link shapes on the first pass, so its output formats to itself (#2400, #2401).
 - Reduce HTML eligibility scanning, definition-prepass work, nested lexer allocation and text-position passes (#2389). Long interior whitespace runs no longer trigger repeated regex backtracking. See the [measurements](reports/parser-costs.md).
 - A container label's trailing `%%` comment is cut where its own inline run ends, so a `%%` inside a closed construct keeps the construct and the text after it (#2372).
 - Markdown import keeps list item shapes, tightness, markers and task boxes as a GFM reader sees them (#1935, #1937, #1941, #1943, #1946, #1947, #1968, #1981, #1982, #2011, #2013, #2026, #2047, #2048, #2050, #2056, #2061, #2295, #2314).
