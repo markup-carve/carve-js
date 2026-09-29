@@ -171,7 +171,7 @@ describe('blockquote lazy list marker only folds into an OPEN paragraph', () => 
     // The closed inner fence leaves no paragraph for an unmarked line.
     // The closer lookup must use the inner quote's depth.
     expect(html('> > a\n> > ```\n> > ```\ny\n')).toBe(
-      '<blockquote>\n  <blockquote>\n    <p>a</p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>',
+      '<blockquote>\n  <blockquote>\n    <p>a</p>\n    <pre><code></code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>',
     )
   })
 

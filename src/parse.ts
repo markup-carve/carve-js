@@ -77,6 +77,7 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 import { ownValue } from './own-property.js'
+import { verbatimContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
 import { linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
@@ -2346,15 +2347,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
     // collector frames its folded lines exactly as it does a code fence's.
     lines.push(stripLazyFrame(ln))
   }
-  // `join` collapses both no payload lines and one blank payload line to the
-  // same empty string. They render differently: the former contributes
-  // nothing, while every blank line between the delimiters is verbatim raw
-  // payload. Preserve the count when the payload is entirely blank so a
-  // renderer never has to guess which source shape produced `content: ""`.
-  const content = lines.length > 0 && lines.every((line) => line === '')
-    ? '\n'.repeat(lines.length)
-    : lines.join('\n')
-  return { type: 'raw_block', format, content }
+  return { type: 'raw_block', format, content: verbatimContent(lines) }
 }
 
 // A closer of each fence shape, spelled PERMISSIVELY: a leading indentation run
@@ -8712,11 +8705,13 @@ class ParseSession {
     const label = labelRaw ? labelRaw.slice(1, -1) : undefined
     const closeRe = fenceCloseRe(marker)
     const lines: string[] = []
+    let closed = false
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
       if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
         lexer.consume()
+        closed = true
         break
       }
       lexer.consume()
@@ -8729,7 +8724,13 @@ class ParseSession {
       lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
     }
     const fenceEndIndex = lexer.pos
-    const cb: CodeBlock = { type: 'code_block', content: lines.join('\n') }
+    // AN UNTERMINATED PAYLOAD OWNS A FINAL LINE BREAK even when it collected no
+    // line: it runs to the end of its container, and the end supplies the break.
+    // §28's zero-line payload is the CLOSED fence's, which renders no character
+    // (carve-js#2342); `- ```` with its body below the item's content
+    // column keeps the line corpus 276 pins for it.
+    if (!closed && lines.length === 0) lines.push('')
+    const cb: CodeBlock = { type: 'code_block', content: verbatimContent(lines) }
     if (lang) cb.lang = lang
     if (header !== undefined) cb.header = header
     if (label !== undefined) cb.label = label

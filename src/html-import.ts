@@ -40,6 +40,7 @@ import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
+import { codePayloadContent } from './verbatim-payload.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -2152,10 +2153,11 @@ class Importer {
       const source = code ?? node
       const lang = codeLanguage(node, code, this.codeLanguageWrappers)
       // Rendered code blocks conventionally carry one newline before </code>.
-      // It separates payload from markup; it is not an additional blank source
-      // line. Remove exactly one so a real trailing blank line (two newlines)
-      // remains data and Carve's own HTML round-trips semantically.
-      const content = this.text(source).replace(/\n$/, '')
+      // It TERMINATES the last payload line rather than adding one, so it comes
+      // off - but a text of one newline is then one BLANK line and not none, and
+      // dropping it unconditionally lost a line on every all-blank payload,
+      // including this engine's own HTML (carve-js#2342, raised by codex review).
+      const content = codePayloadContent(this.text(source))
       return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
     }
     // The synthetic element `markFootnotePlacement` leaves where an endnotes

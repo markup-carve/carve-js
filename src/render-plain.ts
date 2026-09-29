@@ -7,6 +7,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
+import { codePayloadText } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
@@ -142,7 +143,7 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       // both are present, matching the div's title-then-label order.
       const header = node.header ? `${stripControls(node.header)}\n\n` : ''
       const label = node.label ? `${stripControls(node.label)}\n\n` : ''
-      return `${header}${label}${stripControls(node.content)}\n\n`
+      return `${header}${label}${stripControls(codePayloadText(node.content))}\n`
     }
     case 'block_quote':
       return `"${trimNonNbsp(renderBlocks(node.children, ctx))}"\n\n`
