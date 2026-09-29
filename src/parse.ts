@@ -7136,10 +7136,20 @@ interface EmphasisMemo {
   lastBrace: number
   // Each link or image destination's `(` mapped to its closing `)`, built once.
   destinations?: Map<number, number>
+  // Each `[` mapped to its balanced `]`, built once. Same map the inline pass
+  // resolves a label with, so the scan hides exactly the run the parser builds.
+  brackets?: BracketClose
 }
 
 function newEmphasisMemo(): EmphasisMemo {
   return { failed: new Map(), lastBrace: -2 }
+}
+
+/** `buildBracketMap` over one inline text, built at most once per scan. */
+function emphasisBrackets(text: string, memo: EmphasisMemo): BracketClose {
+  memo.brackets ??= text.includes('[') ? buildBracketMap(text) : () => undefined
+
+  return memo.brackets
 }
 
 // The braced inlines E2a names, as sticky copies of the matchers the main loop
@@ -13858,8 +13868,26 @@ class ParseSession {
           continue
         }
       }
+      // A BALANCED BRACKET RUN IS OPAQUE, ITS LABEL INCLUDED (PART 8,
+      // markup-carve/carve#2577). Links rank 5 and the bare emphasis markers
+      // rank 7, so the run resolves first and a marker inside it is label text
+      // by the time the delimiter stack reaches it: `/[a/](/u)` is a link whose
+      // label ends in a slash, not an emphasis paired across the bracket. An
+      // UNBALANCED `[` is no run and hides nothing, which is what keeps `/[a/`
+      // emphasizing.
+      //
+      // Asked of every balanced run, not only of one a link resolves from,
+      // because the rank belongs to the RUN: `/[a/]` with no destination at all
+      // is literal text too.
+      if (ch === '[') {
+        const close = emphasisBrackets(text, memo)(j)
+        if (close !== undefined) {
+          j = close
+          continue
+        }
+      }
       // A link or image destination, title included, and an autolink (E2a,
-      // markup-carve/carve#2046). The label is NOT opaque and stays as it is.
+      // markup-carve/carve#2046).
       if (ch === '(' && text[j - 1] === ']') {
         const end = linkDestinations(text, memo).get(j)
         if (end !== undefined) {

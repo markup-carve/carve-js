@@ -29,7 +29,13 @@ describe('PART 11 §5 lone brackets in bracketed content', () => {
     ['<a href="/y">a ] b [ c</a>', '[a \\] b \\[ c](/y)'],
     ['<span class="c">[x]</span>', '[[x]]{.c}'],
     ['<a href="/y">see [1] here</a>', '[see [1] here](/y)'],
-    ['<span class="c">a <em>[</em> b ]</span>', '[a /[/ b ]]{.c}'],
+    // BOTH brackets are escaped here, and the `]` is what makes it so: left
+    // bare it pairs with the `[` in front of it, and PART 8 ranks that balanced
+    // run above the emphasis marker (markup-carve/carve#2577), so the unescaped
+    // spelling reads back as literal text instead of an emphasis. Verified
+    // against the executable spec at markup-carve/carve e778d33a: the escaped
+    // spelling reads back as this HTML and the bare one does not.
+    ['<span class="c">a <em>[</em> b ]</span>', '[a /\\[/ b \\]]{.c}'],
     ['<span class="c">[ <a href="/u">x</a></span>', '[\\[ [x](/u)]{.c}'],
     ['<span class="c"><code>[</code> ]</span>', '[`[` \\]]{.c}'],
     ['<span class="c"><ruby>[<rt>x</rt></ruby>]</span>', '[[(x)]]{.c}'],

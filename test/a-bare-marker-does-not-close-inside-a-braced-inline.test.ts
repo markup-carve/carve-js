@@ -57,13 +57,19 @@ describe('a bare marker does not close inside a braced inline', () => {
     expect(html('~`a~b`~')).toBe('<p><s><code>a~b</code></s></p>')
   })
 
-  it('still closes inside a link label, which no clause hides', () => {
-    expect(html('~[a~](b)')).toBe('<p><s>[a</s>](b)</p>')
+  // A BALANCED BRACKET RUN HIDES ITS CLOSER TOO, ruled on
+  // markup-carve/carve#2577 and pinned by corpus category 522. PART 8 ranks
+  // links at 5 and the bare markers at 7, so the run resolves first and the
+  // marker inside it is label text. This row used to read the other way, on the
+  // premise that no clause hid the label.
+  it('does not close inside a balanced bracket run', () => {
+    expect(html('~[a~](b)')).toBe('<p>~<a href="b">a~</a></p>')
   })
 })
 
 // E2a, markup-carve/carve#2046: a link or image destination, title included,
-// and an autolink are opaque too. The LABEL still is not.
+// and an autolink are opaque too. The label is opaque as well, under PART 8's
+// ranking rather than E2a (markup-carve/carve#2577).
 describe('a bare marker does not close inside a link destination or an autolink', () => {
   it('answers the clause example for a link', () => {
     expect(html('/see [x](http://a.b/c) now/')).toBe('<p><em>see <a href="http://a.b/c">x</a> now</em></p>')
