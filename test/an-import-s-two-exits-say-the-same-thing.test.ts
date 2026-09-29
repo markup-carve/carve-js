@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { htmlToCarve, htmlToAst, parse, toAstJson } from '../src/index.js'
+import { htmlToCarve, htmlToAst, parse, renderCarveWithConversionReport, toAstJson } from '../src/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const fixtureDir = resolve(__dirname, '../spec/tests/html-import')
@@ -405,5 +405,78 @@ describe('a caption target is the captioned block, not a paragraph around it', (
       children: [{ type: 'image', src: 'i.png', alt: 'a' }],
       attrs: { classes: ['x'] },
     })
+  })
+})
+
+/**
+ * THE CODE-PAYLOAD DIFFERENCE IS DECLARED, AND IT HAS A DIRECTION
+ * (markup-carve/carve-js#2395).
+ *
+ * `terminateCodePayloads` above absorbs the one difference CARVE-P12-064
+ * declares: an imported `<code>` may publish a payload with no final break, and
+ * a canonical fence has to break before its closer. But it terminates BOTH
+ * sides, so it is blind to WHICH exit is short - a tree exit that appended the
+ * break would pass the sweep too, and appending it is what the clause forbids
+ * ("A reader MUST NOT guess that a missing final break was omitted by a
+ * producer and append one"). The proof that the sweep cannot see that is below,
+ * which is why the direction is asserted here instead.
+ *
+ * The clause also splits the reporting. The canonical writer inserts the break
+ * and reports `field-unspellable` for `code_block.content` on the PART 11 §1d
+ * channel; "an API exposing only the HTML-import report adds no diagnostic code
+ * for the later canonical writer's inserted break". So the import report is
+ * silent by rule, not by omission.
+ */
+describe('an imported code payload without a final break', () => {
+  const contents = (value: unknown, out: unknown[] = []): unknown[] => {
+    if (!value || typeof value !== 'object') return out
+    if (Array.isArray(value)) {
+      for (const item of value) contents(item, out)
+      return out
+    }
+    const node = value as Record<string, unknown>
+    if (node.type === 'code_block') out.push(node.content)
+    for (const key of Object.keys(node)) contents(node[key], out)
+    return out
+  }
+  const payloads = (html: string) => ({
+    tree: contents(toAstJson(htmlToAst(html).value)),
+    source: contents(toAstJson(parse(htmlToCarve(html).value))),
+  })
+
+  it.each([
+    ['bare', '<pre><code>x</code></pre>', '```\nx\n```\n'],
+    ['in a container', '<div class="h"><pre><code>x</code></pre></div>', '::: h\n```\nx\n```\n:::\n'],
+    ['in a quote', '<blockquote><pre><code>x</code></pre></blockquote>', '> ```\n> x\n> ```\n'],
+  ])('keeps the payload in the tree and closes the fence in the source, %s', (_label, html, crv) => {
+    expect(htmlToCarve(html).value).toBe(crv)
+    expect(payloads(html)).toEqual({ tree: ['x'], source: ['x\n'] })
+  })
+
+  it('reports the inserted break on the conversion channel and not on the import report', () => {
+    const html = '<pre><code>x</code></pre>'
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    const report = renderCarveWithConversionReport(htmlToAst(html).value).report
+    expect(report.diagnostics.map((row) => [row.code, row.node, row.field])).toEqual([
+      ['field-unspellable', 'code_block', 'content'],
+    ])
+  })
+
+  it.each([
+    ['an empty payload', '<pre><code></code></pre>', ''],
+    ['a payload that already breaks', '<pre><code>x\n</code></pre>', 'x\n'],
+  ])('needs no inserted break and reports nothing for %s', (_label, html, content) => {
+    expect(payloads(html)).toEqual({ tree: [content], source: [content] })
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(renderCarveWithConversionReport(htmlToAst(html).value).report.diagnostics).toEqual([])
+  })
+
+  it('the sweep above cannot see which exit is short, so these assertions carry it', () => {
+    // Both arms normalize to the same tree, so `disagreement` reports nothing
+    // either way. The clause-conforming pair is the second one.
+    const appended = { type: 'code_block', content: 'x\n' }
+    const kept = { type: 'code_block', content: 'x' }
+    expect(terminateCodePayloads(appended)).toEqual(terminateCodePayloads(kept))
+    expect(terminateCodePayloads(kept)).toEqual(appended)
   })
 })

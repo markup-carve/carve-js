@@ -116,6 +116,14 @@ rather than a placeholder for a mapping still to come:
   `structure-unspellable` warning: `<td>x<br>y</td>` imports as `| x y |`.
   `htmlToAst` keeps the break, and `renderCarve` writes the same space for a
   tree that holds one.
+- **A code payload with no final line break gains one in the source.** The text
+  of `<pre><code>x</code></pre>` is `x` with nothing after it, and `htmlToAst`
+  publishes that payload as written. A canonical fence breaks before its closer,
+  so `htmlToCarve` writes a closed fence whose payload reads back as `x` plus a
+  break. The inserted break belongs to writing rather than to the import, so the
+  import report stays silent about it and `renderCarveWithConversionReport`
+  reports `field-unspellable` for `code_block.content` instead
+  (`CARVE-P12-064`). An empty payload needs no break and reports nothing.
 - **Ruby annotations stay structured.** A conforming `<ruby>` run becomes a
   `ruby` AST node whose `pairs` keep each base and its first `<rt>` annotation.
   Conventional `<rp>` parentheses are ignored. Custom `<rp>` content is
