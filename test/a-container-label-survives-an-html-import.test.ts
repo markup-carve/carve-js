@@ -57,10 +57,9 @@ describe('a container label survives an html import', () => {
     expect(roundTrip('::: figure [g]\nBody.\n:::\n')).toBe('::: figure [g]\nBody.\n:::\n')
   })
 
-  // THE RAW-RUN HALF. A label is a raw string and a paragraph escapes what it
-  // holds, so this shape said something new on each pass: `[a *b*]` came back
-  // as `a \*b*`.
-  it('keeps a label that holds a raw markup run', () => {
+  // THE MARKUP HALF. The label is an inline run, so the degraded paragraph holds
+  // rendered markup and the lift writes it back in the opener's own spelling.
+  it('keeps a label that holds a markup run', () => {
     expect(roundTrip('{#foo}\n::: [a *b*]\nBody.\n:::\n')).toBe(
       '{#foo}\n::: [a *b*]\nBody.\n:::\n',
     )
@@ -96,12 +95,20 @@ describe('a container label survives an html import', () => {
 describe('the labels the lift refuses, and the divs that still unwrap', () => {
   const unwrapped = (html: string) => importSource(html).value
 
-  // The field is raw and the writer emits it raw, so lifting a paragraph
-  // holding markup would flatten the markup and lose it without a word.
-  it('refuses a label paragraph holding markup, and the div unwraps', () => {
-    const out = unwrapped('<div><p class="div-label">a <em>b</em></p><p>Body.</p></div>')
+  // Markup itself is no longer a refusal: the label is an inline run, so the
+  // paragraph's content has a spelling on the opener (markup-carve/carve#2572).
+  // What still refuses is what the WRITTEN form cannot carry, which is why the
+  // rule is asked of the writer rather than of the text - a `]` reaches the
+  // label through a code span with no `]` character in the label's own text.
+  it('refuses a label whose written form holds `]`, and the div unwraps', () => {
+    const out = unwrapped('<div><p class="div-label">a <code>]</code> b</p><p>Body.</p></div>')
     expect(out).not.toContain(':::')
     expect(out).toContain('{.div-label}')
+  })
+
+  it('lifts the same shape once the `]` is gone', () => {
+    expect(unwrapped('<div><p class="div-label">a <code>x</code> b</p><p>Body.</p></div>'))
+      .toBe('::: [a `x` b]\nBody.\n:::\n')
   })
 
   // `]` closes the label, so it has no spelling on an opener.
@@ -109,6 +116,24 @@ describe('the labels the lift refuses, and the divs that still unwrap', () => {
     const out = unwrapped('<div><p class="div-label">a]b</p><p>Body.</p></div>')
     expect(out).not.toContain(':::')
     expect(out).toContain('{.div-label}')
+  })
+
+  // The probe that writes the label's source is a MEASUREMENT: it must not crash
+  // and it must not file the diagnostics the body walk is about to file. Both
+  // were raised by codex review on the change that made the label a run.
+  it('refuses a label the writer has no spelling for, rather than throwing', () => {
+    const imported = importSource('<div><p class="div-label">a<code></code>b</p></div>')
+    expect(imported.value).toContain('{.div-label}')
+    expect(imported.report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
+  })
+
+  it('refuses a label whose written form does not read back as one', () => {
+    expect(unwrapped('<div><p class="div-label"><code></code></p></div>')).not.toContain(':::')
+  })
+
+  it('files a refused lift\u2019s diagnostics once, not twice', () => {
+    const imported = importSource('<div><p class="div-label"><unknown>x</unknown><a href="/x">x</a></p></div>')
+    expect(imported.report.diagnostics.map((d) => d.code)).toEqual(['raw-preserved'])
   })
 
   it('refuses a label that is not the first element, and the div unwraps', () => {

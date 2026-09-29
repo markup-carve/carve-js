@@ -14,6 +14,7 @@ import type {
   ExtensionRenderContext,
 } from './extension.js'
 import { inlineText, slugify } from './heading-ids.js'
+import { parseContainerLabelInlines } from './parse.js'
 
 /**
  * Glossary (#91, Tier-3). A `::: glossary` definition list declares terms;
@@ -122,7 +123,7 @@ function renderGlossary(
   // floor forbids.
   if (node.title !== undefined) parts.push(`${pad}<p class="admonition-title">${ctx.renderInlines(node.title)}</p>`)
   if (node.label !== undefined && node.label !== '') {
-    parts.push(`${pad}<p class="div-label">${ctx.escapeHtml(node.label)}</p>`)
+    parts.push(`${pad}<p class="div-label">${ctx.renderInlines(parseContainerLabelInlines(node.label))}</p>`)
   }
   for (const child of node.children) {
     if (child.type !== 'definition_list') {

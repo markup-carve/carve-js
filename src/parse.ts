@@ -7030,6 +7030,22 @@ export function parseRefLabelInlines(label: string): InlineNode[] {
   return new ParseSession().parseRefLabelInlines(label)
 }
 
+/**
+ * The inline nodes of a CONTAINER LABEL - a div's, an admonition's or a fence's
+ * unconsumed `[label]`.
+ *
+ * `CARVE-P9-041` enumerates a div label among the hosts that HAVE an inline run,
+ * so the fallback publishes that run and not the characters the author typed
+ * (ruled on markup-carve/carve#2572). The label is held as text here, the way the
+ * oracle's own layout tree holds it, so the scan happens where it is rendered.
+ *
+ * Positions are stripped: the label reaches this from an AST field, which carries
+ * no offset of its own, and PART 12 section 4 forbids inventing one.
+ */
+export function parseContainerLabelInlines(label: string): InlineNode[] {
+  return stripPositions(new ParseSession().parseRefLabelInlines(label))
+}
+
 interface InlineSource {
   baseOffset: number
   startLine: number

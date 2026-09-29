@@ -1,5 +1,6 @@
 import type { Admonition, Attrs, Extension, InlineNode } from './ast.js'
 import type { CarveExtension, ExtensionRenderContext } from './extension.js'
+import { parseContainerLabelInlines } from './parse.js'
 
 /**
  * Hidden / blurred "spoiler" content, revealed on interaction. Tier-3, the
@@ -82,7 +83,7 @@ export function spoiler(): CarveExtension {
         // title - the static path consumes the node, so the core floor never
         // runs; preserving it keeps the no-content-dropped invariant.
         const labelLine = adm.label
-          ? `${innerPad}<p class="div-label">${ctx.escapeHtml(adm.label)}</p>\n`
+          ? `${innerPad}<p class="div-label">${ctx.renderInlines(parseContainerLabelInlines(adm.label))}</p>\n`
           : ''
         return (
           `${pad}${open}\n` +

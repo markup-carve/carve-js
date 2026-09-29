@@ -9,6 +9,7 @@ import {
   type RenderOptions,
 } from './render-html.js'
 import { stripBidiControls } from './bidi-controls.js'
+import { parseContainerLabelInlines } from './parse.js'
 
 /** Options for the {@link tableOfContents} extension. */
 export interface TableOfContentsOptions {
@@ -379,7 +380,7 @@ function renderToc(
   const idAttr = titleId === undefined || titleId === '' ? '' : ` id="${ctx.escapeAttr(titleId)}"`
   const head =
     (node.title === undefined ? '' : `<p class="admonition-title"${idAttr}>${ctx.renderInlines(node.title)}</p>\n`) +
-    (node.label === undefined || node.label === '' ? '' : `<p class="div-label">${ctx.escapeHtml(node.label)}</p>\n`)
+    (node.label === undefined || node.label === '' ? '' : `<p class="div-label">${ctx.renderInlines(parseContainerLabelInlines(node.label))}</p>\n`)
   const emptyNav = head === '' ? `<nav${attrs}></nav>` : `<nav${attrs}>\n${head}</nav>`
   // Preserve any authored blocks written inside the placeholder before the nav,
   // never silently drop them (mirrors the index/glossary directives).

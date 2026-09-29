@@ -138,8 +138,12 @@ describe('fence ownership after earlier blocks', () => {
     )
   })
   it('quote-lazy text', () => {
+    // A FLUSH-LEFT LINE REACHES NO OPEN PARAGRAPH HERE. The over-indented fence
+    // is the item's open verbatim region, so the quote holds no paragraph for an
+    // unmarked line to continue and the line is the document's
+    // (markup-carve/carve-js#2350).
     expect(carveToHtml('> - head\n>\n>       ```\n>       a\ntext\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\ntext\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>head\n      <pre><code>a\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>text</p>',
     )
   })
   it('trailing blank before a sibling', () => {

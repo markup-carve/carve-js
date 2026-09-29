@@ -110,18 +110,16 @@ describe('the fence info line reads the same production', () => {
 })
 
 describe('the label a container renders', () => {
-  // THE SLOT IS FIXED HERE, THE LABEL'S OWN RENDERING IS NOT. A container label
-  // renders as raw text in this engine and as INLINE content in the oracle, on
-  // every label - `[a /b/]` diverges too, with no bracket anywhere near it. So
-  // these two shapes open their container now and still differ from the oracle in
-  // what the label reads as, which is markup-carve/carve-js#2348 and not this
-  // slot. Asserted as measured rather than as the oracle reads it, so the day the
-  // label becomes inline content these rows move with it.
-  it('takes an escaped bracket into the label, still unresolved', () => {
-    expect(html('::: note [a \\] b]\nbody\n:::\n')).toBe(NOTE('a \\] b'))
+  // THE SLOT IS FIXED HERE, AND THE LABEL'S OWN RENDERING NOW AGREES WITH THE
+  // ORACLE TOO: a container label is an inline run (markup-carve/carve#2572,
+  // ported for markup-carve/carve-js#2348), so the bracket the slot admitted is
+  // resolved and the code span is a span. The two questions were separate and
+  // these rows are where they meet.
+  it('resolves an escaped bracket taken into the label', () => {
+    expect(html('::: note [a \\] b]\nbody\n:::\n')).toBe(NOTE('a ] b'))
   })
 
-  it('takes a code span into the label, still unparsed', () => {
-    expect(html('::: note [a `]` b]\nbody\n:::\n')).toBe(NOTE('a `]` b'))
+  it('reads a code span taken into the label as a span', () => {
+    expect(html('::: note [a `]` b]\nbody\n:::\n')).toBe(NOTE('a <code>]</code> b'))
   })
 })

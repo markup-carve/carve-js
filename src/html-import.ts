@@ -24,7 +24,7 @@ import { DocumentIdRegistry } from './document-ids.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
-import { mergeAttrs } from './parse.js'
+import { mergeAttrs, parse } from './parse.js'
 import {
   DANGEROUS_URL_SCHEMES,
   LABEL_DEFAULTS,
@@ -1528,19 +1528,27 @@ class Importer {
       if (before.nodeName === '#text' && (domValue(before) ?? '').trim() !== '') return undefined
     }
     /*
-     * TEXT ONLY. `Div.label` is a raw string and the writer emits it raw, so
-     * lifting a paragraph holding markup would flatten the markup and lose it
-     * without a word.
+     * ITS INLINE CONTENT, WRITTEN BACK AS THE LABEL'S SOURCE. The label is an
+     * inline run (ruled on markup-carve/carve#2572), so markup in it has a
+     * spelling on the opener and the paragraph can be lifted whole. This used to
+     * refuse anything but text, because the label was published escaped and
+     * lifting `<strong>` would have flattened it without a word.
+     *
+     * The written form is what the refusals below are asked of, for the reason
+     * `spellableTitle` gives: enumerating the spellings that can produce a `]`
+     * is a second copy of the grammar, and the writer already knows.
      */
     const kids = domChildren(body[at]!) ?? []
-    if (kids.some((kid) => kid.nodeName !== '#text')) return undefined
-    const label = kids.map((kid) => domValue(kid) ?? '').join('')
+    const labelPath = bodyPaths[at] ?? ''
+    const label = this.containerLabelSource(kids, labelPath, depth)
+    if (label === undefined) return undefined
     /*
      * AND NOTHING THE OPENER CANNOT SPELL. `]` closes the label and a newline
      * ends the opener line, so neither can ride back out - a label carrying one
-     * would be written into source that re-reads as something else.
+     * would be written into source that re-reads as something else. Whatever else
+     * an inline run can spell, the parser answers for; see `labelReadsBack`.
      */
-    if (label.includes(']') || label.includes('\n')) return undefined
+    if (label.includes(']') || label.includes('\n') || !this.labelReadsBack(label)) return undefined
     /*
      * The element itself, and then everything under it - see `chargeSubtree`.
      *
@@ -1561,7 +1569,6 @@ class Importer {
      * `div-label` class is the exception and is consumed, because the renderer
      * writes it back from the label itself.
      */
-    const labelPath = bodyPaths[at] ?? ''
     const own = this.attrs(body[at]!, labelPath)
     const leftover = own && {
       ...own,
@@ -2999,6 +3006,53 @@ class Importer {
    * that goes stale the next time a spelling is added. Rendering the inlines
    * asks the writer itself.
    */
+  /**
+   * A container label's source, written from the inline content of the
+   * `<p class="div-label">` the renderer degraded it to, or `undefined` when the
+   * writer has no spelling for it.
+   *
+   * A THROWAWAY WALK, rewound in full. It is a measurement whose only result is a
+   * string: the real budget is charged once by the `chargeSubtree` call the lift
+   * already makes, and every diagnostic the walk files would be filed a second
+   * time by the body walk when the lift is refused - two identical `raw-preserved`
+   * rows for one element, and the report's cap spent twice (raised by codex
+   * review). `mark` and `restore` are the same pair the figure arm rewinds with.
+   */
+  private containerLabelSource(kids: P5Node[], labelPath: string, depth: number): string | undefined {
+    const rewind = this.mark()
+    const nodes = this.nodes
+    try {
+      const inlines = this.blockInlines(kids, labelPath, depth + 2)
+
+      return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: inlines }] }).trimEnd()
+    } catch (error) {
+      // NO SPELLING IS A REFUSAL, NOT A CRASH. An empty `<code>` has no Carve
+      // source while its open run does not end, and the writer says so; the
+      // paragraph then stays in the body, where the ordinary walk reports the
+      // loss exactly as it did before the label was a run.
+      if (error instanceof SourceUnspellableError) return undefined
+      throw error
+    } finally {
+      this.nodes = nodes
+      this.restore(rewind)
+    }
+  }
+
+  /**
+   * Whether the opener `::: [label]` reads that label back.
+   *
+   * The two characters an opener cannot carry are refused by name above, because
+   * each has its own reason. Everything else is asked of the PARSER, for the
+   * reason `spellableTitle` gives: enumerating the spellings that break an opener
+   * is a second copy of the grammar and goes stale. An empty code span writes two
+   * backticks, which turn the opener into a paragraph.
+   */
+  private labelReadsBack(label: string): boolean {
+    const first = parse(`::: [${label}]\nx\n:::\n`).children[0]
+
+    return first?.type === 'div' && first.label === label
+  }
+
   private spellableTitle(title: InlineNode[]): boolean {
     const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: title }] })
     return !written.includes('"') && !written.trimEnd().includes('\n')
