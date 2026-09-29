@@ -2940,18 +2940,7 @@ function parseCommentBlock(lexer: Lexer): Comment {
   const openerLine = lexer.consume()
   const m = RE_COMMENT_BLOCK_ANY.exec(openerLine)!
   const fence = m[1]!.length
-  // The body is indented RELATIVE to its fence, the way a code fence's body is:
-  // an opener at column 1 makes a body line at column 1 flush, not
-  // one-indented. Keeping the absolute text left `- a` / ` %%% n` / ` x`
-  // holding `n\n x` here and `n\nx` in carve-rs and carve-php - a cross-engine
-  // AST difference that surfaced as `carve fmt` writing the body one column
-  // further in on every reformat (carve#653).
-  const openerIndent = /^[ \t]*/.exec(openerLine)![0].length
-  const dedent = (line: string): string => {
-    let cut = 0
-    while (cut < openerIndent && (line[cut] === ' ' || line[cut] === '\t')) cut++
-    return line.slice(cut)
-  }
+  // Container prefixes are already removed; the remaining payload keeps its bytes.
   const lines: string[] = []
   // PART 7's four characters: a tail of one vertical tab is a NON-EMPTY tail.
   const openerTail = trimNonNbsp(m[2]!)
@@ -2964,7 +2953,7 @@ function parseCommentBlock(lexer: Lexer): Comment {
       break
     }
     lexer.consume()
-    lines.push(dedent(ln))
+    lines.push(stripLazyFrame(ln))
   }
   return { type: 'comment', block: true, content: lines.join('\n') }
 }
@@ -6194,6 +6183,7 @@ function rebaseOverindentedBlocks(
       }
       if (!closed) onUnclosedCodeFence?.()
     } else if (comment !== undefined) {
+      const closeAt = (commentCloser ??= commentCloserLookup(lines))(comment, i)
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (!isBlankLine(candidate) && indentColumns(candidate, base) < base) break
@@ -6203,6 +6193,7 @@ function rebaseOverindentedBlocks(
           commentFenceRun(sliceColumns(candidate, base, true)) === comment
         )
           break
+        if (j < closeAt) heldFoldedLines.add(j)
       }
     } else if (colon !== null) {
       const stack = [colon]
@@ -10642,6 +10633,7 @@ class ParseSession {
       }
 
       const nested: string[] = []
+      const commentPayloadCandidates = new Map<number, string>()
       const nestedLineNumbers: number[] = []
       const nestedSourceLines: (string | undefined)[] = []
       const bufferedBlanks = new Set<number>()
@@ -11308,6 +11300,11 @@ class ParseSession {
             // Keep the fold explicit so a closed descendant cannot claim it.
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           }
+          if (lazyState.opaque?.kind === 'comment' &&
+              commentFenceRun(l) !== lazyState.opaque.length &&
+              commentBlockHasCloser(lexer, lazyState.opaque.length)) {
+            commentPayloadCandidates.set(nested.length, sliceColumns(l, Math.min(indentColumns(l), contentCol), true))
+          }
           takenBelowColumn.add(nested.length)
           nested.push(lazyLine)
           nestedSourceLines.push(l)
@@ -11365,6 +11362,13 @@ class ParseSession {
           lexer.consume()
         } else {
           break
+        }
+      }
+
+      if (commentPayloadCandidates.size > 0) {
+        const closedComments = commentBlockSpans([content, ...nested])
+        for (const [index, payload] of commentPayloadCandidates) {
+          if (closedComments[index + 1]) nested[index] = LAZY_FRAME + stripLazyFrame(payload)
         }
       }
 

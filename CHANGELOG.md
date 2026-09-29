@@ -18,6 +18,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Fenced comments retain payload indentation beyond the host content column. Formatting preserves those columns, including comments folded into definition terms (markup-carve/carve#2535).
+
 - Markdown import keeps code blocks when a language hint is unsupported. It omits the whole hint instead of shortening it to a different language or producing an invalid fence (markup-carve/carve#2522).
 
 - Fences inside quoted lists and footnotes no longer absorb following unmarked lines (markup-carve/carve#2550).
