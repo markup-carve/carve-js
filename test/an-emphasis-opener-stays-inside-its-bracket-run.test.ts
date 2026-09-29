@@ -19,6 +19,13 @@ describe('PART 8: emphasis opened in a balanced bracket run stays inside it', ()
   }
 
   it.each([
+    ['[{~a ~> b]~}', '<p>[{~a ~&gt; b]~}</p>'],
+    ['[{~a]~> b~}', '<p>[{~a]<s>&gt; b</s>}</p>'],
+    ['[{~a~>b~}]', '<p>[<del>a</del><ins>b</ins>]</p>'],
+    ['[{~a ~> b]~} {~c~>d~}', '<p>[{~a ~&gt; b]~} <del>c</del><ins>d</ins></p>'],
+  ])('bounds editorial substitution in %s', (source, expected) => expect(html(source)).toBe(expected))
+
+  it.each([
     ['[a [b *c] d*]', '<p>[a [b *c] d*]</p>'],
     ['[a *b \\] c] d*', '<p>[a *b ] c] d*</p>'],
     ['[a *b `]` c] d*', '<p>[a *b <code>]</code> c] d*</p>'],

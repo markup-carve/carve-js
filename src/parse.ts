@@ -13570,8 +13570,9 @@ class ParseSession {
         // would otherwise force a backtrack to EOF at every `{` (quadratic on
         // runs like `{+`×n or `{~`×n). O(1) suffix lookups; output-identical.
         const hasBrace = !!(rbraceSuf && rbraceSuf[i])
+        const inlineEnd = bracketRuns.at(-1)?.close ?? text.length
         const sub = hasBrace ? this.substitutionAt(text, i) : null
-        if (sub) {
+        if (sub && sub.end <= inlineEnd) {
           flush()
           out.push(
             this.withPos(
@@ -13590,7 +13591,6 @@ class ParseSession {
           continue
         }
         // A pair opened inside a bracket run must close inside that run.
-        const inlineEnd = bracketRuns.at(-1)?.close ?? text.length
         const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? this.criticPairEnd(text, i, '+}') : -1
         if (ins !== -1 && ins <= inlineEnd) {
           flush()
