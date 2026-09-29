@@ -614,17 +614,17 @@ const RE_COMMENT_LINE = /^[ \t]*%%/
  * heading-only rules over this, and a heading now reads the same rule as a
  * paragraph.
  *
- * `atRunStart` IS THE HOST'S RUN, NOT A NESTED ONE. Inside emphasis the marker
+ * A balanced bracket label starts a host run at `runStart`. Inside emphasis the marker
  * has the opening delimiter in front of it, which is not a separator, so
  * `/%% c/` keeps its text (corpus 518).
  */
-const opensInlineComment = (text: string, i: number, atRunStart = false): boolean =>
+const opensInlineComment = (text: string, i: number, atRunStart = false, runStart = 0): boolean =>
   text[i] === '%' &&
   text[i + 1] === '%' &&
   (text[i - 1] === ' ' ||
     text[i - 1] === '\t' ||
     text[i - 1] === '\n' ||
-    (atRunStart && i === 0))
+    (atRunStart && i === runStart))
 
 /**
  * `text` with a trailing comment and its whole separating run removed, for a
@@ -12706,6 +12706,9 @@ class ParseSession {
     // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
     // branches resolve the close bracket in O(1); see buildBracketMap.
     const bracketClose: BracketClose = text.includes('[') ? buildBracketMap(text) : () => undefined
+    const hasInlineComments = text.includes('%%')
+    let commentLineEnd = -1
+    const commentRuns: Array<{ start: number; close: number }> = []
 
     // Suffix tables so a tail regex is only run when its mandatory close
     // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
@@ -12733,6 +12736,14 @@ class ParseSession {
 
     while (i < text.length) {
       const c = text[i]!
+      while (commentRuns.length && i >= commentRuns[commentRuns.length - 1]!.close) {
+        commentRuns.pop()
+      }
+      // The bracket scanner decides which escapes and opaque spans hide a closer.
+      if (c === '[' && hasInlineComments) {
+        const close = bracketClose(i)
+        if (close !== undefined) commentRuns.push({ start: i + 1, close })
+      }
       if (c === '\0' && this.inLineBlock) {
         flush()
         out.push(this.withPos({ type: 'non_breaking_space' }, source, text, i, i + 1))
@@ -12890,8 +12901,8 @@ class ParseSession {
       }
 
       // Trailing (inline) line comment: `%%` behind its separator consumes to the
-      // next newline (or end of input). The separator is absorbed so the visible
-      // text keeps no trailing space; the terminating newline stays and becomes a
+      // next newline or the enclosing bracket run's closer. Absorbing the separator
+      // leaves no trailing space; the terminating newline stays and becomes a
       // soft break. `%%` inside a code span never reaches here (code is consumed
       // opaquely), and `\%%` is already handled by the escape branch. (§4.13,
       // grammar inline_comment.)
@@ -12901,7 +12912,8 @@ class ParseSession {
       // there - but inside a line block the whole stanza is inline content, so
       // the verse kept `%% c` as text where the other engines drop it, and this
       // one dropped it on the first line and not the second (carve#574).
-      if (opensInlineComment(text, i, atHostRunStart)) {
+      const commentRun = commentRuns[commentRuns.length - 1]
+      if (opensInlineComment(text, i, atHostRunStart || commentRun !== undefined, commentRun?.start)) {
         // Absorb the WHOLE separating run so the visible text keeps no trailing
         // whitespace (CARVE-P9-041, markup-carve/carve#2552). Flush the trimmed
         // buffer with a source span that ends where the run begins, and start the
@@ -12913,8 +12925,12 @@ class ParseSession {
           out.push(this.withPos(node, source, text, bufStart, commentStart))
         }
         buf = ''
-        const nl = text.indexOf('\n', i)
-        const end = nl === -1 ? text.length : nl
+        // Several bracket comments can share a line; search its suffix only once.
+        if (commentLineEnd < i) {
+          const nl = text.indexOf('\n', i)
+          commentLineEnd = nl === -1 ? text.length : nl
+        }
+        const end = Math.min(commentLineEnd, commentRun?.close ?? text.length)
         const content = text.slice(i + 2, end).replace(/^[ \t]/, '').replace(/[ \t]+$/, '')
         out.push(
           this.withPos({ type: 'comment', block: false, content } as Comment, source, text, i, end),
