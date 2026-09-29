@@ -156,3 +156,91 @@ describe('the closer that decides whether the fence opens', () => {
     expect(carveToHtml(item('%%% secret', 2, 'y'))).not.toContain('secret')
   })
 })
+
+// ---------------------------------------------------------------------------
+// THE DEGRADATION IS TOTAL FOR LOOSENESS TOO (markup-carve/carve-js#2337).
+//
+// §17 L1 loosens an item on a second PARAGRAPH, and an invisible line in front
+// of that paragraph is not a wall that hides it (carve#621). The degraded
+// opener is one such line, so the two spellings answer the same way here as
+// everywhere else. Reading it as a BLOCK instead kept the item tight, which is
+// the third answer carve#1903's ruling refuses.
+//
+// Measured against the executable spec at markup-carve/carve 5b70a768.
+// ---------------------------------------------------------------------------
+
+const LOOSE_PAIR = '<ul>\n  <li><p>t</p>\n    <p>c</p>\n  </li>\n  <li><p>s</p></li>\n</ul>'
+const LOOSE_LEAD = '<ul>\n  <li><p>t</p></li>\n  <li><p>s</p></li>\n</ul>'
+
+describe('a paragraph after a degraded opener loosens the item', () => {
+  // Every unterminated spelling: the bare run at three widths, the
+  // insignificant tail in both its spellings. A reader keyed on the tail rather
+  // than on the missing closer would pass a single-spelling test.
+  it.each([
+    ['three wide', '- t\n\n  %%%\n  c\n- s\n'],
+    ['a trailing space', '- t\n\n  %%% \n  c\n- s\n'],
+    ['a spaced tail', '- t\n\n  %%% note\n  c\n- s\n'],
+    ['a glued tail', '- t\n\n  %%%x\n  c\n- s\n'],
+    ['four wide', '- t\n\n  %%%%\n  c\n- s\n'],
+    ['five wide', '- t\n\n  %%%%%\n  c\n- s\n'],
+    ['a narrower run below it, which cannot close it', '- t\n\n  %%%%\n  c\n  %%%\n- s\n'],
+    ['the %% line form it has to equal [control]', '- t\n\n  %% c\n  c\n- s\n'],
+    ['no invisible line at all [control]', '- t\n\n  c\n- s\n'],
+  ])('%s', (_name, source) => {
+    expect(carveToHtml(source)).toBe(LOOSE_PAIR)
+  })
+
+  // A TERMINATED fence is one invisible BLOCK rather than an invisible line, and
+  // §17 L1 still finds the paragraph behind it. Its payload is hidden, so the
+  // second paragraph is `d`.
+  it('a terminated fence, one invisible block [control]', () => {
+    expect(carveToHtml('- t\n\n  %%%\n  c\n  %%%\n  d\n- s\n')).toBe(
+      '<ul>\n  <li><p>t</p>\n    <p>d</p>\n  </li>\n  <li><p>s</p></li>\n</ul>',
+    )
+  })
+
+  // The blank's own clause: with nothing but the degraded opener after it, the
+  // item is still followed by a blank line before the next marker.
+  it.each([
+    ['the degraded opener', '- t\n\n  %%%\n- s\n'],
+    ['the %% line form it has to equal [control]', '- t\n\n  %% c\n- s\n'],
+  ])('a tail of only %s still loosens', (_name, source) => {
+    expect(carveToHtml(source)).toBe(LOOSE_LEAD)
+  })
+
+  // THE CONTROL THAT KEEPS THIS ABOUT §28 AND NOT ABOUT EVERY `%%%`. A closer
+  // one column below the item's content column is outside the item but inside
+  // the DOCUMENT, so the opener is not degraded: it opens a real span whose
+  // payload outlives the item and is republished. A block is not a second
+  // paragraph, so the item stays tight.
+  it('a closer outside the item is still a closer', () => {
+    expect(carveToHtml('- d\n\n  %%%\n  p\nz\n  %%%\n')).toBe(
+      '<ul>\n  <li>d\n    p\n  </li>\n</ul>\n<p>z</p>',
+    )
+  })
+
+  // The blank line is what loosens; the opener only fails to fill the gap.
+  it('needs the blank line', () => {
+    expect(carveToHtml('- t\n  %%%\n  c\n- s\n')).toBe(
+      '<ul>\n  <li>t\n    c\n  </li>\n  <li>s</li>\n</ul>',
+    )
+  })
+
+  it('reads an ordered host the same way', () => {
+    expect(carveToHtml('1. t\n\n   %%%\n   c\n1. s\n')).toBe(
+      '<ol>\n  <li><p>t</p>\n    <p>c</p>\n  </li>\n  <li><p>s</p></li>\n</ol>',
+    )
+  })
+
+  it("reads a nested item at its own content column the same way", () => {
+    expect(carveToHtml('- a\n  - t\n\n    %%%\n    c\n')).toBe(
+      '<ul>\n  <li>a\n    <ul>\n      <li><p>t</p>\n        <p>c</p>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
+
+  // THE HOST CONTROL. At the top level there is no item to loosen and both
+  // spellings already agreed, so the item is what moved.
+  it('leaves the top level alone', () => {
+    expect(carveToHtml('t\n\n%%%\nc\n')).toBe('<p>t</p>\n<p>c</p>')
+  })
+})
