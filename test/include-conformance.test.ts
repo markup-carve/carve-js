@@ -81,26 +81,10 @@ const files = readdirSync(vectorDir)
 /**
  * Vector goldens the PINNED spec has not regenerated yet.
  *
- * CARVE-P12-064 (markup-carve/carve#2616) made `code_block.content` literal
- * payload text: a fence that runs out at EOF keeps whether its last line had a
- * break and must not invent one. The i04 golden was generated before that
- * ruling, so it still spells the invented break for a child fragment ending
- * mid-line. Entry goes out with the pin that regenerates it
- * (markup-carve/carve#2623).
- *
  * DECLARED, NEVER TOLERATED: an entry whose vector already matches its own
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
-const AHEAD_OF_PIN = new Map<string, { field: string; value: string; reason: string }>([
-  [
-    'i04-fragment-containment-unclosed-fence',
-    {
-      field: 'html',
-      value: '<p>Before.</p>\n<pre><code class="language-js">let x = 1;</code></pre>\n<p>After.</p>',
-      reason: 'CARVE-P12-064: the child fragment ends mid-line, so its payload keeps no final break',
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { field: string; value: string; reason: string }>()
 
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.
