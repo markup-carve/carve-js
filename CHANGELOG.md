@@ -19,6 +19,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Fixed
 
 - Rebase code and raw fences after a blank-separated quote in a footnote body (carve#2598).
+- Include a fenced block quote's closing delimiter in its source span, including empty quotes, caption targets and quotes inside footnotes (#2345).
 
 - An unterminated fence absorbed into a list paragraph keeps its interior blank lines from loosening the list (#2358).
 

@@ -2174,6 +2174,10 @@ function parseBlockAttributeRun(src: string): Attrs | null {
  * A CONTAINER ENDS AT ITS LAST PLACED CHILD (PART 12 §4, markup-carve/carve#1522
  * and markup-carve/carve#1524).
  */
+// Parser-only ownership: a closed fenced quote keeps its closer even when
+// its children are empty or hoisted (CARVE-P12-014, carve-js#2345).
+const explicitlyClosedQuotes = new WeakSet<object>()
+
 const ENDS_AT_LAST_PLACED_CHILD = new Set([
   'block_quote',
   'definition_list',
@@ -2299,7 +2303,7 @@ function attachBlockPos(
       if (last.endOffset !== undefined) node.pos.endOffset = last.endOffset
     }
   }
-  if (type !== undefined && ENDS_AT_LAST_PLACED_CHILD.has(type)) {
+  if (type !== undefined && ENDS_AT_LAST_PLACED_CHILD.has(type) && !explicitlyClosedQuotes.has(node)) {
     const kids =
       type === 'definition_list'
         ? entriesToWire((node as { items?: DefinitionItem[] }).items ?? [])
@@ -9460,6 +9464,11 @@ class ParseSession {
     const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
     const bq: BlockQuote = { type: 'block_quote', fenced: true, children: this.parseBlocks(subLexer, 0) }
     const quoteEndIndex = lexer.pos
+    // The collector excludes its own closer from `inner`. At EOF without a
+    // closer, the last consumed line is still part of the body.
+    if ((inner.at(-1)?.lineIndex ?? openLineIndex) < quoteEndIndex - 1) {
+      explicitlyClosedQuotes.add(bq)
+    }
     // §4's seventh caption host. The slot hangs on the CLOSING fence, as the
     // figure group's does, and what it produces is what the PREFIXED spelling
     // produces: a captioned quote is a figure either way, because the two
