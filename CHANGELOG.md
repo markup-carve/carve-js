@@ -7,7 +7,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
-## [Unreleased]
+## [0.1.8] - 2026-09-29
 
 ### Breaking
 
@@ -27,7 +27,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
-- Reduce HTML eligibility scanning, definition-prepass work, nested lexer allocation and text-position passes. Long interior whitespace runs no longer trigger repeated regex backtracking. See the [measurements](reports/parser-costs.md).
+- Reduce HTML eligibility scanning, definition-prepass work, nested lexer allocation and text-position passes (#2389). Long interior whitespace runs no longer trigger repeated regex backtracking. See the [measurements](reports/parser-costs.md).
 - A container label's trailing `%%` comment is cut where its own inline run ends, so a `%%` inside a closed construct keeps the construct and the text after it (#2372).
 - Markdown import keeps list item shapes, tightness, markers and task boxes as a GFM reader sees them (#1935, #1937, #1941, #1943, #1946, #1947, #1968, #1981, #1982, #2011, #2013, #2026, #2047, #2048, #2050, #2056, #2061, #2295, #2314).
 - Markdown import preserves inline text: emphasis, quotes, character references, escaped backticks, terminal backslashes, autolink escapes and the whitespace a heading holds (#2285, #2288, #2290, #2319, #2323, #2324).
@@ -42,11 +42,11 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - HTML import leaves a link's or span's edge whitespace outside it, drops an empty list rather than writing an attribute line with no block, drops an empty heading, and joins two adjacent definition lists the source spells as one (#2120, #2127, #2135; markup-carve/carve#2365, markup-carve/carve#2367).
 - BBCode import spells formatting tags the way the Carve writer would, escapes what a post's own text forms beside a converted tag, and writes a bare marker for an empty quote line (#1884, #1885, #1893, #1896, #1898, #1904, #2076).
 - The Carve writer emits source that reads back as the tree it was given, over text runs, figures, link padding, autolinks, line-block text, attributes inside emphasis and whitespace Carve cannot spell (#2134, #2136, #2145, #2151, #2156, #2171, #2174, #2217, #2244, #2282, #2367).
-- The Carve writer escapes a link-shaped run's opening destination parenthesis, including around emphasis, and no longer rescans an unclosed destination to the end of the input (#2114, #2115; markup-carve/carve#2357, markup-carve/carve#2359).
+- The Carve writer escapes a link-shaped run's opening destination parenthesis, including around emphasis, and no longer rescans an unclosed destination to the end of the input (#2114, #2115; markup-carve/carve#2357, markup-carve/carve#2359). Where a bracket pair crosses a formatting span, the opening bracket is escaped and the destination parenthesis is not, which is the one-escape spelling the shared importer fixture and the other two engines carry (#2397).
 - The Markdown writer emits what a GFM reader reads, over block cells, quote markers, cell breaks, list-tables, frontmatter and a link whose fragment names no heading (#2113, #2116, #2121, #2130, #2138, #2144, #2146, #2149, #2150, #2158, #2166, #2170, #2254; markup-carve/carve#2363).
 - The Markdown target keeps every block a list item holds, padding a continuation line from the item's marker and separating a block below a nested list (#2085).
 - A comment keeps its payload, its span and its owner inside every container: a list item, a quoted item, a definition term, a description body and a nested marker (#2185, #2202, #2262, #2270, #2280, #2287, #2298, #2300, #2312, #2327, #2335, #2354, #2360, #2376, #2382).
-- A fence is measured from the base its own container gives it, so a closer, a payload line and a below-column run land in the block that owns them (#2201, #2208, #2213, #2220, #2223, #2224, #2242, #2256, #2257, #2258, #2265, #2266, #2284, #2361, #2364).
+- A fence is measured from the base its own container gives it, so a closer, a payload line and a below-column run land in the block that owns them (#2201, #2208, #2213, #2220, #2223, #2224, #2242, #2256, #2257, #2258, #2265, #2266, #2284, #2361, #2364), and rebasing an item leaves code, raw and comment boundaries alone where an over-indented quote marker follows an opaque head (#2386).
 - A fence's closer is searched for only inside the container that opened it, a fenced quote's explicit closer is inside its source span, and a `:::` on an item's marker line whose body arrives by lazy folding stays text (#1880, #1883, #1889, #1890, #2345).
 - A quote keeps its nested state across lazy paragraph lines, and a lazy line no longer closes a fence it was spliced into or continues past a container fence (#2268, #2274, #2277, #2325).
 - A definition term folds an indented block opener, a comment and a definition past its column at every depth, an empty term marker followed by a space folds like the bare one, and a description body ends at two blank lines (#1891, #2161, #2185, #2221, #2306, #2317; markup-carve/carve#2411).
@@ -74,7 +74,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - `applyAstPatch` rejects unknown operations and malformed pointers before applying a patch (#2091).
 - AST JSON ingest and export handle lists with hundreds of thousands of items without overflowing the argument stack (#2153, #2159).
 - `fromAstJson` rejects an array in a figure's target and validates a node-matrix position one level deeper (#1959, #1994).
-- A figure in a table cell keeps its caption order, an ingested cross-reference keeps its text, and an empty grouping label writes nothing (#2249, #2271).
+- A figure in a table cell keeps its caption order, an ingested cross-reference keeps its text, and an empty grouping label writes nothing (#2249, #2271). A `::: list-table` whose grouping label the extension does not consume renders that label above the table instead of dropping it (#2387, #2388).
 - The indentation lint names an over-indented fence opener with a glued info string, including unterminated fences (#2341).
 - The term-fold lint measures a BOM's width and skips verbatim spans, and the fence-ownership and nesting-cap diagnostics agree with the parser, as do the formatter's own (#2165, #2218, #2249, #2301).
 
@@ -159,5 +159,5 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.7...HEAD
+[0.1.8]: https://github.com/markup-carve/carve-js/compare/0.1.7...0.1.8
 [0.1.7]: https://github.com/markup-carve/carve-js/compare/0.1.6...0.1.7
