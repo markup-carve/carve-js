@@ -81,6 +81,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Improvements
 
+- Reduce position-removal key arrays, definition prepasses on ordinary bracket text, unused container maps and plain-paragraph scanner setup. The [follow-up measurements](reports/parser-followups.md) include CPU and allocation profiles, definition controls and multiple nesting depths (#2390, #2391, #2392, #2393).
+
 - `carve lint` reports a fence opener that fell back to inline text, and a `::: footnotes` or `::: references` marker inside a container that places nothing; `--extension citations` makes the references rule reachable (#1914, #2045, #2068).
 - `renderCarveWithConversionReport` names the AST structures and fields Carve source cannot spell (#2091).
 - Node identity, annotation range and provenance sidecar APIs for AST JSON, with session-scoped identities in editor snapshots and top-level source-byte measurement in `parseWithProvenance` (#2091).
