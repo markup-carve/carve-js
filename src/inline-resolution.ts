@@ -109,15 +109,13 @@ export function applyLinkDefs(
   nodes: InlineNode[],
   defs: Map<string, LinkDef>,
 ): InlineNode[] {
-  const out: InlineNode[] = []
-  for (let node of nodes) {
+  if (defs.size === 0) return nodes
+  for (const node of nodes) {
     mapInlineChildren(node, applyLinkDefs, defs)
     if (isUnresolvedReference(node)) {
-      node = applyReferenceDefinition(node, defs)
+      applyReferenceDefinition(node, defs)
       // Unresolved links remain available to the later heading-reference pass.
     }
-    out.push(node)
   }
-  return out
+  return nodes
 }
-

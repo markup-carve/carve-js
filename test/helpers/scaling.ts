@@ -55,11 +55,17 @@ const MAX_MS = 20_000
 export const perfIt = process.env.CARVE_PERF ? it : it.skip
 
 /** One timed call, in milliseconds. */
-function time(fn: () => void): number {
+function time(fn: () => void, minSampleMs = 0): number {
   const start = performance.now()
-  fn()
+  let calls = 0
+  let elapsed: number
+  do {
+    fn()
+    calls++
+    elapsed = performance.now() - start
+  } while (elapsed < minSampleMs)
 
-  return performance.now() - start
+  return elapsed / calls
 }
 
 function median(values: number[]): number {
@@ -89,6 +95,8 @@ export function expectScansLinearly(
      * shape whose fragment is long from building a needlessly large input.
      */
     smallRepeats?: number
+    /** Batch short operations to reduce timer and scheduler noise. */
+    minSampleMs?: number
   } = {},
 ): void {
   const prefix = options.prefix ?? ''
@@ -97,7 +105,7 @@ export function expectScansLinearly(
   expectBuiltInputScansLinearly(
     convert,
     (repeats) => prefix + fragment.repeat(repeats) + suffix,
-    { label: options.label ?? fragment, ...(options.smallRepeats === undefined ? {} : { smallRepeats: options.smallRepeats }) },
+    { ...(options.minSampleMs === undefined ? {} : { minSampleMs: options.minSampleMs }), label: options.label ?? fragment, ...(options.smallRepeats === undefined ? {} : { smallRepeats: options.smallRepeats }) },
   )
 }
 
@@ -120,7 +128,7 @@ export function expectScansLinearly(
 export function expectBuiltInputScansLinearly(
   convert: (input: string) => void,
   build: (repeats: number) => string,
-  options: { label?: string; smallRepeats?: number; largeRepeats?: number } = {},
+  options: { label?: string; smallRepeats?: number; largeRepeats?: number; minSampleMs?: number } = {},
 ): void {
   const label = options.label ?? 'input'
   const smallRepeats = options.smallRepeats ?? SMALL_REPEATS
@@ -132,6 +140,7 @@ export function expectBuiltInputScansLinearly(
   // Prime any module-level caches so round 1 does not measure setup. The small
   // sample is the same shape, so it warms what the large one would.
   convert(small)
+  if (options.minSampleMs) convert(large)
 
   const smallPerByte: number[] = []
   const largePerByte: number[] = []
@@ -143,11 +152,11 @@ export function expectBuiltInputScansLinearly(
     let elapsedLarge: number
 
     if (round % 2 === 0) {
-      elapsedSmall = time(() => convert(small))
-      elapsedLarge = time(() => convert(large))
+      elapsedSmall = time(() => convert(small), options.minSampleMs)
+      elapsedLarge = time(() => convert(large), options.minSampleMs)
     } else {
-      elapsedLarge = time(() => convert(large))
-      elapsedSmall = time(() => convert(small))
+      elapsedLarge = time(() => convert(large), options.minSampleMs)
+      elapsedSmall = time(() => convert(small), options.minSampleMs)
     }
 
     smallPerByte.push(elapsedSmall / small.length)

@@ -1,13 +1,13 @@
 import type { Document, Position } from './ast.js'
 
 /** Node positions and the sidecar fields that also carry source locations. */
-const POSITION_FIELDS = [
+const POSITION_FIELDS: readonly string[] = [
   'pos',
   'footnoteDefPos',
   'termSpans',
   'definitionSpans',
   'definitionLines',
-] as const
+]
 
 /**
  * Remove source-position fields from the finished tree. The parser still tracks positions;
@@ -24,12 +24,13 @@ export function dropPositions(doc: Document): void {
       return
     }
     const record = value as Record<string, unknown>
-    for (const field of POSITION_FIELDS) delete record[field]
+    // Visit the original object shape before deletion changes enumeration.
     const node = typeof record['type'] === 'string'
     for (const key in record) {
-      if (!Object.hasOwn(record, key)) continue
+      if (!Object.hasOwn(record, key) || POSITION_FIELDS.includes(key)) continue
       if (key !== 'attrs' || !node) walk(record[key])
     }
+    for (const field of POSITION_FIELDS) delete record[field]
   }
   walk(doc)
 }
