@@ -81,6 +81,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Improvements
 
+- Reduced position-removal time by visiting children before deleting fields. Container lexers share immutable line arrays, ordinary Unicode text uses the plain-text inline paths, and reference resolution avoids redundant passes and replacement arrays. Short deep-quote scaling guards use longer timing batches without relaxing their threshold. See the [paired measurements](reports/parser-next-five.md).
+
 - Reduce position-removal key arrays, definition prepasses on ordinary bracket text, unused container maps and plain-paragraph scanner setup. The [follow-up measurements](reports/parser-followups.md) include CPU and allocation profiles, definition controls and multiple nesting depths (#2390, #2391, #2392, #2393).
 
 - `carve lint` reports a fence opener that fell back to inline text, and a `::: footnotes` or `::: references` marker inside a container that places nothing; `--extension citations` makes the references rule reachable (#1914, #2045, #2068).

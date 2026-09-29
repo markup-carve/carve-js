@@ -747,7 +747,7 @@ export const layoutWork = {
 class Lexer {
   attachmentBoundaries: Set<number>
   prefixMemoLines?: boolean[]
-  lines: string[]
+  lines: readonly string[]
   lineOffsets: number[]
   lineNumberOffset: number
   sourceLineMap?: number[]
@@ -999,9 +999,11 @@ class Lexer {
     // not a run - or a body ending in a blank line gains a line it never had.
     if (typeof source === 'string') {
       if (layoutWork.on) layoutWork.seam += source.length
-      this.lines = normalizeNewlines(source).split('\n')
+      const lines = normalizeNewlines(source).split('\n')
+      if (lines.length && lines[lines.length - 1] === '') lines.pop()
+      this.lines = lines
     } else {
-      this.lines = source.slice()
+      this.lines = source
     }
     // Drop the trailing empty line a terminal newline introduces. ONLY for a
     // string source, where that `''` is an artifact of the split: `'a\n'`
@@ -1013,9 +1015,6 @@ class Lexer {
     // came out one line short (markup-carve/carve-js#988). The old
     // join-then-split round trip lost it the same way; reproducing that here
     // reproduced the loss with it.
-    if (typeof source === 'string' && this.lines.length && this.lines[this.lines.length - 1] === '') {
-      this.lines.pop()
-    }
     if (typeof source === 'string') {
       this.documentLineCount = this.lines.length
       // The last CHARACTER, not a suffix scan over a normalized copy: `\r\n`
@@ -1316,7 +1315,6 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   // `parent.lineNumber`, both fixed once the Lexer constructor has run. Rebuilt
   // per child it made an ordinary flat list quadratic (see the field's docblock
   // and markup-carve/carve-js#885).
-  const parentIndicesOf = sub.sourceLineMap ? parentLineIndices(parent) : EMPTY_LINE_INDICES
 
   for (let i = 0; i < sub.lines.length; i++) {
     const mapped = sub.sourceLineMap?.[i]
@@ -1358,7 +1356,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     const parentIndex =
       mapped === undefined
         ? startLineIndex + i
-        : (parentIndicesOf.get(mapped) ?? []).find(
+        : (parentLineIndices(parent).get(mapped) ?? []).find(
             (candidate) => candidate >= previousIndex && anchorsTo(candidate),
           )
     if (parentIndex === undefined) return declinePositions(sub)
@@ -1448,9 +1446,6 @@ function parentLineIndices(lexer: Lexer): Map<number, number[]> {
   lexer.lineIndicesByNumber = built
   return built
 }
-
-/** Stand-in for the map above when the sub-lexer has no line map to invert. */
-const EMPTY_LINE_INDICES: ReadonlyMap<number, number[]> = new Map()
 
 /** A dedented line's content, with any synthesized leading spaces removed. */
 function withoutSyntheticIndent(line: string): string {
@@ -2539,7 +2534,7 @@ interface CloserIndex {
  * same suffix-maximum structure over a different pattern; spelling that twice is
  * how the two would drift.
  */
-function buildCodeCloserIndex(lines: string[], re: RegExp): CloserIndex['code'] {
+function buildCodeCloserIndex(lines: readonly string[], re: RegExp): CloserIndex['code'] {
   const codeLast = new Map<string, Map<number, number>>()
   for (let i = 0; i < lines.length; i++) {
     const f = re.exec(lines[i]!)
@@ -2568,7 +2563,7 @@ function buildCodeCloserIndex(lines: string[], re: RegExp): CloserIndex['code'] 
   return code
 }
 
-function buildCloserIndex(lines: string[]): CloserIndex {
+function buildCloserIndex(lines: readonly string[]): CloserIndex {
   const comment = new Map<number, number>()
   const colon = new Map<number, number>()
   for (let i = 0; i < lines.length; i++) {
@@ -12917,9 +12912,9 @@ class ParseSession {
     // span.
     atHostRunStart: boolean,
   ): InlineNode[] {
-    // ASCII prose has no inline openers or smart-punctuation tokens.
+    // Non-ASCII text and ASCII letters/digits have no core inline openers.
     // Extension matchers can claim ordinary text, so they retain the full scan.
-    if (this.activeMatchers.length === 0 && /^[A-Za-z0-9 \t]+$/.test(text)) {
+    if (this.activeMatchers.length === 0 && /^[A-Za-z0-9 \t\u0080-\uFFFF]+$/.test(text)) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
     }
     const out: InlineNode[] = []
@@ -12983,13 +12978,13 @@ class ParseSession {
       }
 
       // Core inline constructs all begin with punctuation. When no extension
-      // matcher can claim an arbitrary offset, append ordinary ASCII prose as a
+      // matcher can claim an arbitrary offset, append ordinary text as a
       // run instead of asking smart typography, emphasis and every other inline
       // recognizer about each letter and space individually.
       const code = text.charCodeAt(i)
       if (
         this.activeMatchers.length === 0 &&
-        ((code >= 48 && code <= 57) ||
+        (code >= 128 || (code >= 48 && code <= 57) ||
           (code >= 65 && code <= 90) ||
           (code >= 97 && code <= 122) ||
           code === 32 ||
@@ -13002,6 +12997,7 @@ class ParseSession {
           const next = text.charCodeAt(i)
           if (
             !(
+              next >= 128 ||
               (next >= 48 && next <= 57) ||
               (next >= 65 && next <= 90) ||
               (next >= 97 && next <= 122) ||
