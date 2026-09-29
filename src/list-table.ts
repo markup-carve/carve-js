@@ -7,6 +7,7 @@ import type {
   Paragraph,
 } from './ast.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
+import { parseContainerLabelInlines } from './parse.js'
 
 /**
  * Render `::: list-table` admonitions as real HTML `<table>` markup, with the
@@ -193,6 +194,17 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
 
   const lines: string[] = []
 
+  // A `<table>` admits no `<p>` and its one `<caption>` slot belongs to the
+  // quoted title, so an unconsumed grouping `[label]` renders immediately
+  // BEFORE the element (CARVE-P9-072), the shape `glossary` and `index` use.
+  // Dropping it deleted authored text, which the unconsumed-label floor in
+  // `docs/graceful-degradation.md` forbids; an empty `[]` names nothing, and is
+  // skipped here as it is in the sibling extensions and on the other targets.
+  const labelFloor =
+    node.label === undefined || node.label === ''
+      ? ''
+      : `${pad}<p class="div-label">${ctx.renderInlines(parseContainerLabelInlines(node.label))}</p>\n`
+
   // <caption> holds phrasing content: the title renders through the inline
   // pipeline (a plain-text flatten would silently drop the author's markup).
   // Emptiness is judged on the RENDERED inlines so an image-only or
@@ -267,7 +279,7 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
     const body = grid.map((gridRow, rowIndex) => `${pad}    ${renderRow(gridRow, rowIndex)}`)
     lines.push(`${pad}  <tbody>\n${body.join('\n')}\n${pad}  </tbody>`)
     const attrs = renderTableAttributes(node, ctx)
-    return `${pad}<table${attrs}>\n${lines.join('\n')}\n${pad}</table>`
+    return `${labelFloor}${pad}<table${attrs}>\n${lines.join('\n')}\n${pad}</table>`
   }
 
   if (headGrid.length > 0) {
@@ -296,7 +308,7 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
 
   const attrs = renderTableAttributes(node, ctx)
 
-  return `${pad}<table${attrs}>\n${lines.join('\n')}\n${pad}</table>`
+  return `${labelFloor}${pad}<table${attrs}>\n${lines.join('\n')}\n${pad}</table>`
 }
 
 interface Placement {
