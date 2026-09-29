@@ -11144,7 +11144,30 @@ class ParseSession {
             // column 0, which is the line this test excludes and which is all
             // that separates 358 from 357-2.
             (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
-            !lazyContinuationEndsList(l, lexer)) ||
+            (!lazyContinuationEndsList(l, lexer) ||
+              // A list marker indented past the base column but BELOW the content
+              // column folds into what the item is still holding open, rather than
+              // ending the list. Under symmetric §10 no list marker interrupts a
+              // paragraph, so on the recursive reparse it stays folded:
+              // `1. a`/`  1. b`, `- a`/` - b`, and the abutting-attr form
+              // `- a`/` -{.x} b` all fold. (At or past the content column the
+              // marker nests; at the base column it can start a sibling list,
+              // §11 -- so only a below-content indented one folds.)
+              //
+              // AN EXEMPTION FROM `lazyContinuationEndsList`, NOT A REASON OF ITS
+              // OWN (markup-carve/carve-js#2338). Written as a third alternative
+              // it collected the marker with nothing left to fold it into: after
+              // an attribute line, a reference definition, a heading or a closed
+              // fence the item's paragraph is over, and the band marker then
+              // opened a NESTED list where the oracle ends the container and
+              // starts a sibling one. The band followers that are not markers
+              // already read that way, which is what left the two spellings of
+              // one band apart.
+              (indentColumns(l, baseIndent + 1) > baseIndent &&
+                (RE_TASK.test(l) ||
+                  RE_UNORDERED.test(l) ||
+                  RE_ORDERED.test(l) ||
+                  extractItemAttr(l) !== null)))) ||
             // A COMMENT INSIDE A SPAN THIS ITEM ALREADY HOLDS IS NOT A COMMENT THAT
             // ENDS IT (markup-carve/carve-js#2255, markup-carve/carve#2488). §28
             // pairs the delimiters and indentation is part of neither, so ending the
@@ -11157,19 +11180,7 @@ class ParseSession {
             // opener test refuses an indented run - so a span a descendant holds is
             // invisible to it (`bodyHoldsOpenCommentSpan`).
             (commentFenceRun(l.replace(/^[ \t]+/, '')) !== undefined &&
-              bodyHoldsOpenCommentSpan(nested, itemSpanScan)) ||
-            // A list marker indented past the base column but BELOW the content
-            // column folds into the lead text rather than ending the list. Under
-            // symmetric §10 no list marker interrupts a paragraph, so on the
-            // recursive reparse it stays folded: `1. a`/`  1. b`, `- a`/` - b`,
-            // and the abutting-attr form `- a`/` -{.x} b` all fold. (At or past
-            // the content column the marker nests; at the base column it can start
-            // a sibling list, §11 -- so only a below-content indented one folds.)
-            (indentColumns(l, baseIndent + 1) > baseIndent &&
-              (RE_TASK.test(l) ||
-                RE_UNORDERED.test(l) ||
-                RE_ORDERED.test(l) ||
-                extractItemAttr(l) !== null)))
+              bodyHoldsOpenCommentSpan(nested, itemSpanScan)))
         ) {
           bodyHasBelowColumnLine = true
           let lazyLine = l
