@@ -3,7 +3,8 @@ import { expect, it } from 'vitest'
 import { carveToHtml, parse } from '../src/index.js'
 
 const cases: { source: string, html: string }[] = JSON.parse(readFileSync(new URL('./fixtures/container-ownership.json', import.meta.url), 'utf8'))
-for (const { source, html } of cases) {
+const boundaries = JSON.parse(readFileSync(new URL('./fixtures/container-ownership-boundaries.json', import.meta.url), 'utf8'))
+for (const { source, html } of [...cases, ...boundaries]) {
   it(`container ownership: ${JSON.stringify(source)}`, () => {
     expect(carveToHtml(source).trim()).toBe(html)
   })

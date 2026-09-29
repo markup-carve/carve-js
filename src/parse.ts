@@ -6202,7 +6202,8 @@ function rebaseOverindentedBlocks(
       ownedColumn = markerColumn
       continue
     }
-    if (!includeSublists && base === 0 && RE_BLOCKQUOTE.test(line)) {
+    if (!includeSublists && base === 0 && RE_BLOCKQUOTE.test(line) &&
+        blockQuoteParagraphOpen(markerLineQuoteState(line)!)) {
       const quote = quoteProbe ??= new Lexer([])
       quote.lines = lines
       quote.pos = i
@@ -11639,7 +11640,8 @@ class ParseSession {
         extractItemAttr(content, terminatorFree) !== null
       // Include marker-line containers whose continuation keeps its own extent.
       const leadOwnsExtent = RE_DEFLIST_TERM.test(content) ||
-        (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content))
+        (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&
+          blockQuoteParagraphOpen(markerLineQuoteState(content)!))
       const rebaseLines = leadOwnsExtent ? [content, ...nested] : nested
       const rebaseEligible = leadOwnsExtent
         ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
