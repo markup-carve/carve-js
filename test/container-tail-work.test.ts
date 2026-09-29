@@ -86,6 +86,8 @@ for (const [source, offsets] of [
 
 for (const [name, sourceAt, suffixAt] of [
   ['lazy quote', (depth: number) => '> '.repeat(depth) + 'end\nlazy\n', (depth: number) => depth * 4],
+  ['CRLF blank-separated list continuation', (depth: number) => '- '.repeat(depth) + 'a\r\n\r\n' + '  '.repeat(depth) + 'b\r\n', () => 0],
+  ['blank-separated comment continuation', (depth: number) => '- '.repeat(depth) + 'a\n\n' + '  '.repeat(depth) + '%% note\n', () => 0],
   ['blank-separated list continuation', (depth: number) => '- '.repeat(depth) + 'a\n\n' + '  '.repeat(depth) + 'b\n', () => 0],
   ['comment list continuation', (depth: number) => '- '.repeat(depth) + 'a\n' + '  '.repeat(depth) + '%% note\n', () => 0],
   ['indented list continuation', (depth: number) => '- '.repeat(depth) + 'a\n' + '  '.repeat(depth) + 'b\n', () => 0],
@@ -104,6 +106,7 @@ for (const [name, sourceAt, suffixAt] of [
 }
 
 for (const source of [
+  '- '.repeat(64) + 'a\n' + '\t'.repeat(32) + 'leaf\n',
   '-{title="😀"} leaf\n',
   '1.{title="😀"} - [x] leaf\r\n',
   '-{.x} -{.y} leaf\n',
@@ -135,7 +138,7 @@ for (const source of [
 }
 
 for (const marker of ['-{.x} ', '1.{.x} ', '-{.x} [ ] ']) {
-  it(`does not reconstruct the attributed tail for ${JSON.stringify(marker)}`, () => {
+  it(`avoids the instrumented attributed-tail fallback for ${JSON.stringify(marker)}`, () => {
     for (const depth of [32, 64, 128]) {
       const source = marker.repeat(depth) + 'x'.repeat(100_000) + '\n'
       const previous = layoutWork.on
@@ -143,7 +146,8 @@ for (const marker of ['-{.x} ', '1.{.x} ', '-{.x} [ ] ']) {
       layoutWork.on = true
       try {
         const ast = parse(source)
-        expect(layoutWork.seam).toBe(source.length)
+        // Guard the copying fallback getter, not uninstrumented engine string copies.
+        expect(layoutWork.seam - source.length).toBe(0)
         expect(renderHtml(ast)).toContain('x'.repeat(100_000))
       } finally {
         layoutWork.on = previous
