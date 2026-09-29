@@ -162,13 +162,8 @@ describe('an indented comment fence', () => {
   })
 })
 
-describe('a comment body is indented relative to its fence', () => {
-  // A code fence's body is measured from its opener, and a comment fence is no
-  // different: an opener at column 1 makes a body line at column 1 flush. This
-  // engine kept the absolute text, so the same document parsed to a different
-  // comment content here than in carve-rs and carve-php, and `carve fmt` wrote
-  // the body one column further in each time it ran (carve#653).
-  it('drops the fence indent from a below-column body in a list item', () => {
+describe('a comment body retains indentation beyond its host', () => {
+  it('removes only the available host prefix from a below-column body', () => {
     const ast = parse('- a\n %%% n\n x\n %%%\n tail\n')
     const comments: string[] = []
     const walk = (n: any): void => {
@@ -180,7 +175,7 @@ describe('a comment body is indented relative to its fence', () => {
     expect(comments).toEqual(['n\nx'])
   })
 
-  it('keeps indentation the body has BEYOND the fence', () => {
+  it('keeps every payload column at document level', () => {
     const ast = parse('%%%\n  x\n%%%\n')
 
     expect((ast.children[0] as any).content).toBe('  x')

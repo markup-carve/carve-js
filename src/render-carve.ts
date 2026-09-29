@@ -3453,7 +3453,7 @@ class CarveRenderSession {
       const comment = node as Comment
       lines.push(
         comment.block
-          ? this.renderBlockComment(comment.content).split('\n').map((line) => ` ${line}`).join('\n')
+          ? this.renderBlockComment(comment.content).split('\n').map((line, index, all) => index === 0 || index === all.length - 1 ? ` ${line}` : line).join('\n')
           : comment.content === '' ? ' %%' : ` %% ${comment.content}`,
       )
       if (term[i + 1]?.type === 'soft_break') i++

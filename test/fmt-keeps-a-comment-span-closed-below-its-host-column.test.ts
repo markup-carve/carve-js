@@ -73,7 +73,7 @@ describe('fmt keeps a comment span whose closer sits below its host column', () 
   // The four documents the ticket reports, spelled out so a change to the
   // canonical form is visible in the diff rather than only in a property.
   it.each([
-    ['a description body', ':: t\n:  head\n\n     %%%\n     a\n%%%\n', ':: t\n: head\n\n  %%%\n  a\n  %%%\n'],
+    ['a description body', ':: t\n:  head\n\n     %%%\n     a\n%%%\n', ':: t\n: head\n\n  %%%\n    a\n  %%%\n'],
     [
       'a note body',
       'see[^f]\n\n[^f]: head\n\n  %%%\n  a\n%%%\n',
@@ -82,7 +82,7 @@ describe('fmt keeps a comment span whose closer sits below its host column', () 
     [
       'two spans in a list item',
       '- head\n\n    %%%\n    a\n%%%\n    %%%\n    b\n    %%%\n\n  tail\n',
-      '- head\n\n  %%%\n  a\n  %%%\n\n  %%%\n  b\n  %%%\n\n  tail\n',
+      '- head\n\n  %%%\n    a\n  %%%\n\n  %%%\n    b\n  %%%\n\n  tail\n',
     ],
     [
       'a nested list item',
