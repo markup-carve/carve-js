@@ -8,7 +8,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
 import type { SmartTypographyMode } from './render-markdown.js'
-import { verbatimLines } from './verbatim-payload.js'
+import { codeLines } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -288,7 +288,7 @@ function renderCodeBlock(content: string, lang?: string, header?: string, label?
   if (label) out += `${style(label, BOLD)}\n\n`
   // The language keeps the slot this target already gave it, unchanged.
   if (lang) out += `${style(`┌── ${lang} `, DIM)}\n`
-  for (const line of verbatimLines(content)) {
+  for (const line of codeLines(content)) {
     out += `${style(`  ${line}`, FG_BRIGHT_WHITE)}\n`
   }
   return `${out}\n`

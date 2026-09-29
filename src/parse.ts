@@ -77,7 +77,7 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 import { ownValue } from './own-property.js'
-import { verbatimContent } from './verbatim-payload.js'
+import { codeContent, verbatimContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
 import { linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
@@ -732,6 +732,14 @@ class Lexer {
    */
   sourceOffsetMap?: number[]
   /**
+   * The document's last line number, and whether the source ended without a
+   * break after it. A code payload running to that line is the only one whose
+   * literal text ends mid-line (CARVE-P12-064), so a fence consults both to
+   * decide whether its last line owns a break.
+   */
+  documentLineCount = 0
+  documentLacksFinalBreak = false
+  /**
    * Width of the container prefix stripped from each line (`> `, `- `, and so
    * on). Columns are 1-based against the DOCUMENT line, so the inline scanner
    * has to add back what the container removed. It varies per line, since `>`,
@@ -964,6 +972,13 @@ class Lexer {
     // reproduced the loss with it.
     if (typeof source === 'string' && this.lines.length && this.lines[this.lines.length - 1] === '') {
       this.lines.pop()
+    }
+    if (typeof source === 'string') {
+      this.documentLineCount = this.lines.length
+      // The last CHARACTER, not a suffix scan over a normalized copy: `\r\n`
+      // ends in LF and a lone `\r` normalizes to one, so both are breaks.
+      const last = source.charCodeAt(source.length - 1)
+      this.documentLacksFinalBreak = source !== '' && last !== 10 && last !== 13
     }
     // MEASURED ON THE SOURCE AS GIVEN, not on the normalized lines. `+1` per
     // line assumes every ending is one character, but `\r\n` is two - so a
@@ -1209,6 +1224,8 @@ function nestedSubLexer(
   sub.footnoteDefs = parent.footnoteDefs
   sub.footnoteDefPos = parent.footnoteDefPos
   sub.nested = true
+  sub.documentLineCount = parent.documentLineCount
+  sub.documentLacksFinalBreak = parent.documentLacksFinalBreak
   sub.rootLines = parent.rootLines ?? parent.lines
   sub.depth = parent.depth + 1
   sub.inFigureGroup = parent.inFigureGroup
@@ -8848,6 +8865,7 @@ class ParseSession {
     const label = labelRaw ? labelRaw.slice(1, -1) : undefined
     const closeRe = fenceCloseRe(marker)
     const lines: string[] = []
+    let lastPayloadLineIndex = -1
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
@@ -8855,6 +8873,7 @@ class ParseSession {
         lexer.consume()
         break
       }
+      lastPayloadLineIndex = lexer.pos
       lexer.consume()
       // The frame did its work in the closer test above - it is what keeps a
       // closing run the CONTAINER folded in from closing this block - and a
@@ -8865,10 +8884,15 @@ class ParseSession {
       lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
     }
     const fenceEndIndex = lexer.pos
-    // §28's zero-line payload is the closed fence's AND the unterminated
-    // one's: CARVE-P12-064 says an unclosed fence with no payload lines also has
-    // content "", so the end of the container supplies no break of its own.
-    const cb: CodeBlock = { type: 'code_block', content: verbatimContent(lines) }
+    // CARVE-P12-064: `content` is the payload's LITERAL text. Every line carries
+    // its own break, so a zero-line payload is `""` whether the fence closed or
+    // not, and only a payload whose last line is the document's last - with no
+    // break behind it in the source - ends mid-line.
+    const terminated =
+      !lexer.documentLacksFinalBreak ||
+      lastPayloadLineIndex < 0 ||
+      lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
+    const cb: CodeBlock = { type: 'code_block', content: codeContent(lines, terminated) }
     if (lang) cb.lang = lang
     if (header !== undefined) cb.header = header
     if (label !== undefined) cb.label = label

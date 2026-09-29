@@ -11,7 +11,7 @@ describe('a fence label keeps its block through AST ingest', () => {
     const doc = resolve(parse(source, { positions }))
     expect(doc.children).toHaveLength(1)
     expect(doc.children[0]).toMatchObject({
-      type: 'code_block', lang: 'js', label: 'a `]` b', content: 'c',
+      type: 'code_block', lang: 'js', label: 'a `]` b', content: 'c\n',
     })
     expect(renderHtml(doc).trim()).toBe(expected)
     const wire = toAstJson(doc)

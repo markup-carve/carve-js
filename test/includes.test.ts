@@ -87,7 +87,9 @@ describe('expandIncludes', () => {
       child: '```js\nlet x = 1;',
     })
     expect(result.warnings).toEqual([])
-    expect(result.html).toContain('<pre><code class="language-js">let x = 1;\n</code></pre>')
+    // The child ran out mid-line, and CARVE-P12-064 forbids inventing the
+    // break; containment still holds, which is what this row is about.
+    expect(result.html).toContain('<pre><code class="language-js">let x = 1;</code></pre>')
     expect(result.html).toContain('<p>After.</p>')
   })
 

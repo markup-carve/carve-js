@@ -18,6 +18,7 @@
  * `replaceChildNode()` semantics.
  */
 
+import { codeLines, codeTerminated } from './verbatim-payload.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import type {
@@ -870,8 +871,9 @@ function extractTextContent(node: NodeLike): string {
     }
     case 'code_block': {
       const content = (node['content'] as string) ?? ''
-      if (content.includes('\n')) return '```\n' + content + '\n```'
-      return '`' + content + '`'
+      const lines = codeLines(content)
+      if (lines.length > 1) return '```\n' + content + (codeTerminated(content) ? '' : '\n') + '```'
+      return '`' + (lines[0] ?? '') + '`'
     }
     case 'link':
     case 'autolink': {

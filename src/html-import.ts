@@ -40,7 +40,6 @@ import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
-import { codePayloadContent } from './verbatim-payload.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -2164,7 +2163,7 @@ class Importer {
       // off - but a text of one newline is then one BLANK line and not none, and
       // dropping it unconditionally lost a line on every all-blank payload,
       // including this engine's own HTML (carve-js#2342, raised by codex review).
-      const content = codePayloadContent(this.text(source))
+      const content = this.text(source)
       return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
     }
     // The synthetic element `markFootnotePlacement` leaves where an endnotes

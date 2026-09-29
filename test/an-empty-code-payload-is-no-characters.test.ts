@@ -80,22 +80,28 @@ describe('the AST carries the count', () => {
     expect(codeOf('```\n\n\n```\n').content).toBe('\n\n')
   })
 
-  it('reads a non-blank payload back as the lines it holds', () => {
-    expect(codeOf('```\na\n```\n').content).toBe('a')
-    expect(codeOf('```\na\nb\n```\n').content).toBe('a\nb')
-    expect(codeOf('```\na\n\n```\n').content).toBe('a\n')
+  it('reads a non-blank payload back as the literal text it holds', () => {
+    expect(codeOf('```\na\n```\n').content).toBe('a\n')
+    expect(codeOf('```\na\nb\n```\n').content).toBe('a\nb\n')
+    expect(codeOf('```\na\n\n```\n').content).toBe('a\n\n')
   })
 
-  it('encodes the code payload the way the raw payload already did', () => {
+  it('gives the code payload a literal encoding the raw one still lacks', () => {
+    // CARVE-P12-064: a code payload keeps the break before its closer, which
+    // the raw encoding leaves implied. The blank-line payloads still agree.
     const raw = (source: string): string => {
       const block = parse(source).children[0]
       if (block?.type !== 'raw_block') throw new Error(`not a raw block: ${block?.type}`)
 
       return block.content
     }
-    for (const payload of ['', '\n', '\n\n', 'a\n', 'a\nb\n']) {
+    for (const payload of ['', '\n', '\n\n']) {
       expect(codeOf(`\`\`\`\n${payload}\`\`\`\n`).content, JSON.stringify(payload))
         .toBe(raw(`\`\`\`=html\n${payload}\`\`\`\n`))
+    }
+    for (const payload of ['a\n', 'a\nb\n']) {
+      expect(codeOf(`\`\`\`\n${payload}\`\`\`\n`).content, JSON.stringify(payload)).toBe(payload)
+      expect(raw(`\`\`\`=html\n${payload}\`\`\`\n`), JSON.stringify(payload)).toBe(payload.slice(0, -1))
     }
   })
 })

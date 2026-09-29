@@ -42,7 +42,6 @@ import { stripBidiControls } from './bidi-controls.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
-import { codePayloadText } from './verbatim-payload.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -1476,7 +1475,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // (see parseBlocks), so it renders here AND wherever else a code block is
       // emitted (e.g. inside a code-group).
       const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
-      const escaped = escapeHtml(codePayloadText(node.content))
+      const escaped = escapeHtml(node.content)
       return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
     }
     case 'block_quote':

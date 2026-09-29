@@ -146,13 +146,36 @@ function disagreement(parsed: unknown, recorded: unknown, path = ''): string | n
 const wire = (value: unknown): unknown =>
   normalize(JSON.parse(JSON.stringify(toAstJson(value as Parameters<typeof toAstJson>[0]))))
 
+/**
+ * A payload that ends mid-line, given the break Carve source owes it.
+ *
+ * CARVE-P12-064 lets an IMPORTED `<code>` publish a payload with no final
+ * break, and a canonical fence has to break before its closer - so the source
+ * exit necessarily carries one break the tree exit does not. That is the
+ * clause's own declared loss, not a disagreement about the import, and it is
+ * the only difference this normalization may absorb.
+ */
+const terminateCodePayloads = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(terminateCodePayloads)
+  if (!value || typeof value !== 'object') return value
+  const node = value as Record<string, unknown>
+  const mapped = Object.fromEntries(Object.entries(node).map(([key, child]) => [key, terminateCodePayloads(child)]))
+  if (node.type === 'code_block' && typeof node.content === 'string' && node.content !== '' && !node.content.endsWith('\n')) {
+    mapped.content = `${node.content}\n`
+  }
+  return mapped
+}
+
 function twoExits(html: string): string | null {
   const source = htmlToCarve(html)
   // The one carve-out the contract page names: a tree Carve source cannot spell
   // survives in the AST and not in the source, and the row says so.
   if (source.report.diagnostics.some((row) => row.code === 'structure-unspellable')) return null
 
-  return disagreement(wire(parse(source.value)), wire(htmlToAst(html).value))
+  return disagreement(
+    terminateCodePayloads(wire(parse(source.value))),
+    terminateCodePayloads(wire(htmlToAst(html).value)),
+  )
 }
 
 /**

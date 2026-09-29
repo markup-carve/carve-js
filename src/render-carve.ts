@@ -32,7 +32,7 @@ export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
-import { payloadTerminated } from './verbatim-payload.js'
+import { codeSource, payloadTerminated } from './verbatim-payload.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
@@ -2908,12 +2908,13 @@ class CarveRenderSession {
           node.header !== undefined && node.attrs?.keyValues?.['title'] === node.header
             ? renderBlockAttrs(withoutKey(node.attrs, 'title'))
             : attrs
-        // The closing-line separator the raw block's case owes, for the same
-        // reason: a payload of no lines writes no line, and an all-blank one
-        // already carries a newline per line, so adding one would turn the
-        // empty payload into a one-line one on every format pass (#2351).
-        const closerSeparator = payloadTerminated(node.content) ? '' : '\n'
-        const body = `${fence}${info}\n${this.protectVerbatim(node.content)}${closerSeparator}${fence}`
+        // A canonical fence always breaks before its closer, so the payload is
+        // written without its own final break and the break is the delimiter's.
+        // For a payload that ends mid-line that break is added, which is a loss
+        // `renderCarveWithConversionReport` reports. Only a payload of NO lines
+        // writes no line at all, and there the closer follows the opener.
+        const closerSeparator = node.content === '' ? '' : '\n'
+        const body = `${fence}${info}\n${this.protectVerbatim(codeSource(node.content))}${closerSeparator}${fence}`
         return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
       }
       case 'block_quote': {

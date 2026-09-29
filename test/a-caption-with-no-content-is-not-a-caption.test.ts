@@ -102,7 +102,10 @@ describe('a caption with no content is not a caption', () => {
       ['empty figcaption, image', '<figure><img src="g.jpg" alt="G"><figcaption></figcaption></figure>', 'image'],
       ['whitespace figcaption, image', '<figure><img src="g.jpg" alt="G"><figcaption>   </figcaption></figure>', 'image'],
       ['no figcaption, quote', '<figure><blockquote><p>q</p></blockquote></figure>', 'block_quote'],
-      ['no figcaption, code', '<figure><pre><code>x</code></pre></figure>', 'code_block'],
+      // The payload ends with its break, so the round-trip below is exact. An
+      // unterminated one is the one difference Carve source cannot carry back
+      // (CARVE-P12-064), and it is not what this row is about.
+      ['no figcaption, code', '<figure><pre><code>x\n</code></pre></figure>', 'code_block'],
       ['no figcaption, table', '<figure><table><tr><td>x</td></tr></table></figure>', 'table'],
       ['no figcaption, paragraph', '<figure><p>plain</p></figure>', 'paragraph'],
     ]

@@ -59,7 +59,9 @@ describe('mermaid extension', () => {
     }
     expect(
       carveToHtml('``` js\nconst x = 1\n```', { extensions: [mermaid(), highlight] }),
-    ).toBe('<pre class="hl" role="img" aria-label="hl">const x = 1</pre>')
+    // The stand-in interpolates `content` raw, so it carries the payload's own
+    // final break (CARVE-P12-064); the mermaid path strips it as a source body.
+    ).toBe('<pre class="hl" role="img" aria-label="hl">const x = 1\n</pre>')
     expect(
       carveToHtml('``` mermaid\ngraph TD; A-->B\n```', { extensions: [mermaid(), highlight] }),
     ).toBe('<pre class="mermaid" role="img" aria-label="mermaid">graph TD; A-->B</pre>')

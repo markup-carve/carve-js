@@ -64,22 +64,22 @@ describe('a tab-padded code fence closer still closes', () => {
     expect(carveToHtml(src)).toBe('<pre><code>x\n</code></pre>')
     // The assertion the report was measured on. Checked as well as the HTML
     // because a renderer that merely hid the line would pass the HTML row.
-    expect(codeContent(src)).toBe('x')
+    expect(codeContent(src)).toBe('x\n')
     expect(codeContent(src)).not.toContain(F)
     expect(codeContent(src)).not.toContain(T)
   })
 
   it('closes for both fence characters and any run length', () => {
-    expect(codeContent(`~~~\nx\n~~~${T}\n`)).toBe('x')
+    expect(codeContent(`~~~\nx\n~~~${T}\n`)).toBe('x\n')
     // A closer may be LONGER than its opener; the tab must not change that.
-    expect(codeContent(`${F}\nx\n${F}${F}${T}\n`)).toBe('x')
-    expect(codeContent(`${F}js\nx\n${F}${T}\n`)).toBe('x')
+    expect(codeContent(`${F}\nx\n${F}${F}${T}\n`)).toBe('x\n')
+    expect(codeContent(`${F}js\nx\n${F}${T}\n`)).toBe('x\n')
   })
 
   it('accepts any mix of trailing spaces and tabs', () => {
     // PART 2 drops the whole trailing run, so its composition cannot matter.
     for (const tail of [T, `${T}  `, ` ${T}`, `${T}${T}`, '  ', '']) {
-      expect(codeContent(`${F}\nx\n${F}${tail}\n`)).toBe('x')
+      expect(codeContent(`${F}\nx\n${F}${tail}\n`)).toBe('x\n')
     }
   })
 
@@ -92,9 +92,9 @@ describe('a tab-padded code fence closer still closes', () => {
     // to start at column 0, and that holds with a tab, with a space and with
     // nothing - all three engines agree, and none of them closes here. Pinned
     // so the trailing widening is not mistaken for a general loosening.
-    expect(codeContent(`${F}\nx\n  ${F}\n`)).toBe(`x\n  ${F}`)
-    expect(codeContent(`${F}\nx\n  ${F}${T}\n`)).toBe(`x\n  ${F}${T}`)
-    expect(codeContent(`${F}\nx\n  ${F} \n`)).toBe(`x\n  ${F} `)
+    expect(codeContent(`${F}\nx\n  ${F}\n`)).toBe(`x\n  ${F}\n`)
+    expect(codeContent(`${F}\nx\n  ${F}${T}\n`)).toBe(`x\n  ${F}${T}\n`)
+    expect(codeContent(`${F}\nx\n  ${F} \n`)).toBe(`x\n  ${F} \n`)
   })
 
   it('closes inside a quote, a list item and a div', () => {
@@ -184,8 +184,8 @@ describe('a tab-padded code fence closer still closes', () => {
   })
 
   it('CONTROL a space-padded and a bare closer are unchanged', () => {
-    expect(codeContent(`${F}\nx\n${F} \n`)).toBe('x')
-    expect(codeContent(`${F}\nx\n${F}\n`)).toBe('x')
+    expect(codeContent(`${F}\nx\n${F} \n`)).toBe('x\n')
+    expect(codeContent(`${F}\nx\n${F}\n`)).toBe('x\n')
     expect(carveToHtml(`${F}\nx\n${F}\n`)).toBe('<pre><code>x\n</code></pre>')
   })
 
@@ -206,11 +206,11 @@ describe('a tab-padded code fence closer still closes', () => {
     // the fence opens as an ordinary one. This row was pinned as a known
     // divergence when only the closer had moved; the opener's trailing case is
     // now narrowed too, so it is a real assertion.
-    expect(codeContent(`${F}${T}\nx\n${F}\n`)).toBe('x')
+    expect(codeContent(`${F}${T}\nx\n${F}\n`)).toBe('x\n')
     expect(carveToHtml(`${F}${T}\nx\n${F}\n`)).toBe('<pre><code>x\n</code></pre>')
     // The tilde spelling, and a trailing run of tab-then-space.
-    expect(codeContent(`~~~${T}\nx\n~~~\n`)).toBe('x')
-    expect(codeContent(`${F}${T} \nx\n${F}\n`)).toBe('x')
+    expect(codeContent(`~~~${T}\nx\n~~~\n`)).toBe('x\n')
+    expect(codeContent(`${F}${T} \nx\n${F}\n`)).toBe('x\n')
   })
 
   it('an opener whose tab TRAILS an info string opens, and keeps the info', () => {
