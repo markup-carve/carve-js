@@ -882,6 +882,16 @@ class Lexer {
   // Document line number to indices of this lexer's lines, built once per parent.
   lineIndicesByNumber: Map<number, number[]> | undefined = undefined
 
+  private terminatorFreeLines: boolean[] = []
+
+  lineTerminatorFree(index: number): boolean {
+    return this.terminatorFreeLines[index] ??= !/[\n\r\u2028\u2029]/.test(this.lines[index] ?? '')
+  }
+
+  inheritTerminatorFree(index: number, parent: Lexer, parentIndex: number): void {
+    if (parent.lineTerminatorFree(parentIndex)) this.terminatorFreeLines[index] = true
+  }
+
   constructor(
     source: string | readonly string[],
     opts: ParseOptions = {},
@@ -1125,11 +1135,19 @@ function stripLazyFrame(line: string): string {
   return line.startsWith(LAZY_FRAME) ? line.slice(LAZY_FRAME.length) : line
 }
 
+/** Recorded at a literal prefix strip; discard if later collection changes the text. */
+interface StrippedLineOrigin {
+  text: string
+  parentIndex: number
+  prefix: number
+}
+
 function nestedSubLexer(
   parent: Lexer,
   lines: readonly string[],
   startLineIndex: number,
   sourceLineMap?: number[],
+  origins?: ReadonlyMap<number, StrippedLineOrigin>,
 ): Lexer {
   // The default map is parallel to the Lexer's OWN lines, which drop one
   // trailing blank (see the constructor), so it is built to that length -
@@ -1164,7 +1182,7 @@ function nestedSubLexer(
   sub.inFootnoteBody = parent.inFootnoteBody
   sub.hostBody = parent.hostBody
   sub.consumesHostedLinkDefs = parent.consumesHostedLinkDefs
-  attachDocumentOffsets(sub, parent, startLineIndex)
+  attachDocumentOffsets(sub, parent, startLineIndex, origins)
   return sub
 }
 
@@ -1184,7 +1202,7 @@ function nestedSubLexer(
  * because a guessed offset is what PART 12 section 4 forbids. Those keep the
  * behavior they had.
  */
-function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number): void {
+function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number, origins?: ReadonlyMap<number, StrippedLineOrigin>): void {
   // A parent whose own offsets are local cannot anchor a child: the child would
   // inherit local numbers and believe they were document ones, which is how a
   // list inside a `+`-continued blockquote reported "\n- i" for the text "item".
@@ -1219,6 +1237,17 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     const mapped = sub.sourceLineMap?.[i]
     const subLine = sub.lines[i]
     if (subLine === undefined) return
+    const origin = origins?.get(i)
+    if (origin && origin.text === subLine && origin.parentIndex >= previousIndex &&
+        (mapped === undefined || mapped === parent.lineNumber(origin.parentIndex))) {
+      const parentIndex = origin.parentIndex
+      previousIndex = parentIndex
+      offsets.push(parent.lineOffset(parentIndex) + origin.prefix)
+      widths.push(parent.lineStartColumn(parentIndex) - 1 + origin.prefix)
+      prefixMemoLines.push(parent.prefixMemoLines?.[parentIndex] ?? true)
+      sub.inheritTerminatorFree(i, parent, parentIndex)
+      continue
+    }
     let literalSuffix: boolean | undefined
     // A LAZY-FRAMED LINE IS STILL PLACEABLE (markup-carve/carve-js#1624). The
     // frame is three characters no document can spell, prepended by the quote
@@ -1266,6 +1295,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // not, there is no honest offset to record and this declines - which now
     // means NO positions rather than local ones (see below).
     const isLiteralSuffix = literalSuffix ?? parentLine.endsWith(subLine)
+    if (isLiteralSuffix) sub.inheritTerminatorFree(i, parent, parentIndex)
     prefixMemoLines.push(isLiteralSuffix && (parent.prefixMemoLines?.[parentIndex] ?? true))
     let prefix = parentLine.length - subLine.length
     if (framed && parentLine.endsWith(unframed)) {
@@ -3771,10 +3801,22 @@ function unorderedMarkerChar(line: string): string {
   return line.replace(/^\s*/, '').charAt(0)
 }
 
+/** Preserve capture indices while matching only the marker on terminator-free lines. */
+function unorderedMatch(line: string, terminatorFree = false): RegExpExecArray | null {
+  if (!terminatorFree) return RE_UNORDERED.exec(line)
+  const match = /^([ \t]*)[-*] +[ \t]*(?=[^ \t])/.exec(line)
+  if (!match) return null
+  const content = line.slice(match[0].length)
+  match[0] = line
+  match.push(content)
+  return match
+}
+
 function matchListMarker(
   line: string,
   isTask: boolean,
   isOrdered: boolean,
+  terminatorFree = false,
 ): RegExpExecArray | null {
   if (isTask) return RE_TASK.exec(line)
   if (isOrdered) {
@@ -3784,7 +3826,7 @@ function matchListMarker(
   }
   // Unordered: not continued by task or ordered markers.
   if (RE_TASK.test(line) || RE_ORDERED.test(line)) return null
-  return RE_UNORDERED.exec(line)
+  return unorderedMatch(line, terminatorFree)
 }
 
 // The visual content column of a list-marker line (`- x` -> 2, `1. x` -> 3,
@@ -3792,7 +3834,7 @@ function matchListMarker(
 // captures the item content as its LAST group, so the content column is the
 // column width of everything before that content. Used to decide, in the
 // looseness scan, whether a line belongs to an item's sub-list (carve#322).
-function markerContentColumn(line: string): number {
+function markerContentColumn(line: string, terminatorFree = false): number {
   // Mirror parseList's own content-column computation so the looseness scan
   // uses the SAME threshold the recursive sub-list parse uses -- including the
   // task convention (content column is base + 2, the bullet width, NOT the
@@ -3803,7 +3845,7 @@ function markerContentColumn(line: string): number {
   const mline = la ? la.stripped : line
   const base = indentColumns(line)
   if (RE_TASK.test(mline)) return base + 2
-  const m = RE_ORDERED.exec(mline) ?? RE_UNORDERED.exec(mline)
+  const m = RE_ORDERED.exec(mline) ?? unorderedMatch(mline, terminatorFree)
   if (!m) return -1
   const content = m[m.length - 1]!
   return base + (mline.length - leadingWhitespace(mline) - content.length)
@@ -8604,10 +8646,10 @@ class ParseSession {
     if (RE_HEADING.test(line)) return this.parseHeading(lexer)
     // Definition list starts on a `:: term` line (two colons, not three).
     if (RE_DEFLIST_TERM.test(line)) return this.parseDefinitionList(lexer)
-    if (RE_BLOCKQUOTE.test(line)) return this.parseBlockQuote(lexer)
+    if (quotedLineText(line, lexer.lineTerminatorFree(lexer.pos)) !== null) return this.parseBlockQuote(lexer)
     if (
       RE_TASK.test(line) ||
-      RE_UNORDERED.test(line) ||
+      unorderedMatch(line, lexer.lineTerminatorFree(lexer.pos)) !== null ||
       RE_ORDERED.test(line) ||
       extractItemAttr(line) !== null
     )
@@ -10149,6 +10191,7 @@ class ParseSession {
   private parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     const firstLineIndex = lexer.pos
     const inner: string[] = []
+    const origins = new Map<number, StrippedLineOrigin>()
     const innerLineNumbers: number[] = []
     const state: BlockQuoteLazyState = {
       mode: { kind: 'closed' },
@@ -10216,11 +10259,12 @@ class ParseSession {
     }
     while (!lexer.eof()) {
       const ln = lexer.peek()!
-      const m = RE_BLOCKQUOTE.exec(ln)
-      if (m) {
+      const quoted = quotedLineText(ln, lexer.lineTerminatorFree(lexer.pos))
+      if (quoted !== null) {
         const lineIndex = lexer.pos
         lexer.consume()
-        const content = m[1] ?? ''
+        const content = quoted
+        if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
         inner.push(content)
         untracked.push([content, lineIndex])
         innerLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -10304,7 +10348,7 @@ class ParseSession {
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
       if (!lazyLinkDef) trackLine(ln, lineIndex)
     }
-    const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
+    const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers, origins)
     subLexer.quoteLazyHint = handDown
     // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
     // stops here. A footnote body absorbs residual indentation because its blocks
@@ -10574,7 +10618,8 @@ class ParseSession {
       // marker regexes match; remember its attributes to attach to the <li>.
       const la = extractItemAttr(line)
       const mline = la ? la.stripped : line
-      const m = matchListMarker(mline, isTask, isOrdered)
+      const terminatorFree = lexer.lineTerminatorFree(lexer.pos)
+      const m = matchListMarker(mline, isTask, isOrdered, terminatorFree)
       if (!m) break
       // §11: a sibling with a different marker character (unordered) or a
       // different delimiter (ordered) is a new list.
@@ -10593,6 +10638,7 @@ class ParseSession {
       } else {
         content = m[2]!
       }
+      const leadOrigin = !la && terminatorFree ? { text: content, parentIndex: itemStartLineIndex, prefix: line.length - content.length } : undefined
       const itemAttrs = la ? la.attrs : undefined
 
       // item (continuation paragraphs or nested lists). Visual content column:
@@ -10699,7 +10745,7 @@ class ParseSession {
       // structure did not hold (markup-carve/carve#2509, carve-js#2261).
       let descendantOpaque: DescendantOpaque | null = null
       let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
-      let nestedOwnerColumn = markerContentColumn(content)
+      let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
       let firstBodyMarkerColumn: number | undefined = RE_DEFLIST_TERM.test(content) ? -1 : undefined
       let hasParentAuthoredBlock = false
       // Lines that could open a parent-owned block, tested only where the answer
@@ -11410,7 +11456,7 @@ class ParseSession {
       // it.  This is #1705's authored `block_base`: only structural indentation
       // is removed, while indentation beyond the opener's base remains payload.
       const leadIsMarker =
-        RE_UNORDERED.test(content) ||
+        unorderedMatch(content, terminatorFree) !== null ||
         RE_ORDERED.test(content) ||
         RE_TASK.test(content) ||
         extractItemAttr(content) !== null
@@ -11434,7 +11480,7 @@ class ParseSession {
         ? rebaseOverindentedBlocks(
           rebaseLines,
           rebaseEligible,
-          leadIsMarker ? markerContentColumn(content) : -1,
+          leadIsMarker ? markerContentColumn(content, terminatorFree) : -1,
           false,
           false,
           (index) => subListMarkers.delete(leadIsTerm ? index - 1 : index),
@@ -11577,7 +11623,7 @@ class ParseSession {
       const subListColumnAt = (at: number): number => {
         if (subColAt === null) {
           subColAt = new Array(nested.length).fill(-1)
-          let col = leadIsMarker ? markerContentColumn(content) : -1
+          let col = leadIsMarker ? markerContentColumn(content, terminatorFree) : -1
           for (let k = 0; k < nested.length; k++) {
             if (subListMarkers.has(k) && (col < 0 || indentColumns(nested[k]!, 1) === 0)) {
               col = markerContentColumn(nested[k]!)
@@ -11861,7 +11907,9 @@ class ParseSession {
         startLineIndex: number,
         sourceLineMap?: number[],
       ): Lexer => {
-        const sub = nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap)
+        const origins = leadOrigin && startLineIndex === itemStartLineIndex && lines[0] === leadOrigin.text
+          ? new Map([[0, leadOrigin]]) : undefined
+        const sub = nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap, origins)
         // THIS BODY'S COLUMN 0 IS THE ITEM'S CONTENT COLUMN, so a marker reaching
         // it opens a sublist rather than folding into an open paragraph (§24 C3,
         // markup-carve/carve#1517). Set here rather than in `nestedSubLexer`
