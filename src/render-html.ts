@@ -697,7 +697,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       // Preserve any blocks authored inside the placeholder before flushing.
       for (const child of (node as Directive).children) {
         const r = renderBlock(child, opts, sectionStack.length)
-        if (r !== '') out.push(r)
+        if (r !== '' || owesALine(child)) out.push(r)
       }
       // Flush the endnotes in place at the marker. Do NOT close open sections:
       // that would drop any following content out of its section (and diverged
@@ -742,7 +742,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       continue
     }
     const rendered = renderBlock(node, opts, sectionStack.length)
-    if (rendered !== '') out.push(rendered)
+    if (rendered !== '' || owesALine(node)) out.push(rendered)
   }
   closeTo(1) // close any sections still open at end of document
   if (footnotes.order.length && !footnotesPlaced) out.push(renderFootnoteSection(ast, footnotes, opts))
@@ -753,7 +753,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   for (const node of trailers) {
     if (!documentChildren.has(node)) continue
     const rendered = renderBlock(node, opts, 0)
-    if (rendered !== '') out.push(rendered)
+    if (rendered !== '' || owesALine(node)) out.push(rendered)
   }
   return out.join('\n')
 }
@@ -1355,10 +1355,26 @@ function renderHeadingElement(
  *  path a childless container takes, so a genuinely empty container renders as
  *  it always did. */
 function renderBlocks(nodes: BlockNode[], opts: RenderOptions, level: number): string {
-  return nodes
-    .map((c) => renderBlock(c, opts, level))
-    .filter((s) => s !== '')
-    .join('\n')
+  const out: string[] = []
+  for (const child of nodes) {
+    const rendered = renderBlock(child, opts, level)
+    if (rendered !== '' || owesALine(child)) out.push(rendered)
+  }
+  return out.join('\n')
+}
+
+/** Does this block owe a line even when its rendering is the empty string?
+ *
+ *  An html `raw_block` renders `pad + content`, so a payload of no lines comes
+ *  back as `''` at pad level 0 and as the pad itself anywhere deeper. Filtering
+ *  on the string alone therefore dropped the block at the document root and kept
+ *  it under a heading, a quote or an item. `raw_block`'s AN ALL-BLANK PAYLOAD IS
+ *  NOT AN ABSENT BLOCK names no host and no depth (markup-carve/carve-js#2326).
+ *
+ *  A raw block the target drops is not this case: its omission is a reported
+ *  loss, and the oracle gives it no line either. */
+function owesALine(node: BlockNode): boolean {
+  return node.type === 'raw_block' && node.format === 'html'
 }
 
 /**

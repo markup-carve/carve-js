@@ -27,9 +27,12 @@ describe('a fence running to the end of a container keeps its blank lines', () =
     expect(carveToCarve(source)).toBe(source)
   })
 
-  it('still emits nothing for a raw block with no payload lines', () => {
+  // A payload of no lines contributes no characters, but the block still takes
+  // its line in the join - which it always did under a heading, a quote or an
+  // item, and now does at the document root too (carve-js#2326).
+  it('emits the line but no characters for a raw block with no payload lines', () => {
     const source = '```=html\n```\n\nafter\n'
-    expect(carveToHtml(source)).toBe('<p>after</p>')
+    expect(carveToHtml(source)).toBe('\n<p>after</p>')
     expect(carveToCarve(source)).toBe(source)
   })
 
