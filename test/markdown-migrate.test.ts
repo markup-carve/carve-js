@@ -743,11 +743,13 @@ describe('markdownToCarve — HTML entities', () => {
   })
 
   // Leading whitespace is indentation to every block rule that runs after the
-  // decode: ` - item` is a LIST, where `&#32;- item` is a paragraph in cmark.
+  // decode: ` - item` is a LIST, where `&#32;- item` is a paragraph in cmark. The
+  // marker is escaped instead, and the whitespace itself is dropped rather than
+  // substituted (markup-carve/carve#2595).
   it('does not let decoded leading whitespace open a block', () => {
-    expect(conv('&#32;- item')).toBe('\\ - item')
-    expect(carveToHtml(conv('&#32;- item'))).toBe('<p>&nbsp;- item</p>')
-    expect(carveToHtml(conv('&#32;# H'))).toBe('<p>&nbsp;# H</p>')
+    expect(conv('&#32;- item')).toBe('\\- item')
+    expect(carveToHtml(conv('&#32;- item'))).toBe('<p>- item</p>')
+    expect(carveToHtml(conv('&#32;# H'))).toBe('<p># H</p>')
   })
 
   // Whitespace that was already there is not the decode's doing.
