@@ -12679,9 +12679,8 @@ class ParseSession {
     // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
     // branches resolve the close bracket in O(1); see buildBracketMap.
     const bracketClose: BracketClose = text.includes('[') ? buildBracketMap(text) : () => undefined
-    const hasInlineComments = text.includes('%%')
     let commentLineEnd = -1
-    const commentRuns: Array<{ start: number; close: number }> = []
+    const bracketRuns: Array<{ start: number; close: number }> = []
 
     // Suffix tables so a tail regex is only run when its mandatory close
     // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
@@ -12709,13 +12708,13 @@ class ParseSession {
 
     while (i < text.length) {
       const c = text[i]!
-      while (commentRuns.length && i >= commentRuns[commentRuns.length - 1]!.close) {
-        commentRuns.pop()
+      while (bracketRuns.length && i >= bracketRuns[bracketRuns.length - 1]!.close) {
+        bracketRuns.pop()
       }
       // The bracket scanner decides which escapes and opaque spans hide a closer.
-      if (c === '[' && hasInlineComments) {
+      if (c === '[') {
         const close = bracketClose(i)
-        if (close !== undefined) commentRuns.push({ start: i + 1, close })
+        if (close !== undefined) bracketRuns.push({ start: i + 1, close })
       }
       if (c === '\0' && this.inLineBlock) {
         flush()
@@ -12885,7 +12884,7 @@ class ParseSession {
       // there - but inside a line block the whole stanza is inline content, so
       // the verse kept `%% c` as text where the other engines drop it, and this
       // one dropped it on the first line and not the second (carve#574).
-      const commentRun = commentRuns[commentRuns.length - 1]
+      const commentRun = bracketRuns[bracketRuns.length - 1]
       if (opensInlineComment(text, i, atHostRunStart || commentRun !== undefined, commentRun?.start)) {
         // Absorb the WHOLE separating run so the visible text keeps no trailing
         // whitespace (CARVE-P9-041, markup-carve/carve#2552). Flush the trimmed
@@ -13458,7 +13457,7 @@ class ParseSession {
       }
 
       // Emphasis-family delimiters
-      const em = this.matchEmphasis(text, i, source, inFootnote, emphasisNoClose)
+      const em = this.matchEmphasis(text, i, source, inFootnote, emphasisNoClose, bracketRuns.at(-1)?.close ?? text.length)
       if (em) {
         flush()
         out.push(this.withPos(em.node, source, text, i, em.end))
@@ -13501,6 +13500,7 @@ class ParseSession {
     source: InlineSource,
     inFootnote = false,
     noClose: EmphasisMemo = newEmphasisMemo(),
+    end = text.length,
   ): EmphasisMatch | null {
     const c = text[i]!
 
@@ -13517,7 +13517,7 @@ class ParseSession {
         let searchPos = start
         for (;;) {
           const close = findClose(text, searchPos, '*/')
-          if (close === -1) break
+          if (close === -1 || close + 2 > end) break
           const inner = text.slice(start, close)
           // The content must not end in whitespace (nor be empty). A trailing
           // space closer like `/*x */` is not bold-italic; skip this `*/` and
@@ -13590,7 +13590,7 @@ class ParseSession {
         // e.g. snake_/case/).
         if ((delim === '/' || delim === '_') && before === '/') continue
         // Find closer that's not preceded by space
-        const close = this.cachedFindEmphasisClose(text, i + 1, delim, noClose)
+        const close = this.cachedFindEmphasisClose(text, i + 1, delim, noClose, end)
         if (close !== -1) {
           const inner = text.slice(i + 1, close)
           return {
@@ -13608,11 +13608,12 @@ class ParseSession {
     from: number,
     delim: string,
     memo: EmphasisMemo,
+    end: number,
   ): number {
     const failed = memo.failed.get(delim)
     if (failed !== undefined && failed[from] === 1) return -1
     const visited: number[] = []
-    const close = this.findEmphasisClose(text, from, delim, memo, failed, visited)
+    const close = this.findEmphasisClose(text, from, delim, memo, failed, visited, end)
     if (close === -1) {
       const marks = failed ?? new Uint8Array(text.length + 1)
       for (const j of visited) marks[j] = 1
@@ -13878,8 +13879,11 @@ class ParseSession {
     memo: EmphasisMemo = newEmphasisMemo(),
     failed?: Uint8Array,
     visited?: number[],
+    end = text.length,
   ): number {
-    for (let j = from; j < text.length; j++) {
+    // PART 8: a delimiter inside a balanced label cannot pair past its close.
+    // Keep the original text so flanking and source offsets use the same run.
+    for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!

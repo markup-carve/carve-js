@@ -30,7 +30,7 @@ describe('PART 11 §5 destination-opening parentheses', () => {
   })
 
   it.each([
-    ['[<em>a](b)</em>', '[/a]\\(b)/'],
+    ['[<em>a](b)</em>', '[/a\\]\\(b)/'],
     ['<em>[a](b</em>)', '/[a]\\(b/)'],
     ['[<em>a</em>](b)', '[/a/]\\(b)'],
     ['[a](<em>b</em>)', '[a]\\(/b/)'],

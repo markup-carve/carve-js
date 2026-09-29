@@ -23,7 +23,11 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *    has to be deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>()
-// Empty. Its `security` entry went out with the bump past markup-carve/carve#2361.
+AHEAD_OF_PIN.set('paren-after-a-closed-bracket', {
+  reason: 'carve-js#2362: emphasis crossing a literal bracket needs that bracket escaped under PART 8.',
+  carve: '[a]\\(b) and f(x) and (see above) and [a] (b) and [a](b c)\n\n' +
+    '[[a]\\(u)]{.c}\n\n[`a`]\\(b)\n\n[/a\\]\\(b)/\n\n[a]\\(b(xy)d) and [a]()\n',
+})
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.

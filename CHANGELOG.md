@@ -18,6 +18,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Keep emphasis delimiters inside their enclosing balanced bracket run (#2362).
+
 - Rebase code and raw fences after a blank-separated quote in a footnote body (carve#2598).
 - Include a fenced block quote's closing delimiter in its source span, including empty quotes, caption targets and quotes inside footnotes (#2345).
 
