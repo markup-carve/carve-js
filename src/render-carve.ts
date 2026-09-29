@@ -39,7 +39,7 @@ import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 import { utf8ByteLength } from './abbr-budget.js'
-import { collectLoneBrackets, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
+import { collectLoneBrackets, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
@@ -2277,6 +2277,7 @@ function lastBoundary(node: InlineNode | undefined): string {
 class CarveRenderSession {
   renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
     this.destinationParensByUnit = new WeakMap()
+    this.crossingBracketsByUnit = new WeakMap()
     reportRubyLosses(ast, opts)
     ast = withCellHardBreaksFlattened(ast)
     ast = withTextAsOneRun(ast)
@@ -3874,7 +3875,7 @@ class CarveRenderSession {
   ): string {
     const nodes = flattenRubyForCarve(sourceNodes)
     if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-    if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, this.loneBrackets, this.leftToSearch, this.pairedClosers)
+    if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, this.loneBrackets, this.leftToSearch, this.pairedClosers, this.crossingOpeners)
     ctx.inlineDepth++
     try {
       let out = ''
@@ -4020,7 +4021,9 @@ class CarveRenderSession {
       this.lastLiteralRanges = []
       this.lastNoteCloses = []
       if (this.escapeMode === 'minimal') {
-        if (node.type === 'text' && result.includes('(')) {
+        // A crossing opener is decided from the completed run too, so its text
+        // node is kept even when no destination paren brought it here.
+        if (node.type === 'text' && (result.includes('(') || this.crossingOpeners.has(node))) {
           this.lastLiteralRanges.push({ start: 0, end: result.length, node })
         } else {
           let cursor = 0
@@ -4559,6 +4562,13 @@ class CarveRenderSession {
   private pairedClosers: PairedClosers = new WeakMap()
 
   /**
+   * The `[` of a pair reaching across a formatting boundary. PART 8 resolves
+   * the bracket run first, so such a run would isolate the delimiters it
+   * crosses: the opener is unconditional and its closer closes nothing.
+   */
+  private crossingOpeners: CrossingOpeners = new WeakMap()
+
+  /**
    * Whether each paired `[` was last written escaped, for its closer. The two
    * sit in different units whenever a nested construct separates them, and as
    * separate knobs neither could be relaxed alone, so the search kept both.
@@ -4735,6 +4745,12 @@ class CarveRenderSession {
 
   private destinationParensByUnit = new WeakMap<object, Set<number>>()
 
+  /**
+   * Crossing openers the completed run selected, so a re-render of an escalated
+   * unit writes the same escape the minimal pass chose.
+   */
+  private crossingBracketsByUnit = new WeakMap<object, Set<number>>()
+
   private lastLiteralRanges: LiteralRange[] = []
 
   private lastNoteCloses: number[] = []
@@ -4743,31 +4759,39 @@ class CarveRenderSession {
 
   /** Choose escapes from the emitted inline run, including intervening inline nodes. */
   private escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteCloses: Set<number>): string {
-    if (!text.includes('](') || ranges.length === 0) return text
-    const destinations = completeDestinationOpeners(text)
-    const bracketClose = buildBracketMap(text, true)
-    const paired = new Set<number>()
-    for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', i + 1)) {
-      const close = bracketClose(i)
-      if (close !== undefined && !noteCloses.has(close) && destinations.has(close + 1)) paired.add(close + 1)
-    }
-    const selected: number[] = []
+    if (ranges.length === 0) return text
     const sources = new Map<Text, string>()
-    for (const range of ranges) {
-      let source = sources.get(range.node)
-      if (source === undefined) {
-        source = cleanEscapedText(range.node).replace(UNWRITABLE_CONTROLS, '')
-        sources.set(range.node, source)
+    const sourceOf = (node: Text): string => {
+      let source = sources.get(node)
+      if (source === undefined) sources.set(node, (source = cleanEscapedText(node).replace(UNWRITABLE_CONTROLS, '')))
+      return source
+    }
+    // The crossing openers come FIRST, because an escaped `[` opens no run, so
+    // the `(` behind that run's closer is no longer a destination opener.
+    const crossing = this.selectCrossingOpeners(text, ranges, sourceOf)
+    const selected = [...crossing]
+    if (text.includes('](')) {
+      const destinations = completeDestinationOpeners(text)
+      const bracketClose = buildBracketMap(text, true)
+      const paired = new Set<number>()
+      for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', i + 1)) {
+        if (crossing.has(i)) continue
+        const close = bracketClose(i)
+        if (close !== undefined && !noteCloses.has(close) && destinations.has(close + 1)) paired.add(close + 1)
       }
-      let sourceOffset = (range.sourceStart ?? 0) - 1
-      for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
-        sourceOffset = source.indexOf('(', sourceOffset + 1)
-        if (!paired.has(i) || precededByOddBackslashRun(text, i) || this.leftToSearch.has(range.node)) continue
-        let forced = this.destinationParensByUnit.get(range.node)
-        if (forced === undefined) this.destinationParensByUnit.set(range.node, forced = new Set())
-        forced.add(sourceOffset)
-        selected.push(i)
+      for (const range of ranges) {
+        const source = sourceOf(range.node)
+        let sourceOffset = (range.sourceStart ?? 0) - 1
+        for (let i = text.indexOf('(', range.start); i !== -1 && i < range.end; i = text.indexOf('(', i + 1)) {
+          sourceOffset = source.indexOf('(', sourceOffset + 1)
+          if (!paired.has(i) || precededByOddBackslashRun(text, i) || this.leftToSearch.has(range.node)) continue
+          let forced = this.destinationParensByUnit.get(range.node)
+          if (forced === undefined) this.destinationParensByUnit.set(range.node, forced = new Set())
+          forced.add(sourceOffset)
+          selected.push(i)
+        }
       }
+      selected.sort((a, b) => a - b)
     }
     let out = ''
     let cursor = 0
@@ -4778,17 +4802,53 @@ class CarveRenderSession {
     return out + text.slice(cursor)
   }
 
+  /**
+   * The `[` of each crossing pair whose host came out with BARE delimiters, as
+   * offsets into the completed run.
+   *
+   * The decision waits for the run because the answer is in what was written: a
+   * span the writer had to brace - `{/a]/}` - keeps its delimiters through a
+   * bracket run, so the escape there would be idle, and on a nested pair it also
+   * cost idempotence. `writtenBraced` is the writer's own record of that choice,
+   * so nothing here re-derives it. EVERY crossed span has to be bare: a braced one
+   * anywhere in the way changes how far the bracket run reaches, and section 4's
+   * check still catches any spelling this declines to fix.
+   */
+  private selectCrossingOpeners(text: string, ranges: LiteralRange[], sourceOf: (node: Text) => string): Set<number> {
+    const selected = new Set<number>()
+    if (!text.includes('[')) return selected
+    for (const range of ranges) {
+      const openers = this.crossingOpeners.get(range.node)
+      if (openers === undefined) continue
+      const source = sourceOf(range.node)
+      let sourceOffset = (range.sourceStart ?? 0) - 1
+      for (let i = text.indexOf('[', range.start); i !== -1 && i < range.end; i = text.indexOf('[', i + 1)) {
+        sourceOffset = source.indexOf('[', sourceOffset + 1)
+        const hosts = openers.get(sourceOffset)
+        if (hosts === undefined || hosts.some((host) => this.writtenBraced.has(host))) continue
+        if (precededByOddBackslashRun(text, i) || this.leftToSearch.has(range.node)) continue
+        let forced = this.crossingBracketsByUnit.get(range.node)
+        if (forced === undefined) this.crossingBracketsByUnit.set(range.node, forced = new Set())
+        forced.add(sourceOffset)
+        selected.add(i)
+      }
+    }
+    return selected
+  }
+
   private escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false, sourceOffset = 0): string {
     const mode = this.escapeModeHere()
     text = text.replace(UNWRITABLE_CONTROLS, '')
     const destinationParens = this.escapeUnit == null ? undefined : this.destinationParensByUnit.get(this.escapeUnit)
     const lone = this.escapeUnit == null ? undefined : this.loneBrackets.get(this.escapeUnit)
+    const crossingBrackets = this.escapeUnit == null ? undefined : this.crossingBracketsByUnit.get(this.escapeUnit)
     const closers = this.escapeUnit == null ? undefined : this.pairedClosers.get(this.escapeUnit)
     const unit = this.escapeUnit
     const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
     const call = mode === 'conservative' ? this.nextEscapeCallIndex() : 0
     const decide = (char: string, offset: number, subject: string): string => {
       if (destinationParens?.has(sourceOffset + offset)) return '\\('
+      if (crossingBrackets?.has(sourceOffset + offset)) return '\\['
       if (lone?.has(sourceOffset + offset)) {
         this.lastOccurrenceRelaxed = false
         return `\\${char}`
