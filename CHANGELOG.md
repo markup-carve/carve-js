@@ -18,6 +18,9 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- ANSI output preserves every code payload line, including trailing blank lines (markup-carve/carve-js#2357).
+- Indentation lint names an over-indented fence opener with a glued info string, including unterminated fences (#2341).
+
 - Keep emphasis delimiters inside their enclosing balanced bracket run (#2362).
 
 - Rebase code and raw fences after a blank-separated quote in a footnote body (carve#2598).

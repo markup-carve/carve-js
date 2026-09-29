@@ -1115,7 +1115,7 @@ function collectListItemIndentWarnings(
     // marker. Suggesting a dedent or escape there would corrupt that payload.
     // Keep genuine fence delimiters eligible so an authored over-column opener
     // still receives the migration diagnostic.
-    if (_unrendered.has(lineNo) && !/^(?:`{3,}|~{3,}|:{3,})(?: |$)/.test(authored.rest)) {
+    if (_unrendered.has(lineNo) && !opensCodeFence(authored.rest) && !/^:{3,}(?: |$)/.test(authored.rest)) {
       reported.add(lineNo)
       continue
     }
