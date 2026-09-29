@@ -10595,6 +10595,16 @@ class ParseSession {
       // `authoredBaseEligible`'s complement: that set also excludes a fence
       // body, which reached the column and carries authored indentation.
       const takenBelowColumn = new Set<number>()
+      // `nested` indices holding a `%%%` opener the tracker refused, because no
+      // run of its width follows in the DOCUMENT. §28 substitutes one `%%` line
+      // comment for it, and carve#1903 makes that substitution a classification
+      // rather than a rendering rule, so the two looseness scans below must read
+      // the line the way they read `%% x` (carve-js#2337).
+      //
+      // The tracker's answer is the one to record, not a scan of this item's own
+      // lines: an opener whose closer fell OUTSIDE the item opened a real span,
+      // whose payload was then republished, and a block is not the line form.
+      const degradedOpeners = new Set<number>()
       let hasOverindentedBlockCandidate = false
       let authoredFenceBase = 0
       // A verbatim fence a DESCENDANT opened, while it is open.
@@ -11111,7 +11121,11 @@ class ParseSession {
             // Classify the span before applying the item's column boundary.
             // A below-column payload line still ends the item; its own parse
             // then sees an unclosed opener and publishes the former payload.
-            (fence) => commentBlockHasCloser(lexer, fence, fenceLineIndex),
+            (fence) => {
+              const closes = commentBlockHasCloser(lexer, fence, fenceLineIndex)
+              if (!closes) degradedOpeners.add(nested.length - 1)
+              return closes
+            },
           )
           // The item holds no paragraph a below-column line can continue while a
           // descendant holds a fence open. PART 1 S4 asks about the open STACK.
@@ -11348,7 +11362,7 @@ class ParseSession {
       const hiddenByComment = hasBlank ? commentBlockSpans([content, ...nested]) : []
       for (let k = nested.length - 1; k >= 0; k--) {
         const ln = nested[k]!
-        if (hiddenByComment[k + 1] === true) continue
+        if (hiddenByComment[k + 1] === true || degradedOpeners.has(k)) continue
         if (isBlankLine(ln)) {
           // A `+`-injected separator is not a blank line the author wrote, and
           // never loosens - the same exemption the second-paragraph scan below
@@ -11684,6 +11698,15 @@ class ParseSession {
             continue
           }
           if (isBlankLine(nested[j])) {
+            j++
+            continue
+          }
+          // AN OPENER THAT CANNOT CLOSE IS ONE `%%` LINE, not a block (PART 9
+          // §28, carve#1903), so the scan steps over that one line and reads
+          // what follows as the item's own second paragraph. Reading it as a
+          // block left `- t` / blank / `  %%%` / `  c` tight where the `%% x`
+          // spelling of the same invisible line is loose (carve-js#2337).
+          if (degradedOpeners.has(j)) {
             j++
             continue
           }

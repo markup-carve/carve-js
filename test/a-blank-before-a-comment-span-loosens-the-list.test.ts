@@ -36,13 +36,15 @@ describe('a blank line before a comment span loosens the list', () => {
   })
 
   // An opener with no run of its exact width ahead opens nothing (PART 9 §28),
-  // so it hides nothing and `c` below it is the item's own content. The
-  // tightness here is a SEPARATE open divergence from the oracle, tracked as
-  // markup-carve/carve-js#2337 - it belongs to the second-paragraph scan, not
-  // to this one, and neither reader moved on it here.
+  // so it hides nothing and `c` below it is the item's own content - a second
+  // paragraph behind one invisible line, which loosens the item the way the
+  // `%% c` spelling of that line does. The tightness was the open divergence
+  // markup-carve/carve-js#2337 named; it belongs to the second-paragraph scan,
+  // and this expectation moved with it, re-derived from the oracle at
+  // markup-carve/carve 5b70a768.
   it('an opener that cannot close hides nothing', () => {
     expect(carveToHtml('- t\n\n  %%%%\n  c\n  %%%\n- s\n')).toBe(
-      '<ul>\n  <li>t\n    c\n  </li>\n  <li>s</li>\n</ul>',
+      '<ul>\n  <li><p>t</p>\n    <p>c</p>\n  </li>\n  <li><p>s</p></li>\n</ul>',
     )
   })
 
