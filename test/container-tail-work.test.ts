@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { parse, renderHtml } from '../src/index.js'
+import { layoutWork } from '../src/parse.js'
 
 function work(source: string) {
   const exec = RegExp.prototype.exec
@@ -85,6 +86,8 @@ for (const [source, offsets] of [
 
 for (const [name, sourceAt, suffixAt] of [
   ['lazy quote', (depth: number) => '> '.repeat(depth) + 'end\nlazy\n', (depth: number) => depth * 4],
+  ['blank-separated list continuation', (depth: number) => '- '.repeat(depth) + 'a\n\n' + '  '.repeat(depth) + 'b\n', () => 0],
+  ['comment list continuation', (depth: number) => '- '.repeat(depth) + 'a\n' + '  '.repeat(depth) + '%% note\n', () => 0],
   ['indented list continuation', (depth: number) => '- '.repeat(depth) + 'a\n' + '  '.repeat(depth) + 'b\n', () => 0],
 ] as const) {
   it(`bounds remaining tail work for ${name}`, () => {
@@ -128,5 +131,24 @@ for (const source of [
     }
     visit(parse(source))
     expect(found).toBe(true)
+  })
+}
+
+for (const marker of ['-{.x} ', '1.{.x} ', '-{.x} [ ] ']) {
+  it(`does not reconstruct the attributed tail for ${JSON.stringify(marker)}`, () => {
+    for (const depth of [32, 64, 128]) {
+      const source = marker.repeat(depth) + 'x'.repeat(100_000) + '\n'
+      const previous = layoutWork.on
+      layoutWork.reset()
+      layoutWork.on = true
+      try {
+        const ast = parse(source)
+        expect(layoutWork.seam).toBe(source.length)
+        expect(renderHtml(ast)).toContain('x'.repeat(100_000))
+      } finally {
+        layoutWork.on = previous
+        layoutWork.reset()
+      }
+    }
   })
 }
