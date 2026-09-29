@@ -11547,9 +11547,9 @@ class ParseSession {
       // to `fenceLines[k + 1]`. Marking ranges is O(n) total (ranges never
       // overlap), keeping the scan linear.
       //
-      // A code fence absorbed into a paragraph still hides its interior blanks
-      // from tightness (carve-js#2358). Track its span even when §10's closer
-      // lookahead prevents it from opening a code block.
+      // An unterminated code fence absorbed into a paragraph keeps later blanks
+      // from loosening the item until it ends (carve-js#2358). Track the fence
+      // even when §10's closer lookahead prevents it from opening a code block.
       //
       // ALL THREE FENCE KINDS. This knew only the code fence, which is the same
       // one-kind-of-three defect corpus category 279 pins for the collectors -

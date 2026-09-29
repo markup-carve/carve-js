@@ -23,7 +23,7 @@ describe('an inline fence span keeps its item tight', () => {
     })
   }
 
-  it('keeps later blanks inside the unterminated span', () => {
+  it('keeps later blanks after the unterminated fence from loosening', () => {
     expect(carveToHtml('- a\n  ```\n  x\n\n  z\n\n  w\n')).toBe(
       '<ul>\n  <li>a\n<code>\nx</code>\n    z\n    w\n  </li>\n</ul>',
     )
