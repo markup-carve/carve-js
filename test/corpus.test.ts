@@ -878,6 +878,43 @@ const IMPLEMENTED = new Set([
   // declared are those two. The band between two content columns stays open on
   // carve-js#2289 and no document of this category writes its closer there.
   'a-comment-span-s-closer-column-does-not-move-the-item-s-ownership',
+  // The pin bump to carve `bcdcba4b` adds NINETEEN categories, corpus 513
+  // through 531, of 142 documents. Every one of the 142 was rendered through
+  // this engine and compared with its `.html` fixture BEFORE any name went in
+  // here: 142 of 142 byte-for-byte. The corpus at this pin holds 2134 documents,
+  // up from 1992 at the pin this commit moves off, and all 2134 match. None of
+  // the nineteen needed engine work: the rules behind them landed here one at a
+  // time over the last day, and the pin was simply behind the corpus.
+  //
+  // The engine change this bump DID need sits outside all nineteen.
+  // markup-carve/carve#2616 states `CARVE-P12-064`, and its clause that an
+  // unclosed fence with no payload lines also has content "" rewrote nine
+  // goldens in categories this list already held (69, 85, 276, 478, 509, 511).
+  // This engine invented a payload line for that shape, which corpus 276 pinned
+  // before the ruling and contradicts after it, so the compensation comes out of
+  // `parse.ts` here. The ruling's WIDER half - a nonempty payload keeping its own
+  // trailing break, so `content` for one line of `a` becomes `"a\n"` - is a wire
+  // change across the AST, import and the writers, and stays open as
+  // carve-js#2373.
+  'a-comment-span-opened-below-every-content-column-is-located-there',
+  'a-fence-a-container-inside-a-quote-holds-open-stores-no-claim',
+  'a-nested-marker-comment-keeps-its-own-ownership',
+  'a-heading-comment-preserves-code-span-content',
+  'a-band-paragraph-after-an-invisible-line-leaves-the-item-loose',
+  'a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator',
+  'a-shifted-fence-in-a-quoted-item-stores-no-continuation-claim',
+  'a-dropped-raw-block-takes-no-line-in-the-container-that-holds-it',
+  'a-zero-line-and-a-one-blank-raw-payload-are-not-the-same-block',
+  'an-emphasis-marker-does-not-pair-across-a-link-bracket',
+  'a-link-title-crosses-a-soft-wrap-and-an-attribute-value-does-not',
+  'an-empty-code-payload-renders-no-characters',
+  'a-link-inside-a-span-s-label-keeps-its-destination',
+  'a-quoted-value-and-a-quoted-title-escape-different-sets',
+  'a-tab-does-not-open-the-title-slot',
+  'a-footnote-body-whose-every-block-renders-nothing-is-an-empty-body',
+  'a-container-label-publishes-its-inline-run',
+  'a-fence-after-a-footnote-quote-has-its-own-base',
+  'an-opener-under-a-quote-in-a-nested-host-opens-at-one-column-only',
 ])
 
 /**

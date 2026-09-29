@@ -247,7 +247,7 @@ describe('a fence holds only the lines its container still reaches', () => {
     const source = '- > ```\n  :::\n  ```\n\n*[A]: expansion\n\nA here\n'
 
     expect(html(source)).toBe(
-      '<ul> <li> <blockquote> <pre><code> </code></pre> </blockquote> ' +
+      '<ul> <li> <blockquote> <pre><code></code></pre> </blockquote> ' +
         '<div> <pre><code> </code></pre> </div> </li> </ul> ' +
         '<p><abbr title="expansion">A</abbr> here</p>',
     )
@@ -268,7 +268,7 @@ describe('a fence holds only the lines its container still reaches', () => {
     // its own way, rendering the definition as a visible paragraph instead of
     // collecting it, so this is not two engines against one.
     expect(html('> ```\n\n[r]: /url\n\n[r][]\n')).toBe(
-      '<blockquote> <pre><code> </code></pre> </blockquote> <p><a href="/url">r</a></p>',
+      '<blockquote> <pre><code></code></pre> </blockquote> <p><a href="/url">r</a></p>',
     )
   })
 

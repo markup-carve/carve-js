@@ -96,7 +96,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
 
   it('CONTROL an UNTERMINATED code fence with no paragraph above it still opens a block', () => {
     expect(html('> ```\ntail\n')).toBe(
-      '<blockquote>\n  <pre><code>\n</code></pre>\n</blockquote>\n<p>tail</p>',
+      '<blockquote>\n  <pre><code></code></pre>\n</blockquote>\n<p>tail</p>',
     )
   })
 

@@ -32,7 +32,7 @@ import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 describe('a fence opened on a list marker line', () => {
   it('leaves an EMPTY code block and re-parses the residue at document level', () => {
     expect(carveToHtml('- ```\nx\n```\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
     )
   })
 
@@ -40,7 +40,7 @@ describe('a fence opened on a list marker line', () => {
     // A separate row because the broken readings differed here, one keeping the
     // leading space in the code text and one stripping it.
     expect(carveToHtml('- ```\n x\n ```\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
     )
   })
 
@@ -55,7 +55,7 @@ describe('a fence opened on a list marker line', () => {
     // Unanimous across engines and unenforced until now. It is the answer the
     // item spelling had drifted away from.
     expect(carveToHtml('> ```\nx\n```\n')).toBe(
-      '<blockquote>\n  <pre><code>\n</code></pre>\n</blockquote>\n<p>x\n<code></code></p>',
+      '<blockquote>\n  <pre><code></code></pre>\n</blockquote>\n<p>x\n<code></code></p>',
     )
   })
 
@@ -63,7 +63,7 @@ describe('a fence opened on a list marker line', () => {
     // Shows the empty inline code in the first row is a property of the
     // backtick run and not of this rule.
     expect(carveToHtml('- ~~~\nx\n~~~\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>\n<p>x\n~~~</p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n~~~</p>',
     )
   })
 

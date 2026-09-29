@@ -41,7 +41,7 @@ describe('an unterminated fence inside a ::: body', () => {
     // I4 gates INTERRUPTION. Unchanged, and the same in all three engines.
     expect(squash(carveToHtml('```\nx\n'))).toBe('<pre><code>x </code></pre>')
     expect(squash(carveToHtml('> ```\n'))).toBe(
-      '<blockquote> <pre><code> </code></pre> </blockquote>',
+      '<blockquote> <pre><code></code></pre> </blockquote>',
     )
   })
 })

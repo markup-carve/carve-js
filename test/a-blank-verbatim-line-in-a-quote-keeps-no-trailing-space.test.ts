@@ -27,9 +27,10 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  */
 
 describe('a blank verbatim line inside a quote keeps no trailing space', () => {
-  it('an unterminated fence in a quote closes over a bare marker line', () => {
-    // Corpus 69-opaque-spans-inside-a-container-6.
-    expect(carveToCarve('> ```\n')).toBe('> ```\n>\n> ```\n')
+  it('an unterminated fence in a quote closes over no payload line', () => {
+    // Corpus 69-opaque-spans-inside-a-container-6, whose `.fmt` sidecar lost its
+    // bare marker line when `CARVE-P12-064` emptied the zero-line payload.
+    expect(carveToCarve('> ```\n')).toBe('> ```\n> ```\n')
   })
 
   it('a blank line inside a fenced block inside a quote is a bare marker line', () => {

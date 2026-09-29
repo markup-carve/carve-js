@@ -14,10 +14,10 @@ import type { CodeBlock } from '../src/ast.js'
  * different values rather than two readings of `""`.
  *
  * Expectations are derived from the executable spec at markup-carve/carve
- * `89157529` (corpus category 524), which this repo's spec pin predates, so the
- * corpus runner here cannot see them. They are asserted directly for a second
- * reason as well: the corpus comparison trims both sides, and every divergence
- * here is leading or trailing whitespace.
+ * `89157529` (corpus category 524), which the spec pin now carries, so the corpus
+ * runner here sees them too. They stay asserted directly for a second reason:
+ * the corpus comparison trims both sides, and every divergence here is leading
+ * or trailing whitespace.
  */
 
 const codeOf = (source: string): CodeBlock => {
@@ -43,13 +43,18 @@ describe('the renderer half (#2342)', () => {
     expect(carveToHtml('- ```\n  ```\n')).toBe('<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>')
   })
 
-  it('leaves an UNTERMINATED payload its line, which corpus 276 pins', () => {
-    // The unterminated fence runs to the end of its container and the end
-    // supplies the break, so this row is NOT the one section 28 empties.
-    expect(carveToHtml('```\n')).toBe('<pre><code>\n</code></pre>')
+  it('empties an UNTERMINATED zero-line payload too, which corpus 276 pins', () => {
+    // `CARVE-P12-064` (markup-carve/carve#2616) reaches the unterminated fence
+    // as well: it holds no payload line, so it invents no break. This engine
+    // used to give it one and corpus 276 pinned THAT reading, until the ruling
+    // rewrote its goldens to the rows below.
+    expect(carveToHtml('```\n')).toBe('<pre><code></code></pre>')
     expect(carveToHtml('- ```\nx\n```\n')).toBe(
-      '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
+      '<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
     )
+    // Its one-blank-line partner keeps the line whether the fence closes or not,
+    // which is what keeps the two shapes two documents.
+    expect(carveToHtml('```\n\n')).toBe('<pre><code>\n</code></pre>')
   })
 })
 

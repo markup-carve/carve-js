@@ -48,7 +48,7 @@ describe('a fence ends with the container that holds it', () => {
     const source = `> ${B}\n\n[r]: /url\n\n[r][]\n`
 
     expect(html(source)).toBe(
-      '<blockquote> <pre><code> </code></pre> </blockquote> <p><a href="/url">r</a></p>',
+      '<blockquote> <pre><code></code></pre> </blockquote> <p><a href="/url">r</a></p>',
     )
   })
 
@@ -56,7 +56,7 @@ describe('a fence ends with the container that holds it', () => {
     const source = `:::\n> ${B}\n:::\n\n*[A]: expansion\n\nA here\n`
 
     expect(html(source)).toBe(
-      '<div> <blockquote> <pre><code> </code></pre> </blockquote> </div> ' +
+      '<div> <blockquote> <pre><code></code></pre> </blockquote> </div> ' +
         '<p><abbr title="expansion">A</abbr> here</p>',
     )
   })

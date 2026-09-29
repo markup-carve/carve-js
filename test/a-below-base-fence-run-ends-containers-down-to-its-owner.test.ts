@@ -49,7 +49,7 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       'depth 3, the run at column 0 ends all three items',
       "- a\n  - b\n    - c\n\n      ```\n      p\n```\n",
-      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <pre><code>p\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code>\n</code></pre>",
+      "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <pre><code>p\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>",
     ],
     [
       'depth 3, the run at column 2 stops at the outer item',

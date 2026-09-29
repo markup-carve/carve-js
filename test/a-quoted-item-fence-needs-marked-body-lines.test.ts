@@ -5,15 +5,15 @@ import { carveToHtml } from '../src/index.js'
 const cases = [
   [
     "> - ``` x\n    code\n    ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\">\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
   ],
   [
     "> - ``` x\n      code\n    tail\n    ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\">\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\ntail\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\ntail\n<code></code></p>"
   ],
   [
     "> - ``` x\n    code\n      ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\">\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
   ],
   [
     "> - ```=html\n    <b>hi</b>\n    ```\n",
@@ -21,7 +21,7 @@ const cases = [
   ],
   [
     "> - - ``` x\n      code\n      ```\n",
-    "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <pre><code class=\"language-x\">\n</code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
+    "<blockquote>\n  <ul>\n    <li>\n      <ul>\n        <li>\n          <pre><code class=\"language-x\"></code></pre>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>"
   ],
   [
     "> - ``` x\n>     code\n>     ```\n",
