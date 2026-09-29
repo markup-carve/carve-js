@@ -18,6 +18,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Markdown import keeps code blocks when a language hint is unsupported. It omits the whole hint instead of shortening it to a different language or producing an invalid fence (markup-carve/carve#2522).
+
 - Fences inside quoted lists and footnotes no longer absorb following unmarked lines (markup-carve/carve#2550).
 
 - Unfinished code fences in nested list items retain every trailing blank line when the item ends.
