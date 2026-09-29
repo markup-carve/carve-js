@@ -208,3 +208,12 @@ it('keeps the fence tracker in sync inside a raised colon container', () => {
     { rule: 'list-item-block-overindented', line: 6, column: 7 },
   ])
 })
+
+
+it('still reports a colon opener that holds an inline comment', () => {
+  const source = '- a\n\n      ::: note {% c %}\n      # x\n      :::\n  - b\n      # y\n'
+  expect(findings(source)).toMatchObject([
+    { rule: 'list-item-block-overindented', line: 3, column: 7 },
+    { rule: 'list-item-block-overindented', line: 7, column: 7 },
+  ])
+})

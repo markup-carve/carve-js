@@ -1035,7 +1035,7 @@ function collectListItemIndentWarnings(
     return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
   }
   const items: LintItemColumn[] = []
-  const commentLines = collectCommentLines(doc)
+  const commentLines = collectCommentLines(doc, true)
   walkDocument(doc, (node) => {
     if (node.type !== 'list_item') return
     const pos = (node as Positioned).pos
@@ -2319,10 +2319,10 @@ function collectUnpublishedLines(
 }
 
 /** Line numbers covered by a comment node, which a host never sees. */
-function collectCommentLines(doc: Document): Set<number> {
+function collectCommentLines(doc: Document, blocksOnly = false): Set<number> {
   const comments = new Set<number>()
   walkDocument(doc, (node) => {
-    if (node.type !== 'comment') return
+    if (node.type !== 'comment' || (blocksOnly && !node.block)) return
     const pos = (node as Positioned).pos
     if (!pos) return
     const end = (pos as { endLine?: number }).endLine ?? pos.startLine
