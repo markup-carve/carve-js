@@ -194,3 +194,8 @@ describe('over-indented fences with glued info strings', () => {
     expect(findings('- a\n\n  ```js\n      # payload\n      ```=html\n  ```\n')).toEqual([])
   })
 })
+
+
+it('does not report fence-shaped payload inside a comment', () => {
+  expect(findings('- a\n\n  %%%\n      ```js\n      ```=html\n      ```\n  %%%\n')).toEqual([])
+})

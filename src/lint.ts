@@ -1035,7 +1035,12 @@ function collectListItemIndentWarnings(
     return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
   }
   const items: LintItemColumn[] = []
+  const verbatimOpeners = new Set<number>()
   walkDocument(doc, (node) => {
+    if (node.type === 'code_block' || node.type === 'raw_block') {
+      const pos = (node as Positioned).pos
+      if (pos) verbatimOpeners.add(pos.startLine)
+    }
     if (node.type !== 'list_item') return
     const pos = (node as Positioned).pos
     if (!pos) return
@@ -1110,12 +1115,9 @@ function collectListItemIndentWarnings(
       continue
     }
     if (openFence && owner) ambiguousFences.delete(owner)
-    // Payload inside an already parsed verbatim/comment/container region is
-    // data, even when it happens to begin with `#`, `>` or another block
-    // marker. Suggesting a dedent or escape there would corrupt that payload.
-    // Keep genuine fence delimiters eligible so an authored over-column opener
-    // still receives the migration diagnostic.
-    if (_unrendered.has(lineNo) && !opensCodeFence(authored.rest) && !/^:{3,}(?: |$)/.test(authored.rest)) {
+    // Code/raw payload and comments are data. Only a parsed block's opener
+    // remains eligible for an over-indentation diagnostic.
+    if (_unrendered.has(lineNo) && !verbatimOpeners.has(lineNo)) {
       reported.add(lineNo)
       continue
     }
