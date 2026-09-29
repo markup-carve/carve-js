@@ -10,17 +10,17 @@ const codeOf = (src: string): string => {
 
 describe('a whitespace-only code line in a list item keeps its content', () => {
   it('keeps the spaces past the content column', () => {
-    expect(codeOf('- ```\n  a\n    \n  b\n  ```\n')).toBe('a\n  \nb')
+    expect(codeOf('- ```\n  a\n    \n  b\n  ```\n')).toBe('a\n  \nb\n')
   })
 
   it('reads a line no wider than the content column as an empty line', () => {
-    expect(codeOf('- ```\n  a\n  \n  b\n  ```\n')).toBe('a\n\nb')
-    expect(codeOf('- ```\n  a\n\n  b\n  ```\n')).toBe('a\n\nb')
+    expect(codeOf('- ```\n  a\n  \n  b\n  ```\n')).toBe('a\n\nb\n')
+    expect(codeOf('- ```\n  a\n\n  b\n  ```\n')).toBe('a\n\nb\n')
   })
 
   it('makes an imported whitespace-only line a fmt fixed point', () => {
     const src = htmlToCarve('<ul><li><pre>a\n \nb</pre></li></ul>').value
-    expect(codeOf(src)).toBe('a\n \nb')
+    expect(codeOf(src)).toBe('a\n \nb\n')
     expect(carveToCarve(src)).toBe(src)
   })
 })

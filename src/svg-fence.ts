@@ -1,7 +1,7 @@
 import type { Attrs, CodeBlock } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { sanitizeSvg, type SanitizeSvgOptions } from './svg-sanitize.js'
-import { codePayloadText } from './verbatim-payload.js'
+import { codeSource } from './verbatim-payload.js'
 
 /** Options for the {@link imgFence} factory. Extends the sanitizer options, so
  *  `allowStyle` / `allowLinks` / `allowAnimation` / `allowExternalImages` flow
@@ -117,7 +117,7 @@ function svgTitle(svg: string): string | undefined {
 function sourceFallback(code: CodeBlock, ctx: { indent(l: number): string; escapeHtml(s: string): string; level: number }): string {
   const pad = ctx.indent(ctx.level)
   const langAttr = code.lang ? ` class="language-${code.lang}"` : ''
-  return `${pad}<pre><code${langAttr}>${ctx.escapeHtml(codePayloadText(code.content))}</code></pre>`
+  return `${pad}<pre><code${langAttr}>${ctx.escapeHtml(code.content)}</code></pre>`
 }
 
 /**
@@ -170,7 +170,7 @@ export function imgFence(opts: ImgFenceOptions = {}): CarveExtension {
       const code = node as CodeBlock
       if (!languages.includes(code.lang ?? '')) return undefined
 
-      const { svg, ok } = sanitizeSvg(code.content, opts)
+      const { svg, ok } = sanitizeSvg(codeSource(code.content), opts)
       if (!ok) return sourceFallback(code, ctx)
 
       const pad = ctx.indent(ctx.level)

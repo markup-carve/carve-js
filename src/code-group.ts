@@ -1,7 +1,6 @@
 import type { Admonition, Attrs, BlockNode, CodeBlock, Div } from './ast.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
 import { applySingleSelection, resolveTabsMode, type TabsMode } from './tabs.js'
-import { codePayloadText } from './verbatim-payload.js'
 
 /** Options for the {@link codeGroup} extension. */
 export interface CodeGroupOptions {
@@ -261,7 +260,7 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     const content = item.block.content.replace(/\n+$/, '')
     if (highlighter) return highlighter(content, item.language)
     const langAttr = item.language ? ` class="language-${item.language}"` : ''
-    const escaped = ctx.escapeHtml(codePayloadText(item.block.content))
+    const escaped = ctx.escapeHtml(item.block.content)
     return `<pre${ctx.renderAttrs(withoutSelected(item.block.attrs))}><code${langAttr}>${escaped}</code></pre>\n`
   }
 

@@ -78,20 +78,54 @@ const files = readdirSync(vectorDir)
   .filter((f) => f.endsWith('.json'))
   .sort()
 
+/**
+ * Vector goldens the PINNED spec has not regenerated yet.
+ *
+ * CARVE-P12-064 (markup-carve/carve#2616) made `code_block.content` literal
+ * payload text: a fence that runs out at EOF keeps whether its last line had a
+ * break and must not invent one. The i04 golden was generated before that
+ * ruling, so it still spells the invented break for a child fragment ending
+ * mid-line. Entry goes out with the pin that regenerates it
+ * (markup-carve/carve#2623).
+ *
+ * DECLARED, NEVER TOLERATED: an entry whose vector already matches its own
+ * golden fails too, so a stale line cannot outlive the fix as slack.
+ */
+const AHEAD_OF_PIN = new Map<string, { field: string; value: string; reason: string }>([
+  [
+    'i04-fragment-containment-unclosed-fence',
+    {
+      field: 'html',
+      value: '<p>Before.</p>\n<pre><code class="language-js">let x = 1;</code></pre>\n<p>After.</p>',
+      reason: 'CARVE-P12-064: the child fragment ends mid-line, so its payload keeps no final break',
+    },
+  ],
+])
+
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.
   it('vendors the full vector corpus', () => {
     expect(files.length).toBeGreaterThanOrEqual(94)
   })
 
+  it('declares only vectors that exist and still drift', () => {
+    const names = new Set(files.map((file) => (JSON.parse(readFileSync(join(vectorDir, file), 'utf8')) as Vector).name))
+    for (const name of AHEAD_OF_PIN.keys()) expect(names, `${name} is declared but not vendored`).toContain(name)
+  })
+
   for (const file of files) {
     const vector = JSON.parse(readFileSync(join(vectorDir, file), 'utf8')) as Vector
-    it(`${vector.name} [${vector.rules.join(', ')}]`, () => {
+    const ahead = AHEAD_OF_PIN.get(vector.name)
+    it(`${vector.name} [${vector.rules.join(', ')}]${ahead ? ` AHEAD OF PIN: ${ahead.reason}` : ''}`, () => {
       const result = runVector(vector, carve) as VectorResult
 
+      if (ahead) {
+        expect(vector.expected[ahead.field], `${vector.name}: golden already regenerated - delete its entry`)
+          .not.toEqual(ahead.value)
+      }
       for (const field of EXPECTED_FIELDS as string[]) {
         expect(result[field as keyof VectorResult], `${vector.name}: ${field} mismatch`).toEqual(
-          vector.expected[field],
+          ahead && ahead.field === field ? ahead.value : vector.expected[field],
         )
       }
 

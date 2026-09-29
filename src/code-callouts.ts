@@ -1,6 +1,6 @@
 import type { Attrs, BlockNode, CodeBlock, InlineNode, Paragraph, Text } from './ast.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
-import { verbatimLines } from './verbatim-payload.js'
+import { codeLines } from './verbatim-payload.js'
 
 /**
  * CodeCallouts (#88, Tier-2). `<n>` markers at the end of lines inside a fenced
@@ -81,7 +81,7 @@ function isCalloutCandidate(p: Paragraph): boolean {
 // ----- render -----------------------------------------------------------------
 
 function renderCode(node: CodeBlock, ctx: BlockExtensionRenderContext): string {
-  const lines = verbatimLines(node.content)
+  const lines = codeLines(node.content)
   if (!lines.some((l) => MARKER_RE.test(l))) return undefined as unknown as string
   const pad = ctx.indent(ctx.level)
   const langAttr = node.lang ? ` class="language-${node.lang}"` : ''

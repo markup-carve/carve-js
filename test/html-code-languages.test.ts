@@ -10,6 +10,18 @@ function blocks(value: unknown): Array<{ lang: string | undefined; content: stri
   if (node.type === 'code_block') return [{ lang: node.lang as string | undefined, content: node.content as string }]
   return Object.values(node).flatMap(blocks)
 }
+/**
+ * The payloads with the break Carve source owes them.
+ *
+ * An imported `<code>` may publish a payload that ends mid-line
+ * (CARVE-P12-064), and a canonical fence breaks before its closer - so the
+ * source exit carries a break the imported tree does not. Every other
+ * difference still has to be zero.
+ */
+const terminated = (
+  rows: Array<{ lang: string | undefined; content: string }>,
+): Array<{ lang: string | undefined; content: string }> =>
+  rows.map((row) => ({ ...row, content: row.content === '' || row.content.endsWith('\n') ? row.content : `${row.content}\n` }))
 for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
   describe(mode, () => {
     for (const fixture of cases) {
@@ -17,7 +29,7 @@ for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
         const ast = htmlToAst(fixture.html, { mode }).value
         expect(blocks(ast).map((b) => b.lang ?? null)).toEqual(fixture.languages)
         const source = htmlToCarve(fixture.html, { mode }).value
-        expect(blocks(parse(source))).toEqual(blocks(ast))
+        expect(terminated(blocks(parse(source)))).toEqual(terminated(blocks(ast)))
         expect(renderCarve(parse(source))).toBe(source)
       })
     }

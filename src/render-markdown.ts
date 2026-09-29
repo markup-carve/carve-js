@@ -21,7 +21,7 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
-import { payloadTerminated } from './verbatim-payload.js'
+import { codeSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
@@ -301,13 +301,13 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // into `attrs`, so that is where the answer already is.
       const effectiveTitle = node.attrs?.keyValues?.['title'] ?? node.header
       const info = markdownFenceInfo(node.lang, effectiveTitle, node.label)
-      // The separator a payload of no lines does not own, and an all-blank one
-      // already carries; see `payloadTerminated`.
-      const closerSeparator = payloadTerminated(content) ? '' : '\n'
+      // The payload is written without its own final break; the break before
+      // the closer is the delimiter's. A payload of NO lines writes no line.
+      const closerSeparator = content === '' ? '' : '\n'
       // The whole region between the delimiters, its opening newline included, so
       // that an empty payload line is a newline with another behind it wherever it
       // stands.
-      const payload = holdPayloadBlanks(`\n${content}${closerSeparator}`)
+      const payload = holdPayloadBlanks(`\n${codeSource(content)}${closerSeparator}`)
       return `${fence}${info}${payload}${fence}\n\n`
     }
     case 'block_quote': {

@@ -1,6 +1,6 @@
 import type { Attrs, CodeBlock } from './ast.js'
 import type { CarveExtension, DiagramRenderer } from './extension.js'
-import { codePayloadText } from './verbatim-payload.js'
+import { codeSource } from './verbatim-payload.js'
 
 /** How a {@link fencedRender} instance places the block body. */
 export type FencedRenderContentMode = 'text' | 'json'
@@ -126,8 +126,8 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
         const open = `<${tag}${ctx.renderAttrs(named(attrs), tag)}>`
         const body =
           mode === 'json'
-            ? `<script type="application/json">${guardScriptClose(code.content)}</script>`
-            : escapeText(code.content)
+            ? `<script type="application/json">${guardScriptClose(codeSource(code.content))}</script>`
+            : escapeText(codeSource(code.content))
         const element = `${open}${body}</${tag}>`
         if (opts.wrapInFigure) {
           const pad = ctx.indent(ctx.level)
@@ -162,7 +162,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
           // the class/attrs survive and the wrapper is identical across engines
           // (carve#302). A `<div>` - not the interactive `<pre>`/`<div>` tag -
           // because the output is a rendered image, not source text.
-          const element = `<div${ctx.renderAttrs(named(attrs), 'div')}>${build(code.content)}</div>`
+          const element = `<div${ctx.renderAttrs(named(attrs), 'div')}>${build(codeSource(code.content))}</div>`
           if (opts.wrapInFigure) {
             return `${pad}<figure class="${ctx.escapeAttr(figureClass)}">\n${pad}${element}\n${pad}</figure>`
           }
@@ -172,7 +172,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
         // same merged attrs (cssClass ahead of author classes, hardened by
         // ctx.renderAttrs).
         const langAttr = code.lang ? ` class="language-${ctx.escapeAttr(code.lang)}"` : ''
-        return `${pad}<pre${ctx.renderAttrs(attrs)}><code${langAttr}>${ctx.escapeHtml(codePayloadText(code.content))}</code></pre>`
+        return `${pad}<pre${ctx.renderAttrs(attrs)}><code${langAttr}>${ctx.escapeHtml(code.content)}</code></pre>`
       },
     },
   }
