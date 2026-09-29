@@ -25,8 +25,10 @@ export function dropPositions(doc: Document): void {
     }
     const record = value as Record<string, unknown>
     for (const field of POSITION_FIELDS) delete record[field]
-    for (const key of Object.keys(record)) {
-      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
+    const node = typeof record['type'] === 'string'
+    for (const key in record) {
+      if (!Object.hasOwn(record, key)) continue
+      if (key !== 'attrs' || !node) walk(record[key])
     }
   }
   walk(doc)

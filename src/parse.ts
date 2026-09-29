@@ -6227,7 +6227,7 @@ function rebaseOverindentedBlocks(
       quote.lines = lines
       quote.pos = i
       const state = markerLineQuoteState(line)!
-      const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
+      let fenceCloserMemo: QuotedFenceCloserMemo | undefined
       while (++quote.pos < lines.length) {
         const next = lines[quote.pos]!
         const marked = RE_BLOCKQUOTE.exec(next)
@@ -6235,7 +6235,7 @@ function rebaseOverindentedBlocks(
           trackBlockQuoteLazyState(
             marked[1] ?? '', state,
             (width) => quotedCommentHasCloser(quote, width, quote.pos),
-            (marker, depth, column) => quotedFenceHasCloser(quote, marker, quote.pos, fenceCloserMemo, depth, column),
+            (marker, depth, column) => quotedFenceHasCloser(quote, marker, quote.pos, fenceCloserMemo ??= new Map(), depth, column),
           )
           continue
         }
@@ -7719,10 +7719,9 @@ class ParseSession {
   }
 
   private collectLinkDefs(lexer: Lexer) {
-    // This pass publishes link/abbreviation definitions and records rejected
-    // link definitions. Each spelling needs `[`, even behind container markers.
-    // Keep the complete ownership scan whenever that character is present.
-    if (!lexer.lines.some((line, index) => index >= lexer.pos && line.includes('['))) return
+    // Every definition spelling contains `]: `, including those behind
+    // container markers. Retain the full ownership scan for any candidate.
+    if (!lexer.lines.some((line, index) => index >= lexer.pos && line.includes(']: '))) return
     // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
     // opened, or null when there was none. A fence inside a div ends at that div's
     // closer, exactly as it ends at the end of a quote or a list item - and the
@@ -9763,7 +9762,7 @@ class ParseSession {
         inDefList: false,
         attrRun: null,
       }
-      const defFenceMemo: QuotedFenceCloserMemo = new Map()
+      let defFenceMemo: QuotedFenceCloserMemo | undefined
       // The next entry ends the body, and so does a line below its column after a
       // blank. A second blank ends it regardless of the following indentation.
       const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
@@ -9805,7 +9804,7 @@ class ParseSession {
             marker,
             atLineIndex,
             openerCol,
-            defFenceMemo,
+            defFenceMemo ??= new Map(),
             bodyEndsAt,
           )
           lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
@@ -10367,7 +10366,7 @@ class ParseSession {
       colonWidths: [],
       attrRun: null,
     }
-    const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
+    let fenceCloserMemo: QuotedFenceCloserMemo | undefined
     // Quoted lines not yet fed to the tracker. `state` is read only when an
     // unmarked line asks whether the paragraph is still open (or a `+` closes
     // it), so tracking waits until then. The tracker descends every nested
@@ -10389,7 +10388,7 @@ class ParseSession {
         (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
         (marker, depth, column) =>
           !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
-          quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo, depth, column),
+          quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo ??= new Map(), depth, column),
         descent,
         this.markerPrefixMemo(lexer, lineIndex),
         !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)),
@@ -10884,7 +10883,7 @@ class ParseSession {
       }
 
       const nested: string[] = []
-      const commentPayloadCandidates = new Map<number, string>()
+      let commentPayloadCandidates: Map<number, string> | undefined
       const nestedLineNumbers: number[] = []
       // Collection can later rebase or frame a line; consumers check its text before reuse.
       const nestedOrigins = new Map<number, StrippedLineOrigin>()
@@ -11134,7 +11133,7 @@ class ParseSession {
       // below the content column folded into the code text - body and closer
       // both. Nothing precedes the lead, so no closer lookahead applies: the
       // fence opens unconditionally, exactly as it does at the top of a quote.
-      const itemFenceMemo: QuotedFenceCloserMemo = new Map()
+      let itemFenceMemo: QuotedFenceCloserMemo | undefined
       // A sibling or outer marker ends the item, and so does a line below the
       // column after a blank (carve#1379).
       const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
@@ -11432,7 +11431,7 @@ class ParseSession {
                 marker,
                 fenceLineIndex,
                 contentCol,
-                itemFenceMemo,
+                itemFenceMemo ??= new Map(),
                 itemEndsAt,
               )
               lexer.fenceLookaheadAnswers.set(
@@ -11582,7 +11581,7 @@ class ParseSession {
           if (lazyState.opaque?.kind === 'comment' &&
               commentFenceRun(l) !== lazyState.opaque.length &&
               commentBlockHasCloser(lexer, lazyState.opaque.length)) {
-            commentPayloadCandidates.set(nested.length, sliceColumns(l, Math.min(indentColumns(l), contentCol), true))
+            (commentPayloadCandidates ??= new Map()).set(nested.length, sliceColumns(l, Math.min(indentColumns(l), contentCol), true))
           }
           takenBelowColumn.add(nested.length)
           nested.push(lazyLine)
@@ -11644,7 +11643,7 @@ class ParseSession {
         }
       }
 
-      if (commentPayloadCandidates.size > 0) {
+      if (commentPayloadCandidates) {
         const closedComments = commentBlockSpans([content, ...nested])
         for (const [index, payload] of commentPayloadCandidates) {
           if (closedComments[index + 1]) nested[index] = LAZY_FRAME + stripLazyFrame(payload)
@@ -12593,7 +12592,9 @@ class ParseSession {
     // paragraph. The first line's stripped width is folded into the inline
     // base position so source offsets/columns stay accurate.
     const firstLead = lines[0]!.match(/^[ \t]+/)?.[0].length ?? 0
-    const text = dropTrailingWhitespace(lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n'))
+    const text = dropTrailingWhitespace(lines.length === 1
+      ? lines[0]!.slice(firstLead)
+      : lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n'))
     // Each line contributes its OWN leading whitespace on top of whatever prefix
     // the container stripped, so a continuation line needs its own origin rather
     // than a single base offset plus a local one (#444).
@@ -12916,6 +12917,11 @@ class ParseSession {
     // span.
     atHostRunStart: boolean,
   ): InlineNode[] {
+    // ASCII prose has no inline openers or smart-punctuation tokens.
+    // Extension matchers can claim ordinary text, so they retain the full scan.
+    if (this.activeMatchers.length === 0 && /^[A-Za-z0-9 \t]+$/.test(text)) {
+      return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
+    }
     const out: InlineNode[] = []
     let i = 0
     let buf = ''
