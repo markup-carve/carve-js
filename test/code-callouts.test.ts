@@ -14,6 +14,12 @@ describe('code callouts', () => {
     expect(out).toContain('return x * 2;          <b class="callout" data-callout="2">2</b>')
   })
 
+  it.each(['', '\n', '\n\n'])('preserves the payload ending %j', (ending) => {
+    expect(h('```\nx <1>' + ending)).toBe(
+      '<pre><code>x <b class="callout" data-callout="1">1</b>' + ending + '</code></pre>',
+    )
+  })
+
   it('binds the following list as <ol class="callouts"> with explicit values', () => {
     const out = h(SRC)
     expect(out).toContain('<ol class="callouts">')

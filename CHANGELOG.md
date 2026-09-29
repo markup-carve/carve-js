@@ -51,6 +51,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Changed
 
+- Code-block AST content now includes authored final line breaks (#2373). HTML import and output preserve the literal payload text. Stored trees using the old encoding need migration from source or known producer behavior. Canonical Carve output reports `field-unspellable` when closing a fence requires adding a newline.
+
 - Definition collection skips container queries for lines that cannot define a reference.
 
 - `fromAstJson` accepts `unknown` input and validates it before decoding.

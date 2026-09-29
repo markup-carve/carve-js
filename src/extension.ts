@@ -147,7 +147,11 @@ export interface MatcherContext {
   readonly inLinkLabel?: boolean
   /** Parse inline markup (core + extensions) into nodes. */
   parseInlines(text: string): InlineNode[]
-  /** Parse block markup (core + extensions) into nodes. */
+  /**
+   * Parse block markup (core + extensions) into nodes. The supplied string has
+   * its own EOF: an unclosed code fence preserves whether its last line ended
+   * with a newline. Include that newline when joining terminated body lines.
+   */
   parseBlocks(source: string): BlockNode[]
   /** Reference-link definitions collected from the document. */
   linkDefs: ReadonlyMap<string, { href: string; title?: string }>
