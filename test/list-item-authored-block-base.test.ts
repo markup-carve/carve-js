@@ -65,13 +65,12 @@ describe('list-item authored block bases (carve#1705)', () => {
     expect(exact).toContain('<li><p>x</p>')
   })
 
-  it('rebases a block after an item-level quote with and without a blank', () => {
-    for (const separator of ['\n', '\n\n']) {
-      const exact = html(`- > q${separator}  # h\n`)
-      const over = html(`- > q${separator}   # h\n`)
-      expect(over).toBe(exact)
-      expect(over).toContain('<h1 id="h">h</h1>')
-    }
+  it('keeps an indented opener in the marker-line quote until a blank ends it', () => {
+    expect(html('- > q\n   # h\n')).toBe('<ul>\n  <li>\n    <blockquote><p>q\n# h</p></blockquote>\n  </li>\n</ul>')
+    const exact = html('- > q\n\n  # h\n')
+    const over = html('- > q\n\n   # h\n')
+    expect(over).toBe(exact)
+    expect(over).toContain('<h1 id="h">h</h1>')
   })
 
   it('keeps a below-column thematic marker stable through formatting', () => {

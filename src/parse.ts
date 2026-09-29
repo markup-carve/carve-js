@@ -6151,6 +6151,7 @@ function rebaseOverindentedBlocks(
   // of by the line's own indentation, so a ladder does not re-read the same
   // leading run once per level (carve#752's counted bound).
   let ownedColumn = leadNestedColumn
+  let quoteProbe: Lexer | undefined
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     if (isBlankLine(line)) continue
@@ -6161,10 +6162,35 @@ function rebaseOverindentedBlocks(
     // the intervening marker/content columns have been removed and will apply
     // the authored-base rule in that coordinate system.
     if (ownedColumn >= 0 && base >= ownedColumn) continue
+    if (ownedColumn >= 0 && RE_COMMENT_LINE.test(line) && commentFenceRun(line) === undefined) continue
     ownedColumn = -1
     const markerColumn = markerContentColumn(line)
     if (markerColumn >= 0) {
       ownedColumn = markerColumn
+      continue
+    }
+    if (!includeSublists && base === 0 && RE_BLOCKQUOTE.test(line)) {
+      const quote = quoteProbe ??= new Lexer([])
+      quote.lines = lines
+      quote.pos = i
+      const state = markerLineQuoteState(line)!
+      const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
+      while (++quote.pos < lines.length) {
+        const next = lines[quote.pos]!
+        const marked = RE_BLOCKQUOTE.exec(next)
+        if (marked) {
+          trackBlockQuoteLazyState(
+            marked[1] ?? '', state,
+            (width) => quotedCommentHasCloser(quote, width, quote.pos),
+            (marker, depth, column) => quotedFenceHasCloser(quote, marker, quote.pos, fenceCloserMemo, depth, column),
+          )
+          continue
+        }
+        if (isBlankLine(next) || RE_CAPTION.test(next) ||
+            colonFenceShapeEndsLazyContinuation(next) ||
+            startsInterruptingBlock(quote, undefined, false) || !blockQuoteParagraphOpen(state)) break
+      }
+      i = quote.pos - 1
       continue
     }
     if (base === 0) {
@@ -11571,13 +11597,14 @@ class ParseSession {
         orderedMatch(content, terminatorFree) !== null ||
         taskMatch(content, terminatorFree) !== null ||
         extractItemAttr(content, terminatorFree) !== null
-      // Include a marker-line term so its continuation is not rebased as a new block.
-      const leadIsTerm = RE_DEFLIST_TERM.test(content)
-      const rebaseLines = leadIsTerm ? [content, ...nested] : nested
-      const rebaseEligible = leadIsTerm
+      // Include marker-line containers whose continuation keeps its own extent.
+      const leadOwnsExtent = RE_DEFLIST_TERM.test(content) ||
+        (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content))
+      const rebaseLines = leadOwnsExtent ? [content, ...nested] : nested
+      const rebaseEligible = leadOwnsExtent
         ? new Set([0, ...Array.from(authoredBaseEligible, (index) => index + 1)])
         : authoredBaseEligible
-      const rebaseTakenBelowColumn = leadIsTerm
+      const rebaseTakenBelowColumn = leadOwnsExtent
         ? new Set(Array.from(takenBelowColumn, (index) => index + 1))
         : takenBelowColumn
       let authoredCodeFenceOpen = false
@@ -11594,18 +11621,18 @@ class ParseSession {
           leadIsMarker ? markerContentColumn(content, terminatorFree) : -1,
           false,
           false,
-          (index) => subListMarkers.delete(leadIsTerm ? index - 1 : index),
+          (index) => subListMarkers.delete(leadOwnsExtent ? index - 1 : index),
           () => { authoredCodeFenceOpen = true },
           rebaseTakenBelowColumn,
         )
         : new Set<number>()
-      if (leadIsTerm) {
+      if (leadOwnsExtent) {
         for (let index = 0; index < nested.length; index++) nested[index] = rebaseLines[index + 1]!
       }
       // Rebasing can reveal a fence opened past the item's content column.
       // Its payload markers must not split the collected stream (#2212).
       const firstBlockIdx = subListMarkers.values().next().value ?? -1
-      const authoredBlockBlanks = leadIsTerm
+      const authoredBlockBlanks = leadOwnsExtent
         ? new Set(Array.from(rebasedBlanks, (index) => index - 1))
         : rebasedBlanks
 
