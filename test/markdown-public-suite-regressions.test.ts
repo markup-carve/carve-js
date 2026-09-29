@@ -2,6 +2,13 @@ import { expect, it } from 'vitest'
 import { carveToHtml, markdownToCarve } from '../src/index.js'
 
 it.each([
+  ["[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n", "<p><a href=\"my_(url)\" title=\"title (with parens)\">Foo*bar]</a></p>"],
+  ["[foo]: /url '\ntitle\nline1\nline2\n'\n\n[foo]\n", "<p><a href=\"/url\" title=\"\ntitle\nline1\nline2\n\">foo</a></p>"],
+  ["[foo]: <bar>(baz)\n\n[foo]\n", "<p>[foo]: <bar>(baz)</p>\n<p>[foo]</p>"],
+  ["[\nfoo\n]: /url\nbar\n", "<p>bar</p>"],
+  ["[Foo\n  bar]: /url\n\n[Baz][Foo bar]\n", "<p><a href=\"/url\">Baz</a></p>"],
+  ["[bar][foo\\!]\n\n[foo!]: /url\n", "<p>[bar][foo!]</p>"],
+  ["[foo][ref[]\n\n[ref[]: /uri\n", "<p>[foo][ref[]</p>\n<p>[ref[]: /uri</p>"],
   ['>\t\tfoo\n', '<blockquote>\n  <pre><code>  foo\n</code></pre>\n</blockquote>'],
   ['   > > 1.  one\n>>\n>>     two\n', '<blockquote>\n  <blockquote>\n    <ol>\n      <li><p>one</p>\n        <p>two</p>\n      </li>\n    </ol>\n  </blockquote>\n</blockquote>'],
   ['>>- one\n>>\n  >  > two\n', '<blockquote>\n  <blockquote>\n    <ul>\n      <li>one</li>\n    </ul>\n    <p>two</p>\n  </blockquote>\n</blockquote>'],

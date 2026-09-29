@@ -17,6 +17,10 @@ import {
   extractReferenceDefinitions,
   plainAltText,
   referenceDestinationLabel,
+  referenceInlineTarget,
+  referenceSourceLabel,
+  referenceSourceText,
+  referenceLiteralText,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
@@ -1135,6 +1139,11 @@ function convertInline(
     return `(${enc}${decodeEntitiesInTitle(rest).replace(/^[ \t\n]+/, ' ')})`
   }
 
+  const referenceTail = (canonical: string, fallback: string): string => {
+    const target = referenceInlineTarget(canonical)
+    return protect(target === undefined ? fallback : encodeDest(`(${target})`) ?? fallback)
+  }
+
   const imageLabel = (label: string): string => {
     const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw)
     return rawBracketRunCloses(alt) ? `![${alt}]` : label
@@ -1214,7 +1223,8 @@ function convertInline(
       if (source[offset + match.length] === '(') return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans)
       if (canonical === undefined || /[\[\]]/.test(canonical)) return match
-      return protect(`${imageLabel(`![${label}]`)}[${canonical}]`)
+      const target = referenceInlineTarget(canonical)
+      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
     })
 
   // In a plain three-label chain, an unknown full-reference label can begin
@@ -1254,8 +1264,15 @@ function convertInline(
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
     const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label))
       ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) : undefined
+    const sourceLabel = referenceSourceLabel(reference, protectedSpans)
+    if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel) !== undefined) return referenceTail(sourceLabel, match)
+    const literal = referenceLiteralText(reference, decodeHtmlEntitiesRaw, protectedSpans)
+    if (canonical === undefined && sourceLabel === undefined && !reference.startsWith('^') && /\\[!*]/.test(referenceSourceText(reference, protectedSpans)) && literal !== reference && /[!*]/.test(literal)) {
+      return protect(`\\[${literal}]`)
+    }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
-    return protect(canonical === undefined || /[\[\]]/.test(canonical) || keepCollapsed ? match : `[${canonical}]`)
+    return canonical === undefined || /[\[\]]/.test(canonical)
+      ? protect(match) : referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`)
   })
 
   // Reference-link definition `[label]: dest "title"` (optional space after
@@ -1331,7 +1348,7 @@ function convertInline(
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
     const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans)
     if (destinationLabel === undefined || /[\[\]]/.test(destinationLabel)) return match
-    return `${match}${protect(label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
+    return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
   // Math, converted and protected before the emphasis passes so a formula
@@ -2518,7 +2535,7 @@ function peelQuoteLevels(line: string, levels: number): string {
 }
 
 function blockquotePrefix(line: string): { prefix: string; text: string } | null {
-  return quotedLine(line, 0)
+  return line.startsWith('>') ? quotedLine(line, 0) : null
 }
 
 /**
@@ -2535,7 +2552,7 @@ function quotedLine(line: string, contentCol: number): { prefix: string; text: s
   let col = advanceColumns(contentCol, slack)
   rest = rest.slice(slack.length)
   let prefix = ''
-  for (let marker = /^ {0,3}>[ \t]?/.exec(rest); marker; marker = /^ {0,3}>[ \t]?/.exec(rest)) {
+  for (let marker = /^ ?>[ \t]?/.exec(rest); marker; marker = /^ ?>[ \t]?/.exec(rest)) {
     const tab = marker[0].endsWith('\t')
     const beforePad = advanceColumns(col, tab ? marker[0].slice(0, -1) : marker[0])
     const residue = tab ? advanceColumns(beforePad, '\t') - beforePad - 1 : 0
