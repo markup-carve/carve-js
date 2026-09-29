@@ -18,3 +18,13 @@
  */
 export const ORDERED_TASK_ITEM_UNSPELLABLE =
   'An ordered task item is not spellable as a Carve task item; the checkbox marker was kept as text'
+
+/**
+ * Whitespace an entity decode put at the start of a line, which Carve does not
+ * spell there.
+ *
+ * Dropped rather than substituted: `\\ ` reads as U+00A0, and a non-breaking
+ * space is not the tab or space the author wrote (markup-carve/carve#2595).
+ */
+export const LEADING_WHITESPACE_UNSPELLABLE =
+  'Dropped whitespace a decoded reference put at the start of a line; Carve spells no leading whitespace on a paragraph'

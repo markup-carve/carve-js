@@ -277,7 +277,7 @@ export function extractReferenceDefinitions(
 }
 
 /** A line-initial block opener in text, escaped so the text stays a paragraph. */
-function escapeLineInitialBlockSyntax(text: string): string {
+export function escapeLineInitialBlockSyntax(text: string): string {
   return text
     .split('\n')
     .map((line) => {

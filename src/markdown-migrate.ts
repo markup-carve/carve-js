@@ -13,13 +13,14 @@ import {
   HANDLED_MARKDOWN,
 } from './carve-escape.js'
 import {
+  escapeLineInitialBlockSyntax,
   extractReferenceDefinitions,
   plainAltText,
   referenceDestinationLabel,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
-import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { isTableRow, parse, rawBracketRunCloses } from './parse.js'
 import { escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 
@@ -507,12 +508,36 @@ function decodeHtmlEntities(s: string): string {
     },
   ).replace(/&#/g, '&\\#')
   // Whitespace that a decode put at the START of the line is indentation to
-  // every block rule that runs after this: `&#32;- item` is a paragraph in
-  // cmark and would become a LIST here. `\ ` keeps it inline. The cost is one
-  // character - Carve reads the escape as U+00A0, where cmark keeps U+0020 -
-  // and structure is worth more than the space's breaking behavior.
-  return /^[ \t]/.test(decoded) && !/^[ \t]/.test(s) ? '\\ ' + decoded.slice(1) : decoded
+  // every block rule that runs after this, and Carve has no spelling for it at a
+  // paragraph's start. It is DROPPED and reported, not substituted
+  // (markup-carve/carve#2595): this used to emit `\ `, which Carve reads as
+  // U+00A0, and a non-breaking space is not the tab or space the author wrote -
+  // it changes line breaking and copies out of a browser as a different byte, so
+  // the substitution travels further than the document. The precedent is the
+  // HTML round-trip ruling that an empty half beats a wrong one.
+  //
+  // A marker the drop leaves at column 0 is escaped, so the line stays the
+  // paragraph it was: `&#32;- item` reads as text, not as a list.
+  if (!/^[ \t]/.test(decoded) || /^[ \t]/.test(s)) return decoded
+  const dropped = decoded.replace(/^[ \t]+/, '')
+  importLosses.push({
+    code: 'structure-unspellable',
+    message: LEADING_WHITESPACE_UNSPELLABLE,
+  })
+
+  return escapeLineInitialBlockSyntax(dropped).replace(RE_LINE_INITIAL_DEFINITION, '\\$&')
 }
+
+/**
+ * A definition marker the drop can leave at column 0: a link reference, a
+ * footnote, an abbreviation.
+ *
+ * `escapeLineInitialBlockSyntax` does not cover these, and a definition is not
+ * merely a different block - it reaches no output at all, so
+ * `&#32;[foo]: /url` lost the whole paragraph instead of its leading space.
+ * Raised by codex review on this change.
+ */
+const RE_LINE_INITIAL_DEFINITION = /^\*?(?=\[[^\]\n]*\]:)/
 
 const NATIVE_INLINE_HTML_TAGS = new Set([
   'mark',
