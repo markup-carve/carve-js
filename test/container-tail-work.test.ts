@@ -19,7 +19,7 @@ function work(source: string) {
   finally { RegExp.prototype.exec = exec; String.prototype.endsWith = endsWith }
 }
 
-for (const marker of ['> ', '- ', '> - ', '- > ']) {
+for (const marker of ['> ', '- ', '> - ', '- > ', '1. ', '. ', 'iv) ', '- [ ] ', '* [x] ', '-{.x} ', '1.{title="😀"} ', '-{.x} [ ] ']) {
   it(`bounds successful regex spans and suffix checks for ${JSON.stringify(marker)}`, () => {
     const rows = [32, 64].map(depth => {
       const source = marker.repeat(depth) + 'end\n'
@@ -80,5 +80,53 @@ for (const [source, offsets] of [
     }
     visit(parse(source))
     expect(starts).toEqual(offsets)
+  })
+}
+
+for (const [name, sourceAt, suffixAt] of [
+  ['lazy quote', (depth: number) => '> '.repeat(depth) + 'end\nlazy\n', (depth: number) => depth * 4],
+  ['indented list continuation', (depth: number) => '- '.repeat(depth) + 'a\n' + '  '.repeat(depth) + 'b\n', () => 0],
+] as const) {
+  it(`bounds remaining tail work for ${name}`, () => {
+    const rows = [64, 128].map(depth => {
+      const source = sourceAt(depth)
+      const row = work(source)
+      expect(row.ast).toEqual(parse(source))
+      expect(row.suffixChars).toBe(suffixAt(depth))
+      expect(row.terminatorInputs).toBeLessThanOrEqual(source.length * 5)
+      return row
+    })
+    expect(rows[1]!.matched).toBeLessThanOrEqual(rows[0]!.matched * 2.1)
+  })
+}
+
+for (const source of [
+  '-{title="😀"} leaf\n',
+  '1.{title="😀"} - [x] leaf\r\n',
+  '-{.x} -{.y} leaf\n',
+  '- [ ] a\r\n  - b\r\n    leaf\r\n',
+  '- a\n  - b\n\tleaf\n',
+  '- a\n \t- leaf\n',
+  '- a\n  - b\n    +\n    leaf\n',
+  '> -{.x} leaf\n',
+  '> > leaf\ncontinuation\n',
+  '-{title="x\u2028y"} leaf\n',
+  '-{.x} leaf\u2029\n',
+]) {
+  it(`keeps the leaf source slice for ${JSON.stringify(source)}`, () => {
+    const points = Array.from(source)
+    let found = false
+    function visit(value: unknown): void {
+      if (!value || typeof value !== 'object') return
+      const node = value as { type?: string, value?: string, pos?: { startOffset: number, endOffset: number } }
+      if (node.type === 'text' && node.value?.includes('leaf')) {
+        found = true
+        expect(node.pos).toBeDefined()
+        expect(points.slice(node.pos!.startOffset, node.pos!.endOffset).join('')).toBe(node.value)
+      }
+      for (const child of Object.values(value)) if (Array.isArray(child)) child.forEach(visit)
+    }
+    visit(parse(source))
+    expect(found).toBe(true)
   })
 }

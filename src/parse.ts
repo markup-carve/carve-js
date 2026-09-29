@@ -277,13 +277,16 @@ function authoredTaskState(state: string, checked: boolean): TaskState | undefin
 // marker in any form (`.{#x}text`, `1.{#x}text`, `-{#x}text` are all text).
 const RE_ITEM_ATTR =
   /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[^ \t].*)$/
+const RE_ITEM_ATTR_HEAD =
+  /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +)(?=[^ \t])/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
 // when there is no abutting brace or the brace is not a valid attribute payload
 // (then `-{...}` is not a marker and the line stays ordinary text, mirroring the
 // inline-span disambiguation, grammar §14).
-function extractItemAttr(line: string): { stripped: string; attrs: Attrs | undefined } | null {
-  const m = RE_ITEM_ATTR.exec(line)
+function extractItemAttr(line: string, terminatorFree = false): { stripped: string; attrs: Attrs | undefined } | null {
+  const m = (terminatorFree ? RE_ITEM_ATTR_HEAD : RE_ITEM_ATTR).exec(line)
+  if (m && terminatorFree) m[4] += line.slice(m[0].length)
   if (!m) return null
   if (!isValidInlineAttrPayload(m[3]!)) return null
   const attrs = parseAttrs(m[3]!)
@@ -883,6 +886,17 @@ class Lexer {
   lineIndicesByNumber: Map<number, number[]> | undefined = undefined
 
   private terminatorFreeLines: boolean[] = []
+  // Reuse a measured whitespace run while literal dedents stay inside it.
+  private leadingWhitespaceLines: number[] = []
+
+  lineLeadingWhitespace(index: number): number {
+    return this.leadingWhitespaceLines[index] ??= /^[ \t]*/.exec(this.lines[index] ?? '')![0].length
+  }
+
+  inheritLeadingWhitespace(index: number, parent: Lexer, parentIndex: number, prefix: number): void {
+    const remaining = parent.lineLeadingWhitespace(parentIndex) - prefix
+    if (remaining >= 0) this.leadingWhitespaceLines[index] = remaining
+  }
 
   lineTerminatorFree(index: number): boolean {
     return this.terminatorFreeLines[index] ??= !/[\n\r\u2028\u2029]/.test(this.lines[index] ?? '')
@@ -1246,6 +1260,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       widths.push(parent.lineStartColumn(parentIndex) - 1 + origin.prefix)
       prefixMemoLines.push(parent.prefixMemoLines?.[parentIndex] ?? true)
       sub.inheritTerminatorFree(i, parent, parentIndex)
+      sub.inheritLeadingWhitespace(i, parent, parentIndex, origin.prefix)
       continue
     }
     let literalSuffix: boolean | undefined
@@ -1295,7 +1310,10 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // not, there is no honest offset to record and this declines - which now
     // means NO positions rather than local ones (see below).
     const isLiteralSuffix = literalSuffix ?? parentLine.endsWith(subLine)
-    if (isLiteralSuffix) sub.inheritTerminatorFree(i, parent, parentIndex)
+    if (isLiteralSuffix) {
+      sub.inheritTerminatorFree(i, parent, parentIndex)
+      sub.inheritLeadingWhitespace(i, parent, parentIndex, parentLine.length - subLine.length)
+    }
     prefixMemoLines.push(isLiteralSuffix && (parent.prefixMemoLines?.[parentIndex] ?? true))
     let prefix = parentLine.length - subLine.length
     if (framed && parentLine.endsWith(unframed)) {
@@ -3300,6 +3318,7 @@ interface QuoteFenceHosts {
 function trackQuoteHostFence(
   content: string, state: BlockQuoteLazyState,
   hasCloser: (marker: string, column?: number) => boolean,
+  terminatorFree: boolean,
 ): boolean {
   const host = state.hosts ??= { columns: [0], markers: [], kinds: [], fence: null }
   const column = indentColumns(content)
@@ -3317,7 +3336,7 @@ function trackQuoteHostFence(
     }
   }
   if (text === '') return false
-  if (RE_BLOCKQUOTE.test(content)) {
+  if (quotedLineText(content, terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []
     return false
   }
@@ -3552,7 +3571,7 @@ function classifyQuotedLine(
     if (state.mode.close.test(content)) state.mode = { kind: 'closed' }
     return null
   }
-  if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser)) return null
+  if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser, terminatorFree)) return null
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
@@ -3815,20 +3834,41 @@ function unorderedMatch(line: string, terminatorFree = false): RegExpExecArray |
   return match
 }
 
+const RE_ORDERED_HEAD = /^([ \t]*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*(?=[^ \t])/
+const RE_TASK_HEAD = /^([ \t]*)[-*] +\[([ xX\-_>?])\] +[ \t]*(?=[^ \t])/
+
+function markerMatch(line: string, full: RegExp, head: RegExp, terminatorFree: boolean): RegExpExecArray | null {
+  if (!terminatorFree) return full.exec(line)
+  const match = head.exec(line)
+  if (!match) return null
+  const content = line.slice(match[0].length)
+  match[0] = line
+  match.push(content)
+  return match
+}
+
+function orderedMatch(line: string, terminatorFree = false): RegExpExecArray | null {
+  return markerMatch(line, RE_ORDERED, RE_ORDERED_HEAD, terminatorFree)
+}
+
+function taskMatch(line: string, terminatorFree = false): RegExpExecArray | null {
+  return markerMatch(line, RE_TASK, RE_TASK_HEAD, terminatorFree)
+}
+
 function matchListMarker(
   line: string,
   isTask: boolean,
   isOrdered: boolean,
   terminatorFree = false,
 ): RegExpExecArray | null {
-  if (isTask) return RE_TASK.exec(line)
+  if (isTask) return taskMatch(line, terminatorFree)
   if (isOrdered) {
     // An ordered list is not continued by a task or unordered marker.
-    if (RE_TASK.test(line)) return null
-    return RE_ORDERED.exec(line)
+    if (taskMatch(line, terminatorFree) !== null) return null
+    return orderedMatch(line, terminatorFree)
   }
   // Unordered: not continued by task or ordered markers.
-  if (RE_TASK.test(line) || RE_ORDERED.test(line)) return null
+  if (taskMatch(line, terminatorFree) !== null || orderedMatch(line, terminatorFree) !== null) return null
   return unorderedMatch(line, terminatorFree)
 }
 
@@ -3844,11 +3884,11 @@ function markerContentColumn(line: string, terminatorFree = false): number {
   // `- [ ] ` checkbox width) and an abutting `{...}` attribute (stripped first).
   // A marker-attached block contributes zero (§24 C3), so the width is read
   // off the stripped line.
-  const la = extractItemAttr(line)
+  const la = extractItemAttr(line, terminatorFree)
   const mline = la ? la.stripped : line
   const base = indentColumns(line)
-  if (RE_TASK.test(mline)) return base + 2
-  const m = RE_ORDERED.exec(mline) ?? unorderedMatch(mline, terminatorFree)
+  if (taskMatch(mline, terminatorFree) !== null) return base + 2
+  const m = orderedMatch(mline, terminatorFree) ?? unorderedMatch(mline, terminatorFree)
   if (!m) return -1
   const content = m[m.length - 1]!
   return base + (mline.length - leadingWhitespace(mline) - content.length)
@@ -3948,8 +3988,8 @@ function olTypeOf(kind: OlKind): '' | 'a' | 'A' | 'i' | 'I' {
 
 // A line continues an ordered list of `kind`/`delim` (same dialect + same
 // `.`/`)` delimiter).
-function orderedContinues(line: string, kind: OlKind, delim: string): boolean {
-  const o = RE_ORDERED.exec(line)
+function orderedContinues(line: string, kind: OlKind, delim: string, terminatorFree = false): boolean {
+  const o = orderedMatch(line, terminatorFree)
   return o !== null && o[3]! === delim && olKindMatches(o[2]!, kind)
 }
 
@@ -3979,8 +4019,8 @@ function orderedContinues(line: string, kind: OlKind, delim: string): boolean {
  * `RE_ABBR_DEF` is not in the set: a definition inside a container is no longer
  * recognized as one, so the line renders as text and is genuinely visible.
  */
-function isInvisibleLine(line: string): boolean {
-  const l = line.replace(/^[ \t]+/, '')
+function isInvisibleLine(line: string, whitespace?: number): boolean {
+  const l = whitespace === undefined ? line.replace(/^[ \t]+/, '') : line.slice(whitespace)
   // `RE_COMMENT_LINE` matches a `%%%` opener too, so exclude the block form
   // explicitly - skipping it lands the scan on the block's BODY.
   if (RE_COMMENT_BLOCK.test(l)) return false
@@ -6484,7 +6524,7 @@ function indentColumns(line: string, cap = Infinity): number {
 // columns of a straddling tab are re-emitted as spaces so tab+space-aligned
 // sibling markers keep the same visual column and the recursive parse re-derives
 // the child base from it. For space-only indentation this equals line.slice(cols).
-function sliceColumns(line: string, cols: number, keepResidual = false): string {
+function sliceColumns(line: string, cols: number, keepResidual = false, onLiteralStrip?: (prefix: number) => void): string {
   let col = 0
   let i = 0
   while (i < line.length && col < cols) {
@@ -6505,6 +6545,7 @@ function sliceColumns(line: string, cols: number, keepResidual = false): string 
   // block opener reaches column 0. (Space-only indentation has no residual.)
   if (layoutWork.on) layoutWork.strip += i
   if (keepResidual && col > cols) return ' '.repeat(col - cols) + line.slice(i)
+  onLiteralStrip?.(i)
   return line.slice(i)
 }
 
@@ -8651,10 +8692,10 @@ class ParseSession {
     if (RE_DEFLIST_TERM.test(line)) return this.parseDefinitionList(lexer)
     if (quotedLineText(line, lexer.lineTerminatorFree(lexer.pos)) !== null) return this.parseBlockQuote(lexer)
     if (
-      RE_TASK.test(line) ||
+      taskMatch(line, lexer.lineTerminatorFree(lexer.pos)) !== null ||
       unorderedMatch(line, lexer.lineTerminatorFree(lexer.pos)) !== null ||
-      RE_ORDERED.test(line) ||
-      extractItemAttr(line) !== null
+      orderedMatch(line, lexer.lineTerminatorFree(lexer.pos)) !== null ||
+      extractItemAttr(line, lexer.lineTerminatorFree(lexer.pos)) !== null
     )
       return this.parseList(lexer)
     if (isTableRow(line)) return this.parseTable(lexer)
@@ -10541,17 +10582,18 @@ class ParseSession {
     const first = lexer.peek()!
     const baseIndent = indentColumns(first)
     // Classify on the marker after stripping any abutting `{...}` attribute block.
-    const firstAttr = extractItemAttr(first)
+    const firstTerminatorFree = lexer.lineTerminatorFree(lexer.pos)
+    const firstAttr = extractItemAttr(first, firstTerminatorFree)
     const firstStripped = firstAttr ? firstAttr.stripped : first
-    const isTask = RE_TASK.test(firstStripped)
-    const isOrdered = !isTask && RE_ORDERED.test(firstStripped)
+    const isTask = taskMatch(firstStripped, firstTerminatorFree) !== null
+    const isOrdered = !isTask && orderedMatch(firstStripped, firstTerminatorFree) !== null
     // A change of unordered marker character (`-` vs `*` vs `+`), or of
     // ordered dialect/delimiter (decimal/alpha/roman, `.` vs `)`), starts a
     // new list (grammar PART 9 §11). The first item fixes the ordered
     // dialect; the second item's marker (if a sibling) tie-breaks an
     // ambiguous single roman letter.
     const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(firstStripped)
-    const firstOrdered = isOrdered ? RE_ORDERED.exec(firstStripped)! : null
+    const firstOrdered = isOrdered ? orderedMatch(firstStripped, firstTerminatorFree)! : null
     const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
     let orderedKind: OlKind = 'dec'
     let orderedStart = 1
@@ -10619,15 +10661,15 @@ class ParseSession {
       if (indentColumns(line, baseIndent + 1) !== baseIndent) break
       // Strip an abutting `{...}` attribute block off the marker so the bare
       // marker regexes match; remember its attributes to attach to the <li>.
-      const la = extractItemAttr(line)
-      const mline = la ? la.stripped : line
       const terminatorFree = lexer.lineTerminatorFree(lexer.pos)
+      const la = extractItemAttr(line, terminatorFree)
+      const mline = la ? la.stripped : line
       const m = matchListMarker(mline, isTask, isOrdered, terminatorFree)
       if (!m) break
       // §11: a sibling with a different marker character (unordered) or a
       // different delimiter (ordered) is a new list.
       if (!isOrdered && unorderedMarkerChar(mline) !== firstMarkerChar) break
-      if (isOrdered && !orderedContinues(mline, orderedKind, orderedDelim)) break
+      if (isOrdered && !orderedContinues(mline, orderedKind, orderedDelim, terminatorFree)) break
 
       let content: string
       let checked: boolean | undefined
@@ -10641,7 +10683,7 @@ class ParseSession {
       } else {
         content = m[2]!
       }
-      const leadOrigin = !la && terminatorFree ? { text: content, parentIndex: itemStartLineIndex, prefix: line.length - content.length } : undefined
+      const leadOrigin = terminatorFree ? { text: content, parentIndex: itemStartLineIndex, prefix: line.length - content.length } : undefined
       const itemAttrs = la ? la.attrs : undefined
 
       // item (continuation paragraphs or nested lists). Visual content column:
@@ -10716,6 +10758,15 @@ class ParseSession {
       const nested: string[] = []
       const commentPayloadCandidates = new Map<number, string>()
       const nestedLineNumbers: number[] = []
+      // Collection can later rebase or frame a line; consumers check its text before reuse.
+      const nestedOrigins = new Map<number, StrippedLineOrigin>()
+      const invisibleNested = (index: number): boolean => {
+        const text = nested[index]!
+        const origin = nestedOrigins.get(index)
+        const remaining = origin && origin.text === text
+          ? lexer.lineLeadingWhitespace(origin.parentIndex) - origin.prefix : -1
+        return isInvisibleLine(text, remaining >= 0 ? remaining : undefined)
+      }
       const nestedSourceLines: (string | undefined)[] = []
       const bufferedBlanks = new Set<number>()
       // Lines admitted by reaching this item's content column. A below-column
@@ -11119,7 +11170,8 @@ class ParseSession {
           // quote-lazy MARKER line never reaches the content-column arm, not even
           // inside an open fence, where the gate above hands the line back.
           !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
-          const placed = sliceColumns(l, contentCol, true)
+          let strippedPrefix: number | undefined
+          const placed = sliceColumns(l, contentCol, true, prefix => { strippedPrefix = prefix })
           if (!RE_ADMONITION_CLOSE.test(placed)) bodyHasContentColumnLine = true
           const followsBlank = pendingBlanks > 0
           for (let k = 0; k < pendingBlanks; k++) {
@@ -11165,7 +11217,7 @@ class ParseSession {
               ? l.startsWith(LAZY_FRAME)
                 ? l
                 : LAZY_FRAME + l.replace(/^[ \t]+/, '')
-              : sliceColumns(l, contentCol, true)
+              : placed
           // A line collected INSIDE AN OPEN FENCE is verbatim body, never an
           // authored base. Without this guard the rebase saw an over-indented
           // fence CLOSER - one written past its opener, which is body text, not a
@@ -11180,6 +11232,9 @@ class ParseSession {
               firstBodyMarkerColumn = markerContentColumn(nested.find((line) => !isBlankLine(line)) ?? dedented)
             }
             if (firstBodyMarkerColumn >= 0 && !hasParentAuthoredBlock) parentBlockCandidates.push(dedented)
+          }
+          if (strippedPrefix !== undefined && dedented === placed) {
+            nestedOrigins.set(nested.length, { text: dedented, parentIndex: lexer.pos, prefix: strippedPrefix })
           }
           nested.push(dedented)
           nestedSourceLines.push(l)
@@ -11465,9 +11520,9 @@ class ParseSession {
       // is removed, while indentation beyond the opener's base remains payload.
       const leadIsMarker =
         unorderedMatch(content, terminatorFree) !== null ||
-        RE_ORDERED.test(content) ||
-        RE_TASK.test(content) ||
-        extractItemAttr(content) !== null
+        orderedMatch(content, terminatorFree) !== null ||
+        taskMatch(content, terminatorFree) !== null ||
+        extractItemAttr(content, terminatorFree) !== null
       // Include a marker-line term so its continuation is not rebased as a new block.
       const leadIsTerm = RE_DEFLIST_TERM.test(content)
       const rebaseLines = leadIsTerm ? [content, ...nested] : nested
@@ -11532,7 +11587,7 @@ class ParseSession {
           blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k)
           break
         }
-        if (!isInvisibleLine(ln)) break
+        if (!invisibleNested(k)) break
       }
 
       // A blank line inside an OPEN verbatim fence is that fence's content, not
@@ -11842,7 +11897,7 @@ class ParseSession {
               continue
             }
           }
-          if (isInvisibleLine(nested[j]!)) {
+          if (invisibleNested(j)) {
             j++
             continue
           }
@@ -11914,9 +11969,14 @@ class ParseSession {
         lines: readonly string[],
         startLineIndex: number,
         sourceLineMap?: number[],
+        nestedOffset = -1,
       ): Lexer => {
-        const origins = leadOrigin && startLineIndex === itemStartLineIndex && lines[0] === leadOrigin.text
-          ? new Map([[0, leadOrigin]]) : undefined
+        const origins = new Map<number, StrippedLineOrigin>()
+        if (nestedOffset === -1 && leadOrigin) origins.set(0, leadOrigin)
+        for (let i = Math.max(0, -nestedOffset); i < lines.length; i++) {
+          const origin = nestedOrigins.get(i + nestedOffset)
+          if (origin) origins.set(i, origin)
+        }
         const sub = nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap, origins)
         // THIS BODY'S COLUMN 0 IS THE ITEM'S CONTENT COLUMN, so a marker reaching
         // it opens a sublist rather than folding into an open paragraph (§24 C3,
@@ -11944,6 +12004,7 @@ class ParseSession {
               blockLines,
               itemStartLineIndex + 1 + firstBlockIdx,
               nestedLineNumbers.slice(firstBlockIdx),
+              firstBlockIdx,
             ),
             0,
             carry,
