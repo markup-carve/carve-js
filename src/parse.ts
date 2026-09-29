@@ -284,19 +284,38 @@ const RE_ITEM_ATTR_HEAD =
 // when there is no abutting brace or the brace is not a valid attribute payload
 // (then `-{...}` is not a marker and the line stays ordinary text, mirroring the
 // inline-span disambiguation, grammar §14).
-function extractItemAttr(line: string, terminatorFree = false): { stripped: string; attrs: Attrs | undefined } | null {
+interface ItemAttributeMarker {
+  stripped: string
+  attrs: Attrs | undefined
+  markerLine?: string
+  contentOffset?: number
+  headWidth?: number
+}
+
+const RE_TASK_CONTENT_HEAD = /^\[([ xX\-_>?])\] +[ \t]*(?=[^ \t])/
+
+function extractItemAttr(line: string, terminatorFree = false): ItemAttributeMarker | null {
   const m = (terminatorFree ? RE_ITEM_ATTR_HEAD : RE_ITEM_ATTR).exec(line)
-  if (m && terminatorFree) m[4] += line.slice(m[0].length)
-  if (!m) return null
-  if (!isValidInlineAttrPayload(m[3]!)) return null
-  const attrs = parseAttrs(m[3]!)
-  // The blessed empty block (`-{} text`) exists to STRIP the braces, not to
-  // record anything: it declares no id, class or key. Recording an empty attrs
-  // object would make `-{} x` and `- x` different documents that render the
-  // same, and the writer emits the shorter of the two - so a formatted item
-  // came back without the object and `parse(fmt(x)) == parse(x)` did not hold
-  // (issue 359). carve-rs already records nothing here.
-  return { stripped: m[1]! + m[2]! + m[4]!, attrs: isEmptyAttrs(attrs) ? undefined : attrs }
+  if (!m || !isValidInlineAttrPayload(m[3]!)) return null
+  const parsed = parseAttrs(m[3]!)
+  // Empty braces remove marker metadata without adding an empty AST attribute object.
+  const attrs = isEmptyAttrs(parsed) ? undefined : parsed
+  if (!terminatorFree) return { stripped: m[1]! + m[2]! + m[4]!, attrs }
+
+  const contentOffset = m[0].length
+  const content = line.slice(contentOffset)
+  const head = m[1]! + m[2]! + m[4]!
+  const taskWidth = RE_TASK_CONTENT_HEAD.exec(content)?.[0].length ?? 0
+  // Classifiers need the marker, an optional checkbox, and one payload character.
+  // The body stays a slice of the source instead of a slice of a flattened rope.
+  return {
+    attrs, contentOffset, headWidth: head.length,
+    markerLine: head + content.slice(0, taskWidth + 1),
+    get stripped() {
+      if (layoutWork.on) layoutWork.seam += head.length + content.length
+      return head + content
+    },
+  }
 }
 
 /**
@@ -686,7 +705,7 @@ export const layoutWork = {
   gate: 0,
   /** Characters walked by the column strip (`sliceColumns`). */
   strip: 0,
-  /** Characters re-copied at a container recursion seam (join/split/normalize). */
+  /** Characters re-copied at container or attributed-marker seams. */
   seam: 0,
   reset(): void {
     this.gate = 0
@@ -3885,7 +3904,7 @@ function markerContentColumn(line: string, terminatorFree = false): number {
   // A marker-attached block contributes zero (§24 C3), so the width is read
   // off the stripped line.
   const la = extractItemAttr(line, terminatorFree)
-  const mline = la ? la.stripped : line
+  const mline = la ? (la.markerLine ?? la.stripped) : line
   const base = indentColumns(line)
   if (taskMatch(mline, terminatorFree) !== null) return base + 2
   const m = orderedMatch(mline, terminatorFree) ?? unorderedMatch(mline, terminatorFree)
@@ -4058,10 +4077,15 @@ function commentBlockSpans(lines: string[]): boolean[] {
   // refuted in O(1). Scanning to the end instead costs one suffix read per
   // unterminated opener, which is the ladder carve#2542 measured.
   const lastAt = new Map<number, number>()
+  let canClose = false
   for (let k = 0; k < lines.length; k++) {
     const run = commentFenceRun(lines[k]!)
-    if (run !== undefined) lastAt.set(run, k)
+    if (run !== undefined) {
+      if (lastAt.has(run)) canClose = true
+      lastAt.set(run, k)
+    }
   }
+  if (!canClose) return hidden
   let verbatimClose: RegExp | null = null
   for (let k = 0; k < lines.length; k++) {
     const line = lines[k]!
@@ -4392,6 +4416,7 @@ function restoreVerbatimBlanks(
   sourceLines: readonly (string | undefined)[],
   buffered: ReadonlySet<number>,
   openerColumn: (index: number) => number,
+  factsAt?: (index: number) => ItemLineFacts | undefined,
 ): void {
   if (buffered.size === 0) return
   const state = verbatimOnlyLazyState()
@@ -4402,11 +4427,11 @@ function restoreVerbatimBlanks(
       if (source !== undefined && column >= 0 && insideOpenFence(state)) {
         lines[i] = sliceColumns(source, column, true)
       }
-      trackItemLazyState(lines[i]!, state)
+      trackItemLazyState(lines[i]!, state, undefined, true, undefined, factsAt?.(i))
       continue
     }
     const wasOpen = insideOpenFence(state)
-    trackItemLazyState(lines[i]!, state)
+    trackItemLazyState(lines[i]!, state, undefined, true, undefined, factsAt?.(i))
     if (!wasOpen && insideOpenFence(state)) column = openerColumn(i)
   }
 }
@@ -4895,6 +4920,12 @@ function trackWrappedAttributeRun(
   return false
 }
 
+interface ItemLineFacts {
+  terminatorFree: boolean
+  whitespace?: number | undefined
+  prefixMemo?: Map<number, number> | undefined
+}
+
 function trackItemLazyState(
   content: string,
   state: ItemLazyState,
@@ -4918,6 +4949,7 @@ function trackItemLazyState(
    * attached block's own lines - keep the old unconditional behavior.
    */
   hasCommentCloser: (fence: number) => boolean = () => true,
+  facts?: ItemLineFacts,
 ): void {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does. Clearing it here and re-arming it only in the two branches
@@ -5106,17 +5138,18 @@ function trackItemLazyState(
   //
   // No RE_ABBR_DEF: PART 12 §7 recognizes an abbreviation definition only as a
   // direct child of the document, so inside an item the line IS a paragraph.
+  const invisibleContent = facts?.whitespace === undefined ? content : content.slice(facts.whitespace)
   if (
     atContentColumn &&
-    RE_INVISIBLE_BLOCK_LEAD.test(content) &&
-    (RE_COMMENT_LINE.test(content) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(content))
+    RE_INVISIBLE_BLOCK_LEAD.test(invisibleContent) &&
+    (RE_COMMENT_LINE.test(invisibleContent) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(content))
   ) {
     // ONLY THE FOOTNOTE DEFINITION OPENS A RUN. A comment is one line and a
     // link reference definition has no body at all, so the line after either of
     // them is the container's again.
     state.inFootnoteBody = RE_FOOTNOTE_DEF.test(content)
     state.invisibleAtColumn = true
-    state.commentAtColumn = RE_COMMENT_LINE.test(content)
+    state.commentAtColumn = RE_COMMENT_LINE.test(invisibleContent)
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -5223,12 +5256,13 @@ function trackItemLazyState(
   // the MARKER content only: a heading on a line the sub-item COLLECTS is the
   // other half of S4, which the enumeration below decides and corpus
   // 75-list-nesting-and-looseness-4 pins the folding answer for.
-  const nestedMarker = extractItemAttr(content)?.stripped ?? content
-  if (RE_TASK.test(nestedMarker) || RE_ORDERED.test(nestedMarker) || RE_UNORDERED.test(nestedMarker)) {
+  const nestedAttr = extractItemAttr(content, facts?.terminatorFree)
+  const nestedMarker = nestedAttr ? (nestedAttr.markerLine ?? nestedAttr.stripped) : content
+  if (taskMatch(nestedMarker, facts?.terminatorFree) || orderedMatch(nestedMarker, facts?.terminatorFree) || unorderedMatch(nestedMarker, facts?.terminatorFree)) {
     state.absorbingFence = false
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
-    const nested = markerLineState(content)
+    const nested = markerLineState(content, facts?.prefixMemo)
     state.lazyFoldable = nested.leavesParagraphOpen
     state.inTable = nested.endsOnTableRow
     state.quoteInner = nested.quote
@@ -10584,7 +10618,7 @@ class ParseSession {
     // Classify on the marker after stripping any abutting `{...}` attribute block.
     const firstTerminatorFree = lexer.lineTerminatorFree(lexer.pos)
     const firstAttr = extractItemAttr(first, firstTerminatorFree)
-    const firstStripped = firstAttr ? firstAttr.stripped : first
+    const firstStripped = firstAttr ? (firstAttr.markerLine ?? firstAttr.stripped) : first
     const isTask = taskMatch(firstStripped, firstTerminatorFree) !== null
     const isOrdered = !isTask && orderedMatch(firstStripped, firstTerminatorFree) !== null
     // A change of unordered marker character (`-` vs `*` vs `+`), or of
@@ -10663,7 +10697,7 @@ class ParseSession {
       // marker regexes match; remember its attributes to attach to the <li>.
       const terminatorFree = lexer.lineTerminatorFree(lexer.pos)
       const la = extractItemAttr(line, terminatorFree)
-      const mline = la ? la.stripped : line
+      const mline = la ? (la.markerLine ?? la.stripped) : line
       const m = matchListMarker(mline, isTask, isOrdered, terminatorFree)
       if (!m) break
       // §11: a sibling with a different marker character (unordered) or a
@@ -10683,6 +10717,10 @@ class ParseSession {
       } else {
         content = m[2]!
       }
+      const markerContentLength = content.length
+      if (la?.contentOffset !== undefined && la.headWidth !== undefined) {
+        content = line.slice(la.contentOffset + mline.length - markerContentLength - la.headWidth)
+      }
       const leadOrigin = terminatorFree ? { text: content, parentIndex: itemStartLineIndex, prefix: line.length - content.length } : undefined
       const itemAttrs = la ? la.attrs : undefined
 
@@ -10698,7 +10736,7 @@ class ParseSession {
       // convention `- [x] x` / `  {.c}`).
       const contentCol = isTask
         ? baseIndent + 2
-        : baseIndent + (mline.length - leadingWhitespace(mline) - content.length)
+        : baseIndent + (mline.length - leadingWhitespace(mline) - markerContentLength)
       lexer.consume()
 
       if (isContinuationMarker(content) && !attachesAtDocumentColumnZero(lexer)) {
@@ -10760,6 +10798,15 @@ class ParseSession {
       const nestedLineNumbers: number[] = []
       // Collection can later rebase or frame a line; consumers check its text before reuse.
       const nestedOrigins = new Map<number, StrippedLineOrigin>()
+      const lineFacts = (text: string, origin?: StrippedLineOrigin): ItemLineFacts | undefined => {
+        if (!origin || origin.text !== text) return undefined
+        const remaining = lexer.lineLeadingWhitespace(origin.parentIndex) - origin.prefix
+        return {
+          terminatorFree: lexer.lineTerminatorFree(origin.parentIndex),
+          whitespace: remaining >= 0 ? remaining : undefined,
+          prefixMemo: this.markerPrefixMemo(lexer, origin.parentIndex),
+        }
+      }
       const invisibleNested = (index: number): boolean => {
         const text = nested[index]!
         const origin = nestedOrigins.get(index)
@@ -11313,6 +11360,7 @@ class ParseSession {
               if (!closes) degradedOpeners.add(nested.length - 1)
               return closes
             },
+            lineFacts(trackedContent, nestedOrigins.get(nested.length - 1)),
           )
           // The item holds no paragraph a below-column line can continue while a
           // descendant holds a fence open. PART 1 S4 asks about the open STACK.
@@ -11617,6 +11665,7 @@ class ParseSession {
       const sourceLines = [line, ...nestedSourceLines]
       restoreVerbatimBlanks(restoredLines, sourceLines, bufferedBlanks, (index) =>
         index === 0 ? contentCol : indentColumns(sourceLines[index] ?? ''),
+        (index) => lineFacts(restoredLines[index]!, index === 0 ? leadOrigin : nestedOrigins.get(index - 1)),
       )
       for (let index = 0; index < nested.length; index++) nested[index] = restoredLines[index + 1]!
 
