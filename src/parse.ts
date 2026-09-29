@@ -557,36 +557,39 @@ const RE_COMMENT_LINE = /^[ \t]*%%/
 /**
  * Whether the `%%` at `i` opens the trailing inline comment form.
  *
- * TWO CHARACTERS DECIDE IT, and the one in front is the separator: a literal
- * space, or the line break that puts `%%` first on a later line. A tab is not
- * that separator - `space` is U+0020 and the clause that refuses a tab after a
- * footnote, link or abbreviation definition marker refuses one here.
+ * ONE RULE FOR EVERY HOST (CARVE-P9-041, markup-carve/carve#2552). A tab
+ * separates as a space does, a line break separates, and `%%` that begins the
+ * HOST's own inline run needs no separator at all - a definition term, a table
+ * cell, a figure caption, a div label and a link label each start mid-line, so
+ * nothing at the block layer covers the marker there. The spec deleted its two
+ * heading-only rules over this, and a heading now reads the same rule as a
+ * paragraph.
  *
- * THE START OF A RUN IS NOT THE START OF A LINE. A nested span, a table cell, a
- * caption, an admonition title and a definition term all begin mid-line, so `%%`
- * written first in one is ordinary text; the line-start spelling reaches the
- * inline layer only behind the newline in front of it, which the separator
- * already covers.
- *
- * `tabSeparates` AND `atLineStart` ARE THE HEADING, whose separator is not the
- * inline one: the spec's own heading path strips `(^|[ \t])%%` from the line
- * before anything reads it as inline content, so a tab and the line's own start
- * both separate there. The tab half is a whole-line strip and so reaches a nested
- * run inside the heading; the line-start half is the heading text's own index 0,
- * which only its outermost run has.
+ * `atRunStart` IS THE HOST'S RUN, NOT A NESTED ONE. Inside emphasis the marker
+ * has the opening delimiter in front of it, which is not a separator, so
+ * `/%% c/` keeps its text (corpus 518).
  */
-const opensInlineComment = (
-  text: string,
-  i: number,
-  tabSeparates = false,
-  atLineStart = false,
-): boolean =>
+const opensInlineComment = (text: string, i: number, atRunStart = false): boolean =>
   text[i] === '%' &&
   text[i + 1] === '%' &&
   (text[i - 1] === ' ' ||
+    text[i - 1] === '\t' ||
     text[i - 1] === '\n' ||
-    (tabSeparates && text[i - 1] === '\t') ||
-    (atLineStart && i === 0))
+    (atRunStart && i === 0))
+
+/**
+ * `text` with a trailing comment and its whole separating run removed, for a
+ * slot whose content never reaches the inline scanner: the colon fence's
+ * `[label]`, which renders as plain text. An escaped `\%%` keeps its separator,
+ * so the backslash in front of the marker already declines it.
+ */
+const stripTrailingComment = (text: string): string => {
+  for (let i = 0; i < text.length; i++) {
+    if (!opensInlineComment(text, i, true)) continue
+    return text.slice(0, i).replace(/[ \t]+$/, '')
+  }
+  return text
+}
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
 const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_TRAILING_WS)
@@ -7289,7 +7292,9 @@ class ParseSession {
   private scanLinkLabel(text: string, source: InlineSource, inFootnote: boolean): InlineNode[] {
     this.linkLabelDepth++
     try {
-      return this.scanInline(text, source, inFootnote)
+      // A LABEL IS A HOST, not a span inside one: its inline run starts here, so a
+      // `%%` written first in it needs no separator (CARVE-P9-041, corpus 518).
+      return this.scanInline(text, source, inFootnote, false, NO_OPEN_KINDS, true)
     } finally {
       this.linkLabelDepth--
     }
@@ -8550,17 +8555,12 @@ class ParseSession {
     // at the end of the heading text is therefore ordinary inline content.
     // Column where the content starts on the first line (the marker + spaces).
     const textColumn = line.length - line.replace(/^#{1,6} +/, '').length + 1
-    this.wideCommentSeparator = true
-    try {
-      node.children = this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
-        anchored: lexer.hasDocumentOffsets,
-        baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
-        startLine: lexer.lineNumber(lineIndex),
-        startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
-      })
-    } finally {
-      this.wideCommentSeparator = false
-    }
+    node.children = this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      anchored: lexer.hasDocumentOffsets,
+      baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
+      startLine: lexer.lineNumber(lineIndex),
+      startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
+    })
     return node
   }
 
@@ -8830,7 +8830,7 @@ class ParseSession {
     const titleText = m[3] !== undefined ? m[3]!.slice(1, -1) : undefined
     // Optional inert grouping `[label]` (PART 9 §12): a group extension (tabs)
     // uses it as the tab name; core does not render it.
-    const label = m[4] !== undefined ? m[4]!.slice(1, -1) : undefined
+    const label = m[4] !== undefined ? stripTrailingComment(m[4]!.slice(1, -1)) : undefined
     const inner = collectColonFenceBody(lexer, {
       // Which of the two named-container types this fence opens, so an unclosed
       // one is reported as the thing it was (CARVE-P12-057).
@@ -9337,7 +9337,7 @@ class ParseSession {
     const m = RE_DIV_OPEN.exec(lexer.consume())!
     const fence = m[1]!.length
     // Optional inert grouping `[label]` on a typeless div (`::: [First]`).
-    const label = m[2] !== undefined ? m[2]!.slice(1, -1) : undefined
+    const label = m[2] !== undefined ? stripTrailingComment(m[2]!.slice(1, -1)) : undefined
     const inner = collectColonFenceBody(lexer, {
       kind: 'div',
       lineIndex: openLineIndex,
@@ -9911,22 +9911,15 @@ class ParseSession {
             return
           }
           const origin = anchorOf(part.lines[0]!)
-          // Only the first part opens on the `::` line itself, and only there can a
-          // leading `%%` run be term text rather than a comment (carve-js#2293).
-          parseSession.termMarkerLine = index === 0
-          try {
-            termInlines.push(
-              ...parseSession.parseInline(dropTrailingWhitespace(part.text), lexer.abbrDefs, lexer.linkDefs, {
-                anchored: lexer.hasDocumentOffsets,
-                baseOffset: origin.offset,
-                startLine: origin.line,
-                startColumn: origin.column,
-                ...(part.lines.length > 1 ? { lineAnchors: part.lines.map(anchorOf) } : {}),
-              }),
-            )
-          } finally {
-            parseSession.termMarkerLine = false
-          }
+          termInlines.push(
+            ...parseSession.parseInline(dropTrailingWhitespace(part.text), lexer.abbrDefs, lexer.linkDefs, {
+              anchored: lexer.hasDocumentOffsets,
+              baseOffset: origin.offset,
+              startLine: origin.line,
+              startColumn: origin.column,
+              ...(part.lines.length > 1 ? { lineAnchors: part.lines.map(anchorOf) } : {}),
+            }),
+          )
         })
         // A part-boundary break is placed once both its neighbours exist: from the
         // preceding sibling's end to the following sibling's start, the span the
@@ -12451,23 +12444,6 @@ class ParseSession {
   private inLineBlock = false
 
   /**
-   * Whether the next inline scan opens on a definition TERM's own `::` line.
-   *
-   * Read once, by the outermost scan only: the exception it carries is about the
-   * marker line's own first run, and a run that opens a nested span is a
-   * different question (markup-carve/carve-js#2293).
-   */
-  private termMarkerLine = false
-
-  /**
-   * Whether the inline text being scanned is a heading's own line, whose
-   * trailing-comment separator is the wider one - see `opensInlineComment`. Held
-   * for the whole heading rather than consumed by the outermost scan, because the
-   * strip it stands in for runs before any delimiter on the line is read.
-   */
-  private wideCommentSeparator = false
-
-  /**
    * An unclosed run's content with the trailing whitespace its end drops. In a
    * line block a line break is content and is kept (markup-carve/carve#2089); a
    * stanza's own end leaves nothing there to keep.
@@ -12482,6 +12458,7 @@ class ParseSession {
     inFootnote = false,
     captionContext = false,
     kinds: ReadonlySet<string> = NO_OPEN_KINDS,
+    opensHostRun = false,
   ): InlineNode[] {
     if (inlineDepth >= MAX_NESTING_DEPTH) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
@@ -12489,11 +12466,10 @@ class ParseSession {
     inlineDepth++
     const outer = this.openKinds
     this.openKinds = kinds
-    // Consumed here, so a nested run starts from the ordinary rule.
-    const onTermMarkerLine = this.termMarkerLine
-    this.termMarkerLine = false
     try {
-      return this.scanInlineInner(text, source, inFootnote, captionContext, onTermMarkerLine)
+      return this.scanInlineInner(
+        text, source, inFootnote, captionContext, opensHostRun || inlineDepth === 1,
+      )
     } finally {
       this.openKinds = outer
       inlineDepth--
@@ -12505,24 +12481,13 @@ class ParseSession {
     source: InlineSource,
     inFootnote: boolean,
     captionContext: boolean,
-    onTermMarkerLine = false,
+    // Whether a `%%` at index 0 stands at the start of the HOST's own inline run -
+    // see `opensInlineComment`. True for the outermost scan of a block's text and
+    // for a label, which is a host of its own; false inside emphasis or any other
+    // span.
+    atHostRunStart: boolean,
   ): InlineNode[] {
     const out: InlineNode[] = []
-    // A RUN THAT BEGINS A DEFINITION TERM'S OWN LINE IS TERM TEXT, so the comment
-    // arm below skips every index up to and including this one. A term has no
-    // content column of its own, so nothing written on the `::` line opens a block
-    // there (markup-carve/carve#2411) and the line-comment form cannot be spelled
-    // on it at all. Read as one, `:: %%%` published neither the run nor the body it
-    // fenced and left the fold's leading space standing in the `dt`
-    // (carve-js#2293). The exception reaches the FIRST run and nothing else: a run
-    // later on the same line is the ordinary inline comment, one on a continuation
-    // line never arrives here, and one that opens a nested span is a separate
-    // question this does not answer.
-    const termTextRunEnd = onTermMarkerLine ? /^[ \t]*/.exec(text)![0].length : -1
-    // The heading's own separator - see `opensInlineComment`. Read once here, so
-    // the emphasis-closer scan below agrees with the builder on the same line.
-    const wideComment = this.wideCommentSeparator
-    const wideCommentAtStart = wideComment && inlineDepth === 1
     let i = 0
     let buf = ''
     let bufStart = 0
@@ -12733,20 +12698,12 @@ class ParseSession {
       // there - but inside a line block the whole stanza is inline content, so
       // the verse kept `%% c` as text where the other engines drop it, and this
       // one dropped it on the first line and not the second (carve#574).
-      if (opensInlineComment(text, i, wideComment, wideCommentAtStart) && i > termTextRunEnd) {
-        // Absorb the ONE separator so the visible text keeps no trailing space.
-        // Flush the trimmed buffer with a source span that ends where the
-        // separator begins, and start the comment node there too, keeping inline
-        // source spans contiguous. The separator is one character, so whatever
-        // whitespace stands in front of it is ordinary text - `a  %% c` keeps one
-        // space in the `a` beside the comment. The heading absorbs the whole run
-        // instead, because the strip its wider separator stands for trims the
-        // line's trailing whitespace after cutting the comment off.
-        const trimmed = wideComment
-          ? buf.replace(/[ \t]+$/, '')
-          : buf.endsWith(' ')
-            ? buf.slice(0, -1)
-            : buf
+      if (opensInlineComment(text, i, atHostRunStart)) {
+        // Absorb the WHOLE separating run so the visible text keeps no trailing
+        // whitespace (CARVE-P9-041, markup-carve/carve#2552). Flush the trimmed
+        // buffer with a source span that ends where the run begins, and start the
+        // comment node there too, keeping inline source spans contiguous.
+        const trimmed = buf.replace(/[ \t]+$/, '')
         const commentStart = i - (buf.length - trimmed.length)
         if (trimmed) {
           const node = { type: 'text', value: trimmed } as Text
@@ -13054,7 +13011,10 @@ class ParseSession {
               this.withPos(
                 {
                   type: 'span',
-                  children: this.scanInline(innerText, this.shiftSource(source, text, i + 1), inFootnote),
+                  // A BRACKETED LABEL IS A HOST - see `scanLinkLabel`.
+                  children: this.scanInline(
+                    innerText, this.shiftSource(source, text, i + 1), inFootnote, false, NO_OPEN_KINDS, true,
+                  ),
                   attrs: parseAttrs(ms[1]!),
                 } as Span,
                 source,
@@ -13077,7 +13037,10 @@ class ParseSession {
           const ext: Extension = {
             type: 'inline_extension',
             name: m[1]!,
-            content: this.scanInline(m[2]!, this.shiftSource(source, text, i + m[0].indexOf('[') + 1), inFootnote),
+            content: this.scanInline(
+              m[2]!, this.shiftSource(source, text, i + m[0].indexOf('[') + 1), inFootnote,
+              false, NO_OPEN_KINDS, true,
+            ),
           }
           // THE ONLY INLINE ATTRIBUTE SURFACE WITH NO VALIDITY GATE, until now: a
           // trailing block here went straight to `parseAttrs`, so `{#1a}` became
@@ -13744,8 +13707,9 @@ class ParseSession {
       // An unbounded comment consumes the rest of its line before the delimiter
       // stack can claim a closer there. A later line can still close the span.
       // ONE PREDICATE WITH THE BUILDER: a closer this scan hides and the builder
-      // publishes, or the reverse, is a span whose two halves disagree.
-      if (opensInlineComment(text, j, this.wideCommentSeparator)) {
+      // publishes, or the reverse, is a span whose two halves disagree. The scan
+      // starts past its own opener, so the run-start arm cannot reach it.
+      if (opensInlineComment(text, j)) {
         const newline = text.indexOf('\n', j + 2)
         if (newline === -1) return -1
         j = newline
