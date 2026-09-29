@@ -8728,13 +8728,11 @@ class ParseSession {
     const label = labelRaw ? labelRaw.slice(1, -1) : undefined
     const closeRe = fenceCloseRe(marker)
     const lines: string[] = []
-    let closed = false
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
       if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
         lexer.consume()
-        closed = true
         break
       }
       lexer.consume()
@@ -8747,12 +8745,9 @@ class ParseSession {
       lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
     }
     const fenceEndIndex = lexer.pos
-    // AN UNTERMINATED PAYLOAD OWNS A FINAL LINE BREAK even when it collected no
-    // line: it runs to the end of its container, and the end supplies the break.
-    // §28's zero-line payload is the CLOSED fence's, which renders no character
-    // (carve-js#2342); `- ```` with its body below the item's content
-    // column keeps the line corpus 276 pins for it.
-    if (!closed && lines.length === 0) lines.push('')
+    // §28's zero-line payload is the closed fence's AND the unterminated
+    // one's: CARVE-P12-064 says an unclosed fence with no payload lines also has
+    // content "", so the end of the container supplies no break of its own.
     const cb: CodeBlock = { type: 'code_block', content: verbatimContent(lines) }
     if (lang) cb.lang = lang
     if (header !== undefined) cb.header = header

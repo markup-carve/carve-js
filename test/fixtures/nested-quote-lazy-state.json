@@ -67,7 +67,7 @@
   {
     "name": "a blank starts a fresh nested quote",
     "source": "> > a\n>\n> > ```\ny\n",
-    "html": "<blockquote>\n  <blockquote><p>a</p></blockquote>\n  <blockquote>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
+    "html": "<blockquote>\n  <blockquote><p>a</p></blockquote>\n  <blockquote>\n    <pre><code></code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
   },
   {
     "name": "a closed inner fence ends the lazy claim",

@@ -137,7 +137,7 @@ describe('the def-list entry matcher is the one consumer that unframes', () => {
 
 describe('a quoted fence needs marked body lines', () => {
   it('leaves an unmarked line outside the quote', () => {
-    expect(carveToHtml("> - ```\n  # h\n\npara\n" )).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code>\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p># h</p>\n<p>para</p>")
+    expect(carveToHtml("> - ```\n  # h\n\npara\n" )).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p># h</p>\n<p>para</p>")
   })
 })
 

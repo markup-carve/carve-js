@@ -31,7 +31,7 @@ const outside = (src: string): string =>
 describe('a definition body is such a container', () => {
   it('a fence on the marker line holds an empty code block', () => {
     expect(carveToHtml(':: t\n:  ```\nbody\n```\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code>\n</code></pre>\n  </dd>\n</dl>\n<p>body\n<code></code></p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<p>body\n<code></code></p>',
     )
   })
 

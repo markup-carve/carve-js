@@ -39,7 +39,7 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
   })
 
   it('a quoted fence leaves unmarked lines outside', () => {
-    expect(carveToHtml("> - ``` x\ncode\n```\n")).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\">\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>")
+    expect(carveToHtml("> - ``` x\ncode\n```\n")).toBe("<blockquote>\n  <ul>\n    <li>\n      <pre><code class=\"language-x\"></code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>code\n<code></code></p>")
   })
 
   it("ordered markers", () => {
@@ -81,7 +81,7 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
   // Controls - these agreed with the spec already and must stay agreeing.
   it("the OUTERMOST spelling still leaks the body to the document", () => {
     expect(carveToHtml("- ``` x\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <pre><code class=\"language-x\">\n</code></pre>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <pre><code class=\"language-x\"></code></pre>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
     )
   })
 

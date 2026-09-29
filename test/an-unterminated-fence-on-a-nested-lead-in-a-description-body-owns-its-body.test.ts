@@ -64,7 +64,9 @@ describe('an unterminated fence on a nested lead in a description body owns its 
    * owns its body.
    */
   it('the outermost item spelling still leaks its body (control)', () => {
-    expect(bodyOf('- ``` x\ncode\n```\n')).toBe('\n')
+    // The leak is what this control watches; the payload is empty because
+    // `CARVE-P12-064` gives an unclosed zero-line fence no line of its own.
+    expect(bodyOf('- ``` x\ncode\n```\n')).toBe('')
   })
 
   it('the list-item host still owns its body (control, #1630)', () => {
