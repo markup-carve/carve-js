@@ -167,6 +167,48 @@ const TRAILING_WS = '[ \\t]*$'
 const FENCE_TRAILING_WS = '[ \\t]*$'
 
 /**
+ * A line matcher whose `[label]` slot closes where the reader's own bracket scan
+ * does, rather than at the first `]`.
+ *
+ * The `label` production takes a BALANCED run (markup-carve/carve#2576), and a
+ * regex cannot spell one - which is why the slot was written flat as
+ * `\[[^\]]*\]` in the colon opener and the fence info line, the two spellings of
+ * the one production, and why both lost a label holding a nested bracket. So the
+ * slot matches greedily here and each label group is checked against
+ * `buildBracketMap`: the same scan the inline pass resolves a link label with, so
+ * a nested bracket, an escaped `]` and a `]` inside a code span read the same way
+ * in both, and an UNCLOSED backtick run swallows the closer and leaves the line as
+ * prose - which is what a link text does with the same bytes.
+ *
+ * `test` and `exec` keep RegExp's own signatures, so every tracker that asks
+ * whether a line opens the block gets this one answer instead of a second.
+ *
+ * THE SLOT IS `[^\n]*`, NOT `.*`. JavaScript's dot also excludes U+2028 and
+ * U+2029, which the flat `[^\]]*` accepted, so a dot would have turned a label
+ * holding one into prose. How those two characters read is a question of its own
+ * and is not answered here.
+ */
+function balancedLabelMatcher(
+  re: RegExp,
+  labelGroups: readonly number[],
+): { test: (line: string) => boolean, exec: (line: string) => RegExpExecArray | null } {
+  const exec = (line: string): RegExpExecArray | null => {
+    const m = re.exec(line)
+    if (m === null) return null
+    for (const group of labelGroups) {
+      const raw = m[group]
+      // A greedy slot reaches the LAST `]` on the line, so an unbalanced run
+      // arrives here rather than being silently cut short at the first one.
+      if (raw !== undefined && buildBracketMap(raw)(0) !== raw.length - 1) return null
+    }
+
+    return m
+  }
+
+  return { test: (line) => exec(line) !== null, exec }
+}
+
+/**
  * The closer for a code fence opened with `marker`: the same character, at
  * least as long, and nothing after it but the trailing run above.
  *
@@ -184,10 +226,13 @@ function fenceCloseRe(marker: string): RegExp {
   return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_TRAILING_WS}`)
 }
 
-const RE_FENCE = new RegExp(
-  '^()(`{3,}|~{3,}) ?(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\\[[^\\]]*\\]))?' +
-    '|("[^"]*")(?: +(\\[[^\\]]*\\]))?|(\\[[^\\]]*\\]))?' +
-    FENCE_TRAILING_WS,
+const RE_FENCE = balancedLabelMatcher(
+  new RegExp(
+    '^()(`{3,}|~{3,}) ?(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\\[[^\\n]*\\]))?' +
+      '|("[^"]*")(?: +(\\[[^\\n]*\\]))?|(\\[[^\\n]*\\]))?' +
+      FENCE_TRAILING_WS,
+  ),
+  [5, 7, 8],
 )
 /** A colon run, whichever of the colon-fence blocks it goes on to open. */
 const RE_COLON_RUN = /^:{3,}/
@@ -313,7 +358,10 @@ function isContinuationMarker(line: string): boolean {
 }
 
 const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
-const RE_ADMONITION_OPEN = /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\]]*\]))?[ \t]*$/
+const RE_ADMONITION_OPEN = balancedLabelMatcher(
+  /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\n]*\]))?[ \t]*$/,
+  [4],
+)
 // The closer takes the OPENER's trailing run (`TRAILING_WS`), not `\s`. This is
 // the pair carve-js#805 names: carve-js#794 / carve-js#798 narrowed
 // `RE_ADMONITION_OPEN` above to `[ \t]*$` and left this one wide, so a mark that
@@ -349,7 +397,7 @@ const RE_QUOTE_BLOCK_OPEN = /^(:{3,}) +>[ \t]*$/
 // code fence allows ```[NPM]; a label after a TYPE word needs a space and is
 // handled by RE_ADMONITION_OPEN. Shares the `:::` closer.
 // Groups: 2 label (bracketed).
-const RE_DIV_OPEN = /^(:{3,}) *(\[[^\]]*\])?[ \t]*$/
+const RE_DIV_OPEN = balancedLabelMatcher(/^(:{3,}) *(\[[^\n]*\])?[ \t]*$/, [2])
 const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
 
 // MARKER REQUIRES CONTENT ignores TRAILING WHITESPACE, and NO TRAILING
