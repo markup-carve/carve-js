@@ -3175,13 +3175,13 @@ function closeFence(out: string[], openerAt: number, pad: string, info: string):
 
 /**
  * A Markdown info string reduced to the one token a Carve fence takes, or
- * nothing when a backtick in its first word stops it being an info string.
+ * nothing when the complete word is outside Carve's language charset.
  */
 function fenceInfo(rest: string): string {
   const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
   rest = rest.replace(escapesAndEntities, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
-  const firstInfoWord = rest.trim().split(/[ \t]/, 1)[0] ?? ''
-  return firstInfoWord.includes('`') ? '' : (rest.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? '')
+  const firstInfoWord = rest.replace(/^[ \t]+|[ \t]+$/g, '').split(/[ \t]/, 1)[0] ?? ''
+  return /^[A-Za-z0-9_+#/.-]+$/.test(firstInfoWord) ? firstInfoWord : ''
 }
 
 /**
