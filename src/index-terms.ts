@@ -6,6 +6,7 @@ import type {
   ExtensionRenderContext,
 } from './extension.js'
 import { deriveDisplayNodes, inlineText, slugify } from './heading-ids.js'
+import { parseContainerLabelInlines } from './parse.js'
 
 /**
  * Index terms (#91, Tier-3). Invisible `:index[term]` markers are collected
@@ -166,7 +167,7 @@ function renderIndexList(
   // floor forbids.
   const title =
     (node.title === undefined ? '' : `${pad}<p class="admonition-title">${ctx.renderInlines(node.title)}</p>\n`) +
-    (node.label === undefined || node.label === '' ? '' : `${pad}<p class="div-label">${ctx.escapeHtml(node.label)}</p>\n`)
+    (node.label === undefined || node.label === '' ? '' : `${pad}<p class="div-label">${ctx.renderInlines(parseContainerLabelInlines(node.label))}</p>\n`)
   // Preserve any authored content inside the placeholder before the list -
   // never silently drop authored blocks.
   if (node.children.length === 0) return title + ul

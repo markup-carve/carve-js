@@ -47,6 +47,7 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
+import { parseContainerLabelInlines } from './parse.js'
 
 export type SocialLinkKind = 'mention' | 'tag'
 
@@ -852,7 +853,7 @@ function placedTitleParts(
     name = ` aria-labelledby="${escapeAttr(titleId)}"`
     head += `${indent(level)}<p class="admonition-title" id="${escapeAttr(titleId)}">${renderInlines(title, opts)}</p>\n`
   }
-  const floor = labelFloor(node.label, level)
+  const floor = labelFloor(node.label, level, opts)
   if (floor) head += `${floor}\n`
   return { name, head }
 }
@@ -1498,7 +1499,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // `<p class="div-label">` at the start of the div content. (A group
       // extension consumes the node before it reaches core, so there is no
       // double rendering when one is active.)
-      const floor = labelFloor(node.label, level + 1)
+      const floor = labelFloor(node.label, level + 1, opts)
       const body = renderBlocks(node.children, opts, level + 1)
       const visibleBody = floor ? `${floor}${body === '' ? '' : `\n${body}`}` : body
       return frameBlockContainer(open, visibleBody, `${pad}</div>`)
@@ -1949,18 +1950,30 @@ function renderTableRowFlat(
 
 /**
  * The core caption floor for an unconsumed grouping `[label]`: a
- * `<p class="div-label">` (label HTML-escaped) at the given indent level, or
- * `''` when there is no label. The label text survives in every target even
- * when no group extension (tabs / code-group) consumed it.
+ * `<p class="div-label">` at the given indent level, or `''` when there is no
+ * label. The label text survives in every target even when no group extension
+ * (tabs / code-group) consumed it.
+ *
+ * ITS CONTENT IS AN INLINE RUN, not the characters the author typed:
+ * `CARVE-P9-041` names a div label among the hosts that have one (ruled on
+ * markup-carve/carve#2572). Escaping it instead published `a /b/` where every
+ * other host publishes `a <em>b</em>`, and it made one host answer two ways,
+ * since a trailing `%%` comment in a label is already read as a run.
  */
-function labelFloor(label: string | undefined, level: number): string {
+function labelFloor(label: string | undefined, level: number, opts: RenderOptions): string {
   // UNDEFINED means no grouping was written; `''` means `[]` was, and the two are
   // different documents - the parser keeps them apart and so does every other
   // target. Collapsing them here dropped the one element `:::[]` renders, which
   // is the same distinction the title a line below already draws for
   // `::: note ""` (carve-js#2236).
   if (label === undefined) return ''
-  return `${indent(level)}<p class="div-label">${escapeHtml(label)}</p>`
+
+  return `${indent(level)}<p class="div-label">${renderContainerLabel(label, opts)}</p>`
+}
+
+/** A container label's inline run, rendered. See {@link labelFloor}. */
+export function renderContainerLabel(label: string, opts: RenderOptions): string {
+  return renderInlines(parseContainerLabelInlines(label), opts)
 }
 
 /**
@@ -1997,7 +2010,7 @@ function renderAdmonition(node: Admonition | Directive, opts: RenderOptions, lev
       : ''
   // Core caption floor: surface an unconsumed `[label]` after the title (the
   // title is rendered first when a block carries both).
-  const floor = labelFloor(node.label, level + 1)
+  const floor = labelFloor(node.label, level + 1, opts)
   const labelLine = floor ? `${floor}\n` : ''
   const body = renderBlocks(node.children, opts, level + 1)
   // Leading block attributes (§15) merge with the admonition's own
