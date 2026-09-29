@@ -39,7 +39,7 @@ import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 import { utf8ByteLength } from './abbr-budget.js'
-import { collectLoneBrackets, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
+import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
@@ -1748,6 +1748,18 @@ function precededByOddBackslashRun(text: string, offset: number): boolean {
   let run = 0
   for (let i = offset - 1; i >= 0 && text[i] === '\\'; i -= 1) run += 1
   return run % 2 === 1
+}
+
+/** A backslash in front of each offset, which must be given in order. */
+function write(text: string, offsets: readonly number[]): string {
+  if (offsets.length === 0) return text
+  let out = ''
+  let cursor = 0
+  for (const at of offsets) {
+    out += text.slice(cursor, at) + '\\'
+    cursor = at
+  }
+  return out + text.slice(cursor)
 }
 
 /**
@@ -3875,7 +3887,9 @@ class CarveRenderSession {
   ): string {
     const nodes = flattenRubyForCarve(sourceNodes)
     if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
-    if (ctx.inlineDepth === 0) collectLoneBrackets(sourceNodes, false, this.loneBrackets, this.leftToSearch, this.pairedClosers, this.crossingOpeners)
+    if (ctx.inlineDepth === 0) {
+      collectLoneBrackets(sourceNodes, false, this.loneBrackets, this.leftToSearch, this.pairedClosers, this.crossingOpeners, this.crossingClosers)
+    }
     ctx.inlineDepth++
     try {
       let out = ''
@@ -4569,6 +4583,14 @@ class CarveRenderSession {
   private crossingOpeners: CrossingOpeners = new WeakMap()
 
   /**
+   * The `]` of such a pair, where an outer opener survives to answer it. It is
+   * unconditional for the same reason its opener is, and it is what makes the
+   * rule terminal: the opener it answers keeps its bare form, so no third
+   * bracket is owed anything.
+   */
+  private crossingClosers: CrossingClosers = new WeakMap()
+
+  /**
    * Whether each paired `[` was last written escaped, for its closer. The two
    * sit in different units whenever a nested construct separates them, and as
    * separate knobs neither could be relaxed alone, so the search kept both.
@@ -4793,26 +4815,17 @@ class CarveRenderSession {
       }
       selected.sort((a, b) => a - b)
     }
-    let out = ''
-    let cursor = 0
-    for (const i of selected) {
-      out += text.slice(cursor, i) + '\\'
-      cursor = i
-    }
-    return out + text.slice(cursor)
+    return write(text, selected)
   }
 
   /**
-   * The `[` of each crossing pair whose host came out with BARE delimiters, as
-   * offsets into the completed run.
+   * The `[` of each crossing pair, as offsets into the completed run.
    *
-   * The decision waits for the run because the answer is in what was written: a
-   * span the writer had to brace - `{/a]/}` - keeps its delimiters through a
-   * bracket run, so the escape there would be idle, and on a nested pair it also
-   * cost idempotence. `writtenBraced` is the writer's own record of that choice,
-   * so nothing here re-derives it. EVERY crossed span has to be bare: a braced one
-   * anywhere in the way changes how far the bracket run reaches, and section 4's
-   * check still catches any spelling this declines to fix.
+   * It waits for the run because the `](` pass reads these offsets: an escaped
+   * `[` opens no run, so the `(` behind that run's closer opens no destination.
+   * The crossed span's own spelling is not consulted. A braced span loses its
+   * delimiters to a bracket run too, so declining on one dropped the span
+   * (markup-carve/carve-js#2399).
    */
   private selectCrossingOpeners(text: string, ranges: LiteralRange[], sourceOf: (node: Text) => string): Set<number> {
     const selected = new Set<number>()
@@ -4824,8 +4837,7 @@ class CarveRenderSession {
       let sourceOffset = (range.sourceStart ?? 0) - 1
       for (let i = text.indexOf('[', range.start); i !== -1 && i < range.end; i = text.indexOf('[', i + 1)) {
         sourceOffset = source.indexOf('[', sourceOffset + 1)
-        const hosts = openers.get(sourceOffset)
-        if (hosts === undefined || hosts.some((host) => this.writtenBraced.has(host))) continue
+        if (!openers.has(sourceOffset)) continue
         if (precededByOddBackslashRun(text, i) || this.leftToSearch.has(range.node)) continue
         let forced = this.crossingBracketsByUnit.get(range.node)
         if (forced === undefined) this.crossingBracketsByUnit.set(range.node, forced = new Set())
@@ -4842,6 +4854,7 @@ class CarveRenderSession {
     const destinationParens = this.escapeUnit == null ? undefined : this.destinationParensByUnit.get(this.escapeUnit)
     const lone = this.escapeUnit == null ? undefined : this.loneBrackets.get(this.escapeUnit)
     const crossingBrackets = this.escapeUnit == null ? undefined : this.crossingBracketsByUnit.get(this.escapeUnit)
+    const crossingClosers = this.escapeUnit == null ? undefined : this.crossingClosers.get(this.escapeUnit)
     const closers = this.escapeUnit == null ? undefined : this.pairedClosers.get(this.escapeUnit)
     const unit = this.escapeUnit
     const escapes = mode === 'minimal' ? MINIMAL_ESCAPE_SITES : CANDIDATE_ESCAPES
@@ -4849,6 +4862,7 @@ class CarveRenderSession {
     const decide = (char: string, offset: number, subject: string): string => {
       if (destinationParens?.has(sourceOffset + offset)) return '\\('
       if (crossingBrackets?.has(sourceOffset + offset)) return '\\['
+      if (char === ']' && crossingClosers?.has(sourceOffset + offset)) return '\\]'
       if (lone?.has(sourceOffset + offset)) {
         this.lastOccurrenceRelaxed = false
         return `\\${char}`

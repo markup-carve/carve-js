@@ -18,32 +18,36 @@ export type PairedClosers = WeakMap<object, Map<number, Site>>
 
 /**
  * The `[` of a pair whose two brackets sit under DIFFERENT formatting nodes,
- * keyed like `LoneBrackets` but carrying the HOSTS the pair reaches across.
+ * keyed like `LoneBrackets`.
  *
  * PART 8 resolves the bracket run before the emphasis delimiters, so a run
- * reaching across a formatting boundary isolates the bare delimiters inside it:
- * the OPENER carries the escape, and its closer then closes no run, so a `(`
- * behind it opens no destination.
+ * reaching across a formatting boundary isolates the delimiters inside it: the
+ * OPENER carries the escape, and its closer then closes no run, so a `(` behind
+ * it opens no destination.
  *
- * The hosts are what say whether the escape is load bearing, because only a BARE
- * delimiter run can be isolated. A braced pair survives a bracket run, and the
- * writer braces a span whenever its neighbors or its content leave it no bare
- * spelling - which is a rendering decision, so the writer resolves it rather
- * than this pass.
+ * A pair is read as crossing from BOTH sides: the opener may sit at the run's own
+ * level and the closer under a span, or the other way round, and it is the SPAN's
+ * delimiter run that the bracket run would split either way. Spans holding both
+ * brackets are crossed by nothing and stay out.
  *
- * Every span the pair crosses is recorded, from BOTH sides: the opener may sit at
- * the run's own level and the closer under a span, or the other way round, and it
- * is the SPAN's delimiter run that the bracket run would split either way. Spans
- * holding both brackets are crossed by nothing and stay out.
- *
- * The writer escapes only where EVERY crossed span came out bare, which is the
- * conservative side of the question on purpose. Where a braced span is in the way
- * the bracket run stops behaving like one, in ways that vary with the nesting, and
- * declining there costs nothing: PART 11 section 4's own check still sees any
- * spelling that would re-read wrong and escalates that unit, which is what the
- * writer did for all of these before this rule existed.
+ * The span's own spelling does not enter it. A braced span loses its delimiters
+ * to a bracket run as surely as a bare one - `[{^a]^}` reads back as literal text
+ * in the spec's reader, in carve-rs and in carve-php - so declining there dropped
+ * the span instead of protecting it (markup-carve/carve-js#2399).
  */
-export type CrossingOpeners = WeakMap<object, Map<number, readonly object[]>>
+export type CrossingOpeners = WeakMap<object, Set<number>>
+
+/**
+ * The `]` of such a pair, where an OUTER opener survives to answer it.
+ *
+ * Escaping an opener takes it out of the run, so the `]` that answered it falls
+ * through to the next opener out; where that pair crosses the same boundary a
+ * second escape is owed and only the closer can pay it, because the outer opener
+ * keeps its bare form. One forward pass cannot see this, and leaving it undecided
+ * is what made the writer disagree with itself: `carve fmt` computed the second
+ * pass and spent one more backslash per bracket level (markup-carve/carve-rs#2209).
+ */
+export type CrossingClosers = WeakMap<object, Set<number>>
 
 /**
  * Text nodes of a run holding an empty code span. Neither §5 half selects a
@@ -80,9 +84,10 @@ export function collectLoneBrackets(
   leftToSearch: LeftToSearch,
   pairs?: PairedClosers,
   crossing?: CrossingOpeners,
+  crossingClosers?: CrossingClosers,
 ): void {
   const scopes: Scope[] = [{ content: nodes, bracketed }]
-  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into, leftToSearch, pairs, crossing)
+  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into, leftToSearch, pairs, crossing, crossingClosers)
 }
 
 /** How deep two bracket sites share the same spans. */
@@ -99,6 +104,7 @@ function collectScope(
   leftToSearch: LeftToSearch,
   pairs: PairedClosers | undefined,
   crossing: CrossingOpeners | undefined,
+  crossingClosers: CrossingClosers | undefined,
 ): void {
   const sites: Array<Site & { chain: readonly object[] }> = []
   const owners: object[] = []
@@ -188,36 +194,70 @@ function collectScope(
     into.delete(owner)
     pairs?.delete(owner)
     crossing?.delete(owner)
+    crossingClosers?.delete(owner)
     if (hasEmptyCode) leftToSearch.add(owner)
     else leftToSearch.delete(owner)
   }
   if (hasEmptyCode) return
 
-  const lone: Site[] = []
-  const crossed: Array<{ site: Site; hosts: readonly object[] }> = []
-  const open: Array<Site & { chain: readonly object[] }> = []
-  for (const site of sites) {
-    if (site.char === '[') {
-      open.push(site)
-      continue
-    }
-    const opener = open.pop()
-    if (opener === undefined) {
-      lone.push(site)
-      continue
-    }
-    const shared = sharedDepth(opener.chain, site.chain)
-    const hosts = [...opener.chain.slice(shared), ...site.chain.slice(shared)]
-    if (hosts.length > 0) {
-      crossed.push({ site: opener, hosts })
-      continue
-    }
-    if (pairs === undefined || !bracketed) continue
-    let closers = pairs.get(site.owner)
-    if (closers === undefined) pairs.set(site.owner, (closers = new Map()))
-    closers.set(site.offset, opener)
+  type Bracket = Site & { chain: readonly object[] }
+  /** The spans a pair reaches across, from whichever side holds them. */
+  const crossed = (opener: Bracket, closer: Bracket): number => {
+    const shared = sharedDepth(opener.chain, closer.chain)
+    return opener.chain.length - shared + (closer.chain.length - shared)
   }
-  for (const site of open) lone.push(site)
+
+  // PASS ONE names the crossing openers: a pair read straight off the run whose
+  // two brackets sit under different spans.
+  const crossingOpeners = new Set<Bracket>()
+  {
+    const open: Bracket[] = []
+    for (const site of sites) {
+      if (site.char === '[') open.push(site)
+      else {
+        const opener = open.pop()
+        if (opener !== undefined && crossed(opener, site) > 0) crossingOpeners.add(opener)
+      }
+    }
+  }
+
+  // PASS TWO reads the run as the reader will, with those openers GONE. A `]`
+  // whose own `[` is escaped falls through to the next opener out, and where
+  // that pair crosses the same boundary the CLOSER takes the escape - the opener
+  // cannot, because escaping it would only move the question one bracket further
+  // out. One pass cannot decide this, since which brackets survive is not known
+  // until the run is complete (markup-carve/carve-rs#2209).
+  //
+  // An escaped closer answers nothing, so its opener STAYS OPEN for the next `]`
+  // rather than being spent on it. Popping it left a second crossing `]` bare,
+  // and `carve fmt` then wrote that escape itself: `<p>[[[<ins>]]</ins></p>`
+  // imported as `[\[\[{+\]]+}` and re-formatted to `\[\[\[{+\]]+}`.
+  const lone: Site[] = []
+  const crossingClosed: Bracket[] = []
+  {
+    const open: Bracket[] = []
+    const decided = new Set<Bracket>()
+    for (const site of sites) {
+      if (site.char === '[') {
+        if (!crossingOpeners.has(site)) open.push(site)
+        continue
+      }
+      const opener = open.pop()
+      if (opener === undefined) continue
+      decided.add(site)
+      if (crossed(opener, site) > 0) {
+        crossingClosed.push(site)
+        open.push(opener)
+        continue
+      }
+      if (pairs === undefined || !bracketed) continue
+      let closers = pairs.get(site.owner)
+      if (closers === undefined) pairs.set(site.owner, (closers = new Map()))
+      closers.set(site.offset, opener)
+    }
+    for (const site of sites) if (site.char === ']' && !decided.has(site)) lone.push(site)
+    for (const site of open) lone.push(site)
+  }
 
   if (bracketed) {
     for (const site of lone) {
@@ -226,10 +266,15 @@ function collectScope(
       offsets.add(site.offset)
     }
   }
-  if (crossing === undefined) return
-  for (const { site, hosts } of crossed) {
-    let offsets = crossing.get(site.owner)
-    if (offsets === undefined) crossing.set(site.owner, (offsets = new Map()))
-    offsets.set(site.offset, hosts)
+  record(crossing, crossingOpeners)
+  record(crossingClosers, crossingClosed)
+}
+
+function record(at: WeakMap<object, Set<number>> | undefined, sites: Iterable<Site>): void {
+  if (at === undefined) return
+  for (const site of sites) {
+    let offsets = at.get(site.owner)
+    if (offsets === undefined) at.set(site.owner, (offsets = new Set()))
+    offsets.add(site.offset)
   }
 }
