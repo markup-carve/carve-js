@@ -68,18 +68,22 @@ describe('marker padding collapses where the item carries its content along', ()
   })
 })
 
-describe('an empty code block carries the blank line fmt writes', () => {
+// An empty payload STAYS empty through both writers. The blank line these rows
+// used to expect was the writer inventing a payload line the author never wrote,
+// which is the defect markup-carve/carve-js#2351 names; the empty payload then
+// renders no character at all (corpus 524, carve-js#2342).
+describe('an empty code block keeps its empty payload', () => {
   it.each([
-    ['at the document level', '```\n```\n', lines('```', '', '```')],
-    ['inside a list item', '- ```\n  ```\n', lines('- ```', '', sp(2) + '```')],
-    ['inside a quoted item, where the blank carries the marker', '> - ```\n>   ```\n', lines('> - ```', '>', sp(0) + '>' + sp(3) + '```')],
-    ['with an info string', '```js\n```\n', lines('```js', '', '```')],
+    ['at the document level', '```\n```\n', lines('```', '```')],
+    ['inside a list item', '- ```\n  ```\n', lines('- ```', sp(2) + '```')],
+    ['inside a quoted item, where the closer carries the marker', '> - ```\n>   ```\n', lines('> - ```', '>' + sp(3) + '```')],
+    ['with an info string', '```js\n```\n', lines('```js', '```')],
   ])('%s', (_label, source, expected) => {
     const out = markdownToCarve(source)
     expect(out).toBe(expected)
     expect(carveToCarve(out)).toBe(out)
-    // Both spellings render the same empty block, so this is bytes only.
     expect(carveToHtml(out)).toBe(carveToHtml(source))
+    expect(carveToHtml(out)).toMatch(/<code(?: class="language-js")?><\/code>/)
   })
 
   it('leaves a fence that holds something alone', () => {

@@ -32,6 +32,7 @@ export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
+import { payloadTerminated } from './verbatim-payload.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
@@ -2907,7 +2908,12 @@ class CarveRenderSession {
           node.header !== undefined && node.attrs?.keyValues?.['title'] === node.header
             ? renderBlockAttrs(withoutKey(node.attrs, 'title'))
             : attrs
-        const body = `${fence}${info}\n${this.protectVerbatim(node.content)}\n${fence}`
+        // The closing-line separator the raw block's case owes, for the same
+        // reason: a payload of no lines writes no line, and an all-blank one
+        // already carries a newline per line, so adding one would turn the
+        // empty payload into a one-line one on every format pass (#2351).
+        const closerSeparator = payloadTerminated(node.content) ? '' : '\n'
+        const body = `${fence}${info}\n${this.protectVerbatim(node.content)}${closerSeparator}${fence}`
         return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
       }
       case 'block_quote': {
@@ -3024,7 +3030,7 @@ class CarveRenderSession {
         // extra separator before the closer would change the AST on every
         // format pass. Non-blank content still needs the ordinary closing-line
         // separator (including content with a trailing blank line).
-        const closerSeparator = node.content === '' || /^\n+$/.test(node.content) ? '' : '\n'
+        const closerSeparator = payloadTerminated(node.content) ? '' : '\n'
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':

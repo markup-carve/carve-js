@@ -72,12 +72,12 @@
   {
     "name": "a closed inner fence ends the lazy claim",
     "source": "> > a\n> a\n> > ```\n> > ```\ny\n",
-    "html": "<blockquote>\n  <blockquote>\n    <p>a\na</p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
+    "html": "<blockquote>\n  <blockquote>\n    <p>a\na</p>\n    <pre><code></code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
   },
   {
     "name": "a closed outer fence ends the lazy claim",
     "source": "> > a\n> a\n> ```\n> ```\ny\n",
-    "html": "<blockquote>\n  <blockquote><p>a\na</p></blockquote>\n  <pre><code>\n</code></pre>\n</blockquote>\n<p>y</p>"
+    "html": "<blockquote>\n  <blockquote><p>a\na</p></blockquote>\n  <pre><code></code></pre>\n</blockquote>\n<p>y</p>"
   },
   {
     "name": "malformed colon text absorbs a later bare fence",
@@ -87,7 +87,7 @@
   {
     "name": "closer lookup after a shallower lazy line",
     "source": "> > a\n> > ````js\n> a\n> > ```\n> > ```\ny\n",
-    "html": "<blockquote>\n  <blockquote>\n    <p>a\n<code>js\na</code></p>\n    <pre><code>\n</code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
+    "html": "<blockquote>\n  <blockquote>\n    <p>a\n<code>js\na</code></p>\n    <pre><code></code></pre>\n  </blockquote>\n</blockquote>\n<p>y</p>"
   },
   {
     "name": "lazy fence-shaped line",

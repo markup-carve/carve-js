@@ -233,12 +233,12 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       const info = infoSlot.trim()
       if (info && !/^[A-Za-z0-9-]+$/.test(info)) return undefined
       out.push(indent(depth), '<pre><code', info ? ` class="language-${info}"` : '', '>')
+      // EVERY PAYLOAD LINE IS TERMINATED, AND A PAYLOAD OF NONE IS NO
+      // CHARACTERS. This path only takes a CLOSED fence, and a closed fence with
+      // no body line renders an empty element (corpus 524, carve-js#2342). The
+      // line corpus 276 pins belongs to the UNTERMINATED fence, which the
+      // `close >= lines.length` guard above hands back to the full parser.
       for (let j = i + 1; j < close; j++) { out.text(lines[j]!); out.push('\n') }
-      // AN EMPTY PAYLOAD IS STILL A LINE. With no body lines the loop above emits
-      // nothing at all, so an empty fence came back `<pre><code></code></pre>`
-      // while the authoritative pipeline renders `<pre><code>\n</code></pre>` -
-      // the shape corpus 276 pins for an empty code block.
-      if (close === i + 1) out.push('\n')
       out.push('</code></pre>')
       if (stats) accept(stats, 'codeFences', i, close + 1)
       i = close + 1; wrote = true; continue

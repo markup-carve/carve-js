@@ -21,6 +21,7 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
+import { payloadTerminated } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
@@ -300,7 +301,10 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // into `attrs`, so that is where the answer already is.
       const effectiveTitle = node.attrs?.keyValues?.['title'] ?? node.header
       const info = markdownFenceInfo(node.lang, effectiveTitle, node.label)
-      return `${fence}${info}\n${content}\n${fence}\n\n`
+      // The separator a payload of no lines does not own, and an all-blank one
+      // already carries; see `payloadTerminated`.
+      const closerSeparator = payloadTerminated(content) ? '' : '\n'
+      return `${fence}${info}\n${content}${closerSeparator}${fence}\n\n`
     }
     case 'block_quote': {
       const lines = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx))).split('\n')

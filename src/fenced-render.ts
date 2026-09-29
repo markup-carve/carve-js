@@ -1,5 +1,6 @@
 import type { Attrs, CodeBlock } from './ast.js'
 import type { CarveExtension, DiagramRenderer } from './extension.js'
+import { codePayloadText } from './verbatim-payload.js'
 
 /** How a {@link fencedRender} instance places the block body. */
 export type FencedRenderContentMode = 'text' | 'json'
@@ -171,7 +172,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
         // same merged attrs (cssClass ahead of author classes, hardened by
         // ctx.renderAttrs).
         const langAttr = code.lang ? ` class="language-${ctx.escapeAttr(code.lang)}"` : ''
-        return `${pad}<pre${ctx.renderAttrs(attrs)}><code${langAttr}>${ctx.escapeHtml(code.content)}\n</code></pre>`
+        return `${pad}<pre${ctx.renderAttrs(attrs)}><code${langAttr}>${ctx.escapeHtml(codePayloadText(code.content))}</code></pre>`
       },
     },
   }
