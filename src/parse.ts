@@ -13587,15 +13587,17 @@ class ParseSession {
           i = sub.end
           continue
         }
+        // A pair opened inside a bracket run must close inside that run.
+        const inlineEnd = bracketRuns.at(-1)?.close ?? text.length
         const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? this.criticPairEnd(text, i, '+}') : -1
-        if (ins !== -1) {
+        if (ins !== -1 && ins <= inlineEnd) {
           flush()
           out.push(this.withPos({ type: 'insert', children: this.scanInline(text.slice(i + 2, ins - 2), this.shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, ins))
           i = ins
           continue
         }
         const del = delSuf && delSuf[i] && text[i + 1] === '-' ? this.criticPairEnd(text, i, '-}') : -1
-        if (del !== -1) {
+        if (del !== -1 && del <= inlineEnd) {
           flush()
           out.push(this.withPos({ type: 'delete', children: this.scanInline(text.slice(i + 2, del - 2), this.shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, del))
           i = del
@@ -13634,7 +13636,7 @@ class ParseSession {
         const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined && !this.openKinds.has(delim)
           ? this.bracedPairEnd(text, i, `${delim}}`)
           : -1
-        if (forced !== -1) {
+        if (forced !== -1 && forced <= inlineEnd) {
           flush()
           out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!])) } as Emphasis, source, text, i, forced))
           i = forced

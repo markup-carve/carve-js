@@ -85,9 +85,10 @@ export function collectLoneBrackets(
   pairs?: PairedClosers,
   crossing?: CrossingOpeners,
   crossingClosers?: CrossingClosers,
+  escaped?: WeakMap<object, Set<number>>,
 ): void {
   const scopes: Scope[] = [{ content: nodes, bracketed }]
-  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into, leftToSearch, pairs, crossing, crossingClosers)
+  for (let scope = scopes.pop(); scope !== undefined; scope = scopes.pop()) collectScope(scope, scopes, into, leftToSearch, pairs, crossing, crossingClosers, escaped)
 }
 
 /** How deep two bracket sites share the same spans. */
@@ -105,6 +106,7 @@ function collectScope(
   pairs: PairedClosers | undefined,
   crossing: CrossingOpeners | undefined,
   crossingClosers: CrossingClosers | undefined,
+  escaped: WeakMap<object, Set<number>> | undefined,
 ): void {
   const sites: Array<Site & { chain: readonly object[] }> = []
   const owners: object[] = []
@@ -119,7 +121,7 @@ function collectScope(
     const text = value.replace(UNWRITABLE_CONTROLS, '')
     for (let offset = 0; offset < text.length; offset++) {
       const char = text[offset]!
-      if (char === '[' || char === ']') sites.push({ owner, offset, char, chain })
+      if ((char === '[' || char === ']') && !escaped?.get(owner)?.has(offset)) sites.push({ owner, offset, char, chain })
     }
   }
 

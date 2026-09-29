@@ -3849,7 +3849,7 @@ class CarveRenderSession {
             let piece: string
             try { piece = this.escapeText(text.slice(from, to), false, false, from) }
             finally { this.escapeUnit = previous }
-            if (node.type === 'text' && piece.includes('(')) {
+            if (node.type === 'text' && /[()[\]]/.test(piece)) {
               ranges.push({ start: out.length, end: out.length + piece.length, node, sourceStart: from })
             }
             out += piece
@@ -3975,7 +3975,7 @@ class CarveRenderSession {
           lineTail = (lineTail + EMPTY_COMMENT).slice(-2)
         }
 
-        if (this.escapeMode === 'minimal') {
+        if (this.escapeMode === 'minimal' || this.escalatedUnits !== null) {
           if (override === undefined) for (const close of this.lastNoteCloses) noteCloses.push(out.length + close)
           for (const range of override?.ranges ?? this.lastLiteralRanges) {
             literalRanges.push({ ...range, start: out.length + range.start, end: out.length + range.end })
@@ -4002,10 +4002,10 @@ class CarveRenderSession {
         lineHostsCaption = lineNodeCount === 1 && inlineHostsCaption(node)
         captionCanOpen = false
       })
-      if (this.escapeMode === 'minimal') {
+      if (this.escapeMode === 'minimal' || this.escalatedUnits !== null) {
         // A bracket or destination may cross a nested emphasis boundary. Keep
         // its text-node ranges until the outer inline run is complete.
-        if (ctx.inlineDepth === 1) return this.escapeLiteralDestinations(out, literalRanges, new Set(noteCloses))
+        if (ctx.inlineDepth === 1) return this.escapeLiteralDestinations(out, literalRanges, new Set(noteCloses), sourceNodes)
         this.inlineChildProjections.push({ text: out, ranges: literalRanges, noteCloses })
       }
       return out
@@ -4034,10 +4034,10 @@ class CarveRenderSession {
       )
       this.lastLiteralRanges = []
       this.lastNoteCloses = []
-      if (this.escapeMode === 'minimal') {
-        // A crossing opener is decided from the completed run too, so its text
-        // node is kept even when no destination paren brought it here.
-        if (node.type === 'text' && (result.includes('(') || this.crossingOpeners.has(node))) {
+      if (this.escapeMode === 'minimal' || this.escalatedUnits !== null) {
+        // Keep every literal bracket: search-selected escapes can change which
+        // pairs cross a formatting boundary.
+        if (node.type === 'text' && /[()[\]]/.test(result)) {
           this.lastLiteralRanges.push({ start: 0, end: result.length, node })
         } else {
           let cursor = 0
@@ -4053,7 +4053,7 @@ class CarveRenderSession {
           }
         }
       }
-      if (this.escapeMode === 'minimal' && (node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
+      if ((this.escapeMode === 'minimal' || this.escalatedUnits !== null) && (node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
         const close = buildBracketMap(result, true)(result.indexOf('['))
         if (close !== undefined) this.lastNoteCloses.push(close)
       }
@@ -4780,7 +4780,7 @@ class CarveRenderSession {
   private inlineChildProjections: Array<{ text: string; ranges: LiteralRange[]; noteCloses: number[] }> = []
 
   /** Choose escapes from the emitted inline run, including intervening inline nodes. */
-  private escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteCloses: Set<number>): string {
+  private escapeLiteralDestinations(text: string, ranges: LiteralRange[], noteCloses: Set<number>, nodes: InlineNode[]): string {
     if (ranges.length === 0) return text
     const sources = new Map<Text, string>()
     const sourceOf = (node: Text): string => {
@@ -4790,9 +4790,36 @@ class CarveRenderSession {
     }
     // The crossing openers come FIRST, because an escaped `[` opens no run, so
     // the `(` behind that run's closer is no longer a destination opener.
-    const crossing = this.selectCrossingOpeners(text, ranges, sourceOf)
+    const crossing = this.escapeMode === 'minimal'
+      ? this.selectCrossingOpeners(text, ranges, sourceOf)
+      : new Set<number>()
+    // Search-selected escapes can expose a different crossing pair. Read the
+    // emitted brackets again, excluding every escape this candidate carries.
+    const escaped = new WeakMap<object, Set<number>>()
+    const sites: Array<{ node: Text; offset: number; at: number; char: string }> = []
+    for (const range of ranges) {
+      const source = sourceOf(range.node)
+      const offsets = { '[': (range.sourceStart ?? 0) - 1, ']': (range.sourceStart ?? 0) - 1 }
+      for (let at = range.start; at < range.end; at++) {
+        const char = text[at]
+        if (char !== '[' && char !== ']') continue
+        const offset = source.indexOf(char, offsets[char] + 1)
+        offsets[char] = offset
+        if (precededByOddBackslashRun(text, at) || crossing.has(at)) {
+          let skipped = escaped.get(range.node)
+          if (skipped === undefined) escaped.set(range.node, skipped = new Set())
+          skipped.add(offset)
+        } else sites.push({ node: range.node, offset, at, char })
+      }
+    }
+    const openers: CrossingOpeners = new WeakMap()
+    const closers: CrossingClosers = new WeakMap()
+    collectLoneBrackets(nodes, false, new WeakMap(), new WeakSet(), undefined, openers, closers, escaped)
+    for (const site of sites) {
+      if ((site.char === '[' ? openers : closers).get(site.node)?.has(site.offset)) crossing.add(site.at)
+    }
     const selected = [...crossing]
-    if (text.includes('](')) {
+    if (this.escapeMode === 'minimal' && text.includes('](')) {
       const destinations = completeDestinationOpeners(text)
       const bracketClose = buildBracketMap(text, true)
       const paired = new Set<number>()
@@ -4813,8 +4840,8 @@ class CarveRenderSession {
           selected.push(i)
         }
       }
-      selected.sort((a, b) => a - b)
     }
+    selected.sort((a, b) => a - b)
     return write(text, selected)
   }
 
