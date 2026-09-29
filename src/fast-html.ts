@@ -121,7 +121,7 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
 
   const lines = source.split('\n')
   if (lines.at(-1) === '') lines.pop()
-  if (lines.some((line) => / +$/.test(line))) return undefined
+  if (lines.some((line) => line.charCodeAt(line.length - 1) === 32)) return undefined
   // A LONE `+` IS THE LIST CONTINUATION MARKER (§17 L3), never a paragraph. It
   // renders NOTHING and attaches the block below it to the item above, which the
   // borrowed layout has no model for - so the document goes to the authoritative
@@ -295,12 +295,19 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
   return true
 }
 
+const INLINE_MARKER = /[*\/`\[]/g
+const COMPLEX_INLINE = /[{}^\\<>_~!@$=#'"]|--|\.\.\.|\/\*|\*\/|``|\+-|\((?:c|r|tm)\)/
+
 function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput): true | undefined {
   if (inlineComplex(text)) return undefined
   let i = 0, plain = 0
   while (i < text.length) {
+    // Reset after recursive inline rendering, which uses the same matcher.
+    INLINE_MARKER.lastIndex = i
+    const marker = INLINE_MARKER.exec(text)
+    if (!marker) break
+    i = marker.index
     const delimiter = text[i]!
-    if (!'*\/`['.includes(delimiter)) { i++; continue }
     out.text(text.slice(plain, i))
     if (delimiter === '*' || delimiter === '/') {
       const close = text.indexOf(delimiter, i + 1)
@@ -348,17 +355,9 @@ function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options, o
 }
 
 function inlineComplex(text: string): boolean {
-  let colons = 0
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!
-    if (`{}^\\<>_~!@$=#'"`.includes(c)) return true
-    if (c === ':' && ++colons === 2) return true
-    const tail = text.slice(i)
-    if (tail.startsWith('--') || tail.startsWith('...') || tail.startsWith('/*') ||
-      tail.startsWith('*/') || tail.startsWith('``') || tail.startsWith('+-') ||
-      tail.startsWith('(c)') || tail.startsWith('(r)') || tail.startsWith('(tm)')) return true
-  }
-  return false
+  if (COMPLEX_INLINE.test(text)) return true
+  const colon = text.indexOf(':')
+  return colon !== -1 && text.indexOf(':', colon + 1) !== -1
 }
 
 function renderList(lines: string[], start: number, offset: number, depth: number, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): { next: number } | undefined {
