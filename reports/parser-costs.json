@@ -1,0 +1,4630 @@
+{
+  "metadata": {
+    "generatedAt": "2026-09-29T14:54:58.310Z",
+    "node": "v24.19.0",
+    "cpu": "AMD Ryzen 9 PRO 7940HS w/ Radeon 780M Graphics",
+    "logicalCpus": 16,
+    "baseline": {
+      "head": "393111222a45ba916f18290581e345169500b71b",
+      "sourceSha256": "f432e336200895bc76a1636ee42c21db7cbd14206c495ba40232e2aaa5472bff",
+      "buildSha256": "dd50b16e059d6516643768a142fca825b9668429913b1b7006706e8b44be1d8b"
+    },
+    "candidate": {
+      "head": "393111222a45ba916f18290581e345169500b71b",
+      "sourceSha256": "782e878b27ce96227b14d801797b523f5e50bd564c48ebc5567c113d67c890d8",
+      "buildSha256": "19929da18234e23d654b3466dcdc69a545ad44d332f9df1b80e8ae9218b7a82c"
+    },
+    "runnerSha256": "de194a51fa5ddcaf569612025790b6f1b812e66bbb77cfebab31ce938dbaeb11",
+    "method": "Two fresh-worker rounds per fixture/mode, baseline-candidate then candidate-baseline. Each worker warms for 300ms and records five batches of at least 100ms. GC precedes each batch. Separate 50-call heap sample at 4096 bytes includes collected objects. Keep rounds separate; timing and sampled allocation are observations, not CI thresholds."
+  },
+  "groups": [
+    {
+      "family": "long-line",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 81,
+          "wallMs": 1.2401653580246907,
+          "cpuMs": 1.5405185185185184
+        },
+        {
+          "iterations": 52,
+          "wallMs": 1.9235469038461543,
+          "cpuMs": 2.2429423076923074
+        },
+        {
+          "iterations": 142,
+          "wallMs": 0.7073739577464787,
+          "cpuMs": 0.8673521126760564
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.3217181447368413,
+          "cpuMs": 1.4875789473684211
+        },
+        {
+          "iterations": 138,
+          "wallMs": 0.7285939130434793,
+          "cpuMs": 0.8214565217391304
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 527920,
+      "loadStart": [
+        32.36,
+        26.35,
+        19.91
+      ],
+      "loadEnd": [
+        32.36,
+        26.35,
+        19.91
+      ],
+      "sink": 1
+    },
+    {
+      "family": "long-line",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 53,
+          "wallMs": 1.890833566037737,
+          "cpuMs": 1.8605283018867926
+        },
+        {
+          "iterations": 265,
+          "wallMs": 0.37797692452830167,
+          "cpuMs": 0.44044905660377354
+        },
+        {
+          "iterations": 149,
+          "wallMs": 0.6723115033557044,
+          "cpuMs": 0.827255033557047
+        },
+        {
+          "iterations": 104,
+          "wallMs": 0.963359548076923,
+          "cpuMs": 1.1019038461538462
+        },
+        {
+          "iterations": 361,
+          "wallMs": 0.277148085872576,
+          "cpuMs": 0.2776925207756233
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 566320,
+      "loadStart": [
+        32.36,
+        26.35,
+        19.91
+      ],
+      "loadEnd": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "sink": 1
+    },
+    {
+      "family": "long-line",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 194,
+          "wallMs": 0.5170895979381444,
+          "cpuMs": 0.5996907216494846
+        },
+        {
+          "iterations": 65,
+          "wallMs": 1.5445358923076933,
+          "cpuMs": 1.4886307692307692
+        },
+        {
+          "iterations": 236,
+          "wallMs": 0.4245621016949156,
+          "cpuMs": 0.4711059322033898
+        },
+        {
+          "iterations": 55,
+          "wallMs": 1.824210963636363,
+          "cpuMs": 1.9246909090909092
+        },
+        {
+          "iterations": 236,
+          "wallMs": 0.4238156440677966,
+          "cpuMs": 0.4697203389830508
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 530792,
+      "loadStart": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "loadEnd": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "sink": 1
+    },
+    {
+      "family": "long-line",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 34,
+          "wallMs": 2.9471803235294107,
+          "cpuMs": 3.3351470588235292
+        },
+        {
+          "iterations": 47,
+          "wallMs": 2.13311340425532,
+          "cpuMs": 2.304404255319149
+        },
+        {
+          "iterations": 87,
+          "wallMs": 1.1553243448275867,
+          "cpuMs": 1.4664597701149424
+        },
+        {
+          "iterations": 45,
+          "wallMs": 2.225466688888888,
+          "cpuMs": 2.3827777777777777
+        },
+        {
+          "iterations": 130,
+          "wallMs": 0.7712806076923069,
+          "cpuMs": 1.0406
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 629168,
+      "loadStart": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "loadEnd": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "sink": 1
+    },
+    {
+      "family": "long-line",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 31,
+          "wallMs": 3.2481829354838707,
+          "cpuMs": 3.0308387096774196
+        },
+        {
+          "iterations": 48,
+          "wallMs": 2.0860483333333355,
+          "cpuMs": 2.190395833333333
+        },
+        {
+          "iterations": 101,
+          "wallMs": 0.9902302772277223,
+          "cpuMs": 1.1912475247524752
+        },
+        {
+          "iterations": 42,
+          "wallMs": 2.38688588095238,
+          "cpuMs": 2.4351190476190476
+        },
+        {
+          "iterations": 68,
+          "wallMs": 1.4754763970588238,
+          "cpuMs": 1.6304999999999998
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 678712,
+      "loadStart": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "loadEnd": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "sink": 1
+    },
+    {
+      "family": "long-line",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 82,
+          "wallMs": 1.2215552560975615,
+          "cpuMs": 1.3398536585365852
+        },
+        {
+          "iterations": 365,
+          "wallMs": 0.2747723753424658,
+          "cpuMs": 0.30349315068493155
+        },
+        {
+          "iterations": 196,
+          "wallMs": 0.5102438673469387,
+          "cpuMs": 0.5937244897959184
+        },
+        {
+          "iterations": 175,
+          "wallMs": 0.5715887257142861,
+          "cpuMs": 0.6663257142857143
+        },
+        {
+          "iterations": 102,
+          "wallMs": 0.9814809313725498,
+          "cpuMs": 1.067578431372549
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 675920,
+      "loadStart": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "loadEnd": [
+        30.89,
+        26.14,
+        19.88
+      ],
+      "sink": 1
+    },
+    {
+      "family": "long-line",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 236,
+          "wallMs": 0.42390522033898326,
+          "cpuMs": 0.5009491525423729
+        },
+        {
+          "iterations": 229,
+          "wallMs": 0.43715817030567705,
+          "cpuMs": 0.5061484716157205
+        },
+        {
+          "iterations": 220,
+          "wallMs": 0.4549440909090911,
+          "cpuMs": 0.5328590909090909
+        },
+        {
+          "iterations": 147,
+          "wallMs": 0.6821041156462587,
+          "cpuMs": 0.8190612244897959
+        },
+        {
+          "iterations": 83,
+          "wallMs": 1.2090664096385535,
+          "cpuMs": 1.346289156626506
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 617656,
+      "loadStart": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "loadEnd": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "sink": 0
+    },
+    {
+      "family": "long-line",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 113,
+          "wallMs": 0.887682637168142,
+          "cpuMs": 1.1093097345132743
+        },
+        {
+          "iterations": 74,
+          "wallMs": 1.35466322972973,
+          "cpuMs": 1.5285
+        },
+        {
+          "iterations": 219,
+          "wallMs": 0.45934134246575314,
+          "cpuMs": 0.5400730593607306
+        },
+        {
+          "iterations": 84,
+          "wallMs": 1.1960484880952382,
+          "cpuMs": 1.568452380952381
+        },
+        {
+          "iterations": 237,
+          "wallMs": 0.4226078649789028,
+          "cpuMs": 0.44054852320675103
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 741560,
+      "loadStart": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "loadEnd": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "sink": 1
+    },
+    {
+      "family": "long-line",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 31,
+          "wallMs": 3.2510150645161278,
+          "cpuMs": 4.7946451612903225
+        },
+        {
+          "iterations": 48,
+          "wallMs": 2.0987714583333337,
+          "cpuMs": 2.5735625
+        },
+        {
+          "iterations": 49,
+          "wallMs": 2.074276469387755,
+          "cpuMs": 2.552204081632653
+        },
+        {
+          "iterations": 37,
+          "wallMs": 2.730190405405404,
+          "cpuMs": 3.386081081081081
+        },
+        {
+          "iterations": 50,
+          "wallMs": 2.0258106799999998,
+          "cpuMs": 2.45802
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 67065520,
+      "loadStart": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "loadEnd": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "sink": 0
+    },
+    {
+      "family": "long-line",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 279,
+          "wallMs": 0.3596274587813621,
+          "cpuMs": 0.3708673835125448
+        },
+        {
+          "iterations": 385,
+          "wallMs": 0.2603043012987014,
+          "cpuMs": 0.28622597402597405
+        },
+        {
+          "iterations": 390,
+          "wallMs": 0.2569466179487178,
+          "cpuMs": 0.26225128205128206
+        },
+        {
+          "iterations": 378,
+          "wallMs": 0.2649781481481482,
+          "cpuMs": 0.2909232804232804
+        },
+        {
+          "iterations": 356,
+          "wallMs": 0.2811037134831462,
+          "cpuMs": 0.2889943820224719
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 2203696,
+      "loadStart": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "loadEnd": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "sink": 0
+    },
+    {
+      "family": "long-line",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 376,
+          "wallMs": 0.26656051329787245,
+          "cpuMs": 0.2940345744680851
+        },
+        {
+          "iterations": 361,
+          "wallMs": 0.27768800277008304,
+          "cpuMs": 0.28482548476454295
+        },
+        {
+          "iterations": 384,
+          "wallMs": 0.2610110312500001,
+          "cpuMs": 0.2659609375
+        },
+        {
+          "iterations": 372,
+          "wallMs": 0.2692590188172043,
+          "cpuMs": 0.2803521505376344
+        },
+        {
+          "iterations": 349,
+          "wallMs": 0.2865351146131806,
+          "cpuMs": 0.29202292263610313
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 2161984,
+      "loadStart": [
+        29.61,
+        25.96,
+        19.85
+      ],
+      "loadEnd": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "sink": 40970
+    },
+    {
+      "family": "long-line",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 40964,
+      "sourceSha256": "a4d05b131c559eabcc1b6ca532456f6c68f0aa37d2f9f00814609d38e9c50603",
+      "samples": [
+        {
+          "iterations": 47,
+          "wallMs": 2.129899212765958,
+          "cpuMs": 2.6262978723404258
+        },
+        {
+          "iterations": 36,
+          "wallMs": 2.779164944444444,
+          "cpuMs": 3.6230555555555557
+        },
+        {
+          "iterations": 50,
+          "wallMs": 2.025401300000001,
+          "cpuMs": 2.53614
+        },
+        {
+          "iterations": 49,
+          "wallMs": 2.0470527346938767,
+          "cpuMs": 2.4904897959183674
+        },
+        {
+          "iterations": 38,
+          "wallMs": 2.683366315789475,
+          "cpuMs": 3.225473684210526
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 67276392,
+      "loadStart": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "loadEnd": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "sink": 40970
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 200,
+          "wallMs": 0.5007130700000002,
+          "cpuMs": 0.529415
+        },
+        {
+          "iterations": 176,
+          "wallMs": 0.5686566022727267,
+          "cpuMs": 0.6111534090909091
+        },
+        {
+          "iterations": 156,
+          "wallMs": 0.6422461217948716,
+          "cpuMs": 0.7466346153846154
+        },
+        {
+          "iterations": 183,
+          "wallMs": 0.5483509562841534,
+          "cpuMs": 0.5776994535519125
+        },
+        {
+          "iterations": 149,
+          "wallMs": 0.6750981476510064,
+          "cpuMs": 0.7043758389261745
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 866232,
+      "loadStart": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "loadEnd": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 402,
+          "wallMs": 0.24903698507462685,
+          "cpuMs": 0.2565870646766169
+        },
+        {
+          "iterations": 309,
+          "wallMs": 0.3242348932038835,
+          "cpuMs": 0.31190614886731394
+        },
+        {
+          "iterations": 390,
+          "wallMs": 0.2566940615384615,
+          "cpuMs": 0.2540410256410256
+        },
+        {
+          "iterations": 334,
+          "wallMs": 0.2999674640718562,
+          "cpuMs": 0.29688323353293417
+        },
+        {
+          "iterations": 414,
+          "wallMs": 0.24170119565217396,
+          "cpuMs": 0.25017391304347825
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 525688,
+      "loadStart": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "loadEnd": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "sink": 1
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 360,
+          "wallMs": 0.27854179166666676,
+          "cpuMs": 0.29054166666666664
+        },
+        {
+          "iterations": 379,
+          "wallMs": 0.2642922691292877,
+          "cpuMs": 0.2920686015831135
+        },
+        {
+          "iterations": 453,
+          "wallMs": 0.22146166666666667,
+          "cpuMs": 0.2577814569536424
+        },
+        {
+          "iterations": 436,
+          "wallMs": 0.22974755963302754,
+          "cpuMs": 0.2586743119266055
+        },
+        {
+          "iterations": 460,
+          "wallMs": 0.2174478326086958,
+          "cpuMs": 0.22890869565217392
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 602176,
+      "loadStart": [
+        28.2,
+        25.73,
+        19.81
+      ],
+      "loadEnd": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "sink": 1
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 220,
+          "wallMs": 0.4550254272727275,
+          "cpuMs": 0.4940136363636364
+        },
+        {
+          "iterations": 240,
+          "wallMs": 0.4178417041666667,
+          "cpuMs": 0.44053333333333333
+        },
+        {
+          "iterations": 228,
+          "wallMs": 0.4398019561403505,
+          "cpuMs": 0.46707894736842104
+        },
+        {
+          "iterations": 224,
+          "wallMs": 0.4470473080357143,
+          "cpuMs": 0.47793303571428575
+        },
+        {
+          "iterations": 230,
+          "wallMs": 0.43524132173913044,
+          "cpuMs": 0.46455217391304343
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 777152,
+      "loadStart": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "loadEnd": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "sink": 1
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 235,
+          "wallMs": 0.4255697872340425,
+          "cpuMs": 0.46419574468085106
+        },
+        {
+          "iterations": 245,
+          "wallMs": 0.40956406122448996,
+          "cpuMs": 0.43135510204081634
+        },
+        {
+          "iterations": 243,
+          "wallMs": 0.4120141193415636,
+          "cpuMs": 0.430679012345679
+        },
+        {
+          "iterations": 250,
+          "wallMs": 0.40092613200000005,
+          "cpuMs": 0.460572
+        },
+        {
+          "iterations": 246,
+          "wallMs": 0.4076337439024387,
+          "cpuMs": 0.4440691056910569
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 691200,
+      "loadStart": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "loadEnd": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 514,
+          "wallMs": 0.19456717509727633,
+          "cpuMs": 0.246784046692607
+        },
+        {
+          "iterations": 519,
+          "wallMs": 0.19276375337186902,
+          "cpuMs": 0.19628131021194606
+        },
+        {
+          "iterations": 516,
+          "wallMs": 0.19380249418604645,
+          "cpuMs": 0.19735077519379846
+        },
+        {
+          "iterations": 519,
+          "wallMs": 0.19296154720616582,
+          "cpuMs": 0.22705202312138728
+        },
+        {
+          "iterations": 512,
+          "wallMs": 0.19562227539062493,
+          "cpuMs": 0.200712890625
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 710088,
+      "loadStart": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "loadEnd": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 515,
+          "wallMs": 0.19470592815533969,
+          "cpuMs": 0.2312271844660194
+        },
+        {
+          "iterations": 524,
+          "wallMs": 0.19087256870228997,
+          "cpuMs": 0.19783015267175572
+        },
+        {
+          "iterations": 517,
+          "wallMs": 0.1936710773694392,
+          "cpuMs": 0.19733462282398453
+        },
+        {
+          "iterations": 533,
+          "wallMs": 0.1879262213883677,
+          "cpuMs": 0.21473733583489682
+        },
+        {
+          "iterations": 520,
+          "wallMs": 0.19270547499999985,
+          "cpuMs": 0.23076153846153846
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 749176,
+      "loadStart": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "loadEnd": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 241,
+          "wallMs": 0.4181046182572614,
+          "cpuMs": 0.5203195020746888
+        },
+        {
+          "iterations": 259,
+          "wallMs": 0.387896359073359,
+          "cpuMs": 0.4444903474903475
+        },
+        {
+          "iterations": 280,
+          "wallMs": 0.35746247499999984,
+          "cpuMs": 0.37367500000000003
+        },
+        {
+          "iterations": 272,
+          "wallMs": 0.3677983161764703,
+          "cpuMs": 0.4790992647058823
+        },
+        {
+          "iterations": 256,
+          "wallMs": 0.39193304687499975,
+          "cpuMs": 0.40862890625
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 763496,
+      "loadStart": [
+        26.42,
+        25.4,
+        19.73
+      ],
+      "loadEnd": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 57,
+          "wallMs": 1.7612803508771935,
+          "cpuMs": 1.8834912280701754
+        },
+        {
+          "iterations": 56,
+          "wallMs": 1.792766125,
+          "cpuMs": 1.8879642857142858
+        },
+        {
+          "iterations": 58,
+          "wallMs": 1.7256667586206893,
+          "cpuMs": 1.8141206896551723
+        },
+        {
+          "iterations": 53,
+          "wallMs": 1.8936162264150949,
+          "cpuMs": 1.9655283018867924
+        },
+        {
+          "iterations": 55,
+          "wallMs": 1.8291736545454549,
+          "cpuMs": 1.9707818181818182
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 67488008,
+      "loadStart": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "loadEnd": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "sink": 40983
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 219,
+          "wallMs": 0.45666374885844757,
+          "cpuMs": 0.46737442922374434
+        },
+        {
+          "iterations": 229,
+          "wallMs": 0.43724834061135365,
+          "cpuMs": 0.44803493449781656
+        },
+        {
+          "iterations": 233,
+          "wallMs": 0.4303438025751075,
+          "cpuMs": 0.44005150214592276
+        },
+        {
+          "iterations": 216,
+          "wallMs": 0.46474515740740735,
+          "cpuMs": 0.47761574074074076
+        },
+        {
+          "iterations": 222,
+          "wallMs": 0.4509333198198195,
+          "cpuMs": 0.45963063063063064
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 1366688,
+      "loadStart": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "loadEnd": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 225,
+          "wallMs": 0.4448442399999999,
+          "cpuMs": 0.45320444444444447
+        },
+        {
+          "iterations": 234,
+          "wallMs": 0.42840749145299134,
+          "cpuMs": 0.4411666666666667
+        },
+        {
+          "iterations": 222,
+          "wallMs": 0.45135659909909887,
+          "cpuMs": 0.46344144144144145
+        },
+        {
+          "iterations": 212,
+          "wallMs": 0.4733943679245282,
+          "cpuMs": 0.4837264150943396
+        },
+        {
+          "iterations": 204,
+          "wallMs": 0.49127024509803896,
+          "cpuMs": 0.5081470588235294
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 1576592,
+      "loadStart": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "loadEnd": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unclosed-code",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 40965,
+      "sourceSha256": "39a6bf41d598229bedbd8f08e1fe30abc9a6d8737a3a11fe2c7e4fd95b51aab6",
+      "samples": [
+        {
+          "iterations": 57,
+          "wallMs": 1.7628384035087719,
+          "cpuMs": 1.8599122807017543
+        },
+        {
+          "iterations": 54,
+          "wallMs": 1.8775404999999987,
+          "cpuMs": 1.9982222222222221
+        },
+        {
+          "iterations": 55,
+          "wallMs": 1.8383199272727262,
+          "cpuMs": 1.9228545454545456
+        },
+        {
+          "iterations": 57,
+          "wallMs": 1.770908438596491,
+          "cpuMs": 1.8728947368421052
+        },
+        {
+          "iterations": 56,
+          "wallMs": 1.7959035178571432,
+          "cpuMs": 1.9269285714285715
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 67462416,
+      "loadStart": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "loadEnd": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "sink": 40983
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 12,
+          "wallMs": 8.392213749999996,
+          "cpuMs": 16.44783333333333
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.8511819230769175,
+          "cpuMs": 13.13423076923077
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.741914461538465,
+          "cpuMs": 13.044923076923077
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.935331769230769,
+          "cpuMs": 14.571538461538463
+        },
+        {
+          "iterations": 18,
+          "wallMs": 5.608080500000003,
+          "cpuMs": 7.514444444444444
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 247426600,
+      "loadStart": [
+        25.03,
+        25.13,
+        19.67
+      ],
+      "loadEnd": [
+        23.5,
+        24.81,
+        19.6
+      ],
+      "sink": 0
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 38,
+          "wallMs": 2.656933499999999,
+          "cpuMs": 4.170947368421053
+        },
+        {
+          "iterations": 34,
+          "wallMs": 2.9520878823529415,
+          "cpuMs": 4.49464705882353
+        },
+        {
+          "iterations": 35,
+          "wallMs": 2.88433057142857,
+          "cpuMs": 4.417714285714286
+        },
+        {
+          "iterations": 40,
+          "wallMs": 2.5213240999999984,
+          "cpuMs": 3.8303
+        },
+        {
+          "iterations": 29,
+          "wallMs": 3.4501878965517223,
+          "cpuMs": 5.323620689655172
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 118414168,
+      "loadStart": [
+        23.5,
+        24.81,
+        19.6
+      ],
+      "loadEnd": [
+        23.5,
+        24.81,
+        19.6
+      ],
+      "sink": 0
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 39,
+          "wallMs": 2.5775330256410265,
+          "cpuMs": 4.116794871794872
+        },
+        {
+          "iterations": 35,
+          "wallMs": 2.878821285714288,
+          "cpuMs": 4.3388285714285715
+        },
+        {
+          "iterations": 32,
+          "wallMs": 3.1828111250000006,
+          "cpuMs": 5.1288125
+        },
+        {
+          "iterations": 41,
+          "wallMs": 2.4706288780487813,
+          "cpuMs": 3.9269268292682926
+        },
+        {
+          "iterations": 37,
+          "wallMs": 2.7761430540540553,
+          "cpuMs": 4.445675675675676
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 117676752,
+      "loadStart": [
+        23.5,
+        24.81,
+        19.6
+      ],
+      "loadEnd": [
+        23.5,
+        24.81,
+        19.6
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 13,
+          "wallMs": 7.715038076923074,
+          "cpuMs": 13.472923076923077
+        },
+        {
+          "iterations": 13,
+          "wallMs": 8.01369130769231,
+          "cpuMs": 13.831461538461538
+        },
+        {
+          "iterations": 9,
+          "wallMs": 11.246249222222218,
+          "cpuMs": 21.66688888888889
+        },
+        {
+          "iterations": 15,
+          "wallMs": 6.882374533333329,
+          "cpuMs": 10.347000000000001
+        },
+        {
+          "iterations": 8,
+          "wallMs": 12.52095525,
+          "cpuMs": 21.982875
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 245561112,
+      "loadStart": [
+        23.5,
+        24.81,
+        19.6
+      ],
+      "loadEnd": [
+        23.5,
+        24.81,
+        19.6
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 10,
+          "wallMs": 10.434739799999994,
+          "cpuMs": 17.787200000000002
+        },
+        {
+          "iterations": 11,
+          "wallMs": 9.553603454545458,
+          "cpuMs": 16.78209090909091
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.911132769230772,
+          "cpuMs": 10.30746153846154
+        },
+        {
+          "iterations": 12,
+          "wallMs": 8.724193333333337,
+          "cpuMs": 14.772916666666667
+        },
+        {
+          "iterations": 11,
+          "wallMs": 9.243493727272732,
+          "cpuMs": 15.570818181818181
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 292450432,
+      "loadStart": [
+        21.94,
+        24.46,
+        19.52
+      ],
+      "loadEnd": [
+        21.94,
+        24.46,
+        19.52
+      ],
+      "sink": 0
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 25,
+          "wallMs": 4.0735093199999985,
+          "cpuMs": 6.4737599999999995
+        },
+        {
+          "iterations": 19,
+          "wallMs": 5.410100315789475,
+          "cpuMs": 8.248263157894737
+        },
+        {
+          "iterations": 24,
+          "wallMs": 4.205895041666665,
+          "cpuMs": 6.231625
+        },
+        {
+          "iterations": 22,
+          "wallMs": 4.55181268181818,
+          "cpuMs": 6.845363636363637
+        },
+        {
+          "iterations": 21,
+          "wallMs": 4.763027571428573,
+          "cpuMs": 7.252
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 163072512,
+      "loadStart": [
+        21.94,
+        24.46,
+        19.52
+      ],
+      "loadEnd": [
+        21.94,
+        24.46,
+        19.52
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 20,
+          "wallMs": 5.189785550000002,
+          "cpuMs": 8.4474
+        },
+        {
+          "iterations": 35,
+          "wallMs": 2.9527464857142864,
+          "cpuMs": 3.408657142857143
+        },
+        {
+          "iterations": 25,
+          "wallMs": 4.043656240000001,
+          "cpuMs": 6.2306799999999996
+        },
+        {
+          "iterations": 18,
+          "wallMs": 5.818649222222222,
+          "cpuMs": 8.576777777777778
+        },
+        {
+          "iterations": 22,
+          "wallMs": 4.558923000000004,
+          "cpuMs": 7.0443181818181815
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 166441776,
+      "loadStart": [
+        21.94,
+        24.46,
+        19.52
+      ],
+      "loadEnd": [
+        21.94,
+        24.46,
+        19.52
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 14,
+          "wallMs": 7.2648605000000055,
+          "cpuMs": 8.546000000000001
+        },
+        {
+          "iterations": 10,
+          "wallMs": 10.474676699999998,
+          "cpuMs": 16.8843
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.708839384615387,
+          "cpuMs": 10.773384615384616
+        },
+        {
+          "iterations": 10,
+          "wallMs": 10.089547400000004,
+          "cpuMs": 16.9123
+        },
+        {
+          "iterations": 11,
+          "wallMs": 9.711245545454547,
+          "cpuMs": 17.074454545454543
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 294046336,
+      "loadStart": [
+        21.94,
+        24.46,
+        19.52
+      ],
+      "loadEnd": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "sink": 0
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 87,
+          "wallMs": 1.1586154137931033,
+          "cpuMs": 1.5772988505747125
+        },
+        {
+          "iterations": 89,
+          "wallMs": 1.1262857191011233,
+          "cpuMs": 1.417258426966292
+        },
+        {
+          "iterations": 92,
+          "wallMs": 1.0931672717391312,
+          "cpuMs": 1.3899565217391305
+        },
+        {
+          "iterations": 94,
+          "wallMs": 1.0671931276595743,
+          "cpuMs": 1.3826702127659576
+        },
+        {
+          "iterations": 87,
+          "wallMs": 1.1641815172413787,
+          "cpuMs": 1.4966666666666668
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 72540752,
+      "loadStart": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "loadEnd": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "sink": 0
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 137,
+          "wallMs": 0.7301276350364965,
+          "cpuMs": 0.9172189781021898
+        },
+        {
+          "iterations": 135,
+          "wallMs": 0.7431275925925926,
+          "cpuMs": 0.8660444444444444
+        },
+        {
+          "iterations": 143,
+          "wallMs": 0.6996188181818179,
+          "cpuMs": 0.8089090909090909
+        },
+        {
+          "iterations": 128,
+          "wallMs": 0.7812550390624997,
+          "cpuMs": 0.89040625
+        },
+        {
+          "iterations": 145,
+          "wallMs": 0.693806524137931,
+          "cpuMs": 0.7812068965517242
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 56685984,
+      "loadStart": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "loadEnd": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "sink": 0
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 141,
+          "wallMs": 0.7109506170212769,
+          "cpuMs": 0.81977304964539
+        },
+        {
+          "iterations": 144,
+          "wallMs": 0.697578409722222,
+          "cpuMs": 0.8089375
+        },
+        {
+          "iterations": 143,
+          "wallMs": 0.7013275804195805,
+          "cpuMs": 0.835965034965035
+        },
+        {
+          "iterations": 127,
+          "wallMs": 0.7883500236220472,
+          "cpuMs": 0.9049370078740158
+        },
+        {
+          "iterations": 142,
+          "wallMs": 0.7066143521126762,
+          "cpuMs": 0.8125211267605634
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 57268416,
+      "loadStart": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "loadEnd": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "sink": 0
+    },
+    {
+      "family": "many-paragraphs",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 12288,
+      "sourceSha256": "31bb8934c555f17a8022fca19fbbd5ce870b94e23308bf7502f8b0d0da6aa471",
+      "samples": [
+        {
+          "iterations": 96,
+          "wallMs": 1.0424764791666667,
+          "cpuMs": 1.3813020833333332
+        },
+        {
+          "iterations": 94,
+          "wallMs": 1.0651935957446808,
+          "cpuMs": 1.3842446808510638
+        },
+        {
+          "iterations": 101,
+          "wallMs": 0.9908691188118808,
+          "cpuMs": 1.2337821782178218
+        },
+        {
+          "iterations": 98,
+          "wallMs": 1.0283543061224492,
+          "cpuMs": 1.3400714285714286
+        },
+        {
+          "iterations": 86,
+          "wallMs": 1.1659476627906984,
+          "cpuMs": 1.4889302325581395
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 73438760,
+      "loadStart": [
+        20.99,
+        24.22,
+        19.47
+      ],
+      "loadEnd": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "sink": 18431
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 123,
+          "wallMs": 0.8142037642276418,
+          "cpuMs": 1.3767479674796748
+        },
+        {
+          "iterations": 220,
+          "wallMs": 0.4546647409090905,
+          "cpuMs": 0.6245818181818181
+        },
+        {
+          "iterations": 130,
+          "wallMs": 0.7715539,
+          "cpuMs": 1.1798538461538461
+        },
+        {
+          "iterations": 200,
+          "wallMs": 0.5005725050000001,
+          "cpuMs": 0.824175
+        },
+        {
+          "iterations": 202,
+          "wallMs": 0.49524598514851464,
+          "cpuMs": 0.803029702970297
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 70363160,
+      "loadStart": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "loadEnd": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 249,
+          "wallMs": 0.4025331004016063,
+          "cpuMs": 0.6899196787148594
+        },
+        {
+          "iterations": 209,
+          "wallMs": 0.4793714928229663,
+          "cpuMs": 0.7777894736842105
+        },
+        {
+          "iterations": 198,
+          "wallMs": 0.5055484393939397,
+          "cpuMs": 0.8522979797979797
+        },
+        {
+          "iterations": 172,
+          "wallMs": 0.5821102151162787,
+          "cpuMs": 0.9444418604651162
+        },
+        {
+          "iterations": 281,
+          "wallMs": 0.3564219857651246,
+          "cpuMs": 0.5636868327402135
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 45954664,
+      "loadStart": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "loadEnd": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 267,
+          "wallMs": 0.37508116853932594,
+          "cpuMs": 0.6047827715355806
+        },
+        {
+          "iterations": 250,
+          "wallMs": 0.4006528919999996,
+          "cpuMs": 0.64246
+        },
+        {
+          "iterations": 185,
+          "wallMs": 0.5407079621621622,
+          "cpuMs": 0.9375297297297298
+        },
+        {
+          "iterations": 131,
+          "wallMs": 0.7650297633587784,
+          "cpuMs": 1.2438854961832062
+        },
+        {
+          "iterations": 203,
+          "wallMs": 0.4935824532019703,
+          "cpuMs": 0.8338226600985221
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 45545312,
+      "loadStart": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "loadEnd": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 153,
+          "wallMs": 0.6536811699346404,
+          "cpuMs": 1.0935228758169935
+        },
+        {
+          "iterations": 210,
+          "wallMs": 0.478055414285714,
+          "cpuMs": 0.5127476190476191
+        },
+        {
+          "iterations": 122,
+          "wallMs": 0.8271957131147548,
+          "cpuMs": 1.3656065573770493
+        },
+        {
+          "iterations": 100,
+          "wallMs": 1.01165297,
+          "cpuMs": 1.7031200000000002
+        },
+        {
+          "iterations": 126,
+          "wallMs": 0.7969523333333329,
+          "cpuMs": 1.2908253968253969
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 71141472,
+      "loadStart": [
+        19.71,
+        23.9,
+        19.39
+      ],
+      "loadEnd": [
+        19.25,
+        23.74,
+        19.36
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 58,
+          "wallMs": 1.7334955862068961,
+          "cpuMs": 2.4810172413793103
+        },
+        {
+          "iterations": 83,
+          "wallMs": 1.214168518072289,
+          "cpuMs": 1.8616746987951809
+        },
+        {
+          "iterations": 90,
+          "wallMs": 1.134044033333334,
+          "cpuMs": 2.005722222222222
+        },
+        {
+          "iterations": 67,
+          "wallMs": 1.5444697014925373,
+          "cpuMs": 1.8044776119402985
+        },
+        {
+          "iterations": 114,
+          "wallMs": 0.878599728070176,
+          "cpuMs": 1.084201754385965
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 75488960,
+      "loadStart": [
+        19.25,
+        23.74,
+        19.36
+      ],
+      "loadEnd": [
+        19.25,
+        23.74,
+        19.36
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 48,
+          "wallMs": 2.083386229166667,
+          "cpuMs": 2.8865208333333334
+        },
+        {
+          "iterations": 117,
+          "wallMs": 0.8640767179487183,
+          "cpuMs": 1.4169145299145298
+        },
+        {
+          "iterations": 82,
+          "wallMs": 1.2285078658536577,
+          "cpuMs": 1.8636219512195122
+        },
+        {
+          "iterations": 66,
+          "wallMs": 1.5197762727272734,
+          "cpuMs": 2.0969242424242425
+        },
+        {
+          "iterations": 140,
+          "wallMs": 0.7175247499999996,
+          "cpuMs": 1.0252928571428572
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 40824928,
+      "loadStart": [
+        19.25,
+        23.74,
+        19.36
+      ],
+      "loadEnd": [
+        19.25,
+        23.74,
+        19.36
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 111,
+          "wallMs": 0.902640279279279,
+          "cpuMs": 1.5593693693693693
+        },
+        {
+          "iterations": 62,
+          "wallMs": 1.6308164838709664,
+          "cpuMs": 1.9115322580645162
+        },
+        {
+          "iterations": 165,
+          "wallMs": 0.6069942787878793,
+          "cpuMs": 0.7172848484848485
+        },
+        {
+          "iterations": 102,
+          "wallMs": 0.9826138627450984,
+          "cpuMs": 1.4789313725490196
+        },
+        {
+          "iterations": 152,
+          "wallMs": 0.6587128223684207,
+          "cpuMs": 0.9797236842105264
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 50182832,
+      "loadStart": [
+        19.25,
+        23.74,
+        19.36
+      ],
+      "loadEnd": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 130,
+          "wallMs": 0.770013669230769,
+          "cpuMs": 1.2856846153846155
+        },
+        {
+          "iterations": 155,
+          "wallMs": 0.6469613806451617,
+          "cpuMs": 1.084941935483871
+        },
+        {
+          "iterations": 110,
+          "wallMs": 0.9146146181818184,
+          "cpuMs": 1.3662454545454545
+        },
+        {
+          "iterations": 182,
+          "wallMs": 0.5494511208791207,
+          "cpuMs": 0.7388461538461538
+        },
+        {
+          "iterations": 165,
+          "wallMs": 0.6086333333333331,
+          "cpuMs": 1.0116727272727273
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 75909720,
+      "loadStart": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "loadEnd": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 90,
+          "wallMs": 1.1116103222222218,
+          "cpuMs": 1.8658333333333335
+        },
+        {
+          "iterations": 146,
+          "wallMs": 0.6858474520547947,
+          "cpuMs": 1.0544931506849313
+        },
+        {
+          "iterations": 105,
+          "wallMs": 0.9524771714285721,
+          "cpuMs": 1.4918857142857143
+        },
+        {
+          "iterations": 159,
+          "wallMs": 0.6305186415094335,
+          "cpuMs": 0.9974088050314465
+        },
+        {
+          "iterations": 121,
+          "wallMs": 0.8300279008264458,
+          "cpuMs": 1.345404958677686
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 95806648,
+      "loadStart": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "loadEnd": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "sink": 78154
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 130,
+          "wallMs": 0.7725143384615382,
+          "cpuMs": 1.3176
+        },
+        {
+          "iterations": 121,
+          "wallMs": 0.8295778842975206,
+          "cpuMs": 1.4853471074380165
+        },
+        {
+          "iterations": 102,
+          "wallMs": 0.9807130980392157,
+          "cpuMs": 1.6414215686274511
+        },
+        {
+          "iterations": 205,
+          "wallMs": 0.4886417073170733,
+          "cpuMs": 0.7474536585365854
+        },
+        {
+          "iterations": 92,
+          "wallMs": 1.0888185760869573,
+          "cpuMs": 1.683771739130435
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 69653312,
+      "loadStart": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "loadEnd": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 78,
+          "wallMs": 1.2826398846153846,
+          "cpuMs": 2.0332820512820513
+        },
+        {
+          "iterations": 115,
+          "wallMs": 0.8784113565217397,
+          "cpuMs": 1.1905826086956521
+        },
+        {
+          "iterations": 74,
+          "wallMs": 1.3804449054054053,
+          "cpuMs": 2.221756756756757
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.3973561184210528,
+          "cpuMs": 1.8052894736842104
+        },
+        {
+          "iterations": 111,
+          "wallMs": 0.9057042072072077,
+          "cpuMs": 1.2101261261261262
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 70095496,
+      "loadStart": [
+        18.35,
+        23.48,
+        19.3
+      ],
+      "loadEnd": [
+        17.6,
+        23.24,
+        19.24
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-quotes",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "546ddff402fe3151dc9c4a0a9059219bcbf4a4426c63d9ab136a05072365c95a",
+      "samples": [
+        {
+          "iterations": 31,
+          "wallMs": 3.229024645161292,
+          "cpuMs": 3.6318387096774196
+        },
+        {
+          "iterations": 22,
+          "wallMs": 4.687011681818185,
+          "cpuMs": 4.26
+        },
+        {
+          "iterations": 32,
+          "wallMs": 3.1748748437500005,
+          "cpuMs": 3.58825
+        },
+        {
+          "iterations": 36,
+          "wallMs": 2.7892443888888874,
+          "cpuMs": 3.284666666666667
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.3290912236842107,
+          "cpuMs": 2.129605263157895
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 96578600,
+      "loadStart": [
+        17.6,
+        23.24,
+        19.24
+      ],
+      "loadEnd": [
+        17.6,
+        23.24,
+        19.24
+      ],
+      "sink": 78154
+    },
+    {
+      "family": "nested-lists",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 37,
+          "wallMs": 2.715367945945946,
+          "cpuMs": 4.227351351351351
+        },
+        {
+          "iterations": 34,
+          "wallMs": 2.970644000000003,
+          "cpuMs": 4.366411764705882
+        },
+        {
+          "iterations": 65,
+          "wallMs": 1.5614865538461538,
+          "cpuMs": 3.054969230769231
+        },
+        {
+          "iterations": 28,
+          "wallMs": 3.667040642857143,
+          "cpuMs": 4.695964285714285
+        },
+        {
+          "iterations": 46,
+          "wallMs": 2.1883403043478276,
+          "cpuMs": 3.4730000000000003
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 132263072,
+      "loadStart": [
+        17.6,
+        23.24,
+        19.24
+      ],
+      "loadEnd": [
+        16.91,
+        23,
+        19.19
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-lists",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 29,
+          "wallMs": 3.4982211724137917,
+          "cpuMs": 4.7027586206896554
+        },
+        {
+          "iterations": 62,
+          "wallMs": 1.630145548387097,
+          "cpuMs": 3.039951612903226
+        },
+        {
+          "iterations": 26,
+          "wallMs": 3.9925315769230783,
+          "cpuMs": 4.216615384615385
+        },
+        {
+          "iterations": 71,
+          "wallMs": 1.4100633943661975,
+          "cpuMs": 2.7660985915492957
+        },
+        {
+          "iterations": 94,
+          "wallMs": 1.0858956702127665,
+          "cpuMs": 1.2657021276595743
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 105453664,
+      "loadStart": [
+        16.91,
+        23,
+        19.19
+      ],
+      "loadEnd": [
+        16.91,
+        23,
+        19.19
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-lists",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 74,
+          "wallMs": 1.3605462972972966,
+          "cpuMs": 1.5291621621621623
+        },
+        {
+          "iterations": 32,
+          "wallMs": 3.14123,
+          "cpuMs": 4.5485625
+        },
+        {
+          "iterations": 41,
+          "wallMs": 2.447517707317072,
+          "cpuMs": 3.6267560975609756
+        },
+        {
+          "iterations": 49,
+          "wallMs": 2.0507972040816322,
+          "cpuMs": 3.4478979591836736
+        },
+        {
+          "iterations": 36,
+          "wallMs": 2.793168499999998,
+          "cpuMs": 3.987222222222222
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 99473912,
+      "loadStart": [
+        16.91,
+        23,
+        19.19
+      ],
+      "loadEnd": [
+        16.91,
+        23,
+        19.19
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-lists",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 34,
+          "wallMs": 2.944613411764707,
+          "cpuMs": 4.282764705882353
+        },
+        {
+          "iterations": 59,
+          "wallMs": 1.7008700169491517,
+          "cpuMs": 2.8604067796610173
+        },
+        {
+          "iterations": 66,
+          "wallMs": 1.5206811666666666,
+          "cpuMs": 2.4847121212121213
+        },
+        {
+          "iterations": 53,
+          "wallMs": 1.8930988490566043,
+          "cpuMs": 2.9297735849056603
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.3216291710526311,
+          "cpuMs": 2.338631578947368
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 132489784,
+      "loadStart": [
+        16.91,
+        23,
+        19.19
+      ],
+      "loadEnd": [
+        16.76,
+        22.87,
+        19.16
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-lists",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 55,
+          "wallMs": 1.8248276,
+          "cpuMs": 3.631418181818182
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.3176260394736845,
+          "cpuMs": 1.6459605263157895
+        },
+        {
+          "iterations": 78,
+          "wallMs": 1.285506487179487,
+          "cpuMs": 1.4391923076923077
+        },
+        {
+          "iterations": 46,
+          "wallMs": 2.1987128260869575,
+          "cpuMs": 2.9235434782608696
+        },
+        {
+          "iterations": 73,
+          "wallMs": 1.3785579315068492,
+          "cpuMs": 2.4246849315068495
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 151770632,
+      "loadStart": [
+        16.76,
+        22.87,
+        19.16
+      ],
+      "loadEnd": [
+        16.76,
+        22.87,
+        19.16
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-lists",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 62,
+          "wallMs": 1.6139449354838713,
+          "cpuMs": 3.106
+        },
+        {
+          "iterations": 52,
+          "wallMs": 1.930640403846155,
+          "cpuMs": 2.7408653846153848
+        },
+        {
+          "iterations": 73,
+          "wallMs": 1.373848589041097,
+          "cpuMs": 2.4296301369863014
+        },
+        {
+          "iterations": 106,
+          "wallMs": 0.9474741037735854,
+          "cpuMs": 1.1021320754716981
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.326311486842105,
+          "cpuMs": 2.2325394736842106
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 107530240,
+      "loadStart": [
+        16.76,
+        22.87,
+        19.16
+      ],
+      "loadEnd": [
+        16.76,
+        22.87,
+        19.16
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-lists",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 64,
+          "wallMs": 1.5712714062499993,
+          "cpuMs": 2.931671875
+        },
+        {
+          "iterations": 64,
+          "wallMs": 1.59186865625,
+          "cpuMs": 2.506703125
+        },
+        {
+          "iterations": 75,
+          "wallMs": 1.3539192666666668,
+          "cpuMs": 2.16392
+        },
+        {
+          "iterations": 56,
+          "wallMs": 1.791658500000001,
+          "cpuMs": 2.485
+        },
+        {
+          "iterations": 69,
+          "wallMs": 1.4494509710144925,
+          "cpuMs": 2.654
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 111058688,
+      "loadStart": [
+        16.76,
+        22.87,
+        19.16
+      ],
+      "loadEnd": [
+        16.14,
+        22.64,
+        19.11
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-lists",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 59,
+          "wallMs": 1.706041016949152,
+          "cpuMs": 3.2058305084745764
+        },
+        {
+          "iterations": 44,
+          "wallMs": 2.335386795454546,
+          "cpuMs": 3.2498863636363637
+        },
+        {
+          "iterations": 66,
+          "wallMs": 1.5230423181818187,
+          "cpuMs": 2.6396666666666664
+        },
+        {
+          "iterations": 86,
+          "wallMs": 1.1673325116279079,
+          "cpuMs": 1.475546511627907
+        },
+        {
+          "iterations": 59,
+          "wallMs": 1.731488152542374,
+          "cpuMs": 2.6503898305084745
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 150326040,
+      "loadStart": [
+        16.14,
+        22.64,
+        19.11
+      ],
+      "loadEnd": [
+        16.14,
+        22.64,
+        19.11
+      ],
+      "sink": 1
+    },
+    {
+      "family": "nested-lists",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 53,
+          "wallMs": 1.909925320754716,
+          "cpuMs": 3.0611320754716984
+        },
+        {
+          "iterations": 64,
+          "wallMs": 1.5626703906249997,
+          "cpuMs": 3.098015625
+        },
+        {
+          "iterations": 32,
+          "wallMs": 3.1417760625,
+          "cpuMs": 4.25240625
+        },
+        {
+          "iterations": 53,
+          "wallMs": 1.891037773584906,
+          "cpuMs": 2.9357358490566035
+        },
+        {
+          "iterations": 54,
+          "wallMs": 1.8528807407407388,
+          "cpuMs": 3.6197962962962964
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 174356960,
+      "loadStart": [
+        16.14,
+        22.64,
+        19.11
+      ],
+      "loadEnd": [
+        16.14,
+        22.64,
+        19.11
+      ],
+      "sink": 297603
+    },
+    {
+      "family": "nested-lists",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 65,
+          "wallMs": 1.5514803230769225,
+          "cpuMs": 2.6392153846153845
+        },
+        {
+          "iterations": 83,
+          "wallMs": 1.2125757469879515,
+          "cpuMs": 1.9788674698795181
+        },
+        {
+          "iterations": 72,
+          "wallMs": 1.3964078055555547,
+          "cpuMs": 2.3875416666666665
+        },
+        {
+          "iterations": 94,
+          "wallMs": 1.070955691489362,
+          "cpuMs": 1.6416489361702127
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.3215589078947374,
+          "cpuMs": 2.1859605263157897
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 150141352,
+      "loadStart": [
+        16.14,
+        22.64,
+        19.11
+      ],
+      "loadEnd": [
+        15.24,
+        22.34,
+        19.03
+      ],
+      "sink": 0
+    },
+    {
+      "family": "nested-lists",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 65,
+          "wallMs": 1.5401263076923075,
+          "cpuMs": 2.678723076923077
+        },
+        {
+          "iterations": 82,
+          "wallMs": 1.224277878048781,
+          "cpuMs": 1.8927682926829268
+        },
+        {
+          "iterations": 64,
+          "wallMs": 1.5628715468749999,
+          "cpuMs": 2.59190625
+        },
+        {
+          "iterations": 69,
+          "wallMs": 1.4500852173913044,
+          "cpuMs": 2.6728405797101447
+        },
+        {
+          "iterations": 62,
+          "wallMs": 1.6300710645161285,
+          "cpuMs": 2.7843064516129035
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 138508696,
+      "loadStart": [
+        15.24,
+        22.34,
+        19.03
+      ],
+      "loadEnd": [
+        15.24,
+        22.34,
+        19.03
+      ],
+      "sink": 297603
+    },
+    {
+      "family": "nested-lists",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 388,
+      "sourceSha256": "7b2e83ce7399600d77f919e5c0084373d85d3f238d111427fc0bc314f1c86b5e",
+      "samples": [
+        {
+          "iterations": 59,
+          "wallMs": 1.7104699491525417,
+          "cpuMs": 2.9686440677966104
+        },
+        {
+          "iterations": 52,
+          "wallMs": 1.9300392692307686,
+          "cpuMs": 3.29475
+        },
+        {
+          "iterations": 55,
+          "wallMs": 1.8224600181818191,
+          "cpuMs": 3.131672727272727
+        },
+        {
+          "iterations": 69,
+          "wallMs": 1.4515074782608706,
+          "cpuMs": 2.9877391304347825
+        },
+        {
+          "iterations": 65,
+          "wallMs": 1.5553965384615385,
+          "cpuMs": 2.5551538461538463
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 183830976,
+      "loadStart": [
+        15.24,
+        22.34,
+        19.03
+      ],
+      "loadEnd": [
+        15.24,
+        22.34,
+        19.03
+      ],
+      "sink": 297603
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 15,
+          "wallMs": 6.911055666666668,
+          "cpuMs": 13.3424
+        },
+        {
+          "iterations": 15,
+          "wallMs": 6.919801599999998,
+          "cpuMs": 13.3702
+        },
+        {
+          "iterations": 18,
+          "wallMs": 5.624704833333333,
+          "cpuMs": 10.17688888888889
+        },
+        {
+          "iterations": 20,
+          "wallMs": 5.00533585,
+          "cpuMs": 9.2461
+        },
+        {
+          "iterations": 27,
+          "wallMs": 3.8218203703703675,
+          "cpuMs": 5.570777777777778
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 174446808,
+      "loadStart": [
+        15.14,
+        22.2,
+        19.01
+      ],
+      "loadEnd": [
+        15.14,
+        22.2,
+        19.01
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 35,
+          "wallMs": 2.8629308285714274,
+          "cpuMs": 4.731314285714286
+        },
+        {
+          "iterations": 42,
+          "wallMs": 2.392117023809525,
+          "cpuMs": 4.3342857142857145
+        },
+        {
+          "iterations": 42,
+          "wallMs": 2.4101725000000007,
+          "cpuMs": 4.4442619047619045
+        },
+        {
+          "iterations": 46,
+          "wallMs": 2.1767326304347816,
+          "cpuMs": 4.007717391304348
+        },
+        {
+          "iterations": 41,
+          "wallMs": 2.4608048780487812,
+          "cpuMs": 4.28090243902439
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 128421264,
+      "loadStart": [
+        15.14,
+        22.2,
+        19.01
+      ],
+      "loadEnd": [
+        15.14,
+        22.2,
+        19.01
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 39,
+          "wallMs": 2.57593435897436,
+          "cpuMs": 4.131461538461538
+        },
+        {
+          "iterations": 39,
+          "wallMs": 2.598073333333332,
+          "cpuMs": 4.75348717948718
+        },
+        {
+          "iterations": 37,
+          "wallMs": 2.709384432432431,
+          "cpuMs": 4.663702702702702
+        },
+        {
+          "iterations": 34,
+          "wallMs": 2.9473450588235304,
+          "cpuMs": 5.489088235294117
+        },
+        {
+          "iterations": 41,
+          "wallMs": 2.4555910487804895,
+          "cpuMs": 4.166731707317074
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 129411144,
+      "loadStart": [
+        15.14,
+        22.2,
+        19.01
+      ],
+      "loadEnd": [
+        15.14,
+        22.2,
+        19.01
+      ],
+      "sink": 256
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 20,
+          "wallMs": 5.098614449999997,
+          "cpuMs": 10.31655
+        },
+        {
+          "iterations": 32,
+          "wallMs": 3.2099492812499975,
+          "cpuMs": 4.3606875
+        },
+        {
+          "iterations": 24,
+          "wallMs": 4.303334708333334,
+          "cpuMs": 8.224333333333332
+        },
+        {
+          "iterations": 17,
+          "wallMs": 5.921255294117647,
+          "cpuMs": 10.911294117647058
+        },
+        {
+          "iterations": 22,
+          "wallMs": 4.590744409090906,
+          "cpuMs": 9.022863636363637
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 174036264,
+      "loadStart": [
+        15.14,
+        22.2,
+        19.01
+      ],
+      "loadEnd": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 18,
+          "wallMs": 5.732424166666669,
+          "cpuMs": 10.245111111111111
+        },
+        {
+          "iterations": 28,
+          "wallMs": 3.6852514642857153,
+          "cpuMs": 5.358642857142857
+        },
+        {
+          "iterations": 21,
+          "wallMs": 4.9201470952381,
+          "cpuMs": 9.299809523809524
+        },
+        {
+          "iterations": 23,
+          "wallMs": 4.455580652173912,
+          "cpuMs": 7.777652173913043
+        },
+        {
+          "iterations": 27,
+          "wallMs": 3.7366551851851844,
+          "cpuMs": 4.3971481481481485
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 196409072,
+      "loadStart": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "loadEnd": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 27,
+          "wallMs": 3.743642148148149,
+          "cpuMs": 6.489148148148148
+        },
+        {
+          "iterations": 35,
+          "wallMs": 2.899925228571429,
+          "cpuMs": 5.036342857142857
+        },
+        {
+          "iterations": 34,
+          "wallMs": 2.9445682352941174,
+          "cpuMs": 5.551323529411765
+        },
+        {
+          "iterations": 31,
+          "wallMs": 3.2829930967741934,
+          "cpuMs": 5.829451612903226
+        },
+        {
+          "iterations": 32,
+          "wallMs": 3.12877125,
+          "cpuMs": 5.2334375
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 149740000,
+      "loadStart": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "loadEnd": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "sink": 256
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 35,
+          "wallMs": 2.908745114285715,
+          "cpuMs": 4.907571428571428
+        },
+        {
+          "iterations": 37,
+          "wallMs": 2.7540558648648625,
+          "cpuMs": 4.996486486486487
+        },
+        {
+          "iterations": 32,
+          "wallMs": 3.1389471250000014,
+          "cpuMs": 5.4683125
+        },
+        {
+          "iterations": 31,
+          "wallMs": 3.2342925806451603,
+          "cpuMs": 5.555806451612903
+        },
+        {
+          "iterations": 31,
+          "wallMs": 3.2742384193548353,
+          "cpuMs": 5.829806451612903
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 149379440,
+      "loadStart": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "loadEnd": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "sink": 256
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 20,
+          "wallMs": 5.076300399999999,
+          "cpuMs": 9.31695
+        },
+        {
+          "iterations": 25,
+          "wallMs": 4.070098720000001,
+          "cpuMs": 5.74336
+        },
+        {
+          "iterations": 29,
+          "wallMs": 3.501189793103447,
+          "cpuMs": 4.564724137931035
+        },
+        {
+          "iterations": 20,
+          "wallMs": 5.076162149999999,
+          "cpuMs": 9.01875
+        },
+        {
+          "iterations": 23,
+          "wallMs": 4.442054521739129,
+          "cpuMs": 7.653391304347826
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 184343984,
+      "loadStart": [
+        14.97,
+        22.05,
+        18.97
+      ],
+      "loadEnd": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "sink": 256
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 21,
+          "wallMs": 4.805858238095238,
+          "cpuMs": 7.702095238095238
+        },
+        {
+          "iterations": 24,
+          "wallMs": 4.2699740833333335,
+          "cpuMs": 6.241166666666667
+        },
+        {
+          "iterations": 16,
+          "wallMs": 6.461489687500006,
+          "cpuMs": 11.477625
+        },
+        {
+          "iterations": 17,
+          "wallMs": 6.04024211764706,
+          "cpuMs": 12.51370588235294
+        },
+        {
+          "iterations": 14,
+          "wallMs": 7.427728000000002,
+          "cpuMs": 14.876642857142857
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 227234656,
+      "loadStart": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "loadEnd": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "sink": 11775
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 31,
+          "wallMs": 3.297382677419353,
+          "cpuMs": 5.8180645161290325
+        },
+        {
+          "iterations": 30,
+          "wallMs": 3.3846998999999984,
+          "cpuMs": 6.0098
+        },
+        {
+          "iterations": 28,
+          "wallMs": 3.6163947142857142,
+          "cpuMs": 7.045892857142857
+        },
+        {
+          "iterations": 35,
+          "wallMs": 2.9058962857142854,
+          "cpuMs": 4.209457142857143
+        },
+        {
+          "iterations": 31,
+          "wallMs": 3.295665225806451,
+          "cpuMs": 5.978870967741935
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 180590664,
+      "loadStart": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "loadEnd": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "sink": 11775
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 23,
+          "wallMs": 4.44637539130435,
+          "cpuMs": 8.358347826086955
+        },
+        {
+          "iterations": 38,
+          "wallMs": 2.684984842105262,
+          "cpuMs": 3.836578947368421
+        },
+        {
+          "iterations": 29,
+          "wallMs": 3.459421931034485,
+          "cpuMs": 6.607413793103449
+        },
+        {
+          "iterations": 30,
+          "wallMs": 3.458885066666668,
+          "cpuMs": 6.055833333333334
+        },
+        {
+          "iterations": 29,
+          "wallMs": 3.5019643793103445,
+          "cpuMs": 7.073896551724138
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 172860664,
+      "loadStart": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "loadEnd": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "sink": 0
+    },
+    {
+      "family": "unicode-lines",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8192,
+      "sourceSha256": "705cf8e89a935a0d2b70577e0a3d90b953a2f85153cb040c52da621f9a3d493e",
+      "samples": [
+        {
+          "iterations": 21,
+          "wallMs": 4.7864814761904775,
+          "cpuMs": 9.245761904761904
+        },
+        {
+          "iterations": 26,
+          "wallMs": 3.890470730769231,
+          "cpuMs": 5.905038461538462
+        },
+        {
+          "iterations": 18,
+          "wallMs": 5.605558388888887,
+          "cpuMs": 10.571722222222222
+        },
+        {
+          "iterations": 26,
+          "wallMs": 3.9674800000000014,
+          "cpuMs": 5.866807692307693
+        },
+        {
+          "iterations": 23,
+          "wallMs": 4.418081695652177,
+          "cpuMs": 5.907739130434782
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 224635344,
+      "loadStart": [
+        14.25,
+        21.78,
+        18.9
+      ],
+      "loadEnd": [
+        13.43,
+        21.49,
+        18.82
+      ],
+      "sink": 0
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1,
+          "wallMs": 125.77441900000002,
+          "cpuMs": 128.213
+        },
+        {
+          "iterations": 1,
+          "wallMs": 117.66114900000002,
+          "cpuMs": 119.703
+        },
+        {
+          "iterations": 1,
+          "wallMs": 118.240227,
+          "cpuMs": 119.526
+        },
+        {
+          "iterations": 1,
+          "wallMs": 121.15280699999994,
+          "cpuMs": 122.574
+        },
+        {
+          "iterations": 1,
+          "wallMs": 119.80605000000003,
+          "cpuMs": 121.419
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 847640,
+      "loadStart": [
+        13.43,
+        21.49,
+        18.82
+      ],
+      "loadEnd": [
+        12.52,
+        21.17,
+        18.73
+      ],
+      "sink": 0
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1450,
+          "wallMs": 0.0689721172413793,
+          "cpuMs": 0.07727034482758621
+        },
+        {
+          "iterations": 1432,
+          "wallMs": 0.0698605579608939,
+          "cpuMs": 0.07864525139664805
+        },
+        {
+          "iterations": 1388,
+          "wallMs": 0.07206498703170029,
+          "cpuMs": 0.08143876080691644
+        },
+        {
+          "iterations": 1145,
+          "wallMs": 0.08737620873362444,
+          "cpuMs": 0.10619301310043668
+        },
+        {
+          "iterations": 1435,
+          "wallMs": 0.06971757282229972,
+          "cpuMs": 0.08181324041811847
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 549176,
+      "loadStart": [
+        12.52,
+        21.17,
+        18.73
+      ],
+      "loadEnd": [
+        12.52,
+        21.17,
+        18.73
+      ],
+      "sink": 1
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1266,
+          "wallMs": 0.07903358609794627,
+          "cpuMs": 0.09068641390205372
+        },
+        {
+          "iterations": 1421,
+          "wallMs": 0.07037717382125261,
+          "cpuMs": 0.08016115411681915
+        },
+        {
+          "iterations": 1242,
+          "wallMs": 0.08053663687600639,
+          "cpuMs": 0.09691787439613526
+        },
+        {
+          "iterations": 1318,
+          "wallMs": 0.07590815781487104,
+          "cpuMs": 0.08898786039453718
+        },
+        {
+          "iterations": 1449,
+          "wallMs": 0.06903159627329195,
+          "cpuMs": 0.07769703243616287
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 543120,
+      "loadStart": [
+        12.52,
+        21.17,
+        18.73
+      ],
+      "loadEnd": [
+        12.52,
+        21.17,
+        18.73
+      ],
+      "sink": 1
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1,
+          "wallMs": 116.09223099999997,
+          "cpuMs": 119.361
+        },
+        {
+          "iterations": 1,
+          "wallMs": 124.776747,
+          "cpuMs": 127.298
+        },
+        {
+          "iterations": 1,
+          "wallMs": 114.80861399999992,
+          "cpuMs": 116.204
+        },
+        {
+          "iterations": 1,
+          "wallMs": 116.21213799999998,
+          "cpuMs": 117.436
+        },
+        {
+          "iterations": 1,
+          "wallMs": 116.20206900000005,
+          "cpuMs": 117.42
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 881480,
+      "loadStart": [
+        12.31,
+        20.98,
+        18.68
+      ],
+      "loadEnd": [
+        12.21,
+        20.81,
+        18.64
+      ],
+      "sink": 1
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1,
+          "wallMs": 132.920527,
+          "cpuMs": 134.539
+        },
+        {
+          "iterations": 1,
+          "wallMs": 124.26094899999998,
+          "cpuMs": 125.89
+        },
+        {
+          "iterations": 1,
+          "wallMs": 123.65730199999996,
+          "cpuMs": 126.606
+        },
+        {
+          "iterations": 1,
+          "wallMs": 131.922052,
+          "cpuMs": 136.124
+        },
+        {
+          "iterations": 1,
+          "wallMs": 129.45103100000006,
+          "cpuMs": 139.714
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 853600,
+      "loadStart": [
+        12.21,
+        20.81,
+        18.64
+      ],
+      "loadEnd": [
+        12.27,
+        20.68,
+        18.61
+      ],
+      "sink": 0
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 879,
+          "wallMs": 0.11377312514220704,
+          "cpuMs": 0.13840386803185437
+        },
+        {
+          "iterations": 1048,
+          "wallMs": 0.09542811068702298,
+          "cpuMs": 0.11761354961832061
+        },
+        {
+          "iterations": 930,
+          "wallMs": 0.10757924301075275,
+          "cpuMs": 0.12616021505376343
+        },
+        {
+          "iterations": 738,
+          "wallMs": 0.13551101355013562,
+          "cpuMs": 0.16489837398373983
+        },
+        {
+          "iterations": 756,
+          "wallMs": 0.1322915185185185,
+          "cpuMs": 0.15407010582010583
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 555512,
+      "loadStart": [
+        12.27,
+        20.68,
+        18.61
+      ],
+      "loadEnd": [
+        12.17,
+        20.52,
+        18.57
+      ],
+      "sink": 1
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 958,
+          "wallMs": 0.10444075887265133,
+          "cpuMs": 0.12730480167014613
+        },
+        {
+          "iterations": 997,
+          "wallMs": 0.1003191564694082,
+          "cpuMs": 0.12362387161484453
+        },
+        {
+          "iterations": 1072,
+          "wallMs": 0.09330300746268652,
+          "cpuMs": 0.11041138059701493
+        },
+        {
+          "iterations": 841,
+          "wallMs": 0.11890718906064209,
+          "cpuMs": 0.14353388822829966
+        },
+        {
+          "iterations": 1055,
+          "wallMs": 0.09478737914691951,
+          "cpuMs": 0.11356303317535545
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 662768,
+      "loadStart": [
+        12.17,
+        20.52,
+        18.57
+      ],
+      "loadEnd": [
+        12.17,
+        20.52,
+        18.57
+      ],
+      "sink": 1
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1,
+          "wallMs": 132.490903,
+          "cpuMs": 134.104
+        },
+        {
+          "iterations": 1,
+          "wallMs": 125.48840000000007,
+          "cpuMs": 126.987
+        },
+        {
+          "iterations": 1,
+          "wallMs": 132.43915500000003,
+          "cpuMs": 133.88
+        },
+        {
+          "iterations": 1,
+          "wallMs": 128.67912699999988,
+          "cpuMs": 130.462
+        },
+        {
+          "iterations": 1,
+          "wallMs": 135.29900399999997,
+          "cpuMs": 136.959
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 853472,
+      "loadStart": [
+        12.17,
+        20.52,
+        18.57
+      ],
+      "loadEnd": [
+        11.68,
+        20.28,
+        18.5
+      ],
+      "sink": 0
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 3,
+          "wallMs": 50.075003,
+          "cpuMs": 55.44266666666667
+        },
+        {
+          "iterations": 2,
+          "wallMs": 50.67692750000003,
+          "cpuMs": 51.9735
+        },
+        {
+          "iterations": 2,
+          "wallMs": 51.57087999999999,
+          "cpuMs": 55.8955
+        },
+        {
+          "iterations": 3,
+          "wallMs": 48.10476966666666,
+          "cpuMs": 48.91133333333334
+        },
+        {
+          "iterations": 3,
+          "wallMs": 46.8424,
+          "cpuMs": 47.59466666666666
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 13198528,
+      "loadStart": [
+        11.68,
+        20.28,
+        18.5
+      ],
+      "loadEnd": [
+        11.78,
+        20.16,
+        18.47
+      ],
+      "sink": 0
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1557,
+          "wallMs": 0.06425105202312141,
+          "cpuMs": 0.06969171483622351
+        },
+        {
+          "iterations": 1740,
+          "wallMs": 0.05747947298850573,
+          "cpuMs": 0.058689080459770115
+        },
+        {
+          "iterations": 1643,
+          "wallMs": 0.06089541874619595,
+          "cpuMs": 0.062041387705416916
+        },
+        {
+          "iterations": 1679,
+          "wallMs": 0.05962044073853483,
+          "cpuMs": 0.06898987492555092
+        },
+        {
+          "iterations": 1728,
+          "wallMs": 0.057870732638888894,
+          "cpuMs": 0.06560185185185186
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 571000,
+      "loadStart": [
+        11.78,
+        20.16,
+        18.47
+      ],
+      "loadEnd": [
+        11.78,
+        20.16,
+        18.47
+      ],
+      "sink": 8201
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 1603,
+          "wallMs": 0.062405410480349366,
+          "cpuMs": 0.06474298190892078
+        },
+        {
+          "iterations": 1569,
+          "wallMs": 0.06376233715742509,
+          "cpuMs": 0.06530210325047801
+        },
+        {
+          "iterations": 1419,
+          "wallMs": 0.07050177942212824,
+          "cpuMs": 0.07610288935870331
+        },
+        {
+          "iterations": 1043,
+          "wallMs": 0.09589588878235868,
+          "cpuMs": 0.09777852348993289
+        },
+        {
+          "iterations": 1695,
+          "wallMs": 0.05900506253687318,
+          "cpuMs": 0.06836696165191741
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 527016,
+      "loadStart": [
+        11.78,
+        20.16,
+        18.47
+      ],
+      "loadEnd": [
+        11.72,
+        20.01,
+        18.43
+      ],
+      "sink": 8201
+    },
+    {
+      "family": "interior-spaces",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8195,
+      "sourceSha256": "4a3e49c6c8606c6af42d5ec0905a53539dd8d72a730ff6ba4897623b76a15931",
+      "samples": [
+        {
+          "iterations": 2,
+          "wallMs": 54.91339499999998,
+          "cpuMs": 62.9115
+        },
+        {
+          "iterations": 3,
+          "wallMs": 49.70990600000001,
+          "cpuMs": 51.371
+        },
+        {
+          "iterations": 2,
+          "wallMs": 51.36863549999998,
+          "cpuMs": 62.39
+        },
+        {
+          "iterations": 3,
+          "wallMs": 48.40259200000003,
+          "cpuMs": 50.32566666666667
+        },
+        {
+          "iterations": 2,
+          "wallMs": 56.20826349999999,
+          "cpuMs": 66.76
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 13959544,
+      "loadStart": [
+        11.72,
+        20.01,
+        18.43
+      ],
+      "loadEnd": [
+        11.72,
+        20.01,
+        18.43
+      ],
+      "sink": 8201
+    },
+    {
+      "family": "definitions",
+      "mode": "parse",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 14,
+          "wallMs": 7.284706071428571,
+          "cpuMs": 8.603785714285715
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.8370675384615405,
+          "cpuMs": 14.273923076923078
+        },
+        {
+          "iterations": 15,
+          "wallMs": 6.723812866666663,
+          "cpuMs": 11.271133333333333
+        },
+        {
+          "iterations": 18,
+          "wallMs": 5.565590500000003,
+          "cpuMs": 8.877722222222223
+        },
+        {
+          "iterations": 9,
+          "wallMs": 11.513781777777783,
+          "cpuMs": 17.698888888888888
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 194998488,
+      "loadStart": [
+        11.72,
+        20.01,
+        18.43
+      ],
+      "loadEnd": [
+        11.98,
+        19.92,
+        18.41
+      ],
+      "sink": 0
+    },
+    {
+      "family": "definitions",
+      "mode": "parse",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 9,
+          "wallMs": 11.226687888888895,
+          "cpuMs": 15.65011111111111
+        },
+        {
+          "iterations": 8,
+          "wallMs": 12.673900875000001,
+          "cpuMs": 20.421375
+        },
+        {
+          "iterations": 3,
+          "wallMs": 38.96258799999998,
+          "cpuMs": 38.080666666666666
+        },
+        {
+          "iterations": 4,
+          "wallMs": 32.41371275,
+          "cpuMs": 35.083
+        },
+        {
+          "iterations": 5,
+          "wallMs": 20.459176799999977,
+          "cpuMs": 26.574
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 195537296,
+      "loadStart": [
+        11.98,
+        19.92,
+        18.41
+      ],
+      "loadEnd": [
+        11.98,
+        19.92,
+        18.41
+      ],
+      "sink": 513
+    },
+    {
+      "family": "definitions",
+      "mode": "parse",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 14,
+          "wallMs": 7.200193571428571,
+          "cpuMs": 12.3225
+        },
+        {
+          "iterations": 18,
+          "wallMs": 5.579120611111112,
+          "cpuMs": 12.11261111111111
+        },
+        {
+          "iterations": 19,
+          "wallMs": 5.354886578947374,
+          "cpuMs": 10.613157894736842
+        },
+        {
+          "iterations": 26,
+          "wallMs": 4.02071546153846,
+          "cpuMs": 4.454807692307693
+        },
+        {
+          "iterations": 16,
+          "wallMs": 6.4120335625,
+          "cpuMs": 11.3276875
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 193835552,
+      "loadStart": [
+        11.98,
+        19.92,
+        18.41
+      ],
+      "loadEnd": [
+        11.98,
+        19.92,
+        18.41
+      ],
+      "sink": 0
+    },
+    {
+      "family": "definitions",
+      "mode": "parse",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 10,
+          "wallMs": 10.133822599999997,
+          "cpuMs": 15.9132
+        },
+        {
+          "iterations": 19,
+          "wallMs": 5.438503736842102,
+          "cpuMs": 10.615105263157895
+        },
+        {
+          "iterations": 18,
+          "wallMs": 5.871634277777774,
+          "cpuMs": 7.526777777777777
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.760210076923079,
+          "cpuMs": 14.236846153846155
+        },
+        {
+          "iterations": 12,
+          "wallMs": 8.498337916666676,
+          "cpuMs": 17.247
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 194776504,
+      "loadStart": [
+        11.98,
+        19.92,
+        18.41
+      ],
+      "loadEnd": [
+        11.58,
+        19.71,
+        18.35
+      ],
+      "sink": 513
+    },
+    {
+      "family": "definitions",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 12,
+          "wallMs": 8.634806166666664,
+          "cpuMs": 14.799999999999999
+        },
+        {
+          "iterations": 14,
+          "wallMs": 7.156552857142856,
+          "cpuMs": 11.648214285714285
+        },
+        {
+          "iterations": 12,
+          "wallMs": 8.912895749999999,
+          "cpuMs": 14.454916666666668
+        },
+        {
+          "iterations": 11,
+          "wallMs": 9.226325818181811,
+          "cpuMs": 17.669181818181816
+        },
+        {
+          "iterations": 16,
+          "wallMs": 6.3974434375000016,
+          "cpuMs": 10.715625
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 246765144,
+      "loadStart": [
+        11.58,
+        19.71,
+        18.35
+      ],
+      "loadEnd": [
+        11.58,
+        19.71,
+        18.35
+      ],
+      "sink": 513
+    },
+    {
+      "family": "definitions",
+      "mode": "no-positions",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 10,
+          "wallMs": 10.239428200000003,
+          "cpuMs": 15.8512
+        },
+        {
+          "iterations": 12,
+          "wallMs": 8.887320500000007,
+          "cpuMs": 14.323333333333332
+        },
+        {
+          "iterations": 17,
+          "wallMs": 5.902355411764709,
+          "cpuMs": 9.016823529411765
+        },
+        {
+          "iterations": 12,
+          "wallMs": 8.431260583333332,
+          "cpuMs": 13.750166666666667
+        },
+        {
+          "iterations": 13,
+          "wallMs": 7.842336076923079,
+          "cpuMs": 16.841
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 247220560,
+      "loadStart": [
+        11.58,
+        19.71,
+        18.35
+      ],
+      "loadEnd": [
+        11.58,
+        19.71,
+        18.35
+      ],
+      "sink": 0
+    },
+    {
+      "family": "definitions",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 11,
+          "wallMs": 9.690206454545454,
+          "cpuMs": 13.770454545454545
+        },
+        {
+          "iterations": 10,
+          "wallMs": 10.100704799999994,
+          "cpuMs": 17.1028
+        },
+        {
+          "iterations": 9,
+          "wallMs": 11.758664444444447,
+          "cpuMs": 19.083666666666666
+        },
+        {
+          "iterations": 12,
+          "wallMs": 8.577580083333336,
+          "cpuMs": 14.007583333333335
+        },
+        {
+          "iterations": 17,
+          "wallMs": 6.379651529411764,
+          "cpuMs": 9.762
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 247491632,
+      "loadStart": [
+        11.58,
+        19.71,
+        18.35
+      ],
+      "loadEnd": [
+        11.38,
+        19.53,
+        18.3
+      ],
+      "sink": 513
+    },
+    {
+      "family": "definitions",
+      "mode": "no-positions",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 9,
+          "wallMs": 11.116832666666673,
+          "cpuMs": 18.183333333333334
+        },
+        {
+          "iterations": 10,
+          "wallMs": 10.398597400000005,
+          "cpuMs": 17.2322
+        },
+        {
+          "iterations": 8,
+          "wallMs": 12.797000874999995,
+          "cpuMs": 18.12675
+        },
+        {
+          "iterations": 9,
+          "wallMs": 11.885726777777778,
+          "cpuMs": 18.297777777777778
+        },
+        {
+          "iterations": 9,
+          "wallMs": 11.841844666666677,
+          "cpuMs": 24.54588888888889
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 247852416,
+      "loadStart": [
+        11.38,
+        19.53,
+        18.3
+      ],
+      "loadEnd": [
+        11.38,
+        19.53,
+        18.3
+      ],
+      "sink": 0
+    },
+    {
+      "family": "definitions",
+      "mode": "html",
+      "round": 0,
+      "reader": "baseline",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 45,
+          "wallMs": 2.2550502444444445,
+          "cpuMs": 3.355511111111111
+        },
+        {
+          "iterations": 45,
+          "wallMs": 2.227359666666666,
+          "cpuMs": 3.236088888888889
+        },
+        {
+          "iterations": 57,
+          "wallMs": 1.7691964912280702,
+          "cpuMs": 2.649263157894737
+        },
+        {
+          "iterations": 54,
+          "wallMs": 1.859086814814814,
+          "cpuMs": 2.876462962962963
+        },
+        {
+          "iterations": 72,
+          "wallMs": 1.4198488750000011,
+          "cpuMs": 1.8961805555555555
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 58092536,
+      "loadStart": [
+        11.38,
+        19.53,
+        18.3
+      ],
+      "loadEnd": [
+        11.38,
+        19.53,
+        18.3
+      ],
+      "sink": 0
+    },
+    {
+      "family": "definitions",
+      "mode": "html",
+      "round": 0,
+      "reader": "candidate",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 51,
+          "wallMs": 1.9764577254901976,
+          "cpuMs": 2.6913529411764703
+        },
+        {
+          "iterations": 38,
+          "wallMs": 2.6624553684210532,
+          "cpuMs": 3.866842105263158
+        },
+        {
+          "iterations": 73,
+          "wallMs": 1.3828914109589034,
+          "cpuMs": 1.7221780821917807
+        },
+        {
+          "iterations": 49,
+          "wallMs": 2.0412438163265323,
+          "cpuMs": 2.4751020408163265
+        },
+        {
+          "iterations": 44,
+          "wallMs": 2.3002446818181825,
+          "cpuMs": 2.384113636363636
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 55138000,
+      "loadStart": [
+        11.38,
+        19.53,
+        18.3
+      ],
+      "loadEnd": [
+        11.38,
+        19.53,
+        18.3
+      ],
+      "sink": 19967
+    },
+    {
+      "family": "definitions",
+      "mode": "html",
+      "round": 1,
+      "reader": "candidate",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 94,
+          "wallMs": 1.0643106595744676,
+          "cpuMs": 1.3431382978723403
+        },
+        {
+          "iterations": 95,
+          "wallMs": 1.069007273684211,
+          "cpuMs": 1.3440736842105263
+        },
+        {
+          "iterations": 72,
+          "wallMs": 1.393751555555555,
+          "cpuMs": 1.7845555555555555
+        },
+        {
+          "iterations": 82,
+          "wallMs": 1.2287046097560976,
+          "cpuMs": 1.583390243902439
+        },
+        {
+          "iterations": 92,
+          "wallMs": 1.0916658695652175,
+          "cpuMs": 1.3472608695652173
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 54776088,
+      "loadStart": [
+        11.83,
+        19.49,
+        18.3
+      ],
+      "loadEnd": [
+        11.83,
+        19.49,
+        18.3
+      ],
+      "sink": 0
+    },
+    {
+      "family": "definitions",
+      "mode": "html",
+      "round": 1,
+      "reader": "baseline",
+      "bytes": 8206,
+      "sourceSha256": "388de74bc0d5e184324599d3fcaff7457f780c198ea45d2d3d38b22c35c8cbc1",
+      "samples": [
+        {
+          "iterations": 68,
+          "wallMs": 1.4736148235294124,
+          "cpuMs": 1.970264705882353
+        },
+        {
+          "iterations": 76,
+          "wallMs": 1.3203056315789483,
+          "cpuMs": 1.7363552631578947
+        },
+        {
+          "iterations": 77,
+          "wallMs": 1.3078807662337661,
+          "cpuMs": 1.6967142857142856
+        },
+        {
+          "iterations": 82,
+          "wallMs": 1.22961793902439,
+          "cpuMs": 1.5669268292682927
+        },
+        {
+          "iterations": 89,
+          "wallMs": 1.1254424606741567,
+          "cpuMs": 1.3982134831460675
+        }
+      ],
+      "heapIterations": 50,
+      "sampledAllocationBytes": 64076392,
+      "loadStart": [
+        11.83,
+        19.49,
+        18.3
+      ],
+      "loadEnd": [
+        11.83,
+        19.49,
+        18.3
+      ],
+      "sink": 0
+    }
+  ]
+}

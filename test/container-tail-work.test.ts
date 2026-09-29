@@ -93,7 +93,7 @@ for (const [name, sourceAt, suffixAt] of [
   ['indented list continuation', (depth: number) => '- '.repeat(depth) + 'a\n' + '  '.repeat(depth) + 'b\n', () => 0],
 ] as const) {
   it(`bounds remaining tail work for ${name}`, () => {
-    const rows = [64, 128].map(depth => {
+    const rows = [32, 64, 128].map(depth => {
       const source = sourceAt(depth)
       const row = work(source)
       expect(row.ast).toEqual(parse(source))
@@ -101,7 +101,10 @@ for (const [name, sourceAt, suffixAt] of [
       expect(row.terminatorInputs).toBeLessThanOrEqual(source.length * 5)
       return row
     })
-    expect(rows[1]!.matched).toBeLessThanOrEqual(rows[0]!.matched * 2.1)
+    // Compare added work so a fixed startup offset cannot distort the ratio.
+    // Doubling the added input doubles linear work and quadruples quadratic work.
+    expect(rows[2]!.matched - rows[1]!.matched)
+      .toBeLessThanOrEqual((rows[1]!.matched - rows[0]!.matched) * 2.1)
   })
 }
 

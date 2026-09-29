@@ -38,18 +38,11 @@ export function dropPositions(doc: Document): void {
  * uses an identity path without allocating an offset table.
  */
 export function toCodepointPositions(doc: Document, source: string): void {
-  let hasAstral = false
-  for (let i = 0; i < source.length; i++) {
-    const code = source.charCodeAt(i)
-    if (code >= 0xd800 && code <= 0xdbff) {
-      hasAstral = true
-      break
-    }
-  }
-  if (!hasAstral) return
+  if (!/[\ud800-\udbff]/.test(source)) return
 
   // codepointAt[i] is the number of CODEPOINTS before UTF-16 index i.
   const codepointAt = new Uint32Array(source.length + 1)
+  const lineStartCodepoint: number[] = [0]
   let count = 0
   for (let i = 0; i < source.length; i++) {
     codepointAt[i] = count
@@ -61,20 +54,13 @@ export function toCodepointPositions(doc: Document, source: string): void {
       i++
     }
     count++
+    if (code === 10 || (code === 13 && source.charCodeAt(i + 1) !== 10)) {
+      lineStartCodepoint.push(count)
+    }
   }
   codepointAt[source.length] = count
 
   const codepointOffset = (utf16Offset: number): number => codepointAt[Math.min(utf16Offset, source.length)] ?? count
-
-  // Codepoint index of each line's start, so a column can be recomputed from an
-  // offset instead of converted on its own.
-  const lineStartCodepoint: number[] = [0]
-  for (let i = 0; i < source.length; i++) {
-    const code = source.charCodeAt(i)
-    if (code === 10 || (code === 13 && source.charCodeAt(i + 1) !== 10)) {
-      lineStartCodepoint.push(codepointOffset(i + 1))
-    }
-  }
 
   const convert = (pos: Position): void => {
     const startOffset = pos.startOffset

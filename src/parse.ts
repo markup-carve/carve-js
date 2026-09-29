@@ -551,7 +551,20 @@ const RE_TRAILING_WS = /[ \t]+$/
  * `text` with EVERY line's trailing space-and-tab run removed.
  */
 function dropTrailingWhitespace(text: string): string {
-  return text.replace(/[ \t]+(?=\n|$)/g, '')
+  let from = 0
+  let pieces: string[] | undefined
+  for (let end = text.indexOf('\n');;) {
+    if (end < 0) end = text.length
+    let keep = end
+    while (keep > from && (text.charCodeAt(keep - 1) === 32 || text.charCodeAt(keep - 1) === 9)) keep--
+    if (keep !== end) {
+      (pieces ??= []).push(text.slice(from, keep))
+      from = end
+    }
+    if (end === text.length) break
+    end = text.indexOf('\n', end + 1)
+  }
+  return pieces ? pieces.join('') + text.slice(from) : text
 }
 const RE_TABLE_ROW = /^\|/
 // A complete standard table row opens AND closes with `|` (grammar
@@ -732,7 +745,7 @@ export const layoutWork = {
 }
 
 class Lexer {
-  attachmentBoundaries = new Set<number>()
+  attachmentBoundaries: Set<number>
   prefixMemoLines?: boolean[]
   lines: string[]
   lineOffsets: number[]
@@ -807,7 +820,7 @@ class Lexer {
   defaultFrontmatterFormat = 'yaml'
   parseOptions: ParseOptions
   unclosedContainerKeys: Set<string> | undefined
-  abbrDefs: Map<string, string> = new Map()
+  abbrDefs: Map<string, string>
   /**
    * True only for the lexer over the whole document. PART 12 §7 recognizes an
    * abbreviation definition ONLY at document level: inside a block quote, list
@@ -815,9 +828,9 @@ class Lexer {
    * false, which is what makes a container-authored `*[X]: y` inert.
    */
   atDocumentLevel = false
-  linkDefs: Map<string, LinkDef> = new Map()
+  linkDefs: Map<string, LinkDef>
   /** Document lines admitted only as a block quote's lazy paragraph text. */
-  literalLazyLinkDefLines: Set<number> = new Set()
+  literalLazyLinkDefLines: Set<number>
   /**
    * List-marker lines a block quote admitted as LAZY PARAGRAPH TEXT.
    *
@@ -828,7 +841,7 @@ class Lexer {
    * through the quote's own sub-parse - which read the marker again and opened
    * an item inside the quote instead (markup-carve/carve#1904).
    */
-  quoteLazyMarkerLines: Set<number> = new Set()
+  quoteLazyMarkerLines: Set<number>
   /**
    * Lines a LIST ITEM admitted below its content column as lazy text.
    *
@@ -841,7 +854,7 @@ class Lexer {
    * while one written at that column in the source ends the item
    * (markup-carve/carve-js#1630).
    */
-  itemLazyLines: Set<number> = new Set()
+  itemLazyLines: Set<number>
   /**
    * EVERY line a block quote admitted as lazy continuation text.
    *
@@ -855,7 +868,7 @@ class Lexer {
    * Read today only by the list collector's description-marker arm
    * (markup-carve/carve-js#1606).
    */
-  quoteLazyLines: Set<number> = new Set()
+  quoteLazyLines: Set<number>
   /** See `QuoteLazyHint`. Set by the enclosing quote, taken by the first quote parsed here. */
   quoteLazyHint: QuoteLazyHint | null = null
   /**
@@ -869,12 +882,12 @@ class Lexer {
    * normative. This set is the pre-pass's answer, and the strip consults it
    * instead of re-deciding (markup-carve/carve-js#1597).
    */
-  declinedLinkDefLines: Set<number> = new Set()
+  declinedLinkDefLines: Set<number>
   // Footnote definitions keyed by raw label; value is the parsed note
   // body (def line + indented continuation), set by parseFootnoteDef.
-  footnoteDefs: Map<string, BlockNode[]> = new Map()
+  footnoteDefs: Map<string, BlockNode[]>
   /** Where each definition sits in the source, parallel to `footnoteDefs`. */
-  footnoteDefPos: Map<string, Position> = new Map()
+  footnoteDefPos: Map<string, Position>
   // True for sub-lexers over already-nested block content (list item /
   // blockquote / admonition bodies). Informational only: under the §10
   // Markdown-like rule a visible block interrupts a paragraph at EVERY level
@@ -897,14 +910,17 @@ class Lexer {
 
   // Cache the scan start and longest bare run by fence character. Later
   // openers with a longer marker can skip the scan.
-  fenceCloserMemo: QuotedFenceCloserMemo = new Map()
+  private ownFenceCloserMemo?: QuotedFenceCloserMemo
+  get fenceCloserMemo(): QuotedFenceCloserMemo {
+    return this.ownFenceCloserMemo ??= new Map()
+  }
 
   // Where a closer of each fence shape LAST occurs in these lines, built once
   // by `closerIndex`. See `CloserIndex`.
   fenceCloserIndex: CloserIndex | undefined = undefined
 
   /** Container-scoped §10 fence lookahead answers, keyed by source line. */
-  fenceLookaheadAnswers: Map<string, boolean> = new Map()
+  fenceLookaheadAnswers: Map<string, boolean>
   /**
    * §10 answers a container gave for a fence a DESCENDANT of it owns.
    *
@@ -913,7 +929,7 @@ class Lexer {
    * fence's own container never receives the line that closes it, so it cannot
    * answer for itself (markup-carve/carve#1399 one level in).
    */
-  descendantFenceAnswers: Map<string, boolean> = new Map()
+  descendantFenceAnswers: Map<string, boolean>
   /** This lexer reads a container body whose collector supplied those answers. */
   usesContainerFenceLookahead = false
 
@@ -952,7 +968,20 @@ class Lexer {
     opts: ParseOptions = {},
     lineNumberOffset = 0,
     unclosedContainerKeys?: Set<string>,
+    inherited?: Lexer,
   ) {
+    this.attachmentBoundaries = inherited?.attachmentBoundaries ?? new Set()
+    this.abbrDefs = inherited?.abbrDefs ?? new Map()
+    this.linkDefs = inherited?.linkDefs ?? new Map()
+    this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()
+    this.quoteLazyMarkerLines = inherited?.quoteLazyMarkerLines ?? new Set()
+    this.itemLazyLines = inherited?.itemLazyLines ?? new Set()
+    this.quoteLazyLines = inherited?.quoteLazyLines ?? new Set()
+    this.declinedLinkDefLines = inherited?.declinedLinkDefLines ?? new Set()
+    this.footnoteDefs = inherited?.footnoteDefs ?? new Map()
+    this.footnoteDefPos = inherited?.footnoteDefPos ?? new Map()
+    this.fenceLookaheadAnswers = inherited?.fenceLookaheadAnswers ?? new Map()
+    this.descendantFenceAnswers = inherited?.descendantFenceAnswers ?? new Map()
     this.parseOptions = opts
     this.unclosedContainerKeys = unclosedContainerKeys
     this.lineNumberOffset = lineNumberOffset
@@ -1152,8 +1181,9 @@ function subLexer(
   lineNumberOffset: number,
   sourceLineMap?: number[],
   unclosedContainerKeys?: Set<string>,
+  inherited?: Lexer,
 ): Lexer {
-  const sub = new Lexer(source, opts, lineNumberOffset, unclosedContainerKeys)
+  const sub = new Lexer(source, opts, lineNumberOffset, unclosedContainerKeys, inherited)
   if (sourceLineMap) sub.sourceLineMap = sourceLineMap
   // A source fragment's EOF uses the same line coordinates as its payload.
   if (typeof source === 'string') sub.documentLineCount = sub.lineNumber(sub.lines.length - 1)
@@ -1225,20 +1255,9 @@ function nestedSubLexer(
     parent.lineNumberOffset + startLineIndex,
     sourceLineMap ?? Array.from({ length: mapLength }, (_l, i) => parent.lineNumber(startLineIndex + i)),
     parent.unclosedContainerKeys,
+    parent,
   )
-  sub.abbrDefs = parent.abbrDefs
-  sub.linkDefs = parent.linkDefs
-  sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
-  sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
-  sub.attachmentBoundaries = parent.attachmentBoundaries
-  sub.itemLazyLines = parent.itemLazyLines
-  sub.fenceLookaheadAnswers = parent.fenceLookaheadAnswers
-  sub.descendantFenceAnswers = parent.descendantFenceAnswers
   sub.usesContainerFenceLookahead = true
-  sub.quoteLazyLines = parent.quoteLazyLines
-  sub.declinedLinkDefLines = parent.declinedLinkDefLines
-  sub.footnoteDefs = parent.footnoteDefs
-  sub.footnoteDefPos = parent.footnoteDefPos
   sub.nested = true
   sub.documentLineCount = parent.documentLineCount
   sub.documentLacksFinalBreak = parent.documentLacksFinalBreak
@@ -7700,6 +7719,10 @@ class ParseSession {
   }
 
   private collectLinkDefs(lexer: Lexer) {
+    // This pass publishes link/abbreviation definitions and records rejected
+    // link definitions. Each spelling needs `[`, even behind container markers.
+    // Keep the complete ownership scan whenever that character is present.
+    if (!lexer.lines.some((line, index) => index >= lexer.pos && line.includes('['))) return
     // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
     // opened, or null when there was none. A fence inside a div ends at that div's
     // closer, exactly as it ends at the end of a quote or a list item - and the
@@ -14021,8 +14044,8 @@ class ParseSession {
     let indices = this.newlineIndexCache.get(text)
     if (indices === undefined) {
       indices = []
-      for (let i = 0; i < text.length; i++) {
-        if (text[i] === '\n') indices.push(i)
+      for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) {
+        indices.push(i)
       }
       this.newlineIndexCache.set(text, indices)
     }
