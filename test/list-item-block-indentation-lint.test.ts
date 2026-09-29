@@ -174,3 +174,46 @@ describe('list item block indentation diagnostics', () => {
     })
   })
 })
+
+
+describe('over-indented fences with glued info strings', () => {
+  it.each(['```', '``` js', '```js', '```=html', '~~~js', '~~~=html'])('names the opener of %s', (opener) => {
+    const source = `- a\n\n      ${opener}\n      x\n      ${opener.slice(0, 3)}\n`
+    expect(findings(source)).toMatchObject([
+      { rule: 'list-item-block-overindented', line: 3, column: 7 },
+    ])
+  })
+
+  it('names an unclosed raw fence inside nested quotes', () => {
+    expect(findings('> > - a\n> >\n> >     ```=html\n> >     x\nflush\n')).toMatchObject([
+      { rule: 'list-item-block-overindented', line: 3, column: 9 },
+    ])
+  })
+
+  it('leaves glued fences at the content column and their payload alone', () => {
+    expect(findings('- a\n\n  ```js\n      # payload\n      ```=html\n  ```\n')).toEqual([])
+  })
+})
+
+
+it('does not report fence-shaped payload inside a comment', () => {
+  expect(findings('- a\n\n  %%%\n      ```js\n      ```=html\n      ```\n  %%%\n')).toEqual([])
+})
+
+
+it('keeps the fence tracker in sync inside a raised colon container', () => {
+  const source = '- head\n\n      :::\n      ```\n      :::\n      ```\n      a\n  - second\n      :::\n  - third\n'
+  expect(findings(source)).toMatchObject([
+    { rule: 'list-item-block-overindented', line: 3, column: 7 },
+    { rule: 'list-item-block-overindented', line: 6, column: 7 },
+  ])
+})
+
+
+it('still reports a colon opener that holds an inline comment', () => {
+  const source = '- a\n\n      ::: note {% c %}\n      # x\n      :::\n  - b\n      # y\n'
+  expect(findings(source)).toMatchObject([
+    { rule: 'list-item-block-overindented', line: 3, column: 7 },
+    { rule: 'list-item-block-overindented', line: 7, column: 7 },
+  ])
+})

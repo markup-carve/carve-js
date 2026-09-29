@@ -1035,6 +1035,7 @@ function collectListItemIndentWarnings(
     return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
   }
   const items: LintItemColumn[] = []
+  const commentLines = collectCommentLines(doc, true)
   walkDocument(doc, (node) => {
     if (node.type !== 'list_item') return
     const pos = (node as Positioned).pos
@@ -1110,12 +1111,10 @@ function collectListItemIndentWarnings(
       continue
     }
     if (openFence && owner) ambiguousFences.delete(owner)
-    // Payload inside an already parsed verbatim/comment/container region is
-    // data, even when it happens to begin with `#`, `>` or another block
-    // marker. Suggesting a dedent or escape there would corrupt that payload.
-    // Keep genuine fence delimiters eligible so an authored over-column opener
-    // still receives the migration diagnostic.
-    if (_unrendered.has(lineNo) && !/^(?:`{3,}|~{3,}|:{3,})(?: |$)/.test(authored.rest)) {
+    // Comments contain no eligible openers. Keep code/raw and colon fence
+    // delimiters available to the source-level fence tracker.
+    if (commentLines.has(lineNo) || (_unrendered.has(lineNo) &&
+        !opensCodeFence(authored.rest) && !/^:{3,}(?: |$)/.test(authored.rest))) {
       reported.add(lineNo)
       continue
     }
@@ -2320,10 +2319,10 @@ function collectUnpublishedLines(
 }
 
 /** Line numbers covered by a comment node, which a host never sees. */
-function collectCommentLines(doc: Document): Set<number> {
+function collectCommentLines(doc: Document, blocksOnly = false): Set<number> {
   const comments = new Set<number>()
   walkDocument(doc, (node) => {
-    if (node.type !== 'comment') return
+    if (node.type !== 'comment' || (blocksOnly && !node.block)) return
     const pos = (node as Positioned).pos
     if (!pos) return
     const end = (pos as { endLine?: number }).endLine ?? pos.startLine

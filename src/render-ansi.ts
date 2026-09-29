@@ -8,6 +8,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
 import type { SmartTypographyMode } from './render-markdown.js'
+import { verbatimLines } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -287,11 +288,7 @@ function renderCodeBlock(content: string, lang?: string, header?: string, label?
   if (label) out += `${style(label, BOLD)}\n\n`
   // The language keeps the slot this target already gave it, unchanged.
   if (lang) out += `${style(`┌── ${lang} `, DIM)}\n`
-  // A PAYLOAD OF NO LINES SHOWS NO LINE. Splitting `''` yields one empty line,
-  // which gave a closed empty fence a padded blank row the HTML does not have
-  // (carve-js#2342). A trailing blank line this target still drops is its own
-  // question, not this one - `\n$` stays.
-  for (const line of content === '' ? [] : content.replace(/\n$/, '').split('\n')) {
+  for (const line of verbatimLines(content)) {
     out += `${style(`  ${line}`, FG_BRIGHT_WHITE)}\n`
   }
   return `${out}\n`
