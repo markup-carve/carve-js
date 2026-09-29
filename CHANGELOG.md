@@ -8,6 +8,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
+
 ### Added
 
 - Reuse unchanged blocks for supported plain-paragraph edits in editor sessions.
@@ -16,9 +17,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - HTML import recognizes explicit code-language hints on code blocks and Sphinx, GitHub and MediaWiki wrappers, with validated tokens and deterministic fallback (markup-carve/carve#2387).
 
 ### Fixed
-
-- Keep retained list markers below the item's content column as text after
-  comments. A comment no longer lets an under-indented marker open a child list.
 
 - ANSI output preserves every code payload line, including trailing blank lines (#2357).
 
