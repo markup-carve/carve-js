@@ -304,7 +304,11 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // The separator a payload of no lines does not own, and an all-blank one
       // already carries; see `payloadTerminated`.
       const closerSeparator = payloadTerminated(content) ? '' : '\n'
-      return `${fence}${info}\n${content}${closerSeparator}${fence}\n\n`
+      // The whole region between the delimiters, its opening newline included, so
+      // that an empty payload line is a newline with another behind it wherever it
+      // stands.
+      const payload = holdPayloadBlanks(`\n${content}${closerSeparator}`)
+      return `${fence}${info}${payload}${fence}\n\n`
     }
     case 'block_quote': {
       const lines = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx))).split('\n')
@@ -1191,6 +1195,39 @@ function escapeMdTitle(title: string): string {
   return stripControls(title).replace(/[\\"]/g, '\\$&')
 }
 
+/** Stand a carrier on each empty line of a payload region; see PAYLOAD_BLANK. */
+function holdPayloadBlanks(payload: string): string {
+  if (!payload.includes('\n\n')) return payload
+
+  return payload.replace(/\n(?=\n)/g, `\n${PAYLOAD_BLANK}`)
+}
+
+/**
+ * Take every held payload line back to the empty line it stands for, the
+ * container prefix in front of the carrier included.
+ *
+ * A LINEAR SCAN, not `/[ \t]*<carrier>/g`. That pattern retries its whitespace
+ * run at every position of any OTHER space run in the document, so one code
+ * block holding a blank payload line and 160000 spaces took 21 seconds to render
+ * where the same document takes milliseconds without the carrier. Raised by
+ * codex review on this change.
+ */
+function stripPayloadBlanks(text: string): string {
+  let at = text.indexOf(PAYLOAD_BLANK)
+  if (at === -1) return text
+  let out = ''
+  let from = 0
+  while (at !== -1) {
+    let end = at
+    while (end > from && (text.charCodeAt(end - 1) === 32 || text.charCodeAt(end - 1) === 9)) end--
+    out += text.slice(from, end)
+    from = at + 1
+    at = text.indexOf(PAYLOAD_BLANK, from)
+  }
+
+  return out + text.slice(from)
+}
+
 function safeFence(content: string, min: number): string {
   let longest = 0
   for (const match of content.matchAll(/`+/g)) longest = Math.max(longest, match[0].length)
@@ -1732,11 +1769,26 @@ let RE_CONTEXT_SENTINEL = /(?!)/g
 let HAS_CONTEXT_SENTINEL = /(?!)/
 let RE_ANY_SENTINEL = /(?!)/g
 
+/**
+ * A code fence's EMPTY payload line, held against `normalize`'s blank-run
+ * collapse. Every blank line between the delimiters is payload (PART 9 section
+ * 28), and the collapse is a sweep over the finished document, so two of them
+ * arrived as one and the rest of the payload was gone (carve-php#2736). Standing
+ * on the line keeps the collapse from seeing a run at all; the quote marker and
+ * the list pad still land in front of it, and `stripPayloadBlanks` takes the
+ * carrier and the whitespace before it off once the collapse has run.
+ *
+ * Frontmatter answers the same clause by being built outside `normalize`
+ * entirely, which a block inside a container cannot do.
+ */
+let PAYLOAD_BLANK = ''
+
 const CARRIER_BASE = 0xe004
-const CARRIER_COUNT = 10
+const CARRIER_COUNT = 11
 
 function setCarriers(run: string[]): void {
-  const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang, colon, dot, at] = run as [
+  const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang, colon, dot, at, payloadBlank] = run as [
+    string,
     string,
     string,
     string,
@@ -1748,6 +1800,7 @@ function setCarriers(run: string[]): void {
     string,
     string,
   ]
+  PAYLOAD_BLANK = payloadBlank
   CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang, ':': colon, '.': dot, '@': at }
   CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!', [colon]: ':', [dot]: '.', [at]: '@' }
   RE_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}${at}]`, 'g')
@@ -2193,7 +2246,7 @@ function normalize(text: string): string {
   // re-render as `&nbsp;` and is never mistaken for an indented code-block
   // prefix the way ordinary leading spaces would be. Done after trimming so
   // placeholder-derived leading indentation survives.
-  const collapsed = `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`
+  const collapsed = `${trimNonNbsp(stripPayloadBlanks(text.replace(/\n{3,}/g, '\n\n')))}\n`
 
   return resolveNarrowedEscapes(resolveContextEscapes(collapsed))
 }
