@@ -3910,6 +3910,81 @@ function isInvisibleLine(line: string): boolean {
   return indentColumns(line, 1) === 0 && isBlockAttributeLine(l)
 }
 
+/**
+ * Which lines a closed `%%%` comment block hides, opener and closer included.
+ *
+ * `isInvisibleLine` answers per line and therefore cannot see the block form at
+ * all. An opener with no run of its exact width ahead opens nothing (PART 9
+ * §28) and hides nothing, and a run inside VERBATIM payload is that block's
+ * content rather than an opener - which is why the caller passes the item's
+ * marker line too, since the fence may be authored on it.
+ *
+ * A verbatim opener is taken at face value here, without §10's closer lookahead,
+ * and only a closer at column 0 ends its run. Both readings err toward STAYING
+ * in the payload, and the cost of that is an unmarked comment block, which lands
+ * the caller back on the reading it had before this pass existed.
+ */
+function commentBlockSpans(lines: string[]): boolean[] {
+  const hidden = new Array<boolean>(lines.length).fill(false)
+  // The last line carrying each run width, so an opener that cannot close is
+  // refuted in O(1). Scanning to the end instead costs one suffix read per
+  // unterminated opener, which is the ladder carve#2542 measured.
+  const lastAt = new Map<number, number>()
+  for (let k = 0; k < lines.length; k++) {
+    const run = commentFenceRun(lines[k]!)
+    if (run !== undefined) lastAt.set(run, k)
+  }
+  let verbatimClose: RegExp | null = null
+  for (let k = 0; k < lines.length; k++) {
+    const line = lines[k]!
+    if (verbatimClose !== null) {
+      if (verbatimClose.test(line)) verbatimClose = null
+      continue
+    }
+    const run = commentFenceRun(line)
+    if (run !== undefined) {
+      if ((lastAt.get(run) ?? -1) <= k) continue
+      // EXACT length closes; a shorter run inside a wider block is payload.
+      let close = k + 1
+      while (commentFenceRun(lines[close]!) !== run) close++
+      for (let j = k; j <= close; j++) hidden[j] = true
+      k = close
+      continue
+    }
+    const opener = verbatimOpener(line)
+    if (opener !== null) verbatimClose = fenceCloseRe(opener)
+  }
+
+  return hidden
+}
+
+/**
+ * The fence run of a verbatim opener on `line`, reached through indentation and
+ * through any number of list markers, else null.
+ *
+ * `commentFenceRun` is indent-tolerant (carve#624), so reading the opener at
+ * column 0 alone leaves the two asymmetric: a `%%%` pair inside a DESCENDANT
+ * item's code payload then reads as a comment block.
+ */
+function verbatimOpener(line: string): string | null {
+  // Each marker consumes at least two characters, so `rest` strictly shrinks.
+  let rest = line.replace(/^[ \t]+/, '')
+  while (rest.length > 0) {
+    const fence = RE_FENCE.exec(rest)
+    if (fence) return fence[2]!
+    const raw = RE_RAW_FENCE.exec(rest)
+    if (raw) return raw[1]!
+    const task = RE_TASK.exec(rest)
+    const unordered = task ? null : RE_UNORDERED.exec(rest)
+    const ordered = task ?? unordered ? null : RE_ORDERED.exec(rest)
+    const content = task ? task[3] : unordered ? unordered[2] : ordered ? ordered[4] : undefined
+    if (content === undefined) return null
+    rest = content
+  }
+
+  return null
+}
+
 function lineOpensBlock(line: string): boolean {
   return (
     RE_RAW_FENCE.test(line) ||
@@ -11266,8 +11341,14 @@ class ParseSession {
       // `  %% n` / `- b` came out tight, where the same document without the
       // comment is loose.
       let blankBeforeInvisible = false
+      // A comment BLOCK renders nothing either, and its payload is not an
+      // invisible LINE, so the scan steps over the whole block. Only an item
+      // holding a blank can reach the flag, which is what keeps the pass off
+      // every other item.
+      const hiddenByComment = hasBlank ? commentBlockSpans([content, ...nested]) : []
       for (let k = nested.length - 1; k >= 0; k--) {
         const ln = nested[k]!
+        if (hiddenByComment[k + 1] === true) continue
         if (isBlankLine(ln)) {
           // A `+`-injected separator is not a blank line the author wrote, and
           // never loosens - the same exemption the second-paragraph scan below
