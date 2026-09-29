@@ -20,6 +20,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 - Rebase code and raw fences after a blank-separated quote in a footnote body (carve#2598).
 
+- An unterminated fence absorbed into a list paragraph keeps its interior blank lines from loosening the list (#2358).
+
 - Fenced comments retain payload indentation beyond the host content column. Formatting preserves those columns, including comments folded into definition terms (markup-carve/carve#2535).
 
 - Markdown import keeps code blocks when a language hint is unsupported. It omits the whole hint instead of shortening it to a different language or producing an invalid fence (markup-carve/carve#2522).

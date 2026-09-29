@@ -158,17 +158,12 @@ describe('a fence delimiter line', () => {
   })
 
   it('is the same rule for the looseness scan, which reads fences too', () => {
-    // A FOURTEENTH: an item's tight/loose decision skips blanks inside a CLOSED
-    // fence. Reading the mark as a closer made the fence closed, so the blank was
-    // skipped and the item came out tight - the mark decided a `<p>` wrapper two
-    // constructs away from itself.
-    // The only blank line in the document sits inside the fence, so the item is
-    // TIGHT (`<li>b</li>`) when the fence is closed and LOOSE (`<li><p>b</p>`)
-    // when it is not. A bare closer closes it; the mark must not.
-    const item = (ch: string) => carveToHtml('- a\n  ```\n  x\n\n  y\n  ```' + ch + '\n- b\n')
-    expect(item('')).toContain('<li>b</li>')
-    expect(item('﻿')).toContain('<li><p>b</p></li>')
-    expect(item('X')).toContain('<li><p>b</p></li>')
+    // A blank after a real closer separates paragraphs and loosens the list.
+    // A mark or letter prevents closure, leaving the blank inside the span.
+    const item = (ch: string) => carveToHtml('- a\n  ```\n  x\n  ```' + ch + '\n\n  y\n- b\n')
+    expect(item('')).toContain('<li><p>b</p></li>')
+    expect(item('﻿')).toContain('<li>b</li>')
+    expect(item('X')).toContain('<li>b</li>')
   })
 })
 

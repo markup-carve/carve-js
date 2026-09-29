@@ -11547,13 +11547,9 @@ class ParseSession {
       // to `fenceLines[k + 1]`. Marking ranges is O(n) total (ranges never
       // overlap), keeping the scan linear.
       //
-      // §10'S CLOSER LOOKAHEAD IS CONDITIONAL ON AN OPEN PARAGRAPH, and this pass
-      // applied it unconditionally, so it refused to latch an unterminated opener
-      // the block parser had accepted as a block and read the blank inside that
-      // block as an interior separator (carve-js#2210). §17 L1 and L1a ask for a
-      // second PARAGRAPH, and a paragraph plus one code block holds none.
-      // `fenceState` runs the block tracker's own state machine over these lines
-      // so the two agree about when an opener latches.
+      // An unterminated code fence absorbed into a paragraph keeps later blanks
+      // from loosening the item until it ends (carve-js#2358). Track the fence
+      // even when §10's closer lookahead prevents it from opening a code block.
       //
       // ALL THREE FENCE KINDS. This knew only the code fence, which is the same
       // one-kind-of-three defect corpus category 279 pins for the collectors -
@@ -11586,12 +11582,6 @@ class ParseSession {
           }
         }
         return subColAt[at]!
-      }
-      // Does the SUB-LIST hold the line at `at`, rather than this item? Same
-      // threshold, asked of one line. Built on first use like the table it reads.
-      const subListOwns = (at: number): boolean => {
-        const subCol = subListColumnAt(at)
-        return subCol >= 0 && indentColumns(nested[at]!, subCol) >= subCol
       }
       // Fence membership is read only for blank lines in the tightness pass.
       // Without a blank, classifying every descendant on the marker line has
@@ -11634,7 +11624,6 @@ class ParseSession {
       // the transition through zero writes a range: nesting a hundred containers
       // inside an item marks the outermost span once rather than once per level,
       // which is the same bound the openIdx it replaces had.
-      const fenceState = verbatimOnlyLazyState()
       const firstContentIdx = fenceLines.findIndex((l) => l.trim() !== '')
       const open: Array<{
         kind: 'code' | 'comment' | 'colon'
@@ -11658,33 +11647,6 @@ class ParseSession {
       }
       for (let k = 0; k < fenceLines.length; k++) {
         const line = fenceLines[k]!
-        // §10'S CLOSER LOOKAHEAD ASKS ABOUT *THIS* ITEM'S PARAGRAPH, and one the
-        // SUB-LIST holds open is not one (carve-js#2230). A run that dedents back
-        // out of a child follows the child's own opener, which this pass reads as
-        // paragraph text at its own column, so the run refused to latch and the
-        // blank inside the block it opens loosened the item.
-        //
-        // Asked only at a run, only with a paragraph open, and only with none of
-        // this item's own already open, so an item without a fence pays nothing.
-        // Answering it for every line instead fails the counted guard in
-        // test/nested-container-rescan.test.ts: the table it reads is O(body).
-        if (
-          fenceState.lazyFoldable &&
-          open.length === 0 &&
-          k > 1 &&
-          (RE_FENCE.test(line) || RE_RAW_FENCE.test(line)) &&
-          subListOwns(k - 2)
-        ) {
-          fenceState.lazyFoldable = false
-        }
-        const paragraphOpen = fenceState.lazyFoldable
-        trackItemLazyState(
-          line,
-          fenceState,
-          (marker) => codeCloserPossible(closers, marker, k),
-          true,
-          (run) => exactCloserPossible(closers.comment, run, k),
-        )
         const inner = open[open.length - 1]
         if (inner !== undefined && inner.kind !== 'colon') {
           const closed =
@@ -11717,8 +11679,7 @@ class ParseSession {
         let opened: { kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number } | null =
           null
         if (marker !== null) {
-          if (!paragraphOpen || codeCloserPossible(closers, marker, k))
-            opened = { kind: 'code', close: fenceCloseRe(marker), len: marker.length }
+          opened = { kind: 'code', close: fenceCloseRe(marker), len: marker.length }
         } else {
           const run = commentFenceRun(line)
           if (run !== undefined) {
