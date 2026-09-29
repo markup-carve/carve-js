@@ -11657,17 +11657,12 @@ class ParseSession {
         // above already visited, so an item without a blank pays nothing.
         if (resumesAt >= 0 && resumesAt !== j && subCol >= 0 &&
           indentColumns(beforeRebase[resumesAt]!, subCol) >= subCol) continue
-        // A folded continuation starts no block at this item's column. The
-        // blank still separates this item from a following sibling (§17 L1).
-        if (takenBelowColumn.has(j)) {
-          if (nextIsSibling()) {
-            loose = true
-            break
-          }
-          continue
-        }
         // `j` can no longer be an invisible line (skipped above), so this is the
         // plain "is the next visible thing a paragraph" test it always was.
+        //
+        // ASKED OF A BAND LINE TOO. A line the item folded below its content
+        // column is its own paragraph text, so §17 L1 reads it exactly as the
+        // content-column spelling (markup-carve/carve#2548, corpus 517).
         //
         // STILL `lineOpensBlock`, not §24 C3's wider family. The rebase above has
         // already rewritten an over-indented opener into its exact-column
