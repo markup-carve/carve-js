@@ -28,10 +28,9 @@ import { carveToHtml, markdownToCarve } from '../src/index.js'
  *   truncated at the backtick: dropping it says "this language does not fit",
  *   where keeping `foo` says the source named a language it never named.
  *
- * The documented normalizations are untouched, and they are the controls: a
- * separate info word (```js title="x") and a Pandoc brace
- * (```{.python .numberLines}) still reduce to a language the source really did
- * name.
+ * A separate info word (```js title="x") leaves the language intact.
+ * A Pandoc brace is outside the supported language charset, so the imported
+ * block keeps its code and omits the language hint.
  */
 
 describe('a fence info string holding a backtick', () => {
@@ -84,10 +83,10 @@ describe('a fence info string holding a backtick', () => {
     expect(markdownToCarve('```js title="x"\nx\n```\n')).toContain('```js\n')
   })
 
-  it('still reduces a Pandoc brace to its language', () => {
-    // The shape the unanchored reduction was written for, and it still names a
-    // language the source really did name.
-    expect(markdownToCarve('```{.python .numberLines}\nx\n```\n')).toContain('```.python')
+  it('omits an unsupported Pandoc brace without changing the code', () => {
+    const migrated = markdownToCarve('```{.python .numberLines}\nx\n```\n')
+    expect(migrated).toBe('```\nx\n```\n')
+    expect(carveToHtml(migrated)).toBe('<pre><code>x\n</code></pre>')
   })
 
   it('still opens an ordinary fence with no info at all', () => {
