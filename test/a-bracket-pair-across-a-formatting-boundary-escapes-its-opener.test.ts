@@ -11,6 +11,13 @@
  * `tests/html-import/paren-after-a-closed-bracket`, the cross-engine contract for
  * importer output; carve-php took it in markup-carve/carve-php#2756 and carve-rs
  * in markup-carve/carve-rs#2206.
+ *
+ * THE CROSSED SPAN'S OWN SPELLING DOES NOT ENTER IT. This rule shipped with a
+ * clause that declined wherever the writer had braced a crossed span, on the
+ * reading that a braced pair survives a bracket run. It does not: the spec's own
+ * reader, carve-rs and carve-php all read `[{^a]^}` as literal text, so declining
+ * dropped the span for every reader but this one. The bytes below were measured
+ * against all three (markup-carve/carve-js#2399).
  */
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, htmlToCarve } from '../src/index.js'
@@ -21,9 +28,9 @@ describe('a bracket pair across a formatting boundary escapes its opener', () =>
     ['[<strong>a](b)</strong>', '\\[*a](b)*'],
     ['<em>[a</em>](b)', '/\\[a/](b)'],
     // One shape pays a second backslash: a crossing pair nested inside a literal
-    // pair, where the inner closer then answers the outer opener. `[[/a\]/]` also
-    // holds; carve-php and carve-rs write these bytes, so the fleet decides any
-    // trimming rather than this engine.
+    // pair, where the inner closer then answers the outer opener. carve-php and
+    // carve-rs write these bytes, so the fleet decides any trimming rather than
+    // this engine.
     ['[[<em>a]</em>]', '[\\[/a\\]/]'],
   ])('%s imports as %s', (body, expected) => {
     const out = htmlToCarve(`<p>${body}</p>`).value
@@ -41,36 +48,34 @@ describe('a bracket pair across a formatting boundary escapes its opener', () =>
   })
 
   /*
-   * A BRACED delimiter is NOT a boundary this rule reaches, and the escape there
-   * is not merely idle - it cost idempotence, which is why these are a gate.
+   * A BRACED delimiter is crossed like any other. Superscript, subscript, insert
+   * and delete are always braced and an emphasis is braced whenever its neighbors
+   * leave it no bare form, so this family was the whole of what the old clause
+   * declined - which is to say it was where the span went missing.
    *
-   * Only a bare delimiter run can be isolated. A brace pair survives a bracket
-   * run, so `[{^a]^}` re-reads as itself with no backslash anywhere. Escaping the
-   * opener anyway wrote `[\[{^a]^}]` for the nested shape, and re-formatting that
-   * added a second backslash.
-   *
-   * WHICH SPELLING A SPAN GETS IS THE WRITER'S CALL, not the node type's: sup,
-   * sub, insert and delete are always braced, and an emphasis or strong is braced
-   * too whenever its neighbors leave it no bare form. So this asks `writtenBraced`
-   * rather than re-deriving the condition.
+   * Each spelling was read back by the spec's own reader
+   * (`scripts/spec/layout.mjs` plus `scripts/spec/html.mjs` at carve `aa3678a2`,
+   * the pinned spec) and comes out as the HTML that wrote it. Unescaped, the same
+   * reader returns the source as literal text.
    */
   it.each([
-    ['<p>[<sup>a]</sup></p>', '[{^a]^}'],
-    ['<p>[[<sup>a]</sup>]</p>', '[[{^a]^}]'],
-    ['<p>[<sub>a]</sub></p>', '[{,a],}'],
-    ['<p>[<ins>a]</ins></p>', '[{+a]+}'],
-    ['<p>[<del>a]</del></p>', '[{-a]-}'],
-    ['<p>[<sup>a](b)</sup></p>', '[{^a]\\(b)^}'],
+    ['<p>[<sup>a]</sup></p>', '\\[{^a]^}'],
+    ['<p>[[<sup>a]</sup>]</p>', '[\\[{^a\\]^}]'],
+    ['<p>[<sub>a]</sub></p>', '\\[{,a],}'],
+    ['<p>[[<sub>a]</sub>]</p>', '[\\[{,a\\],}]'],
+    ['<p>[<ins>a]</ins></p>', '\\[{+a]+}'],
+    ['<p>[<del>a]</del></p>', '\\[{-a]-}'],
+    ['<p>[<sup>a](b)</sup></p>', '\\[{^a](b)^}'],
     // An alphanumeric neighbor leaves the emphasis no bare spelling either.
-    ['<p>a[<em>b]</em>c</p>', 'a[{/b]/}c'],
-    ['<p>[[<em>a]</em>x</p>', '[[{/a]/}x'],
-    ['<p>[[<strong>a]</strong>x</p>', '[[{*a]*}x'],
-    ['<p>[[<em>](b)</em>x</p>', '[[{/]\\(b)/}x'],
+    ['<p>a[<em>b]</em>c</p>', 'a\\[{/b]/}c'],
+    ['<p>[[<em>a]</em>x</p>', '[\\[{/a\\]/}x'],
+    ['<p>[[<strong>a]</strong>x</p>', '[\\[{*a\\]*}x'],
+    ['<p>[[<em>](b)</em>x</p>', '[\\[{/\\](b)/}x'],
     // And from the other side: the OPENER under the braced span, the closer above it.
-    ['<p>x<em>[a</em>]</p>', 'x{/[a/}]'],
-    ['<p><em>[a</em>x]</p>', '{/[a/}x]'],
-    ['<p>x<sup>[a</sup>]</p>', 'x{^[a^}]'],
-  ])('writes no escape across a braced delimiter: %s', (html, expected) => {
+    ['<p>x<em>[a</em>]</p>', 'x{/\\[a/}]'],
+    ['<p><em>[a</em>x]</p>', '{/\\[a/}x]'],
+    ['<p>x<sup>[a</sup>]</p>', 'x{^\\[a^}]'],
+  ])('escapes across a braced delimiter too: %s', (html, expected) => {
     const out = htmlToCarve(html).value
     expect(out).toBe(`${expected}\n`)
     expect(carveToCarve(out)).toBe(out)
@@ -78,15 +83,14 @@ describe('a bracket pair across a formatting boundary escapes its opener', () =>
   })
 
   /*
-   * A braced span re-pairs everything under it, so only the OUTERMOST span the
-   * pair crosses has a say. A bare span nested inside a braced one is safe, and a
-   * span holding BOTH brackets is crossed by nothing at all.
+   * Only the OUTERMOST span a pair crosses decides, and a span holding BOTH
+   * brackets is crossed by nothing at all.
    */
   it.each([
-    ['<p>[[<sup><em>a]</em></sup>]</p>', '[[{^/a]/^}]'],
-    ['<p><em>[[<strong>a]</strong>x</em></p>', '/[[{*a]*}x/'],
-    ['<p><em>[a<strong>b]</strong></em></p>', '/[a{*b]*}/'],
-  ])('leaves a pair a braced span already protects: %s', (html, expected) => {
+    ['<p>[[<sup><em>a]</em></sup>]</p>', '[\\[{^/a\\]/^}]'],
+    ['<p><em>[[<strong>a]</strong>x</em></p>', '/[\\[{*a\\]*}x/'],
+    ['<p><em>[a<strong>b]</strong></em></p>', '/\\[a{*b]*}/'],
+  ])('reads the crossing from the outermost span: %s', (html, expected) => {
     const out = htmlToCarve(html).value
     expect(out).toBe(`${expected}\n`)
     expect(carveToCarve(out)).toBe(out)
@@ -101,9 +105,7 @@ describe('a bracket pair across a formatting boundary escapes its opener', () =>
   it.each([
     ['<p><em>[a</em>]</p>', '/\\[a/]'],
     ['<p><em>[a</em>](b)</p>', '/\\[a/](b)'],
-    // A braced span on the far side declines the rule, so section 4's own check
-    // settles this one and the closer keeps the escape it always had.
-    ['<p><em>[a</em><em>b]</em></p>', '/[a/{/b\\]/}'],
+    ['<p><em>[a</em><em>b]</em></p>', '/\\[a/{/b]/}'],
   ])('escapes the opener when the pair crosses upward: %s', (html, expected) => {
     const out = htmlToCarve(html).value
     expect(out).toBe(`${expected}\n`)
@@ -116,9 +118,12 @@ describe('a bracket pair across a formatting boundary escapes its opener', () =>
    * INVARIANTS are swept rather than sampled: each import re-formats to itself and
    * comes back as the HTML that wrote it.
    *
-   * This is the gate the spelling cases above cannot be. Each of them pins bytes,
-   * and an escape that is merely idle keeps every byte assertion passing - it shows
-   * up as a second backslash on the NEXT format, which is what the sweep sees.
+   * IT CANNOT SEE THE DEFECT ABOVE, and that is worth stating where the sweep
+   * lives. `carveToHtml` is this engine's reader, which is more permissive here
+   * than the spec's: all 993 shapes the old clause declined on passed both
+   * assertions while reading as literal text everywhere else. Only running the
+   * imported source through a foreign reader separated them, which is why the
+   * families above pin bytes measured against one.
    */
   it('holds the writer invariants across every placement', () => {
     const tags = ['em', 'strong', 'u', 's', 'mark', 'sup', 'sub', 'ins', 'del']
