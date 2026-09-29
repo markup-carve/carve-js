@@ -1,3 +1,4 @@
+import { attributedDjotWords } from './djot-word-attributes.js'
 import { attributedDjotStrong } from './djot-attributed-strong.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
@@ -297,6 +298,10 @@ export function djotToCarve(djot: string): string {
     spans.push(span)
     return `${prefix}${spans.length - 1}\x00`
   })
-  const converted = convert(held).replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spans[Number(index)]!)
+  const words = attributedDjotWords(held, maskDjotCodeAndDestinations(held), convert, span => {
+    spans.push(span)
+    return `${prefix}${spans.length - 1}\x00`
+  })
+  const converted = convert(words).replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spans[Number(index)]!)
   return frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`
 }
