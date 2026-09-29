@@ -1035,12 +1035,8 @@ function collectListItemIndentWarnings(
     return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
   }
   const items: LintItemColumn[] = []
-  const verbatimOpeners = new Set<number>()
+  const commentLines = collectCommentLines(doc)
   walkDocument(doc, (node) => {
-    if (node.type === 'code_block' || node.type === 'raw_block') {
-      const pos = (node as Positioned).pos
-      if (pos) verbatimOpeners.add(pos.startLine)
-    }
     if (node.type !== 'list_item') return
     const pos = (node as Positioned).pos
     if (!pos) return
@@ -1115,9 +1111,10 @@ function collectListItemIndentWarnings(
       continue
     }
     if (openFence && owner) ambiguousFences.delete(owner)
-    // Code/raw payload and comments are data. Only a parsed block's opener
-    // remains eligible for an over-indentation diagnostic.
-    if (_unrendered.has(lineNo) && !verbatimOpeners.has(lineNo)) {
+    // Comments contain no eligible openers. Keep code/raw and colon fence
+    // delimiters available to the source-level fence tracker.
+    if (commentLines.has(lineNo) || (_unrendered.has(lineNo) &&
+        !opensCodeFence(authored.rest) && !/^:{3,}(?: |$)/.test(authored.rest))) {
       reported.add(lineNo)
       continue
     }

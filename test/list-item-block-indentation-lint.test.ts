@@ -199,3 +199,12 @@ describe('over-indented fences with glued info strings', () => {
 it('does not report fence-shaped payload inside a comment', () => {
   expect(findings('- a\n\n  %%%\n      ```js\n      ```=html\n      ```\n  %%%\n')).toEqual([])
 })
+
+
+it('keeps the fence tracker in sync inside a raised colon container', () => {
+  const source = '- head\n\n      :::\n      ```\n      :::\n      ```\n      a\n  - second\n      :::\n  - third\n'
+  expect(findings(source)).toMatchObject([
+    { rule: 'list-item-block-overindented', line: 3, column: 7 },
+    { rule: 'list-item-block-overindented', line: 6, column: 7 },
+  ])
+})
