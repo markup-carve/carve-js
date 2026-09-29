@@ -934,7 +934,11 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ["517-a-band-paragraph-after-an-invisible-line-leaves-the-item-loose-5", { reason: "Retained markers below the content column stay text (markup-carve/carve#2619).", html: "<ul>\n  <li><p>t</p>\n    <p>- b</p>\n  </li>\n  <li><p>s</p></li>\n</ul>" }],
+  ["277-a-below-column-marker-after-a-comment-where-no-paragraph-is-open", { reason: "Retained markers below the content column stay text (markup-carve/carve#2619).", html: "<ul>\n  <li>a\n    - s\n  </li>\n</ul>" }],
+  ["277-a-below-column-marker-after-a-comment-where-no-paragraph-is-open-2", { reason: "Retained markers below the content column stay text (markup-carve/carve#2619).", html: "<ul>\n  <li>a\n    1. o\n  </li>\n</ul>" }],
+])
 
 
 

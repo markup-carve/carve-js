@@ -11345,6 +11345,11 @@ class ParseSession {
             (deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')))
           ) {
             lazyLine = l.replace(/^[ \t]+/, '')
+          } else if (!insideOpenFence(lazyState) && indentColumns(l, contentCol) < contentCol &&
+              (lazyState.commentAtColumn || RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart())) &&
+              (RE_TASK.test(l) || RE_UNORDERED.test(l) || RE_ORDERED.test(l) || extractItemAttr(l) !== null)) {
+            // Retained markers below the content column stay text on reparse.
+            lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
             // A block-SHAPED line below the content column opens nothing (§24 C3:
             // below it a marker folds as lazy item text and no other opener nests
