@@ -18,3 +18,18 @@
 1953: Extracts figure-target rendering into one helper per non-HTML renderer and routes standalone figures and panels through it. The PR states Markdown, plain-text and ANSI output are unchanged, and no public signature moves, so a consumer installing the package has nothing to act on.
 2066: Trims parser, writer and table-of-contents comments. No statement, signature or emitted byte moves, so a consumer installing the package has nothing to act on.
 2067: Removes stale benchmark figures from source comments across twelve modules. Comment text only; no code moves.
+
+# 0.1.8. Each moved shipped source without changing what a consumer installs.
+
+2176: Replaces hand-written HTML-import DOM types with parse5's own. Type-level only; no imported document changes.
+2183: Gives each canonical render its own session state. Output is unchanged for every corpus document, and no documented API exposed the shared state.
+2186: Isolates parser document state while preserving the recursion limits. No parsed document changes.
+2188: Routes reference resolution through typed inline child traversal. The same references resolve to the same nodes.
+2219: Extracts inline resolution and shares block-child traversal between passes. No behavior moves.
+2228: Separates parser policies and widens the checked type boundaries. Type-level only.
+2231: Uses typed traversal and state in parsing and HTML import. No parsed or imported document changes.
+2233: Adds literal-text verification to the migration report tests. Test-side only.
+2189: Spec corpus pin bump. Carries no engine change of its own.
+2204: Spec corpus pin bump. Its one engine change, a term-folded footnote reference's label, ships under the definition-term entry.
+2286: Spec corpus pin bump. Carries no engine change of its own.
+2374: Spec corpus pin bump listing nineteen new corpus categories. Carries no engine change of its own.
