@@ -6322,6 +6322,9 @@ function rebaseOverindentedBlocks(
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate)) {
+          // An unmarked blank ends a quote (CARVE-P2-008). The next block
+          // gets its own footnote-body base (CARVE-P0-004, carve#2598).
+          if (hostIsFootnoteBody && RE_BLOCKQUOTE.test(opener)) break
           let k = j + 1
           while (k < lines.length && isBlankLine(lines[k]!)) k++
           if (k >= lines.length || indentColumns(lines[k]!, runColumn) < runColumn) break
