@@ -3252,28 +3252,36 @@ interface QuoteFenceHosts {
   columns: number[]
   markers: number[]
   kinds: ('item' | 'note')[]
-  fence: { marker: string; column: number } | null
-  pending: { marker: string; column: number } | null
+  /**
+   * The fence a list item or footnote inside this quote holds open. `column` is
+   * where the opener sits and `floor` the host's own content column; the two
+   * differ for an over-indented opener, and then a closer at either one ends it.
+   */
+  fence: { marker: string; column: number; floor: number } | null
 }
 
 function trackQuoteHostFence(
   content: string, state: BlockQuoteLazyState,
   hasCloser: (marker: string, column?: number) => boolean,
 ): boolean {
-  const host = state.hosts ??= { columns: [0], markers: [], kinds: [], fence: null, pending: null }
+  const host = state.hosts ??= { columns: [0], markers: [], kinds: [], fence: null }
   const column = indentColumns(content)
   const text = content.replace(/^[ \t]*/, '')
   if (host.fence) {
-    if (text !== '' && column < host.fence.column) host.fence = null
+    const open = host.fence
+    if (text !== '' && column < open.floor) host.fence = null
     else {
-      if (column === host.fence.column && fenceCloseRe(host.fence.marker).test(text)) host.fence = null
+      if (
+        (column === open.floor || column === open.column) &&
+        fenceCloseRe(open.marker).test(text)
+      ) host.fence = null
       closeBlockQuoteParagraph(state)
       return true
     }
   }
   if (text === '') return false
   if (RE_BLOCKQUOTE.test(content)) {
-    host.columns = [0]; host.markers = []; host.kinds = []; host.pending = null
+    host.columns = [0]; host.markers = []; host.kinds = []
     return false
   }
   const paragraph = blockQuoteParagraphOpen(state)
@@ -3307,21 +3315,22 @@ function trackQuoteHostFence(
     break
   }
   const floor = host.columns.at(-1)!
-  if (host.pending && host.pending.column > floor) host.pending = null
   const code = RE_FENCE.exec(inner)
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
   const marker = code?.[2] ?? raw?.[1] ?? null
-  if (host.pending && marker && marker[0] === host.pending.marker[0] && marker.length >= host.pending.marker.length) {
-    host.pending = null
-    return false
-  }
   if (marker && floor > 0) {
-    if (at === floor && (blockStart || !paragraph || hasCloser(marker, floor))) {
-      host.fence = { marker, column: floor }
+    // AN OVER-INDENTED OPENER IS STILL THE HOST'S FENCE. §24 C3 asks a processor
+    // to NAME a block opener past the item's canonical content column, not to
+    // refuse it, so the host holds its payload exactly as it holds a canonical
+    // one - and a flush-left line then reaches no open paragraph. Read as a
+    // continuation instead, it put a document-level line inside the fence
+    // (carve-js#2350). Its closer may sit at its own column or at the host's.
+    const overIndented = at !== floor
+    if (blockStart || !paragraph || hasCloser(marker, floor) || (overIndented && hasCloser(marker, at))) {
+      host.fence = { marker, column: at, floor }
       closeBlockQuoteParagraph(state)
       return true
     }
-    if (at !== floor) host.pending = { marker, column: floor }
   }
   return false
 }
