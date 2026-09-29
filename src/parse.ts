@@ -1315,6 +1315,9 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       prefix = parentLine.length - trimmed.length - synthetic
     }
 
+    // A parent frame has already been excluded from its source offset.
+    prefix -= parentLine.length - stripLazyFrame(parentLine).length
+
     const offset = parent.lineOffset(parentIndex) + prefix
     const width = parent.lineStartColumn(parentIndex) - 1 + prefix
     // Refuse a negative published offset. This guard is unreachable under the
