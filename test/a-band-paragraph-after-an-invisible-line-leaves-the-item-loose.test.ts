@@ -32,9 +32,9 @@ describe('a band paragraph after an invisible line leaves the item loose', () =>
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it('a sub-list attached from the band keeps the list tight', () => {
+  it('a retained marker starts a second paragraph and leaves the list loose', () => {
     expect(carveToHtml('- t\n\n  %% c\n - b\n- s\n')).toBe(
-      '<ul>\n  <li>t\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n  <li>s</li>\n</ul>',
+      '<ul>\n  <li><p>t</p>\n    <p>- b</p>\n  </li>\n  <li><p>s</p></li>\n</ul>',
     )
   })
 
