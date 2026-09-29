@@ -1155,6 +1155,8 @@ function subLexer(
 ): Lexer {
   const sub = new Lexer(source, opts, lineNumberOffset, unclosedContainerKeys)
   if (sourceLineMap) sub.sourceLineMap = sourceLineMap
+  // A source fragment's EOF uses the same line coordinates as its payload.
+  if (typeof source === 'string') sub.documentLineCount = sub.lineNumber(sub.lines.length - 1)
   return sub
 }
 

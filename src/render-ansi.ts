@@ -288,8 +288,10 @@ function renderCodeBlock(content: string, lang?: string, header?: string, label?
   if (label) out += `${style(label, BOLD)}\n\n`
   // The language keeps the slot this target already gave it, unchanged.
   if (lang) out += `${style(`┌── ${lang} `, DIM)}\n`
-  for (const line of codeLines(content)) {
-    out += `${style(`  ${line}`, FG_BRIGHT_WHITE)}\n`
+  const lines = codeLines(content)
+  for (const [index, line] of lines.entries()) {
+    const ending = index < lines.length - 1 || content.endsWith('\n') ? '\n' : ''
+    out += `${style(`  ${line}`, FG_BRIGHT_WHITE)}${ending}`
   }
   return `${out}\n`
 }

@@ -92,7 +92,7 @@ function renderCode(node: CodeBlock, ctx: BlockExtensionRenderContext): string {
       const [, prefix, ws, n] = m
       return `${ctx.escapeHtml(prefix!)}${ws}<b class="callout" data-callout="${n}">${n}</b>`
     })
-    .map((line) => `${line}\n`)
+    .map((line, index) => `${line}${index < lines.length - 1 || node.content.endsWith('\n') ? '\n' : ''}`)
     .join('')
   return `${pad}<pre${ctx.renderAttrs(node.attrs)}><code${langAttr}>${body}</code></pre>`
 }
