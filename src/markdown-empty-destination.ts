@@ -1,3 +1,4 @@
+import { readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
 /*
  * CommonMark links an empty destination; Carve reads `[t]()` as literal text
  * (markup-carve/carve#2069). The Markdown importer writes such a link as its
@@ -12,9 +13,11 @@ export interface EmptyDestinationReferences {
   empty: Map<string, string>
   defined: Set<string>
   labels: Map<string, string>
+  inline: Map<string, string>
+  sourceLabels: Map<string, string>
 }
 
-const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map() }
+const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), sourceLabels: new Map() }
 
 let references = NO_REFERENCES
 
@@ -32,6 +35,27 @@ export function referenceDestinationLabel(
   if (label.startsWith('^')) return undefined
   const key = normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders))
   return references.empty.has(key) ? undefined : references.labels.get(key)
+}
+
+export function referenceInlineTarget(label: string): string | undefined {
+  return references.inline.get(label)
+}
+
+export function referenceSourceText(label: string, placeholders: readonly string[]): string {
+  for (let pass = 0; pass < placeholders.length; pass++) {
+    const restored = label.replace(/\x00P(\d+)\x00/g, (token, index: string) => placeholders[Number(index)] ?? token)
+    if (restored === label) break
+    label = restored
+  }
+  return label
+}
+
+export function referenceSourceLabel(label: string, placeholders: readonly string[]): string | undefined {
+  return references.sourceLabels.get(normalizeReferenceLabel(referenceSourceText(label, placeholders)))
+}
+
+export function referenceLiteralText(label: string, decodeEntity: (entity: string) => string, placeholders: readonly string[]): string {
+  return decodeLinkTitle(label, decodeEntity, placeholders)
 }
 
 const RE_ENTITY = /&(?:#[xX][0-9A-Fa-f]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/g
@@ -83,7 +107,28 @@ export function extractReferenceDefinitions(
   const defined = new Set<string>()
   const labels = new Map<string, string>()
   const definitions: string[] = []
+  const inline = new Map<string, string>()
+  const sourceLabels = new Map<string, string>()
+  const reservedReferences = new Set<number>()
+  for (const line of lines) {
+    for (const match of line.matchAll(/\[carve-import-reference-(\d+)\]/gi)) reservedReferences.add(Number(match[1]))
+  }
   const kept: string[] = []
+  let referenceChunk: { lines: readonly string[]; start: number; through: number; text: string; offsets: number[] } | undefined
+  const referenceSource = (index: number): string => {
+    if (!referenceChunk || referenceChunk.lines !== lines || index > referenceChunk.through) {
+      const chunks: string[] = []
+      const offsets: number[] = []
+      let size = 0, through = index
+      for (; through < lines.length && lines[through]!.trim() !== ''; through++) {
+        offsets.push(size)
+        chunks.push(lines[through]!)
+        size += lines[through]!.length + 1
+      }
+      referenceChunk = { lines, start: index, through: through - 1, text: chunks.join('\n'), offsets }
+    }
+    return referenceChunk.text.slice(referenceChunk.offsets[index - referenceChunk.start])
+  }
   let fence: string | null = null
   let htmlCloser: RegExp | null = null
   let blockDepth = 0
@@ -161,6 +206,32 @@ export function extractReferenceDefinitions(
       canStart = true
       continue
     }
+    if (canStart && !opensItem && lineDepth === 0 && listIndent === 0 && /^ {0,3}\[(?!\^)/.test(content)) {
+      const single = /^ {0,3}\[((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
+      const ordinary = single && !/\\\]/.test(single[1]!) && (single[2]!.trim() === '' || lineTitle.test(single[2]!))
+      const parsed = ordinary ? undefined : readMarkdownReferenceDefinition(referenceSource(i))
+      if (parsed?.complex && !parsed.target.startsWith('<>')) {
+        const key = normalizeReferenceLabel(decodeLinkTitle(parsed.label, decodeEntity))
+        if (!defined.has(key)) {
+          let serial = inline.size + 1
+          while (reservedReferences.has(serial) || inline.has(`carve-import-reference-${serial}`)) serial++
+          const canonical = `carve-import-reference-${serial}`
+          labels.set(key, canonical)
+          inline.set(canonical, parsed.target)
+          sourceLabels.set(normalizeReferenceLabel(parsed.label), canonical)
+          defined.add(key)
+        }
+        i += parsed.lines - 1
+        depth = 0
+        canStart = true
+        continue
+      }
+      if (parsed === null && (/^ {0,3}\[[^\n]*\]:[ \t]*</.test(content) || /^ {0,3}\[[^\n]*\[[^\n]*\]:/.test(content))) {
+        kept.push(line.replace(/^( *)\[/, '$1\\['))
+        canStart = false
+        continue
+      }
+    }
     // A deeper quote opens a block; a shallower line is lazy continuation.
     const definition = /^ {0,3}\[((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
     if (
@@ -194,7 +265,10 @@ export function extractReferenceDefinitions(
           canStart = true
           continue
         }
-        if (!repeated) labels.set(key, definition[1]!)
+        if (!repeated) {
+          labels.set(key, definition[1]!)
+          sourceLabels.set(normalizeReferenceLabel(definition[1]!), definition[1]!)
+        }
         let preceding: string | undefined
         for (let at = kept.length - 1; at >= 0; at--) {
           if (kept[at]!.trim() !== '') { preceding = kept[at]; break }
@@ -273,7 +347,7 @@ export function extractReferenceDefinitions(
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }
-  return { lines: kept, references: { empty, defined, labels }, definitions }
+  return { lines: kept, references: { empty, defined, labels, inline, sourceLabels }, definitions }
 }
 
 /** A line-initial block opener in text, escaped so the text stays a paragraph. */

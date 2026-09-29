@@ -47,5 +47,5 @@ it('does not resolve an escaped reference label against a different spelling', (
 
 it('does not duplicate escaped bracket labels', () => {
   const converted = markdownToCarve('[a\\]b][]\n\n[a\\]b]: /u')
-  expect(converted.split('\n')[0]).toBe('[a\\]b][]')
+  expect(carveToHtml(converted)).toBe('<p><a href="/u">a]b</a></p>')
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { djotMigrationWarnings, lintCarve } from '../src/index.js'
+import { carveToHtml, djotMigrationWarnings, lintCarve } from '../src/index.js'
 
 const at = (source: string, rule: string) =>
   lintCarve(source).filter((w) => w.rule === rule).map((w) => `${w.line}:${w.column}`)
@@ -9,6 +9,23 @@ const at = (source: string, rule: string) =>
 // clause landed. carve-js emitted it nowhere, so the one construct in the
 // language that reaches neither the page nor a symbol table did so silently.
 describe('lint reports a block attribute that reaches no block', () => {
+  it.each([
+    ':: t\n: {empty}\n\nflush\n',
+    'ref[^a]\n\n[^a]: {empty}\n\nflush\n',
+    '> :: t\n> : {empty}\n\nflush\n',
+  ])('stays silent for an empty body sentinel: %s', (source) => {
+    expect(at(source, 'unattached-block-attribute')).toEqual([])
+    expect(carveToHtml(source)).toContain('<p>flush</p>')
+  })
+
+  it.each([
+    [':: t\n: {.x}\n\nflush\n', '2:3'],
+    ['ref[^a]\n\n[^a]: {.x}\n\nflush\n', '3:7'],
+    ['para\n\n{empty}\n', '3:1'],
+  ])('reports ordinary attributes with no following block: %s', (source, location) => {
+    expect(at(source, 'unattached-block-attribute')).toEqual([location])
+  })
+
   it('reports one at an item boundary, where the next marker ends the item', () => {
     expect(at('- a\n\n  {.c}\n- b\n', 'unattached-block-attribute')).toEqual(['3:3'])
   })

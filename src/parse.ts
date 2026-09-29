@@ -9123,7 +9123,7 @@ class ParseSession {
       sub.sublistsCarryAuthoredBase = true
       sub.inFootnoteBody = true
       sub.hostBody = 'footnote'
-      lexer.footnoteDefs.set(label, this.parseBlocks(sub, 0))
+      lexer.footnoteDefs.set(label, bodyLines.length === 1 && bodyLines[0] === '{empty}' ? [] : this.parseBlocks(sub, 0))
       // The definition runs from its `[^label]:` marker to the last line it
       // consumed. The body blocks cannot supply that: the marker is not part of
       // any of them, so a span derived from the body would start inside the
@@ -10138,7 +10138,7 @@ class ParseSession {
       const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
-      return parseSession.parseBlocks(sub, 0)
+      return bodyLines.length === 1 && bodyLines[0] === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)
     }
     /**
      * The span covering document lines `first`..`last` inclusive, marker and all.
@@ -13570,8 +13570,9 @@ class ParseSession {
         // would otherwise force a backtrack to EOF at every `{` (quadratic on
         // runs like `{+`×n or `{~`×n). O(1) suffix lookups; output-identical.
         const hasBrace = !!(rbraceSuf && rbraceSuf[i])
+        const inlineEnd = bracketRuns.at(-1)?.close ?? text.length
         const sub = hasBrace ? this.substitutionAt(text, i) : null
-        if (sub) {
+        if (sub && sub.end <= inlineEnd) {
           flush()
           out.push(
             this.withPos(
@@ -13590,7 +13591,6 @@ class ParseSession {
           continue
         }
         // A pair opened inside a bracket run must close inside that run.
-        const inlineEnd = bracketRuns.at(-1)?.close ?? text.length
         const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? this.criticPairEnd(text, i, '+}') : -1
         if (ins !== -1 && ins <= inlineEnd) {
           flush()

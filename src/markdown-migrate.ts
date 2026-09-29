@@ -17,6 +17,10 @@ import {
   extractReferenceDefinitions,
   plainAltText,
   referenceDestinationLabel,
+  referenceInlineTarget,
+  referenceSourceLabel,
+  referenceSourceText,
+  referenceLiteralText,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
@@ -1074,7 +1078,7 @@ function convertInline(
       if (restored === body) break
       body = restored
     }
-    const href = body.replace(/[\\[\]()`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
+    const href = body.replace(/[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
     return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
       { type: 'link', href, children: [{ type: 'text', value: body }] },
     ] }] }).replace(/\n$/, '')
@@ -1133,6 +1137,11 @@ function convertInline(
       '%' + char.charCodeAt(0).toString(16).toUpperCase(),
     )
     return `(${enc}${decodeEntitiesInTitle(rest).replace(/^[ \t\n]+/, ' ')})`
+  }
+
+  const referenceTail = (canonical: string, fallback: string): string => {
+    const target = referenceInlineTarget(canonical)
+    return protect(target === undefined ? fallback : encodeDest(`(${target})`) ?? fallback)
   }
 
   const imageLabel = (label: string): string => {
@@ -1214,7 +1223,37 @@ function convertInline(
       if (source[offset + match.length] === '(') return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans)
       if (canonical === undefined || /[\[\]]/.test(canonical)) return match
-      return protect(`${imageLabel(`![${label}]`)}[${canonical}]`)
+      const target = referenceInlineTarget(canonical)
+      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
+    })
+
+  // In a plain three-label chain, an unknown full-reference label can begin
+  // the next link. Protect the resolved tail before the ordinary reference pass.
+  let chainCursor = 0
+  const chainAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+  const chainSubject = line
+  line = line.replace(/(?<![!\\\]])\[([\w .-]+)\]\[([\w .-]+)\]\[([\w .-]+)\](?!\[)/gu,
+    (match, first: string, second: string, third: string, offset: number) => {
+      while (chainCursor < offset) {
+        if (chainSubject[chainCursor] === '<') {
+          chainAutolink.lastIndex = chainCursor
+          const auto = chainAutolink.exec(chainSubject)
+          const tag = scanHtmlTag(chainSubject, chainCursor)
+          const end = auto ? chainCursor + auto[0].length : tag?.end
+          if (end !== undefined) { chainCursor = end; continue }
+        }
+        chainCursor++
+      }
+      if (chainCursor > offset) return match
+      const tail = /^\x00P(\d+)\x00/.exec(chainSubject.slice(offset + match.length))
+      if (tail && protectedSpans[Number(tail[1])]?.startsWith('(')) return match
+      const middle = referenceDestinationLabel(second, decodeHtmlEntitiesRaw, protectedSpans)
+      const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans)
+      if (middle !== undefined) {
+        return `[${first}]${protect(`[${middle}]`)}[${third}]${last !== undefined ? protect(`[${last}]`) : ''}`
+      }
+      if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${protect(`[${last}]`)}`
+      return match
     })
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
@@ -1225,8 +1264,15 @@ function convertInline(
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
     const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label))
       ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) : undefined
+    const sourceLabel = referenceSourceLabel(reference, protectedSpans)
+    if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel) !== undefined) return referenceTail(sourceLabel, match)
+    const literal = referenceLiteralText(reference, decodeHtmlEntitiesRaw, protectedSpans)
+    if (canonical === undefined && sourceLabel === undefined && !reference.startsWith('^') && /\\[!*]/.test(referenceSourceText(reference, protectedSpans)) && literal !== reference && /[!*]/.test(literal)) {
+      return protect(`\\[${literal}]`)
+    }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
-    return protect(canonical === undefined || /[\[\]]/.test(canonical) || keepCollapsed ? match : `[${canonical}]`)
+    return canonical === undefined || /[\[\]]/.test(canonical)
+      ? protect(match) : referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`)
   })
 
   // Reference-link definition `[label]: dest "title"` (optional space after
@@ -1269,7 +1315,7 @@ function convertInline(
       if (restored === body) break
       body = restored
     }
-    if (!/[\\`]/.test(body)) return protect(match)
+    if (!/[\\`]/.test(body) && rawBracketRunCloses(body)) return protect(match)
     return protect(writeLiteralAutolink(body))
   })
   line = line.replace(/<[^>\s@]+@[^>\s]+>/g, match => /[\\\x00]/.test(match) ? match : protect(match))
@@ -1302,7 +1348,7 @@ function convertInline(
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
     const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans)
     if (destinationLabel === undefined || /[\[\]]/.test(destinationLabel)) return match
-    return `${match}${protect(label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
+    return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
   // Math, converted and protected before the emphasis passes so a formula
@@ -2489,15 +2535,7 @@ function peelQuoteLevels(line: string, levels: number): string {
 }
 
 function blockquotePrefix(line: string): { prefix: string; text: string } | null {
-  let rest = line
-  let prefix = ''
-  while (rest.startsWith('>')) {
-    rest = rest.slice(1)
-    if (rest.startsWith(' ') || rest.startsWith('\t')) rest = rest.slice(1)
-    prefix += '> '
-  }
-  if (prefix === '') return null
-  return { prefix, text: rest }
+  return line.startsWith('>') ? quotedLine(line, 0) : null
 }
 
 /**
@@ -2514,9 +2552,12 @@ function quotedLine(line: string, contentCol: number): { prefix: string; text: s
   let col = advanceColumns(contentCol, slack)
   rest = rest.slice(slack.length)
   let prefix = ''
-  for (let marker = /^>[ \t]?/.exec(rest); marker; marker = /^>[ \t]?/.exec(rest)) {
-    col = advanceColumns(col, marker[0])
-    rest = rest.slice(marker[0].length)
+  for (let marker = /^ ?>[ \t]?/.exec(rest); marker; marker = /^ ?>[ \t]?/.exec(rest)) {
+    const tab = marker[0].endsWith('\t')
+    const beforePad = advanceColumns(col, tab ? marker[0].slice(0, -1) : marker[0])
+    const residue = tab ? advanceColumns(beforePad, '\t') - beforePad - 1 : 0
+    col = beforePad + (tab ? 1 : 0)
+    rest = ' '.repeat(residue) + rest.slice(marker[0].length)
     prefix += '> '
   }
   if (prefix === '') return null
@@ -2760,7 +2801,10 @@ function collectBlockquoteInlineRun(
     run.push(continues ? { ...parsed, continued: true } : parsed)
     end++
   }
-  if (run.length === 0) return { lines: [pad + strip(lines[start]!)], end: start + 1, blank: true }
+  if (run.length === 0) {
+    const empty = quotedLine(lines[start]!, contentCol)
+    return { lines: [pad + (empty && quoteDepth(empty.prefix) > 1 ? empty.prefix.trimEnd() : strip(lines[start]!))], end: start + 1, blank: true }
+  }
   const quoteEnds = end === lines.length || quotedLine(lines[end]!, contentCol) === null
   return {
     lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run)), markers, quoteEnds), dialect)
