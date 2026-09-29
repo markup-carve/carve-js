@@ -7,6 +7,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
+## [0.1.9] - 2026-09-30
+
+### Fixes
+
+- `lintCarve` no longer reports `unattached-block-attribute` on the `{empty}` sentinel, the spelling PART 11 §7b and §7d define for an empty footnote definition body and an empty description body. An attribute block that reaches no block is still reported (#2408).
+- Markdown import resolves a reference chain against the definitions that exist, and reads a definition whose label is escaped or spans lines and whose title carries parentheses or spans lines (#2409; markup-carve/carve#2522, markup-carve/carve#2593).
+- Markdown import keeps a bracketed autolink's destination and the parentheses inside it, and keeps tab residue and nested quote markers inside a quoted block (#2409; markup-carve/carve#2522).
+- An editorial substitution is bounded by the bracket run that encloses it (#2409; markup-carve/carve#2645).
+
+### Improvements
+
+- Reduced position-removal time by visiting children before deleting fields. Container lexers share immutable line arrays, ordinary Unicode text uses the plain-text inline paths, and reference resolution avoids redundant passes and replacement arrays. Short deep-quote scaling guards use longer timing batches without relaxing their threshold. See the [paired measurements](reports/parser-next-five.md) (#2407).
+- Reduce position-removal key arrays, definition prepasses on ordinary bracket text, unused container maps and plain-paragraph scanner setup. The [follow-up measurements](reports/parser-followups.md) include CPU and allocation profiles, definition controls and multiple nesting depths (#2390, #2391, #2392, #2393).
+
 ## [0.1.8] - 2026-09-29
 
 ### Breaking
@@ -80,10 +94,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - The term-fold lint measures a BOM's width and skips verbatim spans, and the fence-ownership and nesting-cap diagnostics agree with the parser, as do the formatter's own (#2165, #2218, #2249, #2301).
 
 ### Improvements
-
-- Reduced position-removal time by visiting children before deleting fields. Container lexers share immutable line arrays, ordinary Unicode text uses the plain-text inline paths, and reference resolution avoids redundant passes and replacement arrays. Short deep-quote scaling guards use longer timing batches without relaxing their threshold. See the [paired measurements](reports/parser-next-five.md).
-
-- Reduce position-removal key arrays, definition prepasses on ordinary bracket text, unused container maps and plain-paragraph scanner setup. The [follow-up measurements](reports/parser-followups.md) include CPU and allocation profiles, definition controls and multiple nesting depths (#2390, #2391, #2392, #2393).
 
 - `carve lint` reports a fence opener that fell back to inline text, and a `::: footnotes` or `::: references` marker inside a container that places nothing; `--extension citations` makes the references rule reachable (#1914, #2045, #2068).
 - `renderCarveWithConversionReport` names the AST structures and fields Carve source cannot spell (#2091).
@@ -164,5 +174,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
+[0.1.9]: https://github.com/markup-carve/carve-js/compare/0.1.8...0.1.9
 [0.1.8]: https://github.com/markup-carve/carve-js/compare/0.1.7...0.1.8
 [0.1.7]: https://github.com/markup-carve/carve-js/compare/0.1.6...0.1.7
