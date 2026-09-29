@@ -9,154 +9,96 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Added
-
-- Reuse unchanged blocks for supported plain-paragraph edits in editor sessions.
-  Session AST snapshots are now deeply frozen; clone them before annotation or editing.
-
-- HTML import recognizes explicit code-language hints on code blocks and Sphinx, GitHub and MediaWiki wrappers, with validated tokens and deterministic fallback (markup-carve/carve#2387).
-
-### Fixed
-
-- ANSI output preserves every code payload line, including trailing blank lines (#2357).
-
-- Indentation lint names an over-indented fence opener with a glued info string, including unterminated fences (#2341).
-
-- Keep emphasis delimiters inside their enclosing balanced bracket run (#2362).
-
-- Rebase code and raw fences after a blank-separated quote in a footnote body (carve#2598).
-- Include a fenced block quote's closing delimiter in its source span, including empty quotes, caption targets and quotes inside footnotes (#2345).
-
-- An unterminated fence absorbed into a list paragraph keeps its interior blank lines from loosening the list (#2358).
-
-- Fenced comments retain payload indentation beyond the host content column. Formatting preserves those columns, including comments folded into definition terms (markup-carve/carve#2535).
-
-- Markdown import keeps code blocks when a language hint is unsupported. It omits the whole hint instead of shortening it to a different language or producing an invalid fence (markup-carve/carve#2522).
-
-- Fences inside quoted lists and footnotes no longer absorb following unmarked lines (markup-carve/carve#2550).
-
-- Unfinished code fences in nested list items retain every trailing blank line when the item ends.
-
-- Attribute blocks reject unquoted values containing pipes, backslashes or quotes. Formatting quotes and escapes backslashes so attribute values survive reparsing (#2191).
-
-- Comments and definitions indented past a definition term stay in the term. Terms on list-marker lines follow the same folding rule, and headings under their descriptions stay inside the description (markup-carve/carve#2411, #2185).
-
-- Reference and abbreviation passes visit extension content, ruby pairs and citation fields. Resolved references retain their metadata without receiving definition attributes again.
-
-- Parser options and caches belong to each call. Failed option getters no longer leak quote settings, and independent nested calls use their own options. Extension context helpers retain the enclosing settings and recursion limit.
-
-- Source positions count lone surrogates separately and map BOM-prefixed text containing astral characters against the original source. Astral text after a lone carriage return also receives codepoint columns.
-
-- AST JSON ingest handles lists with hundreds of thousands of items, and export handles equally wide block lists, without overflowing the JavaScript argument stack (#2153).
-
-### Changed
-
-- Code-block AST content now includes authored final line breaks (#2373). HTML import and output preserve the literal payload text. Stored trees using the old encoding need migration from source or known producer behavior. Canonical Carve output reports `field-unspellable` when closing a fence requires adding a newline.
-
-- Definition collection skips container queries for lines that cannot define a reference.
-
-- `fromAstJson` accepts `unknown` input and validates it before decoding.
-
-- Canonical rendering reuses the two most recent escape-window parses, reducing parser work without changing output (#2154).
-
-## [0.1.8] - 2026-09-25
-
 ### Breaking
 
+- `code_block.content` is the payload's literal text, so a nonempty payload keeps the break before its closer and one that ends mid-line keeps none, on every target and in an extension fragment (#2373, #2383).
 - The serialized `footnote_ref` target field is `label`, not `id`, and ingest refuses the old wire spelling (#1965; markup-carve/carve#2213).
-- `RenderLoss` is discriminated by `code`, and `format` exists only on a `raw-format-dropped` loss (#1972, #1980), so reading `loss.format` unconditionally no longer type-checks.
-- `renderCarve` throws `SourceUnspellableError` for an empty emphasis-family mark instead of writing an empty brace pair, which read back as literal text (#1879, #1881). A mark whose content touches whitespace takes the braced form.
-- AST ingest refuses a bare `table_row` at the document root and a `footnote_ref` with no target, and accepts a `citation` with no `pos` (#1960; markup-carve/carve#2197).
-- A `citation` outside `citation_group.items` is refused at decode with `AstJsonMisplacedNodeTypeError`, instead of being accepted and throwing in a renderer (#1976).
-- A generated-content `:::` kind decodes and re-encodes as `directive` rather than `admonition`, over the six kinds CARVE-P12-057 names (#2006; markup-carve/carve#2225).
+- `RenderLoss` is discriminated by `code`, its enum closes at `raw-format-dropped` and `ruby-flattened`, and `carve render --allow-loss` accepts two code names where it accepted six (#1972, #1980, #2111; markup-carve/carve#2252).
+- A dropped table-section attribute, a flattened table cell's blocks, a dropped math label or number and a flattened section are reported as conversion diagnostics instead (#2111).
+- `renderCarve` throws `SourceUnspellableError` for an empty emphasis-family mark instead of writing a brace pair that read back as text; a mark whose content touches whitespace takes the braced form (#1879, #1881).
+- `renderCarve`'s minimal form escapes a lone bracket inside span, link or inline note content and drops idle escapes, so documents that already round-tripped emit different bytes (#2118; markup-carve/carve#2358).
+- The Markdown writer separates a table cell's blocks with a space instead of joining them with a break tag (#2119, #2126).
+- AST ingest refuses a bare table row at the document root, a footnote reference with no target, a citation outside a citation group and a directive without children, and accepts a citation with no position (#1960, #1976, #2097; markup-carve/carve#2197, markup-carve/carve#2333).
+- A generated-content `:::` kind decodes and re-encodes as a directive rather than an admonition, over the six kinds the spec names (#2006; markup-carve/carve#2225).
 - Every empty block container renders one blank HTML body line (#1934; markup-carve/carve#2184).
-- The HTML importer's diagnostics cap emits a `diagnostics-truncated` row instead of throwing `HtmlImportLimitError`, which narrows to the depth and node limits (#2034, #2044).
-- Twelve runtime symbols that never left their declaring module lost their `export` (#1916, #1917). None of them was reachable through the package's exports map.
-- The `RenderLoss` code enum closes at `raw-format-dropped` and `ruby-flattened`. A dropped table-section attributes field, a flattened table cell's blocks and a dropped math label number report `field-unspellable` on the PART 11 §1d conversion-diagnostics channel, a flattened section reports `structure-unspellable` there, and `carve render --allow-loss` accepts two code names where it accepted six (#2111; markup-carve/carve#2252).
-- Escaped spaces and preserved line-block columns are `non_breaking_space` nodes, and U+E000 is literal content in every field. A stored tree carrying U+E000 where a generated space belongs is read as authored text and reaches HTML raw, with no error and no version signal, because the AST contract stays `1.0`. Reparsing the source is the only remedy (#2100; markup-carve/carve#2337).
-- AST ingest rejects a `directive` without `children`, and an empty directive publishes `children: []` (#2097; markup-carve/carve#2333).
-- `renderCarve`'s minimal form escapes a lone bracket inside span, link or inline note content, and drops the idle escapes the narrowing search used to leave behind, so the bytes move for documents that already round-tripped (#2118; markup-carve/carve#2358).
-- The Markdown writer separates the blocks of a `table_cell.blocks` with one space instead of joining them with `<br>`, over CARVE-P12-049, so a cell that already rendered emits different bytes (#2119, #2126).
+- The HTML importer's diagnostics cap reports a truncation row instead of throwing, and the error it threw now covers only the depth and node limits (#2034, #2044).
+- An escaped space and a preserved line-block column are their own node kind, and U+E000 is literal content everywhere, so a stored tree using U+E000 for a generated space must be reparsed from source (#2100; markup-carve/carve#2337).
+- Twelve runtime symbols that never left their declaring module lost their export; none was reachable through the package's exports map (#1916, #1917).
 
 ### Fixes
 
-- `applyAstPatch` rejects unknown operations and malformed pointers before applying a patch (#2091).
-- The Markdown target keeps every block a list item holds. A continuation line is
-  padded from the item's marker rather than from a task item's checkbox, and a
-  block below a nested list gets the blank line that stops GFM reading it as a
-  continuation of the last sublist item (#2085).
-- A node pulled in by a sliced include reports positions in its own file's coordinates (#1862).
-- A reference definition reads its destination through the same `link_destination` production as an inline tail, and a still-open parenthesis leaves the line a paragraph (#1868, #1872).
-- A tab does not satisfy a list or task marker separator, and a tab guards a bare delimiter on both sides (#1870, #1887).
-- A fence's closer is searched for only inside the container that opened it, so a fence in a list item or a description body no longer reaches a later entry (#1880, #1883, #1890).
-- A `:::` on an item's marker line whose body arrives by lazy folding stays text, and a closer at the content column does not rescue it (#1889).
-- An empty term marker followed by a space folds into a description body like the bare marker (#1891).
+- A container label's trailing `%%` comment is cut where its own inline run ends, so a `%%` inside a closed construct keeps the construct and the text after it (#2372).
+- Markdown import keeps list item shapes, tightness, markers and task boxes as a GFM reader sees them (#1935, #1937, #1941, #1943, #1946, #1947, #1968, #1981, #1982, #2011, #2013, #2026, #2047, #2048, #2050, #2056, #2061, #2295, #2314).
+- Markdown import preserves inline text: emphasis, quotes, character references, escaped backticks, terminal backslashes, autolink escapes and the whitespace a heading holds (#2285, #2288, #2290, #2319, #2323, #2324).
+- Markdown import preserves links: boundaries, reference targets and fallback, URL encoding, destination parentheses, parenthesized and multiline titles, and case-folded reference labels (#1983, #2294, #2296, #2299, #2321, #2322).
+- Markdown import keeps code and fences: payload whitespace, blank lines, line endings in a code span, decoded language labels, and a hint it cannot validate is omitted whole rather than shortened to a different language (#2002, #2017, #2297, #2302, #2331; markup-carve/carve#2522).
+- Markdown import reads headings, HTML blocks and inline HTML the way CommonMark does, retaining an empty heading as raw HTML (#2003, #2009, #2303, #2304, #2315, #2320).
+- Markdown import writes tables, quotes, thematic runs and reference definitions the way `carve fmt` does, so an imported document passes `fmt --check` (#1918, #1919, #1920, #1921, #1929, #1932, #1952, #1990, #1991, #1992, #1993, #2032, #2037, #2039, #2042, #2049).
+- Djot import preserves escaped delimiters in emphasis, attributes attached to words, folded heading continuations and a malformed hashtag attribute as text (#2291, #2303, #2318, #2329).
+- HTML import keeps what an element holds: an unsupported wrapper is unwrapped in place, a formula with no TeX is read as its text, and a cell keeps its alignment and its multiline content (#2015, #2054, #2104, #2120, #2122, #2137, #2147, #2160, #2169, #2172, #2175, #2194, #2203, #2309; markup-carve/carve#2255, markup-carve/carve#2341, markup-carve/carve#2361).
+- HTML import recognizes explicit code-language hints on code blocks and on Sphinx, GitHub and MediaWiki wrappers, with validated tokens and a deterministic fallback (#2143; markup-carve/carve#2387).
+- HTML import reports what it refuses or preserves in one wording at every entry point, over raw-kept elements, retained attributes, style URLs and ordered task checkboxes (#2021, #2024, #2043, #2053, #2058, #2062, #2064, #2206, #2226).
+- HTML import leaves a link's or span's edge whitespace outside it, drops an empty list rather than writing an attribute line with no block, drops an empty heading, and joins two adjacent definition lists the source spells as one (#2120, #2127, #2135; markup-carve/carve#2365, markup-carve/carve#2367).
+- BBCode import spells formatting tags the way the Carve writer would, escapes what a post's own text forms beside a converted tag, and writes a bare marker for an empty quote line (#1884, #1885, #1893, #1896, #1898, #1904, #2076).
+- The Carve writer emits source that reads back as the tree it was given, over text runs, figures, link padding, autolinks, line-block text, attributes inside emphasis and whitespace Carve cannot spell (#2134, #2136, #2145, #2151, #2156, #2171, #2174, #2217, #2244, #2282, #2367).
+- The Carve writer escapes a link-shaped run's opening destination parenthesis, including around emphasis, and no longer rescans an unclosed destination to the end of the input (#2114, #2115; markup-carve/carve#2357, markup-carve/carve#2359).
+- The Markdown writer emits what a GFM reader reads, over block cells, quote markers, cell breaks, list-tables, frontmatter and a link whose fragment names no heading (#2113, #2116, #2121, #2130, #2138, #2144, #2146, #2149, #2150, #2158, #2166, #2170, #2254; markup-carve/carve#2363).
+- The Markdown target keeps every block a list item holds, padding a continuation line from the item's marker and separating a block below a nested list (#2085).
+- A comment keeps its payload, its span and its owner inside every container: a list item, a quoted item, a definition term, a description body and a nested marker (#2185, #2202, #2262, #2270, #2280, #2287, #2298, #2300, #2312, #2327, #2335, #2354, #2360, #2376, #2382).
+- A fence is measured from the base its own container gives it, so a closer, a payload line and a below-column run land in the block that owns them (#2201, #2208, #2213, #2220, #2223, #2224, #2242, #2256, #2257, #2258, #2265, #2266, #2284, #2361, #2364).
+- A fence's closer is searched for only inside the container that opened it, a fenced quote's explicit closer is inside its source span, and a `:::` on an item's marker line whose body arrives by lazy folding stays text (#1880, #1883, #1889, #1890, #2345).
+- A quote keeps its nested state across lazy paragraph lines, and a lazy line no longer closes a fence it was spliced into or continues past a container fence (#2268, #2274, #2277, #2325).
+- A definition term folds an indented block opener, a comment and a definition past its column at every depth, an empty term marker followed by a space folds like the bare one, and a description body ends at two blank lines (#1891, #2161, #2185, #2221, #2306, #2317; markup-carve/carve#2411).
+- A container label closes on a balanced bracket in both spellings and publishes its inline run, and emphasis is bounded by the bracket run around it (#2347, #2349, #2356, #2362, #2366).
+- A blank line inside a fence, a note body or a sub-list no longer loosens the list that holds it, and an item's tightness is read at every column its paragraph text reaches (#1938, #1951, #2235, #2241, #2332, #2339, #2344, #2346, #2358, #2363).
+- A list item's content column is measured from the marker, not from a block attached to it (#2131, #2142).
+- A whitespace-only code line keeps its content in a list item and a footnote body, measured from the fence opener (#2196, #2201).
+- An unfinished code fence keeps its trailing blank lines on every target, ANSI included, and an empty raw block keeps its line (#2328, #2353, #2357, #2365, #2370).
 - An escaped delimiter closes no braced pair, in all nine kinds, and leaves no stray hard break (#1897, #1902).
 - A `%%` comment inside a bare emphasis run consumes the rest of the line, and the Carve writer braces such a span so it reads back (#1899, #1906).
-- A `%%` line comment's content drops trailing spaces and tabs and the one leading space or tab that separates it from the marker, while a `%%%` block comment keeps its bytes and a no-break space survives either way (#2079; markup-carve/carve-rs#1951).
+- A `%%` line comment's content drops trailing whitespace and one leading separator, while a `%%%` block comment keeps its bytes and a no-break space survives either way (#2079; markup-carve/carve-rs#1951).
+- A reference definition reads its destination the same way an inline tail does, and a still-open parenthesis leaves the line a paragraph (#1868, #1872).
+- A tab does not satisfy a list or task marker separator, and a tab guards a bare delimiter on both sides (#1870, #1887).
 - A caption's `#` glued to the word before it is numbered where no tag name follows (#1900).
-- A `boldItalic` strong takes the nested spelling when its content cannot sit against `/*` (#1877).
-- An attribute block after an editorial substitution or comment stays literal text (#1876; markup-carve/carve#2138).
-- The CLI runs when launched through a symlink, which is how `npx`, a `.bin` shim and a global install invoke it (#1909).
-- A blank line inside a fence in a nested or sibling sub-list no longer loosens the outer list (#1938, #1951).
-- `fromAstJson()` rejects an array in `figure.target` instead of handing renderers a malformed tree (#1959).
-- A node-matrix position is validated one level deeper (#1994).
-- Footnotes, citation definitions and code callouts are found inside nested sections and block table cells (#1985).
-- A profile denial reaches `block_extension` and `directive`, which the vocabulary had no name for and `isTypeAllowed` therefore answered yes about, and ingest admits `line_block.lines` (#1984).
-- The BBCode importer spells the four formatting tags the way the Carve writer would, escapes what a post's own text forms beside a converted tag, marks the links it writes, escapes a brace run or a line-initial block opener the author never typed, and writes a bare `>` for an empty or whitespace-only quote line instead of a marker with a trailing space (#1884, #1885, #1893, #1896, #1898, #1904, #2076).
-- The Markdown importer writes tables, fences, list markers, nested quotes, continuation lines and reference definitions the way `carve fmt` does, so an imported document passes `fmt --check` (#1918, #1920, #1921, #1929, #1932, #1952).
-- The Markdown importer reads item shapes, setext headings, indented code, tab columns, ordered interrupts and bold-italic nesting the way cmark-gfm does (#1935, #1937, #1941, #2049).
-- The Markdown importer measures quoted lines from the item that holds them, keeps quoted item fences and lazy lines, and preserves an item's looseness (#1943, #1946, #1947).
-- The Markdown importer drops an all-blank GFM table row and reports it as `structure-unspellable`, and fits each body row to the header's column count (#1919, #1920).
-- The Markdown importer keeps a code block's blank lines, ends a paragraph run at an `=` setext underline, folds a link reference definition at any indent, and opens no false fence (#2002, #2003, #2009, #2017).
-- The Markdown importer escapes a list marker only Carve recognizes, keeps a non-1 ordered marker after a lazy item line as text, moves link reference definitions to the document end, and keeps a shortcut reference's link (#1981, #1982, #1983).
-- The Markdown importer keeps raw HTML blank lines and terminal newlines, retains a list item holding an empty-destination definition, and writes footnote definitions at the document end (#1990, #1991, #1992, #1993).
-- The Markdown importer folds a quoted heading at any item depth, writes a folded block opener bare, and keeps a task box from opening a block (#2011, #2013, #2026).
-- The Markdown importer respells a nested `+` bullet on the line that opens it, so `- + a` reads as two list levels rather than an item of prose (#2061).
-- A task pair cmark-gfm reads as text stays text, in a quoted item and behind a second marker (#2047, #2048).
-- A thematic run on a paragraph continuation line is escaped, and a doubled quote marker a list item holds is respelled (#2032, #2042).
-- A block opener is read at the position its container gives it, and a quote's slack is read as the quote's, with intraword emphasis braced (#2037, #2039).
-- A list's tight or loose shape survives the Markdown target: a tight item's separator is dropped above every opener that interrupts a paragraph and kept above one that underlines or glues instead, and a loose list is written loose (#2050, #2056).
-- Tight nested lists survive Markdown output (#1968).
-- `LinkPolicy` reads the host a browser reads (#2010).
-- A denied-scheme destination is imported as its content rather than dropped (#2015; markup-carve/carve#2255).
-- A raw-kept element reports its refused attributes, an attribute-preserved row reports preserved fidelity, and a style in kept bytes goes through the refusal policy (#2021, #2024, #2043).
-- A style's `url()` arguments are read off the same comment-stripped, escape-decoded text the renderer's sanitizer acts on, so a row cannot name a refusal the renderer did not make (#2058).
-- An imported table cell keeps multiline HTML on one Carve row, unwrapping what raw HTML would otherwise split the row on and reporting the flattening (#2054).
-- An ordered task item keeps its checkbox as bracket text and reports the loss, from the HTML importer (#2053) and the Markdown importer (#2064), in one wording at both entry points (#2062).
+- A bold-italic strong takes the nested spelling when its content cannot sit against the delimiter (#1877).
+- Attribute blocks reject unquoted values containing pipes, backslashes or quotes, fold a class key-value into the class slot, contribute no token for an empty or refused class, and stay literal text after an editorial substitution or comment (#1876, #2191, #2192, #2193, #2199; markup-carve/carve#2138).
+- Source positions count lone surrogates separately, reach a tab stop by codepoints, and map text after a BOM or a lone carriage return against the original source (#2139, #2178).
+- A retained marker in a nested list and a line block holding a tab keep their source offsets, a generated verse column stays unplaced, and an authored attribute named `pos` survives a position walk (#2108, #2110, #2179, #2377).
+- A node pulled in by a sliced include reports positions in its own file's coordinates, and the CLI runs when launched through a symlink, which is how a global install and a package runner invoke it (#1862, #1909).
+- Footnotes, citation definitions and code callouts are found inside nested sections and block table cells, and the reference and abbreviation passes reach extension content, ruby pairs and citation fields (#1985).
+- A profile denial reaches block extensions and directives, which it used to answer yes about; ingest admits a line block's lines, and a link policy reads the host a browser reads (#1984, #2010).
 - Pipe and list table span resolution agree, and a rowspan crossing a row-group boundary renders in one HTML body group (#1975, #1979).
-- A structural wrapper class trails the attributes the author wrote instead of leading them, for a `::: toc` nav and for the `tabs` and `code-group` wrappers, which also stop re-emitting an authored `role` behind the minted name (#2096, #2099; markup-carve/carve#2328).
-- The HTML importer unwraps an unsupported element in place, so the headings, lists and code blocks inside a custom element such as `<react-app>` stay blocks rather than collapsing into one line (#2104; markup-carve/carve#2341).
-- A line block whose stanza holds a tab keeps the source spans of its unchanged text runs; synthesized columns and text merged across a tab stay unplaced (#2108; markup-carve/carve#2175).
-- A position walk keeps an authored attribute named `pos`, both where positions are remapped and where `positions: false` removes them (#2110).
-- The Carve writer escapes the opening destination parenthesis in link-shaped text, so importing `<p>[a](b)</p>` writes `[a]\(b)` rather than `\[a](b)` (#2114; markup-carve/carve#2357).
-- The Markdown writer escapes a `>` standing at a paragraph line's content position, which every CommonMark reader otherwise read as a block quote; a mid-line `>` stays bare and an authored escape keeps its bytes (#2113, #2116).
-- The destination-parenthesis escape reaches a bracket pair spanning inline nodes, so a link-shaped run around emphasis writes `[/a/]\(b)`, and an unclosed destination is no longer rescanned to the end of the input (#2115; markup-carve/carve#2359).
-- The HTML importer leaves a link's or span's edge whitespace outside it (#2120; markup-carve/carve#2365).
-- The HTML importer reads a `<math>` with no TeX as its text where its tokens are linear, with the space an `mspace` stands for, rather than dropping the formula, and imports a formula beside its hidden-MathML fallback image once (#2120, #2122; markup-carve/carve#2361).
-- The Markdown writer keeps a link whose fragment names no heading, which collapsed to its label, and writes a hard break inside a table cell as `<br>`, where the backslash-newline spelling ended the GFM row (#2121; markup-carve/carve#2363).
-- The HTML importer drops a `<ul>` or `<ol>` with no item instead of writing an attribute line with no block under it, with one `element-dropped` row covering its attributes (#2127; markup-carve/carve#2367).
+- A structural wrapper class trails the attributes the author wrote instead of leading them (#2096, #2099; markup-carve/carve#2328).
+- Parser options and caches belong to each call, so a failed option getter leaks no quote setting and nested calls use their own options.
+- `applyAstPatch` rejects unknown operations and malformed pointers before applying a patch (#2091).
+- AST JSON ingest and export handle lists with hundreds of thousands of items without overflowing the argument stack (#2153, #2159).
+- `fromAstJson` rejects an array in a figure's target and validates a node-matrix position one level deeper (#1959, #1994).
+- A figure in a table cell keeps its caption order, an ingested cross-reference keeps its text, and an empty grouping label writes nothing (#2249, #2271).
+- The indentation lint names an over-indented fence opener with a glued info string, including unterminated fences (#2341).
+- The term-fold lint measures a BOM's width and skips verbatim spans, and the fence-ownership and nesting-cap diagnostics agree with the parser, as do the formatter's own (#2165, #2218, #2249, #2301).
 
 ### Improvements
 
-- Node identity, annotation range, and provenance sidecar APIs for AST JSON. Editor snapshots include session-scoped node identities, and `parseWithProvenance` measures top-level source bytes (#2091).
-- `renderCarveWithConversionReport` names AST structures and fields that Carve source cannot spell (#2091).
-- An include warning carries `includedBy`, the directives that pulled its file in, root first (#1956; markup-carve/carve-lsp#224).
-- `carve lint` reports a fence opener that fell back to inline text, as rule `fence-opener-fallback` (#1914).
-- `carve lint` reports a `::: footnotes` or `::: references` marker inside a container, which renders a plain typed div and places nothing, and takes `--extension citations` so the references rule is reachable from the command line (#2045, #2068).
-- Directives retain quoted titles through the AST and render them inside the region they place (#2014, #2019, #2027, #2038).
-- The versioned AST envelope is read and written (#1987, #1989).
-- Ruby annotations survive interchange as ordered base and annotation pairs, with a `base(annotation)` fallback reported as `ruby-flattened` and accepted by `carve render --allow-loss` (#1972).
-- `small_caps` is accepted as a structural inline node and rendered as native HTML (#1965).
-- Labeled display equations receive numbers in caption order and render them on every target (#1969).
-- AST JSON accepts explicit `section` blocks and block content in table cells, with the flattening reported on the targets that cannot hold them (#1971).
-- Citation items carry `mode` through parsing and AST JSON, and HTML rendering uses each item's mode (#1973).
-- A spanning table cell publishes its resolved extent (#1964).
-- Parsed line blocks publish their inline lines beside `children` (#1988).
-- Table heads, bodies and feet keep their attributes through AST exchange and HTML import, rendered on `thead`, `tbody` and `tfoot`, with the source, Markdown, plain-text and ANSI targets reporting what they cannot represent (#2103; markup-carve/carve#2339).
+- `carve lint` reports a fence opener that fell back to inline text, and a `::: footnotes` or `::: references` marker inside a container that places nothing; `--extension citations` makes the references rule reachable (#1914, #2045, #2068).
+- `renderCarveWithConversionReport` names the AST structures and fields Carve source cannot spell (#2091).
+- Node identity, annotation range and provenance sidecar APIs for AST JSON, with session-scoped identities in editor snapshots and top-level source-byte measurement in `parseWithProvenance` (#2091).
+- Editor sessions reuse unchanged blocks for supported plain-paragraph edits and report semantic changes; session AST snapshots are deeply frozen, so clone one before annotating or editing (#2232, #2234).
 - Annotation offsets use a fixed codepoint projection independent of JSON key order, over image alt text, math, breaks and generated spaces (#2100).
-- The escape narrowing search probes a pruned window around the units it relaxes instead of re-rendering the whole document, and reaches block lists nested in untyped items such as a definition list's descriptions; the inline writer also stops flattening its growing output before every node. Re-parsed source on the largest html-to-markdown corpus pages falls from 194-218 documents' worth to 16-45, with byte-identical Carve, diagnostics and Markdown output (#2109, #2112).
-- The minimal form pairs brackets once per inline scope, so the escape narrowing search settles sooner: re-parsed source over the ten html-to-markdown benchmark pages falls from 42.3 MB to 16.4 MB (#2118).
+- The versioned AST envelope is read and written (#1987, #1989).
+- Directives retain quoted titles through the AST and render them inside the region they place (#2014, #2019, #2027, #2038).
+- Ruby annotations survive interchange as ordered base and annotation pairs, with a flattened fallback that `carve render --allow-loss` accepts (#1972).
+- Small caps is accepted as a structural inline node and rendered as native HTML (#1965).
+- Labeled display equations receive numbers in caption order and render them on every target (#1969).
+- AST JSON accepts explicit section blocks and block content in table cells, with the flattening reported on the targets that cannot hold them (#1971).
+- Citation items carry their mode through parsing and AST JSON, and HTML rendering uses it (#1973).
+- A spanning table cell publishes its resolved extent, and parsed line blocks publish their inline lines beside their children (#1964, #1988).
+- Table heads, bodies and feet keep their attributes through AST exchange and HTML import, with the other targets reporting what they cannot represent (#2103; markup-carve/carve#2339).
+- A list-table can be imported as a table rather than a list (#2149).
+- An include warning carries the directives that pulled its file in, root first (#1956; markup-carve/carve-lsp#224).
+- `fromAstJson` accepts unknown input and validates it before decoding (#2173).
+- The escape narrowing search probes a pruned window instead of re-rendering the document, with byte-identical output: re-parsed source over ten benchmark pages falls from 42.3 MB to 16.4 MB (#2109, #2112, #2118, #2154, #2162, #2164, #2182, #2184, #2279).
+- Parsing does less repeated work on containers, definitions, quotes and lists: tail matching, prefix classification, lazy-continuation tracking and sentinel scans run only where their answers are used (#2167, #2225, #2252, #2259, #2260, #2276, #2375, #2378, #2379).
+- HTML rendering streams through a bounded buffer (#2232).
 
 ## [0.1.7] - 2026-09-18
 
@@ -216,6 +158,5 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.8...HEAD
-[0.1.8]: https://github.com/markup-carve/carve-js/compare/0.1.7...0.1.8
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.7...HEAD
 [0.1.7]: https://github.com/markup-carve/carve-js/compare/0.1.6...0.1.7
