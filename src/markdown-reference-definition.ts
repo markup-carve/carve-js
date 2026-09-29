@@ -17,9 +17,13 @@ export function readMarkdownReferenceDefinition(source: string): MarkdownReferen
     if (source[at] === ']') break
   }
   const label = source.slice(labelStart, at)
-  if (!label.trim() || label.length > 999 || source[at + 1] !== ':') return null
+  if (!label.trim() || /\n[ \t]*\n/.test(label) || label.length > 999 || source[at + 1] !== ':') return null
   at += 2
-  while (/[ \t\n]/.test(source[at] ?? '\0')) at++
+  while (/[ \t]/.test(source[at] ?? '\0')) at++
+  if (source[at] === '\n') {
+    at++
+    while (/[ \t]/.test(source[at] ?? '\0')) at++
+  }
   const destinationStart = at
   if (source[at] === '<') {
     at++
@@ -46,26 +50,36 @@ export function readMarkdownReferenceDefinition(source: string): MarkdownReferen
     at++
     while (/[ \t]/.test(source[at] ?? '\0')) at++
   }
+  const destinationOnly = (): MarkdownReferenceDefinition | null => {
+    let end = destinationEnd
+    while (/[ \t]/.test(source[end] ?? '\0')) end++
+    if (end < source.length && source[end] !== '\n') return null
+    return { label, target: destination, lines: source.slice(0, end).split('\n').length, complex: /\n|\\\]/.test(label) }
+  }
   let title: string | undefined
+  let titleSource = ''
   const quote = source[at]
   if (at > destinationEnd && (quote === '"' || quote === "'" || quote === '(')) {
     const close = quote === '(' ? ')' : quote
     const titleStart = ++at
     for (; at < source.length; at++) {
       if (source[at] === '\\') { at++; continue }
-      if (quote === '(' && source[at] === '(') return null
+      if (quote === '(' && source[at] === '(') return destinationOnly()
+      if (source[at] === '\n' && /^\n[ \t]*\n/.test(source.slice(at))) return destinationOnly()
       if (source[at] === close) break
     }
-    if (source[at] !== close) return null
+    if (source[at] !== close) return destinationOnly()
     title = source.slice(titleStart, at++)
+    titleSource = quote === '('
+      ? ' \"' + title.replace(/\\([!-\/:-@\[-`{-~])/g, '$1').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'
+      : ' ' + source.slice(titleStart - 1, at)
     while (/[ \t]/.test(source[at] ?? '\0')) at++
-    if (at < source.length && source[at] !== '\n') return null
+    if (at < source.length && source[at] !== '\n') return destinationOnly()
   } else {
     at = destinationEnd
     while (/[ \t]/.test(source[at] ?? '\0')) at++
-    if (at < source.length && source[at] !== '\n') return null
+    if (at < source.length && source[at] !== '\n') return destinationOnly()
   }
-  const titleSource = title === undefined ? '' : ` "${title.replace(/(?<!\\)"/g, '\\"')}"`
   return {
     label,
     target: destination + titleSource,

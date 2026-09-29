@@ -33,6 +33,8 @@ export function referenceDestinationLabel(
   placeholders: readonly string[] = [],
 ): string | undefined {
   if (label.startsWith('^')) return undefined
+  const authored = references.sourceLabels.get(normalizeReferenceLabel(referenceSourceText(label, placeholders)))
+  if (authored !== undefined && references.inline.has(authored)) return authored
   const key = normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders))
   return references.empty.has(key) ? undefined : references.labels.get(key)
 }
@@ -102,9 +104,11 @@ function htmlBlockCloser(rest: string): RegExp | null {
 export function extractReferenceDefinitions(
   lines: readonly string[],
   decodeEntity: (entity: string) => string,
+  interruptsParagraph: (line: string) => boolean,
 ): { lines: string[]; references: EmptyDestinationReferences; definitions: string[] } {
   const empty = new Map<string, string>()
   const defined = new Set<string>()
+  const authoredDefinitions = new Set<string>()
   const labels = new Map<string, string>()
   const definitions: string[] = []
   const inline = new Map<string, string>()
@@ -120,7 +124,7 @@ export function extractReferenceDefinitions(
       const chunks: string[] = []
       const offsets: number[] = []
       let size = 0, through = index
-      for (; through < lines.length && lines[through]!.trim() !== ''; through++) {
+      for (; through < lines.length && lines[through]!.trim() !== '' && (through === index || !interruptsParagraph(lines[through]!)); through++) {
         offsets.push(size)
         chunks.push(lines[through]!)
         size += lines[through]!.length + 1
@@ -211,15 +215,15 @@ export function extractReferenceDefinitions(
       const ordinary = single && !/\\\]/.test(single[1]!) && (single[2]!.trim() === '' || lineTitle.test(single[2]!))
       const parsed = ordinary ? undefined : readMarkdownReferenceDefinition(referenceSource(i))
       if (parsed?.complex && !parsed.target.startsWith('<>')) {
-        const key = normalizeReferenceLabel(decodeLinkTitle(parsed.label, decodeEntity))
-        if (!defined.has(key)) {
+        const key = normalizeReferenceLabel(parsed.label)
+        if (!authoredDefinitions.has(key)) {
           let serial = inline.size + 1
           while (reservedReferences.has(serial) || inline.has(`carve-import-reference-${serial}`)) serial++
           const canonical = `carve-import-reference-${serial}`
-          labels.set(key, canonical)
           inline.set(canonical, parsed.target)
           sourceLabels.set(normalizeReferenceLabel(parsed.label), canonical)
           defined.add(key)
+          authoredDefinitions.add(key)
         }
         i += parsed.lines - 1
         depth = 0
@@ -258,7 +262,10 @@ export function extractReferenceDefinitions(
           canStart = false
           continue
         }
-        const repeated = defined.has(key)
+        const authoredKey = normalizeReferenceLabel(definition[1]!)
+        const authoredRepeated = authoredDefinitions.has(authoredKey)
+        const repeated = defined.has(key) || authoredRepeated
+        authoredDefinitions.add(authoredKey)
         defined.add(key)
         if (definition[1]!.startsWith('^')) {
           kept.push(line, ...continued)
@@ -296,7 +303,7 @@ export function extractReferenceDefinitions(
           /[ \t]+\(((?:[^()\\]|\\.)*)\)\s*$/,
           (_match, body: string) => ` "${body.replace(/"/g, '\\"')}"`,
         )
-        if (!repeated || empty.has(key)) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
+        if (!authoredRepeated || empty.has(key)) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
         if (opensItem) {
           const nextLine = lines[i + 1]
           if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
@@ -333,8 +340,10 @@ export function extractReferenceDefinitions(
         raw = nextTitle[1]!
         i++
       }
-      if (!defined.has(key)) empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity))
+      const authoredKey = normalizeReferenceLabel(definition[1]!)
+      if (!defined.has(key) && !authoredDefinitions.has(authoredKey)) empty.set(key, raw === '' ? '' : decodeLinkTitle(raw.slice(1, -1), decodeEntity))
       defined.add(key)
+      authoredDefinitions.add(authoredKey)
       canStart = true
       // Keep the item as an empty comment line; the output pass restores the
       // marker after inline conversion.
