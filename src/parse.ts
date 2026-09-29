@@ -650,16 +650,30 @@ const opensInlineComment = (text: string, i: number, atRunStart = false, runStar
 
 /**
  * `text` with a trailing comment and its whole separating run removed, for a
- * slot whose content never reaches the inline scanner: the colon fence's
- * `[label]`, which renders as plain text. An escaped `\%%` keeps its separator,
- * so the backslash in front of the marker already declines it.
+ * container's `[label]`.
+ *
+ * The cut is on the STRING because the non-HTML targets write the label as the
+ * source the author typed, so a label still carrying the comment would leak it
+ * into Markdown, plain text and ANSI. WHERE it cuts is the label's own inline
+ * run's answer: the run is scanned and the boundary is its top-level comment
+ * node's start, so a `%%` that a closed construct scopes is not a marker here
+ * either (ruled on markup-carve/carve#2618).
+ *
+ * Deriving it rather than restating it is the point. A second scan spelling out
+ * which constructs are opaque answers differently the day one of them moves, and
+ * each miss deletes visible label text - markup-carve/carve-rs#2158 found three
+ * in a row that way. An escape or a nested comment needs no rule here: the run
+ * has already decided, and only its own trailing comment reaches this.
  */
 const stripTrailingComment = (text: string): string => {
-  for (let i = 0; i < text.length; i++) {
-    if (!opensInlineComment(text, i, true)) continue
-    return text.slice(0, i).replace(/[ \t]+$/, '')
-  }
-  return text
+  // A label with no marker in it cannot have a trailing comment, and most have
+  // none - so the run is scanned only where the answer can differ.
+  if (!text.includes('%%')) return text
+  const nodes = parseRefLabelInlines(text)
+  const last = nodes[nodes.length - 1]
+  if (last?.type !== 'comment' || last.block) return text
+  const start = last.pos?.startOffset
+  return start === undefined ? text : text.slice(0, start).replace(/[ \t]+$/, '')
 }
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
