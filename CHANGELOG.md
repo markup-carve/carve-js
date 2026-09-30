@@ -7,12 +7,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
+## [Unreleased]
+
+### Fixes
+
+- `unattached-block-attribute` no longer advises deleting a footnote or description body that holds nothing but an attribute block. PART 11 §7d makes the report itself correct there, but a bare marker is not a marker, so deleting the line drops the `<dd>` and turns a footnote definition and its references into text. The message now points at the `{empty}` sentinel that `fmt` writes. Reported lines and columns are unchanged (#2412).
+- Reference boundaries are preserved and quote rendering checks are deterministic (#2411).
+
 ## [0.1.9] - 2026-09-30
 
 ### Fixes
 
 - `lintCarve` no longer reports `unattached-block-attribute` on the `{empty}` sentinel, the spelling PART 11 §7b and §7d define for an empty footnote definition body and an empty description body. An attribute block that reaches no block is still reported (#2408).
-- `unattached-block-attribute` no longer advises deleting a footnote or description body that holds nothing but an attribute block. PART 11 §7d makes the report itself correct there, but a bare marker is not a marker, so deleting the line drops the `<dd>` and turns a footnote definition and its references into text. The message now points at the `{empty}` sentinel that `fmt` writes. Reported lines and columns are unchanged (#2412).
 - Markdown import resolves a reference chain against the definitions that exist, and reads a definition whose label is escaped or spans lines and whose title carries parentheses or spans lines (#2409; markup-carve/carve#2522, markup-carve/carve#2593).
 - Markdown import keeps a bracketed autolink's destination and the parentheses inside it, and keeps tab residue and nested quote markers inside a quoted block (#2409; markup-carve/carve#2522).
 - An editorial substitution is bounded by the bracket run that encloses it (#2409; markup-carve/carve#2645).
@@ -175,6 +181,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.9...HEAD
 [0.1.9]: https://github.com/markup-carve/carve-js/compare/0.1.8...0.1.9
 [0.1.8]: https://github.com/markup-carve/carve-js/compare/0.1.7...0.1.8
 [0.1.7]: https://github.com/markup-carve/carve-js/compare/0.1.6...0.1.7
