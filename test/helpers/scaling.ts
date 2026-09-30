@@ -30,6 +30,11 @@ import { expect, it } from 'vitest'
  *   is always taken later and load that ramps during the test lands on it.
  * - Take the MEDIAN of several rounds. A mean is dragged by one stall, and a
  *   minimum discards the information that the machine was loaded at all.
+ * - A BATCHED sample averages a MINIMUM NUMBER OF CALLS, not just a minimum
+ *   elapsed time. A time budget alone stops batching as soon as one call
+ *   exceeds it, so the faster side of a ratio gets averaged and the slower side
+ *   does not - and which side that is depends on the machine. See
+ *   `MIN_CALLS_PER_BATCH`.
  */
 
 /** Input repeat counts. The 4x multiple separates linear (~1x per byte) from quadratic (~4x). */
@@ -46,6 +51,18 @@ const MAX_PER_BYTE_RATIO = 2.0
 const MAX_MS = 20_000
 
 /**
+ * Calls a batched sample averages over, however fast the machine is.
+ *
+ * A time budget alone guarantees no averaging: the loop stops once the budget is
+ * spent, so a call already costing more than it is a sample of ONE. The two
+ * sides of a ratio differ in per-call cost by construction, so that shortfall
+ * lands on the expensive side while the cheap side averages several, and a stall
+ * can only add time (carve-js#2420). A count is the only form the guarantee can
+ * take on a machine whose speed the budget does not know.
+ */
+const MIN_CALLS_PER_BATCH = 4
+
+/**
  * Timing assertions are gated so they never run inside the everyday suite.
  *
  * They are the only tests whose outcome depends on what else the machine is
@@ -54,8 +71,21 @@ const MAX_MS = 20_000
  */
 export const perfIt = process.env.CARVE_PERF ? it : it.skip
 
-/** One timed call, in milliseconds. */
-function time(fn: () => void, minSampleMs = 0): number {
+/**
+ * Mean cost of one call, in milliseconds.
+ *
+ * With no budget this is one call. With a budget it is at least
+ * `MIN_CALLS_PER_BATCH` calls AND at least `minSampleMs`, whichever needs more.
+ *
+ * Exported for `test/a-batched-scaling-sample-averages-several-calls.test.ts`,
+ * which runs in the everyday suite because the scaling guards themselves do not
+ * run on pull requests.
+ */
+export function timeCalls(
+  fn: () => void,
+  minSampleMs = 0,
+): { msPerCall: number; calls: number } {
+  const minCalls = minSampleMs > 0 ? MIN_CALLS_PER_BATCH : 1
   const start = performance.now()
   let calls = 0
   let elapsed: number
@@ -63,9 +93,9 @@ function time(fn: () => void, minSampleMs = 0): number {
     fn()
     calls++
     elapsed = performance.now() - start
-  } while (elapsed < minSampleMs)
+  } while (elapsed < minSampleMs || calls < minCalls)
 
-  return elapsed / calls
+  return { msPerCall: elapsed / calls, calls }
 }
 
 function median(values: number[]): number {
@@ -95,7 +125,14 @@ export function expectScansLinearly(
      * shape whose fragment is long from building a needlessly large input.
      */
     smallRepeats?: number
-    /** Batch short operations to reduce timer and scheduler noise. */
+    /**
+     * Batch short operations to reduce timer and scheduler noise.
+     *
+     * Size it so that BOTH sides measure over a comparable window, which means
+     * above the cost of one LARGE call rather than one small one. Below that the
+     * large side is governed by `MIN_CALLS_PER_BATCH` alone and the small side
+     * by the budget, leaving the small side the short and noisy one.
+     */
     minSampleMs?: number
   } = {},
 ): void {
@@ -152,11 +189,11 @@ export function expectBuiltInputScansLinearly(
     let elapsedLarge: number
 
     if (round % 2 === 0) {
-      elapsedSmall = time(() => convert(small), options.minSampleMs)
-      elapsedLarge = time(() => convert(large), options.minSampleMs)
+      elapsedSmall = timeCalls(() => convert(small), options.minSampleMs).msPerCall
+      elapsedLarge = timeCalls(() => convert(large), options.minSampleMs).msPerCall
     } else {
-      elapsedLarge = time(() => convert(large), options.minSampleMs)
-      elapsedSmall = time(() => convert(small), options.minSampleMs)
+      elapsedLarge = timeCalls(() => convert(large), options.minSampleMs).msPerCall
+      elapsedSmall = timeCalls(() => convert(small), options.minSampleMs).msPerCall
     }
 
     smallPerByte.push(elapsedSmall / small.length)
