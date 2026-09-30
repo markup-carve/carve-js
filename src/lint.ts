@@ -435,14 +435,27 @@ export function lintCarve(
   // no block was reported by carve-rs on 38 corpus documents and by carve-js on
   // none (carve-js#2240). The parser is the only place the fact exists: nothing
   // is emitted for the run, so no node carries it.
+  // The REMEDY differs where the run is the construct's whole body. PART 11 §7d
+  // says `: {#i}` "reaches the same empty body by the same path and is equally
+  // discarded", so the report is earned - the authored attribute does vanish.
+  // "Delete it" is not: a bare `: ` or `[^a]: ` is not a marker at all (PART 2,
+  // MARKER REQUIRES CONTENT), so following that advice drops the `<dd>` and
+  // turns a footnote definition and every reference to it into literal text.
+  // Only `{empty}` is canonical here, and it is what `fmt` already writes
+  // (carve-js#2408).
   for (const run of danglingBlockAttributes) {
+    const construct = run.wholeBodyOf === 'footnote' ? 'footnote definition' : 'description'
     out.push({
       line: run.line,
       column: run.column,
       rule: 'unattached-block-attribute',
-      message:
-        'This block attribute reaches no block - the document or the container holding it ends ' +
-        'first - so nothing is emitted for it. Move it above the block it describes, or delete it.',
+      message: run.wholeBodyOf
+        ? `This block attribute is the whole body of a ${construct}, so nothing is emitted for ` +
+          'it and the attribute is discarded. Do not delete the line - the marker needs content, ' +
+          'so a bare marker degrades to text. Write the empty-body sentinel `{empty}` if the body ' +
+          'is meant to be empty, or give the body content.'
+        : 'This block attribute reaches no block - the document or the container holding it ends ' +
+          'first - so nothing is emitted for it. Move it above the block it describes, or delete it.',
       start: run.startOffset,
       end: run.endOffset,
     })
