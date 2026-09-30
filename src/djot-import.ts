@@ -1,9 +1,12 @@
-import { attributedDjotWords } from './djot-word-attributes.js'
+import { parse } from './parse.js'
+import { renderPlainText } from './render-plain.js'
+import { djotEmphasis } from './djot-emphasis.js'
+import { attributedDjotWords, readAttributes } from './djot-word-attributes.js'
 import { attributedDjotStrong } from './djot-attributed-strong.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
 import { escapePlainCarveInlineSyntax, HANDLED_DJOT } from './carve-escape.js'
-import { applyMigrationFixes, maskDjotCodeAndDestinations } from './djot-migrate.js'
+import { applyMigrationFixes, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 
 const fencedLines = (lines: readonly string[]): boolean[] => {
   let fence: { ch: string; len: number } | null = null
@@ -69,12 +72,14 @@ function charsThroughColumns(line: string, wanted: number): number {
 }
 
 /** Translate Djot definition-item structure without touching unrelated source. */
-function convertDefinitionLists(source: string): string {
+function convertDefinitionLists(source: string, emptyTerm: string): string {
   const lines = source.split('\n')
   const masked = maskDjotCodeAndDestinations(source).split('\n')
   const stack: Array<{ source: number; target: number; body: boolean; ready: boolean }> = []
   for (let i = 0; i < lines.length; i++) {
-    const term = /^([ \t]*):[ \t]+(\S.*)$/.exec(masked[i] ?? '')
+    const fenceCandidate = /^([ \t]*):[ \t]+(`{3,}|~{3,})(.*)$/.exec(lines[i]!)
+    const rawFence = fenceCandidate && !(fenceCandidate[2]![0] === '`' && fenceCandidate[3]!.includes('`')) ? fenceCandidate : null
+    const term = /^([ \t]*):[ \t]+(\S.*)$/.exec(masked[i] ?? '') ?? (fenceCandidate && masked[i]?.trimStart().startsWith(':') ? /^([ \t]*):[ \t]+(\S.*)$/.exec(lines[i]!) : null)
     if (term) {
       const [indent] = leadingIndent(term[1]!)
       while (stack.length && indent < stack.at(-1)!.source) stack.pop()
@@ -91,7 +96,12 @@ function convertDefinitionLists(source: string): string {
             top.ready = false
           }
           const prefix = ' '.repeat(target)
-          lines[i] = `${top ? '' : `${prefix}{loose}\n`}${prefix}:: ${termText}`
+          lines[i] = `${top ? '' : `${prefix}{loose}\n`}${prefix}:: ${rawFence ? emptyTerm : termText}`
+          if (rawFence) {
+            lines[i] += `\n${prefix}:  ${termText}`
+            stack.at(-1)!.body = true
+            stack.at(-1)!.ready = true
+          }
           continue
         }
         if (top.ready && indent >= top.source + 2) {
@@ -142,14 +152,14 @@ function convertDjotBlockMarkers(source: string): string {
   }
   for (let i = 0; i < lines.length; i++) {
     if ((masked[i] ?? '').trim() === '') continue
-    const enclosed = /^((?:[ \t]*>[ \t]*)*)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)
+    const enclosed = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)
     if (enclosed) {
-      const authored = /^((?:[ \t]*>[ \t]*)*)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(lines[i]!)
+      const authored = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(lines[i]!)
       const [columns] = leadingIndent(enclosed[2]!)
       if (authored) lines[i] = `${authored[1]}${isNestedAt(i, enclosed[1]!, columns) ? authored[2] : ''}${authored[3]}.${authored[4]}`
       continue
     }
-    const rule = /^((?:[ \t]*>[ \t]*)*)([ \t]*)([*-])(?:[ \t]*\3){2,}[ \t]*$/.exec(masked[i]!)
+    const rule = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)([*-])(?:[ \t]*\3){2,}[ \t]*$/.exec(masked[i]!)
     if (!rule) continue
     const quote = rule[1]!
     const indent = rule[2]!
@@ -195,6 +205,41 @@ function collapseFalseListBoundaries(source: string): string {
     i = end
   }
   return result.join('\n')
+}
+
+function consumeOrphanDjotAttributes(source: string): { source: string; restore: (text: string) => string } {
+  const masked = maskDjotCodeAndDestinations(source).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length)).split('\n')
+  const item = String.raw`(?:[.#][A-Za-z0-9_][A-Za-z0-9_-]*|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
+  const pattern = new RegExp(String.raw`\{[ \t]*${item}(?:[ \t]+${item})*[ \t]*\}`, 'g')
+  const lines = source.split('\n')
+  let prefix = '\x00DJOTORPHAN\x00'
+  while (source.includes(prefix)) prefix += '\x00'
+  const spaces: string[] = []
+  const converted = lines.map((line, index) => {
+    const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(line)![0].length
+    const last = line.trimEnd().length
+    const strippedLine = line.replace(pattern, '')
+    const markerOnly = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*(?:[-*+]|[0-9]+[.)]|#{1,6}|:{1,2}|\[\^[^\]]+\]:)[ \t]+(?:\[[ xX-]\][ \t]+)?$/.test(strippedLine)
+    let orphanEnd = -1, dropLine = false
+    const written = line.replace(pattern, (attrs: string, at: number) => {
+      let before = at
+      while (line[before - 1] === '\\') before--
+      if (masked[index]![at] !== '{' || (at - before) % 2 !== 0) return attrs
+      if (at !== orphanEnd && /[\]*_}^~]/.test(line[at - 1] ?? '') || (at > 0 && masked[index]![at - 1] === ' ' && line[at - 1] !== ' ')) return attrs
+      if (markerOnly) return attrs
+      const alone = at === first && at + attrs.length === last
+      const previous = (lines[index - 1] ?? '').replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
+      if (alone && (lines[index + 1] ?? '').trim() !== '' && (index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous))) return attrs
+      orphanEnd = at + attrs.length
+      if (alone) dropLine = true
+      return prefix + (at === first ? 'L' : 'I')
+    }).replace(new RegExp(`${prefix}([LI])([ \t]*)`, 'g'), (_all, kind: string, space: string) => {
+      spaces.push(kind === 'I' ? space : space === '' ? '' : `!\`${space}\``)
+      return `${prefix}${spaces.length - 1}\x00`
+    })
+    return dropLine ? undefined : written
+  }).filter(line => line !== undefined).join('\n')
+  return { source: converted, restore: text => text.replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spaces[Number(index)]!) }
 }
 
 function escapeInvalidAttributeHashes(source: string): string {
@@ -287,13 +332,38 @@ function foldHeadingContinuations(source: string): string {
 export function djotToCarve(djot: string): string {
   const normalized = djot.replace(/\r\n?/g, '\n')
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
-  const convert = (text: string): string => collapseFalseListBoundaries(
-    applyMigrationFixes(escapePlainDjotText(convertDefinitionLists(convertDjotBlockMarkers(text)))).output,
-  )
+  const convert = (text: string): string => {
+    let emptyTerm = '\x00DJOTEMPTYTERM\x00'
+    while (text.includes(emptyTerm)) emptyTerm += '\x00'
+    const attrs = consumeOrphanDjotAttributes(convertDefinitionLists(convertDjotBlockMarkers(text), emptyTerm))
+    return attrs.restore(collapseFalseListBoundaries(djotEmphasis(attrs.source, plain => applyMigrationFixes(escapePlainDjotText(plain), true).output))).replaceAll(emptyTerm, '%%')
+  }
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
-  const folded = foldHeadingContinuations(body)
+  const headingFolded = foldHeadingContinuations(body)
+  let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
+  const collapsedChars = collapsedMask.split('')
+  for (let at = 0; at < headingFolded.length; at++) {
+    if (collapsedChars[at] !== '{') continue
+    const attrs = readAttributes(headingFolded, at)
+    if (!attrs) continue
+    for (let i = at; i < attrs.end; i++) if (collapsedChars[i] !== '\n') collapsedChars[i] = ' '
+    at = attrs.end - 1
+  }
+  collapsedMask = collapsedChars.join('')
+  const previousDefinitionLines = new Map<number, string>()
+  let definitionOffset = 0, previousDefinitionLine = ''
+  for (const line of headingFolded.split('\n')) { previousDefinitionLines.set(definitionOffset, previousDefinitionLine); definitionOffset += line.length + 1; previousDefinitionLine = line }
+  const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!))
+  const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && definitions.has(key) ? `${label}[${key}]` : value)
+  const imageMask = maskDjotCodeAndDestinations(rawFolded)
+  const folded = rawFolded.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (image: string, label: string, at: number) => {
+    if (imageMask[at] !== '!' || isDjotEscaped(rawFolded, at) || label.includes('\\')) return image
+    if (!/[_*`{^~]/.test(label)) { spans.push(label); return `![${prefix}${spans.length - 1}\x00]` }
+    spans.push(renderPlainText(parse(convert(`DJOTALT ${label} DJOTEND`)), { smartTypography: false }).replace(/ DJOTEND\n?$/, '').slice(8))
+    return `![${prefix}${spans.length - 1}\x00]`
+  })
   const held = attributedDjotStrong(folded, maskDjotCodeAndDestinations(folded), convert, (span) => {
     spans.push(span)
     return `${prefix}${spans.length - 1}\x00`

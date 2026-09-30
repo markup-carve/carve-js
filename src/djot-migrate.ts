@@ -340,28 +340,54 @@ function codepointPrefix(src: string): Uint32Array | undefined {
  * collisions inside code are not real mis-renders, so the scanner simply
  * never sees them.
  */
-export function maskDjotCodeAndDestinations(src: string): string {
+export function isDjotEscaped(source: string, at: number): boolean {
+  let start = at
+  while (source[start - 1] === '\\') start--
+  return (at - start) % 2 !== 0
+}
+
+export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
-  let fence: { ch: string; len: number } | null = null
-  const staged = lines.map((line) => {
+  const previousLines = new Map<number, string>()
+  let sourceOffset = 0, previousLine = ''
+  for (const line of lines) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
+  let fence: { ch: string; len: number; indent: number; container: number | null; depth: number } | null = null
+  let previousBlock = true
+  const staged = lines.map((line, index) => {
+    let content = line, depth = 0
+    while (true) {
+      const quote = /^[ \t]*>[ ]?/.exec(content)
+      if (!quote) break
+      content = content.slice(quote[0].length)
+      depth++
+    }
+    if (fence && content.trim() !== '' && depth < fence.depth) fence = null
+    if (fence && fence.container !== null && content.trim() !== '' && /^[ \t]*/.exec(content)![0].length < fence.container && depth === fence.depth) fence = null
     if (fence) {
-      // parseFence: a closer may be indented by at most 3 spaces.
-      const close = line.match(/^ {0,3}([`~]{3,})[ \t]*$/)
-      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
-        fence = null
+      const close = content.match(new RegExp(`^[ \t]{0,${fence.indent}}([\x60~]{3,})[ \t]*$`))
+      if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) { fence = null; previousBlock = true }
+      return blanks(line)
+    }
+    const open = content.match(/^([ \t]*)(?:(:[ \t]+|[-*+][ \t]+|[0-9]+[.)][ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)[ \t]*$/)
+    if (open && !(open[2]?.startsWith(':') && !previousBlock)) {
+      let nested = false
+      if (!open[2] && open[1]!.length > 0) {
+        const quote = line.slice(0, line.length - content.length)
+        for (let previous = index - 1; previous >= 0; previous--) {
+          if (!lines[previous]!.startsWith(quote)) break
+          const candidate = lines[previous]!.slice(quote.length)
+          if (candidate.trim() === '' || /^[ \t]*/.exec(candidate)![0].length >= open[1]!.length) continue
+          nested = !/^(?:([*-])[ \t]*){3,}$/.test(candidate.trim()) && /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+\S/.test(candidate)
+          break
+        }
       }
-      return blanks(line)
+      const container = open[2] ? open[1]!.length + open[2].length : nested ? open[1]!.length : null
+      fence = { ch: open[3]![0]!, len: open[3]!.length, indent: open[2] ? container! : Math.max(3, open[1]!.length), container, depth }
+      const start = line.indexOf(open[3]!)
+      return line.slice(0, start) + blanks(line.slice(start))
     }
-    // Mirror Carve's RE_FENCE exactly (src/parse.ts): a fence opener is
-    // a >=3 run with at most a single `[A-Za-z0-9_+#.-]` info token. A
-    // multiword / attribute info string (```ts title=demo) is NOT a
-    // Carve fence — Carve parses it as prose, so we must not mask it.
-    const open = line.match(/^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)\s*$/)
-    if (open) {
-      fence = { ch: open[2]![0]!, len: open[2]!.length }
-      return blanks(line)
-    }
+    previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} |\{[.#A-Za-z])/.test(content)
     return line
   })
   const s = staged.join('\n')
@@ -375,6 +401,8 @@ export function maskDjotCodeAndDestinations(src: string): string {
     while (s[i + n] === '`') n++
     return n
   }
+  const paragraphEnds = Array.from(s.matchAll(/\n[ \t]*\n/g), match => match.index!)
+  let paragraphIndex = 0
   let i = 0
   while (i < s.length) {
     if (s[i] !== '`') {
@@ -382,9 +410,11 @@ export function maskDjotCodeAndDestinations(src: string): string {
       continue
     }
     const len = runLen(i)
+    while ((paragraphEnds[paragraphIndex] ?? s.length) <= i) paragraphIndex++
+    const paragraphEnd = paragraphEnds[paragraphIndex] ?? s.length
     let j = i + len
     let closed = -1
-    while (j < s.length) {
+    while (j < paragraphEnd) {
       if (s[j] === '`' && runLen(j) === len) {
         closed = j
         break
@@ -392,7 +422,13 @@ export function maskDjotCodeAndDestinations(src: string): string {
       j++
     }
     if (closed === -1) {
-      i += len // unmatched, literal
+      if (!unclosedCode) {
+        i += len
+        continue
+      }
+      const end = paragraphEnd
+      for (let k = i; k < end; k++) if (out[k] !== '\n') out[k] = ' '
+      i = end
       continue
     }
     for (let k = i; k < closed + len; k++) if (out[k] !== '\n') out[k] = ' '
@@ -406,7 +442,12 @@ export function maskDjotCodeAndDestinations(src: string): string {
   // visible. Lookbehind on `]` keys this to a real link/image target.
   let masked = out.join('')
   masked = masked.replace(/(?<=\])\([^()\n]*\)/g, (g) => blanks(g))
-  return masked
+  if (references) masked = masked.replace(/^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[(?!\^)[^\]\n]*\]:[^\n]*/gm, (value, at: number) => {
+    const previous = (previousLines.get(at) ?? '')?.replace(/^[ \t]*(?:>[ \t]*)*/, '').trim() ?? ''
+    return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previous) ? blanks(value) : value
+  }).replace(/(?<=\])\[[^\]\n]*\]/g, blanks)
+  masked = masked.replace(/^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?:{3,}[ \t]+([A-Za-z_][A-Za-z0-9_.-]*)/gm, (value: string, name: string, at: number) => (previousLines.get(at) ?? '').trim() === '' || /(?:[-*+]|[0-9]+[.)])[ \t]+:{3,}/.test(value) ? value.slice(0, -name.length) + blanks(name) : value)
+  return masked.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)
 }
 
 /** A single source splice: replace [start, end) with `text`. */
@@ -510,7 +551,7 @@ function tableContinuationLines(source: string): Set<number> {
 }
 
 /** The full scan, carrying the fix edits used by `applyMigrationFixes`. */
-function scanHits(source: string): ScanHit[] {
+function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   const out: ScanHit[] = []
   // Code (fenced + inline, multi-line) is masked to spaces so no rule
   // can match through or into it. Positions are preserved 1:1. The scan
@@ -521,7 +562,7 @@ function scanHits(source: string): ScanHit[] {
   // `masked`, so the captured content for a suggestion is sliced from
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
-  const masked = maskDjotCodeAndDestinations(norm)
+  const masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode)
   // A `+ ` line carrying a pipe is ambiguous by text alone: without a table
   // above it, it is a Djot bullet that degrades to prose in Carve; after a
   // table row, it is Carve's native continuation-row syntax. Ask the parser
@@ -710,8 +751,8 @@ export interface MigrationFixResult {
  * not re-run on the output, so a fixed `~~x~~` -> `~x~` is never re-flagged
  * as a subscript.
  */
-export function applyMigrationFixes(source: string): MigrationFixResult {
-  const hits = scanHits(source)
+export function applyMigrationFixes(source: string, nativeDjotCode = false): MigrationFixResult {
+  const hits = scanHits(source, nativeDjotCode)
 
   // Mark every hit that *crosses* another (partial overlap where neither span
   // contains the other). `hits` is sorted by start (line/column), so a single
