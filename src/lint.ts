@@ -1048,8 +1048,22 @@ function collectListItemIndentWarnings(
     return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
   }
   const items: LintItemColumn[] = []
+  const blockRuns = new Map<string, Array<{ first: number; column: number }>>()
   const commentLines = collectCommentLines(doc, true)
   walkDocument(doc, (node) => {
+    const blockPos = (node as Positioned).pos
+    if (blockPos && (node.type === 'block_quote' || node.type === 'table')) {
+      const opening = lines[blockPos.startLine - 1] ?? ''
+      const at = utf16IndexOfColumn(opening, Math.max(0, (blockPos.startColumn ?? 1) - 1))
+      const column = visualColumnAt(opening, at)
+      const kind = node.type === 'table' ? '|' : '>'
+      for (let line = blockPos.startLine; line <= (blockPos.endLine ?? blockPos.startLine); line++) {
+        const key = `${kind}:${line}`
+        const runs = blockRuns.get(key) ?? []
+        runs.push({ first: blockPos.startLine, column })
+        blockRuns.set(key, runs)
+      }
+    }
     if (node.type !== 'list_item') return
     const pos = (node as Positioned).pos
     if (!pos) return
@@ -1113,6 +1127,11 @@ function collectListItemIndentWarnings(
     if (termFoldLines.has(lineNo)) continue
     const owner = containing ?? lastEnded
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
+    const kind = /^>(?: |$)/.test(authored.rest) ? '>' : isTableRow(authored.rest) ? '|' : undefined
+    const blockFirst = kind === undefined ? undefined : blockRuns.get(`${kind}:${lineNo}`)
+      ?.filter((block) => block.column >= (owner?.contentColumn ?? 0))
+      .reduce<number | undefined>((first, block) => first === undefined ? block.first : Math.min(first, block.first), undefined)
+    const continuingRun = blockFirst !== undefined && blockFirst < lineNo
     if (owner?.markerLineDeepestColumn === authored.column) continue
     const openFence = owner ? ambiguousFences.get(owner) : undefined
     if (openFence && containing === owner) {
@@ -1127,7 +1146,8 @@ function collectListItemIndentWarnings(
     // Comments contain no eligible openers. Keep code/raw and colon fence
     // delimiters available to the source-level fence tracker.
     if (commentLines.has(lineNo) || (_unrendered.has(lineNo) &&
-        !opensCodeFence(authored.rest) && !/^:{3,}(?: |$)/.test(authored.rest))) {
+        !opensCodeFence(authored.rest) && !/^:{3,}(?: |$)/.test(authored.rest) &&
+        !(kind === '>' && blockFirst === lineNo))) {
       reported.add(lineNo)
       continue
     }
@@ -1170,6 +1190,11 @@ function collectListItemIndentWarnings(
         if (authoredCodeFence) ambiguousFences.set(owner, { kind: 'code', run: authoredCodeFence[1]! })
         else if (authoredColonFence) ambiguousFences.set(owner, { kind: 'colon', run: authoredColonFence[1]! })
       }
+      continue
+    }
+
+    if (rule === 'list-item-block-overindented' && continuingRun) {
+      reported.add(lineNo)
       continue
     }
 
