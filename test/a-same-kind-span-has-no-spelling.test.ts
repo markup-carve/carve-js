@@ -14,7 +14,6 @@ const nested: Array<[string, string, string]> = [
   ['a strike', '<p><s>a <s>b</s> c</s></p>', '~a b c~\n'],
   ['a highlight', '<p><mark>a <mark>b</mark> c</mark></p>', '=a b c=\n'],
   ['a strong alone', '<p><strong><b>x</b></strong></p>', '*x*\n'],
-  ['an emphasis through a link', '<p><em>a <a href="u">b <em>c</em></a></em></p>', '/a [b c](u)/\n'],
   ['a bare inner span in a braced one', '<p>a<strong><b>x</b></strong>b</p>', 'a{*x*}b\n'],
 ]
 
@@ -31,6 +30,7 @@ describe('a span inside a span of the same kind', () => {
   })
 
   it.each([
+    ['an emphasis through a link', '<p><em>a <a href="u">b <em>c</em></a></em></p>', '/a [b /c/](u)/\n'],
     ['two kinds', '<p><em>a <strong>b</strong> c</em></p>', '/a *b* c/\n'],
     ['two kinds, both braced', '<p>a<s><del>x</del></s>b</p>', 'a{~{-x-}~}b\n'],
     // A braced span of another kind is a scope of its own (carve-js#1841).

@@ -2706,6 +2706,7 @@ class CarveRenderSession {
     this.escapeMode = mode
     this.writtenBraced = new WeakSet()
     this.openEmphasisKinds = new Set()
+    this.labelKinds = new Set()
     this.bracedForScope = new WeakSet()
     this.attributeEnclosures = []
     this.expandedBoldItalic = new WeakSet()
@@ -4121,9 +4122,12 @@ class CarveRenderSession {
       try { return renderInlineDispatch() } finally { renderSession.attributeEnclosures.pop() }
     }
     if (EMPHASIS_KINDS.has(node.type)) {
-      if (renderSession.openEmphasisKinds.has(node.type)) {
+      if (renderSession.openEmphasisKinds.has(node.type) && !renderSession.labelKinds.has(node.type)) {
         throw new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
       }
+      const labelKinds = renderSession.labelKinds
+      renderSession.labelKinds = new Set(labelKinds)
+      renderSession.labelKinds.delete(node.type)
       const outer = renderSession.openEmphasisKinds
       const children = (node as { children?: InlineNode[] }).children ?? []
       const scoped = node.type === 'superscript' || node.type === 'subscript' || holdsOpenKind(children, outer)
@@ -4135,6 +4139,7 @@ class CarveRenderSession {
       } finally {
         renderSession.attributeEnclosures.pop()
         renderSession.openEmphasisKinds = outer
+        renderSession.labelKinds = labelKinds
       }
     }
 
@@ -4318,7 +4323,14 @@ class CarveRenderSession {
     if (node.ref !== undefined && node.rawRef !== undefined) {
       return node.rawRef
     }
-    const text = escapeNoteReferenceLabel(this.renderInlines(node.children, ctx), ctx)
+    const outer = this.labelKinds
+    this.labelKinds = new Set([...outer, ...this.openEmphasisKinds])
+    let text: string
+    try {
+      text = escapeNoteReferenceLabel(this.renderInlines(node.children, ctx), ctx)
+    } finally {
+      this.labelKinds = outer
+    }
     const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
     return `[${text}](${escapeDestination(node.href)}${title})${this.inlineAttrs(node.attrs, node)}`
   }
@@ -4711,6 +4723,9 @@ class CarveRenderSession {
 
   /** The emphasis kinds open around the node being written. */
   private openEmphasisKinds = new Set<string>()
+
+  /** Outer kinds a link label may open once more. */
+  private labelKinds = new Set<string>()
 
   /** Spans written braced so their content starts a scope of its own. */
   private bracedForScope = new WeakSet<object>()
