@@ -100,6 +100,18 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       for (let i = run.start; i < run.end; i++) if (!claimed.has(i)) literalEscapes.add(i)
     }
   }
+  const bracketEnds = new Map<number, number>()
+  const bracketStarts = new Map<number, number>()
+  const brackets: number[] = []
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\\') { i++; continue }
+    if (source[i] === '[') brackets.push(i)
+    else if (source[i] === ']' && brackets.length) {
+      const start = brackets.pop()!
+      bracketEnds.set(start, i)
+      bracketStarts.set(i, start)
+    }
+  }
   interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean }
   let flattened = false
   const output: string[] = []
@@ -120,7 +132,12 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         output.push('')
       } else {
         const ch = source[frame.i++]!
-        output.push(literalEscapes.has(frame.i - 1) ? `\\${ch}` : ch)
+        const at = frame.i - 1
+        const crossesBracket = frame.pair !== undefined && (
+          ch === '[' && (bracketEnds.get(at) ?? -1) >= frame.end
+          || ch === ']' && (bracketStarts.get(at) ?? at) < frame.pair.open
+        )
+        output.push(literalEscapes.has(at) || crossesBracket ? `\\${ch}` : ch)
         record(ch, ch)
       }
       continue

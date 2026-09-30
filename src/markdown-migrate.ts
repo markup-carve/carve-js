@@ -1,3 +1,4 @@
+import { protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { isValidAttrPayload } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
@@ -1430,10 +1431,14 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
-  line = markdownEmphasis(line, () => importLosses.push({
+  const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
     message: 'Unwrapped nested emphasis of the same kind; its text is preserved',
-  }), undefined, protectedSpans)
+  })
+  line = protectMarkdownLinkLabels(line, protectedSpans, protect,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) !== undefined,
+    reportFlattenedEmphasis)
+  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
   // strikethrough and the run lost a tilde as well.
@@ -2690,7 +2695,7 @@ function collectBlockquoteInlineRun(
     // with the quote's marker. Four columns past the quote's container it
     // starts none, since indented code cannot interrupt a paragraph.
     // A list marker there opens a list outside the quote, whatever its number.
-    const plain = !RE_LIST_MARKER.test(line) && isParagraphRunLine(lines, end, 'text')
+    const plain = !RE_LIST_MARKER.test(line) && isParagraphRunLine([line], 0, 'text')
     const over = indentColumns(line) >= contentCol + 4
     if (!parsed && paragraph && line.trim() !== '' && (plain || over)) {
       const text = over && !plain ? escapeBlockOpener(strip(line).trimStart()) : strip(line)
@@ -3337,6 +3342,10 @@ function collectListInlineRun(
   const fence = RE_MD_FENCE_LINE.exec(first.slice(nestedEnd))
   if (fence && fenceRunIsAFence(fence[2]!, fence[3]!)) {
     return collectItemFence(lines, start, first.slice(0, nestedEnd), fence[2]!, fenceInfo(fence[3]!))
+  }
+
+  if (RE_MD_THEMATIC.test(first.slice(nestedEnd))) {
+    return { lines: [first.slice(0, nestedEnd) + '---'], end: start + 1 }
   }
 
   // A block marker behind a task checkbox is the item paragraph's text in
@@ -4422,7 +4431,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // either (CommonMark: `* * *` is a rule, not a bullet holding `* *`).
       // Counted as a marker its columns became a content column, and the rule
       // itself - and every block after it - was padded out to them.
-      const openCol = listCols.length ? listCols[listCols.length - 1]! : 0
+      let openCol = 0
+      for (const col of listCols) if (col <= indentColumns(line)) openCol = col
       marker = RE_MD_THEMATIC.test(stripColumns(line, openCol))
         ? null
         : line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
@@ -4462,7 +4472,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         trimmed.startsWith('>') ||
         isMarkdownFenceLine(trimmed) ||
         htmlBlockAt(lines, i) !== null ||
-        /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed))
+        RE_MD_THEMATIC.test(trimmed))
       // A block a fence or table ended every item for is set apart from the
       // list, as fmt writes it.
       if (closedItem && trimmed !== '' && !marker && listCols.length && listCols[0]! > indent && out.at(-1)?.trim() !== '') {
