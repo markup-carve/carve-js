@@ -62,7 +62,7 @@ if (first === '--worker') {
   const sum = node => node.selfSize + node.children.reduce((total, child) => total + sum(child), 0)
   console.log(JSON.stringify({ samples, sampledBytesPerCall: sum(profile.head) / 50, routing, outputHash, loadStart, loadEnd: loadavg(), sink }))
 } else {
-  assert.ok(first && second && third, 'Usage: node scripts/bench-reference-definitions.mjs BASELINE_INDEX CANDIDATE_INDEX OUTPUT_JSON [--matrix|--cache]')
+  assert.ok(first && second && third, 'Usage: node scripts/bench-reference-definitions.mjs BASELINE_INDEX CANDIDATE_INDEX OUTPUT_JSON [--matrix|--cache|--sparse]')
   const entries = { baseline: resolve(first), candidate: resolve(second) }
   const stamp = entry => Object.fromEntries(['parse.js', 'fast-html.js', 'source-positions.js'].map(name => [name, digest(readFileSync(resolve(dirname(entry), name)))]))
   const metadata = {
@@ -70,7 +70,9 @@ if (first === '--worker') {
     baseline: stamp(entries.baseline), candidate: stamp(entries.candidate), runnerSha256: digest(readFileSync(fileURLToPath(import.meta.url))),
     method: 'Two fresh-worker rounds per fixture/API in alternating reader order. Each worker warms for 250ms and measures five batches of at least eight calls and 150ms. Separate 50-call heap samples include collected objects. Timing and allocation are observations, not CI thresholds.',
   }
-  const cases = fourth === '--matrix'
+  const cases = fourth === '--sparse'
+    ? ['fixed-definitions', 'dense', 'inline-links'].map(family => ({ family, size: 1024 }))
+    : fourth === '--matrix'
     ? families.flatMap(family => [64, 256, 1024].map(size => ({ family, size })))
     : [{ family: 'dense', size: 256 }, { family: 'dense', size: 1024 }, { family: 'forward', size: 1024 }, { family: 'fallback', size: 1024 }, ...fourth === '--cache' ? [{ family: 'plain', size: 1024 }, { family: 'inline-links', size: 1024 }] : []]
   const groups = []

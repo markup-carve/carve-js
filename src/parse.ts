@@ -7462,6 +7462,7 @@ class ParseSession {
   private linkDefMatches: Map<string, LinkDefMatch> | undefined
 
   private matchLinkDef(line: string): LinkDefMatch | null {
+    if (!line.includes(']:')) return null
     const cached = this.linkDefMatches?.get(line)
     if (cached) return cached
     const matched = matchLinkDef(line)

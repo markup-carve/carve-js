@@ -1,0 +1,1510 @@
+{
+  "metadata": {
+    "generatedAt": "2026-09-30T22:00:36.716Z",
+    "node": "v24.19.0",
+    "cpu": "AMD Ryzen 9 PRO 7940HS w/ Radeon 780M Graphics",
+    "logicalCpus": 16,
+    "baseline": {
+      "parse.js": "4beec6c6f0f858815adbe6426686f16841ff2436863cf0c3a0d9a0044926b415",
+      "fast-html.js": "a450f3476bafba7809392cc61d939708846ad0c9caa81491d7110de778d7084c",
+      "source-positions.js": "cba8188d148ddd8340c2f1262b2e178cbd181bd4975822574c21d517fef18884"
+    },
+    "candidate": {
+      "parse.js": "aa20cfcc4c588ac27858c7b0eb993181a0c4a29aa5e1a30535e1f2681149e037",
+      "fast-html.js": "a450f3476bafba7809392cc61d939708846ad0c9caa81491d7110de778d7084c",
+      "source-positions.js": "cba8188d148ddd8340c2f1262b2e178cbd181bd4975822574c21d517fef18884"
+    },
+    "runnerSha256": "6cc2a88ed6cdf05668fda8865a1bc3c5b097dc923be163e91a4399bcdaf867e2",
+    "method": "Two fresh-worker rounds per fixture/API in alternating reader order. Each worker warms for 250ms and measures five batches of at least eight calls and 150ms. Separate 50-call heap samples include collected objects. Timing and allocation are observations, not CI thresholds."
+  },
+  "groups": [
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "parse",
+      "reader": "baseline",
+      "round": 0,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 8,
+          "wallMs": 19.956484125000003,
+          "cpuMs": 38.132375
+        },
+        {
+          "calls": 9,
+          "wallMs": 17.963557444444444,
+          "cpuMs": 30.131444444444444
+        },
+        {
+          "calls": 11,
+          "wallMs": 14.448350272727266,
+          "cpuMs": 21.41909090909091
+        },
+        {
+          "calls": 9,
+          "wallMs": 18.108779222222235,
+          "cpuMs": 28.122666666666667
+        },
+        {
+          "calls": 12,
+          "wallMs": 12.503610166666684,
+          "cpuMs": 19.3045
+        }
+      ],
+      "sampledBytesPerCall": 6881879.2,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "6f010810e0a3823811c632e5cb7ceffaa755a174c77fa297ae71ec1c3183bdcf",
+      "loadStart": [
+        15,
+        17.17,
+        14.8
+      ],
+      "loadEnd": [
+        14.84,
+        17.1,
+        14.79
+      ],
+      "sink": 1088
+    },
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "parse",
+      "reader": "candidate",
+      "round": 0,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 8,
+          "wallMs": 21.254628874999995,
+          "cpuMs": 29.190125
+        },
+        {
+          "calls": 9,
+          "wallMs": 16.96817133333334,
+          "cpuMs": 31.755999999999997
+        },
+        {
+          "calls": 12,
+          "wallMs": 13.542924249999999,
+          "cpuMs": 18.880416666666665
+        },
+        {
+          "calls": 9,
+          "wallMs": 18.096865444444447,
+          "cpuMs": 26.25322222222222
+        },
+        {
+          "calls": 12,
+          "wallMs": 12.774777749999998,
+          "cpuMs": 23.02716666666667
+        }
+      ],
+      "sampledBytesPerCall": 6766820.16,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "6f010810e0a3823811c632e5cb7ceffaa755a174c77fa297ae71ec1c3183bdcf",
+      "loadStart": [
+        14.84,
+        17.1,
+        14.79
+      ],
+      "loadEnd": [
+        14.84,
+        17.1,
+        14.79
+      ],
+      "sink": 1088
+    },
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "parse",
+      "reader": "candidate",
+      "round": 1,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 9,
+          "wallMs": 17.962027888888883,
+          "cpuMs": 38.662444444444446
+        },
+        {
+          "calls": 11,
+          "wallMs": 14.855277272727273,
+          "cpuMs": 25.862636363636362
+        },
+        {
+          "calls": 8,
+          "wallMs": 23.713918125000006,
+          "cpuMs": 31.609
+        },
+        {
+          "calls": 9,
+          "wallMs": 17.706647666666665,
+          "cpuMs": 40.300222222222224
+        },
+        {
+          "calls": 15,
+          "wallMs": 10.131571000000001,
+          "cpuMs": 12.543466666666665
+        }
+      ],
+      "sampledBytesPerCall": 6806041.6,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "6f010810e0a3823811c632e5cb7ceffaa755a174c77fa297ae71ec1c3183bdcf",
+      "loadStart": [
+        14.84,
+        17.1,
+        14.79
+      ],
+      "loadEnd": [
+        15.01,
+        17.1,
+        14.8
+      ],
+      "sink": 1088
+    },
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "parse",
+      "reader": "baseline",
+      "round": 1,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 9,
+          "wallMs": 18.30119544444445,
+          "cpuMs": 37.218333333333334
+        },
+        {
+          "calls": 10,
+          "wallMs": 15.605223599999999,
+          "cpuMs": 27.8544
+        },
+        {
+          "calls": 12,
+          "wallMs": 12.715173583333334,
+          "cpuMs": 25.09975
+        },
+        {
+          "calls": 10,
+          "wallMs": 15.582581500000003,
+          "cpuMs": 25.887099999999997
+        },
+        {
+          "calls": 15,
+          "wallMs": 10.337972400000005,
+          "cpuMs": 13.291466666666668
+        }
+      ],
+      "sampledBytesPerCall": 6844182.72,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "6f010810e0a3823811c632e5cb7ceffaa755a174c77fa297ae71ec1c3183bdcf",
+      "loadStart": [
+        15.01,
+        17.1,
+        14.8
+      ],
+      "loadEnd": [
+        15.01,
+        17.1,
+        14.8
+      ],
+      "sink": 0
+    },
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "html",
+      "reader": "baseline",
+      "round": 0,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 62,
+          "wallMs": 2.437411306451612,
+          "cpuMs": 2.9104032258064514
+        },
+        {
+          "calls": 58,
+          "wallMs": 2.6081066724137925,
+          "cpuMs": 3.1439482758620687
+        },
+        {
+          "calls": 62,
+          "wallMs": 2.4498595000000005,
+          "cpuMs": 2.9308548387096773
+        },
+        {
+          "calls": 64,
+          "wallMs": 2.3630246562499995,
+          "cpuMs": 3.065703125
+        },
+        {
+          "calls": 64,
+          "wallMs": 2.354053828125,
+          "cpuMs": 2.74971875
+        }
+      ],
+      "sampledBytesPerCall": 2148895.36,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        15.01,
+        17.1,
+        14.8
+      ],
+      "loadEnd": [
+        14.45,
+        16.94,
+        14.76
+      ],
+      "sink": 34815
+    },
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "html",
+      "reader": "candidate",
+      "round": 0,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 63,
+          "wallMs": 2.3928397777777772,
+          "cpuMs": 2.9382539682539686
+        },
+        {
+          "calls": 64,
+          "wallMs": 2.372885140625,
+          "cpuMs": 2.78196875
+        },
+        {
+          "calls": 54,
+          "wallMs": 2.789378407407408,
+          "cpuMs": 3.440462962962963
+        },
+        {
+          "calls": 68,
+          "wallMs": 2.212563161764706,
+          "cpuMs": 2.645220588235294
+        },
+        {
+          "calls": 70,
+          "wallMs": 2.1517897285714267,
+          "cpuMs": 2.591
+        }
+      ],
+      "sampledBytesPerCall": 2125669.44,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        14.45,
+        16.94,
+        14.76
+      ],
+      "loadEnd": [
+        14.45,
+        16.94,
+        14.76
+      ],
+      "sink": 0
+    },
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "html",
+      "reader": "candidate",
+      "round": 1,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 69,
+          "wallMs": 2.1949239130434783,
+          "cpuMs": 2.3653333333333335
+        },
+        {
+          "calls": 65,
+          "wallMs": 2.334030138461538,
+          "cpuMs": 2.8336923076923077
+        },
+        {
+          "calls": 59,
+          "wallMs": 2.5583424406779653,
+          "cpuMs": 3.0650677966101694
+        },
+        {
+          "calls": 68,
+          "wallMs": 2.244691955882353,
+          "cpuMs": 2.764794117647059
+        },
+        {
+          "calls": 66,
+          "wallMs": 2.2999909848484847,
+          "cpuMs": 2.754590909090909
+        }
+      ],
+      "sampledBytesPerCall": 2157210.08,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        14.45,
+        16.94,
+        14.76
+      ],
+      "loadEnd": [
+        14.45,
+        16.94,
+        14.76
+      ],
+      "sink": 34815
+    },
+    {
+      "family": "fixed-definitions",
+      "size": 1024,
+      "api": "html",
+      "reader": "baseline",
+      "round": 1,
+      "bytes": 12333,
+      "sourceSha256": "1f60d2ba64840896c37d2e012b33ae4b7b21babfa235e52b12ed093593955d00",
+      "samples": [
+        {
+          "calls": 65,
+          "wallMs": 2.31097056923077,
+          "cpuMs": 2.7478615384615384
+        },
+        {
+          "calls": 56,
+          "wallMs": 2.7029034642857153,
+          "cpuMs": 3.1462499999999998
+        },
+        {
+          "calls": 57,
+          "wallMs": 2.6591565438596487,
+          "cpuMs": 3.1110701754385963
+        },
+        {
+          "calls": 67,
+          "wallMs": 2.265963925373134,
+          "cpuMs": 2.7233432835820897
+        },
+        {
+          "calls": 63,
+          "wallMs": 2.382472761904763,
+          "cpuMs": 2.813968253968254
+        }
+      ],
+      "sampledBytesPerCall": 2165191.04,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 64,
+        "consumedLines": 1088,
+        "activeDefinitions": 64
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        14.45,
+        16.94,
+        14.76
+      ],
+      "loadEnd": [
+        14.45,
+        16.94,
+        14.76
+      ],
+      "sink": 0
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "parse",
+      "reader": "baseline",
+      "round": 0,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 8,
+          "wallMs": 20.96722000000001,
+          "cpuMs": 38.245125
+        },
+        {
+          "calls": 8,
+          "wallMs": 19.97608799999999,
+          "cpuMs": 38.619625
+        },
+        {
+          "calls": 8,
+          "wallMs": 28.083692375000012,
+          "cpuMs": 46.411375
+        },
+        {
+          "calls": 8,
+          "wallMs": 22.04023037500002,
+          "cpuMs": 41.754625
+        },
+        {
+          "calls": 10,
+          "wallMs": 16.718551899999987,
+          "cpuMs": 19.9506
+        }
+      ],
+      "sampledBytesPerCall": 11765516.64,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "b540244aa42ea187743fb8bce5361619087bade92e98803655430fa88bd0ecdd",
+      "loadStart": [
+        13.94,
+        16.8,
+        14.73
+      ],
+      "loadEnd": [
+        13.94,
+        16.8,
+        14.73
+      ],
+      "sink": 0
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "parse",
+      "reader": "candidate",
+      "round": 0,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 8,
+          "wallMs": 20.451260875000003,
+          "cpuMs": 39.745
+        },
+        {
+          "calls": 8,
+          "wallMs": 18.93831737500001,
+          "cpuMs": 33.470875
+        },
+        {
+          "calls": 8,
+          "wallMs": 22.767073124999996,
+          "cpuMs": 37.5445
+        },
+        {
+          "calls": 8,
+          "wallMs": 21.207791500000013,
+          "cpuMs": 34.687375
+        },
+        {
+          "calls": 10,
+          "wallMs": 16.066676800000003,
+          "cpuMs": 22.1809
+        }
+      ],
+      "sampledBytesPerCall": 9991184.96,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "b540244aa42ea187743fb8bce5361619087bade92e98803655430fa88bd0ecdd",
+      "loadStart": [
+        13.94,
+        16.8,
+        14.73
+      ],
+      "loadEnd": [
+        14.26,
+        16.82,
+        14.75
+      ],
+      "sink": 0
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "parse",
+      "reader": "candidate",
+      "round": 1,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 8,
+          "wallMs": 21.96576125,
+          "cpuMs": 33.363625
+        },
+        {
+          "calls": 8,
+          "wallMs": 20.114109499999998,
+          "cpuMs": 31.84375
+        },
+        {
+          "calls": 8,
+          "wallMs": 20.092134,
+          "cpuMs": 40.68625
+        },
+        {
+          "calls": 11,
+          "wallMs": 14.50662418181818,
+          "cpuMs": 17.378636363636364
+        },
+        {
+          "calls": 8,
+          "wallMs": 20.253478374999986,
+          "cpuMs": 32.972
+        }
+      ],
+      "sampledBytesPerCall": 10055535.68,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "b540244aa42ea187743fb8bce5361619087bade92e98803655430fa88bd0ecdd",
+      "loadStart": [
+        14.26,
+        16.82,
+        14.75
+      ],
+      "loadEnd": [
+        14.26,
+        16.82,
+        14.75
+      ],
+      "sink": 0
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "parse",
+      "reader": "baseline",
+      "round": 1,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 8,
+          "wallMs": 25.76300975000001,
+          "cpuMs": 40.65475
+        },
+        {
+          "calls": 8,
+          "wallMs": 22.239627374999998,
+          "cpuMs": 36.06625
+        },
+        {
+          "calls": 8,
+          "wallMs": 25.329219374999994,
+          "cpuMs": 45.598375
+        },
+        {
+          "calls": 8,
+          "wallMs": 50.66428875,
+          "cpuMs": 58.16925
+        },
+        {
+          "calls": 8,
+          "wallMs": 34.77553850000001,
+          "cpuMs": 59.001625
+        }
+      ],
+      "sampledBytesPerCall": 11735138.72,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "b540244aa42ea187743fb8bce5361619087bade92e98803655430fa88bd0ecdd",
+      "loadStart": [
+        14.26,
+        16.82,
+        14.75
+      ],
+      "loadEnd": [
+        15.76,
+        17.08,
+        14.84
+      ],
+      "sink": 0
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "html",
+      "reader": "baseline",
+      "round": 0,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 39,
+          "wallMs": 3.9142802307692306,
+          "cpuMs": 4.955897435897436
+        },
+        {
+          "calls": 44,
+          "wallMs": 3.47757584090909,
+          "cpuMs": 4.512431818181818
+        },
+        {
+          "calls": 43,
+          "wallMs": 3.571868488372092,
+          "cpuMs": 4.550558139534884
+        },
+        {
+          "calls": 45,
+          "wallMs": 3.3363938888888875,
+          "cpuMs": 3.885777777777778
+        },
+        {
+          "calls": 46,
+          "wallMs": 3.2646904130434824,
+          "cpuMs": 4.0630434782608695
+        }
+      ],
+      "sampledBytesPerCall": 3159469.44,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        15.76,
+        17.08,
+        14.84
+      ],
+      "loadEnd": [
+        15.76,
+        17.08,
+        14.84
+      ],
+      "sink": 0
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "html",
+      "reader": "candidate",
+      "round": 0,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 38,
+          "wallMs": 3.9699826052631586,
+          "cpuMs": 5.027236842105263
+        },
+        {
+          "calls": 48,
+          "wallMs": 3.163130145833333,
+          "cpuMs": 4.063645833333333
+        },
+        {
+          "calls": 41,
+          "wallMs": 3.6770836829268303,
+          "cpuMs": 4.91609756097561
+        },
+        {
+          "calls": 49,
+          "wallMs": 3.074892836734694,
+          "cpuMs": 3.7363265306122453
+        },
+        {
+          "calls": 46,
+          "wallMs": 3.285352565217394,
+          "cpuMs": 4.071021739130435
+        }
+      ],
+      "sampledBytesPerCall": 3171882.4,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        15.76,
+        17.08,
+        14.84
+      ],
+      "loadEnd": [
+        14.98,
+        16.9,
+        14.8
+      ],
+      "sink": 34815
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "html",
+      "reader": "candidate",
+      "round": 1,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 35,
+          "wallMs": 4.3027474,
+          "cpuMs": 5.585571428571429
+        },
+        {
+          "calls": 41,
+          "wallMs": 3.725168097560976,
+          "cpuMs": 4.674951219512195
+        },
+        {
+          "calls": 42,
+          "wallMs": 3.6074670238095257,
+          "cpuMs": 4.880071428571428
+        },
+        {
+          "calls": 49,
+          "wallMs": 3.1043977551020387,
+          "cpuMs": 3.7718367346938773
+        },
+        {
+          "calls": 48,
+          "wallMs": 3.1445591874999983,
+          "cpuMs": 3.8207291666666667
+        }
+      ],
+      "sampledBytesPerCall": 3157334.24,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        14.98,
+        16.9,
+        14.8
+      ],
+      "loadEnd": [
+        14.98,
+        16.9,
+        14.8
+      ],
+      "sink": 34815
+    },
+    {
+      "family": "dense",
+      "size": 1024,
+      "api": "html",
+      "reader": "baseline",
+      "round": 1,
+      "bytes": 30549,
+      "sourceSha256": "7c2c55a16e8178087844f136181c0cf78fc3891181b9fbfbdca30817b17d4ca1",
+      "samples": [
+        {
+          "calls": 42,
+          "wallMs": 3.5871104285714286,
+          "cpuMs": 4.787071428571428
+        },
+        {
+          "calls": 43,
+          "wallMs": 3.491360674418602,
+          "cpuMs": 4.311720930232558
+        },
+        {
+          "calls": 40,
+          "wallMs": 3.7836097999999994,
+          "cpuMs": 5.017025
+        },
+        {
+          "calls": 40,
+          "wallMs": 3.75602835,
+          "cpuMs": 4.679125
+        },
+        {
+          "calls": 36,
+          "wallMs": 4.189284277777777,
+          "cpuMs": 5.216555555555555
+        }
+      ],
+      "sampledBytesPerCall": 3177406.88,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 1024,
+        "consumedLines": 2048,
+        "activeDefinitions": 1024
+      },
+      "outputHash": "de11b719c3891b1c85c85a5a3d16770711c479c3b0ba3f8a150f849ad9822ac2",
+      "loadStart": [
+        14.98,
+        16.9,
+        14.8
+      ],
+      "loadEnd": [
+        14.98,
+        16.9,
+        14.8
+      ],
+      "sink": 34815
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "parse",
+      "reader": "baseline",
+      "round": 0,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 20,
+          "wallMs": 7.927097850000001,
+          "cpuMs": 13.004900000000001
+        },
+        {
+          "calls": 21,
+          "wallMs": 7.591407952380954,
+          "cpuMs": 9.094047619047618
+        },
+        {
+          "calls": 15,
+          "wallMs": 10.4548778,
+          "cpuMs": 16.5052
+        },
+        {
+          "calls": 23,
+          "wallMs": 6.75453486956522,
+          "cpuMs": 7.85204347826087
+        },
+        {
+          "calls": 17,
+          "wallMs": 9.016604117647054,
+          "cpuMs": 14.378764705882352
+        }
+      ],
+      "sampledBytesPerCall": 5079999.36,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "2c40a2789dbdc26c8d649de1209a172c998ed2c6306670fd4559d13e849ef4d7",
+      "loadStart": [
+        14.98,
+        16.9,
+        14.8
+      ],
+      "loadEnd": [
+        15.06,
+        16.89,
+        14.8
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "parse",
+      "reader": "candidate",
+      "round": 0,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 17,
+          "wallMs": 9.071072470588232,
+          "cpuMs": 15.246529411764705
+        },
+        {
+          "calls": 18,
+          "wallMs": 8.450674166666666,
+          "cpuMs": 13.378388888888889
+        },
+        {
+          "calls": 17,
+          "wallMs": 9.104270352941178,
+          "cpuMs": 14.321
+        },
+        {
+          "calls": 17,
+          "wallMs": 8.942262705882353,
+          "cpuMs": 14.940588235294118
+        },
+        {
+          "calls": 20,
+          "wallMs": 7.663391149999995,
+          "cpuMs": 11.70635
+        }
+      ],
+      "sampledBytesPerCall": 5077022.72,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "2c40a2789dbdc26c8d649de1209a172c998ed2c6306670fd4559d13e849ef4d7",
+      "loadStart": [
+        15.06,
+        16.89,
+        14.8
+      ],
+      "loadEnd": [
+        15.06,
+        16.89,
+        14.8
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "parse",
+      "reader": "candidate",
+      "round": 1,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 21,
+          "wallMs": 7.235754619047617,
+          "cpuMs": 8.803333333333333
+        },
+        {
+          "calls": 20,
+          "wallMs": 7.753555699999998,
+          "cpuMs": 12.681799999999999
+        },
+        {
+          "calls": 26,
+          "wallMs": 6.030489961538461,
+          "cpuMs": 6.6761923076923075
+        },
+        {
+          "calls": 20,
+          "wallMs": 7.873956800000002,
+          "cpuMs": 12.10225
+        },
+        {
+          "calls": 20,
+          "wallMs": 7.542506150000008,
+          "cpuMs": 8.2352
+        }
+      ],
+      "sampledBytesPerCall": 5086100.96,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "2c40a2789dbdc26c8d649de1209a172c998ed2c6306670fd4559d13e849ef4d7",
+      "loadStart": [
+        15.06,
+        16.89,
+        14.8
+      ],
+      "loadEnd": [
+        15.06,
+        16.89,
+        14.8
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "parse",
+      "reader": "baseline",
+      "round": 1,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 8,
+          "wallMs": 34.817552750000004,
+          "cpuMs": 19.78375
+        },
+        {
+          "calls": 8,
+          "wallMs": 23.516360625000004,
+          "cpuMs": 28.696875
+        },
+        {
+          "calls": 15,
+          "wallMs": 10.124065066666663,
+          "cpuMs": 12.498666666666667
+        },
+        {
+          "calls": 21,
+          "wallMs": 7.223238904761913,
+          "cpuMs": 11.88352380952381
+        },
+        {
+          "calls": 14,
+          "wallMs": 10.832862428571437,
+          "cpuMs": 16.810642857142856
+        }
+      ],
+      "sampledBytesPerCall": 5134625.12,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "2c40a2789dbdc26c8d649de1209a172c998ed2c6306670fd4559d13e849ef4d7",
+      "loadStart": [
+        18.26,
+        17.52,
+        15.02
+      ],
+      "loadEnd": [
+        18.26,
+        17.52,
+        15.02
+      ],
+      "sink": 1024
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "html",
+      "reader": "baseline",
+      "round": 0,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 45,
+          "wallMs": 3.3361261333333334,
+          "cpuMs": 4.181244444444444
+        },
+        {
+          "calls": 47,
+          "wallMs": 3.1957107234042548,
+          "cpuMs": 3.8494255319148936
+        },
+        {
+          "calls": 37,
+          "wallMs": 4.077442783783782,
+          "cpuMs": 5.324810810810811
+        },
+        {
+          "calls": 38,
+          "wallMs": 3.9839803684210495,
+          "cpuMs": 4.88228947368421
+        },
+        {
+          "calls": 49,
+          "wallMs": 3.104413122448978,
+          "cpuMs": 3.777530612244898
+        }
+      ],
+      "sampledBytesPerCall": 2089840.48,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "a57dfb1784aa89f1dcbb0f45ee73a09ed54ad65e06403f3c0cad7a8420695c11",
+      "loadStart": [
+        18.26,
+        17.52,
+        15.02
+      ],
+      "loadEnd": [
+        18.26,
+        17.52,
+        15.02
+      ],
+      "sink": 54271
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "html",
+      "reader": "candidate",
+      "round": 0,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 59,
+          "wallMs": 2.5575946610169487,
+          "cpuMs": 3.185237288135593
+        },
+        {
+          "calls": 57,
+          "wallMs": 2.6451842456140344,
+          "cpuMs": 3.1091228070175436
+        },
+        {
+          "calls": 45,
+          "wallMs": 3.380383666666666,
+          "cpuMs": 4.187577777777777
+        },
+        {
+          "calls": 51,
+          "wallMs": 3.0121803333333346,
+          "cpuMs": 3.4750980392156863
+        },
+        {
+          "calls": 56,
+          "wallMs": 2.715771428571429,
+          "cpuMs": 3.3075535714285715
+        }
+      ],
+      "sampledBytesPerCall": 2082997.76,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "a57dfb1784aa89f1dcbb0f45ee73a09ed54ad65e06403f3c0cad7a8420695c11",
+      "loadStart": [
+        18.26,
+        17.52,
+        15.02
+      ],
+      "loadEnd": [
+        17.36,
+        17.34,
+        14.97
+      ],
+      "sink": 54271
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "html",
+      "reader": "candidate",
+      "round": 1,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 53,
+          "wallMs": 2.864810528301886,
+          "cpuMs": 3.5267735849056607
+        },
+        {
+          "calls": 50,
+          "wallMs": 3.0530943600000002,
+          "cpuMs": 3.81482
+        },
+        {
+          "calls": 52,
+          "wallMs": 2.8877455192307675,
+          "cpuMs": 3.627653846153846
+        },
+        {
+          "calls": 35,
+          "wallMs": 4.3714676285714305,
+          "cpuMs": 5.400085714285714
+        },
+        {
+          "calls": 39,
+          "wallMs": 3.8913281538461537,
+          "cpuMs": 4.697282051282051
+        }
+      ],
+      "sampledBytesPerCall": 2086961.6,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "a57dfb1784aa89f1dcbb0f45ee73a09ed54ad65e06403f3c0cad7a8420695c11",
+      "loadStart": [
+        17.36,
+        17.34,
+        14.97
+      ],
+      "loadEnd": [
+        17.36,
+        17.34,
+        14.97
+      ],
+      "sink": 0
+    },
+    {
+      "family": "inline-links",
+      "size": 1024,
+      "api": "html",
+      "reader": "baseline",
+      "round": 1,
+      "bytes": 36864,
+      "sourceSha256": "da49ee94a25384c686f2fc323cd32162f3e37179c39cf16704437c3e278d7d75",
+      "samples": [
+        {
+          "calls": 60,
+          "wallMs": 2.5092452166666663,
+          "cpuMs": 3.0919499999999998
+        },
+        {
+          "calls": 62,
+          "wallMs": 2.4563453387096774,
+          "cpuMs": 2.9848387096774194
+        },
+        {
+          "calls": 52,
+          "wallMs": 2.926426230769231,
+          "cpuMs": 3.559057692307692
+        },
+        {
+          "calls": 57,
+          "wallMs": 2.6471994912280716,
+          "cpuMs": 3.3080350877192983
+        },
+        {
+          "calls": 55,
+          "wallMs": 2.739097727272726,
+          "cpuMs": 3.307909090909091
+        }
+      ],
+      "sampledBytesPerCall": 2081079.84,
+      "routing": {
+        "headings": 0,
+        "paragraphs": 1024,
+        "blockQuotes": 0,
+        "codeFences": 0,
+        "thematicBreaks": 0,
+        "unorderedListItems": 0,
+        "orderedListItems": 0,
+        "tableRows": 0,
+        "linkDefinitions": 0,
+        "consumedLines": 1024,
+        "activeDefinitions": 0
+      },
+      "outputHash": "a57dfb1784aa89f1dcbb0f45ee73a09ed54ad65e06403f3c0cad7a8420695c11",
+      "loadStart": [
+        17.36,
+        17.34,
+        14.97
+      ],
+      "loadEnd": [
+        17.36,
+        17.34,
+        14.97
+      ],
+      "sink": 54271
+    }
+  ]
+}
