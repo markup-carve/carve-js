@@ -1,7 +1,7 @@
 import { parse } from './parse.js'
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
-import { attributedDjotWords } from './djot-word-attributes.js'
+import { attributedDjotWords, readAttributes } from './djot-word-attributes.js'
 import { attributedDjotStrong } from './djot-attributed-strong.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
@@ -218,13 +218,15 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   const converted = lines.map((line, index) => {
     const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(line)![0].length
     const last = line.trimEnd().length
+    const strippedLine = line.replace(pattern, '')
+    const markerOnly = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*(?:[-*+]|[0-9]+[.)]|#{1,6}|:{1,2}|\[\^[^\]]+\]:)[ \t]+(?:\[[ xX-]\][ \t]+)?$/.test(strippedLine)
     let orphanEnd = -1, dropLine = false
     const written = line.replace(pattern, (attrs: string, at: number) => {
       let before = at
       while (line[before - 1] === '\\') before--
       if (masked[index]![at] !== '{' || (at - before) % 2 !== 0) return attrs
       if (at !== orphanEnd && /[\]*_}^~]/.test(line[at - 1] ?? '') || (at > 0 && masked[index]![at - 1] === ' ' && line[at - 1] !== ' ')) return attrs
-      if (/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*(?:[-*+]|[0-9]+[.)]|#{1,6}|:{1,2}|\[\^[^\]]+\]:)[ \t]+(?:\[[ xX-]\][ \t]+)?$/.test(line.slice(0, at).replace(pattern, '')) && line.slice(at).replace(pattern, '').trim() === '') return attrs
+      if (markerOnly) return attrs
       const alone = at === first && at + attrs.length === last
       const previous = (lines[index - 1] ?? '').replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
       if (alone && (lines[index + 1] ?? '').trim() !== '' && (index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous))) return attrs
@@ -334,17 +336,29 @@ export function djotToCarve(djot: string): string {
     let emptyTerm = '\x00DJOTEMPTYTERM\x00'
     while (text.includes(emptyTerm)) emptyTerm += '\x00'
     const attrs = consumeOrphanDjotAttributes(convertDefinitionLists(convertDjotBlockMarkers(text), emptyTerm))
-    return attrs.restore(collapseFalseListBoundaries(djotEmphasis(attrs.source, plain => applyMigrationFixes(escapePlainDjotText(plain)).output))).replaceAll(emptyTerm, '%%')
+    return attrs.restore(collapseFalseListBoundaries(djotEmphasis(attrs.source, plain => applyMigrationFixes(escapePlainDjotText(plain), true).output))).replaceAll(emptyTerm, '%%')
   }
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
   const headingFolded = foldHeadingContinuations(body)
-  const collapsedMask = maskDjotCodeAndDestinations(headingFolded, false)
-  const definitions = new Set(Array.from(headingFolded.matchAll(/\[([^\]\n]*)\]:[ \t]/g)).filter(match => collapsedMask[match.index!] === '[').map(match => match[1]!))
-  const rawFolded = headingFolded.replace(/(!?\[([^\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && definitions.has(key) ? `${label}[${key}]` : value)
+  let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
+  const collapsedChars = collapsedMask.split('')
+  for (let at = 0; at < headingFolded.length; at++) {
+    if (collapsedChars[at] !== '{') continue
+    const attrs = readAttributes(headingFolded, at)
+    if (!attrs) continue
+    for (let i = at; i < attrs.end; i++) if (collapsedChars[i] !== '\n') collapsedChars[i] = ' '
+    at = attrs.end - 1
+  }
+  collapsedMask = collapsedChars.join('')
+  const previousDefinitionLines = new Map<number, string>()
+  let definitionOffset = 0, previousDefinitionLine = ''
+  for (const line of headingFolded.split('\n')) { previousDefinitionLines.set(definitionOffset, previousDefinitionLine); definitionOffset += line.length + 1; previousDefinitionLine = line }
+  const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!))
+  const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && definitions.has(key) ? `${label}[${key}]` : value)
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
-  const folded = rawFolded.replace(/!\[([^\]\n]*)\](?=[([])/g, (image: string, label: string, at: number) => {
+  const folded = rawFolded.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (image: string, label: string, at: number) => {
     if (imageMask[at] !== '!' || isDjotEscaped(rawFolded, at) || label.includes('\\')) return image
     if (!/[_*`{^~]/.test(label)) { spans.push(label); return `![${prefix}${spans.length - 1}\x00]` }
     spans.push(renderPlainText(parse(convert(`DJOTALT ${label} DJOTEND`)), { smartTypography: false }).replace(/ DJOTEND\n?$/, '').slice(8))

@@ -44,7 +44,7 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
   for (let i = 0; i < source.length; i++) {
     if (i === lineStart) {
       const end = source.indexOf('\n', i)
-      const line = source.slice(i, end < 0 ? source.length : end).replace(/^(?:[ \t]*>)*[ \t]*/, '')
+      const line = source.slice(i, end < 0 ? source.length : end).replace(/^(?:[ \t]*>[ ]?)*/, '')
       const indent = /^[ \t]*/.exec(line)![0].length
       if (line.trim() && listColumn !== undefined && indent < listColumn && !/^[ \t]*(?:[-*+] |[0-9]+[.)] )/.test(line)) listColumn = undefined
       const marker = /^[ \t]*(?:[-*+][ \t]|[0-9]+[.)][ \t]|\|)/.test(line)
@@ -187,5 +187,5 @@ function maskDjotEmphasisSource(source: string): string {
     }
     offset += line.length + 1
   }
-  return masked.join('').replace(/!\[[^\]\n]*\](?=[([])/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
+  return masked.join('').replace(/!\[[^\[\]\n]*\](?=[([])/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
 }

@@ -371,8 +371,8 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     }
     const open = content.match(/^([ \t]*)(?:(:[ \t]+|[-*+][ \t]+|[0-9]+[.)][ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)[ \t]*$/)
     if (open && !(open[2]?.startsWith(':') && !previousBlock)) {
-      const container = open[2] ? open[1]!.length + open[2].length : null
-      fence = { ch: open[3]![0]!, len: open[3]!.length, indent: container ?? Math.max(3, open[1]!.length), container, depth }
+      const container = open[2] ? open[1]!.length + open[2].length : open[1]!.length || null
+      fence = { ch: open[3]![0]!, len: open[3]!.length, indent: open[2] ? container! : Math.max(3, open[1]!.length), container, depth }
       const start = line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
     }
@@ -436,7 +436,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previous) ? blanks(value) : value
   }).replace(/(?<=\])\[[^\]\n]*\]/g, blanks)
   masked = masked.replace(/^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?:{3,}[ \t]+([A-Za-z_][A-Za-z0-9_.-]*)/gm, (value: string, name: string, at: number) => (previousLines.get(at) ?? '').trim() === '' || /(?:[-*+]|[0-9]+[.)])[ \t]+:{3,}/.test(value) ? value.slice(0, -name.length) + blanks(name) : value)
-  return masked.replace(/!\[([^\]\n]*)\](?=[([])/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)
+  return masked.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)
 }
 
 /** A single source splice: replace [start, end) with `text`. */
@@ -540,7 +540,7 @@ function tableContinuationLines(source: string): Set<number> {
 }
 
 /** The full scan, carrying the fix edits used by `applyMigrationFixes`. */
-function scanHits(source: string): ScanHit[] {
+function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   const out: ScanHit[] = []
   // Code (fenced + inline, multi-line) is masked to spaces so no rule
   // can match through or into it. Positions are preserved 1:1. The scan
@@ -551,7 +551,7 @@ function scanHits(source: string): ScanHit[] {
   // `masked`, so the captured content for a suggestion is sliced from
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
-  const masked = maskDjotCodeAndDestinations(norm, true, false)
+  const masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode)
   // A `+ ` line carrying a pipe is ambiguous by text alone: without a table
   // above it, it is a Djot bullet that degrades to prose in Carve; after a
   // table row, it is Carve's native continuation-row syntax. Ask the parser
@@ -740,8 +740,8 @@ export interface MigrationFixResult {
  * not re-run on the output, so a fixed `~~x~~` -> `~x~` is never re-flagged
  * as a subscript.
  */
-export function applyMigrationFixes(source: string): MigrationFixResult {
-  const hits = scanHits(source)
+export function applyMigrationFixes(source: string, nativeDjotCode = false): MigrationFixResult {
+  const hits = scanHits(source, nativeDjotCode)
 
   // Mark every hit that *crosses* another (partial overlap where neither span
   // contains the other). `hits` is sorted by start (line/column), so a single

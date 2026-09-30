@@ -87,3 +87,7 @@ test.each([["> - ```\n>   a_b *c\n>   ```", "<code>a_b *c"], ["- [r]: /a_b_\n\n[
 test.each([["Use `[a][]` here.\n\n[a]: /u", "<code>[a][]</code>"], ["See [Introduction][].\n\n# Introduction", "href=\"#Introduction\""], ["::: warn_ing\ntext\n:::", "class=\"warn_ing\""], ["a `x_y {#i}", "<code>x_y {#i}</code>"], ["a _b {+ c_ d", "<em>b {+ c</em>"], ["see ![_x_] here", "<em>x</em>"]])('preserves code and reference context: %s', (source, expected) => {
   expect(carveToHtml(djotToCarve(source))).toContain(expected)
 })
+
+test.each([["a [b](u){title=\"[x][]\"} c\n\n[x]: /u", "title=\"[x][]\""], ["a <http://e.com/[x][]> c\n\n[x]: /u", "href=\"http://e.com/[x][]\""], ["# x\n\nNote [x]: see. Go to [x][].", "href=\"#x\""], ["a `b _c_ d", "<code>b _c_ d</code>"], ["- a\n\n  b _c\n- d_ e", "b _c"], ["- x\n\n  ```\n  a\n      ```\n\nlater _em_", "<em>em</em>"]])('keeps references and delimiter runs within their native contexts: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})
