@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Fixes
 
 - `lintCarve` no longer reports `unattached-block-attribute` on the `{empty}` sentinel, the spelling PART 11 §7b and §7d define for an empty footnote definition body and an empty description body. An attribute block that reaches no block is still reported (#2408).
+- `unattached-block-attribute` no longer advises deleting a footnote or description body that holds nothing but an attribute block. PART 11 §7d makes the report itself correct there, but a bare marker is not a marker, so deleting the line drops the `<dd>` and turns a footnote definition and its references into text. The message now points at the `{empty}` sentinel that `fmt` writes. Reported lines and columns are unchanged (#2412).
 - Markdown import resolves a reference chain against the definitions that exist, and reads a definition whose label is escaped or spans lines and whose title carries parentheses or spans lines (#2409; markup-carve/carve#2522, markup-carve/carve#2593).
 - Markdown import keeps a bracketed autolink's destination and the parentheses inside it, and keeps tab residue and nested quote markers inside a quoted block (#2409; markup-carve/carve#2522).
 - An editorial substitution is bounded by the bracket run that encloses it (#2409; markup-carve/carve#2645).
