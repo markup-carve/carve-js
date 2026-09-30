@@ -14,7 +14,7 @@ export { mergeAttrs } from './attribute-merge.js'
 import { applyAbbreviations, applyLinkDefs } from './inline-resolution.js'
 import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
 import { referenceLink, referenceImage } from './reference-resolution.js'
-import { dropPositions, toCodepointPositions } from './source-positions.js'
+import { definitionLinePosition, dropPositions, toCodepointPositions } from './source-positions.js'
 import type {
   SmartPunctuation,
   AbbreviationDef,
@@ -1547,29 +1547,14 @@ function appendLinkReferenceDefinitions(
     }
     if (def.title !== undefined) node.title = def.title
     if (def.attrs) node.attrs = def.attrs
-    node.pos = wholeLinePos(lexer, def.line, source)
+    node.pos = definitionLinePosition(
+      lexer.lines, lexer.sourceOffsetMap ?? lexer.lineOffsets, def.line, source.length,
+      lexer.lineStartColumn(def.line),
+    )
     authored.push(node)
   }
   authored.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
   children.push(...authored)
-}
-
-/** The span of a whole source line, for a node reassembled from one line. */
-function wholeLinePos(lexer: Lexer, line: number, source: string): Position {
-  const text = lexer.lines[line] ?? ''
-  let offset = 0
-  for (let i = 0; i < line; i++) offset += (lexer.lines[i] ?? '').length + 1
-  // Clamp rather than trust the running total: a document whose final line has
-  // no trailing newline would otherwise claim one byte past the end.
-  const startOffset = Math.min(offset, source.length)
-  return {
-    startLine: line + 1,
-    endLine: line + 1,
-    startColumn: 1,
-    endColumn: text.length + 1,
-    startOffset,
-    endOffset: Math.min(startOffset + text.length, source.length),
-  }
 }
 
 
@@ -7556,7 +7541,7 @@ class ParseSession {
     // they can be resolved regardless of document order (grammar §6).
     this.collectLinkDefs(lexer)
     const children = this.parseBlocks(lexer, 0)
-    appendLinkReferenceDefinitions(children, lexer, source)
+    appendLinkReferenceDefinitions(children, lexer, strippedBom ? '\ufeff' + source : source)
     const doc: Document = { type: 'document', children }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
