@@ -8506,28 +8506,29 @@ class ParseSession {
       // behind a COLUMN-0 quote run only, so `  >    [r]: /url` scored 2 - the
       // indent before a marker the block parser strips - and the exemption below
       // let it through on top of that.
-      const deepestListColumn = openCols
-        .filter((entry) => !entry.quote)
-        .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
-      const deepestTrackedListColumn = listCols.reduce<number | null>(
-        (deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest,
-        deepestListColumn,
-      )
-      const reachedOuterListColumn = openCols
-        .slice(0, composed.depth)
-        .filter((entry) => !entry.quote)
-        .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
+      let deepestTrackedListColumn: number | null = null
+      let reachedOuterListColumn: number | null = null
+      for (let i = 0; i < openCols.length; i++) {
+        const entry = openCols[i]!
+        if (entry.quote) continue
+        if (deepestTrackedListColumn === null || entry.col > deepestTrackedListColumn) {
+          deepestTrackedListColumn = entry.col
+        }
+        if (i < composed.depth && (reachedOuterListColumn === null || entry.col > reachedOuterListColumn)) {
+          reachedOuterListColumn = entry.col
+        }
+      }
+      for (const { col: column } of listCols) {
+        if (deepestTrackedListColumn === null || column > deepestTrackedListColumn) {
+          deepestTrackedListColumn = column
+        }
+      }
       // WITH A LIST COLUMN IN PLAY the test is "at or past the deepest one", not
       // "exactly at an open one": §24 C3 erases an authored base before the item
       // parses the line, so an over-indented definition is the item's definition
       // and registers document-wide (carve#1705). With NO list column open the
       // exact test stands unchanged - a quote's content column is reached, not
       // rebased.
-      const reached = (col: number): boolean =>
-        deepestTrackedListColumn !== null
-          ? col >= deepestTrackedListColumn
-          : composed.peeled.some((one) => one.content === col) ||
-            openCols.some((e, i) => i < composed.depth && e.col === col)
       const anyReached = composed.peeled.length > 0 || composed.depth > 0
       // An unmarked line may lazily continue a quote's open paragraph, but it
       // does not reach a container inside that quote. Falling back to the outer
@@ -8542,7 +8543,10 @@ class ParseSession {
         : plusColumn !== null
         ? rawIndent === plusColumn
         : anyReached
-          ? reached(composed.column)
+          ? deepestTrackedListColumn !== null
+            ? composed.column >= deepestTrackedListColumn
+            : composed.peeled.some((one) => one.content === composed.column) ||
+              openCols.some((entry, i) => i < composed.depth && entry.col === composed.column)
           : inFootnoteBody
             ? composed.column >= FOOTNOTE_BODY_COLUMN
             : composed.column === openColumn
