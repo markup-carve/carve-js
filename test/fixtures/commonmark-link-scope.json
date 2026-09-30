@@ -1,0 +1,37 @@
+[
+  {
+    "example": 473,
+    "markdown": "*[bar*](/url)\n",
+    "html": "<p>*<a href=\"/url\">bar*</a></p>\n"
+  },
+  {
+    "example": 474,
+    "markdown": "_foo [bar_](/url)\n",
+    "html": "<p>_foo <a href=\"/url\">bar_</a></p>\n"
+  },
+  {
+    "example": 521,
+    "markdown": "*[foo*](/uri)\n",
+    "html": "<p>*<a href=\"/uri\">foo*</a></p>\n"
+  },
+  {
+    "example": 534,
+    "markdown": "*[foo*][ref]\n\n[ref]: /uri\n",
+    "html": "<p>*<a href=\"/uri\">foo*</a></p>\n"
+  },
+  {
+    "example": 535,
+    "markdown": "[foo *bar][ref]*\n\n[ref]: /uri\n",
+    "html": "<p><a href=\"/uri\">foo *bar</a>*</p>\n"
+  },
+  {
+    "example": 564,
+    "markdown": "[foo*]: /url\n\n*[foo*]\n",
+    "html": "<p>*<a href=\"/url\">foo*</a></p>\n"
+  },
+  {
+    "example": 523,
+    "markdown": "*foo [bar* baz]\n",
+    "html": "<p><em>foo [bar</em> baz]</p>\n"
+  }
+]

@@ -1,3 +1,4 @@
+import { protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { isValidAttrPayload } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
@@ -1430,10 +1431,14 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
-  line = markdownEmphasis(line, () => importLosses.push({
+  const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
     message: 'Unwrapped nested emphasis of the same kind; its text is preserved',
-  }), undefined, protectedSpans)
+  })
+  line = protectMarkdownLinkLabels(line, protectedSpans, protect,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) !== undefined,
+    reportFlattenedEmphasis)
+  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
   // strikethrough and the run lost a tilde as well.
