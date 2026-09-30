@@ -4,6 +4,11 @@ import { carveToHtml, djotMigrationWarnings, lintCarve } from '../src/index.js'
 const at = (source: string, rule: string) =>
   lintCarve(source).filter((w) => w.rule === rule).map((w) => `${w.line}:${w.column}`)
 
+const advice = (source: string) =>
+  lintCarve(source)
+    .filter((w) => w.rule === 'unattached-block-attribute')
+    .map((w) => (w.message.includes('whole body') ? 'whole-body' : 'generic'))
+
 // carve-js#2240, part one. PART 9 §15 A4 drops a block attribute with no block
 // left to attach to, and docs/validation.md has listed the diagnostic since the
 // clause landed. carve-js emitted it nowhere, so the one construct in the
@@ -30,6 +35,46 @@ describe('lint reports a block attribute that reaches no block', () => {
 
   it.each([':: t\n: {empty}\u00a0\n', 'ref[^a]\n\n[^a]: {empty}\u00a0\n'])('preserves non-breaking space after a sentinel: %s', (source) => {
     expect(carveToHtml(source)).toContain('{empty}&nbsp;')
+  })
+
+  // PART 11 §7d: `: {#i}` "reaches the same empty body by the same path and is
+  // equally discarded", so the report is earned. The generic remedy is not:
+  // deleting the line leaves a bare marker, which MARKER REQUIRES CONTENT makes
+  // text, so the `<dd>` goes and a footnote definition takes every reference to
+  // it down as literal text (carve-js#2408).
+  it.each([
+    ':: t\n: {#i}\n\nflush\n',
+    ':: t\n: {.x}\n\nflush\n',
+    'ref[^a]\n\n[^a]: {#i}\n\nflush\n',
+    '> :: t\n> : {#i}\n\nflush\n',
+  ])('does not advise deleting a body that is only an attribute: %s', (source) => {
+    expect(advice(source)).toEqual(['whole-body'])
+    expect(lintCarve(source).find((w) => w.rule === 'unattached-block-attribute')!.message)
+      .toContain('{empty}')
+  })
+
+  // Deleting the flagged line must be safe wherever the generic advice is given.
+  it.each([
+    'para\n\n{.x}\n',
+    '::: note\nbody\n{.x}\n:::\n',
+    '> q\n> {.k}\n',
+    ':: t\n: p\n\n  {.x}\n',
+    '- a\n\n  {.c}\n- b\n',
+  ])('keeps the generic remedy where deleting the line is safe: %s', (source) => {
+    expect(advice(source)).toEqual(['generic'])
+  })
+
+  // `nestedSubLexer` propagates `hostBody`, so a container written inside a
+  // description or footnote body reads as that body. Its own dangling run is
+  // NOT the body's, and deleting it harms nothing: the fence stays.
+  it.each([
+    [':: t\n: ::: note\n  {.x}\n  :::\n', '3:3'],
+    [':: t\n: ::: d\n  {.x}\n  :::\n', '3:3'],
+    [':: t\n: ::: note\n  body\n  {.x}\n  :::\n', '4:3'],
+    ['ref[^a]\n\n[^a]: ::: note\n  {.x}\n  :::\n', '4:3'],
+  ])('keeps a container nested in a body on the generic remedy: %s', (source, location) => {
+    expect(at(source, 'unattached-block-attribute')).toEqual([location])
+    expect(advice(source)).toEqual(['generic'])
   })
 
   it('reports one at an item boundary, where the next marker ends the item', () => {

@@ -135,6 +135,12 @@ export interface DanglingBlockAttributes {
   column: number
   startOffset: number
   endOffset: number
+  /**
+   * Set when the run is the ENTIRE body of a footnote definition or a
+   * description, where deleting the line destroys the construct rather than
+   * tidying it (PART 2, MARKER REQUIRES CONTENT).
+   */
+  wholeBodyOf?: 'footnote' | 'description'
 }
 
 export interface UnclosedContainer {
@@ -809,6 +815,14 @@ class Lexer {
   inFootnoteBody = false
   /** The body whose content column owns this nested parse. */
   hostBody: 'list' | 'description' | 'footnote' | null = null
+  /**
+   * The body this lexer IS, where `hostBody` is the body it is somewhere inside.
+   *
+   * `nestedSubLexer` propagates `hostBody`, so a container written in a
+   * description body reports one too. This field is deliberately not propagated:
+   * only the lexer handed the body's own lines carries it (carve-js#2408).
+   */
+  hostBodyRoot: 'footnote' | 'description' | null = null
   /** This container consumes indented link definitions on its host's behalf. */
   consumesHostedLinkDefs: false | 'all' | 'lazy' = false
   suppressPositions = false
@@ -1135,7 +1149,7 @@ class Lexer {
    * Shares the unclosed-container dedup set, under a prefixed key: a region the
    * parser re-parses would otherwise report the same dead run once per visit.
    */
-  reportDanglingBlockAttributes(lineIndex: number): void {
+  reportDanglingBlockAttributes(lineIndex: number, wholeBodyOf?: 'footnote' | 'description'): void {
     if (!this.hasDocumentOffsets) return
     if (!this.parseOptions.onDanglingBlockAttributes) return
     const startOffset = this.lineOffset(lineIndex)
@@ -1149,6 +1163,7 @@ class Lexer {
       column: this.lineStartColumn(lineIndex),
       startOffset,
       endOffset,
+      ...(wholeBodyOf ? { wholeBodyOf } : {}),
     })
   }
 }
@@ -8687,7 +8702,16 @@ class ParseSession {
     // fact exists. `carry` streams are excluded: there the run lives on in the
     // other half, and reporting it at the seam would name a loss that is not
     // happening (carve-js#2240).
-    else if (pending && pendingAt !== null) lexer.reportDanglingBlockAttributes(pendingAt)
+    // Two conditions, and both are load-bearing. `hostBodyRoot` rather than
+    // `hostBody` because the latter is propagated, so a `::: note` inside a
+    // description body would claim to BE that body; `out.length === 0` because a
+    // run below real content is not the whole body either (carve-js#2408).
+    else if (pending && pendingAt !== null) {
+      lexer.reportDanglingBlockAttributes(
+        pendingAt,
+        out.length === 0 ? (lexer.hostBodyRoot ?? undefined) : undefined,
+      )
+    }
     return out
   }
 
@@ -9123,6 +9147,7 @@ class ParseSession {
       sub.sublistsCarryAuthoredBase = true
       sub.inFootnoteBody = true
       sub.hostBody = 'footnote'
+      sub.hostBodyRoot = 'footnote'
       lexer.footnoteDefs.set(label, bodyLines.length === 1 && bodyLines[0]?.replace(/[ \t]+$/, '') === '{empty}' ? [] : this.parseBlocks(sub, 0))
       // The definition runs from its `[^label]:` marker to the last line it
       // consumed. The body blocks cannot supply that: the marker is not part of
@@ -10138,6 +10163,7 @@ class ParseSession {
       const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
+      sub.hostBodyRoot = 'description'
       return bodyLines.length === 1 && bodyLines[0]?.replace(/[ \t]+$/, '') === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)
     }
     /**
