@@ -24,6 +24,7 @@ import {
   rawBracketRunCloses,
   symbolOpensAt,
 } from './parse.js'
+import { isAttrValueEscapable } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { findDirectives } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
@@ -1325,13 +1326,37 @@ function isLanguageTag(value: string): boolean {
   return value === '' || /^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value)
 }
 
+/**
+ * Escape a quoted attribute value or title.
+ *
+ * `separators` are the characters the value's own container would otherwise
+ * end on. A backslash is only neutralized when the character it precedes is
+ * one the reader resolves as an escape: PART 11 §2 escapes a character only
+ * if omitting the escape would change the re-parse, and before a
+ * non-punctuation character the reader keeps the backslash literal, so
+ * doubling it would write content back that the re-parse then discards.
+ */
+function escapeQuotedValue(value: string, separators: string): string {
+  let out = ''
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]!
+    if (ch === '\\') {
+      const next = value[i + 1]
+      out += next === undefined || isAttrValueEscapable(next) ? '\\\\' : '\\'
+      continue
+    }
+    out += separators.includes(ch) ? `\\${ch}` : ch
+  }
+  return out
+}
+
 function quoteAttrValue(value: string, force: boolean = false): string {
   // Unquoted values exclude space, tab, CR, LF, quotes, pipes and backslashes.
   // Keep braces quoted too. Other whitespace remains valid unquoted text.
   // Quoted backslashes are doubled; pipes are escaped so table cell splitting
   // leaves them inside the value (CARVE-P2-019).
   if (!force && /^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
-  return `"${value.replace(/[\\"|]/g, '\\$&')}"`
+  return `"${escapeQuotedValue(value, '"|')}"`
 }
 
 /**
@@ -1347,7 +1372,7 @@ function renderCitationMetadata(attrs: Attrs | undefined): string {
   const keyValues = attrs?.keyValues
   if (!keyValues) return ''
   const parts = Object.entries(keyValues).map(
-    ([key, value]) => `${escapeAttrKey(key)}="${value.replace(/[\\"]/g, '\\$&')}"`,
+    ([key, value]) => `${escapeAttrKey(key)}="${escapeQuotedValue(value, '"')}"`,
   )
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`
 }
@@ -1835,7 +1860,7 @@ function escapeDestination(text: string): string {
 }
 
 function escapeQuoted(text: string): string {
-  return text.replace(/[\\"]/g, '\\$&')
+  return escapeQuotedValue(text, '"')
 }
 
 /**

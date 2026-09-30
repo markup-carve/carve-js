@@ -915,6 +915,10 @@ const IMPLEMENTED = new Set([
   'a-container-label-publishes-its-inline-run',
   'a-fence-after-a-footnote-quote-has-its-own-base',
   'an-opener-under-a-quote-in-a-nested-host-opens-at-one-column-only',
+  'a-container-label-preserves-closed-inline-constructs-before-cutting-a-comment',
+  'a-braced-span-cannot-close-beyond-its-bracket-run',
+  'quoted-values-and-titles-retain-a-non-punctuation-backslash',
+  'a-marker-line-opaque-quote-keeps-overindented-markers-literal',
 ])
 
 /**
