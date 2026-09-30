@@ -230,7 +230,7 @@ export function extractReferenceDefinitions(
         canStart = true
         continue
       }
-      if (parsed === null && (/^ {0,3}\[[^\n]*\]:[ \t]*</.test(content) || /^ {0,3}\[[^\n]*\[[^\n]*\]:/.test(content))) {
+      if (parsed === null && (/^ {0,3}\[(?:[^[\]\\\n]|\\.)+\]:[ \t]*</.test(content) || /^ {0,3}\[(?:[^\]\\\n]|\\.)*\[(?:[^\]\\\n]|\\.)*\]:/.test(content))) {
         kept.push(line.replace(/^( *)\[/, '$1\\['))
         canStart = false
         continue

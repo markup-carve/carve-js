@@ -2,6 +2,10 @@ import { expect, it } from 'vitest'
 import { carveToHtml, markdownToCarve } from '../src/index.js'
 
 it.each([
+  ['[foo](/u) and [bar]: x', '<p><a href="/u">foo</a> and [bar]: x</p>'],
+  ['[foo][ref] note [x]: y\n\n[ref]: /u', '<p><a href="/u">foo</a> note [x]: y</p>'],
+  ['[foo] said [x]: y\n\n[foo]: /u', '<p><a href="/u">foo</a> said [x]: y</p>'],
+  ['[a](/b) c]: <d>', '<p><a href="/b">a</a> c]: <d></p>'],
   ["[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n", "<p><a href=\"my_(url)\" title=\"title (with parens)\">Foo*bar]</a></p>"],
   ["[foo]: /url '\ntitle\nline1\nline2\n'\n\n[foo]\n", "<p><a href=\"/url\" title=\"\ntitle\nline1\nline2\n\">foo</a></p>"],
   ["[foo]: <bar>(baz)\n\n[foo]\n", "<p>[foo]: <bar>(baz)</p>\n<p>[foo]</p>"],
