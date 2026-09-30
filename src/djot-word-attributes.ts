@@ -1,6 +1,6 @@
 const quoteValue = (value: string): string => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 
-function readAttributes(source: string, start: number): { end: number; source: string } | undefined {
+export function readAttributes(source: string, start: number): { end: number; source: string } | undefined {
   const parts: string[] = []
   let i = start + 1
   while (i < source.length) {
@@ -62,7 +62,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (!attrs) continue
     let word = i
     if (i > 0 && masked[i - 1] === source[i - 1] && !/[`*_~^\]}>]/.test(source[i - 1]!)) {
-      while (word > cursor && masked[word - 1] === source[word - 1] && !/[\s"'{}\[\]`\x00)>|]/u.test(source[word - 1]!)) word--
+      while (word > cursor && masked[word - 1] === source[word - 1] && !/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) word--
       const closer = source[attrs.end] ?? ''
       if (closer && '_*~^'.includes(closer)) {
         for (let opener = i - 1; opener >= word; opener--) {

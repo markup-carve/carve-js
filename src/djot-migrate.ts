@@ -343,24 +343,21 @@ function codepointPrefix(src: string): Uint32Array | undefined {
 export function maskDjotCodeAndDestinations(src: string): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
-  let fence: { ch: string; len: number } | null = null
+  let fence: { ch: string; len: number; indent: number } | null = null
   const staged = lines.map((line) => {
     if (fence) {
       // parseFence: a closer may be indented by at most 3 spaces.
-      const close = line.match(/^ {0,3}([`~]{3,})[ \t]*$/)
+      const close = line.match(new RegExp(`^[ \t]{0,${fence.indent + 3}}([\x60~]{3,})[ \t]*$`))
       if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
         fence = null
       }
       return blanks(line)
     }
-    // Mirror Carve's RE_FENCE exactly (src/parse.ts): a fence opener is
-    // a >=3 run with at most a single `[A-Za-z0-9_+#.-]` info token. A
-    // multiword / attribute info string (```ts title=demo) is NOT a
-    // Carve fence — Carve parses it as prose, so we must not mask it.
-    const open = line.match(/^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)\s*$/)
+    const open = line.match(/^([ \t]*)(?::[ \t]+)?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)[ \t]*$/)
     if (open) {
-      fence = { ch: open[2]![0]!, len: open[2]!.length }
-      return blanks(line)
+      fence = { ch: open[2]![0]!, len: open[2]!.length, indent: line.indexOf(open[2]!) }
+      const start = line.indexOf(open[2]!)
+      return line.slice(0, start) + blanks(line.slice(start))
     }
     return line
   })

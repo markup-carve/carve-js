@@ -12,7 +12,7 @@ it.each([
   ],
   [
     "x {.c}",
-    "<p>x&nbsp;{.c}</p>"
+    "<p>x&nbsp;</p>"
   ]
 ,
   [
