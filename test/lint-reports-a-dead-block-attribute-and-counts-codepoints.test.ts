@@ -13,6 +13,8 @@ describe('lint reports a block attribute that reaches no block', () => {
     ':: t\n: {empty}\n\nflush\n',
     'ref[^a]\n\n[^a]: {empty}\n\nflush\n',
     '> :: t\n> : {empty}\n\nflush\n',
+    ':: t\n: {empty} \t\n\nflush\n',
+    'ref[^a]\n\n[^a]: {empty} \t\n\nflush\n',
   ])('stays silent for an empty body sentinel: %s', (source) => {
     expect(at(source, 'unattached-block-attribute')).toEqual([])
     expect(carveToHtml(source)).toContain('<p>flush</p>')
@@ -24,6 +26,10 @@ describe('lint reports a block attribute that reaches no block', () => {
     ['para\n\n{empty}\n', '3:1'],
   ])('reports ordinary attributes with no following block: %s', (source, location) => {
     expect(at(source, 'unattached-block-attribute')).toEqual([location])
+  })
+
+  it.each([':: t\n: {empty}\u00a0\n', 'ref[^a]\n\n[^a]: {empty}\u00a0\n'])('preserves non-breaking space after a sentinel: %s', (source) => {
+    expect(carveToHtml(source)).toContain('{empty}&nbsp;')
   })
 
   it('reports one at an item boundary, where the next marker ends the item', () => {

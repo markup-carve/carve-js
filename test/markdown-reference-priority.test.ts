@@ -49,3 +49,10 @@ it('does not duplicate escaped bracket labels', () => {
   const converted = markdownToCarve('[a\\]b][]\n\n[a\\]b]: /u')
   expect(carveToHtml(converted)).toBe('<p><a href="/u">a]b</a></p>')
 })
+
+it.each([
+  '[a\\*b]: /one\n\n[a*b]: <>\n\n[a\\*b] [a*b]',
+  '[a*b]: /one\n\n[a\\*b]: /two\n\n[a\\*b] [a*b]',
+])('keeps the first decoded-key destination when authored labels collide: %s', (source) => {
+  expect(carveToHtml(markdownToCarve(source))).toContain('<a href="/one">a*b</a>')
+})

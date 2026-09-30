@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, parse, renderHtml } from '../src/index.js'
 
 const html = (source: string) => carveToHtml(source).replace(/\n+$/, '')
 
@@ -42,31 +42,24 @@ describe('a block quote framing counts only visible children', () => {
     })
   })
 
-  /**
-   * The first attempt tested emptiness by calling `renderBlock` in a filter and
-   * then let the expanded path render the same children again. That doubles the
-   * work at every nesting level - exponential in depth - and took a 24-deep
-   * quote from under a millisecond to 3.6 seconds while a 32-deep one did not
-   * finish.
-   *
-   * A RATIO, not a wall-clock bound: doubling the depth may not multiply the
-   * cost by more than a small factor. Exponential would be ~65000x here.
-   */
+  // Counting text reads detects repeated rendering without depending on CI
+  // scheduling. Rendering each child twice grows exponentially with depth.
   it('does not render a nested quote more than once per level', () => {
-    const nest = (d: number) => {
-      let s = 'x'
-      for (let i = 0; i < d; i++) s = s.split('\n').map((l) => `> ${l}`).join('\n')
-      return `${s}\n`
-    }
-    const time = (d: number) => {
-      const src = nest(d)
-      carveToHtml(src) // warm
-      const t = performance.now()
-      for (let i = 0; i < 20; i++) carveToHtml(src)
-      return performance.now() - t
-    }
-    const shallow = Math.max(time(16), 0.5)
-    const deep = time(32)
-    expect(deep / shallow).toBeLessThan(10)
+    const ast = parse('> '.repeat(12) + 'x\n')
+    let block = ast.children[0]!
+    while (block.type === 'block_quote') block = block.children[0]!
+    if (block.type !== 'paragraph') throw new Error('Expected the quote paragraph')
+    const text = block.children[0]!
+    if (text.type !== 'text') throw new Error('Expected the paragraph text')
+    const value = text.value
+    let reads = 0
+    Object.defineProperty(text, 'value', {
+      enumerable: true,
+      get() { reads++; return value },
+    })
+    const rendered = renderHtml(ast)
+    expect(rendered).toContain('<p>x</p>')
+    expect(rendered.match(/<blockquote>/g)).toHaveLength(12)
+    expect(reads).toBeLessThan(10)
   })
 })

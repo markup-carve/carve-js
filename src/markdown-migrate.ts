@@ -1128,7 +1128,7 @@ function convertInline(
     const m = pointyEnd < 0 ? inner.match(/^((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u) : null
     const url = pointyEnd >= 0 ? inner.slice(1, pointyEnd) : m ? m[1]! : inner
     const rest = pointyEnd >= 0 ? inner.slice(pointyEnd + 1) : m ? m[2]! : ''
-    if (rest.trim() && (!/^[ \t\n]/.test(rest) || !/^(?:"[^"]*"|'[^']*'|\([^()]*\))$/s.test(rest.trim()))) return undefined
+    if (rest.trim() && (!/^[ \t\n]/.test(rest) || !/^(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\((?:[^()\\]|\\.)*\))$/s.test(rest.trim()))) return undefined
     // A destination and title are entity-decoded by cmark like any other text,
     // and this whole construct is protected from the later decode pass, so it
     // happens here or not at all. `&amp;` in a query string is the canonical
@@ -2535,7 +2535,7 @@ function peelQuoteLevels(line: string, levels: number): string {
 }
 
 function blockquotePrefix(line: string): { prefix: string; text: string } | null {
-  return line.startsWith('>') ? quotedLine(line, 0) : null
+  return line.startsWith('>') ? quotedLine(line, 0, 3) : null
 }
 
 /**
@@ -2546,13 +2546,13 @@ function blockquotePrefix(line: string): { prefix: string; text: string } | null
  * `text` instead, a tab after a quoted item's marker lost the columns the
  * quote marker stood in, and five columns of padding read as three.
  */
-function quotedLine(line: string, contentCol: number): { prefix: string; text: string } | null {
+function quotedLine(line: string, contentCol: number, nestedIndent = contentCol > 0 ? 3 : 1): { prefix: string; text: string } | null {
   let rest = stripColumns(line, contentCol)
   const slack = /^[ \t]{1,3}(?=>)/.exec(rest)?.[0] ?? ''
   let col = advanceColumns(contentCol, slack)
   rest = rest.slice(slack.length)
   let prefix = ''
-  for (let marker = /^ ?>[ \t]?/.exec(rest); marker; marker = /^ ?>[ \t]?/.exec(rest)) {
+  for (let marker = (nestedIndent === 1 ? /^ ?>[ \t]?/ : /^ {0,3}>[ \t]?/).exec(rest); marker; marker = (nestedIndent === 1 ? /^ ?>[ \t]?/ : /^ {0,3}>[ \t]?/).exec(rest)) {
     const tab = marker[0].endsWith('\t')
     const beforePad = advanceColumns(col, tab ? marker[0].slice(0, -1) : marker[0])
     const residue = tab ? advanceColumns(beforePad, '\t') - beforePad - 1 : 0
@@ -4236,7 +4236,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     .replace(/\r\n?/g, '\n')
     .split('\n')
   const { frontmatter, bodyStart } = splitFrontmatter(allLines)
-  const removed = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw)
+  const removed = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw, (line) =>
+    interruptingHtmlBlock(line) || isMarkdownFenceLine(line) || RE_MD_THEMATIC.test(line) ||
+    /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|(?:[-*+]|0{0,8}1[.)])[ \t]+\S|=+[ \t]*$)/.test(line),
+  )
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
   const out: string[] = []

@@ -9123,7 +9123,7 @@ class ParseSession {
       sub.sublistsCarryAuthoredBase = true
       sub.inFootnoteBody = true
       sub.hostBody = 'footnote'
-      lexer.footnoteDefs.set(label, bodyLines.length === 1 && bodyLines[0] === '{empty}' ? [] : this.parseBlocks(sub, 0))
+      lexer.footnoteDefs.set(label, bodyLines.length === 1 && bodyLines[0]?.replace(/[ \t]+$/, '') === '{empty}' ? [] : this.parseBlocks(sub, 0))
       // The definition runs from its `[^label]:` marker to the last line it
       // consumed. The body blocks cannot supply that: the marker is not part of
       // any of them, so a span derived from the body would start inside the
@@ -10138,7 +10138,7 @@ class ParseSession {
       const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
-      return bodyLines.length === 1 && bodyLines[0] === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)
+      return bodyLines.length === 1 && bodyLines[0]?.replace(/[ \t]+$/, '') === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)
     }
     /**
      * The span covering document lines `first`..`last` inclusive, marker and all.
