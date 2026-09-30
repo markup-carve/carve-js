@@ -83,3 +83,7 @@ test.each([
 test.each([["> - ```\n>   a_b *c\n>   ```", "<code>a_b *c"], ["- [r]: /a_b_\n\n[x][r]", "href=\"/a_b_\""], ["\\![a _b_](x)", "<em>b</em>"], ["Look ![](x.png) here", "alt=\"\""], ["![{.c}](x.png)", "alt=\"\""], ["> ```\n> a_b\n\n_c_", "<em>c</em>"], ["- * a", "<li>a</li>"], ["{=_a_=} {+b_+} {-_c-}", "<ins>b_</ins>"], ["```\ncode\n```\n- _a\n- b_", "<li>_a</li>"]])('preserves nested importer context: %s', (source, expected) => {
   expect(carveToHtml(djotToCarve(source))).toContain(expected)
 })
+
+test.each([["Use `[a][]` here.\n\n[a]: /u", "<code>[a][]</code>"], ["See [Introduction][].\n\n# Introduction", "href=\"#Introduction\""], ["::: warn_ing\ntext\n:::", "class=\"warn_ing\""], ["a `x_y {#i}", "<code>x_y {#i}</code>"], ["a _b {+ c_ d", "<em>b {+ c</em>"], ["see ![_x_] here", "<em>x</em>"]])('preserves code and reference context: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})

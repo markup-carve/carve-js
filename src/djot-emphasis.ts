@@ -13,6 +13,22 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
     for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
     i = attrs.end - 1
   }
+  const validBraces = new Set<number>(), pendingBraces = new Map<string, number[]>()
+  let braceLineStart = 0
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\n') {
+      if (source.slice(braceLineStart, i).replace(/^(?:[ \t]*>)*[ \t]*/, '').trim() === '') pendingBraces.clear()
+      braceLineStart = i + 1
+    }
+    if (mask[i] !== source[i] || isDjotEscaped(source, i)) continue
+    if (source[i] === '{' && '+-=^~'.includes(source[i + 1] ?? '\0')) {
+      const kind = source[i + 1]!, stack = pendingBraces.get(kind) ?? []
+      stack.push(i); pendingBraces.set(kind, stack)
+    } else if (source[i] === '}' && '+-=^~'.includes(source[i - 1] ?? '\0')) {
+      const start = pendingBraces.get(source[i - 1]!)?.pop()
+      if (start !== undefined && i > start + 2) validBraces.add(start)
+    }
+  }
   const openers = new Map<string, Opener[]>(['_', '*', '{_', '{*'].map(key => [key, []]))
   const pairs: Pair[] = []
   const structural = new Set<number>()
@@ -46,7 +62,7 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
     }
     if (ch === '\\' && source[i + 1] !== '\n') { i++; continue }
     if (mask[i] !== ch) continue
-    if (ch === '{' && '+-=^~'.includes(source[i + 1] ?? '\0')) { braces.push(i); continue }
+    if (ch === '{' && validBraces.has(i)) { braces.push(i); continue }
     if (ch === '}' && braces.at(-1) !== undefined && source[i - 1] === source[braces.at(-1)! + 1]) { clear(braces.pop()!); continue }
     if (ch === '[') { brackets.push(i); continue }
     if (ch === ']') {
@@ -171,5 +187,5 @@ function maskDjotEmphasisSource(source: string): string {
     }
     offset += line.length + 1
   }
-  return masked.join('').replace(/!\[[^\]\n]*\]/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
+  return masked.join('').replace(/!\[[^\]\n]*\](?=[([])/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
 }

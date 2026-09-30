@@ -346,9 +346,12 @@ export function isDjotEscaped(source: string, at: number): boolean {
   return (at - start) % 2 !== 0
 }
 
-export function maskDjotCodeAndDestinations(src: string): string {
+export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
+  const previousLines = new Map<number, string>()
+  let sourceOffset = 0, previousLine = ''
+  for (const line of lines) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
   let fence: { ch: string; len: number; indent: number; container: number | null; depth: number } | null = null
   let previousBlock = true
   const staged = lines.map((line) => {
@@ -387,6 +390,8 @@ export function maskDjotCodeAndDestinations(src: string): string {
     while (s[i + n] === '`') n++
     return n
   }
+  const paragraphEnds = Array.from(s.matchAll(/\n[ \t]*\n/g), match => match.index!)
+  let paragraphIndex = 0
   let i = 0
   while (i < s.length) {
     if (s[i] !== '`') {
@@ -394,9 +399,11 @@ export function maskDjotCodeAndDestinations(src: string): string {
       continue
     }
     const len = runLen(i)
+    while ((paragraphEnds[paragraphIndex] ?? s.length) <= i) paragraphIndex++
+    const paragraphEnd = paragraphEnds[paragraphIndex] ?? s.length
     let j = i + len
     let closed = -1
-    while (j < s.length) {
+    while (j < paragraphEnd) {
       if (s[j] === '`' && runLen(j) === len) {
         closed = j
         break
@@ -404,7 +411,13 @@ export function maskDjotCodeAndDestinations(src: string): string {
       j++
     }
     if (closed === -1) {
-      i += len // unmatched, literal
+      if (!unclosedCode) {
+        i += len
+        continue
+      }
+      const end = paragraphEnd
+      for (let k = i; k < end; k++) if (out[k] !== '\n') out[k] = ' '
+      i = end
       continue
     }
     for (let k = i; k < closed + len; k++) if (out[k] !== '\n') out[k] = ' '
@@ -418,11 +431,12 @@ export function maskDjotCodeAndDestinations(src: string): string {
   // visible. Lookbehind on `]` keys this to a real link/image target.
   let masked = out.join('')
   masked = masked.replace(/(?<=\])\([^()\n]*\)/g, (g) => blanks(g))
-  masked = masked.replace(/^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[(?!\^)[^\]\n]*\]:[^\n]*/gm, (value, at: number) => {
-    const previous = src.slice(0, at).split('\n').at(-2)?.replace(/^[ \t]*(?:>[ \t]*)*/, '').trim() ?? ''
+  if (references) masked = masked.replace(/^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[(?!\^)[^\]\n]*\]:[^\n]*/gm, (value, at: number) => {
+    const previous = (previousLines.get(at) ?? '')?.replace(/^[ \t]*(?:>[ \t]*)*/, '').trim() ?? ''
     return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previous) ? blanks(value) : value
   }).replace(/(?<=\])\[[^\]\n]*\]/g, blanks)
-  return masked.replace(/!\[([^\]\n]*)\]/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)
+  masked = masked.replace(/^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?:{3,}[ \t]+([A-Za-z_][A-Za-z0-9_.-]*)/gm, (value: string, name: string, at: number) => (previousLines.get(at) ?? '').trim() === '' || /(?:[-*+]|[0-9]+[.)])[ \t]+:{3,}/.test(value) ? value.slice(0, -name.length) + blanks(name) : value)
+  return masked.replace(/!\[([^\]\n]*)\](?=[([])/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)
 }
 
 /** A single source splice: replace [start, end) with `text`. */
@@ -537,7 +551,7 @@ function scanHits(source: string): ScanHit[] {
   // `masked`, so the captured content for a suggestion is sliced from
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
-  const masked = maskDjotCodeAndDestinations(norm)
+  const masked = maskDjotCodeAndDestinations(norm, true, false)
   // A `+ ` line carrying a pipe is ambiguous by text alone: without a table
   // above it, it is a Djot bullet that degrades to prose in Carve; after a
   // table row, it is Carve's native continuation-row syntax. Ask the parser

@@ -224,7 +224,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
       while (line[before - 1] === '\\') before--
       if (masked[index]![at] !== '{' || (at - before) % 2 !== 0) return attrs
       if (at !== orphanEnd && /[\]*_}^~]/.test(line[at - 1] ?? '') || (at > 0 && masked[index]![at - 1] === ' ' && line[at - 1] !== ' ')) return attrs
-      if (/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*(?:[-*+]|[0-9]+[.)]|#{1,6}|:{1,2})[ \t]+(?:\[[ xX-]\][ \t]+)?$/.test(line.slice(0, at).replace(pattern, '')) && line.slice(at).replace(pattern, '').trim() === '') return attrs
+      if (/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*(?:[-*+]|[0-9]+[.)]|#{1,6}|:{1,2}|\[\^[^\]]+\]:)[ \t]+(?:\[[ xX-]\][ \t]+)?$/.test(line.slice(0, at).replace(pattern, '')) && line.slice(at).replace(pattern, '').trim() === '') return attrs
       const alone = at === first && at + attrs.length === last
       const previous = (lines[index - 1] ?? '').replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
       if (alone && (lines[index + 1] ?? '').trim() !== '' && (index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous))) return attrs
@@ -339,7 +339,10 @@ export function djotToCarve(djot: string): string {
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
-  const rawFolded = foldHeadingContinuations(body).replace(/(!?\[([^\]\n]*)\])\[\]/g, '$1[$2]')
+  const headingFolded = foldHeadingContinuations(body)
+  const collapsedMask = maskDjotCodeAndDestinations(headingFolded, false)
+  const definitions = new Set(Array.from(headingFolded.matchAll(/\[([^\]\n]*)\]:[ \t]/g)).filter(match => collapsedMask[match.index!] === '[').map(match => match[1]!))
+  const rawFolded = headingFolded.replace(/(!?\[([^\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && definitions.has(key) ? `${label}[${key}]` : value)
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
   const folded = rawFolded.replace(/!\[([^\]\n]*)\](?=[([])/g, (image: string, label: string, at: number) => {
     if (imageMask[at] !== '!' || isDjotEscaped(rawFolded, at) || label.includes('\\')) return image
