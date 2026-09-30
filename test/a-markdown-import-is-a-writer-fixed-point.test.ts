@@ -409,10 +409,9 @@ describe('a Markdown import writes continuation lines where carve fmt does (#193
     expect(carveToCarve(out)).toBe(out)
   })
 
-  // A rule wins over a list item, so `* * *` nests no items a line could
-  // move into. Not fmt's spelling: Carve reads the rule as nested items.
+  // A rule on the marker line stays in its item and ends its paragraph.
   it('does not read a rule on an item line as nested items', () => {
-    expect(markdownToCarve(md('- * * *', 'x'))).toBe(md('- * * *', 'x'))
+    expect(markdownToCarve(md('- * * *', 'x'))).toBe(md('- ---', 'x'))
   })
 
   it('reads a sibling after an item paragraph as GFM does', () => {
