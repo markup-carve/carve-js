@@ -9,6 +9,26 @@ const POSITION_FIELDS: readonly string[] = [
   'definitionLines',
 ]
 
+/** Position an authored definition using the lexer's indexed line starts. */
+export function definitionLinePosition(
+  lines: readonly string[],
+  lineOffsets: readonly number[],
+  line: number,
+  sourceLength: number,
+  startColumn = 1,
+): Position {
+  const text = lines[line] ?? ''
+  const startOffset = Math.min(lineOffsets[line] ?? 0, sourceLength)
+  return {
+    startLine: line + 1,
+    endLine: line + 1,
+    startColumn,
+    endColumn: text.length + startColumn,
+    startOffset,
+    endOffset: Math.min(startOffset + text.length, sourceLength),
+  }
+}
+
 /**
  * Remove source-position fields from the finished tree. The parser still tracks positions;
  * this option reduces the returned tree rather than skipping scanner work.

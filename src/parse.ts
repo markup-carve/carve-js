@@ -14,7 +14,7 @@ export { mergeAttrs } from './attribute-merge.js'
 import { applyAbbreviations, applyLinkDefs } from './inline-resolution.js'
 import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
 import { referenceLink, referenceImage } from './reference-resolution.js'
-import { dropPositions, toCodepointPositions } from './source-positions.js'
+import { definitionLinePosition, dropPositions, toCodepointPositions } from './source-positions.js'
 import type {
   SmartPunctuation,
   AbbreviationDef,
@@ -1547,29 +1547,14 @@ function appendLinkReferenceDefinitions(
     }
     if (def.title !== undefined) node.title = def.title
     if (def.attrs) node.attrs = def.attrs
-    node.pos = wholeLinePos(lexer, def.line, source)
+    node.pos = definitionLinePosition(
+      lexer.lines, lexer.sourceOffsetMap ?? lexer.lineOffsets, def.line, source.length,
+      lexer.lineStartColumn(def.line),
+    )
     authored.push(node)
   }
   authored.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
   children.push(...authored)
-}
-
-/** The span of a whole source line, for a node reassembled from one line. */
-function wholeLinePos(lexer: Lexer, line: number, source: string): Position {
-  const text = lexer.lines[line] ?? ''
-  let offset = 0
-  for (let i = 0; i < line; i++) offset += (lexer.lines[i] ?? '').length + 1
-  // Clamp rather than trust the running total: a document whose final line has
-  // no trailing newline would otherwise claim one byte past the end.
-  const startOffset = Math.min(offset, source.length)
-  return {
-    startLine: line + 1,
-    endLine: line + 1,
-    startColumn: 1,
-    endColumn: text.length + 1,
-    startOffset,
-    endOffset: Math.min(startOffset + text.length, source.length),
-  }
 }
 
 
@@ -7473,6 +7458,22 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
 
 /** State owned by one synchronous parse operation. */
 class ParseSession {
+  // Cache successful lexical matches; container ownership is checked at each use.
+  private linkDefMatches: Map<string, LinkDefMatch> | undefined
+
+  private matchLinkDef(line: string): LinkDefMatch | null {
+    if (!line.includes(']:')) return null
+    const cached = this.linkDefMatches?.get(line)
+    if (cached) return cached
+    const matched = matchLinkDef(line)
+    if (matched) (this.linkDefMatches ??= new Map()).set(line, matched)
+    return matched
+  }
+
+  private isLinkDefLine(line: string): boolean {
+    return this.matchLinkDef(line) !== null
+  }
+
   private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
 
   // Only literal source suffixes share numeric offsets; reconstructed lines do not.
@@ -7556,7 +7557,7 @@ class ParseSession {
     // they can be resolved regardless of document order (grammar §6).
     this.collectLinkDefs(lexer)
     const children = this.parseBlocks(lexer, 0)
-    appendLinkReferenceDefinitions(children, lexer, source)
+    appendLinkReferenceDefinitions(children, lexer, strippedBom ? '\ufeff' + source : source)
     const doc: Document = { type: 'document', children }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
@@ -8066,7 +8067,7 @@ class ParseSession {
         // indentation and never registered (carve-js#1584). A list item is
         // transparent across a blank whatever marks it.
         !isBlankLine(unquoted) &&
-        (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
+        (wasPrevBlank || startsBlock || this.isLinkDefLine(rawTrimmed))
       ) {
         while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
       }
@@ -8112,7 +8113,7 @@ class ParseSession {
             if (!one.matched) openCols.push({ col: one.content, quote: one.quote, base: one.marker })
           }
         }
-      } else if (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed)) {
+      } else if (wasPrevBlank || startsBlock || this.isLinkDefLine(rawTrimmed)) {
         while (openCols.length && openCols[openCols.length - 1]!.col > composed.column) {
           openCols.pop()
         }
@@ -8133,7 +8134,7 @@ class ParseSession {
           term = null
         } else if (term && quotes === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
           if (commentFenceRun(rest) === undefined) {
-            if (matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
+            if (this.matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
             paraState = 'yes'
             continue
           }
@@ -8143,7 +8144,7 @@ class ParseSession {
             (quotes !== term.quotes ||
               prepassOpensBlock(rest) ||
               RE_DEFLIST_DEF.test(rest) ||
-              isLinkDefLine(rest) ||
+              this.isLinkDefLine(rest) ||
               RE_FOOTNOTE_DEF.test(rest))
           ) {
             term = null
@@ -8299,7 +8300,7 @@ class ParseSession {
         hasBlockMatchers &&
         !this.probingLazyParagraph &&
         ((composed.peeled.some((one) => !one.quote) &&
-          isLinkDefLine(line)) ||
+          this.isLinkDefLine(line)) ||
           RE_FENCE.test(line) ||
           RE_RAW_FENCE.test(line))
       const probed: boolean | 'unknown' = matcherProbeCandidate
@@ -8509,7 +8510,7 @@ class ParseSession {
       if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
       else if (isBlankLine(raw)) plusColumn = null
       // Container ownership below matters only for a definition candidate.
-      const matched = matchLinkDef(line)
+      const matched = this.matchLinkDef(line)
       if (matched === null) continue
       // Inside a footnote body the minimum is column two. After carve#1729 a
       // recognized opener at or past it establishes an authored local base, so
@@ -8521,28 +8522,29 @@ class ParseSession {
       // behind a COLUMN-0 quote run only, so `  >    [r]: /url` scored 2 - the
       // indent before a marker the block parser strips - and the exemption below
       // let it through on top of that.
-      const deepestListColumn = openCols
-        .filter((entry) => !entry.quote)
-        .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
-      const deepestTrackedListColumn = listCols.reduce<number | null>(
-        (deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest,
-        deepestListColumn,
-      )
-      const reachedOuterListColumn = openCols
-        .slice(0, composed.depth)
-        .filter((entry) => !entry.quote)
-        .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
+      let deepestTrackedListColumn: number | null = null
+      let reachedOuterListColumn: number | null = null
+      for (let i = 0; i < openCols.length; i++) {
+        const entry = openCols[i]!
+        if (entry.quote) continue
+        if (deepestTrackedListColumn === null || entry.col > deepestTrackedListColumn) {
+          deepestTrackedListColumn = entry.col
+        }
+        if (i < composed.depth && (reachedOuterListColumn === null || entry.col > reachedOuterListColumn)) {
+          reachedOuterListColumn = entry.col
+        }
+      }
+      for (const { col: column } of listCols) {
+        if (deepestTrackedListColumn === null || column > deepestTrackedListColumn) {
+          deepestTrackedListColumn = column
+        }
+      }
       // WITH A LIST COLUMN IN PLAY the test is "at or past the deepest one", not
       // "exactly at an open one": §24 C3 erases an authored base before the item
       // parses the line, so an over-indented definition is the item's definition
       // and registers document-wide (carve#1705). With NO list column open the
       // exact test stands unchanged - a quote's content column is reached, not
       // rebased.
-      const reached = (col: number): boolean =>
-        deepestTrackedListColumn !== null
-          ? col >= deepestTrackedListColumn
-          : composed.peeled.some((one) => one.content === col) ||
-            openCols.some((e, i) => i < composed.depth && e.col === col)
       const anyReached = composed.peeled.length > 0 || composed.depth > 0
       // An unmarked line may lazily continue a quote's open paragraph, but it
       // does not reach a container inside that quote. Falling back to the outer
@@ -8557,7 +8559,10 @@ class ParseSession {
         : plusColumn !== null
         ? rawIndent === plusColumn
         : anyReached
-          ? reached(composed.column)
+          ? deepestTrackedListColumn !== null
+            ? composed.column >= deepestTrackedListColumn
+            : composed.peeled.some((one) => one.content === composed.column) ||
+              openCols.some((entry, i) => i < composed.depth && entry.col === composed.column)
           : inFootnoteBody
             ? composed.column >= FOOTNOTE_BODY_COLUMN
             : composed.column === openColumn
@@ -8804,7 +8809,7 @@ class ParseSession {
         // reference dangled (the oracle registers it).
         (lexer.inFootnoteBody && !/^[ \t]*\[\^/.test(hostedLinkDefLine)) ||
         (hostedLinkDef && !/^[ \t]*\[\^/.test(hostedLinkDefLine))) &&
-      isLinkDefLine(hostedLinkDefLine) &&
+      this.isLinkDefLine(hostedLinkDefLine) &&
       (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef) &&
       // NOTHING COLLECTED IT, SO NOTHING MAY REMOVE IT. Under-collecting is the
       // error PART 9R R1a licenses; deleting the author's line is the one it
@@ -10511,7 +10516,7 @@ class ParseSession {
       if (!paragraphOpen) break
       const lineIndex = lexer.pos
       lexer.consume()
-      const lazyLinkDef = isLinkDefLine(ln)
+      const lazyLinkDef = this.isLinkDefLine(ln)
       if (lazyLinkDef) {
         lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
       }
@@ -12596,7 +12601,7 @@ class ParseSession {
         (((lexer.consumesHostedLinkDefs === 'all' ||
           (lexer.consumesHostedLinkDefs === 'lazy' &&
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))) &&
-          isLinkDefLine(stripLazyFrame(ln))) ||
+          this.isLinkDefLine(stripLazyFrame(ln))) ||
           (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
             startsInterruptingBlock(lexer))) &&
         !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
