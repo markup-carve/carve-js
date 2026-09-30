@@ -340,25 +340,40 @@ function codepointPrefix(src: string): Uint32Array | undefined {
  * collisions inside code are not real mis-renders, so the scanner simply
  * never sees them.
  */
+export function isDjotEscaped(source: string, at: number): boolean {
+  let start = at
+  while (source[start - 1] === '\\') start--
+  return (at - start) % 2 !== 0
+}
+
 export function maskDjotCodeAndDestinations(src: string): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
-  let fence: { ch: string; len: number; indent: number } | null = null
+  let fence: { ch: string; len: number; indent: number; container: number | null; depth: number } | null = null
+  let previousBlock = true
   const staged = lines.map((line) => {
+    let content = line, depth = 0
+    while (true) {
+      const quote = /^[ \t]*>[ ]?/.exec(content)
+      if (!quote) break
+      content = content.slice(quote[0].length)
+      depth++
+    }
+    if (fence && content.trim() !== '' && depth < fence.depth) fence = null
+    if (fence && fence.container !== null && content.trim() !== '' && /^[ \t]*/.exec(content)![0].length < fence.container && depth === fence.depth) fence = null
     if (fence) {
-      // parseFence: a closer may be indented by at most 3 spaces.
-      const close = line.match(new RegExp(`^[ \t]{0,${fence.indent + 3}}([\x60~]{3,})[ \t]*$`))
-      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
-        fence = null
-      }
+      const close = content.match(new RegExp(`^[ \t]{0,${fence.indent}}([\x60~]{3,})[ \t]*$`))
+      if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) { fence = null; previousBlock = true }
       return blanks(line)
     }
-    const open = line.match(/^([ \t]*)(?::[ \t]+)?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)[ \t]*$/)
-    if (open) {
-      fence = { ch: open[2]![0]!, len: open[2]!.length, indent: line.indexOf(open[2]!) }
-      const start = line.indexOf(open[2]!)
+    const open = content.match(/^([ \t]*)(?:(:[ \t]+|[-*+][ \t]+|[0-9]+[.)][ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)[ \t]*$/)
+    if (open && !(open[2]?.startsWith(':') && !previousBlock)) {
+      const container = open[2] ? open[1]!.length + open[2].length : null
+      fence = { ch: open[3]![0]!, len: open[3]!.length, indent: container ?? Math.max(3, open[1]!.length), container, depth }
+      const start = line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
     }
+    previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} |\{[.#A-Za-z])/.test(content)
     return line
   })
   const s = staged.join('\n')
@@ -403,7 +418,11 @@ export function maskDjotCodeAndDestinations(src: string): string {
   // visible. Lookbehind on `]` keys this to a real link/image target.
   let masked = out.join('')
   masked = masked.replace(/(?<=\])\([^()\n]*\)/g, (g) => blanks(g))
-  return masked
+  masked = masked.replace(/^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[(?!\^)[^\]\n]*\]:[^\n]*/gm, (value, at: number) => {
+    const previous = src.slice(0, at).split('\n').at(-2)?.replace(/^[ \t]*(?:>[ \t]*)*/, '').trim() ?? ''
+    return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previous) ? blanks(value) : value
+  }).replace(/(?<=\])\[[^\]\n]*\]/g, blanks)
+  return masked.replace(/!\[([^\]\n]*)\]/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)
 }
 
 /** A single source splice: replace [start, end) with `text`. */

@@ -50,3 +50,36 @@ test('inline code in a definition term remains in the term', () => {
 test('deep same-kind spans migrate without using the call stack', () => {
   expect(djotToCarve('{_'.repeat(10000) + 'x' + '_}'.repeat(10000))).toBe('{/x/}')
 })
+
+test.each(['_a\n- b_', '_a\n1. b_', '_a\n| b_', 'para _a\n  - b_'])('keeps emphasis across paragraph marker text: %s', source => {
+  expect(carveToHtml(djotToCarve(source))).toContain('<em>')
+})
+test.each(['![basic _image_](url)', '![basic _image_][a_b_]\n\n[a_b_]: url'])('converts image alt text: %s', source => {
+  expect(carveToHtml(djotToCarve(source))).toContain('alt="basic image"')
+})
+test('preserves a reference fragment destination', () => {
+  expect(carveToHtml(djotToCarve('[Introduction][]\n\n[Introduction]: #bar'))).toContain('href="#bar"')
+})
+
+test.each([
+  ['a[^1]\n\n[^1]: note _x_', '<em>x</em>'],
+  ['para\n[x]: y _z_', '<em>z</em>'],
+  ['> ~~~\n> a_b *c\n> ~~~', '<code>a_b *c'],
+  ['- ~~~\n  a_b\n  ~~~', '<code>a_b'],
+  ['![y][r]\n\n> [r]: /i_m.png', 'src="/i_m.png"'],
+  ['![# hash](x.png)', 'alt="# hash"'],
+  ['![> quote](x.png)', 'alt="&gt; quote"'],
+  ['![***](x.png)', 'alt="***"'],
+  ['![a -- b...](x.png)', 'alt="a -- b..."'],
+  ['- a\n{.x}\npara', '<p class="x">para</p>'],
+  ['[a\n\n_b ] c_', '<em>b ] c</em>'],
+  ['_a\n::: b_', '<em>a\n::: b</em>'],
+  [': ```\n  code\n\nnext _x_', '<em>x</em>'],
+  ['para\n: ```\n_b_ c\n\n_d_ e', '<em>d</em>'],
+])('preserves importer context: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})
+
+test.each([["> - ```\n>   a_b *c\n>   ```", "<code>a_b *c"], ["- [r]: /a_b_\n\n[x][r]", "href=\"/a_b_\""], ["\\![a _b_](x)", "<em>b</em>"], ["Look ![](x.png) here", "alt=\"\""], ["![{.c}](x.png)", "alt=\"\""], ["> ```\n> a_b\n\n_c_", "<em>c</em>"], ["- * a", "<li>a</li>"], ["{=_a_=} {+b_+} {-_c-}", "<ins>b_</ins>"], ["```\ncode\n```\n- _a\n- b_", "<li>_a</li>"]])('preserves nested importer context: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})

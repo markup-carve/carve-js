@@ -1,11 +1,11 @@
-import { maskDjotCodeAndDestinations } from './djot-migrate.js'
+import { isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
 
 type Pair = { start: number; openEnd: number; close: number; end: number; kind: string; forced: boolean; children: Pair[]; kinds: Set<string> }
 type Opener = { start: number; end: number; kind: string; forced: boolean }
 
 export function djotEmphasis(source: string, convert: (plain: string) => string): string {
-  const mask = maskDjotEmphasisSource(source).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/\[\^[^\]\n]*\]|(?<=\])\[[^\]\n]*\]|^[ \t]*\[[^\]\n]*\]:(?=[ \t]|$)[^\n]*/gm, value => ' '.repeat(value.length)).split('')
+  const mask = maskDjotEmphasisSource(source).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/\[\^[^\]\n]*\]|(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
   for (let i = 0; i < source.length; i++) {
     if (mask[i] !== '{' || !/[.#A-Za-z]/.test(source[i + 1] ?? '')) continue
     const attrs = readAttributes(source, i)
@@ -17,21 +17,37 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
   const pairs: Pair[] = []
   const structural = new Set<number>()
   const brackets: number[] = []
+  const braces: number[] = []
   const bracketPairs: Array<[number, number]> = []
   let lineStart = 0
+  let previousBlank = true, container = false
+  let listColumn: number | undefined
   const clear = (from: number): void => {
     for (const stack of openers.values()) while (stack.at(-1) && stack.at(-1)!.start >= from) stack.pop()
   }
   for (let i = 0; i < source.length; i++) {
-    if (i === lineStart && /^(?:[ \t]*>[ \t]*)*[ \t]*(?:`{3,}|~{3,}|:{3,}|#{1,6}[ \t]|[-*+][ \t]|[0-9]+[.)][ \t]|\|)/.test(source.slice(i, source.indexOf('\n', i) < 0 ? source.length : source.indexOf('\n', i)))) clear(0)
+    if (i === lineStart) {
+      const end = source.indexOf('\n', i)
+      const line = source.slice(i, end < 0 ? source.length : end).replace(/^(?:[ \t]*>)*[ \t]*/, '')
+      const indent = /^[ \t]*/.exec(line)![0].length
+      if (line.trim() && listColumn !== undefined && indent < listColumn && !/^[ \t]*(?:[-*+] |[0-9]+[.)] )/.test(line)) listColumn = undefined
+      const marker = /^[ \t]*(?:[-*+][ \t]|[0-9]+[.)][ \t]|\|)/.test(line)
+      if (marker && (previousBlank || container)) { clear(0); container = true }
+      else if (previousBlank) container = listColumn !== undefined && indent >= listColumn
+      if (marker && container) { const item = /^[ \t]*(?:[-*+]|[0-9]+[.)])[ \t]+/.exec(line); if (item) listColumn = item[0].length }
+      if (/^[ \t]*(?:`{3,}|~{3,})/.test(line) || (previousBlank || container) && /^[ \t]*(?::{3,})/.test(line) || /^[ \t]*#{1,6}[ \t]/.test(line)) clear(0)
+      previousBlank = line.trim() === '' || /^[ \t]*(?:`{3,}|~{3,}|:{3,}|\{[.#A-Za-z])/.test(line)
+    }
     const ch = source[i]!
     if (ch === '\n') {
-      if (source.slice(lineStart, i).replace(/^(?:[ \t]*>[ \t]*)*/, '').trim() === '') clear(0)
+      if (source.slice(lineStart, i).replace(/^(?:[ \t]*>)*[ \t]*/, '').trim() === '') { clear(0); brackets.length = 0; braces.length = 0 }
       lineStart = i + 1
       continue
     }
     if (ch === '\\' && source[i + 1] !== '\n') { i++; continue }
     if (mask[i] !== ch) continue
+    if (ch === '{' && '+-=^~'.includes(source[i + 1] ?? '\0')) { braces.push(i); continue }
+    if (ch === '}' && braces.at(-1) !== undefined && source[i - 1] === source[braces.at(-1)! + 1]) { clear(braces.pop()!); continue }
     if (ch === '[') { brackets.push(i); continue }
     if (ch === ']') {
       const start = brackets.pop()
@@ -39,10 +55,10 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
       continue
     }
     if (ch !== '_' && ch !== '*') continue
-    if (ch === '*' && /^(?:[ \t]*>[ \t]*)*[ \t]*$/.test(source.slice(lineStart, i))) {
+    if (ch === '*' && /^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+(?:\[[ xX-]\][ \t]+)?)*[ \t]*$/.test(source.slice(lineStart, i))) {
       const end = source.indexOf('\n', i)
       const line = source.slice(lineStart, end < 0 ? source.length : end)
-      if (/^(?:[ \t]*>[ \t]*)*[ \t]*(?:\*[ \t]*){3,}$/.test(line)) {
+      if (/^(?:[ \t]*>)*[ \t]*[ \t]*(?:\*[ \t]*){3,}$/.test(line)) {
         for (let at = i; at < lineStart + line.length; at++) if (source[at] === '*') structural.add(at)
         i = lineStart + line.length - 1
         continue
@@ -55,7 +71,7 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
     const canClose = !forcedOpen && (forcedClose || (i > 0 && !/[ \t\r\n]/.test(source[i - 1]!)))
     const stack = openers.get((forcedClose ? '{' : '') + ch)!
     const opener = stack.at(-1)
-    if (canClose && opener && opener.end < i) {
+    if (canClose && opener && opener.end < i && opener.start > (braces.at(-1) ?? -1)) {
       clear(opener.start)
       pairs.push({ start: opener.start, openEnd: opener.end, close: i, end: i + (forcedClose ? 2 : 1), kind: ch, forced: opener.forced, children: [], kinds: new Set([ch]) })
       if (forcedClose) i++
@@ -155,5 +171,5 @@ function maskDjotEmphasisSource(source: string): string {
     }
     offset += line.length + 1
   }
-  return masked.join('').replace(/!\[[^\]\n]*\]/g, value => ' '.repeat(value.length))
+  return masked.join('').replace(/!\[[^\]\n]*\]/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
 }
