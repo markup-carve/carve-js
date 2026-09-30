@@ -9,6 +9,43 @@ function authoritative(source: string): string {
 }
 
 describe('borrowed HTML layout', () => {
+  it('accepts adjacent definitions and preserves reference resolution', () => {
+    for (const source of [
+      '[a]: /first\n[b]: /second\n\n[x][a] and [y][b]\n',
+      '[x][a] and [y][b]\n\n[a]: /first\n[b]: /second\n',
+      '[a]: /first\n[a]: /second\n\n[x][a]\n',
+      '[a]: /first "Title"\n[b]: /second\n\n[x][a]\n',
+      '[a]: javascript:alert(1)\n[b]: /safe\n\n[x][a]\n',
+      '[a]: /first\n[b]: /second\n\n```\n[c]: /literal\n```\n\n[x][a]\n',
+    ]) {
+      const result = tryFastHtmlWithStats(source, {})
+      expect(result, source).toBeDefined()
+      expect(result!.accepted.linkDefinitions).toBe(2)
+      expect(result!.html, source).toBe(authoritative(source))
+      expect(carveToHtml(source)).toBe(result!.html)
+    }
+    expect(tryFastHtml('[a]: /first\n[a]: /second\n\n[x][a]\n', {}))
+      .toBe('<p><a href="/second">x</a></p>')
+  })
+
+  it('rejects unsafe definition-run eligibility assumptions', () => {
+    for (const source of [
+      'prose\n[a]: /first\n[b]: /second\n\n[x][a]\n',
+      '[a]: /first\n[b]: /second\nprose\n',
+      '[a]: /first\n[b]: /second\n[x][a]\n',
+      '[a]: /first\n[b]: invalid(\n\n[x][a]\n',
+      '[a]: /first\n[b]: /second {.class}\n\n[x][a]\n',
+      '[a]: /first\n[b]: /second\n\n[x][missing]\n',
+      '[a]: /first "x\\"\n[b]: /second\n\n[x][a]\n',
+      '[a]: /first "x\\"\n\n[x][a]\n',
+      '[a]: /first "x\\\\y"\n[b]: /second\n\n[x][a]\n',
+      '[a]: /first\r\n[b]: /second\r\n\r\n[x][a]\r\n',
+    ]) {
+      expect(tryFastHtml(source, {}), source).toBeUndefined()
+      expect(carveToHtml(source), source).toBe(authoritative(source))
+    }
+  })
+
   it('matches the authoritative pipeline for every accepted fixture', () => {
     for (const source of [
       '# Heading\n\nPlain text.\n',

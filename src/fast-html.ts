@@ -156,6 +156,7 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
   }
   if (last < 0) return { defs, ...(definitionLines ? { definitionLines } : {}) }
   let fence: { char: string; len: number } | undefined
+  let previousDefinition = -1
   for (let i = 0; i <= last; i++) {
     const line = lines[i]!
     if (fence) {
@@ -173,8 +174,15 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
     // tightening the pattern is the whole fix.
     const match = /^\[([^\]]+)\]: (\S+)(?: "([^"]*)")?$/.exec(line)
     if (!match || match[1]!.startsWith('@')) return undefined
-    if (i > 0 && lines[i - 1]!.trim() !== '') return undefined
-    if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') return undefined
+    // Escaped titles use the full grammar; the borrowed renderer keeps them out.
+    if (match[3]?.includes('\\')) return undefined
+    if (i > 0 && lines[i - 1]!.trim() !== '' && previousDefinition !== i - 1) return undefined
+    if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') {
+      const next = lines[i + 1]!
+      // A candidate neighbor is validated on the next iteration. It contains
+      // `]:`, so the scan's final candidate index cannot exclude it.
+      if (!next.startsWith('[') || !next.includes(']:')) return undefined
+    }
     // The run still has to BE a `link_destination`: it admits a parenthesis
     // only balanced or escaped, and it carries the three escapes. Read here by
     // the production's own reader rather than by the pattern above, which
@@ -183,6 +191,7 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
     if (href === null) return undefined
     defs.set(normalizeRefLabel(match[1]!), { href, ...(match[3] === undefined ? {} : { title: match[3] }) })
     definitionLines?.push(i)
+    previousDefinition = i
   }
   return { defs, ...(definitionLines ? { definitionLines } : {}) }
 }
