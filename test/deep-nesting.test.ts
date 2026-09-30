@@ -33,7 +33,7 @@ describe('deep nesting does not overflow the stack', () => {
     expectScansLinearly((input) => void parse(input + 'x'), '> ', {
       label: 'nested quote chain',
       smallRepeats: 2000,
-      minSampleMs: 20,
+      minSampleMs: 100,
     })
   })
 
@@ -44,7 +44,7 @@ describe('deep nesting does not overflow the stack', () => {
     expectScansLinearly((input) => void parse(input + 'x\ny'), '> ', {
       label: 'nested quote chain with a lazy line',
       smallRepeats: 2000,
-      minSampleMs: 20,
+      minSampleMs: 100,
     })
   })
 
