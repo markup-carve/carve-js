@@ -23,6 +23,22 @@ describe('parse sessions', () => {
     expect(result).toContain('«child»')
   })
 
+  it('keeps reference definitions local during reentrant parses', () => {
+    let nested = ''
+    const extension: CarveExtension = {
+      name: 'nested-references',
+      matchInline(text, pos) {
+        if (text[pos] !== '§') return null
+        nested = renderHtml(parse('[r]: /inner\n\n[x][r]'))
+        return { node: { type: 'text', value: 'done' }, end: pos + 1 }
+      },
+    }
+    expect(renderHtml(parse('[r]: /outer\n\n§ [x][r]', { extensions: [extension] })))
+      .toBe('<p>done <a href="/outer">x</a></p>')
+    expect(nested).toBe('<p><a href="/inner">x</a></p>')
+    expect(renderHtml(parse('[x][r]'))).toBe('<p>[x][r]</p>')
+  })
+
   it('does not retain quote settings if reading an option throws before scanning', () => {
     const expected = renderHtml(parse('"plain"'))
     expect(() => parse('"broken"', {

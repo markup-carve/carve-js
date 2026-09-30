@@ -7458,6 +7458,21 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
 
 /** State owned by one synchronous parse operation. */
 class ParseSession {
+  // Cache successful lexical matches; container ownership is checked at each use.
+  private linkDefMatches: Map<string, LinkDefMatch> | undefined
+
+  private matchLinkDef(line: string): LinkDefMatch | null {
+    const cached = this.linkDefMatches?.get(line)
+    if (cached) return cached
+    const matched = matchLinkDef(line)
+    if (matched) (this.linkDefMatches ??= new Map()).set(line, matched)
+    return matched
+  }
+
+  private isLinkDefLine(line: string): boolean {
+    return this.matchLinkDef(line) !== null
+  }
+
   private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
 
   // Only literal source suffixes share numeric offsets; reconstructed lines do not.
@@ -8051,7 +8066,7 @@ class ParseSession {
         // indentation and never registered (carve-js#1584). A list item is
         // transparent across a blank whatever marks it.
         !isBlankLine(unquoted) &&
-        (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
+        (wasPrevBlank || startsBlock || this.isLinkDefLine(rawTrimmed))
       ) {
         while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
       }
@@ -8097,7 +8112,7 @@ class ParseSession {
             if (!one.matched) openCols.push({ col: one.content, quote: one.quote, base: one.marker })
           }
         }
-      } else if (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed)) {
+      } else if (wasPrevBlank || startsBlock || this.isLinkDefLine(rawTrimmed)) {
         while (openCols.length && openCols[openCols.length - 1]!.col > composed.column) {
           openCols.pop()
         }
@@ -8118,7 +8133,7 @@ class ParseSession {
           term = null
         } else if (term && quotes === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
           if (commentFenceRun(rest) === undefined) {
-            if (matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
+            if (this.matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
             paraState = 'yes'
             continue
           }
@@ -8128,7 +8143,7 @@ class ParseSession {
             (quotes !== term.quotes ||
               prepassOpensBlock(rest) ||
               RE_DEFLIST_DEF.test(rest) ||
-              isLinkDefLine(rest) ||
+              this.isLinkDefLine(rest) ||
               RE_FOOTNOTE_DEF.test(rest))
           ) {
             term = null
@@ -8284,7 +8299,7 @@ class ParseSession {
         hasBlockMatchers &&
         !this.probingLazyParagraph &&
         ((composed.peeled.some((one) => !one.quote) &&
-          isLinkDefLine(line)) ||
+          this.isLinkDefLine(line)) ||
           RE_FENCE.test(line) ||
           RE_RAW_FENCE.test(line))
       const probed: boolean | 'unknown' = matcherProbeCandidate
@@ -8494,7 +8509,7 @@ class ParseSession {
       if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
       else if (isBlankLine(raw)) plusColumn = null
       // Container ownership below matters only for a definition candidate.
-      const matched = matchLinkDef(line)
+      const matched = this.matchLinkDef(line)
       if (matched === null) continue
       // Inside a footnote body the minimum is column two. After carve#1729 a
       // recognized opener at or past it establishes an authored local base, so
@@ -8793,7 +8808,7 @@ class ParseSession {
         // reference dangled (the oracle registers it).
         (lexer.inFootnoteBody && !/^[ \t]*\[\^/.test(hostedLinkDefLine)) ||
         (hostedLinkDef && !/^[ \t]*\[\^/.test(hostedLinkDefLine))) &&
-      isLinkDefLine(hostedLinkDefLine) &&
+      this.isLinkDefLine(hostedLinkDefLine) &&
       (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef) &&
       // NOTHING COLLECTED IT, SO NOTHING MAY REMOVE IT. Under-collecting is the
       // error PART 9R R1a licenses; deleting the author's line is the one it
@@ -10500,7 +10515,7 @@ class ParseSession {
       if (!paragraphOpen) break
       const lineIndex = lexer.pos
       lexer.consume()
-      const lazyLinkDef = isLinkDefLine(ln)
+      const lazyLinkDef = this.isLinkDefLine(ln)
       if (lazyLinkDef) {
         lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
       }
@@ -12585,7 +12600,7 @@ class ParseSession {
         (((lexer.consumesHostedLinkDefs === 'all' ||
           (lexer.consumesHostedLinkDefs === 'lazy' &&
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))) &&
-          isLinkDefLine(stripLazyFrame(ln))) ||
+          this.isLinkDefLine(stripLazyFrame(ln))) ||
           (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
             startsInterruptingBlock(lexer))) &&
         !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))

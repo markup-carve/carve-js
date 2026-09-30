@@ -12,6 +12,8 @@ const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.len
 const digest = text => createHash('sha256').update(text).digest('hex')
 
 function sourceFor(family, n) {
+  if (family === 'plain') return 'A plain paragraph with several words.\n\n'.repeat(n)
+  if (family === 'inline-links') return '[A link](/target) and plain words.\n\n'.repeat(n)
   const definitions = family === 'fixed-definitions' ? 64 : n
   const paragraphs = family === 'fixed-paragraphs' ? 64 : n
   const defs = Array.from({ length: definitions }, (_, i) => `[r${i}]: /target${i}\n`).join('')
@@ -22,7 +24,7 @@ function sourceFor(family, n) {
   return family === 'forward' ? body + defs : defs + '\n' + body + (family === 'fallback' ? '%% force AST\n' : '')
 }
 
-const families = ['dense', 'fixed-paragraphs', 'fixed-definitions', 'distributed', 'missing', 'forward', 'fallback']
+const families = ['dense', 'fixed-paragraphs', 'fixed-definitions', 'distributed', 'missing', 'forward', 'fallback', 'plain', 'inline-links']
 const [first, second, third, fourth] = process.argv.slice(2)
 if (first === '--worker') {
   const config = JSON.parse(second)
@@ -60,7 +62,7 @@ if (first === '--worker') {
   const sum = node => node.selfSize + node.children.reduce((total, child) => total + sum(child), 0)
   console.log(JSON.stringify({ samples, sampledBytesPerCall: sum(profile.head) / 50, routing, outputHash, loadStart, loadEnd: loadavg(), sink }))
 } else {
-  assert.ok(first && second && third, 'Usage: node scripts/bench-reference-definitions.mjs BASELINE_INDEX CANDIDATE_INDEX OUTPUT_JSON [--matrix]')
+  assert.ok(first && second && third, 'Usage: node scripts/bench-reference-definitions.mjs BASELINE_INDEX CANDIDATE_INDEX OUTPUT_JSON [--matrix|--cache]')
   const entries = { baseline: resolve(first), candidate: resolve(second) }
   const stamp = entry => Object.fromEntries(['parse.js', 'fast-html.js', 'source-positions.js'].map(name => [name, digest(readFileSync(resolve(dirname(entry), name)))]))
   const metadata = {
@@ -70,7 +72,7 @@ if (first === '--worker') {
   }
   const cases = fourth === '--matrix'
     ? families.flatMap(family => [64, 256, 1024].map(size => ({ family, size })))
-    : [{ family: 'dense', size: 256 }, { family: 'dense', size: 1024 }, { family: 'forward', size: 1024 }, { family: 'fallback', size: 1024 }]
+    : [{ family: 'dense', size: 256 }, { family: 'dense', size: 1024 }, { family: 'forward', size: 1024 }, { family: 'fallback', size: 1024 }, ...fourth === '--cache' ? [{ family: 'plain', size: 1024 }, { family: 'inline-links', size: 1024 }] : []]
   const groups = []
   for (const { family, size } of cases) {
     const source = sourceFor(family, size)
