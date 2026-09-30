@@ -8,6 +8,13 @@ behind Trojan Source (U+202A-202E, U+2066-2069) are removed from rendered text -
 while the legitimate LRM/RLM marks are kept. That much is normative, so every
 implementation does it.
 
+A checked render also reports what it blanked. Every destination the scheme
+denylist empties takes one row under the code `destination-denied`, so a link,
+an autolink and an image source each account for themselves. The emitted value
+is the same either way, and `allowRawHtml` does not change the count.
+`--strict-losses` therefore fails on a denied destination, and `--allow-loss`
+does not accept the code.
+
 The one thing you must opt out of is raw passthrough. A ` ```=html ` block or
 `` `…`{=html} `` span is emitted **verbatim** into the HTML output by design, so
 anything you did not author needs:

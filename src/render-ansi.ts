@@ -12,7 +12,7 @@ import { codeLines } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, rawFormatDropped, rubyFlattened, type RenderLoss, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -138,6 +138,30 @@ function chargeCrossrefLabel(
 
 function style(text: string, codes: string): string {
   return `${codes}${text}${RESET}`
+}
+
+/**
+ * Render a child with its losses held back, for a caller that cannot report its
+ * own loss until the child is rendered.
+ *
+ * `replay()` hands the buffer to the real sink in order. A context with no sink
+ * buffers nothing.
+ */
+function withHeldLosses(ctx: AnsiContext, render: () => string): { text: string; replay: () => void } {
+  const outer = ctx.options
+  if (outer.onRenderLoss === undefined) return { text: render(), replay: () => {} }
+  const held: RenderLoss[] = []
+  ctx.options = { ...outer, onRenderLoss: (loss) => held.push(loss) }
+  try {
+    return {
+      text: render(),
+      replay: () => {
+        for (const loss of held) outer.onRenderLoss?.(loss)
+      },
+    }
+  } finally {
+    ctx.options = outer
+  }
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: AnsiContext): string {
@@ -526,13 +550,21 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination gets ANSI link styling.
       if (insideLink) return renderInlines(node.children, ctx)
-      const text = withinLink(() => renderInlines(node.children, ctx))
+      // The label has to render before the destination can be probed, because
+      // `shows` compares the two. But the label is INSIDE the link, and
+      // CARVE-P2-024 orders losses by document position, so the label's rows are
+      // held back and replayed after the link's own.
+      const label = withHeldLosses(ctx, () => withinLink(() => renderInlines(node.children, ctx)))
+      const text = label.text
       const authored = stripControls(node.href)
       const shows = authored && !authored.startsWith('#') && authored !== stripAnsi(text)
       let out = style(text, UNDERLINE + FG_BLUE)
       if (shows) {
-        out += style(` (${blankDeniedDestination(authored)})`, DIM)
+        const destination = blankDeniedDestination(authored)
+        destinationDenied(ctx.options, 'link', 'ansi', authored, destination, node.pos)
+        out += style(` (${destination})`, DIM)
       }
+      label.replay()
       return out
     }
     case 'image':
