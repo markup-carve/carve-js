@@ -36,9 +36,12 @@ cannot match the definition production and now skip cache lookup as well.
 
 ## Measurements
 
+Both measurement runs use baseline
+`04845b7fc31610e17e53ab64bdf7dc5d00a81b39`.
+
 The final source candidate is `edee40791`. These
 [final observations](reference-definitions-final.json.gz) compare it against
-the original baseline after adding the lexical check:
+that baseline after adding the lexical check:
 
 | Final candidate, size 1,024 | API | Baseline ms, rounds 1 / 2 | Candidate ms, rounds 1 / 2 | Sampled KiB/op, baseline to candidate |
 |---|---|---:|---:|---:|
@@ -49,15 +52,14 @@ the original baseline after adding the lexical check:
 | inline-links | parse | 12.642 / 9.633 | 10.101 / 9.466 | 5004.9 to 4959.9 |
 | inline-links | html | 4.746 / 3.463 | 4.012 / 2.715 | 2044.8 to 2034.4 |
 
-Sparse-definition timings remain mixed after the check. It removes unnecessary
+The sparse case uses 64 definitions and 1,024 reference paragraphs. Its parse
+timings remain mixed after the check. It removes unnecessary
 cache lookups, but this shared-host run cannot establish that sparse parsing
 has no overhead. The allocation reduction is clearer than the timing change.
-The broader matrix below provides the other workload dimensions; its HTML
+The final run had one-minute host load of 15.42 to 17.23 on 16 logical
+CPUs. The broader matrix below provides the other workload dimensions; its HTML
 fast renderer is identical to the final candidate.
 
-The following broader matrix predates the final lexical check:
-
-The baseline is `04845b7fc31610e17e53ab64bdf7dc5d00a81b39`.
 The nine-family matrix candidate is `40a9da017`, before the final lexical
 check that skips impossible definition lines. Its build hashes, fixture hashes, Node version, CPU, host
 load, CPU samples and separate timing rounds are recorded in
@@ -91,7 +93,8 @@ host load ranged from 5.22 to 44.41 on 16 logical CPUs. Control
 timings vary substantially during the busiest periods.
 
 The adjacent-definition HTML gain is worth keeping: the dense case was about
-8 times faster in both rounds and used about 82% less sampled allocation.
+8 times faster in both matrix rounds and used about 82% less sampled allocation
+in that matrix.
 Full parsing improved modestly on that case. The indexed position fix also
 removes a demonstrated quadratic cost and corrects authored source offsets.
 Sparse-definition parsing regressed by 8% and 16% in the two matrix rounds.
@@ -121,13 +124,14 @@ The intermediate reports isolate [offset indexing](reference-definitions-offsets
 the final first-line BOM column correction; its ASCII fixtures are unaffected.
 The cache report shows about 15% less sampled parse allocation on
 definition-heavy inputs, with mixed timing results and similar control timings.
-The final reproduction uses `--sparse` for the last comparison against main.
-The nine-family matrix was measured before that final lexical check.
+The final reproduction uses `--sparse` for its comparison against the named baseline.
 
 ## Verification
 
 After each implementation step, focused tests and differential comparisons
-checked the supported behavior. Ownership and cache changes preserve full
+checked the supported behavior. The final lexical-check build `edee40791` was
+also compared against `8d9344d09`, the corrected-position and fast-path build.
+Ownership, cache and lexical-check changes preserve full
 ASTs, position-free ASTs and HTML across 2,200 pinned corpus sources and 3,000
 seeded generated inputs. These comparisons use the corrected position build
 as their baseline, so they do not mask the intentional CRLF and BOM corrections.
@@ -145,21 +149,34 @@ layouts, authored newline offsets, Unicode, and nested independent parses.
 The raw JSON reports are gzip-compressed to keep the review focused on source
 changes and the measurement summary. Use `gzip -dc` to inspect them.
 
-Build a separate clean checkout of the baseline revision, then run:
+Build clean checkouts of baseline `04845b7fc` and corrected-position build
+`8d9344d09`, using `npm ci` and `npm run build` in each. Then use separate
+candidate checkouts for the two recorded runs:
 
 ```sh
+# In candidate checkout 40a9da017, using its benchmark runner:
 npm ci
 npm run build
 node scripts/bench-reference-definitions.mjs \
-  /path/to/baseline/dist/index.js dist/index.js /tmp/reference-results.json --matrix
+  /path/to/baseline/dist/index.js dist/index.js /tmp/reference-matrix.json --matrix
+
+# In final candidate checkout edee40791, using its benchmark runner:
+npm ci
+npm run build
+git submodule update --init --depth 1
 node scripts/bench-reference-definitions.mjs \
   /path/to/baseline/dist/index.js dist/index.js /tmp/reference-final.json --sparse
 node scripts/check-parser-costs.mjs /path/to/corrected-position-build/dist/index.js
 ```
 
-The intermediate comparison uses the offset-corrected build for AST parity.
-The matrix and final measurements compare against the original baseline and uses LF
-ASCII fixtures, whose ASTs do not need the position corrections.
+The runner changed between the matrix and final runs to add `--sparse`.
+Each JSON records its runner hash. Running `--matrix` on the final source is
+also supported, but measures the source after the lexical check rather than
+reproducing the recorded earlier matrix.
+
+The parity check runs from `edee40791` against `8d9344d09`. The timing matrix
+and final measurements compare against `04845b7fc` and use LF ASCII fixtures,
+whose ASTs do not need the position corrections.
 
 Internal position tracking remains in place because source payloads and
 container ownership depend on it. Removing it requires a separate design and
