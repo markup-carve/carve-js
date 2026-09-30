@@ -25,7 +25,7 @@ import { codeSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
-import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
@@ -374,7 +374,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
-      return `${renderImage(node)}\n\n`
+      return `${renderImage(node, ctx)}\n\n`
     case 'raw_block':
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
       if (node.format !== 'html') {
@@ -803,7 +803,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
 
 function renderFigureTarget(node: Figure, ctx: MarkdownContext): string {
   return node.target.type === 'image'
-    ? renderImage(node.target)
+    ? renderImage(node.target, ctx)
     : node.target.type === 'table'
       ? trimNonNbsp(renderTable(node.target, ctx))
       : trimNonNbsp(renderBlock(node.target, ctx))
@@ -889,7 +889,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       if (insideLink) return renderInlines(node.children, ctx)
       return renderLink(node, ctx)
     case 'image':
-      return renderImage(node)
+      return renderImage(node, ctx)
     case 'span': {
       // PART 9 §10 + carve#1127: an authored `abbr` OUTRANKS automatic
       // expansion, and a resolved abbreviation inside such a span contributes
@@ -961,7 +961,9 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
         const display = node.href.startsWith('mailto:') ? node.href.slice(7) : label
         return escapeText(stripControls(display))
       }
-      return `[${label}](${markdownDestination(node.href)})`
+      const destination = markdownDestination(node.href)
+      destinationDenied(ctx.options, 'autolink', 'markdown', node.href, destination, node.pos)
+      return `[${label}](${destination})`
     }
     case 'mention':
       return `@${stripControls(node.user)}`
@@ -1134,18 +1136,22 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   // Markdown has no nested links either: `[see [H](#H)](/outer)` is not a link
   // with a link inside, it is broken. A crossref in the label renders as its
   // text, the same suppression the HTML target makes.
-  const text = withinLink(() => renderInlines(node.children, ctx))
   // A fragment that names no heading is still the author's destination, so the
   // link is kept (PART 11 section 11a).
   const id = fragmentId(node.href)
   const slug = id === undefined ? undefined : ctx.headingSlugs.get(id)
   const destination = slug !== undefined ? `#${slug}` : markdownDestination(node.href)
+  // Before the label renders: the label is INSIDE the link, and CARVE-P2-024
+  // orders losses by document position. A denied image in the label used to
+  // report first, which also kept the wrong row under `maxRenderLosses: 1`.
+  destinationDenied(ctx.options, 'link', 'markdown', node.href, destination, node.pos)
+  const text = withinLink(() => renderInlines(node.children, ctx))
   return node.title === undefined
     ? `[${text}](${destination})`
     : `[${text}](${destination} "${escapeMdTitle(node.title)}")`
 }
 
-function renderImage(node: Image): string {
+function renderImage(node: Image, ctx: MarkdownContext): string {
   // An unresolved reference image writes back as its source, like the link
   // arm above; `![alt]()` would claim an image the document never had.
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
@@ -1153,6 +1159,7 @@ function renderImage(node: Image): string {
   // no longer answers this question (carve#596).
   if (isUnresolvedReference(node)) return escapeText(referenceSourceText(node.rawRef))
   const src = markdownDestination(node.src)
+  destinationDenied(ctx.options, 'image', 'markdown', node.src, src, node.pos)
   const alt = escapeMarkdownLabel(node.alt)
   return node.title === undefined
     ? `![${alt}](${src})`

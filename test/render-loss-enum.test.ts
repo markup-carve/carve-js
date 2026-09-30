@@ -7,10 +7,11 @@ import type { RenderLoss } from '../src/render-loss.js'
 import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
 
 /**
- * `CARVE-P2-024`'s `code` enum is CLOSED at `raw-format-dropped` and
- * `ruby-flattened` (PART 11 §1d, carve#2252 restored by carve#2344), and each
- * names a whole node one selected renderer dropped. A dropped FIELD, and a
- * structure no Carve source spells, go to the conversion-diagnostics channel
+ * `CARVE-P2-024`'s `code` enum holds `raw-format-dropped`, `ruby-flattened` and
+ * `destination-denied` (PART 11 §1d, carve#2252 restored by carve#2344, third
+ * code ruled in carve#2681). Each names something one selected renderer dropped
+ * or blanked. A dropped FIELD, and a structure no Carve source spells, go to
+ * the conversion-diagnostics channel
  * instead: `CARVE-P12-034` (table section attributes), `CARVE-P12-049`
  * (`table_cell.blocks`), `CARVE-P12-051` (`math.label`, `math.number`) and
  * `CARVE-P12-052` (`section`) each say so, and three of them say outright that
@@ -49,13 +50,14 @@ const interchangeOnly = () => ({
   ],
 })
 
-/** A raw block and a ruby: the two losses the enum does name. */
+/** A raw block, a ruby and a denied destination: the three losses the enum does name. */
 const namedLosses = () => ({
   type: 'document',
   srcByteLength: 0,
   children: [
     { type: 'raw_block', format: 'html', content: '<b>x</b>' },
     { type: 'paragraph', children: [{ type: 'ruby', pairs: [{ base: [{ type: 'text', value: 'a' }], annotation: [{ type: 'text', value: 'b' }] }] }] },
+    { type: 'paragraph', children: [{ type: 'link', href: 'javascript:alert(1)', children: [{ type: 'text', value: 'x' }] }] },
   ],
 })
 
@@ -68,8 +70,8 @@ const collect = (render: (ast: never, opts: never) => string, wire: unknown): Re
 const targets = { carve: renderCarve, markdown: renderMarkdown, plain: renderPlainText, ansi: renderAnsi, html: renderHtml }
 
 describe('the render-loss code enum', () => {
-  it('is still closed at two codes in the pinned schema', () => {
-    expect(schemaCodes()).toEqual(['raw-format-dropped', 'ruby-flattened'])
+  it('names three codes in the pinned schema', () => {
+    expect(schemaCodes()).toEqual(['raw-format-dropped', 'ruby-flattened', 'destination-denied'])
   })
 
   it('names no interchange-only shape on any target', () => {
@@ -78,7 +80,7 @@ describe('the render-loss code enum', () => {
     }
   })
 
-  it('emits only codes the schema permits, and emits both of them', () => {
+  it('emits only codes the schema permits, and emits every one of them', () => {
     const seen = new Set<string>()
     for (const [target, render] of Object.entries(targets)) {
       for (const loss of [...collect(render as never, interchangeOnly()), ...collect(render as never, namedLosses())]) {
@@ -86,7 +88,7 @@ describe('the render-loss code enum', () => {
         seen.add(loss.code)
       }
     }
-    expect([...seen].sort()).toEqual(schemaCodes())
+    expect([...seen].sort()).toEqual([...schemaCodes()].sort())
   })
 
   it('reports every one of those shapes on the conversion-diagnostics channel', () => {

@@ -43,7 +43,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
-import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
@@ -2130,7 +2130,9 @@ function renderImage(img: Image, opts: RenderOptions): string {
   // one the footnote-numbering pass asks as well.
   if (isUnresolvedReference(img)) return escapeHtml(referenceSourceText(img.rawRef))
   const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
-  const src = escapeAttr(sanitizeUrl(img.src, opts))
+  const sanitizedSrc = sanitizeUrl(img.src, opts)
+  destinationDenied(opts, 'image', 'html', img.src, sanitizedSrc, img.pos)
+  const src = escapeAttr(sanitizedSrc)
   let attrs = stripKeyValue(img.attrs, 'src')
   // The destination title is a structural slot, just like src. When it is
   // present it wins over a title= key from an attribute block; emitting both
@@ -2290,7 +2292,9 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // lost the inner destination from every consumer of the AST.
       if (insideLink) return renderInlines(node.children, opts)
       const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
-      const href = escapeAttr(sanitizeUrl(node.href, opts))
+      const sanitizedHref = sanitizeUrl(node.href, opts)
+      destinationDenied(opts, 'link', 'html', node.href, sanitizedHref, node.pos)
+      const href = escapeAttr(sanitizedHref)
       // The sanitized structural href wins; never re-emit an author-supplied
       // `href` from an attribute block, which would bypass sanitization.
       const label = withinLink(() => renderInlines(node.children, opts))
@@ -2384,7 +2388,9 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       }
       // The structural href always wins; never re-emit an author-supplied
       // `href` from an attribute block (it would duplicate the attribute).
-      const href = escapeAttr(sanitizeUrl(node.href, opts))
+      const sanitizedAutolink = sanitizeUrl(node.href, opts)
+      destinationDenied(opts, 'autolink', 'html', node.href, sanitizedAutolink, node.pos)
+      const href = escapeAttr(sanitizedAutolink)
       return `<a href="${href}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${escapeHtml(display)}</a>`
     }
     case 'mention': {
@@ -2470,7 +2476,9 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // the authored `target` (PART 12 §3a) and carries the destination in
       // `href`, so the rendering is unchanged - only the tree moved.
       if (node.href) {
-        const crossrefHref = escapeAttr(sanitizeUrl(node.href, opts))
+        const sanitizedCrossref = sanitizeUrl(node.href, opts)
+        destinationDenied(opts, 'crossref', 'html', node.href, sanitizedCrossref, node.pos)
+        const crossrefHref = escapeAttr(sanitizedCrossref)
         // The cloned display text renders INSIDE this anchor, so it renders in
         // the link context: a heading holding a link would otherwise nest one
         // here. The resolver used to unwrap the clone before the renderer saw
