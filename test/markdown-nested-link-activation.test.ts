@@ -39,3 +39,7 @@ test('a malformed email autolink keeps its active inner link', () => {
   expect(html).toContain('<a href="/u">b</a>')
   expect(html).not.toContain('<a href="/v">')
 })
+
+test('an image alt retains the literal outer brackets of an inactive nested link', () => {
+  expect(carveToHtml(markdownToCarve('![[[foo](uri1)](uri2)](uri3)')).trim()).toBe('<img src="uri3" alt="[foo](uri2)">')
+})
