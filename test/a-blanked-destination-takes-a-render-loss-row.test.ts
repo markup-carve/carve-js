@@ -12,6 +12,8 @@ import { describe, expect, it } from 'vitest'
 import { run } from '../src/cli.js'
 import {
   carveToAnsiWithReport,
+  carveToHtml,
+  carveToMarkdown,
   carveToCarveWithReport,
   carveToHtmlWithReport,
   carveToMarkdownWithReport,
@@ -149,6 +151,107 @@ describe('a loss inside a link label', () => {
     expect(result.totalLosses).toBe(2)
     expect(result.truncated).toBe(true)
     expect(result.losses[0]?.pos?.startColumn).toBe(1)
+  })
+})
+
+/*
+ * THE FAST PATH IS A SECOND RENDERER, and it blanks a denied destination with
+ * no loss sink to report it on.
+ *
+ * `tryFastHtml` refuses anything it cannot borrow the layout for, and every
+ * fixture above happens to be refused: `alert(1)` carries parentheses, `<...>`
+ * an autolink, and corpus 536 an image (`![`). A plain single denied link is
+ * refused by none of them, so it took the fast path and reported nothing -
+ * the most ordinary shape of the construct, and the only one no fixture had.
+ */
+describe('a blanked destination on the HTML fast path', () => {
+  const PLAIN = '[x](javascript:one)'
+
+  it.each(SAFE_MODES)('reports a single denied link with allowRawHtml $allowRawHtml', (mode) => {
+    const result = carveToHtmlWithReport(PLAIN, mode)
+    expect(codes(result.losses)).toEqual(['destination-denied'])
+    expect(result.totalLosses).toBe(1)
+    expect(result.losses[0]?.message).toBe('Blanked a denied link destination while rendering html')
+  })
+
+  it('emits the same bytes it always did, checked or not', () => {
+    expect(carveToHtmlWithReport(PLAIN).value).toBe(carveToHtml(PLAIN))
+    expect(carveToHtml(PLAIN)).toBe('<p><a href="">x</a></p>')
+  })
+
+  it('still reports nothing for a destination the denylist allows', () => {
+    const allowed = '[x](https://example.com)'
+    const result = carveToHtmlWithReport(allowed)
+    expect(result.losses).toEqual([])
+    expect(result.value).toBe(carveToHtml(allowed))
+  })
+})
+
+/*
+ * A DESTINATION EMPTIED BY CONTROL-STRIPPING WAS NEVER REFUSED.
+ *
+ * The Markdown writer normalizes before it probes (carve-js#893), so a
+ * destination made of control characters alone arrives at the probe already
+ * empty. Reading the emitted emptiness as a denial charged a row for a refusal
+ * that did not happen, and disagreed with the HTML target on the same input.
+ */
+describe('a Markdown destination the denylist never refused', () => {
+  const CONTROL_ONLY = '[a](\u0001)'
+
+  it('reports nothing, and agrees with the HTML target', () => {
+    expect(carveToMarkdownWithReport(CONTROL_ONLY).totalLosses).toBe(0)
+    expect(carveToHtmlWithReport(CONTROL_ONLY).totalLosses).toBe(0)
+  })
+
+  it('reports nothing for a control-only image source either', () => {
+    /* The source has to strip to NOTHING for the sink to see an empty emitted
+     * value: `<SOH>x<STX>` strips to `x`, which never reaches the branch. */
+    const result = carveToMarkdownWithReport('![a](\u0001\u0002)')
+    expect(result.totalLosses).toBe(0)
+    expect(result.value).toBe(carveToMarkdown('![a](\u0001\u0002)'))
+  })
+
+  it('STILL reports a denied scheme obfuscated with a control character', () => {
+    /* The control strip is what makes the denylist obfuscation-resistant, so
+     * the row has to survive it: `java<SOH>script:` is a refusal. */
+    const result = carveToMarkdownWithReport('[a](java\u0001script:1)')
+    expect(codes(result.losses)).toEqual(['destination-denied'])
+    expect(result.value).toBe('[a]()\n')
+  })
+})
+
+/*
+ * A RESOLVER-PRODUCED DESTINATION THE RENDERER NEVER EMITS OWES NO ROW.
+ *
+ * The clause charges a row for each destination the denylist BLANKS. This
+ * engine resolves a mention or tag inside the render pass
+ * (`socialDestination` in src/render-html.ts), but when the denylist refuses
+ * the result it returns null and the arm emits a `span` with no `href` at all.
+ * Nothing is blanked, so nothing is owed - and a row here would put carve-js
+ * one row ahead of carve-php, which reaches the same count by blanking in
+ * `beforeRender` instead.
+ */
+describe('a resolver-produced destination the denylist refuses', () => {
+  it('emits no destination and owes no row, for a mention or a tag', () => {
+    const mention = carveToHtmlWithReport('@alice', { resolveMention: () => 'javascript:steal' })
+    expect(mention.value).toBe('<p><span class="mention"><strong>@alice</strong></span></p>')
+    expect(mention.losses).toEqual([])
+
+    const tag = carveToHtmlWithReport('#topic', { resolveTag: () => 'vbscript:x' })
+    expect(tag.value).toBe('<p><span class="tag"><strong>#topic</strong></span></p>')
+    expect(tag.losses).toEqual([])
+  })
+
+  it('owes no row for a denied URL template either', () => {
+    const result = carveToHtmlWithReport('@alice', { mentionUrl: 'javascript:{name}' })
+    expect(result.value).toBe('<p><span class="mention"><strong>@alice</strong></span></p>')
+    expect(result.losses).toEqual([])
+  })
+
+  it('still links an allowed mention, so the check above is not vacuous', () => {
+    const result = carveToHtmlWithReport('@alice', { mentionUrl: 'https://s.example/{name}' })
+    expect(result.value).toBe('<p><a class="mention" href="https://s.example/alice">@alice</a></p>')
+    expect(result.losses).toEqual([])
   })
 })
 

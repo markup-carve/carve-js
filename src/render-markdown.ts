@@ -962,7 +962,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
         return escapeText(stripControls(display))
       }
       const destination = markdownDestination(node.href)
-      destinationDenied(ctx.options, 'autolink', 'markdown', node.href, destination, node.pos)
+      destinationDenied(ctx.options, 'autolink', 'markdown', deniedProbeInput(node.href), destination, node.pos)
       return `[${label}](${destination})`
     }
     case 'mention':
@@ -1144,7 +1144,7 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   // Before the label renders: the label is INSIDE the link, and CARVE-P2-024
   // orders losses by document position. A denied image in the label used to
   // report first, which also kept the wrong row under `maxRenderLosses: 1`.
-  destinationDenied(ctx.options, 'link', 'markdown', node.href, destination, node.pos)
+  destinationDenied(ctx.options, 'link', 'markdown', deniedProbeInput(node.href), destination, node.pos)
   const text = withinLink(() => renderInlines(node.children, ctx))
   return node.title === undefined
     ? `[${text}](${destination})`
@@ -1159,7 +1159,7 @@ function renderImage(node: Image, ctx: MarkdownContext): string {
   // no longer answers this question (carve#596).
   if (isUnresolvedReference(node)) return escapeText(referenceSourceText(node.rawRef))
   const src = markdownDestination(node.src)
-  destinationDenied(ctx.options, 'image', 'markdown', node.src, src, node.pos)
+  destinationDenied(ctx.options, 'image', 'markdown', deniedProbeInput(node.src), src, node.pos)
   const alt = escapeMarkdownLabel(node.alt)
   return node.title === undefined
     ? `![${alt}](${src})`
@@ -1336,6 +1336,19 @@ function writtenTypography(nodes: InlineNode[], typography: SmartTypographyMode)
  * manufactures the live URL out of one the probe had already dismissed
  * (markup-carve/carve-js#893).
  */
+/**
+ * What the denylist was actually ASKED about for `url`.
+ *
+ * `markdownDestination` probes the control-stripped form, so a destination made
+ * of control characters alone reaches the probe already empty and comes back
+ * empty without any scheme being refused. Charging a `destination-denied` row
+ * for that reports a refusal that did not happen, and disagrees with the HTML
+ * target on the same input.
+ */
+function deniedProbeInput(url: string): string {
+  return stripDestinationControls(url)
+}
+
 function markdownDestination(url: string): string {
   const probed = sanitizeMdUrl(stripDestinationControls(url))
   const encoded = (probed === '' ? probed : stripControls(url)).replace(/[ ()<>]/g, (ch) => {

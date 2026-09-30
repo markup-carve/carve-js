@@ -1,6 +1,7 @@
 import { slugify, headingIdSlugOpts } from './heading-ids.js'
 import { escapeAttrValue, escapeHtml, sanitizeUrl, type RenderOptions } from './render-html.js'
 import type { ParseOptions } from './parse.js'
+import type { RenderLossSinkOptions } from './render-loss.js'
 import { normalizeRefLabel } from './label-key.js'
 import { linkDestinationValue } from './link-destination.js'
 
@@ -109,6 +110,13 @@ export function tryFastHtmlWithStats(source: string, opts: Options): FastHtmlRes
 }
 
 function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): true | undefined {
+  // A CHECKED RENDER GOES TO THE AUTHORITATIVE PIPELINE. This path blanks a
+  // denied destination (§25) with no loss sink to report it on, so the
+  // `destination-denied` row of CARVE-P2-024 was dropped for exactly the
+  // documents it accepts: `[x](javascript:one)` is ASCII with no image, so it
+  // rendered `<a href="">x</a>` and reported nothing. Corpus 536 hid it by
+  // holding an image, which bails below on `![`.
+  if ((opts as RenderLossSinkOptions).onRenderLoss !== undefined) return undefined
   if (
     opts.extensions?.length || opts.profile !== undefined || opts.sourceLine ||
     (opts as RenderOptions & { mode?: unknown }).mode !== undefined ||
