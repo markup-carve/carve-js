@@ -18,39 +18,38 @@ jobs:
       # it. See markup-carve/carve-wasm#80.
       contents: write
     steps:
-      # GATE: the notes are not the workflow's to write. A CHANGELOG entry is
-      # deliberately one or two lines for a contributor, which makes poor
-      # release notes for a reader deciding whether to upgrade. A human writes
-      # the draft first and this refuses to publish without one.
-      #
-      # Found by listing rather than `gh release view <tag>`: a draft's tag is
-      # not a git ref, so addressing one by tag can match nothing, change
-      # nothing and still exit 0.
-      - name: A release draft for this tag exists and has notes
-        if: github.event_name != 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          release="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-            --jq "[.[] | select(.tag_name == \"$GITHUB_REF_NAME\")] | first")"
-          if [ -z "$release" ]; then
-            echo "::error::no release for $GITHUB_REF_NAME. Write the notes first:" \
-                 "gh release create $GITHUB_REF_NAME --draft --notes-file NOTES.md"
-            echo "::error::if a draft DOES exist, this job could not see it -" \
-                 "check that the job still declares contents: write"
-            exit 1
-          fi
-          body="$(printf '%s' "$release" | jq -r '.body // ""' | tr -d '[:space:]')"
-          [ -n "$body" ] \
-            || { echo "::error::the release for $GITHUB_REF_NAME has no notes"; exit 1; }
-          printf '%s' "$release" | jq -r '"draft=\(.draft) tag=\(.tag_name)"'
-
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref }}
           submodules: recursive # spec corpus submodule; npm test needs it
           # The completeness gate below walks every merge back to the previous
           # tag, so it needs the tags and the history behind them.
           fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      # The draft must describe the tagged changelog section before publishing.
+      # Relative changelog links resolve against this tag in the release body.
+      #
+      # Found by listing rather than `gh release view <tag>`: a draft's tag is
+      # not a git ref, so addressing one by tag can match nothing, change
+      # nothing and still exit 0.
+      - name: The release notes match this tag's changelog
+        shell: bash
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            | jq -cs --arg tag "$GITHUB_REF_NAME" '[.[][] | select(.tag_name == $tag)] | first // empty')"
+          if [ -z "$release" ]; then
+            echo "::error::No release for $GITHUB_REF_NAME. Write its notes first."
+            exit 1
+          fi
+          printf '%s' "$release" | python tools/check-release-notes.py \
+            --tag "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
 
       # Guard: package.json version AND the CHANGELOG must match the release
       # tag, so a mistyped tag, a forgotten version bump, or an un-cut changelog
@@ -115,13 +114,21 @@ jobs:
       # published beside a failed publish is not.
       - name: Publish the release notes
         if: github.event_name != 'workflow_dispatch'
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          id="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-            --jq "[.[] | select(.tag_name == \"$GITHUB_REF_NAME\" and .draft)] | first | .id // empty")"
+          release="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            | jq -cs --arg tag "$GITHUB_REF_NAME" '[.[][] | select(.tag_name == $tag)] | first // empty')"
+          if [ -z "$release" ]; then
+            echo "::error::No release for $GITHUB_REF_NAME. Write its notes first."
+            exit 1
+          fi
+          printf '%s' "$release" | python tools/check-release-notes.py \
+            --tag "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          id="$(printf '%s' "$release" | jq -r 'select(.draft) | .id // empty')"
           if [ -z "$id" ]; then
-            echo "No draft release for $GITHUB_REF_NAME; nothing to publish."
+            echo "The release is already published."
             exit 0
           fi
           # `tag_name` goes with every PATCH of a release. Omit it on a DRAFT
