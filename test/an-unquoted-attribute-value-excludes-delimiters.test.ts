@@ -40,16 +40,28 @@ describe('unquoted attribute value boundaries (#2191)', () => {
     },
   )
 
-  it.each(['a\\b', 'a\\', '\\', 'a|b', 'a"b', "a'b", 'a}b', 'a b'])(
-    'formats a quoted value without changing it: %s',
-    (value) => {
-      const source = `*x*{k=${quoted(value)}}\n`
-      const formatted = renderCarve(parse(source))
-      expect(formatted).toContain(`{k=${quoted(value)}}`)
-      expect(carveToHtml(formatted)).toBe(carveToHtml(source))
-      expect(renderCarve(parse(formatted))).toBe(formatted)
-    },
-  )
+  // PART 11 §2 escapes a character only if omitting the escape would change
+  // the re-parse, so a backslash before a NON-punctuation character stays
+  // single: a reader keeps it literal either way, and doubling it wrote back
+  // one character the re-parse then discarded. Spelled out per value rather
+  // than derived, so the expectation pins the rule instead of the writer.
+  it.each([
+    ['a\\b', '"a\\b"'],
+    ['a\\', '"a\\\\"'],
+    ['\\', '"\\\\"'],
+    ['a\\.b', '"a\\\\.b"'],
+    ['a|b', '"a\\|b"'],
+    ['a"b', '"a\\"b"'],
+    ["a'b", '"a\'b"'],
+    ['a}b', '"a}b"'],
+    ['a b', '"a b"'],
+  ])('formats a quoted value to its shortest re-parsing spelling: %s', (value, expected) => {
+    const source = `*x*{k=${quoted(value)}}\n`
+    const formatted = renderCarve(parse(source))
+    expect(formatted).toContain(`{k=${expected}}`)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(source))
+    expect(renderCarve(parse(formatted))).toBe(formatted)
+  })
 
   it('preserves quoted pipe and backslash values in table cells', () => {
     const source = '| *x*{k="a\\|b\\\\c"} |\n'

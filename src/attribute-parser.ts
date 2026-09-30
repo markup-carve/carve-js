@@ -65,10 +65,15 @@ export function isEmptyAttrs(attrs: Attrs): boolean {
 // Backslash before ASCII punctuation yields that character; any other
 // backslash is kept literal. Mirrors the inline text-escape rule and the
 // carve-php AttributeParser, applied to quoted attribute values.
+const ATTR_VALUE_ESCAPABLE = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/
+
+/** True when a reader resolves a backslash plus `c` to a bare `c`. */
+export function isAttrValueEscapable(c: string): boolean {
+  return ATTR_VALUE_ESCAPABLE.test(c)
+}
+
 export function unescapeAttrValue(v: string): string {
-  return v.replace(/\\(.)/g, (whole, c: string) =>
-    /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/.test(c) ? c : whole,
-  )
+  return v.replace(/\\(.)/g, (whole, c: string) => (isAttrValueEscapable(c) ? c : whole))
 }
 
 export function parseAttrs(src: string): Attrs {
