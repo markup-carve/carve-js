@@ -1,4 +1,4 @@
-import { protectMarkdownLinkLabels } from './markdown-link-scopes.js'
+import { escapeInactiveMarkdownLinkBrackets, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { isValidAttrPayload } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
@@ -1139,6 +1139,19 @@ function convertInline(
     )
     return `(${enc}${decodeEntitiesInTitle(rest).replace(/^[ \t\n]+/, ' ')})`
   }
+
+  const activationSource = line
+  const activationOpaque = opaqueHtmlScanner(activationSource)
+  const activationAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
+  line = escapeInactiveMarkdownLinkBrackets(activationSource, protect,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) !== undefined,
+    offset => {
+      const opaque = activationOpaque(offset)
+      if (opaque !== undefined) return opaque
+      activationAutolink.lastIndex = offset
+      const autolink = activationAutolink.exec(activationSource)
+      return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
+    })
 
   const referenceTail = (canonical: string, fallback: string): string => {
     const target = referenceInlineTarget(canonical)
@@ -4332,6 +4345,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // Whether the last line left a paragraph open inside a list item, which a
   // lazy line can continue.
   let itemParagraph = false
+  let emptyMarkerColumn: number | null = null
   // The quote markers of a quote paragraph the last item line left open, or
   // null. A lazy line continues that paragraph.
   let itemQuote: { prefix: string; col: number } | null = null
@@ -4372,6 +4386,15 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
 
   for (let i = 0; i < lines.length; i++) {
     applyShift()
+    let leftEmptyItem = false
+    if (!inCode && emptyMarkerColumn !== null && lines[i]!.trim() !== '') {
+      if (prevBlank && indentColumns(lines[i]!) > emptyMarkerColumn) {
+        while (listCols.length && listCols.at(-1)! > emptyMarkerColumn) listCols.pop()
+        listMarkers.end(emptyMarkerColumn)
+        leftEmptyItem = true
+      }
+      emptyMarkerColumn = null
+    }
     // A tab after the marker of an item this line opens pads it to the next
     // tab stop. Not on a line four columns past the item holding it, which is
     // code or text, nor on an ordered marker other than 1 under a paragraph.
@@ -4391,6 +4414,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       for (const content of listCols) if (content <= column) holder = content
       if (column - holder < 4 && (prevType !== 'text' || listMarkers.hasListAt(column))) {
         lines[i] = lines[i]!.trimEnd() + ' +'
+        if (lines[i + 1]?.trim() === '') emptyMarkerColumn = column
       }
     }
     const line = lines[i]!
@@ -5001,7 +5025,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // So does a paragraph an item above it would take in once that item's
     // content column moved left.
     // Lists are dedented by `ListMarkers`, which moves their siblings along.
-    const dedent = relIndent >= 1 && relIndent <= 3 && (isHeading || isBlockquote || ((reachesMovedItem || listCols.length > 0) && !isList))
+    const dedent = relIndent >= 1 && relIndent <= 3 && (isHeading || isBlockquote || ((leftEmptyItem || reachesMovedItem || listCols.length > 0) && !isList))
     let body = dedent ? containerPad + line.slice(indent) : line
     // Strip an ATX heading's optional closing `#` run (Carve keeps it as text).
     if (isHeading) body = body.replace(/^([ \t]*#{1,6})[ \t]+/, '$1 ').replace(/[ \t]+#+[ \t]*$/, '')

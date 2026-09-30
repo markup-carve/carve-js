@@ -10849,7 +10849,8 @@ class ParseSession {
         : baseIndent + (mline.length - leadingWhitespace(mline) - markerContentLength)
       lexer.consume()
 
-      if (isContinuationMarker(content) && !attachesAtDocumentColumnZero(lexer)) {
+      if (isContinuationMarker(content) &&
+        (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || isItemAttachBoundary(lexer.peek()!))) {
         // The marker line is still consumed and contributes nothing; the item
         // carries an EMPTY lead from here, exactly as a comment on that line
         // would leave it. `contentCol` is already measured off the marker, so
