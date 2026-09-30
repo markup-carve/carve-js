@@ -3331,12 +3331,14 @@ function collectListInlineRun(
   lines: readonly string[],
   start: number,
   dialect: MarkdownDialect,
+  emptyMarker = false,
 ): {
   lines: string[]
   end: number
   verbatimFrom?: number
 } {
   const first = lines[start]!
+  if (emptyMarker) return { lines: [first], end: start + 1 }
   const marker = first.match(RE_LIST_MARKER)
   if (!marker) return { lines: [convertInline(first, dialect)], end: start + 1 }
   if (itemContentColumn(marker[0]) < columnWidth(marker[0]) && first.trim() !== marker[0].trim()) {
@@ -4346,6 +4348,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // lazy line can continue.
   let itemParagraph = false
   let emptyMarkerColumn: number | null = null
+  const emptyMarkerLines = new Set<number>()
   // The quote markers of a quote paragraph the last item line left open, or
   // null. A lazy line continues that paragraph.
   let itemQuote: { prefix: string; col: number } | null = null
@@ -4414,6 +4417,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       for (const content of listCols) if (content <= column) holder = content
       if (column - holder < 4 && (prevType !== 'text' || listMarkers.hasListAt(column))) {
         lines[i] = lines[i]!.trimEnd() + ' +'
+        emptyMarkerLines.add(i)
         if (lines[i + 1]?.trim() === '') emptyMarkerColumn = column
       }
     }
@@ -4692,7 +4696,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         // make that item loose.
         const next = lines[i + 1]
         const nextIndent = next === undefined ? 0 : indentColumns(next)
-        if (next !== undefined && next.trim() !== '' && !RE_LIST_MARKER.test(next) && !(nextIndent > 0 && nextIndent < fenceCol)) out.push('')
+        if (next !== undefined && next.trim() !== '' && !/^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t]|$)/.test(next) && !(nextIndent > 0 && nextIndent < fenceCol)) out.push('')
         prevType = 'code_fence'
       } else {
         out.push(dedented)
@@ -4759,13 +4763,15 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // out of the item.
     if (
       // After a quote too: a line its paragraph would take is already in it.
-      (wasPrevBlank || prevType === 'blank' || prevType === 'code' || prevType === 'heading' || prevType === 'block_quote' || afterFence || afterTable || leftItems) &&
+      (emptyMarkerLines.has(i - 1) || wasPrevBlank || prevType === 'blank' || prevType === 'code' || prevType === 'heading' || prevType === 'block_quote' || afterFence || afterTable || leftItems) &&
       trimmed !== '' &&
       // Measured on the line, as `relIndent` below is.
       indentColumns(line) - contentCol >= 4
     ) {
       const block = collectIndentedCode(lines, i, contentCol)
-      if (prevType !== 'blank' && out.length > 0) out.push('')
+      const sibling = /^([ \t]*)([-*+]|\d+[.)])(?=[ \t]|$)/.exec(lines[block.end] ?? '')
+      if (emptyMarkerLines.has(i - 1) && sibling && listMarkers.continues(columnWidth(sibling[1]!), sibling[2]!.slice(-1)) && block.lines.at(-1) === '') block.lines.pop()
+      if (prevType !== 'blank' && out.length > 0 && !emptyMarkerLines.has(i - 1)) out.push('')
       out.push(...block.lines)
       i = block.end - 1
       prevType = 'code_fence'
@@ -4881,11 +4887,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (prevType === 'list' && indent >= 1 && listCols.length > (isList ? 1 : 0)) {
       if (isList) {
         reportOrderedTask(line)
-        const run = collectListInlineRun(lines, i, dialect)
+        const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
         if (lazyQuote !== null && indentColumns(line) >= lazyQuote.col) out.push('')
         out.push(...writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end)).lines)
         shiftBy = 0
-        itemParagraph = leavesItemParagraph(run)
+        itemParagraph = !emptyMarkerLines.has(i) && leavesItemParagraph(run)
         itemQuote = leavesItemQuote(run)
         fenceItem = run.verbatimFrom !== undefined || endsInTable(run)
         i = run.end - 1
@@ -5012,9 +5018,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // by indentation, so no blank there (it would wrongly make the list loose).
     const isTopLevelList = isList && prevType !== 'list'
     const siblingMarker = /^([ \t]*)(?:([-*+])|\d+([.)]))(?=[ \t])/.exec(line)
-    const fenceSibling = prevType === 'code_fence' && siblingMarker !== null &&
+    const listSibling = siblingMarker !== null &&
       listMarkers.continues(columnWidth(siblingMarker[1]!), siblingMarker[2] ?? siblingMarker[3]!)
-    if (isTopLevelList && prevType !== 'blank' && !fenceSibling) out.push('')
+    if (isTopLevelList && prevType !== 'blank' && !listSibling) out.push('')
 
     // Carve recognizes `#` headings and `>` blockquotes at their container's
     // content column, but Markdown allows 1-3 further spaces of indent — dedent
@@ -5047,14 +5053,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (isList) {
       reportOrderedTask(line)
-      const run = collectListInlineRun(lines, i, dialect)
+      const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
       const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
       // A list under a quote an item holds is set apart from it, or Carve reads
       // the marker line as the quote's lazy continuation.
       if ((written.separate && prevType === 'list') || (lazyQuote !== null && indentColumns(line) >= lazyQuote.col)) out.push('')
       out.push(...written.lines)
       shiftBy = 0
-      itemParagraph = leavesItemParagraph(run)
+      itemParagraph = !emptyMarkerLines.has(i) && leavesItemParagraph(run)
       itemQuote = leavesItemQuote(run)
       fenceItem = run.verbatimFrom !== undefined || endsInTable(run)
       i = run.end - 1
