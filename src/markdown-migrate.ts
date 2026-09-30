@@ -4604,7 +4604,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const open = !inCode && indentColumns(line) - contentCol < 4 ? RE_MD_FENCE_LINE.exec(held) : null
     if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
       // A fence interrupts the paragraph of the item holding it.
-      if (prevType !== 'blank' && !(prevType === 'list' && contentCol > 0) && out.length > 0) out.push('')
+      if (prevType !== 'blank' && !(contentCol > 0 && (prevType === 'list' || prevType === 'block_quote')) && out.length > 0) out.push('')
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
@@ -4668,7 +4668,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         // make that item loose.
         const next = lines[i + 1]
         const nextIndent = next === undefined ? 0 : indentColumns(next)
-        if (next !== undefined && next.trim() !== '' && !(nextIndent > 0 && nextIndent < fenceCol)) out.push('')
+        if (next !== undefined && next.trim() !== '' && !RE_LIST_MARKER.test(next) && !(nextIndent > 0 && nextIndent < fenceCol)) out.push('')
         prevType = 'code_fence'
       } else {
         out.push(dedented)
@@ -4987,7 +4987,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // another list item is a sibling/nested item — Carve already handles both
     // by indentation, so no blank there (it would wrongly make the list loose).
     const isTopLevelList = isList && prevType !== 'list'
-    if (isTopLevelList && prevType !== 'blank') out.push('')
+    const siblingMarker = /^([ \t]*)(?:([-*+])|\d+([.)]))(?=[ \t])/.exec(line)
+    const fenceSibling = prevType === 'code_fence' && siblingMarker !== null &&
+      listMarkers.continues(columnWidth(siblingMarker[1]!), siblingMarker[2] ?? siblingMarker[3]!)
+    if (isTopLevelList && prevType !== 'blank' && !fenceSibling) out.push('')
 
     // Carve recognizes `#` headings and `>` blockquotes at their container's
     // content column, but Markdown allows 1-3 further spaces of indent — dedent
