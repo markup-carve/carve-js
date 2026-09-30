@@ -81,9 +81,9 @@ describe('a marker at an item content column opens a sublist', () => {
   })
 
   it('leaves a marker on a quote lazy continuation as text', () => {
-    // carve-js#1200, which is NOT overturned: the quote's open paragraph claims
-    // the line before the item's column does. The sublist arm is waived for the
-    // quote's own lazy loop precisely so this keeps answering the old way.
+    // Corpus category 448 keeps the marker in the quote's open paragraph.
+    // The ruling on carve-js#2422 supersedes #1200's contrary ruling;
+    // the item's content column does not open a sublist on this lazy line.
     expect(flat(carveToHtml('- > q\n  - s\ntail\n'))).toBe(
       '<ul> <li> <blockquote><p>q - s tail</p></blockquote> </li> </ul>',
     )
