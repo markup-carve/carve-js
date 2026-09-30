@@ -91,3 +91,7 @@ test.each([["Use `[a][]` here.\n\n[a]: /u", "<code>[a][]</code>"], ["See [Introd
 test.each([["a [b](u){title=\"[x][]\"} c\n\n[x]: /u", "title=\"[x][]\""], ["a <http://e.com/[x][]> c\n\n[x]: /u", "href=\"http://e.com/[x][]\""], ["# x\n\nNote [x]: see. Go to [x][].", "href=\"#x\""], ["a `b _c_ d", "<code>b _c_ d</code>"], ["- a\n\n  b _c\n- d_ e", "b _c"], ["- x\n\n  ```\n  a\n      ```\n\nlater _em_", "<em>em</em>"]])('keeps references and delimiter runs within their native contexts: %s', (source, expected) => {
   expect(carveToHtml(djotToCarve(source))).toContain(expected)
 })
+
+test.each([[" ```\ncode _b_\n```\n\nlater _em_", "code _b_"], [" ```\ncode _b_\n```\n\nlater _em_", "<em>em</em>"], ["![a *s*{#i} c](u)", "alt=\"a s c\""], ["![a _e_{#i} c](u)", "alt=\"a e c\""]])('preserves top-level fences and attributes in image alt text: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})

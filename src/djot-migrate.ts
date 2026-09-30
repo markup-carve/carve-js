@@ -354,7 +354,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
   for (const line of lines) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
   let fence: { ch: string; len: number; indent: number; container: number | null; depth: number } | null = null
   let previousBlock = true
-  const staged = lines.map((line) => {
+  const staged = lines.map((line, index) => {
     let content = line, depth = 0
     while (true) {
       const quote = /^[ \t]*>[ ]?/.exec(content)
@@ -371,7 +371,18 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     }
     const open = content.match(/^([ \t]*)(?:(:[ \t]+|[-*+][ \t]+|[0-9]+[.)][ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)[ \t]*$/)
     if (open && !(open[2]?.startsWith(':') && !previousBlock)) {
-      const container = open[2] ? open[1]!.length + open[2].length : open[1]!.length || null
+      let nested = false
+      if (!open[2] && open[1]!.length > 0) {
+        const quote = line.slice(0, line.length - content.length)
+        for (let previous = index - 1; previous >= 0; previous--) {
+          if (!lines[previous]!.startsWith(quote)) break
+          const candidate = lines[previous]!.slice(quote.length)
+          if (candidate.trim() === '' || /^[ \t]*/.exec(candidate)![0].length >= open[1]!.length) continue
+          nested = !/^(?:([*-])[ \t]*){3,}$/.test(candidate.trim()) && /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+\S/.test(candidate)
+          break
+        }
+      }
+      const container = open[2] ? open[1]!.length + open[2].length : nested ? open[1]!.length : null
       fence = { ch: open[3]![0]!, len: open[3]!.length, indent: open[2] ? container! : Math.max(3, open[1]!.length), container, depth }
       const start = line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
