@@ -95,3 +95,15 @@ test.each([["a [b](u){title=\"[x][]\"} c\n\n[x]: /u", "title=\"[x][]\""], ["a <h
 test.each([[" ```\ncode _b_\n```\n\nlater _em_", "code _b_"], [" ```\ncode _b_\n```\n\nlater _em_", "<em>em</em>"], ["![a *s*{#i} c](u)", "alt=\"a s c\""], ["![a _e_{#i} c](u)", "alt=\"a e c\""]])('preserves top-level fences and attributes in image alt text: %s', (source, expected) => {
   expect(carveToHtml(djotToCarve(source))).toContain(expected)
 })
+
+test.each([["Mr. Smith\n\n ```\ncode _b_\n```\n\nlater _em_", "code _b_"], ["Mr. Smith\n\n ```\ncode _b_\n```\n\nlater _em_", "<em>em</em>"], ["Dr. Brown\n\n ```\ncode _b_\n```\n\nlater _em_", "code _b_"], ["Dr. Brown\n\n ```\ncode _b_\n```\n\nlater _em_", "<em>em</em>"], ["Fig. 1\n\n ```\ncode _b_\n```\n\nlater _em_", "code _b_"], ["Fig. 1\n\n ```\ncode _b_\n```\n\nlater _em_", "<em>em</em>"], ["(ab) prose\n\n ```\ncode _b_\n```\n\nlater _em_", "code _b_"], ["(ab) prose\n\n ```\ncode _b_\n```\n\nlater _em_", "<em>em</em>"]])('keeps prose prefixes outside list containers: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})
+
+test.each([["- item\n\n  > quote\n\n  ```\n  code _b_\n\nlater _em_", "<em>em</em>"], ["> - item\n>\n>   > quote\n>\n>   ```\n>   code _b_\n>\n> later _em_", "<em>em</em>"]])('keeps parent list ancestry around a nested quote: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})
+
+test.each([["> - a\n\n>   ```\n> code _b_", "code _b_"], ["> > - a\n>\n> >   ```\n> > code _b_", "code _b_"]])('ends quote ancestry at a shallower blank line: %s', (source, expected) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(expected)
+})
