@@ -66,4 +66,17 @@ describe('definition collection follows verse ownership', () => {
     expect(values.every((value) => value === 'matched')).toBe(true)
   })
 
+  it('does not assign synthetic extension fragment lines to the document', () => {
+    const extension: CarveExtension = {
+      name: 'synthetic-verse',
+      matchBlock(lines, start, context) {
+        if (lines[start] !== '!wrap') return null
+        const node = context.parseBlocks('::: |\nx\n:::')[0]!
+        return { linesConsumed: 1, node }
+      },
+    }
+    const html = carveToHtml('!wrap\n[r]: /url\n\n::: |\nv\n:::\n\n[t][r]\n', { extensions: [extension] })
+    expect(html).toContain('href="/url"')
+  })
+
 })

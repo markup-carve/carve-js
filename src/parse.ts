@@ -9320,7 +9320,7 @@ class ParseSession {
     const open = lexer.consume()
     const m = RE_LINE_BLOCK_OPEN.exec(open)!
     const fence = m[1]!.length
-    if (this.definitionRegionLines) {
+    if (this.definitionRegionLines && !this.inMatcherRequest) {
       const body = collectLiteralColonFenceBody(lexer, {
         kind: 'line block', lineIndex: openLineIndex, fenceWidth: fence,
       })
