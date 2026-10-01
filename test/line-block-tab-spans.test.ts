@@ -9,6 +9,8 @@ function nodes(value: any): any[] {
 
 for (const source of [
   '::: |\na\tb\n:::\n',
+  '::: |\n😀 plain  gap\n\tshifted\nlast /word/\n:::\n',
+  '> ::: |\n> before\n> \t😀 middle\n> after  gap\n> :::\n',
   '::: |\nwide\t\tgap\n\tlead\n:::\n',
   '> ::: |\n> \t😀 *bold* and /italic/\n> :::\n',
   '- item\n\n  ::: |\n  \ttext\n  :::\n',
@@ -24,8 +26,11 @@ for (const source of [
       expect([...source].slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(node.value)
     }
     for (const node of all.filter((node) => node.type === 'non_breaking_space')) {
-      expect(node.pos).toBeUndefined()
+      if (node.pos) {
+        expect([...source].slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(' ')
+      }
     }
+    expect(all.some((node) => node.type === 'non_breaking_space' && !node.pos)).toBe(true)
   })
 }
 

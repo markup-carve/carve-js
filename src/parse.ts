@@ -3289,7 +3289,10 @@ function isAstralAt(line: string, i: number): boolean {
  * with a literal U+00A0 in the author's text and are converted per renderer
  * (HTML &nbsp;, Markdown U+00A0, plain/ANSI an ordinary space).
  */
-function expandLineBlockWhitespace(line: string, sourceOffsets: Array<number | undefined>): string {
+function expandLineBlockWhitespace(line: string, sourceOffsets?: Array<number | undefined>): string {
+  if (sourceOffsets === undefined) {
+    return line.replace(/(^ +| {2,})/g, (spaces) => '\0'.repeat(spaces.length))
+  }
   let out = ''
   let i = 0
   let column = 0
@@ -3300,14 +3303,17 @@ function expandLineBlockWhitespace(line: string, sourceOffsets: Array<number | u
       // A column counts CODEPOINTS, so a surrogate pair advances the tab stop
       // by one. The offsets stay per code unit: the caller indexes them with
       // UTF-16 positions and `toCodepointPositions` converts the result.
-      const units = isAstralAt(line, i) ? 2 : 1
-      for (let unit = 0; unit < units; unit++) {
-        sourceOffsets.push(i + unit)
-        out += line[i + unit]
-      }
+      const start = i
+      do {
+        const units = isAstralAt(line, i) ? 2 : 1
+        if (sourceOffsets) {
+          for (let unit = 0; unit < units; unit++) sourceOffsets.push(i + unit)
+        }
+        column++
+        i += units
+      } while (i < line.length && line[i] !== ' ' && line[i] !== '\t')
+      out += line.slice(start, i)
       seenContent = true
-      column++
-      i += units
       continue
     }
     const sourceStart = i
@@ -3321,7 +3327,7 @@ function expandLineBlockWhitespace(line: string, sourceOffsets: Array<number | u
     const rewritten = !seenContent || width >= 2 ? '\0'.repeat(width) : ' '
     const hasTab = line.slice(sourceStart, i).includes('\t')
     for (let column = 0; column < rewritten.length; column++) {
-      sourceOffsets.push(hasTab ? undefined : sourceStart + column)
+      sourceOffsets?.push(hasTab ? undefined : sourceStart + column)
     }
     out += rewritten
   }
@@ -9332,8 +9338,9 @@ class ParseSession {
     interface StanzaLine {
       text: string
       lineIndex: number
-      /** Source UTF-16 offset for each expanded character; absent for tab columns. */
-      sourceOffsets: Array<number | undefined>
+      /** Identity mapping unless tabs introduce generated columns. */
+      sourceOffsets: Array<number | undefined> | undefined
+      sourceLength: number
       aligned: boolean
       /**
        * The comment this line WAS, for a line the block layer emptied.
@@ -9374,16 +9381,17 @@ class ParseSession {
             endOffset: lexer.lineOffset(lineIndex) + ln.length,
           }
         }
-        stanza.push({ text: '', lineIndex, sourceOffsets: [], aligned: true, comment })
+        stanza.push({ text: '', lineIndex, sourceOffsets: undefined, sourceLength: 0, aligned: true, comment })
         continue
       }
-      const sourceOffsets: Array<number | undefined> = []
+      const sourceOffsets: Array<number | undefined> | undefined = ln.includes('\t') ? [] : undefined
       const expanded = expandLineBlockWhitespace(ln, sourceOffsets)
       stanza.push({
         text: dropTrailingSpaces(expanded),
         lineIndex,
         sourceOffsets,
-        aligned: !ln.includes('\t'),
+        sourceLength: ln.length,
+        aligned: sourceOffsets === undefined,
       })
     }
     if (stanza.length) stanzas.push(stanza)
@@ -9537,6 +9545,9 @@ class ParseSession {
       if (!anchorable) stripPositions(parsed)
       else if (!unchangedColumns || lines.some((line) => lexer.lineStartColumn(line.lineIndex) < 1)) {
         const byLine = new Map(lines.map((line) => [lexer.lineNumber(line.lineIndex), line]))
+        const sourceOffset = (line: StanzaLine | undefined, index: number): number | undefined =>
+          line?.sourceOffsets ? line.sourceOffsets[index]
+            : line && index >= 0 && index < line.sourceLength ? index : undefined
         const remapPosition = (node: { pos?: Position; type?: string }): void => {
           const pos = node.pos
           if (pos && typeof pos === 'object' && typeof pos.startLine === 'number' && typeof pos.endLine === 'number') {
@@ -9546,13 +9557,13 @@ class ParseSession {
               ? pos.startColumn - lexer.lineStartColumn(first.lineIndex) : -1
             const end = last && pos.endColumn !== undefined
               ? pos.endColumn - lexer.lineStartColumn(last.lineIndex) : -1
-            const sourceStart = first?.sourceOffsets[start]
+            const sourceStart = sourceOffset(first, start)
             const sourceLast = end === 0 && last
-              ? -1 : last?.sourceOffsets[end - 1]
+              ? -1 : sourceOffset(last, end - 1)
             const contiguousText = !('type' in node) || node.type !== 'text' || (first === last &&
               sourceStart !== undefined && sourceLast !== undefined &&
               sourceLast - sourceStart === end - start - 1 &&
-              first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined))
+              (first!.sourceOffsets === undefined || first!.sourceOffsets.slice(start, end).every((offset) => offset !== undefined)))
             if (!first || !last || sourceStart === undefined || sourceLast === undefined || !contiguousText ||
               lexer.lineStartColumn(first.lineIndex) + sourceStart < 1) {
               delete node.pos
