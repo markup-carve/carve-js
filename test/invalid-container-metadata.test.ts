@@ -77,3 +77,45 @@ it('does not block a formatting patch for a prose opener', () => {
   expect(patch.edits.length).toBeGreaterThan(0)
   expect(patch.unresolved).toEqual([])
 })
+
+it('migrates authored malformed metadata rather than its masked tokens', () => {
+  for (const metadata of ['"T" extra', '“T”', '{.x}']) {
+    const source = `::: tip ${metadata}\nbody\n:::\n`
+    const migrated = djotToCarve(source)
+    expect(migrated).toContain('\\::: tip')
+    expect(carveToHtml(migrated)).not.toContain('<aside')
+    expect(carveToHtml(migrated)).not.toContain('<div')
+    expect(carveToHtml(migrated)).toBe(`<p>::: tip${metadata === '{.x}' ? '' : ' ' + (metadata === '"T" extra' ? '“T” extra' : metadata)}\nbody\n:::</p>`)
+  }
+  const source = '::: tip Bad X\n\n::: note\nx\n:::\n:::\n'
+  expect(carveToHtml(djotToCarve(source))).toBe('<p>::: tip Bad X</p>\n<aside class="admonition note" aria-label="Note">\n  <p>x</p>\n</aside>\n<p>:::</p>')
+})
+
+it('diagnoses metadata on a footnote marker line and blocks its format patch', () => {
+  const source = 'a[^1]\n\n[^1]: ::: tip Bad X\n    body\n    :::\n'
+  const warnings = lintCarve(source).filter(w => w.rule === 'fence-title-syntax')
+  expect(warnings).toHaveLength(1)
+  expect(warnings[0]!.line).toBe(3)
+  expect(source.slice(warnings[0]!.start, warnings[0]!.end)).toBe('::: tip Bad X')
+  expect(carveToCarvePatch(source).unresolved[0]?.code).toBe('invalid-container-metadata')
+})
+
+it('counts line and hard-break fences inside rejected migrated containers', () => {
+  for (const opener of ['::: |', '::: \\']) {
+    const source = `::: tip Bad X
+${opener}
+l
+:::
+out
+:::
+`
+    const migrated = djotToCarve(source)
+    expect(migrated).toBe(`\\::: tip Bad X
+${opener}
+l
+:::
+out
+\\:::
+`)
+  }
+})

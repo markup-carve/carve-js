@@ -155,7 +155,7 @@ function convertDjotBlockMarkers(source: string): string {
     if ((masked[i] ?? '').trim() === '') continue
     const container = /^((?:(?:[ \t]*>)+[ \t]*)?[ \t]*)(:{3,}.*)$/.exec(masked[i]!)
     if (container) {
-      const content = container[2]!
+      const content = lines[i]!.slice(container[1]!.length)
       const width = colonFenceOpenerLen(content)
       const top = containers.at(-1)
       const close = /^:{3,}[ \t]*$/.test(content) && top?.width === width
