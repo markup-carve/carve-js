@@ -7768,7 +7768,7 @@ class ParseSession {
     // A LINE BLOCK is verse: a definition written inside one is text the author
     // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
     // closed on its own width so a wider `:::: |` is not closed by a narrower run.
-    let verse: { width: number; scope: PrepassScope; columns: number[] } | null = null
+    let verse: { width: number; scope: PrepassScope; columns: number[]; baseColumns: number[]; quoteState: BlockQuoteLazyState; fenceMemo: QuotedFenceCloserMemo } | null = null
     // A comment's body is OPAQUE. This pass did not know it, so a `[r]: /u`
     // written inside `%%%` registered and a reference elsewhere resolved against
     // text the author commented out - invisible in the output AND active in the
@@ -8209,12 +8209,31 @@ class ParseSession {
         }
       }
       if (verse !== null && !scopeHoldsLine(verse.scope, raw, rawQuoteDepth, unquoted)) {
-        verse = null
+        const savedPos = lexer.pos
+        lexer.pos = idx
+        const lazy = verse.scope.quoteDepth > 0 &&
+          rawQuoteDepth < verse.scope.quoteDepth &&
+          blockQuoteParagraphOpen(verse.quoteState) &&
+          !isBlankLine(raw) && !RE_CAPTION.test(raw) &&
+          !colonFenceShapeEndsLazyContinuation(raw) &&
+          !startsInterruptingBlock(lexer, raw, false)
+        lexer.pos = savedPos
+        if (!lazy) verse = null
       }
       if (verse !== null) {
-        const content = verseScopeContent(raw, verse.columns)
+        const content = verseScopeContent(raw, verse.columns) ?? verseScopeContent(raw, verse.baseColumns)
         const close = content === null ? null : RE_ADMONITION_CLOSE.exec(content)
         if (close && close[1]!.length === verse.width) verse = null
+        else if (verse.scope.quoteDepth > 0) {
+          const tracked = content ?? (rawQuoteDepth < verse.scope.quoteDepth ? raw : null)
+          if (tracked !== null) {
+            trackBlockQuoteLazyState(
+              tracked, verse.quoteState,
+              (fence) => quotedCommentHasCloser(lexer, fence, idx),
+              (marker, depth, column) => quotedFenceHasCloser(lexer, marker, idx, verse!.fenceMemo, depth, column),
+            )
+          }
+        }
         paraState = 'no'
         continue
       }
@@ -8223,22 +8242,32 @@ class ParseSession {
       let quoteContent = 0
       for (const entry of composed.peeled) {
         if (!entry.quote) continue
-        verseColumns.push(entry.marker - quoteContent)
+        verseColumns.push(indentColumns(raw.slice(quoteContent, entry.marker).replace(/[^ \t]/g, ' ')))
         quoteContent = entry.content
       }
-      verseColumns.push(composed.column - quoteContent)
+      verseColumns.push(deflistDef !== null ? contentCol : indentColumns(raw.slice(quoteContent, composed.column).replace(/[^ \t]/g, ' ')))
       const verseAtContentColumn =
         composed.column === quoteContent ||
-        composed.peeled.some((entry) => !entry.quote && !entry.folds) ||
-        openCols.some((entry, depth) => !entry.quote && depth < composed.depth && entry.col === composed.column) ||
-        (inFootnoteBody && composed.column >= FOOTNOTE_BODY_COLUMN) ||
+        (composed.peeled.at(-1)?.quote === false && composed.peeled.at(-1)?.folds === false) ||
+        (openCols[composed.depth - 1]?.quote === false && openCols[composed.depth - 1]!.col <= composed.column) ||
+        (inFootnoteBody && indentColumns(raw) >= FOOTNOTE_BODY_COLUMN) ||
         plusColumn === composed.column
+      const verseBaseColumns = verseColumns.slice()
+      const verseHost = openCols[composed.depth - 1]
+      if (verseHost?.quote === false) {
+        verseBaseColumns[verseBaseColumns.length - 1] = indentColumns(raw.slice(quoteContent, verseHost.col).replace(/[^ \t]/g, ' '))
+      } else if (inFootnoteBody && quoteContent === 0) {
+        verseBaseColumns[0] = FOOTNOTE_BODY_COLUMN
+      }
       const verseOpen = verseAtContentColumn ? RE_LINE_BLOCK_OPEN.exec(verseContent) : null
       if (verseOpen) {
         verse = {
           width: verseOpen[1]!.length,
           columns: verseColumns,
-          scope: { quoteDepth: rawQuoteDepth, contentCol: inFootnoteBody ? leadingWhitespace(unquoted) : contentCol },
+          baseColumns: verseBaseColumns,
+          quoteState: { mode: { kind: 'closed' }, inTable: false, attrRun: null, colonWidths: [] },
+          fenceMemo: new Map(),
+          scope: { quoteDepth: rawQuoteDepth, contentCol: inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol },
         }
         paraState = 'no'
         continue

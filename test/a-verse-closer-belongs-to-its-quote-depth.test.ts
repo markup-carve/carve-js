@@ -34,6 +34,45 @@ describe('a verse closer belongs to its quote depth', () => {
     })
   }
 
+  it('rejects indentation after a quote inside a list', () => {
+    expect(carveToHtml('- >   ::: |\n  >\n  > [r]: /target\n\n[t][r]\n')).toContain('[r]: /target')
+  })
+
+  it('keeps tab-indented footnote verse definitions literal', () => {
+    const html = carveToHtml('[^n]:\n\t::: |\n\t[r]: /hidden\n\t:::\n\n[t][r] [^n]\n')
+    expect(html).toContain('[r]: /hidden')
+    expect(html).not.toContain('href="/hidden"')
+  })
+
+  it('closes tab-indented description verse', () => {
+    expect(carveToHtml(':: term\n: \t::: |\n  verse\n  :::\n  [r]: /target\n\n[t][r]\n')).toContain('href="/target"')
+  })
+
+  it('keeps definitions in lazily continued quoted verse literal', () => {
+    const html = carveToHtml('> ::: |\n> verse\nlazy\n> [r]: /hidden\n> :::\n\n[t][r]\n')
+    expect(html).toContain('[r]: /hidden')
+    expect(html).not.toContain('href="/hidden"')
+  })
+
+  it('ends quoted verse when a code fence prevents lazy continuation', () => {
+    expect(carveToHtml('> ::: |\n> ```\n> verse\nlazy\n> [r]: /target\n\n[t][r]\n')).toContain('href="/target"')
+  })
+
+  for (const source of [
+    '- a\n\n    ::: |\n  [r]: /hidden\n    :::\n\n[t][r]\n',
+    '[^n]:\n    ::: |\n  [r]: /hidden\n    :::\n\n[t][r] [^n]\n',
+  ]) {
+    it('keeps below-base definitions inside rebased verse literal', () => {
+      const html = carveToHtml(source)
+      expect(html).toContain('[r]: /hidden')
+      expect(html).not.toContain('href="/hidden"')
+    })
+  }
+
+  it('closes rebased footnote verse at the body column', () => {
+    expect(carveToHtml('[^n]:\n    ::: |\n    verse\n  :::\n\n*[HTML]: Hyper Text\n\nHTML [^n]\n')).toContain('title="Hyper Text"')
+  })
+
   for (const prefix of ['', '> ', '> > ']) {
     it(`keeps a deeper quoted fence as verse text at depth ${prefix.length / 2}`, () => {
       const source = `${prefix}::: |\n${prefix}> :::\n${prefix}[r]: /hidden\n${prefix}::: \n\n[t][r]\n`
