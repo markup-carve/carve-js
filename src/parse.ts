@@ -5,6 +5,7 @@
  * over each block's text content. No backtracking.
  */
 
+import { expandLineBlockWhitespace, dropTrailingSpaces, verseSourceOffset, restoreVerseGaps } from './verse-whitespace.js'
 import { parseAttrs, isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue, isEmptyAttrs } from './attribute-parser.js'
 export { parseAttrs } from './attribute-parser.js'
 import type { LinkDef } from './inline-resolution.js'
@@ -3267,92 +3268,6 @@ function collectLiteralColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
   return lines
 }
 
-/** Whether UTF-16 index `i` opens a surrogate pair: one codepoint, two units. */
-function isAstralAt(line: string, i: number): boolean {
-  const high = line.charCodeAt(i)
-  if (high < 0xd800 || high > 0xdbff) return false
-  const low = line.charCodeAt(i + 1)
-  return low >= 0xdc00 && low <= 0xdfff
-}
-
-/**
- * Rewrites the whitespace a line block preserves to the U+E000 sentinel.
- *
- * Leading whitespace is always kept, down to a single column. An inner or
- * trailing run of TWO OR MORE columns is a medial gap - the inline alignment a
- * caesura or a column of aligned text is made of - and is kept too. A lone
- * inner space stays an ordinary collapsible space, so a long line can still
- * wrap between words.
- *
- * Use the internal non-breaking-space placeholder (U+E000) - the same
- * private-use sentinel as an escaped space - so preserved columns never collide
- * with a literal U+00A0 in the author's text and are converted per renderer
- * (HTML &nbsp;, Markdown U+00A0, plain/ANSI an ordinary space).
- */
-function expandLineBlockWhitespace(line: string, sourceOffsets?: Array<number | undefined>): string {
-  if (sourceOffsets === undefined) {
-    return line.replace(/(^ +| {2,})/g, (spaces) => '\0'.repeat(spaces.length))
-  }
-  let out = ''
-  let i = 0
-  let column = 0
-  let seenContent = false
-  while (i < line.length) {
-    const ch = line[i]
-    if (ch !== ' ' && ch !== '\t') {
-      // A column counts CODEPOINTS, so a surrogate pair advances the tab stop
-      // by one. The offsets stay per code unit: the caller indexes them with
-      // UTF-16 positions and `toCodepointPositions` converts the result.
-      const start = i
-      do {
-        const units = isAstralAt(line, i) ? 2 : 1
-        if (sourceOffsets) {
-          for (let unit = 0; unit < units; unit++) sourceOffsets.push(i + unit)
-        }
-        column++
-        i += units
-      } while (i < line.length && line[i] !== ' ' && line[i] !== '\t')
-      out += line.slice(start, i)
-      seenContent = true
-      continue
-    }
-    const sourceStart = i
-    let width = 0
-    while (i < line.length && (line[i] === ' ' || line[i] === '\t')) {
-      if (line[i] === '\t') width += 4 - ((column + width) % 4)
-      else width++
-      i++
-    }
-    column += width
-    const rewritten = !seenContent || width >= 2 ? '\0'.repeat(width) : ' '
-    const hasTab = line.slice(sourceStart, i).includes('\t')
-    for (let column = 0; column < rewritten.length; column++) {
-      sourceOffsets?.push(hasTab ? undefined : sourceStart + column)
-    }
-    out += rewritten
-  }
-
-  return out
-}
-
-/**
- * NO TRAILING WHITESPACE (PART 2; carve#926), applied to an expanded line.
- *
- * The MEDIAL GAPS rule in `expandLineBlockWhitespace` has already converted a
- * trailing run of TWO OR MORE columns into NBSP CONTENT, which this must not
- * touch - the sentinel is not a space any more. What is left is a ONE-COLUMN
- * trailing run, still an ordinary collapsible space, and that is the run this
- * drops. So `abc<SP><SP>` keeps two non-breaking spaces and `def<SP>` keeps
- * none.
- *
- * SPLIT OUT of the expansion so the caller can measure alignment against the
- * untrimmed form. Folded in, the drop made the expansion shorter than the
- * source line, an equal-length test read that as "the offsets no longer line
- * up", and one trailing space cost the whole stanza its positions.
- */
-function dropTrailingSpaces(line: string): string {
-  return line.replace(/ +$/, '')
-}
 
 function parseAbbrDef(lexer: Lexer): AbbreviationDef {
   const line = lexer.consume()
@@ -9459,15 +9374,7 @@ class ParseSession {
         this.inLineBlock = outerLineBlock
       }
       // Source NULs were replaced before block parsing; these are generated gaps.
-      const restoreVerbatimGaps = (value: unknown): void => {
-        if (!value || typeof value !== 'object') return
-        for (const [key, child] of Object.entries(value)) {
-          if (typeof child === 'string' && child.includes('\0')) {
-            (value as Record<string, unknown>)[key] = child.replace(/\0/g, '\u00a0')
-          } else restoreVerbatimGaps(child)
-        }
-      }
-      restoreVerbatimGaps(parsed)
+      restoreVerseGaps(parsed)
       if (terminalCommentGuard) {
         const removeGuard = (nodes: InlineNode[]): boolean => {
           for (let index = 0; index < nodes.length; index++) {
@@ -9545,9 +9452,6 @@ class ParseSession {
       if (!anchorable) stripPositions(parsed)
       else if (!unchangedColumns || lines.some((line) => lexer.lineStartColumn(line.lineIndex) < 1)) {
         const byLine = new Map(lines.map((line) => [lexer.lineNumber(line.lineIndex), line]))
-        const sourceOffset = (line: StanzaLine | undefined, index: number): number | undefined =>
-          line?.sourceOffsets ? line.sourceOffsets[index]
-            : line && index >= 0 && index < line.sourceLength ? index : undefined
         const remapPosition = (node: { pos?: Position; type?: string }): void => {
           const pos = node.pos
           if (pos && typeof pos === 'object' && typeof pos.startLine === 'number' && typeof pos.endLine === 'number') {
@@ -9557,9 +9461,9 @@ class ParseSession {
               ? pos.startColumn - lexer.lineStartColumn(first.lineIndex) : -1
             const end = last && pos.endColumn !== undefined
               ? pos.endColumn - lexer.lineStartColumn(last.lineIndex) : -1
-            const sourceStart = sourceOffset(first, start)
+            const sourceStart = verseSourceOffset(first, start)
             const sourceLast = end === 0 && last
-              ? -1 : sourceOffset(last, end - 1)
+              ? -1 : verseSourceOffset(last, end - 1)
             const contiguousText = !('type' in node) || node.type !== 'text' || (first === last &&
               sourceStart !== undefined && sourceLast !== undefined &&
               sourceLast - sourceStart === end - start - 1 &&
