@@ -15,6 +15,10 @@ is the same either way, and `allowRawHtml` does not change the count.
 `--strict-losses` therefore fails on a denied destination, and `--allow-loss`
 does not accept the code.
 
+The row's `message` is normative text: `Blanked a denied destination scheme` for
+a link or an autolink, `Blanked a denied image source` for an image. Nothing is
+appended to either, because the row already carries `target`.
+
 The one thing you must opt out of is raw passthrough. A ` ```=html ` block or
 `` `…`{=html} `` span is emitted **verbatim** into the HTML output by design, so
 anything you did not author needs:

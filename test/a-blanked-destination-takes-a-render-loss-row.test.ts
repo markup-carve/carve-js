@@ -171,7 +171,7 @@ describe('a blanked destination on the HTML fast path', () => {
     const result = carveToHtmlWithReport(PLAIN, mode)
     expect(codes(result.losses)).toEqual(['destination-denied'])
     expect(result.totalLosses).toBe(1)
-    expect(result.losses[0]?.message).toBe('Blanked a denied link destination while rendering html')
+    expect(result.losses[0]?.message).toBe('Blanked a denied destination scheme')
   })
 
   it('emits the same bytes it always did, checked or not', () => {
