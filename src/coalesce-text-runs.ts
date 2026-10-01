@@ -1,13 +1,11 @@
 import type { Document } from './ast.js'
 
-/**
- * Child-bearing fields, the same set the serializer walks.
- *
- * Kept local rather than imported so this pass does not depend on the
- * serializer: it exists to make the RUNTIME tree right, and the serializer is
- * only where the breach happened to be measured.
- */
-const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title', 'pairs', 'base', 'annotation']
+// Authored child fields, including runtime definition-list matrices.
+const CHILD_FIELDS = [
+  'children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption',
+  'shortCaption', 'title', 'pairs', 'base', 'annotation', 'prefix', 'locator',
+  'suffix', 'old', 'new', 'terms', 'definitions',
+]
 
 /**
  * Join adjacent `text` nodes everywhere in a resolved document (PART 12 §1a).
@@ -40,10 +38,17 @@ function visit(node: Record<string, unknown> | null | undefined): void {
   for (const field of CHILD_FIELDS) {
     const value = node[field]
     if (!Array.isArray(value)) continue
-    for (const child of value) visit(child as Record<string, unknown>)
-    const merged = mergeRun(value as Array<Record<string, unknown>>)
-    if (merged !== null) node[field] = merged
+    node[field] = visitList(value as unknown[])
   }
+  visit(node['target'] as Record<string, unknown> | undefined)
+}
+
+function visitList(nodes: unknown[]): unknown[] {
+  for (const [index, child] of nodes.entries()) {
+    if (Array.isArray(child)) nodes[index] = visitList(child as unknown[])
+    else visit(child as Record<string, unknown>)
+  }
+  return mergeRun(nodes as Array<Record<string, unknown>>) ?? nodes
 }
 
 /**
