@@ -62,9 +62,9 @@ describe('a colon opener label closes on a balanced bracket', () => {
 
   // THE SHAPE THAT STAYS PROSE. The unclosed run reaches the end of the line, so
   // there is no closer for the slot, and the line is the paragraph it looks like.
-  it('leaves a label holding an unclosed backtick run as prose', () => {
+  it('drops an invalid typed label and keeps an unrecognized typeless label as prose', () => {
     expect(html('::: note [a ` b]\nbody\n:::\n')).toBe(
-      '<p>::: note [a <code> b]\nbody\n:::</code></p>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>',
     )
     expect(html('::: [a ` b]\nbody\n:::\n')).toBe('<p>::: [a <code> b]\nbody\n:::</code></p>')
   })
@@ -73,9 +73,9 @@ describe('a colon opener label closes on a balanced bracket', () => {
   // end of the line leaves text behind it, and a run with no closer at all is not
   // a run: neither is a label, before or after.
   it.each([
-    ['trailing text after the run', '::: note [a] b]\nbody\n:::\n', '<p>::: note [a] b]\nbody\n:::</p>'],
-    ['no closer at all', '::: note [a\nbody\n:::\n', '<p>::: note [a\nbody\n:::</p>'],
-  ])('%s stays prose', (_name, source, expected) => {
+    ['trailing text after the run', '::: note [a] b]\nbody\n:::\n', '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>'],
+    ['no closer at all', '::: note [a\nbody\n:::\n', '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>'],
+  ])('%s drops metadata and keeps the container', (_name, source, expected) => {
     expect(html(source)).toBe(expected)
   })
 

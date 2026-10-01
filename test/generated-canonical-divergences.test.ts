@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml } from '../src/index.js'
 
 describe('generated canonical divergence regressions', () => {
-  it('keeps separated brace blocks as lazy paragraph text', () => {
+  it('keeps separated brace blocks inside a recovered container', () => {
     const source = '::: note {.cls} \\  a) y \n {.cls} {.cls}\n'
 
-    expect(carveToCarve(source)).toBe('::: note {.cls} \\  a) y\n{.cls} {.cls}\n')
+    expect(carveToCarve(source)).toBe('::: note\n{.cls} {.cls}\n:::\n')
   })
 
   it('still accepts padding after one block-attribute block', () => {
