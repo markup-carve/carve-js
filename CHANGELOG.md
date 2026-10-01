@@ -11,7 +11,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
-- Coalesce adjacent text in substitution arms, citation fields, definition-list terms and descriptions, figure targets, and short captions during resolution.
+- Coalesce adjacent text in substitution arms, citation fields, definition-list terms and descriptions, figure targets, and short captions during resolution (#2437).
 - `unattached-block-attribute` no longer advises deleting a footnote or description body that holds nothing but an attribute block. PART 11 §7d makes the report itself correct there, but a bare marker is not a marker, so deleting the line drops the `<dd>` and turns a footnote definition and its references into text. The message now points at the `{empty}` sentinel that `fmt` writes. Reported lines and columns are unchanged (#2412).
 - Reference boundaries are preserved and quote rendering checks are deterministic (#2411).
 
