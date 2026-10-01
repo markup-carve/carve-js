@@ -69,6 +69,11 @@ it('requires review before formatting drops metadata', () => {
 
 it('preserves rejected Djot opener text during migration', () => {
   const html = carveToHtml(djotToCarve('::: tip Custom Title\nbody\n:::\n'))
-  expect(html).toContain('Custom Title')
-  expect(html).not.toContain('admonition tip')
+  expect(html).toBe('<p>::: tip Custom Title\nbody\n:::</p>')
+})
+
+it('does not block a formatting patch for a prose opener', () => {
+  const patch = carveToCarvePatch('  ::: widget Bad\nx\n:::\n')
+  expect(patch.edits.length).toBeGreaterThan(0)
+  expect(patch.unresolved).toEqual([])
 })

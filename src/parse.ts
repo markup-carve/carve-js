@@ -3154,7 +3154,7 @@ function unclosedContainerFromOpener(lexer: Lexer, opener: ColonFenceOpener): Un
   }
 }
 
-function colonFenceOpenerLen(line: string): number | null {
+export function colonFenceOpenerLen(line: string): number | null {
   const m =
     RE_DIV_OPEN.exec(line) ??
     (RE_ADMONITION_CLOSE.test(line) ? null : RE_ADMONITION_OPEN.exec(line)) ??
