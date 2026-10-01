@@ -236,9 +236,9 @@ describe('lintCarve — fence opener title syntax', () => {
     expect(w[0]!.message).toContain('own line')
   })
 
-  it('keeps the generic warning for other broken fence lines', () => {
+  it('diagnoses an unterminated title while recovering the container', () => {
     const w = lintCarve('::: note "unterminated\nbody\n:::')
-    expect(w.map((x) => x.rule)).toEqual(['block-marker-as-text'])
+    expect(w.map((x) => x.rule)).toEqual(['fence-title-syntax'])
   })
 
   it('does not flag valid title and label forms', () => {

@@ -1,4 +1,4 @@
-import { parse } from './parse.js'
+import { parse, hasInvalidContainerMetadata } from './parse.js'
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords, readAttributes } from './djot-word-attributes.js'
@@ -152,6 +152,11 @@ function convertDjotBlockMarkers(source: string): string {
   }
   for (let i = 0; i < lines.length; i++) {
     if ((masked[i] ?? '').trim() === '') continue
+    const container = /^((?:(?:[ \t]*>)+[ \t]*)?[ \t]*)(:{3,}.*)$/.exec(masked[i]!)
+    if (container && hasInvalidContainerMetadata(container[2]!)) {
+      lines[i] = lines[i]!.slice(0, container[1]!.length) + '\\' + lines[i]!.slice(container[1]!.length)
+      continue
+    }
     const enclosed = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)
     if (enclosed) {
       const authored = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(lines[i]!)

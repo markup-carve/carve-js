@@ -92,10 +92,9 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('a typed opener followed by an unquoted word is not a fence (strict)', () => {
-    // Only a quoted title may follow the type; any other trailing text
-    // makes the line an ordinary paragraph (strict djot).
-    expect(h('::: note hello\nBody.\n:::')).toBe('<p>::: note hello\nBody.\n:::</p>')
+  it('a bare title is dropped while its container recovers', () => {
+    // Bare titles remain invalid metadata (carve#2693).
+    expect(h('::: note hello\nBody.\n:::')).toBe('<aside class="admonition note" aria-label="Note">\n  <p>Body.</p>\n</aside>')
   })
 
   it('renders no title element when the opener has only a type', () => {
@@ -104,8 +103,8 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('a trailing attribute block on the opener is not a fence (strict)', () => {
-    // No inline attributes on a ::: fence: the line is a paragraph. Covers
+  it('inline attributes are dropped while the container recovers', () => {
+    // Inline attributes remain invalid metadata. Covers
     // spaced, abutting, and post-title forms.
     for (const src of [
       '::: note {.x}',
@@ -114,9 +113,10 @@ describe('admonition title (§12)', () => {
       '::: hint {.x}',
     ]) {
       const html = h(`${src}\nBody.\n:::`)
-      expect(html.startsWith('<p>')).toBe(true)
-      expect(html).not.toContain('<aside')
-      expect(html).not.toContain('<div')
+      expect(html).not.toContain(':::')
+      expect(html).toContain('<p>Body.</p>')
+      expect(html).not.toContain('admonition-title')
+      expect(html).not.toContain('class="hint x"')
     }
   })
 

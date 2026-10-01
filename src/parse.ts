@@ -121,6 +121,8 @@ export interface ParseOptions {
    * intentionally not serialized into the AST.
    */
   onUnclosedContainer?: (container: UnclosedContainer) => void
+  /** Reports a recognized container whose malformed metadata was dropped. */
+  onInvalidContainerMetadata?: (container: UnclosedContainer) => void
   /**
    * Called for each block-attribute run that reached no block, because the
    * document or the container holding it ended first (PART 9 §15 A4). Like
@@ -388,10 +390,26 @@ function isContinuationMarker(line: string): boolean {
 }
 
 const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
-const RE_ADMONITION_OPEN = balancedLabelMatcher(
+const RE_VALID_ADMONITION_OPEN = balancedLabelMatcher(
   /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\n]*\]))?[ \t]*$/,
   [4],
 )
+// Invalid metadata does not erase a recognized container (carve#2693).
+const RE_CONTAINER_PREFIX = /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?=$|[\s\u0085"{\[“”])[^\r\n]*$/
+
+export function hasInvalidContainerMetadata(line: string): boolean {
+  return RE_VALID_ADMONITION_OPEN.exec(line) === null && RE_CONTAINER_PREFIX.test(line)
+}
+
+const RE_ADMONITION_OPEN = {
+  exec(line: string): RegExpExecArray | null {
+    return RE_VALID_ADMONITION_OPEN.exec(line) ?? RE_CONTAINER_PREFIX.exec(line)
+  },
+  test(line: string): boolean {
+    return this.exec(line) !== null
+  },
+}
+
 // The closer takes the OPENER's trailing run (`TRAILING_WS`), not `\s`. This is
 // the pair carve-js#805 names: carve-js#794 / carve-js#798 narrowed
 // `RE_ADMONITION_OPEN` above to `[ \t]*$` and left this one wide, so a mark that
@@ -1133,6 +1151,14 @@ class Lexer {
 
   lineNumber(lineIndex: number): number {
     return this.sourceLineMap?.[lineIndex] ?? this.lineNumberOffset + lineIndex + 1
+  }
+
+  reportInvalidContainerMetadata(container: UnclosedContainer): void {
+    if (!this.hasDocumentOffsets) return
+    const key = `invalid:${container.startOffset}:${container.endOffset}`
+    if (this.unclosedContainerKeys?.has(key)) return
+    this.unclosedContainerKeys?.add(key)
+    this.parseOptions.onInvalidContainerMetadata?.(container)
   }
 
   reportUnclosedContainer(container: UnclosedContainer): void {
@@ -7449,7 +7475,7 @@ class ParseSession {
       source,
       opts,
       0,
-      opts.onUnclosedContainer || opts.onDanglingBlockAttributes ? new Set<string>() : undefined,
+      opts.onUnclosedContainer || opts.onDanglingBlockAttributes || opts.onInvalidContainerMetadata ? new Set<string>() : undefined,
     )
     // POSITIONS STILL INDEX THE FILE, not the stripped text. Slicing the mark off
     // shifted every offset in the document by one codepoint, so a consumer that
@@ -7640,7 +7666,7 @@ class ParseSession {
     const before = lexer.lines.slice(priced.start, candidate).join('\n')
     const after = `${before}\n${lexer.lines[candidate]!}`
     const probe = (source: string): LazyProbeFrame => {
-      const { onUnclosedContainer: _ignored, ...callerOptions } = lexer.parseOptions
+      const { onUnclosedContainer: _ignored, onInvalidContainerMetadata: _invalidIgnored, ...callerOptions } = lexer.parseOptions
       const options: ParseOptions = { ...callerOptions, positions: false }
       const sub = new Lexer(source, options)
       sub.atDocumentLevel = true
@@ -9147,6 +9173,16 @@ class ParseSession {
     const m = RE_ADMONITION_OPEN.exec(open)!
     const fence = m[1]!.length
     const kind = m[2]!
+    const invalidMetadata = RE_VALID_ADMONITION_OPEN.exec(open) === null
+    if (invalidMetadata) {
+      const recovered = unclosedContainerFromOpener(lexer, {
+        kind: GENERATED_CONTENT_KINDS.has(kind) ? 'directive' : 'admonition',
+        lineIndex: openLineIndex,
+        fenceWidth: fence,
+      })
+      recovered.endOffset = recovered.startOffset + open.length
+      lexer.reportInvalidContainerMetadata(recovered)
+    }
     // PART 9 §4c: a BARE `::: figure` opener - kind only, no quoted title, no
     // `[label]` - is a composite figure group, not an admonition. An opener
     // carrying either piece of metadata does not match the figure production and
@@ -9155,7 +9191,7 @@ class ParseSession {
     // groups do not nest, which is what `inFigureGroup` carries through the
     // recursion.
     const isFigureGroup =
-      kind === 'figure' && m[3] === undefined && m[4] === undefined && !lexer.inFigureGroup
+      !invalidMetadata && kind === 'figure' && m[3] === undefined && m[4] === undefined && !lexer.inFigureGroup
     // The opener carries an optional quoted title only (grammar
     // quoted_title; PART 9 §12). The quotes delimit the title and are
     // stripped (not part of the rendered text); an explicitly empty `""`

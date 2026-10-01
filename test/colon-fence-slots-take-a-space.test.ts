@@ -80,11 +80,11 @@ describe('the admonition metadata slots are a literal space too', () => {
   ]
 
   for (const [label, opener] of tabbedRows) {
-    it(`a tab in the run leaves the line as prose: ${label}`, () => {
+    it(`a tab in the run drops metadata while the container recovers: ${label}`, () => {
       const out = carveToHtml(`${opener}\nx\n:::\n`)
 
-      expect(out).toContain(':::')
-      expect(out).not.toContain('<aside')
+      expect(out).not.toContain(':::')
+      expect(out).toContain('<aside')
       expect(out).not.toContain('admonition-title')
     })
   }
@@ -106,22 +106,22 @@ describe('the admonition metadata slots are a literal space too', () => {
     })
   }
 
-  it('a tab at both slots is prose, but it proves nothing on its own', () => {
+  it('tabs in both slots still drop all metadata', () => {
     // Kept for the shape, NOT as evidence: narrowing either slot alone already
     // rejects this line, so it would pass with the other slot still wrong.
     // The per-slot rows above are what discriminate; the count guard below is
     // what keeps a row from being deleted without anyone noticing.
-    expect(carveToHtml('::: note\t"T"\t[lbl]\nx\n:::\n')).not.toContain('<aside')
+    expect(carveToHtml('::: note\t"T"\t[lbl]\nx\n:::\n')).toContain('<aside')
   })
 
-  it('every tabbed row is checked, and none of them opens an admonition', () => {
+  it('every tabbed row is checked, and none retains metadata', () => {
     // A row silently dropped from the table would take its slot's coverage
     // with it and nothing else would fail.
     expect(tabbedRows).toHaveLength(7)
     expect(spacedRows).toHaveLength(5)
 
     const stillOpening = tabbedRows.filter(([, opener]) =>
-      carveToHtml(`${opener}\nx\n:::\n`).includes('<aside'),
+      carveToHtml(`${opener}\nx\n:::\n`).includes('admonition-title'),
     )
 
     expect(stillOpening).toStrictEqual([])

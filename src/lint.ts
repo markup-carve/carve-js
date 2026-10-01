@@ -315,6 +315,21 @@ function declaredVersion(source: string, doc: Document): { version: string; offs
   return { version: stamp.version, offset: at >= 0 ? at : 0 }
 }
 
+function recoveredContainerHint(line: string): string {
+  const prefix = 'Invalid container metadata was dropped; the container and its children are preserved. '
+  const match = /^(:{3,}) +([a-zA-Z0-9_][\w-]*)[ \t]+(.+?)[ \t]*$/.exec(line)
+  if (!match) return prefix + 'Use a straight-double-quoted title or a bracketed label; put attributes on their own line above the opener.'
+  const [, fence, kind, tail] = match
+  const labeled = /^(.*?)[ \t]+(\[[^\]\n]*\])$/.exec(tail!)
+  const title = labeled ? labeled[1]! : tail!
+  const label = labeled ? ` ${labeled[2]}` : ''
+  if (title.startsWith('{')) return prefix + 'Put attributes on their own line above the opener.'
+  const curly = /^[“”](.*)[“”]$/.exec(title)
+  if (curly) return prefix + `A smart quote filter may have changed the source. Use straight quotes: ${fence} ${kind} "${curly[1]}"${label}.`
+  if (!title.startsWith('"') && !title.startsWith('[')) return prefix + `Did you mean ${fence} ${kind} "${title}"${label}?`
+  return prefix + 'Use a complete straight-double-quoted title or bracketed label.'
+}
+
 export function lintCarve(
   source: string,
   opts: {
@@ -348,10 +363,12 @@ export function lintCarve(
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
+  const invalidContainerMetadata: UnclosedContainer[] = []
   const danglingBlockAttributes: DanglingBlockAttributes[] = []
   const doc = parse(source, {
     positions: true,
     onUnclosedContainer: (container) => unclosedContainers.push(container),
+    onInvalidContainerMetadata: (container) => invalidContainerMetadata.push(container),
     onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
   })
   // The AST carries codepoint positions over line-ending-normalized text; a
@@ -415,6 +432,17 @@ export function lintCarve(
       column++
     }
     i += width
+  }
+
+  for (const container of invalidContainerMetadata) {
+    out.push({
+      line: container.line,
+      column: container.column,
+      rule: 'fence-title-syntax',
+      message: recoveredContainerHint(source.slice(container.startOffset, container.endOffset)),
+      start: container.startOffset,
+      end: container.endOffset,
+    })
   }
 
   for (const container of unclosedContainers) {

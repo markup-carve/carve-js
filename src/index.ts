@@ -876,7 +876,14 @@ export function carveToCarvePatch(
   source: string,
   opts: ParseOptions & CarveRenderOptions & CheckedRenderOptions = {},
 ): SourcePatch {
-  const result = carveToCarveWithReport(source, opts)
+  let recoveredMetadata = false
+  const result = carveToCarveWithReport(source, {
+    ...opts,
+    onInvalidContainerMetadata: (container) => {
+      recoveredMetadata = true
+      opts.onInvalidContainerMetadata?.(container)
+    },
+  })
   const patch = createSourcePatch(source, result.value, 'formatting', 'canonical-format')
   if (result.totalLosses > 0) {
     patch.edits = []
@@ -887,6 +894,14 @@ export function carveToCarvePatch(
       kind: 'formatting',
       code: 'format-loss',
       message: `Canonical formatting reports ${result.totalLosses} rendering loss${result.totalLosses === 1 ? '' : 'es'}; review the proposed source.`,
+    }]
+  }
+  if (recoveredMetadata && patch.edits.length > 0) {
+    patch.edits = []
+    patch.unresolved = [{
+      start: 0, end: patch.sourceBytes, replacement: result.value,
+      kind: 'formatting', code: 'invalid-container-metadata',
+      message: 'Canonical formatting drops invalid container metadata; review the proposed source.',
     }]
   }
   return patch

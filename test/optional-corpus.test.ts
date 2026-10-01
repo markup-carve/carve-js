@@ -63,6 +63,15 @@ const targets: Record<string, { extension: string; render: Render }> = {
  * configures is a divergence nothing would report.
  */
 const featureRunners: Record<string, (source: string, render: Render) => string> = {
+  'fenced-render-mermaid': (source, render) => render(source, { extensions: [lib.mermaid()] }),
+  'fenced-render-d2': (source, render) => render(source, { extensions: [lib.d2()] }),
+  'fenced-render-graphviz': (source, render) => render(source, { extensions: [lib.graphviz()] }),
+  'fenced-render-wavedrom': (source, render) => render(source, { extensions: [lib.wavedrom()] }),
+  'fenced-render-abc': (source, render) => render(source, { extensions: [lib.abc()] }),
+  'fenced-render-plantuml': (source, render) => render(source, { extensions: [lib.plantuml()] }),
+  'fenced-render-vega-lite': (source, render) => render(source, { extensions: [lib.vegaLite()] }),
+  'fenced-render-chart': (source, render) => render(source, { extensions: [lib.chart()] }),
+  'math-block': (source, render) => render(source, { extensions: [lib.mathBlock()] }),
   'list-table': (source, render) => render(source, { extensions: [listTable()] }),
   'list-table-columns-1344': (source, render) => render(source, { extensions: [listTable()] }),
   'list-table-local-headers-1248': (source, render) => render(source, { extensions: [listTable()] }),
