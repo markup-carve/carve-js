@@ -1735,6 +1735,21 @@ interface PrepassScope {
   contentCol: number
 }
 
+function verseScopeContent(raw: string, columns: number[]): string | null {
+  let view = raw
+  for (let depth = 0; depth < columns.length; depth++) {
+    const col = columns[depth]!
+    if (indentColumns(view) !== col) return null
+    view = sliceColumns(view, col)
+    if (depth < columns.length - 1) {
+      if (view === '>') view = ''
+      else if (view.startsWith('> ')) view = view.slice(2)
+      else return null
+    }
+  }
+  return view
+}
+
 /**
  * Is `line` a colon fence the BLOCK PARSER really opens?
  *
@@ -7753,7 +7768,7 @@ class ParseSession {
     // A LINE BLOCK is verse: a definition written inside one is text the author
     // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
     // closed on its own width so a wider `:::: |` is not closed by a narrower run.
-    let verse: { width: number; scope: PrepassScope } | null = null
+    let verse: { width: number; scope: PrepassScope; columns: number[] } | null = null
     // A comment's body is OPAQUE. This pass did not know it, so a `[r]: /u`
     // written inside `%%%` registered and a reference elsewhere resolved against
     // text the author commented out - invisible in the output AND active in the
@@ -8197,16 +8212,33 @@ class ParseSession {
         verse = null
       }
       if (verse !== null) {
-        const close = line.trim().match(/^(:{3,})$/)
-        if (close && close[1]!.length >= verse.width) verse = null
+        const content = verseScopeContent(raw, verse.columns)
+        const close = content === null ? null : RE_ADMONITION_CLOSE.exec(content)
+        if (close && close[1]!.length === verse.width) verse = null
         paraState = 'no'
         continue
       }
-      const verseOpen = line.trim().match(/^(:{3,})[ \t]*\|$/)
+      const verseContent = raw.slice(composed.column)
+      const verseColumns: number[] = []
+      let quoteContent = 0
+      for (const entry of composed.peeled) {
+        if (!entry.quote) continue
+        verseColumns.push(entry.marker - quoteContent)
+        quoteContent = entry.content
+      }
+      verseColumns.push(composed.column - quoteContent)
+      const verseAtContentColumn =
+        composed.column === quoteContent ||
+        composed.peeled.some((entry) => !entry.quote && !entry.folds) ||
+        openCols.some((entry, depth) => !entry.quote && depth < composed.depth && entry.col === composed.column) ||
+        (inFootnoteBody && composed.column >= FOOTNOTE_BODY_COLUMN) ||
+        plusColumn === composed.column
+      const verseOpen = verseAtContentColumn ? RE_LINE_BLOCK_OPEN.exec(verseContent) : null
       if (verseOpen) {
         verse = {
           width: verseOpen[1]!.length,
-          scope: { quoteDepth: rawQuoteDepth, contentCol },
+          columns: verseColumns,
+          scope: { quoteDepth: rawQuoteDepth, contentCol: inFootnoteBody ? leadingWhitespace(unquoted) : contentCol },
         }
         paraState = 'no'
         continue
