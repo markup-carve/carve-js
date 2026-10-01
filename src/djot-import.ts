@@ -153,7 +153,14 @@ function convertDjotBlockMarkers(source: string): string {
   }
   for (let i = 0; i < lines.length; i++) {
     if ((masked[i] ?? '').trim() === '') continue
-    const container = /^((?:(?:[ \t]*>)+[ \t]*)?[ \t]*)(:{3,}.*)$/.exec(masked[i]!)
+    let view = lines[i]!
+    const prefix = /^(?:[ \t]*> ?|[ \t]*(?:(?:[-*+]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-zA-Z])[.)]|\([0-9A-Za-z]+\)) +(?:\[[ xX]\] +)?|: |\[\^[^\]\r\n]+\]: +))/
+    let host: RegExpExecArray | null
+    while ((host = prefix.exec(view))) view = view.slice(host[0].length)
+    view = view.replace(/^[ \t]+/, '')
+    const containerOffset = lines[i]!.length - view.length
+    const container = view.startsWith(':::') && masked[i]!.slice(containerOffset).startsWith(':::')
+      ? [view, lines[i]!.slice(0, containerOffset), view] : null
     if (container) {
       const content = lines[i]!.slice(container[1]!.length)
       const width = colonFenceOpenerLen(content)
@@ -163,7 +170,6 @@ function convertDjotBlockMarkers(source: string): string {
       if (!close && width !== null) containers.push({ width, invalid })
       if (invalid) {
         lines[i] = lines[i]!.slice(0, container[1]!.length) + '\\' + lines[i]!.slice(container[1]!.length)
-        continue
       }
     }
     const enclosed = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)

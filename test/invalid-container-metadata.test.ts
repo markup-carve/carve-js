@@ -119,3 +119,16 @@ out
 `)
   }
 })
+
+it('preserves literal fence text after list and footnote markers during migration', () => {
+  for (const [prefix, bodyIndent, migratedPrefix] of [
+    ['- ', '  ', '- '], ['1. ', '   ', '1. '], ['+ ', '  ', '- '], ['(1) ', '    ', '1. '],
+    ['- [x] ', '  ', '- [x] '], ['[^1]: ', '    ', '[^1]: '],
+  ]) {
+    const before = prefix === '[^1]: ' ? 'a[^1]\n\n' : ''
+    const source = `${before}${prefix}::: tip Bad X\n${bodyIndent}body\n${bodyIndent}:::\n`
+    const expected = `${before}${migratedPrefix}\\::: tip Bad X\n${bodyIndent}body\n${bodyIndent}\\:::\n`
+    expect(carveToHtml(djotToCarve(source))).toBe(carveToHtml(expected))
+    expect(carveToHtml(djotToCarve(source))).not.toContain('<aside')
+  }
+})
