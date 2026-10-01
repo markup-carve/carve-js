@@ -1735,6 +1735,22 @@ interface PrepassScope {
   contentCol: number
 }
 
+function verseScopeContent(raw: string, columns: number[], exact = true): string | null {
+  let view = raw
+  for (let depth = 0; depth < columns.length; depth++) {
+    const col = columns[depth]!
+    const indent = indentColumns(view)
+    if (depth < columns.length - 1 || exact ? indent !== col : indent < col) return null
+    view = sliceColumns(view, col)
+    if (depth < columns.length - 1) {
+      if (view === '>') view = ''
+      else if (view.startsWith('> ')) view = view.slice(2)
+      else return null
+    }
+  }
+  return view
+}
+
 /**
  * Is `line` a colon fence the BLOCK PARSER really opens?
  *
@@ -7753,7 +7769,7 @@ class ParseSession {
     // A LINE BLOCK is verse: a definition written inside one is text the author
     // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
     // closed on its own width so a wider `:::: |` is not closed by a narrower run.
-    let verse: { width: number; scope: PrepassScope } | null = null
+    let verse: { width: number; scope: PrepassScope; columns: number[]; baseColumns: number[]; quoteState: BlockQuoteLazyState; fenceMemo: QuotedFenceCloserMemo } | null = null
     // A comment's body is OPAQUE. This pass did not know it, so a `[r]: /u`
     // written inside `%%%` registered and a reference elsewhere resolved against
     // text the author commented out - invisible in the output AND active in the
@@ -8194,19 +8210,66 @@ class ParseSession {
         }
       }
       if (verse !== null && !scopeHoldsLine(verse.scope, raw, rawQuoteDepth, unquoted)) {
-        verse = null
+        const lazyContent = verseScopeContent(raw, verse.baseColumns.slice(0, rawQuoteDepth + 1), false) ?? raw
+        const savedPos = lexer.pos
+        lexer.pos = idx
+        const lazy = verse.scope.quoteDepth > 0 &&
+          rawQuoteDepth < verse.scope.quoteDepth &&
+          blockQuoteParagraphOpen(verse.quoteState) &&
+          !isBlankLine(lazyContent) && !RE_CAPTION.test(lazyContent) &&
+          !colonFenceShapeEndsLazyContinuation(lazyContent) &&
+          !startsInterruptingBlock(lexer, lazyContent, false)
+        lexer.pos = savedPos
+        if (!lazy) verse = null
       }
       if (verse !== null) {
-        const close = line.trim().match(/^(:{3,})$/)
-        if (close && close[1]!.length >= verse.width) verse = null
+        const content = verseScopeContent(raw, verse.columns) ?? verseScopeContent(raw, verse.baseColumns)
+        const close = content === null ? null : RE_ADMONITION_CLOSE.exec(content)
+        if (close && close[1]!.length === verse.width) verse = null
+        else if (verse.scope.quoteDepth > 0) {
+          const tracked = verseScopeContent(raw, verse.baseColumns.slice(0, Math.min(rawQuoteDepth + 1, verse.baseColumns.length)), false)
+          if (tracked !== null) {
+            trackBlockQuoteLazyState(
+              tracked, verse.quoteState,
+              (fence) => quotedCommentHasCloser(lexer, fence, idx),
+              (marker, depth, column) => quotedFenceHasCloser(lexer, marker, idx, verse!.fenceMemo, depth, column),
+            )
+          }
+        }
         paraState = 'no'
         continue
       }
-      const verseOpen = line.trim().match(/^(:{3,})[ \t]*\|$/)
+      const verseContent = raw.slice(composed.column)
+      const verseColumns: number[] = []
+      let quoteContent = 0
+      for (const entry of composed.peeled) {
+        if (!entry.quote) continue
+        verseColumns.push(indentColumns(raw.slice(quoteContent, entry.marker).replace(/[^ \t]/g, ' ')))
+        quoteContent = entry.content
+      }
+      verseColumns.push(deflistDef !== null ? contentCol : indentColumns(raw.slice(quoteContent, composed.column).replace(/[^ \t]/g, ' ')))
+      const verseAtContentColumn =
+        composed.column === quoteContent ||
+        (composed.peeled.at(-1)?.quote === false && composed.peeled.at(-1)?.folds === false) ||
+        (openCols[composed.depth - 1]?.quote === false && openCols[composed.depth - 1]!.col <= composed.column) ||
+        (inFootnoteBody && indentColumns(raw) >= FOOTNOTE_BODY_COLUMN) ||
+        plusColumn === composed.column
+      const verseBaseColumns = verseColumns.slice()
+      const verseHost = openCols[composed.depth - 1]
+      if (verseHost?.quote === false) {
+        verseBaseColumns[verseBaseColumns.length - 1] = indentColumns(raw.slice(quoteContent, verseHost.col).replace(/[^ \t]/g, ' '))
+      } else if (inFootnoteBody && contentCol === 0 && quoteContent === 0 && !composed.peeled.some((entry) => !entry.quote)) {
+        verseBaseColumns[0] = FOOTNOTE_BODY_COLUMN
+      }
+      const verseOpen = verseAtContentColumn ? RE_LINE_BLOCK_OPEN.exec(verseContent) : null
       if (verseOpen) {
         verse = {
           width: verseOpen[1]!.length,
-          scope: { quoteDepth: rawQuoteDepth, contentCol },
+          columns: verseColumns,
+          baseColumns: verseBaseColumns,
+          quoteState: { mode: { kind: 'closed' }, inTable: false, attrRun: null, colonWidths: [] },
+          fenceMemo: new Map(),
+          scope: { quoteDepth: rawQuoteDepth, contentCol: inFootnoteBody && contentCol === 0 ? FOOTNOTE_BODY_COLUMN : contentCol },
         }
         paraState = 'no'
         continue
