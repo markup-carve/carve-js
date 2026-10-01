@@ -79,4 +79,12 @@ describe('definition collection follows verse ownership', () => {
     expect(html).toContain('href="/url"')
   })
 
+  it('ends a comment at an indented closer inside verse', () => {
+    expect(carveToHtml("::: |\n%%%\n:::\n  %%%\nkept\n:::\n\n[r]: /url\n\n[t][r]\n")).toBe("<div class=\"line-block\">\n  <p><br>\n:::<br>\n&nbsp;&nbsp;%%%<br>\nkept</p>\n</div>\n<p><a href=\"/url\">t</a></p>")
+  })
+
+  it('ends a comment at an indented closer inside a div', () => {
+    expect(carveToHtml("::: container\n%%%\n:::\n  %%%\nkept\n:::\n\n[r]: /url\n\n[t][r]\n")).toBe("<div class=\"container\">\n  <p>kept</p>\n</div>\n<p><a href=\"/url\">t</a></p>")
+  })
+
 })

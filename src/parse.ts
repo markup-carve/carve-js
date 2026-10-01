@@ -3188,7 +3188,7 @@ function consumeOpaqueColonFenceBodySpan(
     while (!lexer.eof()) {
       const innerLineIndex = lexer.pos
       const innerText = lexer.peek()!
-      const commentClose = RE_COMMENT_BLOCK.exec(innerText)
+      const commentClose = RE_COMMENT_BLOCK_ANY.exec(innerText)
       lexer.consume()
       lines.push({ text: innerText, lineIndex: innerLineIndex })
       if (commentClose !== null && commentClose[1]!.length === fence) break
