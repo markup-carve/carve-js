@@ -3165,7 +3165,7 @@ function consumeOpaqueColonFenceBodySpan(
     // asked only when a paragraph was open, so the rule held for a fence that
     // interrupted prose and lapsed for one that opened a body - which is why
     // the `paragraphOpen` argument is gone.
-    if (!startsInterruptingBlock(lexer)) return false
+    if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) || !fenceHasCloser(lexer, marker)) return false
     const closeRe = fenceCloseRe(marker)
     const isCodeFence = codeOpen !== null
     lexer.consume()
@@ -3188,7 +3188,7 @@ function consumeOpaqueColonFenceBodySpan(
     while (!lexer.eof()) {
       const innerLineIndex = lexer.pos
       const innerText = lexer.peek()!
-      const commentClose = RE_COMMENT_BLOCK.exec(innerText)
+      const commentClose = RE_COMMENT_BLOCK_ANY.exec(innerText)
       lexer.consume()
       lines.push({ text: innerText, lineIndex: innerLineIndex })
       if (commentClose !== null && commentClose[1]!.length === fence) break
@@ -7506,6 +7506,7 @@ class ParseSession {
   // start another probe (a matcher may recursively call ctx.parseBlocks too).
   private probingLazyParagraph = false
   private definitionRegionLines: Set<number> | null = null
+  private inMatcherRequest = false
 
   parse(source: string, opts: ParseOptions = {}): Document {
     this.newlineIndexCache.clear()
@@ -7581,10 +7582,20 @@ class ParseSession {
     const session = this
     return {
       get inLinkLabel() { return session.linkLabelDepth > 0 },
-      parseInlines: (t) => this.parseInline(t, lexer.abbrDefs, lexer.linkDefs),
-      parseBlocks: (s) => this.parseBlockSource(s, opts, lexer),
+      parseInlines: (t) => this.withMatcherRequest(() => this.parseInline(t, lexer.abbrDefs, lexer.linkDefs)),
+      parseBlocks: (s) => this.withMatcherRequest(() => this.parseBlockSource(s, opts, lexer)),
       linkDefs: lexer.linkDefs,
       abbrDefs: lexer.abbrDefs,
+    }
+  }
+
+  private withMatcherRequest<T>(parse: () => T): T {
+    const previous = this.inMatcherRequest
+    this.inMatcherRequest = true
+    try {
+      return parse()
+    } finally {
+      this.inMatcherRequest = previous
     }
   }
 
@@ -7666,7 +7677,7 @@ class ParseSession {
   // registration order. Returns the first match whose end advances past pos.
   private tryInlineMatchers(text: string, pos: number): InlineMatch | null {
     const ctx = this.activeMatcherCtx
-    if (!ctx) return null
+    if (!ctx || (this.definitionRegionLines && !this.inMatcherRequest)) return null
     for (const ext of this.activeMatchers) {
       if (!ext.matchInline) continue
       const res = ext.matchInline(text, pos, ctx)
@@ -7739,6 +7750,8 @@ class ParseSession {
     const parser = new ParseSession()
     parser.probingLazyParagraph = true
     parser.definitionRegionLines = new Set()
+    // Core inline callbacks do not participate in source-line ownership.
+    // Explicit matcher context requests still use the complete matcher set.
     parser.activeMatchers = this.activeMatchers
     const probe = new Lexer(lexer.lines)
     probe.pos = lexer.pos
@@ -9307,7 +9320,7 @@ class ParseSession {
     const open = lexer.consume()
     const m = RE_LINE_BLOCK_OPEN.exec(open)!
     const fence = m[1]!.length
-    if (this.definitionRegionLines) {
+    if (this.definitionRegionLines && !this.inMatcherRequest) {
       const body = collectLiteralColonFenceBody(lexer, {
         kind: 'line block', lineIndex: openLineIndex, fenceWidth: fence,
       })
