@@ -67,7 +67,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
     throw new Error('fencedRender requires at least one non-empty language word')
   }
   const mode: FencedRenderContentMode = opts.contentMode ?? 'text'
-  const cssClass = opts.cssClass ?? languages[0]
+  const cssClass = opts.cssClass ?? languages[0]!
   const tag = opts.tag ?? (mode === 'json' ? 'div' : 'pre')
   const figureClass = opts.figureClass ?? `${cssClass}-figure`
   const label = opts.label ?? cssClass

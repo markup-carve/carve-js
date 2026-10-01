@@ -80,7 +80,7 @@ function stripKeys(attrs: Attrs | undefined, keys: string[]): Attrs | undefined 
 // HTML/SVG). Attributes only the root has are preserved.
 function mergeIntoRoot(svg: string, attrStr: string): string {
   if (attrStr === '') return svg
-  const fenceNames = [...attrStr.matchAll(/\s([A-Za-z_:][\w:.-]*)\s*=/g)].map((mm) => mm[1].toLowerCase())
+  const fenceNames = [...attrStr.matchAll(/\s([A-Za-z_:][\w:.-]*)\s*=/g)].map((mm) => mm[1]!.toLowerCase())
   // Match the root tag quote-aware so a `>` inside a quoted attribute value
   // (e.g. aria-label="1>2") is not mistaken for the tag's end.
   return svg.replace(/^<svg((?:"[^"]*"|'[^']*'|[^>])*?)(\/?)>/i, (_full, rootAttrs: string, slash: string) => {
@@ -101,7 +101,7 @@ function mergeIntoRoot(svg: string, attrStr: string): string {
 function svgTitle(svg: string): string | undefined {
   const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(svg)
   if (!m) return undefined
-  const text = m[1]
+  const text = m[1]!
     .replace(/<[^>]*>/g, '')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')

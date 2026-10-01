@@ -801,7 +801,7 @@ function convertQuotes(text: string): string {
       continue
     }
 
-    contents[top] += text[i]
+    contents[top] = contents[top]! + text.charAt(i)
     i++
   }
 

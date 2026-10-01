@@ -1,3 +1,4 @@
+import { ALL_OWNED_CHILD_FIELDS, OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './owned-child-fields.js'
 /*
  * Structural diff over the PART 12 AST.
  *
@@ -71,13 +72,8 @@ interface Node {
  */
 const IGNORED = new Set(['pos', 'srcByteLength', 'lines'])
 
-/**
- * Fields whose value is a list of child nodes, in the order a walk should
- * follow. Kept as a list rather than "any array of objects with a type",
- * because a definition list's `items` is an array of records without `type`,
- * while a citation group's `items` is an array of citation nodes.
- */
-const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title', 'pairs', 'base', 'annotation']
+/** Schema child lists in document order, including record-valued slots. */
+const CHILD_FIELDS = OWNED_CHILD_FIELDS
 
 function isNode(value: unknown): value is Node {
   return (
@@ -142,8 +138,12 @@ function childrenOf(node: Node): { field: string; nodes: Node[] }[] {
       }
     })
   }
-  for (const field of CHILD_FIELDS) {
+  for (const field of ALL_OWNED_CHILD_FIELDS) {
     const value = node[field]
+    if (isNode(value)) {
+      out.push({ field, nodes: [value] })
+      continue
+    }
     if (!Array.isArray(value)) continue
     // A partially-node array (a definition list's `items`) is skipped rather
     // than half-walked: reporting a path into it would name a position the
@@ -152,8 +152,7 @@ function childrenOf(node: Node): { field: string; nodes: Node[] }[] {
     const nodes = mergeText(value.filter(isNode))
     if (nodes.length > 0) out.push({ field, nodes })
   }
-  // `target` is a single child, not a list (a figure's captioned block).
-  if (isNode(node['target'])) out.push({ field: 'target', nodes: [node['target']] })
+
   return out
 }
 
@@ -163,7 +162,7 @@ function scalars(node: Node): [string, unknown][] {
     .filter(([key, value]) => {
       if (IGNORED.has(key) || key === 'type') return false
       if (CHILD_FIELDS.includes(key) && Array.isArray(value)) return false
-      if (key === 'target' && isNode(value)) return false
+      if (OWNED_SINGLE_CHILD_FIELDS.includes(key) && isNode(value)) return false
       return true
     })
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

@@ -564,7 +564,7 @@ const A_BLOCK_ATTRIBUTES_LINE = /^\{.*\}$/
  * Does the written form of a block OPEN with a block-attributes line?
  */
 function opensWithAnAttributeLine(rendered: string): boolean {
-  return A_BLOCK_ATTRIBUTES_LINE.test(rendered.split('\n', 1)[0])
+  return A_BLOCK_ATTRIBUTES_LINE.test(rendered.split('\n', 1)[0]!)
 }
 
 function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
@@ -4457,12 +4457,12 @@ class CarveRenderSession {
   }
 
   private lineBlockLayoutWhitespace(body: string): string {
-    return body.replace(new RegExp(`(?:^${this.sentinels[3]}+)|${this.sentinels[3]}{2,}`, 'gm'), (run) => this.sentinels[0].repeat(run.length))
+    return body.replace(new RegExp(`(?:^${this.sentinels[3]}+)|${this.sentinels[3]}{2,}`, 'gm'), (run) => this.sentinels[0]!.repeat(run.length))
   }
 
   private normalize(text: string): string {
     const lines = trimNonNbspKeepingGuard(
-      text.replace(new RegExp(`${this.sentinels[3]}(?=[ \t]*(?:\n|$))`, 'g'), '\u00a0').replace(new RegExp(this.sentinels[3], 'g'), '\\ '),
+      text.replace(new RegExp(`${this.sentinels[3]}(?=[ \t]*(?:\n|$))`, 'g'), '\u00a0').replace(new RegExp(this.sentinels[3]!, 'g'), '\\ '),
     ).split('\n')
     const swept = lines.map((line) => {
       // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
@@ -4516,7 +4516,9 @@ class CarveRenderSession {
    * run extend the scheme.
    */
   private protectVerbatim(content: string): string {
-    const [sp, tab, blank] = this.sentinels
+    const sp = this.sentinels[0]!
+    const tab = this.sentinels[1]!
+    const blank = this.sentinels[2]!
 
     return content
       // An authored U+E000 inside verbatim content is the CHARACTER, not an
@@ -4543,9 +4545,9 @@ class CarveRenderSession {
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
           dropTrailingWs(prefix),
         )
-        .replace(new RegExp(this.sentinels[0], 'g'), ' ')
-        .replace(new RegExp(this.sentinels[1], 'g'), '\t')
-        .replace(new RegExp(this.sentinels[2], 'g'), '')
+        .replace(new RegExp(this.sentinels[0]!, 'g'), ' ')
+        .replace(new RegExp(this.sentinels[1]!, 'g'), '\t')
+        .replace(new RegExp(this.sentinels[2]!, 'g'), '')
         // Back to the character itself - see protectVerbatim.
     )
   }

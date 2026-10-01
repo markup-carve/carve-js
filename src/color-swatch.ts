@@ -192,23 +192,24 @@ function contrastText(value: string): '#000' | '#fff' | null {
 function isFullyTransparentHex(value: string): boolean {
   const hex = /^#([0-9a-fA-F]{4}|[0-9a-fA-F]{8})$/.exec(value)
   if (!hex) return false
-  const alpha = hex[1].length === 4 ? hex[1][3] : hex[1].slice(6, 8)
+  const digits = hex[1]!
+  const alpha = digits.length === 4 ? digits.slice(3) : digits.slice(6, 8)
   return /^0+$/.test(alpha)
 }
 
 function parseIntegerRgb(value: string): [number, number, number] | null {
   const hex = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(value)
   if (hex) {
-    const h = hex[1]
+    const h = hex[1]!
     if (h.length === 3 || h.length === 4) {
-      return [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)]
+      return [parseInt(h.charAt(0).repeat(2), 16), parseInt(h.charAt(1).repeat(2), 16), parseInt(h.charAt(2).repeat(2), 16)]
     }
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
   }
 
   const rgb = /^rgba?\((.*)\)$/.exec(value)
   if (!rgb) return null
-  const tokens = rgb[1].trim().split(/[\s,/]+/).filter(Boolean)
+  const tokens = rgb[1]!.trim().split(/[\s,/]+/).filter(Boolean)
   if (tokens.length < 3) return null
   const channels = tokens.slice(0, 3)
   if (!channels.every((t) => /^[+-]?\d+$/.test(t))) return null
