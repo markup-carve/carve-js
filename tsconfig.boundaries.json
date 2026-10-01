@@ -33,6 +33,9 @@
     "src/conversion-diagnostics.ts",
     "src/deny-listed-destination.ts",
     "src/reference-state.ts",
-    "src/verbatim-payload.ts"
+    "src/verbatim-payload.ts",
+    "src/source-patch.ts",
+    "src/coalesce-text-runs.ts",
+    "src/carve-escape.ts"
   ]
 }
