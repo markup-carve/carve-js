@@ -1735,11 +1735,12 @@ interface PrepassScope {
   contentCol: number
 }
 
-function verseScopeContent(raw: string, columns: number[]): string | null {
+function verseScopeContent(raw: string, columns: number[], exact = true): string | null {
   let view = raw
   for (let depth = 0; depth < columns.length; depth++) {
     const col = columns[depth]!
-    if (indentColumns(view) !== col) return null
+    const indent = indentColumns(view)
+    if (depth < columns.length - 1 || exact ? indent !== col : indent < col) return null
     view = sliceColumns(view, col)
     if (depth < columns.length - 1) {
       if (view === '>') view = ''
@@ -8209,14 +8210,15 @@ class ParseSession {
         }
       }
       if (verse !== null && !scopeHoldsLine(verse.scope, raw, rawQuoteDepth, unquoted)) {
+        const lazyContent = verseScopeContent(raw, verse.baseColumns.slice(0, rawQuoteDepth + 1), false) ?? raw
         const savedPos = lexer.pos
         lexer.pos = idx
         const lazy = verse.scope.quoteDepth > 0 &&
           rawQuoteDepth < verse.scope.quoteDepth &&
           blockQuoteParagraphOpen(verse.quoteState) &&
-          !isBlankLine(raw) && !RE_CAPTION.test(raw) &&
-          !colonFenceShapeEndsLazyContinuation(raw) &&
-          !startsInterruptingBlock(lexer, raw, false)
+          !isBlankLine(lazyContent) && !RE_CAPTION.test(lazyContent) &&
+          !colonFenceShapeEndsLazyContinuation(lazyContent) &&
+          !startsInterruptingBlock(lexer, lazyContent, false)
         lexer.pos = savedPos
         if (!lazy) verse = null
       }
@@ -8225,7 +8227,7 @@ class ParseSession {
         const close = content === null ? null : RE_ADMONITION_CLOSE.exec(content)
         if (close && close[1]!.length === verse.width) verse = null
         else if (verse.scope.quoteDepth > 0) {
-          const tracked = content ?? (rawQuoteDepth < verse.scope.quoteDepth ? raw : null)
+          const tracked = verseScopeContent(raw, verse.baseColumns.slice(0, Math.min(rawQuoteDepth + 1, verse.baseColumns.length)), false)
           if (tracked !== null) {
             trackBlockQuoteLazyState(
               tracked, verse.quoteState,

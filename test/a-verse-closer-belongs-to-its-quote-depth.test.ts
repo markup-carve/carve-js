@@ -73,6 +73,17 @@ describe('a verse closer belongs to its quote depth', () => {
     expect(carveToHtml('[^n]:\n    ::: |\n    verse\n  :::\n\n*[HTML]: Hyper Text\n\nHTML [^n]\n')).toContain('title="Hyper Text"')
   })
 
+  for (const source of [
+    '> ::: |\n>   indented verse\nlazy\n> [r]: /hidden\n> :::\n\n[t][r]\n',
+    '> > ::: |\n> > verse\n> lazy\n> > [r]: /hidden\n> > :::\n\n[t][r]\n',
+  ]) {
+    it('tracks indented and partly marked lazy verse lines', () => {
+      const html = carveToHtml(source)
+      expect(html).toContain('[r]: /hidden')
+      expect(html).not.toContain('href="/hidden"')
+    })
+  }
+
   for (const prefix of ['', '> ', '> > ']) {
     it(`keeps a deeper quoted fence as verse text at depth ${prefix.length / 2}`, () => {
       const source = `${prefix}::: |\n${prefix}> :::\n${prefix}[r]: /hidden\n${prefix}::: \n\n[t][r]\n`
