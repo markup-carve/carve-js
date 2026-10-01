@@ -1,3 +1,4 @@
+import { ALL_OWNED_CHILD_FIELDS } from './owned-child-fields.js'
 import type { AstJsonDocument } from './ast-json.js'
 import { NODE_POSITION_KIND } from './wire-fields.js'
 
@@ -14,7 +15,7 @@ export class AstSidecarError extends TypeError {
   constructor(message: string) { super(message); this.name = 'AstSidecarError' }
 }
 
-const ANNOTATION_CHILD_FIELDS = ['target', 'title', 'children', 'items', 'rows', 'cells', 'blocks', 'inline', 'content', 'prefix', 'locator', 'suffix', 'old', 'new', 'pairs', 'base', 'annotation', 'caption', 'shortCaption', 'fallback'] as const
+const ANNOTATION_CHILD_FIELDS = ALL_OWNED_CHILD_FIELDS
 
 type RecordValue = Record<string, unknown>
 const record = (value: unknown): value is RecordValue => !!value && typeof value === 'object' && !Array.isArray(value)

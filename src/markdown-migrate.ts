@@ -2100,8 +2100,8 @@ function nestedItemsOnLine(
       col: columnWidth(line.slice(0, at + m[1]!.length)),
       content: columnWidth(line.slice(0, at + m[0].length)),
       kind: m[2] ?? m[4]!,
-      bullet: m[2],
-      number: m[3],
+      ...(m[2] === undefined ? {} : { bullet: m[2] }),
+      ...(m[3] === undefined ? {} : { number: m[3] }),
       marker: at + m[1]!.length,
       end: at + m[0].length,
     })

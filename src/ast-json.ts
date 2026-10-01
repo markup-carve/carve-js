@@ -1,3 +1,4 @@
+import { OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './owned-child-fields.js'
 /**
  * Serialize a parsed document to the PART 12 exchange shape.
  *
@@ -95,14 +96,8 @@ export interface AstJsonDocument {
   srcByteLength: number
 }
 
-/**
- * Fields that hold child nodes, in the order a walk should follow them.
- *
- * Listed rather than discovered, because a definition list's `items` holds
- * records in the runtime tree. Citation items are nodes and carry inline arrays
- * that the serializer visits separately.
- */
-const CHILD_FIELDS = ['children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title', 'pairs', 'base', 'annotation'] as const
+/** Schema child slots include node arrays, matrices, and runtime records. */
+const CHILD_FIELDS = OWNED_CHILD_FIELDS
 const ingestedLineBlockChildren = new WeakMap<object, string>()
 
 function rememberIngestedLineBlocks(root: Document): void {
@@ -119,7 +114,7 @@ function rememberIngestedLineBlocks(root: Document): void {
       ingestedLineBlockChildren.set(record, JSON.stringify(record['children']))
     }
     for (const field of CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
-    if (record['target'] !== undefined) stack.push(record['target'])
+    for (const field of OWNED_SINGLE_CHILD_FIELDS) if (record[field] !== undefined) stack.push(record[field])
   }
 }
 
@@ -247,10 +242,11 @@ function definitionListsToWire<T>(node: T): T {
     out = { ...(out ?? record), lines }
   }
 
-  const target = (out ?? record)['target']
-  if (target !== undefined) {
-    const mapped = definitionListsToWire(target)
-    if (mapped !== target) out = { ...(out ?? record), target: mapped }
+  for (const field of OWNED_SINGLE_CHILD_FIELDS) {
+    const child = (out ?? record)[field]
+    if (child === undefined) continue
+    const mapped = definitionListsToWire(child)
+    if (mapped !== child) out = { ...(out ?? record), [field]: mapped }
   }
 
   // A resolved crossref carries the target heading's inline content for the
@@ -318,11 +314,8 @@ function definitionListsFromWire<T>(node: T): T {
     const entries = record['items'].every(isRuntimeEntry)
       ? (record['items'] as DefinitionItem[])
       : entriesFromWire(record['items'])
-    // A runtime entry is a RECORD, not a node, and `definitions` is not a
-    // CHILD_FIELD - so the generic walk below cannot reach a definition list
-    // nested inside a description. Returning here without this left that inner
-    // list in its wire shape, and `promoteIngestedBlockImages` then read
-    // `entry.definitions` off a `definition_description` (carve-js#1616).
+    // Runtime entries use record fields rather than wire node fields.
+    // Decode their descriptions explicitly before returning this branch.
     // `terms` gets the pass too, for the INLINE rewrites below rather than for a
     // nested list: no definition list can appear in a term, but a footnote
     // reference can, and skipping the pass left `label` unmapped to `id` there
@@ -343,7 +336,9 @@ function definitionListsFromWire<T>(node: T): T {
   for (const field of CHILD_FIELDS) {
     if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
   }
-  if (record['target'] !== undefined) record['target'] = definitionListsFromWire(record['target'])
+  for (const field of OWNED_SINGLE_CHILD_FIELDS) {
+    if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
+  }
 
   // The wire spells a footnote reference's target `label`; the runtime carries
   // it as `id` (PART 12 §25). `id` on the wire is REFUSED rather than accepted
@@ -1339,7 +1334,7 @@ export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 3 + 32
 const MAX_AST_JSON_WALK = MAX_AST_JSON_DEPTH * 2 + 32
 
 /** The child-bearing fields, `target` included, each named exactly once. */
-const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, 'target'])]
+const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, ...OWNED_SINGLE_CHILD_FIELDS])]
 
 /**
  * Node depth of a payload, measured with an EXPLICIT STACK.

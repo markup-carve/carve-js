@@ -8,7 +8,7 @@ import config from '../eslint.config.mjs'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const boundaryFiles = JSON.parse(readFileSync(join(root, 'tsconfig.boundaries.json'), 'utf8')).include
 const lintFiles = config.flatMap((entry) => entry.files ?? [])
-assert.deepEqual([...lintFiles].sort(), [...boundaryFiles].sort(), 'Typed lint and indexed-access scopes must match')
+assert.deepEqual(boundaryFiles, ['src/**/*.ts'], 'Indexed-access checking covers production source')
 const command = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts.lint
 for (const file of lintFiles) assert.ok(command.split(' ').includes(file), `Lint command omits ${file}`)
 const result = spawnSync(process.execPath, [

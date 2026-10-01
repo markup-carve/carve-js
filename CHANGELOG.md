@@ -9,6 +9,11 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+
+- Share schema child slots across AST conversion, diffs, sidecars, and text coalescing. Diffs report edits inside substitution arms, citation fields, short captions, and extension fallbacks at their child paths. AST depth checks cover singleton children.
+- Keep literal verse definitions consistent through lazy list continuations and attached opaque spans.
+
 ## [0.1.10] - 2026-10-01
 
 ### Breaking

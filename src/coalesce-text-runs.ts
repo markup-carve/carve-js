@@ -1,11 +1,5 @@
+import { ownedChildFields } from './owned-child-fields.js'
 import type { Document } from './ast.js'
-
-// Authored child fields, including runtime definition-list matrices.
-const CHILD_FIELDS = [
-  'children', 'blocks', 'items', 'rows', 'cells', 'inline', 'content', 'caption',
-  'shortCaption', 'title', 'pairs', 'base', 'annotation', 'prefix', 'locator',
-  'suffix', 'old', 'new', 'terms', 'definitions',
-]
 
 /**
  * Join adjacent `text` nodes everywhere in a resolved document (PART 12 §1a).
@@ -27,6 +21,7 @@ const CHILD_FIELDS = [
  */
 export function coalesceTextRuns(doc: Document): Document {
   visit(doc as unknown as Record<string, unknown>)
+  for (const block of doc.trailerBlocks ?? []) visit(block as unknown as Record<string, unknown>)
   for (const blocks of Object.values(doc.footnoteDefs ?? {})) {
     for (const block of blocks) visit(block as unknown as Record<string, unknown>)
   }
@@ -35,12 +30,11 @@ export function coalesceTextRuns(doc: Document): Document {
 
 function visit(node: Record<string, unknown> | null | undefined): void {
   if (!node || typeof node !== 'object') return
-  for (const field of CHILD_FIELDS) {
+  for (const field of ownedChildFields(node)) {
     const value = node[field]
-    if (!Array.isArray(value)) continue
-    node[field] = visitList(value as unknown[])
+    if (Array.isArray(value)) node[field] = visitList(value as unknown[])
+    else visit(value as Record<string, unknown> | undefined)
   }
-  visit(node['target'] as Record<string, unknown> | undefined)
 }
 
 function visitList(nodes: unknown[]): unknown[] {

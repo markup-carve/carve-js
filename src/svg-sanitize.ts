@@ -111,7 +111,7 @@ function schemeIsSafe(url: string): boolean {
   const probe = url.replace(SCHEME_STRIP_RE, '')
   const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
   if (!m) return true // relative / fragment — safe
-  return !DANGEROUS_URL_SCHEMES.has(m[1].toLowerCase())
+  return !DANGEROUS_URL_SCHEMES.has(m[1]!.toLowerCase())
 }
 
 // Decode CSS escapes (`\72` → `r`, `\/` → `/`) so an escaped `url(` / `expression(`
@@ -255,7 +255,7 @@ function parseAttrs(raw: string): ParsedAttr[] {
   ATTR_RE.lastIndex = 0
   while ((m = ATTR_RE.exec(raw)) !== null) {
     const value = m[3] ?? m[4] ?? (m[2] !== undefined ? m[2] : null)
-    out.push({ name: m[1], value })
+    out.push({ name: m[1]!, value })
   }
   return out
 }

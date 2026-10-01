@@ -3144,7 +3144,7 @@ class Importer {
         }
       }
       if (invented) {
-        this.report.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`, tr[r])
+        this.report.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
       }
       const built: TableRow = { type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) }
       const source = tr[r]
@@ -3731,7 +3731,7 @@ class Importer {
     if (!target || target.type !== 'paragraph') return target
     const children = (target as Paragraph).children
     if ((target as Paragraph).attrs || children.length !== 1) return target
-    const only = children[0]
+    const only = children[0]!
     return only.type === 'image' ? (only as unknown as BlockNode) : target
   }
 

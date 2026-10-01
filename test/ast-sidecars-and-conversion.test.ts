@@ -9,6 +9,17 @@ import {
 const ast = () => toAstJson(parse('one\n\ntwo', { positions: true }))
 
 describe('AST sidecars', () => {
+  it('visits replacement and ruby content in authored order', () => {
+    const tree = { type: 'document', children: [{ type: 'paragraph', children: [
+      { type: 'substitution', old: [{ type: 'text', value: 'old' }], new: [{ type: 'text', value: 'new' }] },
+      { type: 'ruby', pairs: [{ base: [{ type: 'text', value: 'base' }], annotation: [{ type: 'text', value: 'reading' }] }] },
+    ] }] } as never
+    const paths = astNodePaths(tree)
+    expect(paths.indexOf('/children/0/children/0/old/0')).toBeLessThan(paths.indexOf('/children/0/children/0/new/0'))
+    expect(paths.indexOf('/children/0/children/1/pairs/0/base/0')).toBeLessThan(paths.indexOf('/children/0/children/1/pairs/0/annotation/0'))
+    expect(paths).toContain('/children/0/children/1/pairs/0/base/0')
+  })
+
   it('binds ephemeral identities to this AST and refuses unknown versions or paths', () => {
     const tree = ast()
     const sidecar = toNodeIdentity(tree, 'session-a')

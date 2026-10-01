@@ -118,3 +118,12 @@ describe('reporting', () => {
     expect(formatChanges(changes)).toContain(`${changes.length} structural change`)
   })
 })
+
+it('reports short-caption edits at their text child path', () => {
+  const tree = (value: string) => ({ type: 'document', srcByteLength: 0, children: [
+    { type: 'table', rows: [], shortCaption: [{ type: 'text', value }] },
+  ] }) as Parameters<typeof diffAst>[0]
+  expect(diffAst(tree('before'), tree('after'))).toMatchObject([
+    { kind: 'changed', type: 'text', path: '/children[0]/shortCaption[0]' },
+  ])
+})
