@@ -6,7 +6,10 @@ function isAstralAt(line: string, i: number): boolean {
   return low >= 0xdc00 && low <= 0xdfff
 }
 
-/** Preserve verse gaps with NUL placeholders, recording generated tab columns. */
+/**
+ * Preserve verse gaps with NUL placeholders, recording generated tab columns.
+ * Callers must pass an offsets array for any line containing a tab.
+ */
 export function expandLineBlockWhitespace(line: string, sourceOffsets?: Array<number | undefined>): string {
   if (sourceOffsets === undefined) {
     return line.replace(/(^ +| {2,})/g, (spaces) => '\0'.repeat(spaces.length))
@@ -51,7 +54,7 @@ export function expandLineBlockWhitespace(line: string, sourceOffsets?: Array<nu
   return out
 }
 
-/** Drop a lone trailing space after wider gaps have become placeholders. */
+/** Trim after expansion so alignment checks can use the untrimmed length. */
 export function dropTrailingSpaces(line: string): string {
   return line.replace(/ +$/, '')
 }
