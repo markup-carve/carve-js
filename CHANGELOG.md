@@ -15,7 +15,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Canonical Carve output preserves parentheses and backslashes in denied URL
   schemes. Presentation targets retain destination filtering and loss reports
   (markup-carve/carve#2685).
-- Match verse openers and closers to the block parser during reference-definition collection, keeping quoted, list-marked, indented, and wider literal fences as text.
+- Match verse openers and closers to the block parser during reference-definition collection, keeping quoted, list-marked, indented, and wider literal fences as text (#2439).
 - `unattached-block-attribute` no longer advises deleting a footnote or description body that holds nothing but an attribute block. PART 11 §7d makes the report itself correct there, but a bare marker is not a marker, so deleting the line drops the `<dd>` and turns a footnote definition and its references into text. The message now points at the `{empty}` sentinel that `fmt` writes. Reported lines and columns are unchanged (#2412).
 - Reference boundaries are preserved and quote rendering checks are deterministic (#2411).
 
