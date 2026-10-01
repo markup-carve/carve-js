@@ -1851,12 +1851,9 @@ function escapeDestinationEscapes(text: string): string {
 }
 
 function escapeDestination(text: string): string {
-  const scheme = /^[\u0000-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(text)?.[1]?.toLowerCase()
-  const sanitizeBlank = scheme !== undefined && ['javascript', 'vbscript', 'data', 'file'].includes(scheme)
   const escaped = escapeDestinationEscapes(text)
   return escaped
     .replace(/\p{White_Space}/gu, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
-    .replace(/\\?[()]/g, (m) => (sanitizeBlank ? (m.endsWith('(') ? '%28' : '%29') : m))
 }
 
 function escapeQuoted(text: string): string {
