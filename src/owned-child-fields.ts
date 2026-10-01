@@ -33,7 +33,7 @@ for (const slot of Object.keys(NODE_POSITION_KIND)) {
   fields.push(slot.slice(dot + 1))
   fieldsByType.set(type, inDocumentOrder(fields))
 }
-const recordFields: readonly string[] = ['terms', 'definitions', 'base', 'annotation']
+const recordFields: readonly string[] = ['terms', 'definitions', ...fieldsByType.get('rubyPair') ?? []]
 
 /** Runtime records own matrices and ruby lists; typed nodes use schema slots. */
 export function ownedChildFields(node: Readonly<Record<string, unknown>>): readonly string[] {

@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 describe('definition collection follows verse ownership', () => {
+  it('registers a definition after a closed verse in a list item', () => {
+    const html = carveToHtml('- ::: |\n  verse\n  :::\n\n  [r]: /target\n\n[t][r]\n')
+    expect(html).toContain('href="/target"')
+  })
+
   it('keeps definitions literal after a lazy list continuation', () => {
     const html = carveToHtml('- ::: |\n  verse\nlazy\n  [r]: /hidden\n  :::\n\n[t][r]\n')
     expect(html).toContain('[r]: /hidden')

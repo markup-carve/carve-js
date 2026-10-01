@@ -3,81 +3,79 @@
   "environment": {
     "date": "2026-10-01",
     "architecture": "x86_64",
-    "node": "22.22.2",
-    "php": "8.5.11",
-    "rustc": "1.97.1"
+    "node": "22.22.2"
   },
   "before": [
     {
       "name": "quoted_fences",
       "n": 128,
       "bytes": 918,
-      "median_ms": 1.9171739999999886,
-      "min_ms": 1.2174660000000017,
+      "median_ms": 1.6383939999999768,
+      "min_ms": 1.1556560000000218,
       "hash": "0c024836f358f9f678817e1847bdca8d866b9b2bafbc3494845125a4c5598b24"
     },
     {
       "name": "verse_definitions",
       "n": 128,
       "bytes": 1942,
-      "median_ms": 4.2434410000000184,
-      "min_ms": 2.8607140000000015,
+      "median_ms": 2.8704060000000027,
+      "min_ms": 2.522784999999999,
       "hash": "0fb0c54dd3ca83aa0165a0efd24737170750fc92cfc3d62bba85bd31e411a0b0"
     },
     {
       "name": "paragraphs",
       "n": 128,
       "bytes": 2176,
-      "median_ms": 0.4584250000000054,
-      "min_ms": 0.32772800000000757,
+      "median_ms": 0.318365,
+      "min_ms": 0.2320410000000095,
       "hash": "45b73087d7f7cbdd329607259c3bae009d5260457260fe402170f4de141dbab2"
     },
     {
       "name": "quoted_fences",
       "n": 1024,
       "bytes": 7190,
-      "median_ms": 3.6935940000000187,
-      "min_ms": 3.1156640000000095,
+      "median_ms": 3.9392270000000167,
+      "min_ms": 3.38649700000002,
       "hash": "b02c4b342ce106a3e2bfc4f48dce326a57ab47d188f2d50f659c42165f4d7a8a"
     },
     {
       "name": "verse_definitions",
       "n": 1024,
       "bytes": 15382,
-      "median_ms": 12.062983000000031,
-      "min_ms": 8.092066000000045,
+      "median_ms": 11.629283999999984,
+      "min_ms": 9.450942999999995,
       "hash": "b6bdac9df74a7d20f33b31a61c62cf826aa566778e1eea1debc1eff576e41c13"
     },
     {
       "name": "paragraphs",
       "n": 1024,
       "bytes": 17408,
-      "median_ms": 0.8864419999999882,
-      "min_ms": 0.8205270000000269,
+      "median_ms": 0.8454469999999787,
+      "min_ms": 0.834226000000001,
       "hash": "352e54fc54a5ce32764f293a92784b7c394519d541c4675f55aace07542f4802"
     },
     {
       "name": "quoted_fences",
       "n": 4096,
       "bytes": 28694,
-      "median_ms": 11.940972999999985,
-      "min_ms": 11.369466000000045,
+      "median_ms": 14.433784000000003,
+      "min_ms": 11.957407999999987,
       "hash": "86826bb3da05dc9d7a76eac4cf5c94f7e03429713502ffd54e74e95497aab639"
     },
     {
       "name": "verse_definitions",
       "n": 4096,
       "bytes": 61462,
-      "median_ms": 38.012328000000025,
-      "min_ms": 34.242069000000015,
+      "median_ms": 38.243150000000014,
+      "min_ms": 34.80416300000002,
       "hash": "14bee9fe3dd5bec10964452f94e2d641937dddc639979799ebd78a1caac3b358"
     },
     {
       "name": "paragraphs",
       "n": 4096,
       "bytes": 69632,
-      "median_ms": 5.207898999999998,
-      "min_ms": 3.3495249999999714,
+      "median_ms": 3.463113000000021,
+      "min_ms": 3.1609680000000253,
       "hash": "eae1c9ebb409994b3c2f67ab3702e0f42a73d3245f23e26114a4c3de31b1ef72"
     }
   ],
@@ -86,73 +84,74 @@
       "name": "quoted_fences",
       "n": 128,
       "bytes": 918,
-      "median_ms": 2.329341999999997,
-      "min_ms": 1.255075999999974,
+      "median_ms": 2.466026999999997,
+      "min_ms": 1.1823370000000182,
       "hash": "0c024836f358f9f678817e1847bdca8d866b9b2bafbc3494845125a4c5598b24"
     },
     {
       "name": "verse_definitions",
       "n": 128,
       "bytes": 1942,
-      "median_ms": 4.7671379999999886,
-      "min_ms": 2.6214820000000145,
+      "median_ms": 3.9362720000000024,
+      "min_ms": 1.693068000000011,
       "hash": "0fb0c54dd3ca83aa0165a0efd24737170750fc92cfc3d62bba85bd31e411a0b0"
     },
     {
       "name": "paragraphs",
       "n": 128,
       "bytes": 2176,
-      "median_ms": 0.36269299999997884,
-      "min_ms": 0.3525549999999953,
+      "median_ms": 0.2887789999999768,
+      "min_ms": 0.23140999999998257,
       "hash": "45b73087d7f7cbdd329607259c3bae009d5260457260fe402170f4de141dbab2"
     },
     {
       "name": "quoted_fences",
       "n": 1024,
       "bytes": 7190,
-      "median_ms": 6.511096000000009,
-      "min_ms": 5.065661000000034,
+      "median_ms": 4.601075999999978,
+      "min_ms": 3.0076060000000098,
       "hash": "b02c4b342ce106a3e2bfc4f48dce326a57ab47d188f2d50f659c42165f4d7a8a"
     },
     {
       "name": "verse_definitions",
       "n": 1024,
       "bytes": 15382,
-      "median_ms": 9.26551900000004,
-      "min_ms": 7.697532999999964,
+      "median_ms": 9.114985999999988,
+      "min_ms": 6.5696870000000445,
       "hash": "b6bdac9df74a7d20f33b31a61c62cf826aa566778e1eea1debc1eff576e41c13"
     },
     {
       "name": "paragraphs",
       "n": 1024,
       "bytes": 17408,
-      "median_ms": 0.9741469999999595,
-      "min_ms": 0.8302460000000451,
+      "median_ms": 1.2638819999999669,
+      "min_ms": 0.9192569999999591,
       "hash": "352e54fc54a5ce32764f293a92784b7c394519d541c4675f55aace07542f4802"
     },
     {
       "name": "quoted_fences",
       "n": 4096,
       "bytes": 28694,
-      "median_ms": 15.41762899999992,
-      "min_ms": 12.96623800000009,
+      "median_ms": 12.885352000000012,
+      "min_ms": 11.73979399999996,
       "hash": "86826bb3da05dc9d7a76eac4cf5c94f7e03429713502ffd54e74e95497aab639"
     },
     {
       "name": "verse_definitions",
       "n": 4096,
       "bytes": 61462,
-      "median_ms": 32.73790399999996,
-      "min_ms": 27.39271700000006,
+      "median_ms": 32.68118800000002,
+      "min_ms": 29.288980000000038,
       "hash": "14bee9fe3dd5bec10964452f94e2d641937dddc639979799ebd78a1caac3b358"
     },
     {
       "name": "paragraphs",
       "n": 4096,
       "bytes": 69632,
-      "median_ms": 3.8363829999999552,
-      "min_ms": 3.349664999999959,
+      "median_ms": 3.2374340000000075,
+      "min_ms": 3.17316100000005,
       "hash": "eae1c9ebb409994b3c2f67ab3702e0f42a73d3245f23e26114a4c3de31b1ef72"
     }
-  ]
+  ],
+  "engine": "TypeScript"
 }

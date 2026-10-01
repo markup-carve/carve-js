@@ -1,5 +1,9 @@
 import { performance } from "node:perf_hooks";
 import { createHash } from "node:crypto";
+if (!process.argv[2]) {
+  process.stderr.write("Usage: node maintenance.mjs /absolute/path/to/built/worktree\n");
+  process.exit(2);
+}
 const { carveToHtml } = await import(`${process.argv[2]}/dist/index.js`);
 const results = [];
 for (const n of [128, 1024, 4096])
