@@ -84,6 +84,18 @@ describe('a verse closer belongs to its quote depth', () => {
     })
   }
 
+  it('keeps a rejected footnote list definition literal', () => {
+    const html = carveToHtml('[^n]:\n  - ::: |\n    verse\n  [r]: /target\n\n[t][r] [^n]\n')
+    expect(html).toContain('[r]: /target')
+    expect(html).not.toContain('href="/target"')
+  })
+
+  it('does not close footnote list verse at the footnote body column', () => {
+    const html = carveToHtml('[^n]:\n  - ::: |\n    verse\n  :::\n  [r]: /hidden\n\n[t][r] [^n]\n')
+    expect(html).not.toContain('href="/hidden"')
+    expect(html).toContain('[r]: /hidden')
+  })
+
   for (const prefix of ['', '> ', '> > ']) {
     it(`keeps a deeper quoted fence as verse text at depth ${prefix.length / 2}`, () => {
       const source = `${prefix}::: |\n${prefix}> :::\n${prefix}[r]: /hidden\n${prefix}::: \n\n[t][r]\n`

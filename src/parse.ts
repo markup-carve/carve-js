@@ -8258,7 +8258,7 @@ class ParseSession {
       const verseHost = openCols[composed.depth - 1]
       if (verseHost?.quote === false) {
         verseBaseColumns[verseBaseColumns.length - 1] = indentColumns(raw.slice(quoteContent, verseHost.col).replace(/[^ \t]/g, ' '))
-      } else if (inFootnoteBody && quoteContent === 0) {
+      } else if (inFootnoteBody && contentCol === 0 && quoteContent === 0 && !composed.peeled.some((entry) => !entry.quote)) {
         verseBaseColumns[0] = FOOTNOTE_BODY_COLUMN
       }
       const verseOpen = verseAtContentColumn ? RE_LINE_BLOCK_OPEN.exec(verseContent) : null
@@ -8269,7 +8269,7 @@ class ParseSession {
           baseColumns: verseBaseColumns,
           quoteState: { mode: { kind: 'closed' }, inTable: false, attrRun: null, colonWidths: [] },
           fenceMemo: new Map(),
-          scope: { quoteDepth: rawQuoteDepth, contentCol: inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol },
+          scope: { quoteDepth: rawQuoteDepth, contentCol: inFootnoteBody && contentCol === 0 ? FOOTNOTE_BODY_COLUMN : contentCol },
         }
         paraState = 'no'
         continue
