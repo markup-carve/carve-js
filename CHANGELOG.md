@@ -9,15 +9,34 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-01
+
+### Breaking
+
+- A destination the URL scheme denylist blanks takes one render-loss row under the new code `destination-denied`, on every target that emits a destination, carrying the normative message `Blanked a denied destination scheme` for a link or an autolink and `Blanked a denied image source` for an image. `RenderLossCode` has a third member, `carve render --strict-losses` fails on a document that holds such a destination, and `--allow-loss` will not waive the code (#2432, #2433, #2435; markup-carve/carve#2679, markup-carve/carve#2681, markup-carve/carve#2686).
+
 ### Fixes
 
-- Coalesce adjacent text in substitution arms, citation fields, definition-list terms and descriptions, figure targets, and short captions during resolution (#2437).
-- Canonical Carve output preserves parentheses and backslashes in denied URL
-  schemes. Presentation targets retain destination filtering and loss reports
-  (markup-carve/carve#2685).
-- Match verse openers and closers to the block parser during reference-definition collection, keeping quoted, list-marked, indented, and wider literal fences as text (#2439).
-- `unattached-block-attribute` no longer advises deleting a footnote or description body that holds nothing but an attribute block. PART 11 §7d makes the report itself correct there, but a bare marker is not a marker, so deleting the line drops the `<dd>` and turns a footnote definition and its references into text. The message now points at the `{empty}` sentinel that `fmt` writes. Reported lines and columns are unchanged (#2412).
-- Reference boundaries are preserved and quote rendering checks are deterministic (#2411).
+- Canonical Carve output keeps the parentheses and backslashes inside a denied URL scheme, so formatting `[x](javascript:alert(1))` no longer rewrites the destination to `javascript:alert%281%29` (#2438; markup-carve/carve#2685).
+- The Carve writer leaves a backslash single inside a quoted attribute value, a quoted title and bibliography metadata when the character after it is not ASCII punctuation, so a title of `t\zu` no longer reads back one character short (#2414).
+- The Carve writer preserves bare emphasis inside a link label when the text around the label carries the same emphasis kind (#2424; markup-carve/carve#2522).
+- `resolve()` coalesces adjacent text in substitution arms, citation fields, definition-list terms and descriptions, figure targets and short captions, so a tree built in code no longer keeps split text in those places (#2437).
+- A verse fence's closer is read in the container that opened it, so a quoted, list-marked, indented or wider literal fence inside a verse stays text instead of registering its lines as reference definitions. A malformed `:::|` opener is no longer accepted (#2439).
+- A reference definition's source position is correct after a CRLF or CR line ending and after a leading BOM (#2429).
+- `lintCarve` reports `list-item-block-overindented` once, on the block's first line, and a table or quote continuation shares its opener's finding (#2416; markup-carve/carve#2643).
+- `lintCarve`'s `unattached-block-attribute` no longer advises deleting a footnote or description body that holds nothing but an attribute block. PART 11 §7d makes the report itself correct there, but a bare marker is not a marker, so deleting the line drops the `<dd>` and turns a footnote definition and its references into text. The message now points at the `{empty}` sentinel that `fmt` writes. Reported lines and columns are unchanged (#2412).
+- Markdown import keeps a reference label's raw identity and first-definition priority, keeps a heading, quote, HTML block or interrupting list marker out of a multiline title, accepts an escaped title delimiter, and falls back to the destination when a title on the following line is invalid. A nested quote held by a list item stays intact (#2411; markup-carve/carve#2522, markup-carve/carve#2593).
+- Markdown import keeps inline links and references when later paragraph text resembles a reference definition (#2415).
+- Markdown import keeps CommonMark emphasis inside a resolved link label, keeps a span that crosses an unresolved bracket, keeps a lazy line in an open quoted paragraph when the line below resembles a setext underline, and classifies a thematic break at the container column it reaches (#2418).
+- Markdown import keeps the brackets and destination of an outer link that an inner link deactivates as text, while an image label stays active, and keeps a blank empty list item with its siblings (#2423).
+- Markdown import keeps a quote followed by a fence inside its list item without inserting a blank line, and keeps the sibling items after the fence tight (#2419).
+- Markdown import keeps the source indentation after an empty list marker, so a heading, fence, nested list or indented code below it keeps its block boundary, and tight siblings keep their spacing (#2425).
+- Djot import pairs emphasis by Djot's own delimiter ownership and converts orphan attributes, empty definition fences, image alt text and reference links in their source context, while code, destinations and fenced metadata stay opaque and a paragraph boundary stops delimiter matching (#2427; markup-carve/carve#2522).
+- Djot import keeps a code fence opaque when ordinary prose such as `Mr. Smith` precedes an indented fence, recognizes Djot's numeric, single-letter and Roman list markers, and tracks each enclosing quote separately so a quote inside a list keeps the item's ownership (#2428; markup-carve/carve#2522).
+
+### Improvements
+
+- `carveToHtml` renders a document whose reference definitions sit in one adjacent run through the HTML fast path instead of the full AST pipeline, and reference-definition parsing reuses indexed line starts and successful lexical matches rather than rescanning the preceding lines. A definition line with an escaped title or an unsupported layout still takes the full parser. See the [measurements](reports/reference-definitions.md) (#2429).
 
 ## [0.1.9] - 2026-09-30
 
@@ -186,7 +205,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.9...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.10...HEAD
+[0.1.10]: https://github.com/markup-carve/carve-js/compare/0.1.9...0.1.10
 [0.1.9]: https://github.com/markup-carve/carve-js/compare/0.1.8...0.1.9
 [0.1.8]: https://github.com/markup-carve/carve-js/compare/0.1.7...0.1.8
 [0.1.7]: https://github.com/markup-carve/carve-js/compare/0.1.6...0.1.7
