@@ -62,15 +62,22 @@ export function rubyFlattened(
   })
 }
 
-/** The clickable URL sinks PART 9 §25 blanks, and the noun each one's message uses. */
-const DENIED_SINK_NOUN = {
-  link: 'link destination',
-  autolink: 'autolink destination',
-  image: 'image source',
-  crossref: 'crossref destination',
+/**
+ * The clickable URL sinks PART 9 §25 blanks, and the message each one reports.
+ *
+ * The text is normative (PART 11 §1d, carve#2686) and is emitted verbatim: no
+ * target is appended, because `target` is already a field on the row. Only the
+ * destination/image split survives in the message, since `nodeType` is `inline`
+ * for every sink and cannot carry the sink kind.
+ */
+const DENIED_SINK_MESSAGE = {
+  link: 'Blanked a denied destination scheme',
+  autolink: 'Blanked a denied destination scheme',
+  image: 'Blanked a denied image source',
+  crossref: 'Blanked a denied destination scheme',
 } as const
 
-export type DeniedDestinationSink = keyof typeof DENIED_SINK_NOUN
+export type DeniedDestinationSink = keyof typeof DENIED_SINK_MESSAGE
 
 /**
  * Report a destination the URL sink policy blanked (PART 9 §25, CARVE-P2-024).
@@ -93,7 +100,7 @@ export function destinationDenied(
     code: 'destination-denied',
     target,
     nodeType: 'inline',
-    message: `Blanked a denied ${DENIED_SINK_NOUN[sink]} while rendering ${target}`,
+    message: DENIED_SINK_MESSAGE[sink],
     ...(pos ? { pos } : {}),
   })
 }
