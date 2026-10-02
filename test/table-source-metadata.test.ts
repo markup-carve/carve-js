@@ -142,3 +142,22 @@ it('promotes body row-header columns and keeps their scope across spans', () => 
   expect(result.report.diagnostics).toEqual([])
   expect(renderHtml(parse(result.value!))).toBe(html)
 })
+
+it('distinguishes implicit zero bodies from an explicit empty body', () => {
+  const source = '{header-rows=1 footer-rows=1}\n| H | G |\n| F | T |\n'
+  const ast = parse(source)
+  expect(toAstJson(ast).children[0]).toMatchObject({ rowGroups: { headRows: 1, bodies: [], footRows: 1 } })
+  expect(renderHtml(ast)).not.toContain('<tbody>')
+  expect(renderCarveWithConversionReport(ast).value).toBe(source)
+  const emptySource = source.replace('footer-rows=1}', 'footer-rows=1 body-rows=0}')
+  const explicit = parse(emptySource)
+  expect(renderHtml(explicit)).toContain('<tbody>')
+  expect(renderCarveWithConversionReport(explicit).value).toBe(emptySource)
+  const table = ast.children[0]
+  if (table.type !== 'table') throw new Error('Expected a table')
+  table.rowGroups!.bodies = [{ headRows: 0, bodyRows: 0 }]
+  delete table.attrs
+  const exported = renderCarveWithConversionReport(ast)
+  expect(exported.value).toContain('body-rows=0')
+  expect(renderHtml(parse(exported.value!))).toBe(renderHtml(ast))
+})

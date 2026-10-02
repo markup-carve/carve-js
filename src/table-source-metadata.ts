@@ -56,7 +56,7 @@ export function tableRowGroupsFromAttrs(attrs: Attrs | undefined, rows: number):
   if (headRows === undefined || footRows === undefined || headRows + footRows > rows) return undefined
   if (kv['body-rows'] === undefined) {
     if (kv['body-header-rows'] !== undefined || kv['body-header-cols'] !== undefined) return undefined
-    return { headRows, bodies: [{ headRows: 0, bodyRows: rows - headRows - footRows }], footRows }
+    return { headRows, bodies: rows > headRows + footRows ? [{ headRows: 0, bodyRows: rows - headRows - footRows }] : [], footRows }
   }
   const rawBodies = kv['body-rows'].trim() === '' ? [] : kv['body-rows'].split(',')
   const headers = kv['body-header-rows']?.split(',')
@@ -96,11 +96,11 @@ export function tableSourceAttrs(table: Table): Attrs | undefined {
     }
   }
   const groups = table.rowGroups
-  if (groups) {
+  if (groups && !preservesTableRowGroups(table, { keyValues })) {
     const put = (key: string, value: string): void => { if (keyValues[key] === undefined) keyValues[key] = value }
     if (groups.headRows > 0) put('header-rows', String(groups.headRows))
     if (groups.footRows > 0) put('footer-rows', String(groups.footRows))
-    const simple = groups.bodies.length === 1 && groups.bodies[0]!.headRows === 0 && groups.bodies[0]!.rowHeadColumns === undefined
+    const simple = groups.bodies.length === 1 && groups.bodies[0]!.headRows === 0 && groups.bodies[0]!.bodyRows > 0 && groups.bodies[0]!.rowHeadColumns === undefined
     if (simple) {
       if (keyValues['header-rows'] === undefined && keyValues['footer-rows'] === undefined) put('header-rows', '0')
     } else {
