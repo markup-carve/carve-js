@@ -1335,6 +1335,7 @@ describe('table row groups on import', () => {
     ['leading', '<tbody></tbody><tbody><tr><th scope="col">H</th><th scope="col">G</th></tr><tr><td>a</td><td>b</td></tr></tbody>', [{ headRows: 0, bodyRows: 0 }, { headRows: 1, bodyRows: 1 }]],
     ['middle', '<tbody><tr><td>a</td></tr></tbody><tbody></tbody><tbody><tr><td>b</td></tr></tbody>', [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 0 }, { headRows: 0, bodyRows: 1 }]],
     ['trailing', '<tbody><tr><td>a</td></tr></tbody><tbody></tbody><tbody></tbody>', [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 0 }, { headRows: 0, bodyRows: 0 }]],
+    ['before a header-cell foot', '<tbody></tbody><tfoot><tr><th scope="col">f</th></tr></tfoot>', [{ headRows: 0, bodyRows: 0 }]],
     ['between head and foot', '<thead><tr><th scope="col">h</th></tr></thead><tbody></tbody><tfoot><tr><td>f</td></tr></tfoot>', [{ headRows: 0, bodyRows: 0 }]],
     ['after head', '<thead><tr><th scope="col">h</th></tr></thead><tbody></tbody>', [{ headRows: 0, bodyRows: 0 }]],
   ])('preserves %s empty bodies through HTML import and source', (_, sections, bodies) => {
@@ -1358,12 +1359,24 @@ describe('table row groups on import', () => {
     const html = `<p>x</p>${table}<p>y</p>`
     const written = htmlToCarve(html)
     expect(written.value).toBe('x\n\ny\n')
-    expect(written.report.diagnostics).toContainEqual(
+    expect(written.report.diagnostics).toEqual([
       expect.objectContaining({ code: 'table-degraded', message: expect.stringContaining('rowless table') }),
-    )
+    ])
     expect(carveToHtml(written.value)).toBe('<p>x</p>\n<p>y</p>')
     const imported = htmlToAst(html)
     expect(imported.value.children[1]).toMatchObject({ type: 'table', rowGroups: { bodies: expect.arrayContaining([expect.objectContaining({ headRows: 0, bodyRows: 0 })]) } })
+    expect(imported.report.diagnostics).toEqual([])
+  })
+
+  it('imports thousands of empty bodies without repeated DOM searches', () => {
+    const html = `<table>${'<tbody></tbody>'.repeat(4000)}</table>`
+    const start = performance.now()
+    const imported = htmlToAst(html)
+    expect(performance.now() - start).toBeLessThan(2000)
+    expect(imported.value.children[0]).toMatchObject({ rowGroups: { bodies: expect.any(Array) } })
+    const table = imported.value.children[0]
+    if (table?.type !== 'table') throw new Error('not a table')
+    expect(table.rowGroups?.bodies).toHaveLength(4000)
     expect(imported.report.diagnostics).toEqual([])
   })
 

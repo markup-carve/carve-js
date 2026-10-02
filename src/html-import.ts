@@ -2175,8 +2175,10 @@ class Importer {
     if (tag === 'carve-footnote-placement') return [{ type: 'directive', kind: 'footnotes', children: [] }]
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
     if (tag === 'table') {
+      const unspellableBefore = this.unspellable.length
       const table = this.table(node, path, depth, attrs)
       if (this.writing && table.type === 'table' && table.rows.length === 0) {
+        this.unspellable.length = unspellableBefore
         return []
       }
       return [table]
@@ -3395,7 +3397,7 @@ class Importer {
         // survives.
         const scope = cellAttrs?.keyValues?.scope
         if (scope !== undefined) {
-          const positional = r < leadingHeaderRows ? 'col' : 'row'
+          const positional = r < leadingHeaderRows && domTag(group.get(row)) !== 'tfoot' ? 'col' : 'row'
           // Only the POSITIONAL value goes. Every other one is kept wherever
           // the cell sits, including below the header rows: `header_cell` has
           // an attribute slot now, after its markers (§5 T10), so such a cell
@@ -3635,12 +3637,14 @@ class Importer {
     }
 
     const orderedSections = domChildren(node) ?? []
+    const sectionIndices = new Map(orderedSections.map((section, index) => [section, index]))
+    const sectionsWithRows = new Set(group.values())
     // Empty bodies have no rows to collect above, but still mark a boundary.
     for (const section of orderedSections) {
       const own = sectionAttrs.get(section)
-      if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section)) continue
-      const sourceIndex = orderedSections.findIndex(child => child === section)
-      const at = bodySections.findIndex(body => body !== undefined && orderedSections.findIndex(child => child === body) > sourceIndex)
+      if (domTag(section) !== 'tbody' || sectionsWithRows.has(section)) continue
+      const sourceIndex = sectionIndices.get(section)!
+      const at = bodySections.findIndex(body => body !== undefined && (sectionIndices.get(body) ?? -1) > sourceIndex)
       const index = at < 0 ? bodies.length : at
       bodies.splice(index, 0, { headRows: 0, bodyRows: 0, ...(own ? { attrs: own.attrs } : {}) })
       bodySections.splice(index, 0, section)
@@ -3658,7 +3662,7 @@ class Importer {
     // BOUNDARY the field exists to record, and absorbing it away left a single
     // ordinary body that the derivation reproduces - so the two bodies went
     // silently, which is the opposite of the point.
-    if (headAttrs === undefined && headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0) {
+    if (headAttrs === undefined && headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0 && bodies[0]!.headRows > 0) {
       const absorbed = Math.min(leadingHeaderRows, bodies[0]!.headRows)
       headRows2 = absorbed
       bodies[0] = { ...bodies[0]!, headRows: bodies[0]!.headRows - absorbed }
