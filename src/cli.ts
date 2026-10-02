@@ -225,6 +225,7 @@ exits 1 if anything is reported, 0 if clean.
                      subcommand, which measures the difference instead of
                      guessing at it.
   -h, --help     Show this help
+  -V, --version  Print the version
 `
 
 async function runMigrate(args: string[], io: CliIO): Promise<number> {
@@ -1127,6 +1128,10 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   const [sub, ...rest] = argv
   if (sub === '--help' || sub === '-h') {
     io.write(HELP)
+    return 0
+  }
+  if (sub === '--version' || sub === '-V') {
+    io.write(`carve-js ${LIB_VERSION}\n`)
     return 0
   }
   // No arguments: render from stdin (HTML), matching the carve-rs / carve-php

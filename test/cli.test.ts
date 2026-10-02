@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { run, type CliIO } from '../src/cli.js'
+import { LIB_VERSION } from '../src/version.js'
 
 /**
  * In-memory CliIO so the `carve` CLI can be exercised without touching the
@@ -46,6 +47,19 @@ describe('carve CLI — dispatch', () => {
     const code = await run(['--help'], t.io)
     expect(code).toBe(0)
     expect(t.out).toContain('carve fix')
+  })
+
+  it.each(['--version', '-V'])('prints the version on %s and exits 0', async (flag) => {
+    const t = makeIO()
+    expect(await run([flag], t.io)).toBe(0)
+    expect(t.out).toBe(`carve-js ${LIB_VERSION}\n`)
+    expect(t.err).toBe('')
+  })
+
+  it('lists --version in help', async () => {
+    const t = makeIO()
+    await run(['--help'], t.io)
+    expect(t.out).toContain('-V, --version')
   })
 
   it('treats a non-subcommand first arg as a file to render (exit 2 if missing)', async () => {
