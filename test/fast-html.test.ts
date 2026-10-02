@@ -9,6 +9,41 @@ function authoritative(source: string): string {
 }
 
 describe('borrowed HTML layout', () => {
+  it('accepts blank lines before a nested bullet list without changing HTML', () => {
+    for (const source of [
+      '- first\n- second\n\n  - nested *strong*\n  - another\n',
+      '- first\n\n\n  - nested\n',
+      '- first\n\n  - nested\n\n    - deeper\n- last\n',
+    ]) {
+      expect(tryFastHtml(source, {}), source).toBe(authoritative(source))
+      expect(tryFastHtmlWithStats(source, {})?.accepted.unorderedListItems, source).toBeGreaterThan(1)
+    }
+  })
+
+  it('keeps fallback for loose siblings and unsupported blocks after blank lines', () => {
+    for (const source of [
+      '- first\n\n  - nested\n\n- last\n',
+      '- first\n\n  - nested\n\n  - loose sibling\n',
+      '- first\n\n  paragraph\n',
+      '- first\n\n   - wrong indent\n',
+      '- first\n\n  1. ordered\n',
+    ]) {
+      expect(tryFastHtml(source, {}), source).toBeUndefined()
+      expect(carveToHtml(source), source).toBe(authoritative(source))
+    }
+  })
+
+  it('uses the fast path for the unchanged shared JavaScript benchmark fixture', () => {
+    const source = readFileSync(new URL('./fixtures/bench-commonmark-core.crv', import.meta.url), 'utf8')
+    const result = tryFastHtmlWithStats(source, {})
+    expect(result).toBeDefined()
+    expect(result!.accepted.headings).toBe(151)
+    expect(result!.accepted.unorderedListItems).toBe(600)
+    expect(result!.accepted.thematicBreaks).toBe(150)
+    expect(result!.html).toBe(authoritative(source))
+    expect(carveToHtml(source)).toBe(result!.html)
+  })
+
   it('accepts adjacent definitions and preserves reference resolution', () => {
     for (const source of [
       '[a]: /first\n[b]: /second\n\n[x][a] and [y][b]\n',
@@ -95,17 +130,10 @@ describe('borrowed HTML layout', () => {
       accepted++
       expect(fast, file).toBe(authoritative(source))
     }
-    // The population this sweep compares, so a fast path that quietly stopped
-    // accepting anything cannot pass by comparing nothing. It moves only when
-    // the pinned corpus does. Acceptance cannot move with a parser change -
-    // `fast-html.ts` takes only a TYPE from `parse.ts` - so a shift here is a
-    // corpus-population fact and is re-derived, never just bumped. Re-derived
-    // for the bump to carve `bcdcba4b` by taking the accepted set at both pins
-    // with this build held fixed: three documents joined and none left, all
-    // three new at this pin - `522-an-emphasis-marker-does-not-pair-across-a-
-    // link-bracket-2` and both halves of `524-an-empty-code-payload-renders-no-
-    // characters`.
-    expect(accepted).toBe(56)
+    // Pin the accepted population so an empty fast-path sweep cannot pass.
+    // Re-derive the accepted set when changing the corpus or fast-path coverage.
+    // Blank-separated nesting adds 87-compact-list-blocks-2 to the previous 56 documents.
+    expect(accepted).toBe(57)
   })
 
   it('falls back for normalization-sensitive or stateful shapes', () => {
