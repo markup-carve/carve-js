@@ -5,6 +5,7 @@
  * over each block's text content. No backtracking.
  */
 
+import { tableColumnsFromAttrs, tableRowGroupsFromAttrs } from './table-source-metadata.js'
 import { expandLineBlockWhitespace, dropTrailingSpaces, verseSourceOffset, restoreVerseGaps } from './verse-whitespace.js'
 import { parseAttrs, isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue, isEmptyAttrs } from './attribute-parser.js'
 export { parseAttrs } from './attribute-parser.js'
@@ -2097,45 +2098,10 @@ function consumeLooseKey(node: BlockNode): void {
 }
 
 function deriveTableMetadata(table: Table): void {
-  const kv = table.attrs?.keyValues
-  if (!kv) return
-  const aligns = positional(kv.aligns, new Set(['left', 'right', 'center']))
-  const valigns = positional(kv.valigns, new Set(['top', 'middle', 'bottom']))
-  const widths = kv.widths?.split(',').map((raw) => {
-    const value = Number(raw.trim())
-    return Number.isFinite(value) && value > 0 && value <= 100 ? value / 100 : undefined
-  }) ?? []
-  const count = Math.max(aligns.length, valigns.length, widths.length)
-  if (count > 0) {
-    table.columns = Array.from({ length: count }, (_, i) => ({
-      ...(aligns[i] ? { align: aligns[i] as 'left' | 'right' | 'center' } : {}),
-      ...(valigns[i] ? { valign: valigns[i] as 'top' | 'middle' | 'bottom' } : {}),
-      ...(widths[i] ? { width: widths[i] } : {}),
-    }))
-  }
-
-  const rowCount = (value: string | undefined): number | undefined => {
-    if (value === undefined) return 0
-    if (value.trim() === '') return 1
-    return /^\d+$/.test(value.trim()) ? Number(value.trim()) : undefined
-  }
-  const headRows = rowCount(kv['header-rows'])
-  const footRows = rowCount(kv['footer-rows'])
-  if (headRows === undefined || footRows === undefined || headRows + footRows > table.rows.length) return
-  if (kv['header-rows'] !== undefined || kv['footer-rows'] !== undefined) {
-    table.rowGroups = {
-      headRows,
-      bodies: [{ headRows: 0, bodyRows: table.rows.length - headRows - footRows }],
-      footRows,
-    }
-  }
-}
-
-function positional(value: string | undefined, allowed: Set<string>): Array<string | undefined> {
-  return value?.split(',').map((raw) => {
-    const item = raw.trim()
-    return allowed.has(item) ? item : undefined
-  }) ?? []
+  const columns = tableColumnsFromAttrs(table.attrs)
+  if (columns) table.columns = columns
+  const rowGroups = tableRowGroupsFromAttrs(table.attrs, table.rows.length)
+  if (rowGroups) table.rowGroups = rowGroups
 }
 
 /**

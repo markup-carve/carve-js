@@ -45,7 +45,7 @@ describe('table section attributes', () => {
       expect(losses).toEqual([])
       const { report } = renderCarveWithConversionReport(fromAstJson(document()), render as never)
       expect(report.diagnostics.filter(d => d.code === 'field-unspellable').map(d => d.field)).toEqual([
-        'rowGroups', 'rowGroups.headAttrs', 'rowGroups.footAttrs', 'rowGroups.bodies[0].attrs',
+        'rowGroups.headAttrs', 'rowGroups.footAttrs', 'rowGroups.bodies[0].attrs',
       ])
     }
   })

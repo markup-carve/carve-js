@@ -1,3 +1,4 @@
+import { tableSourceAttrs } from './table-source-metadata.js'
 import type {
   Attrs,
   BlockNode,
@@ -3133,24 +3134,9 @@ class CarveRenderSession {
   }
 
   private renderTableWithColumns(node: Table, ctx: CarveContext): string {
-    if (!node.columns?.length) {
-      const attrs = renderBlockAttrs(node.attrs)
-      const body = this.renderTable(node, ctx)
-      return attrs ? `${attrs}\n${body}` : body
-    }
-    const keyValues = { ...(node.attrs?.keyValues ?? {}) }
-    const join = (field: 'align' | 'valign', key: string) => {
-      if (keyValues[key] === undefined && node.columns!.some((column) => column[field] !== undefined)) {
-        keyValues[key] = node.columns!.map((column) => column[field] ?? '').join(',')
-      }
-    }
-    join('align', 'aligns')
-    join('valign', 'valigns')
-    if (keyValues.widths === undefined && node.columns.some((column) => column.width !== undefined)) {
-      keyValues.widths = node.columns.map((column) => column.width === undefined ? '' : String(column.width * 100)).join(',')
-    }
-    const attrs = renderBlockAttrs({ ...(node.attrs ?? {}), keyValues })
-    return `${attrs}\n${this.renderTable(node, ctx)}`
+    const attrs = renderBlockAttrs(tableSourceAttrs(node))
+    const body = this.renderTable(node, ctx)
+    return attrs ? `${attrs}\n${body}` : body
   }
 
   private renderList(node: List, ctx: CarveContext): string {

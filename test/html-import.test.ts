@@ -989,10 +989,8 @@ describe('table spans on import', () => {
     // "To the end of this row GROUP", so a `<tfoot>` below the body is not
     // swallowed by a cell HTML stops at the body's last row.
     const html = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td rowspan="0">b</td><td>x</td></tr><tr><td>y</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
-    expect(htmlToCarve(html).value).toBe('|= h |\n| b | x |\n| ^ | y |\n| f |\n| g |\n')
-    // The `<tfoot>` is a grouping the written source cannot spell, which is its
-    // own row's business; no span is reported here.
-    expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
+    expect(htmlToCarve(html).value).toBe('{header-rows=1 footer-rows=2}\n|= h |\n| b | x |\n| ^ | y |\n| f |\n| g |\n')
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
   })
 
   it('stops a rowspan at its row group, whatever the number says', () => {
@@ -1001,7 +999,7 @@ describe('table spans on import', () => {
     // form was resolved against the group at first, and a positive one walked
     // straight through.
     const html = '<table><tbody><tr><td rowspan="5">b</td><td>x</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
-    expect(htmlToCarve(html).value).toBe('| b | x |\n| f |\n| g |\n')
+    expect(htmlToCarve(html).value).toBe('{footer-rows=2}\n| b | x |\n| f |\n| g |\n')
   })
 
   it('reads a tall table in time proportional to its rows', () => {
