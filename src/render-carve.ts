@@ -13,6 +13,7 @@ import type {
   ListItem,
   Table,
   TableCell,
+  TableRow,
   Text,
 } from './ast.js'
 import {
@@ -2309,6 +2310,8 @@ function lastBoundary(node: InlineNode | undefined): string {
 
 /** State owned by one synchronous source-render operation. */
 class CarveRenderSession {
+  private refusedTableRows: TableRow[] = []
+
   renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
     this.destinationParensByUnit = new WeakMap()
     this.crossingBracketsByUnit = new WeakMap()
@@ -2724,6 +2727,8 @@ class CarveRenderSession {
   }
 
   private renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string {
+    this.refusedTableRows = []
+    let rendered = ''
     const previous = this.escapeMode
     this.escapeMode = mode
     this.writtenBraced = new WeakSet()
@@ -2766,10 +2771,22 @@ class CarveRenderSession {
       if (ast.frontmatter) parts.push(this.renderFrontmatter(ast.frontmatter))
       const body = this.renderDocumentBody(ast, ctx)
       if (body) parts.push(body)
-      return this.normalize(parts.join('\n\n'))
+      rendered = this.normalize(parts.join('\n\n'))
+    } catch (error) {
+      // Earlier row refusals are reported before the error a retry will reach.
+      if (this.refusedTableRows.length === 0) throw error
     } finally {
       this.escapeMode = previous
     }
+    if (this.refusedTableRows.length > 0) {
+      throw new SourceUnspellableError(
+        'table_row',
+        'a table row whose every cell is blank has no Carve source spelling',
+        this.refusedTableRows[0],
+        this.refusedTableRows,
+      )
+    }
+    return rendered
   }
 
   private renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
@@ -3636,14 +3653,13 @@ class CarveRenderSession {
       // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
       // so no source spells one and the writer refuses the tree (carve-js#1822).
       if (cells.every((cell) => cell === ' ' || cell === '= ')) {
-        throw new SourceUnspellableError(
-          'table_row',
-          'a table row whose every cell is blank has no Carve source spelling',
-          row,
-        )
+        this.refusedTableRows.push(row)
+        return
       }
       rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
     })
+    // A table losing every row also loses its caption on import.
+    if (rows.length === 0 && node.rows.length > 0) return ''
     if (needsDelimiter) {
       rows.splice(1, 0, `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
     }
