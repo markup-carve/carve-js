@@ -4804,7 +4804,8 @@ class Importer {
         body.bodyRows = keptCount(body.bodyRows)
       }
       table.rowGroups.footRows = keptCount(table.rowGroups.footRows)
-      if (!dropped.has(table) && partitionPreserved && !preservesTableRowGroups(table, tableSourceAttrs(table))) {
+      const survivingTable = { ...table, rows: table.rows.filter(row => !dropped.has(row)) }
+      if (!dropped.has(table) && partitionPreserved && !preservesTableRowGroups(survivingTable, tableSourceAttrs(survivingTable))) {
         const row = table.rows.find(row => dropped.has(row))!
         const origin = this.rowOrigins.get(row)!
         let owner = domParent(origin.node)
