@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { applyProfile, carveToHtml, parse, Profile } from '../src/index.js'
 import { citations, parseLocator } from '../src/citations.js'
-import { perfIt } from './helpers/scaling.js'
+import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [citations()] }).trim()
 const ha = (s: string) =>
@@ -140,6 +140,37 @@ describe('citations: defs + numbered rendering', () => {
     const elapsed = performance.now() - start
 
     expect(elapsed).toBeLessThan(500)
+  })
+
+  perfIt('reuses outer bracket matches after parsing nested citation prefixes', () => {
+    const extensions = [citations()]
+    expectScansLinearly((input) => void parse(input, { extensions }), '[see [x] @a] ', {
+      smallRepeats: 512,
+      minSampleMs: 100,
+    })
+  }, 30000)
+
+  for (const fragment of ['_[b]_ [@a] ', '[a *[b]*](u) [@a] ']) {
+    perfIt(`reuses citation bracket matches around ${fragment}`, () => {
+      const extensions = [citations()]
+      expectScansLinearly((input) => void parse(input, { extensions }), fragment, {
+        smallRepeats: 512,
+        minSampleMs: 100,
+      })
+    }, 30000)
+  }
+
+  it('preserves outer matches around nested prefixes, locators and invalid groups', () => {
+    const doc = parse('[see [x] @a] [bad] [@b, p. [3]] [see [y] @c]', {
+      extensions: [citations()],
+    })
+    const paragraph = doc.children[0]!
+    if (paragraph.type !== 'paragraph') throw new Error('expected paragraph')
+    const groups = paragraph.children.filter((node) => node.type === 'citation_group')
+    expect(groups?.map((node) => node.items?.[0]?.key)).toEqual(['a', 'b', 'c'])
+    expect(groups?.map((node) => node.raw)).toEqual([
+      '[see [x] @a]', '[@b, p. [3]]', '[see [y] @c]',
+    ])
   })
 })
 
