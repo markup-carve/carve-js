@@ -9,6 +9,23 @@ function authoritative(source: string): string {
 }
 
 describe('borrowed HTML layout', () => {
+  it('keeps Unicode and forbidden controls on the authoritative path', () => {
+    for (const value of ['é', '😀', '\uD800', '\r', '\t', '\0', '\v', '\f']) {
+      const source = `plain ${value} tail\n`
+      expect(tryFastHtml(source, {}), JSON.stringify(value)).toBeUndefined()
+      expect(carveToHtml(source), JSON.stringify(value)).toBe(authoritative(source))
+    }
+    const source = 'plain \x7f tail\n'
+    expect(tryFastHtml(source, {})).toBe(authoritative(source))
+  })
+
+  it('keeps complex heading titles and block markers on the authoritative path', () => {
+    for (const source of ['# a: b: c\n', '1) item\n']) {
+      expect(tryFastHtml(source, {}), source).toBeUndefined()
+      expect(carveToHtml(source), source).toBe(authoritative(source))
+    }
+  })
+
   it('keeps separate lists across intervening paragraphs and trailing blanks', () => {
     for (const marker of ['- item', '1. item']) {
       const source = `${marker}\n\nparagraph\n\n\n`.repeat(64) + '\n\n'

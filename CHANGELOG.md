@@ -21,6 +21,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Performance
 
+- Fast HTML eligibility uses one native ASCII/control scan and avoids repeated heading and paragraph checks.
 - Fast HTML list lookahead skips blank lines by index instead of copying the remaining lines at each list boundary (#2461).
 
 ## [0.1.10] - 2026-10-01
