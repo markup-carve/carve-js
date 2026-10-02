@@ -26,6 +26,19 @@ describe('citation matcher', () => {
     }, 90000)
   }
 
+  it.each([55, 60, 62, 63, 64, 65, 128])('keeps citation prefixes across the short-scan limit at %i units', (n) => {
+    for (const unit of ['x', 'α', '😀', String.raw`\]`]) {
+      expect(group('[' + unit.repeat(n) + ' @a]')?.items[0]?.key).toBe('a')
+    }
+  })
+
+  it.each([
+    ['[' + 'x'.repeat(62) + String.raw`\] @a]`, 'a'],
+    ['[' + 'x'.repeat(61) + String.raw`\\] @a]`, undefined],
+  ])('keeps escape parity at the short-scan boundary', (source, key) => {
+    expect(group(source)?.items[0]?.key).toBe(key)
+  })
+
   it.each([128, 1024])('keeps the inner citation inside %i rejected wrappers', (n) => {
     expect(group('['.repeat(n) + '@a' + ']'.repeat(n))?.items[0]?.key).toBe('a')
   })

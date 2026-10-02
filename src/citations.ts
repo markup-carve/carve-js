@@ -324,7 +324,7 @@ function buildBracketMap(text: string): Record<number, number> {
           && (first === undefined || (first.valid && first.invalidItems === invalidItems))) map[frame.open] = i
       }
     }
-    if (c.trim() !== '') contentEnd = i + 1
+    if ((c >= '!' && c <= '~') || c.trim() !== '') contentEnd = i + 1
     escaped = c === '\\' && !escaped
   }
   return map
@@ -342,6 +342,21 @@ function bracketMapFor(text: string, ctx: MatcherContext): Record<number, number
     maps.set(text, map)
   }
   return map
+}
+
+function citationCloseBracket(text: string, pos: number, ctx: MatcherContext): number | undefined {
+  const cached = bracketMaps.get(ctx)?.get(text)
+  if (cached !== undefined) return cached[pos]
+  let depth = 0
+  const end = Math.min(text.length, pos + 64)
+  for (let i = pos; i < end; i++) {
+    const c = text[i]
+    if (c === '\\') i++
+    else if (c === '[') depth++
+    else if (c === ']' && --depth === 0) return i
+  }
+  if (end === text.length) return undefined
+  return bracketMapFor(text, ctx)[pos]
 }
 
 function isEscapedAt(text: string, at: number): boolean {
@@ -378,7 +393,7 @@ function parseItem(raw: string, ctx: MatcherContext): Citation | null {
 
 const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMatch | null => {
   if (text[pos] !== '[') return null
-  const close = bracketMapFor(text, ctx)[pos]
+  const close = citationCloseBracket(text, pos, ctx)
   if (close === undefined) return null
   const after = text[close + 1]
   if (after === '(' || after === '[' || after === '{') return null
