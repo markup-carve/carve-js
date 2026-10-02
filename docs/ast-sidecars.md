@@ -17,6 +17,8 @@ const parsed = parseWithProvenance(source, 'file:///doc.crv')
 
 `renderCarveWithConversionReport(ast)` returns `{ value, report }`. `value` is absent if the writer refuses an unspellable structure. The report names fields or structures that Carve source cannot spell. Pass writer options as the second argument and a stored-diagnostic limit as the third. `totalDiagnostics` still counts every diagnostic.
 
+The canonical writer emits pipe tables. When an explicit `table.rowGroups` partition cannot be reconstructed from the retained `header-rows` and `footer-rows` attributes, the conversion report names the loss with `code: 'field-unspellable'` and `field: 'rowGroups'`. Section attributes receive separate diagnostics. AST JSON exchange and HTML rendering preserve the partition.
+
 The two reports never overlap. `renderCarveWithReport` answers what the selected renderer dropped, and its `code` enum holds `raw-format-dropped`, `ruby-flattened` and `destination-denied` (PART 11 §1d) - each naming something the selected renderer dropped or blanked. A dropped field or an interchange-only structure belongs to this channel instead: table section attributes (`rowGroups.headAttrs`, `rowGroups.footAttrs`, `rowGroups.bodies[N].attrs`), `table_cell.blocks`, `math.label`, `math.number` and `section` are all reported here, and `--strict-losses` and `--allow-loss` do not see them.
 
 See [source editing sessions](editor-sessions.md) for incremental reuse and fallback behavior.
