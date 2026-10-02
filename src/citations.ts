@@ -22,7 +22,7 @@ import type {
 const KEY = String.raw`[\w][\w:.#$%&+?<>~/-]*`
 // One `;`-item: optional prefix, optional single `-` marker, `@key`,
 // optional `, locator`. The marker is exactly one sign directly before `@`.
-const ITEM_RE = new RegExp(String.raw`^(.*?)(-?)@(${KEY})(?:,\s*(.*))?$`)
+const ITEM_RE = new RegExp(String.raw`(${KEY})(?:,\s*(.*))?$`, 'sy')
 
 /** Fixed citeproc locator vocabulary: canonical -> matchers. Flattened and
  *  sorted longest-first so global longest-match wins. ASCII case-insensitive. */
@@ -313,13 +313,28 @@ function bracketMapFor(text: string, ctx: MatcherContext): Record<number, number
   return map
 }
 
+function isEscapedAt(text: string, at: number): boolean {
+  let escapes = 0
+  for (let i = at - 1; i >= 0 && text[i] === '\\'; i--) escapes++
+  return escapes % 2 === 1
+}
+
 function parseItem(raw: string, ctx: MatcherContext): Citation | null {
-  const m = ITEM_RE.exec(raw.trim())
+  const text = raw.trim()
+  let m: RegExpExecArray | null = null
+  let at = text.indexOf('@')
+  for (; at !== -1; at = text.indexOf('@', at + 1)) {
+    if (isEscapedAt(text, at)) continue
+    ITEM_RE.lastIndex = at + 1
+    m = ITEM_RE.exec(text)
+    if (m) break
+  }
   if (!m) return null
-  const prefixText = m[1]!.replace(/\s+$/, '')
-  const item: Citation = { type: 'citation', key: m[3]!, suppressAuthor: m[2] === '-' }
+  const suppressAuthor = text[at - 1] === '-' && !isEscapedAt(text, at - 1)
+  const prefixText = text.slice(0, at - (suppressAuthor ? 1 : 0)).trimEnd()
+  const item: Citation = { type: 'citation', key: m[1]!, suppressAuthor }
   if (prefixText !== '') item.prefix = ctx.parseInlines(prefixText)
-  const locRaw = m[4]
+  const locRaw = m[2]
   if (locRaw !== undefined && locRaw.trim() !== '') {
     item.locator = ctx.parseInlines(locRaw.trim())     // raw, printed as-is
     const p = parseLocator(locRaw)                      // parse the RAW substring
