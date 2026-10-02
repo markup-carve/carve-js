@@ -4731,17 +4731,21 @@ class Importer {
       seen.add(node)
       if (Array.isArray(node)) {
         arrays.push(node)
-        for (const child of node) stack.push(child)
+        for (const child of node) {
+          if (child !== null && typeof child === 'object' && (child as BlockNode).type === 'table') {
+            const table = child as Table
+            for (const row of table.rows) if (refused.has(row)) owners.set(row, table)
+          }
+          stack.push(child)
+        }
         continue
-      }
-      if ((node as BlockNode).type === 'table') {
-        const table = node as Table
-        for (const row of table.rows) if (refused.has(row)) owners.set(row, table)
       }
       const record = node as Record<string, unknown>
       for (const field of ownedChildFields(record)) stack.push(record[field])
     }
 
+    // A singleton table target cannot be removed by array compaction.
+    if (!owners.has(target)) return false
     const remaining = new Map<Table, number>()
     const dropped = new Set<object>()
     for (const row of targets) {

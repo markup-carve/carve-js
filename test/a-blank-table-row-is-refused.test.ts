@@ -113,6 +113,11 @@ describe('the HTML importer', () => {
     expect(result.report.diagnostics.at(-1)?.code).toBe('diagnostics-truncated')
   })
 
+  it.each(['', '<tr><td>a</td></tr>'])('preserves refusals for blank rows in singleton figure targets', (surviving) => {
+    expect(() => htmlToCarve('<figure><table><tr><td></td></tr>' + surviving
+      + '</table><figcaption>c</figcaption></figure>')).toThrow(SourceUnspellableError)
+  })
+
   it('keeps blank rows in the imported AST', () => {
     const result = htmlToAst('<table><tr><td></td></tr><tr><td>a</td></tr></table>')
     expect(result.value.children[0]).toMatchObject({ type: 'table', rows: [{}, {}] })
