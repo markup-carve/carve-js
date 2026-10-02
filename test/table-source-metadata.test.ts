@@ -132,3 +132,13 @@ describe('table body source metadata', () => {
     expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ attrs: { keyValues: { 'body-rows': '2' } } })
   })
 })
+
+it('promotes body row-header columns and keeps their scope across spans', () => {
+  const ast = parse('{body-rows=2,1 body-header-rows=0,1 body-header-cols=1,0}\n| a | b |\n| ^ | c |\n| ^ | D |\n| e | f |\n')
+  const html = renderHtml(ast)
+  expect(html).toContain('<th scope="row" rowspan="3">a</th>')
+  expect(html).toContain('<th scope="col">D</th>')
+  const result = renderCarveWithConversionReport(ast)
+  expect(result.report.diagnostics).toEqual([])
+  expect(renderHtml(parse(result.value!))).toBe(html)
+})
