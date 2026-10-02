@@ -13,6 +13,10 @@ function shiftDecimal(value: string, places: number): string | undefined {
   return shifted.replace(/^0+(?=\d)/, '')
 }
 
+export function tableWidthPercentage(width: number): string {
+  return shiftDecimal(String(width), 2) ?? String(width * 100)
+}
+
 function positional(value: string | undefined, allowed: Set<string>): Array<string | undefined> {
   return value?.split(',').map((raw) => {
     const item = raw.trim()
@@ -64,7 +68,7 @@ export function tableSourceAttrs(table: Table): Attrs | undefined {
     join('align', 'aligns')
     join('valign', 'valigns')
     if (keyValues.widths === undefined && columns.some((column) => column.width !== undefined)) {
-      keyValues.widths = columns.map((column) => column.width === undefined ? '' : (shiftDecimal(String(column.width), 2) ?? String(column.width * 100))).join(',')
+      keyValues.widths = columns.map((column) => column.width === undefined ? '' : tableWidthPercentage(column.width)).join(',')
     }
     if (keyValues.aligns === undefined && keyValues.valigns === undefined && keyValues.widths === undefined) {
       keyValues.aligns = columns.map(() => '').join(',')

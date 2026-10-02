@@ -13,6 +13,15 @@ const columnsDiagnostic = {
 }
 
 describe('table source metadata', () => {
+  it('renders decimal percentages without floating-point noise', () => {
+    const ast = parse('{widths=33.3,0.7,7}\n| a | b | c |\n')
+    const html = renderHtml(ast)
+    expect(html).toContain('width: 33.3%;')
+    expect(html).toContain('width: 0.7%;')
+    expect(html).toContain('width: 7%;')
+    expect(renderCarveWithConversionReport(ast).report.diagnostics).toEqual([])
+  })
+
   it.each([
     [{ align: 'left' }, { align: 'right' }],
     [{ valign: 'top' }, { valign: 'bottom' }],
