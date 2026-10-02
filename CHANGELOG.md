@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Performance
+
+- HTML-to-Carve drops refused blank table rows in batches across block lists. The writer keeps the first refused node on `SourceUnspellableError.node` and supplies the batch on its optional `nodes` field.
+
 ### Fixes
 
 - Share schema child slots across AST conversion, diffs, sidecars, and text coalescing. Diffs report edits inside substitution arms, citation fields, short captions, and extension fallbacks at their child paths. AST depth checks cover singleton children (#2442).

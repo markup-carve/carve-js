@@ -13,6 +13,7 @@ import type {
   ListItem,
   Table,
   TableCell,
+  TableRow,
   Text,
 } from './ast.js'
 import {
@@ -41,6 +42,9 @@ import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
+
+// A partial row batch must stop outer block lists at the deferred error.
+const stoppedRowBatches = new WeakSet<SourceUnspellableError>()
 
 export interface CarveRenderOptions extends RenderLossSinkOptions {}
 
@@ -2783,44 +2787,69 @@ class CarveRenderSession {
       let previousList: List | null = null
       let listSeparated = false
       let previousBlock: BlockNode | null = null
-      for (const block of blocks) {
-        ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
-        const rendered = this.renderBlock(block, ctx)
-        ctx.afterCaptionHost = hostsCaption(block)
-        if (block.type === 'list') {
-          listSeparated = previousList !== null && listsWouldMerge(previousList, block)
-          previousList = block
-        } else if (spellsSomething(rendered)) {
-          previousList = null
-          listSeparated = false
-        }
-        // A block that spells nothing contributes nothing - not even the blank
-        // line a part of its own would open. As far as the page is concerned it
-        // is the empty paragraph above it (PART 11 §10j).
-        if (spellsSomething(rendered)) {
-          const text = rendered
-          // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
-          // lines are one paragraph in the source and N nodes in the tree since
-          // PART 12 §18, so the default block separator would open a blank line
-          // between lines the author wrote adjacent - and PART 11 §6 binds the
-          // writer to the author's layout. Adjacency is read from `pos`, so a
-          // blank line the author DID write survives, and a tree with no
-          // positions falls back to the separator every other block gets.
-          if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
-            parts[parts.length - 1] += `\n${text}`
-          } else if (listSeparated && parts.length > 0) {
-            // §11 N1a's boundary, written as a SENTINEL rather than as four
-            // literal newlines. `normalize` squeezes every run of three or more
-            // newlines to two - correct for a decorative run, which the rule says
-            // to normalize away, and fatal for this one, which the rule says to
-            // keep. The squeeze cannot tell them apart from the text; only the
-            // writer knows, so the writer says so and `normalize` restores it.
-            parts[parts.length - 1] += `\n${this.boundaryTag()}${text}`
-          } else {
-            parts.push(text)
+      const refused: object[] = []
+      let firstRefusal: SourceUnspellableError | undefined
+      let stopped = false
+      try {
+        for (const block of blocks) {
+          ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
+          let rendered: string
+          try {
+            rendered = this.renderBlock(block, ctx)
+          } catch (error) {
+            if (!(error instanceof SourceUnspellableError) || error.nodeType !== 'table_row' || error.node === undefined) throw error
+            firstRefusal ??= error
+            for (const row of error.nodes ?? [error.node]) refused.push(row)
+            if (stoppedRowBatches.has(error)) {
+              stopped = true
+              break
+            }
+            continue
           }
-          previousBlock = block
+          ctx.afterCaptionHost = hostsCaption(block)
+          if (block.type === 'list') {
+            listSeparated = previousList !== null && listsWouldMerge(previousList, block)
+            previousList = block
+          } else if (spellsSomething(rendered)) {
+            previousList = null
+            listSeparated = false
+          }
+          // A block that spells nothing contributes nothing - not even the blank
+          // line a part of its own would open. As far as the page is concerned it
+          // is the empty paragraph above it (PART 11 §10j).
+          if (spellsSomething(rendered)) {
+            const text = rendered
+            // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
+            // lines are one paragraph in the source and N nodes in the tree since
+            // PART 12 §18, so the default block separator would open a blank line
+            // between lines the author wrote adjacent - and PART 11 §6 binds the
+            // writer to the author's layout. Adjacency is read from `pos`, so a
+            // blank line the author DID write survives, and a tree with no
+            // positions falls back to the separator every other block gets.
+            if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
+              parts[parts.length - 1] += `\n${text}`
+            } else if (listSeparated && parts.length > 0) {
+              // §11 N1a's boundary, written as a SENTINEL rather than as four
+              // literal newlines. `normalize` squeezes every run of three or more
+              // newlines to two - correct for a decorative run, which the rule says
+              // to normalize away, and fatal for this one, which the rule says to
+              // keep. The squeeze cannot tell them apart from the text; only the
+              // writer knows, so the writer says so and `normalize` restores it.
+              parts[parts.length - 1] += `\n${this.boundaryTag()}${text}`
+            } else {
+              parts.push(text)
+            }
+            previousBlock = block
+          }
         }
+      } catch (error) {
+        if (firstRefusal === undefined) throw error
+        stopped = true
+      }
+      if (firstRefusal !== undefined) {
+        const error = new SourceUnspellableError(firstRefusal.nodeType, firstRefusal.reason, firstRefusal.node, refused)
+        if (stopped) stoppedRowBatches.add(error)
+        throw error
       }
       return parts.join('\n\n')
     } finally {
@@ -2850,6 +2879,12 @@ class CarveRenderSession {
     ctx.atAnAuthoredBodyColumn = false
     try {
       return this.renderBlockBody(node, ctx, atAnAuthoredBodyColumn)
+    } catch (error) {
+      // Composite blocks may have later items or captions the refusal skipped.
+      if (node.type !== 'table' && error instanceof SourceUnspellableError && error.nodeType === 'table_row') {
+        stoppedRowBatches.add(error)
+      }
+      throw error
     } finally {
       this.escapeUnit = previous
       ctx.atAnAuthoredBodyColumn = atAnAuthoredBodyColumn
@@ -3625,25 +3660,41 @@ class CarveRenderSession {
     const trailingColspansOnly = firstSpan >= 1 && first!.cells.slice(firstSpan).every((c) => c.span === 'colspan')
     const needsDelimiter = firstSpan >= 0 && !trailingColspansOnly
 
-    node.rows.forEach((row, rowIndex) => {
-      const cells: string[] = []
-      for (const cell of row.cells) {
-        // In the delimiter form the promoted row is written as ordinary data
-        // cells - the row after it is what makes them headers.
-        const asHeader = !(needsDelimiter && rowIndex === 0)
-        cells.push(this.renderTableCell(cell, ctx, asHeader))
-      }
-      // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
-      // so no source spells one and the writer refuses the tree (carve-js#1822).
-      if (cells.every((cell) => cell === ' ' || cell === '= ')) {
-        throw new SourceUnspellableError(
-          'table_row',
-          'a table row whose every cell is blank has no Carve source spelling',
-          row,
-        )
-      }
-      rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
-    })
+    const refused: TableRow[] = []
+    let stopped = false
+    try {
+      node.rows.forEach((row, rowIndex) => {
+        const cells: string[] = []
+        for (const cell of row.cells) {
+          // In the delimiter form the promoted row is written as ordinary data
+          // cells - the row after it is what makes them headers.
+          const asHeader = !(needsDelimiter && rowIndex === 0)
+          cells.push(this.renderTableCell(cell, ctx, asHeader))
+        }
+        // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
+        // so no source spells one and the writer refuses the tree (carve-js#1822).
+        if (cells.every((cell) => cell === ' ' || cell === '= ')) {
+          refused.push(row)
+          return
+        }
+        rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
+      })
+    } catch (error) {
+      if (refused.length === 0) throw error
+      // Report the earlier row refusal first; a retry will reach this error.
+      stopped = true
+    }
+    if (refused.length > 0) {
+      if (node.caption !== undefined && refused.length < node.rows.length) stopped = true
+      const error = new SourceUnspellableError(
+        'table_row',
+        'a table row whose every cell is blank has no Carve source spelling',
+        refused[0],
+        refused,
+      )
+      if (stopped) stoppedRowBatches.add(error)
+      throw error
+    }
     if (needsDelimiter) {
       rows.splice(1, 0, `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
     }

@@ -5,6 +5,8 @@ export class SourceUnspellableError extends Error {
     public readonly reason: string,
     /** The node to unwrap so the tree becomes spellable, where one exists. */
     public readonly node?: object,
+    /** Nodes with the same refusal, in source order. */
+    public readonly nodes?: readonly object[],
   ) {
     super(`renderCarve cannot spell ${nodeType}: ${reason}`)
     this.name = 'SourceUnspellableError'

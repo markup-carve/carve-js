@@ -23,6 +23,7 @@ import { CANONICAL_ADMONITION_KINDS, GENERATED_CONTENT_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
+import { ownedChildFields } from './owned-child-fields.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
 import { mergeAttrs, parse } from './parse.js'
 import {
@@ -4716,42 +4717,63 @@ class Importer {
    * Drops the row a writer refusal names, and the table with it when no row
    * survives. False when the row is not in the tree.
    */
-  dropUnspellableRow(document: Document, target: object): boolean {
-    const origin = this.rowOrigins.get(target)
-    if (origin === undefined) return false
-    const stack: unknown[] = [document]
+  dropUnspellableRow(document: Document, target: object, targets: readonly object[] = [target]): boolean {
+    if (this.rowOrigins.get(target) === undefined) return false
+    const refused = new Set(targets)
+    const owners = new Map<object, Table>()
+    const arrays: unknown[][] = []
+    const seen = new Set<object>()
+    const stack: unknown[] = [document, document.trailerBlocks]
+    for (const blocks of Object.values(document.footnoteDefs ?? {})) stack.push(blocks)
     while (stack.length > 0) {
       const node = stack.pop()
-      if (node === null || typeof node !== 'object') continue
+      if (node === null || typeof node !== 'object' || seen.has(node)) continue
+      seen.add(node)
       if (Array.isArray(node)) {
-        const table = node.find(
-          (child): child is Table =>
-            child !== null && typeof child === 'object' && (child as BlockNode).type === 'table' && (child as Table).rows.includes(target as TableRow),
-        )
-        if (table !== undefined) {
-          table.rows.splice(table.rows.indexOf(target as TableRow), 1)
-          this.report.add(
-            'structure-unspellable',
-            'Dropped a row whose every cell is empty: Carve reads such a row as text',
-            'warning',
-            origin.path,
-            origin.node,
-          )
-          if (table.rows.length === 0) {
-            node.splice(node.indexOf(table), 1)
-            // A caption with no row left has nowhere to sit: a lone `^` line
-            // reads as a paragraph, not as a table's caption.
-            if (table.caption !== undefined) {
-              this.report.add('element-dropped', 'Dropped a caption whose table has no row left', 'warning', origin.path, origin.node)
-            }
-          }
-          return true
-        }
+        arrays.push(node)
+        for (const child of node) stack.push(child)
+        continue
       }
-      for (const value of Object.values(node)) stack.push(value)
+      if ((node as BlockNode).type === 'table') {
+        const table = node as Table
+        for (const row of table.rows) if (refused.has(row)) owners.set(row, table)
+      }
+      const record = node as Record<string, unknown>
+      for (const field of ownedChildFields(record)) stack.push(record[field])
     }
 
-    return false
+    const remaining = new Map<Table, number>()
+    const dropped = new Set<object>()
+    for (const row of targets) {
+      const origin = this.rowOrigins.get(row)
+      const table = owners.get(row)
+      if (origin === undefined || table === undefined || dropped.has(row)) continue
+      dropped.add(row)
+      this.report.add(
+        'structure-unspellable',
+        'Dropped a row whose every cell is empty: Carve reads such a row as text',
+        'warning',
+        origin.path,
+        origin.node,
+      )
+      const left = (remaining.get(table) ?? table.rows.length) - 1
+      remaining.set(table, left)
+      if (left === 0) {
+        dropped.add(table)
+        if (table.caption !== undefined) {
+          this.report.add('element-dropped', 'Dropped a caption whose table has no row left', 'warning', origin.path, origin.node)
+        }
+      }
+    }
+    for (const array of arrays) {
+      let write = 0
+      for (const node of array) {
+        if (node !== null && typeof node === 'object' && dropped.has(node)) continue
+        array[write++] = node
+      }
+      array.length = write
+    }
+    return dropped.size > 0
   }
 
   unwrapUnspellable(document: Document, target: object): boolean {
@@ -5784,7 +5806,7 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
     } catch (error) {
       if (!(error instanceof SourceUnspellableError) || error.node === undefined) throw error
       const dropped = error.nodeType === 'table_row'
-        ? importer.dropUnspellableRow(value, error.node)
+        ? importer.dropUnspellableRow(value, error.node, error.nodes)
         : importer.unwrapUnspellable(value, error.node)
       if (!dropped) throw error
     }
