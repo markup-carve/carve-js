@@ -2174,7 +2174,13 @@ class Importer {
     // rebuilt section back in that slot instead of at document end.
     if (tag === 'carve-footnote-placement') return [{ type: 'directive', kind: 'footnotes', children: [] }]
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
-    if (tag === 'table') return [this.table(node, path, depth, attrs)]
+    if (tag === 'table') {
+      const table = this.table(node, path, depth, attrs)
+      if (this.writing && table.type === 'table' && table.rows.length === 0) {
+        return []
+      }
+      return [table]
+    }
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
     if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
     if (tag === 'div') {
@@ -3310,6 +3316,9 @@ class Importer {
       for (const child of domChildren(n) ?? []) walk(child, isSection ? n : section)
     }
     walk(node)
+    if (this.writing && tr.length === 0) {
+      this.report.add('table-degraded', 'Dropped a rowless table, including its attributes and caption: Carve source cannot spell a table without rows', 'warning', path, node)
+    }
     // The attributes of the SECTIONS, read once and in document order. Only a
     // `<tbody>` has a slot for them - the body group `rowGroups` states - so
     // `rowGroups` takes what it places out of this map and whatever is left is
@@ -3556,12 +3565,6 @@ class Importer {
     path: string,
     sectionAttrs: Map<P5Node, { attrs: Attrs; path: string }>,
   ): TableRowGroups | undefined {
-    if (tr.length === 0 && sectionAttrs.size === 0) {
-      if ((domChildren(node) ?? []).some(section => domTag(section) === 'tbody')) {
-        this.report.add('table-degraded', 'Dropped the row grouping of a table with no rows: Carve source cannot spell a rowless table', 'warning', path, node)
-      }
-      return undefined
-    }
     const sectionOf = (row: P5Node): string => domTag(group.get(row)) ?? 'tbody'
     const isHeaderRow = (row: P5Node): boolean => {
       const cells = (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th')
@@ -3635,7 +3638,7 @@ class Importer {
     // Empty bodies have no rows to collect above, but still mark a boundary.
     for (const section of orderedSections) {
       const own = sectionAttrs.get(section)
-      if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section) || (tr.length === 0 && !own)) continue
+      if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section)) continue
       const sourceIndex = orderedSections.findIndex(child => child === section)
       const at = bodySections.findIndex(body => body !== undefined && orderedSections.findIndex(child => child === body) > sourceIndex)
       const index = at < 0 ? bodies.length : at
