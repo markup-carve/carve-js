@@ -17,6 +17,30 @@ function group(src: string): { items: { key: string; suppressAuthor: boolean }[]
 }
 
 describe('citation matcher', () => {
+  it.each([
+    [String.raw`[\@a]`, undefined],
+    [String.raw`[\\@a]`, 'a'],
+    [String.raw`[\\\@a]`, undefined],
+    [String.raw`[escaped \@a, see @b]`, 'b'],
+    [String.raw`[@a\,b]`, undefined],
+    ['[mail me @ home, see @a]', 'a'],
+    ['[see\n@a]', 'a'],
+    ['[@a , p. 4]', undefined],
+  ])('matches citation item boundaries in %s', (source, key) => {
+    expect(group(source)?.items[0]?.key).toBe(key)
+  })
+
+  it('keeps long citation prefixes', () => {
+    expect(group('[' + 'x '.repeat(16384) + '@a]')?.items[0]?.key).toBe('a')
+  })
+
+  it.each([
+    [String.raw`[\-@a]`, false],
+    [String.raw`[\\-@a]`, true],
+  ])('honors escaped suppress-author markers in %s', (source, suppressed) => {
+    expect(group(source)?.items[0]?.suppressAuthor).toBe(suppressed)
+  })
+
   it('types and positions each citation item independently', () => {
     const source = 'See [@a; see @bb, p. 4].\n'
     const g = group(source) as never as {
