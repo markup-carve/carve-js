@@ -99,10 +99,9 @@ describe('table section attribute preservation', () => {
   it('keeps empty attributed sections and reports their source losses', () => {
     const html = '<table><thead id="eh"></thead><tbody id="empty"></tbody><tfoot id="ef"></tfoot></table>'
     expect(groups(html)).toMatchObject({ headRows: 0, headAttrs: { id: 'eh' }, bodies: [{ headRows: 0, bodyRows: 0, attrs: { id: 'empty' } }], footRows: 0, footAttrs: { id: 'ef' } })
-    const loss = report(html).join('\n')
-    expect(loss).toContain('rowGroups.headAttrs')
-    expect(loss).toContain('rowGroups.bodies[0].attrs')
-    expect(loss).toContain('rowGroups.footAttrs')
+    expect(report(html)).toEqual([
+      'table-degraded: Dropped a rowless table, including its attributes and caption: Carve source cannot spell a table without rows',
+    ])
   })
 
   it('reports a `<tbody>`\'s attributes when the grouping itself is dropped', () => {

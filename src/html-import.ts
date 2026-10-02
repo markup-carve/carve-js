@@ -2174,7 +2174,15 @@ class Importer {
     // rebuilt section back in that slot instead of at document end.
     if (tag === 'carve-footnote-placement') return [{ type: 'directive', kind: 'footnotes', children: [] }]
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
-    if (tag === 'table') return [this.table(node, path, depth, attrs)]
+    if (tag === 'table') {
+      const unspellableBefore = this.unspellable.length
+      const table = this.table(node, path, depth, attrs)
+      if (this.writing && table.type === 'table' && table.rows.length === 0) {
+        this.unspellable.length = unspellableBefore
+        return []
+      }
+      return [table]
+    }
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
     if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
     if (tag === 'div') {
@@ -3310,6 +3318,9 @@ class Importer {
       for (const child of domChildren(n) ?? []) walk(child, isSection ? n : section)
     }
     walk(node)
+    if (this.writing && tr.length === 0) {
+      this.report.add('table-degraded', 'Dropped a rowless table, including its attributes and caption: Carve source cannot spell a table without rows', 'warning', path, node)
+    }
     // The attributes of the SECTIONS, read once and in document order. Only a
     // `<tbody>` has a slot for them - the body group `rowGroups` states - so
     // `rowGroups` takes what it places out of this map and whatever is left is
@@ -3386,7 +3397,7 @@ class Importer {
         // survives.
         const scope = cellAttrs?.keyValues?.scope
         if (scope !== undefined) {
-          const positional = r < leadingHeaderRows ? 'col' : 'row'
+          const positional = r < leadingHeaderRows && domTag(group.get(row)) !== 'tfoot' ? 'col' : 'row'
           // Only the POSITIONAL value goes. Every other one is kept wherever
           // the cell sits, including below the header rows: `header_cell` has
           // an attribute slot now, after its markers (§5 T10), so such a cell
@@ -3556,12 +3567,6 @@ class Importer {
     path: string,
     sectionAttrs: Map<P5Node, { attrs: Attrs; path: string }>,
   ): TableRowGroups | undefined {
-    if (tr.length === 0 && sectionAttrs.size === 0) {
-      if ((domChildren(node) ?? []).some(section => domTag(section) === 'tbody')) {
-        this.report.add('table-degraded', 'Dropped the row grouping of a table with no rows: Carve source cannot spell a rowless table', 'warning', path, node)
-      }
-      return undefined
-    }
     const sectionOf = (row: P5Node): string => domTag(group.get(row)) ?? 'tbody'
     const isHeaderRow = (row: P5Node): boolean => {
       const cells = (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th')
@@ -3632,12 +3637,14 @@ class Importer {
     }
 
     const orderedSections = domChildren(node) ?? []
+    const sectionIndices = new Map<P5Node, number>(orderedSections.map((section, index) => [section, index]))
+    const sectionsWithRows = new Set(group.values())
     // Empty bodies have no rows to collect above, but still mark a boundary.
     for (const section of orderedSections) {
       const own = sectionAttrs.get(section)
-      if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section) || (tr.length === 0 && !own)) continue
-      const sourceIndex = orderedSections.findIndex(child => child === section)
-      const at = bodySections.findIndex(body => body !== undefined && orderedSections.findIndex(child => child === body) > sourceIndex)
+      if (domTag(section) !== 'tbody' || sectionsWithRows.has(section)) continue
+      const sourceIndex = sectionIndices.get(section)!
+      const at = bodySections.findIndex(body => body !== undefined && (sectionIndices.get(body) ?? -1) > sourceIndex)
       const index = at < 0 ? bodies.length : at
       bodies.splice(index, 0, { headRows: 0, bodyRows: 0, ...(own ? { attrs: own.attrs } : {}) })
       bodySections.splice(index, 0, section)
@@ -3655,7 +3662,7 @@ class Importer {
     // BOUNDARY the field exists to record, and absorbing it away left a single
     // ordinary body that the derivation reproduces - so the two bodies went
     // silently, which is the opposite of the point.
-    if (headAttrs === undefined && headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0) {
+    if (headAttrs === undefined && headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0 && bodies[0]!.headRows > 0) {
       const absorbed = Math.min(leadingHeaderRows, bodies[0]!.headRows)
       headRows2 = absorbed
       bodies[0] = { ...bodies[0]!, headRows: bodies[0]!.headRows - absorbed }
