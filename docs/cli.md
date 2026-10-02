@@ -31,6 +31,7 @@ carve diff a.crv b.crv     # semantic changes, ignoring source reflow
 carve merge base.crv ours.crv theirs.crv # merge independent edits
 carve portability file.crv # report where the document reads differently in Djot
 carve --help
+carve --version            # or -V: prints `carve-js <version>`
 ```
 
 `carve fmt` rewrites Carve into a canonical form: it strips trailing whitespace,
