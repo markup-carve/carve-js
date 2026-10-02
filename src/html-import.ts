@@ -3472,14 +3472,12 @@ class Importer {
     const sectionsWithRows = new Set(tr.map((row) => group.get(row)))
     for (const [section, own] of sectionAttrs) {
       const tag = domTag(section) ?? 'tbody'
-      // A body group IS the run of rows it consumes, so a section with none is
-      // not a group and has nowhere to put them. Stating it as a zero-count
-      // group would put a body in the partition that describes no rows.
+      // Unclaimed section attributes have no slot in the retained partition.
       const reason = tag !== 'tbody'
         ? 'the section cannot be represented in the retained row partition'
         : sectionsWithRows.has(section)
           ? 'the row grouping this body belongs to was not kept, and nothing else holds it'
-          : 'a body group is the rows it consumes, and this one has none'
+          : 'the empty body could not be retained in the row partition'
       this.report.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path, section)
     }
     /*
@@ -3558,6 +3556,12 @@ class Importer {
     path: string,
     sectionAttrs: Map<P5Node, { attrs: Attrs; path: string }>,
   ): TableRowGroups | undefined {
+    if (tr.length === 0 && sectionAttrs.size === 0) {
+      if ((domChildren(node) ?? []).some(section => domTag(section) === 'tbody')) {
+        this.report.add('table-degraded', 'Dropped the row grouping of a table with no rows: Carve source cannot spell a rowless table', 'warning', path, node)
+      }
+      return undefined
+    }
     const sectionOf = (row: P5Node): string => domTag(group.get(row)) ?? 'tbody'
     const isHeaderRow = (row: P5Node): boolean => {
       const cells = (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th')
@@ -3631,7 +3635,7 @@ class Importer {
     // Empty bodies have no rows to collect above, but still mark a boundary.
     for (const section of orderedSections) {
       const own = sectionAttrs.get(section)
-      if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section)) continue
+      if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section) || (tr.length === 0 && !own)) continue
       const sourceIndex = orderedSections.findIndex(child => child === section)
       const at = bodySections.findIndex(body => body !== undefined && orderedSections.findIndex(child => child === body) > sourceIndex)
       const index = at < 0 ? bodies.length : at

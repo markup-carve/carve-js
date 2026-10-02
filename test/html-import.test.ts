@@ -1350,6 +1350,17 @@ describe('table row groups on import', () => {
     expect(renderCarve(reparsed)).toBe(written.value)
   })
 
+  it('reports rowless bodies without attaching metadata to the next paragraph', () => {
+    const html = '<p>x</p><table><tbody></tbody><tbody></tbody></table><p>y</p>'
+    const written = htmlToCarve(html)
+    expect(written.value).toBe('x\n\ny\n')
+    expect(written.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'table-degraded', message: expect.stringContaining('rowless table') }),
+    ])
+    expect(carveToHtml(written.value)).toBe('<p>x</p>\n<p>y</p>')
+    expect(htmlToAst(html).report.diagnostics).toEqual(written.report.diagnostics)
+  })
+
   it('refuses to describe a head or foot that is not at the edge of the rows', () => {
     // The field can only say "the first N rows" and "the last N rows". A
     // `<thead>` after a `<tbody>` is a table it cannot describe, so the
