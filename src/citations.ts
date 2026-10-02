@@ -136,12 +136,10 @@ interface Def {
   cslText?: string
 }
 
-// Single-entry cache: the matcher is invoked repeatedly for the SAME inline
-// text (once per `[` in it), so caching only the most-recent text gives the
-// O(1)-per-opener win without a global Map retaining large source strings of
-// past parses in a long-lived process.
-let lastBracketMapText: string | null = null
-let lastBracketMap: Record<number, number> = {}
+// Nested inline runs share a matcher context. Keep their maps together so
+// returning to an outer run does not rebuild its map at every citation.
+// Weak keys release the source strings when the parse context is released.
+const bracketMaps = new WeakMap<MatcherContext, Map<string, Record<number, number>>>()
 
 /**
  * Citations (#90, Tier-2). Bracketed `[@key]` references with an in-document
@@ -301,12 +299,18 @@ function buildBracketMap(text: string): Record<number, number> {
   return map
 }
 
-function bracketMapFor(text: string): Record<number, number> {
-  if (text !== lastBracketMapText) {
-    lastBracketMap = buildBracketMap(text)
-    lastBracketMapText = text
+function bracketMapFor(text: string, ctx: MatcherContext): Record<number, number> {
+  let maps = bracketMaps.get(ctx)
+  if (!maps) {
+    maps = new Map()
+    bracketMaps.set(ctx, maps)
   }
-  return lastBracketMap
+  let map = maps.get(text)
+  if (!map) {
+    map = buildBracketMap(text)
+    maps.set(text, map)
+  }
+  return map
 }
 
 function parseItem(raw: string, ctx: MatcherContext): Citation | null {
@@ -328,7 +332,7 @@ function parseItem(raw: string, ctx: MatcherContext): Citation | null {
 
 const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMatch | null => {
   if (text[pos] !== '[') return null
-  const close = bracketMapFor(text)[pos]
+  const close = bracketMapFor(text, ctx)[pos]
   if (close === undefined) return null
   const after = text[close + 1]
   if (after === '(' || after === '[' || after === '{') return null
