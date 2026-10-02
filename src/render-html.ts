@@ -7,7 +7,7 @@
  * indented children for readability.
  */
 
-import { tableWidthPercentage } from './table-source-metadata.js'
+import { tableWidthPercentage, tableRowGroupsFromAttrs } from './table-source-metadata.js'
 import type {
   Admonition,
   Directive,
@@ -1736,10 +1736,13 @@ function emptyContinuation(cell: TableCell): TableCell {
 
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  const consumed = ['aligns', 'valigns', 'widths']
+  const hasBodyMetadata = ['body-rows', 'body-header-rows', 'body-header-cols'].some(key => node.attrs?.keyValues?.[key] !== undefined)
+  if (!hasBodyMetadata || tableRowGroupsFromAttrs(node.attrs, node.rows.length)) consumed.push('header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols')
   const tableAttrs = node.attrs ? {
     ...node.attrs,
-    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key))),
-    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key)) } : {}),
+    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !consumed.includes(key))),
+    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !consumed.includes(key)) } : {}),
   } : undefined
   const lines: string[] = [
     `${pad}<table${renderAttrs(tableAttrs)}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
@@ -1815,11 +1818,18 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     !entry.skip && entry.rowspan > 1 &&
     sectionEnds.some(end => r < end && r + entry.rowspan > end),
   ))
+  const rowContexts = Array.from({ length: grid.length }, (_, row) => ({ header: row < headerEnd, columns: 0 }))
+  let contextStart = headerEnd
+  for (const body of node.rowGroups?.bodies ?? []) {
+    const end = contextStart + body.headRows + body.bodyRows
+    for (let row = contextStart; row < end; row++) rowContexts[row] = { header: row < contextStart + body.headRows, columns: body.rowHeadColumns ?? 0 }
+    contextStart = end
+  }
   if (crossesSection) {
     lines.push(`${pad}  <tbody>`)
     for (let r = 0; r < grid.length; r++) {
-      const inHeaderRun = r < headerEnd
-      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, inHeaderRun, inHeaderRun)}`)
+      const context = rowContexts[r]!
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, context.header, context.header, context.columns)}`)
     }
     lines.push(`${pad}  </tbody>`)
     lines.push(`${pad}</table>`)
@@ -1843,7 +1853,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     lines.push(`${pad}  <tbody${renderAttrs(body.attrs)}>`)
     const end = bodyStart + body.headRows + body.bodyRows
     for (let r = bodyStart; r < end; r++) {
-      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, r < bodyStart + body.headRows, r < bodyStart + body.headRows)}`)
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, r < bodyStart + body.headRows, r < bodyStart + body.headRows, body.rowHeadColumns)}`)
     }
     lines.push(`${pad}  </tbody>`)
     bodyStart = end
@@ -1908,13 +1918,14 @@ function renderTableRowFlat(
   opts: RenderOptions,
   inHeaderRun = false,
   promoteToHeader = false,
+  rowHeadColumns = 0,
 ): string {
   // A row attribute block (`| … |{.x}`) lives on the TableRow, shared by every
   // grid entry in this row.
   const parts: string[] = [`<tr${renderAttrs(cells[0]?.row.attrs)}>`]
-  for (const entry of cells) {
+  for (const [column, entry] of cells.entries()) {
     if (entry.skip) continue
-    const tag = entry.cell.header || promoteToHeader ? 'th' : 'td'
+    const tag = entry.cell.header || promoteToHeader || column < rowHeadColumns ? 'th' : 'td'
     const attrs: string[] = []
     const emitted = new Set<string>()
     if (entry.rowspan > 1) {

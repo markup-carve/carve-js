@@ -1322,22 +1322,13 @@ describe('table row groups on import', () => {
     }
   })
 
-  it('keeps it in the AST and reports it when a writer has to spell it', () => {
-    // Carve source has no spelling for the field, so `htmlToAst` loses nothing
-    // and `htmlToCarve` is where the loss happens - the split PART 12 section
-    // 16 draws, and the same one the figure-wrapping-a-table loss uses.
+  it('keeps body groups in both the AST and source', () => {
     const html = '<table><tbody><tr><td>a</td></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>'
     expect(htmlToAst(html).report.diagnostics).toEqual([])
-    expect(htmlToCarve(html).report.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'structure-unspellable',
-        fidelity: 'dropped',
-        confidence: 'exact',
-        severity: 'warning',
-        message: expect.stringContaining('explicit head/body/foot grouping'),
-        path: '/table[1]',
-      }),
-    ])
+    const written = htmlToCarve(html)
+    expect(written.report.diagnostics).toEqual([])
+    expect(written.value).toContain('body-rows=1,1')
+    expect(toAstJson(parse(written.value)).children[0]).toMatchObject({ rowGroups: { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 } })
   })
 
   it('refuses to describe a head or foot that is not at the edge of the rows', () => {

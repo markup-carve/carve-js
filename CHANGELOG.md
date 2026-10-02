@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- Preserve multiple table bodies, intermediate body headers, empty bodies, and per-body row-header counts with positional source attributes. Keep authored conflicts and report partition loss.
+
 - Preserve source-spellable table heads, single bodies, and footers during canonical conversion and HTML import. Diagnose conflicting column attributes and keep fractional widths exact through percentage conversion. Keep decimal percentages precise in HTML output (#2460).
 - Report explicit table row groups dropped by canonical source conversion as a `field-unspellable` diagnostic for `rowGroups` (#2457).
 - Share schema child slots across AST conversion, diffs, sidecars, and text coalescing. Diffs report edits inside substitution arms, citation fields, short captions, and extension fallbacks at their child paths. AST depth checks cover singleton children (#2442).

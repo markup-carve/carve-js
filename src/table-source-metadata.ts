@@ -43,16 +43,37 @@ export function tableColumnsFromAttrs(attrs: Attrs | undefined): TableColumn[] |
 
 export function tableRowGroupsFromAttrs(attrs: Attrs | undefined, rows: number): TableRowGroups | undefined {
   const kv = attrs?.keyValues
-  if (kv?.['header-rows'] === undefined && kv?.['footer-rows'] === undefined) return undefined
-  const rowCount = (value: string | undefined): number | undefined => {
-    if (value === undefined) return 0
-    if (value.trim() === '') return 1
-    return /^\d+$/.test(value.trim()) ? Number(value.trim()) : undefined
+  if (!kv || !['header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols'].some(key => kv[key] !== undefined)) return undefined
+  const count = (value: string): number | undefined => {
+    const trimmed = value.trim()
+    if (!/^\d+$/.test(trimmed)) return undefined
+    const number = Number(trimmed)
+    return Number.isSafeInteger(number) ? number : undefined
   }
-  const headRows = rowCount(kv?.['header-rows'])
-  const footRows = rowCount(kv?.['footer-rows'])
+  const edge = (value: string | undefined): number | undefined => value === undefined ? 0 : value.trim() === '' ? 1 : count(value)
+  const headRows = edge(kv['header-rows'])
+  const footRows = edge(kv['footer-rows'])
   if (headRows === undefined || footRows === undefined || headRows + footRows > rows) return undefined
-  return { headRows, bodies: [{ headRows: 0, bodyRows: rows - headRows - footRows }], footRows }
+  if (kv['body-rows'] === undefined) {
+    if (kv['body-header-rows'] !== undefined || kv['body-header-cols'] !== undefined) return undefined
+    return { headRows, bodies: [{ headRows: 0, bodyRows: rows - headRows - footRows }], footRows }
+  }
+  const rawBodies = kv['body-rows'].trim() === '' ? [] : kv['body-rows'].split(',')
+  const headers = kv['body-header-rows']?.split(',')
+  const columns = kv['body-header-cols']?.split(',')
+  if ((headers && headers.length !== rawBodies.length) || (columns && columns.length !== rawBodies.length)) return undefined
+  const bodies: TableRowGroups['bodies'] = []
+  let remaining = rows - headRows - footRows
+  for (let i = 0; i < rawBodies.length; i++) {
+    const bodyRows = count(rawBodies[i]!)
+    const bodyHead = headers ? count(headers[i]!) : 0
+    const rawColumns = columns?.[i]?.trim()
+    const rowHeadColumns = rawColumns ? count(rawColumns) : undefined
+    if (bodyRows === undefined || bodyHead === undefined || (rawColumns && rowHeadColumns === undefined) || bodyHead > remaining || bodyRows > remaining - bodyHead) return undefined
+    remaining -= bodyHead + bodyRows
+    bodies.push({ headRows: bodyHead, bodyRows, ...(rowHeadColumns === undefined ? {} : { rowHeadColumns }) })
+  }
+  return remaining === 0 ? { headRows, bodies, footRows } : undefined
 }
 
 /** Add source spellings for table metadata without replacing authored attributes. */
@@ -75,11 +96,18 @@ export function tableSourceAttrs(table: Table): Attrs | undefined {
     }
   }
   const groups = table.rowGroups
-  const body = groups?.bodies[0]
-  if (groups && groups.bodies.length === 1 && body?.headRows === 0 && body.rowHeadColumns === undefined) {
-    if (keyValues['header-rows'] === undefined && groups.headRows > 0) keyValues['header-rows'] = String(groups.headRows)
-    if (keyValues['footer-rows'] === undefined && groups.footRows > 0) keyValues['footer-rows'] = String(groups.footRows)
-    if (keyValues['header-rows'] === undefined && keyValues['footer-rows'] === undefined) keyValues['header-rows'] = '0'
+  if (groups) {
+    const put = (key: string, value: string): void => { if (keyValues[key] === undefined) keyValues[key] = value }
+    if (groups.headRows > 0) put('header-rows', String(groups.headRows))
+    if (groups.footRows > 0) put('footer-rows', String(groups.footRows))
+    const simple = groups.bodies.length === 1 && groups.bodies[0]!.headRows === 0 && groups.bodies[0]!.rowHeadColumns === undefined
+    if (simple) {
+      if (keyValues['header-rows'] === undefined && keyValues['footer-rows'] === undefined) put('header-rows', '0')
+    } else {
+      put('body-rows', groups.bodies.map(body => body.bodyRows).join(','))
+      if (groups.bodies.some(body => body.headRows !== 0)) put('body-header-rows', groups.bodies.map(body => body.headRows).join(','))
+      if (groups.bodies.some(body => body.rowHeadColumns !== undefined)) put('body-header-cols', groups.bodies.map(body => body.rowHeadColumns ?? '').join(','))
+    }
   }
   return Object.keys(keyValues).length ? { ...(table.attrs ?? {}), keyValues } : table.attrs
 }
@@ -87,10 +115,11 @@ export function tableSourceAttrs(table: Table): Attrs | undefined {
 export function preservesTableRowGroups(table: Table, attrs: Attrs | undefined): boolean {
   const groups = table.rowGroups!
   const rebuilt = tableRowGroupsFromAttrs(attrs, table.rows.length)
-  const body = groups.bodies[0]
   return rebuilt !== undefined && groups.headRows === rebuilt.headRows && groups.footRows === rebuilt.footRows
-    && groups.bodies.length === 1 && body !== undefined && body.headRows === 0
-    && body.bodyRows === rebuilt.bodies[0]!.bodyRows && body.rowHeadColumns === undefined
+    && groups.bodies.length === rebuilt.bodies.length && groups.bodies.every((body, i) => {
+      const other = rebuilt.bodies[i]!
+      return body.headRows === other.headRows && body.bodyRows === other.bodyRows && body.rowHeadColumns === other.rowHeadColumns
+    })
 }
 
 export function preservesTableColumns(table: Table, attrs: Attrs | undefined): boolean {
