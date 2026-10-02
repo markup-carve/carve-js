@@ -34,6 +34,14 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'multiple-table-bodies-have-positional-source-metadata',
+  'empty-table-bodies-keep-their-source-boundaries',
+  'a-table-with-no-bodies-keeps-its-head-and-foot',
+  'invalid-table-body-metadata-stays-ordinary',
+  'a-span-across-bodies-keeps-their-header-semantics',
+  'a-head-and-foot-consuming-all-rows-leave-no-implicit-body',
+  'explicit-body-counts-include-native-header-cells',
+
   'invalid-named-container-metadata-keeps-the-subtree',
   // A directive with no resolver is ordinary text, which is what this engine
   // produces whether or not it knows about includes at all (PART 9 section 19).
