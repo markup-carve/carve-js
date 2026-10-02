@@ -7,7 +7,7 @@
  * indented children for readability.
  */
 
-import { tableWidthPercentage } from './table-source-metadata.js'
+import { tableWidthPercentage, tableRowGroupsFromAttrs } from './table-source-metadata.js'
 import type {
   Admonition,
   Directive,
@@ -1736,10 +1736,13 @@ function emptyContinuation(cell: TableCell): TableCell {
 
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  const consumed = ['aligns', 'valigns', 'widths']
+  const hasBodyMetadata = ['body-rows', 'body-header-rows', 'body-header-cols'].some(key => node.attrs?.keyValues?.[key] !== undefined)
+  if (!hasBodyMetadata || tableRowGroupsFromAttrs(node.attrs, node.rows.length)) consumed.push('header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols')
   const tableAttrs = node.attrs ? {
     ...node.attrs,
-    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key))),
-    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key)) } : {}),
+    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !consumed.includes(key))),
+    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !consumed.includes(key)) } : {}),
   } : undefined
   const lines: string[] = [
     `${pad}<table${renderAttrs(tableAttrs)}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,

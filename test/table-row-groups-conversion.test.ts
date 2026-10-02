@@ -20,13 +20,13 @@ describe('table row-group conversion diagnostics', () => {
   it.each([
     ['multiple bodies', { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 }],
     ['body header and row headers', { headRows: 0, bodies: [{ headRows: 1, bodyRows: 1, rowHeadColumns: 1 }], footRows: 0 }],
-  ])('reports a dropped %s partition and keeps cell content', (_name, groups) => {
+  ])('preserves a %s partition and keeps cell content', (_name, groups) => {
     const ast = document(groups)
     const before = toAstJson(ast)
     const result = renderCarveWithConversionReport(ast)
-    expect(result.report).toEqual({ diagnostics: [diagnostic], totalDiagnostics: 1, truncated: false })
+    expect(result.report).toEqual({ diagnostics: [], totalDiagnostics: 0, truncated: false })
     const reparsed = toAstJson(parse(result.value!))
-    expect(reparsed.children[0]).not.toHaveProperty('rowGroups')
+    expect(reparsed.children[0]).toMatchObject({ rowGroups: groups })
     expect(reparsed.children[0]).toMatchObject({ rows: [row('body'), row('total')] })
     expect(toAstJson(ast)).toEqual(before)
   })
@@ -46,7 +46,9 @@ describe('table row-group conversion diagnostics', () => {
   })
 
   it('counts a suppressed partition diagnostic', () => {
-    const result = renderCarveWithConversionReport(document({ headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 }), {}, 0)
+    const ast = document()
+    ast.children[0].attrs = { keyValues: { 'footer-rows': '0' } }
+    const result = renderCarveWithConversionReport(ast, {}, 0)
     expect(result.value).toBeDefined()
     expect(result.report).toEqual({ diagnostics: [], totalDiagnostics: 1, truncated: true })
   })

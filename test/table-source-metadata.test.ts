@@ -91,3 +91,44 @@ describe('table source metadata', () => {
     expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ columns: table.columns, rowGroups: { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 } })
   })
 })
+
+
+describe('table body source metadata', () => {
+  it.each([
+    { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 },
+    { headRows: 0, bodies: [{ headRows: 1, bodyRows: 1, rowHeadColumns: 1 }], footRows: 0 },
+    { headRows: 0, bodies: [{ headRows: 0, bodyRows: 0 }, { headRows: 1, bodyRows: 1, rowHeadColumns: 0 }], footRows: 0 },
+    { headRows: 1, bodies: [], footRows: 1 },
+    { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1, rowHeadColumns: 0 }, { headRows: 0, bodyRows: 1 }], footRows: 0 },
+  ])('preserves body partition %j', (rowGroups) => {
+    const ast = document({ rowGroups, columns: [{ width: 0.333 }, { width: 0.667 }] })
+    const before = toAstJson(ast)
+    const result = renderCarveWithConversionReport(ast)
+    expect(result.report.diagnostics).toEqual([])
+    const reparsed = parse(result.value!)
+    expect(toAstJson(reparsed).children[0]).toMatchObject({ rowGroups })
+    expect(renderHtml(reparsed)).toBe(renderHtml(ast))
+    expect(toAstJson(ast)).toEqual(before)
+    expect(renderCarveWithConversionReport(reparsed).value).toBe(result.value)
+  })
+
+  it.each([
+    'body-rows=1', 'body-rows=1,1 body-header-rows=0',
+    'body-rows=1,1 body-header-cols=x,0', 'body-rows=1,-1',
+    'body-header-rows=1', 'body-rows=9007199254740992',
+    'body-rows=1,1 body-header-rows=1,0', 'header-rows=1 body-rows=x', 'header-rows=1 body-header-rows=1',
+  ])('rejects invalid body metadata %s', (attrs) => {
+    const ast = toAstJson(parse(`{${attrs}}\n| a | b |\n| c | d |\n`))
+    expect(ast.children[0]).not.toHaveProperty('rowGroups')
+    const html = renderHtml(parse(`{${attrs}}\n| a | b |\n| c | d |\n`))
+    expect(html).toContain('body-')
+    if (/(?:^| )header-rows=1(?: |$)/.test(attrs)) expect(html).toContain('header-rows="1"')
+  })
+
+  it('diagnoses retained attributes that conflict with imported bodies', () => {
+    const ast = document({ attrs: { keyValues: { 'body-rows': '2' } }, rowGroups: { headRows: 0, bodies: [{ headRows: 1, bodyRows: 1 }], footRows: 0 } })
+    const result = renderCarveWithConversionReport(ast)
+    expect(result.report.diagnostics.map(d => d.field)).toEqual(['rowGroups'])
+    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ attrs: { keyValues: { 'body-rows': '2' } } })
+  })
+})
