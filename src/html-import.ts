@@ -1,3 +1,4 @@
+import { preservesTableRowGroups, tableSourceAttrs } from './table-source-metadata.js'
 import { codeLanguage } from './html-import-code-language.js'
 import { parseFragment, serializeOuter, defaultTreeAdapter, html as p5html } from 'parse5'
 import { domAttrs, domContainer, domChild, domChildren, domData, domParent, domTag, domValue, type P5Node } from './html-import-dom.js'
@@ -3452,6 +3453,12 @@ class Importer {
     const rows = this.spanGrid(tr, built, rowAttrs, path, depth)
     const unspellableBefore = this.unspellable.length
     const rowGroups = this.rowGroups(node, tr, rows, group, leadingHeaderRows, path, sectionAttrs)
+    if (rowGroups) {
+      const table: Table = { type: 'table', rows, rowGroups, ...(attrs ? { attrs } : {}) }
+      if (listForm || !preservesTableRowGroups(table, tableSourceAttrs(table))) {
+        this.unspellable.push({ node, path, message: 'A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows' })
+      }
+    }
     // A list table has no slot for the grouping on either exit, so the AST exit
     // reports what only the writing exit reports for a pipe table.
     if (listForm && !this.writing) {
@@ -3664,13 +3671,6 @@ class Importer {
       // so it states nothing the rows do not (PART 12 §15, CARVE-P12-034).
       bodies.every((body) => body.headRows === 0 && body.attrs === undefined)
     if (derivable) return undefined
-    // Carve SOURCE has no spelling for the field, so a writer loses it. The
-    // AST keeps it and `htmlToCarve` reports it, which is the split §16 draws.
-    this.unspellable.push({
-      node: node,
-      path,
-      message: 'A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows',
-    })
     return { headRows: headRows2, bodies, footRows, ...(headAttrs ? { headAttrs } : {}), ...(footAttrs ? { footAttrs } : {}) }
   }
 

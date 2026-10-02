@@ -40,7 +40,6 @@ describe('a table section keeps the attributes it has a slot for', () => {
     // Only the field's own unspellability in Carve SOURCE is reported: the
     // attributes themselves are represented, so they are not a loss.
     expect(report(html)).toEqual([
-      'structure-unspellable: A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows',
       'structure-unspellable: Dropped rowGroups.bodies[0].attrs because Carve source cannot spell section attributes',
     ])
   })

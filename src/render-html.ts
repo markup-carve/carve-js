@@ -7,6 +7,7 @@
  * indented children for readability.
  */
 
+import { tableWidthPercentage } from './table-source-metadata.js'
 import type {
   Admonition,
   Directive,
@@ -1749,7 +1750,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   if (node.columns?.some((column) => column.width !== undefined)) {
     lines.push(`${pad}  <colgroup>`)
     for (const column of node.columns) {
-      const style = column.width === undefined ? '' : ` style="width: ${column.width * 100}%;"`
+      const style = column.width === undefined ? '' : ` style="width: ${tableWidthPercentage(column.width)}%;"`
       lines.push(`${pad}    <col${style}>`)
     }
     lines.push(`${pad}  </colgroup>`)

@@ -18,11 +18,8 @@ const diagnostic = {
 
 describe('table row-group conversion diagnostics', () => {
   it.each([
-    ['footer', partition],
-    ['leading header', { headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }],
     ['multiple bodies', { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 }],
     ['body header and row headers', { headRows: 0, bodies: [{ headRows: 1, bodyRows: 1, rowHeadColumns: 1 }], footRows: 0 }],
-    ['explicit single body', { headRows: 0, bodies: [{ headRows: 0, bodyRows: 2 }], footRows: 0 }],
   ])('reports a dropped %s partition and keeps cell content', (_name, groups) => {
     const ast = document(groups)
     const before = toAstJson(ast)
@@ -34,8 +31,22 @@ describe('table row-group conversion diagnostics', () => {
     expect(toAstJson(ast)).toEqual(before)
   })
 
+  it.each([
+    ['footer', partition],
+    ['leading header', { headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }],
+    ['explicit single body', { headRows: 0, bodies: [{ headRows: 0, bodyRows: 2 }], footRows: 0 }],
+    ['head and foot without body rows', { headRows: 1, bodies: [{ headRows: 0, bodyRows: 0 }], footRows: 1 }],
+  ])('preserves an imported %s partition', (_name, groups) => {
+    const ast = document(groups)
+    const before = toAstJson(ast)
+    const result = renderCarveWithConversionReport(ast)
+    expect(result.report).toEqual({ diagnostics: [], totalDiagnostics: 0, truncated: false })
+    expect(toAstJson(parse(result.value!)).children[0]).toMatchObject({ rowGroups: groups, rows: [row('body'), row('total')] })
+    expect(toAstJson(ast)).toEqual(before)
+  })
+
   it('counts a suppressed partition diagnostic', () => {
-    const result = renderCarveWithConversionReport(document(), {}, 0)
+    const result = renderCarveWithConversionReport(document({ headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 }), {}, 0)
     expect(result.value).toBeDefined()
     expect(result.report).toEqual({ diagnostics: [], totalDiagnostics: 1, truncated: true })
   })
