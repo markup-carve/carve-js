@@ -121,7 +121,7 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
     opts.extensions?.length || opts.profile !== undefined || opts.sourceLine ||
     (opts as RenderOptions & { mode?: unknown }).mode !== undefined ||
     opts.sections === false || opts.smartTypography === false || opts.smartTypography === 'source' ||
-    !isAscii(source) || /[\0\t\v\f\r]/.test(source) || source.startsWith('---') ||
+    /[^\x00-\x7f]|[\0\t\v\f\r]/.test(source) || source.startsWith('---') ||
     source.includes('[^') || source.includes('^[') || source.includes('[@') ||
     source.includes('</#') || source.includes('![') || source.includes('%%') ||
     source.includes(':::')
@@ -148,11 +148,6 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
   if (!collected) return undefined
   if (stats) for (const line of collected.definitionLines ?? []) accept(stats, 'linkDefinitions', line, line + 1, true)
   return renderBlocks(lines, collected.defs, opts, out, stats)
-}
-
-function isAscii(source: string): boolean {
-  for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) > 0x7f) return false
-  return true
 }
 
 function collectDefs(lines: string[], observe: boolean): { defs: Map<string, LinkDef>; definitionLines?: number[] } | undefined {
@@ -216,7 +211,7 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
     if (heading) {
       const level = heading[1]!.length
       const title = heading[2]!.trimEnd()
-      if (/[*\/`[]/.test(title) || (title.match(/:/g)?.length ?? 0) >= 2 || inlineComplex(title)) return undefined
+      if (/[*\/`[]/.test(title) || inlineComplex(title)) return undefined
       while (sections.at(-1) !== undefined && sections.at(-1)! >= level) {
         out.push('\n', indent(sections.length - 1), '</section>')
         sections.pop()
@@ -295,7 +290,6 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       if (!rendered) return undefined
       i = rendered.next; wrote = true; continue
     }
-    if (blockish(line)) return undefined
     const start = i
     out.push(indent(depth), '<p>')
     while (lines[i] !== undefined && lines[i]!.trim() !== '') {
