@@ -23,6 +23,7 @@ const KEY = String.raw`[\w][\w:.#$%&+?<>~/-]*`
 // One `;`-item: optional prefix, optional single `-` marker, `@key`,
 // optional `, locator`. The marker is exactly one sign directly before `@`.
 const ITEM_RE = new RegExp(String.raw`(${KEY})(?:,\s*(.*))?$`, 'sy')
+const KEY_RE = new RegExp(KEY, 'y')
 
 /** Fixed citeproc locator vocabulary: canonical -> matchers. Flattened and
  *  sorted longest-first so global longest-match wins. ASCII case-insensitive. */
@@ -282,19 +283,49 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
 // ----- parse: matcher -------------------------------------------------------
 
 function buildBracketMap(text: string): Record<number, number> {
-  const stack: number[] = []
+  const stack: Array<{ open: number; first?: { valid: boolean; invalidItems: number } }> = []
   const map: Record<number, number> = {}
+  let lastSemicolon = -1
+  let lastCommaKey = -1
+  let lastKey = -1
+  let keyEnd = -1
+  let contentEnd = 0
+  let invalidItems = 0
+  let escaped = false
+  const validItemAfter = (start: number): boolean => lastCommaKey > start || (lastKey > start && keyEnd === contentEnd)
   for (let i = 0; i < text.length; i++) {
-    const c = text[i]
-    if (c === '\\') {
-      i++
-      continue
+    const c = text[i]!
+    if (c === '@' && !escaped) {
+      KEY_RE.lastIndex = i + 1
+      const key = KEY_RE.exec(text)
+      if (key !== null) {
+        lastKey = i
+        keyEnd = KEY_RE.lastIndex
+        if (text[keyEnd] === ',') lastCommaKey = i
+      }
     }
-    if (c === '[') stack.push(i)
-    else if (c === ']') {
-      const open = stack.pop()
-      if (open !== undefined) map[open] = i
+    // Item splitting treats even escaped semicolons as separators.
+    if (c === ';') {
+      if (!validItemAfter(lastSemicolon)) invalidItems++
+      for (let j = stack.length - 1; j >= 0; j--) {
+        const frame = stack[j]!
+        if (frame.first !== undefined) break
+        frame.first = { valid: validItemAfter(frame.open), invalidItems }
+      }
+      lastSemicolon = i
     }
+    if (!escaped && c === '[') stack.push({ open: i })
+    else if (!escaped && c === ']') {
+      const frame = stack.pop()
+      if (frame !== undefined) {
+        const first = frame.first
+        // Check edge items and the count of invalid complete items before slicing.
+        if (validItemAfter(Math.max(frame.open, lastSemicolon))
+          && (first === undefined || (first.valid && first.invalidItems === invalidItems))) map[frame.open] = i
+      }
+    }
+    if (c.trim() !== '') contentEnd = i + 1
+    escaped = c === '\\' && !escaped
   }
   return map
 }

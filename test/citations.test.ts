@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { applyProfile, carveToHtml, parse, Profile } from '../src/index.js'
 import { citations, parseLocator } from '../src/citations.js'
-import { expectScansLinearly, perfIt } from './helpers/scaling.js'
+import { expectBuiltInputScansLinearly, expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [citations()] }).trim()
 const ha = (s: string) =>
@@ -17,6 +17,23 @@ function group(src: string): { items: { key: string; suppressAuthor: boolean }[]
 }
 
 describe('citation matcher', () => {
+  for (const [opening, closing] of [['[', ']'], ['[', ']x'], ['[', ' ]'], ['[,', ']'], ['[@a;', ']'], ['[@a; bad; @b,', ']']]) {
+    perfIt(`rejects nested citation wrappers ${opening} ... ${closing} without rescanning`, () => {
+      expectBuiltInputScansLinearly((input) => void parse(input, { extensions: [citations()] }),
+        (n) => opening!.repeat(n) + '@a' + closing!.repeat(n), {
+          label: 'rejected nested citation wrappers', smallRepeats: 16384, minSampleMs: 100,
+        })
+    }, 90000)
+  }
+
+  it.each([128, 1024])('keeps the inner citation inside %i rejected wrappers', (n) => {
+    expect(group('['.repeat(n) + '@a' + ']'.repeat(n))?.items[0]?.key).toBe('a')
+  })
+
+  it.each(['[@a, [x]]', String.raw`[@a, \, [x]]`, '[@a; @b, [x]]', '[@a; @b]', '[@a; bad; @b]', '[@a, x; @b]', '[@a\u00A0]'])('keeps closing brackets in locator content: %s', (source) => {
+    expect(group(source)?.items[0]?.key).toBe(source.includes('; bad;') ? undefined : 'a')
+  })
+
   it.each([
     [String.raw`[\@a]`, undefined],
     [String.raw`[\\@a]`, 'a'],
