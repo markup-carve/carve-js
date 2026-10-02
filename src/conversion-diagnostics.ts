@@ -1,4 +1,4 @@
-import { tableSourceAttrs, preservesTableRowGroups, preservesTableColumns } from './table-source-metadata.js'
+import { tableSourceAttrs, tableNeedsDelimiterHeader, preservesTableRowGroups, preservesTableColumns } from './table-source-metadata.js'
 import type { Document, Position, Table } from './ast.js'
 import { codeTerminated } from './verbatim-payload.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
@@ -41,6 +41,7 @@ export function renderCarveWithConversionReport(
     totalDiagnostics++
     if (diagnostics.length < maxDiagnostics) diagnostics.push(entry)
   }
+  const preservedHeaderCells = new WeakSet<object>()
   const stack: Array<{ value: unknown; inlineOnly: boolean }> = [{ value: ast, inlineOnly: false }]
   while (stack.length) {
     const { value, inlineOnly } = stack.pop()!
@@ -58,6 +59,9 @@ export function renderCarveWithConversionReport(
     if (type === 'paragraph' && Array.isArray(node.children) && node.children.length === 1 && ['image', 'comment'].includes((node.children[0] as { type?: string }).type ?? '')) report('structure-unspellable', 'Carve source spells the paragraph content as a block')
     if ((type === 'figure' || type === 'table') && node.shortCaption !== undefined) report('field-unspellable', 'Carve source cannot spell a short caption', 'shortCaption')
     if (type === 'figure' && (node.target as { type?: string } | undefined)?.type === 'table') report('structure-unspellable', 'Carve source cannot spell a figure wrapper around a table')
+    if (type === 'table' && tableNeedsDelimiterHeader(node as unknown as Table)) {
+      for (const cell of (node as unknown as Table).rows[0]!.cells) preservedHeaderCells.add(cell)
+    }
     if (type === 'table' && (node.columns as unknown[] | undefined)?.length) {
       const table = node as unknown as Table
       if (!preservesTableColumns(table, tableSourceAttrs(table))) {
@@ -80,6 +84,7 @@ export function renderCarveWithConversionReport(
         }
       }
     }
+    if (type === 'table_cell' && node.span !== undefined && node.header === true && !preservedHeaderCells.has(node)) report('field-unspellable', 'Carve span markers cannot preserve a placeholder cell’s header flag', 'header')
     if (type === 'table_cell' && node.blocks !== undefined) report('field-unspellable', 'Carve table cells cannot hold blocks', 'blocks')
     // A canonical fence needs a break before its closer, so a payload that ends
     // mid-line gains one on the way out (CARVE-P12-064).
