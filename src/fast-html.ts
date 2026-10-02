@@ -1,6 +1,6 @@
 import { slugify, headingIdSlugOpts } from './heading-ids.js'
 import { escapeAttrValue, escapeHtml, sanitizeUrl, type RenderOptions } from './render-html.js'
-import type { ParseOptions } from './parse.js'
+import { MAX_NESTING_DEPTH, type ParseOptions } from './parse.js'
 import type { RenderLossSinkOptions } from './render-loss.js'
 import { normalizeRefLabel } from './label-key.js'
 import { linkDestinationValue } from './link-destination.js'
@@ -26,6 +26,11 @@ type LayoutEvent = keyof Omit<FastHtmlStats, 'consumedLines' | 'activeDefinition
 export type FastHtmlResult = { html: string; accepted: FastHtmlStats }
 
 
+function completeUtf16End(text: string, end: number): number {
+  const before = text.charCodeAt(end - 1), after = text.charCodeAt(end)
+  return before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff ? end - 1 : end
+}
+
 class HtmlOutput {
   private parts: string[] = []
   private pending = ''
@@ -36,7 +41,8 @@ class HtmlOutput {
     if (!this.sink) { this.parts.push(...parts); return }
     for (let part of parts) {
       while (part.length) {
-        let end = Math.min(part.length, 4096 - this.pending.length)
+        let end = completeUtf16End(part, Math.min(part.length, 4096 - this.pending.length))
+        if (end === 0) { this.flush(); continue }
         const newline = part.slice(0, end).indexOf('\n')
         if (newline >= 0 && newline < end) end = newline + 1
         this.pending += part.slice(0, end)
@@ -50,7 +56,11 @@ class HtmlOutput {
   private escape(text: string, escape: (text: string) => string): void {
     if (this.discard) return
     if (!this.sink) { this.push(escape(text)); return }
-    for (let i = 0; i < text.length; i += 512) this.push(escape(text.slice(i, i + 512)))
+    for (let i = 0; i < text.length;) {
+      const end = completeUtf16End(text, Math.min(text.length, i + 512))
+      this.push(escape(text.slice(i, end)))
+      i = end
+    }
   }
   private flush(): void {
     if (!this.pending) return
@@ -109,6 +119,14 @@ export function tryFastHtmlWithStats(source: string, opts: Options): FastHtmlRes
   return html === undefined ? undefined : { html, accepted }
 }
 
+function eligibleText(source: string): boolean {
+  if (!/[^\x00-\x7f]|[\0\t\v\f\r]/.test(source)) return true
+  if (/[\0\t\v\f\r]/.test(source)) return false
+  // Unicode is admitted only without syntax that uses ASCII marker flanking.
+  return !/[*\/`\[\]{}^\\<>_~!@$=#'":%+|]|(?:^|\n)(?:[ .-]|[A-Za-z0-9]+[.)] )/.test(source) &&
+    !/[^\x00-\x7f\p{L}\p{M}\p{N}\p{P}\p{S}]/u.test(source)
+}
+
 function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): true | undefined {
   // A CHECKED RENDER GOES TO THE AUTHORITATIVE PIPELINE. This path blanks a
   // denied destination (§25) with no loss sink to report it on, so the
@@ -121,15 +139,20 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
     opts.extensions?.length || opts.profile !== undefined || opts.sourceLine ||
     (opts as RenderOptions & { mode?: unknown }).mode !== undefined ||
     opts.sections === false || opts.smartTypography === false || opts.smartTypography === 'source' ||
-    /[^\x00-\x7f]|[\0\t\v\f\r]/.test(source) || source.startsWith('---') ||
+    !eligibleText(source) || source.startsWith('---') ||
     source.includes('[^') || source.includes('^[') || source.includes('[@') ||
     source.includes('</#') || source.includes('![') || source.includes('%%') ||
     source.includes(':::')
   ) return undefined
 
-  const lines = source.split('\n')
+  let lines = source.split('\n')
   if (lines.at(-1) === '') lines.pop()
-  if (lines.some((line) => line.charCodeAt(line.length - 1) === 32)) return undefined
+  if (lines.some((line) => line.charCodeAt(line.length - 1) === 32)) {
+    const trimmed = lines.map((line) => line.replace(/ +$/, ''))
+    if (trimmed.some((line) => line !== '' &&
+      (blockish(line) || inlineComplex(line) || /[*\/`\[]/.test(line)))) return undefined
+    lines = trimmed
+  }
   // A LONE `+` IS THE LIST CONTINUATION MARKER (§17 L3), never a paragraph. It
   // renders NOTHING and attaches the block below it to the item above, which the
   // borrowed layout has no model for - so the document goes to the authoritative
@@ -372,6 +395,7 @@ function inlineComplex(text: string): boolean {
 }
 
 function renderList(lines: string[], start: number, offset: number, depth: number, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): { next: number } | undefined {
+  if (offset >= 2 * MAX_NESTING_DEPTH) return undefined
   out.push(indent(depth), '<ul>')
   let i = start
   while (i < lines.length) {

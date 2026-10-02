@@ -9,14 +9,46 @@ function authoritative(source: string): string {
 }
 
 describe('borrowed HTML layout', () => {
-  it('keeps Unicode and forbidden controls on the authoritative path', () => {
-    for (const value of ['é', '😀', '\uD800', '\r', '\t', '\0', '\v', '\f']) {
+  it('keeps forbidden controls on the authoritative path', () => {
+    for (const value of ['\uD800', '\r', '\t', '\0', '\v', '\f']) {
       const source = `plain ${value} tail\n`
       expect(tryFastHtml(source, {}), JSON.stringify(value)).toBeUndefined()
       expect(carveToHtml(source), JSON.stringify(value)).toBe(authoritative(source))
     }
     const source = 'plain \x7f tail\n'
     expect(tryFastHtml(source, {})).toBe(authoritative(source))
+  })
+
+  it('accepts Unicode plain paragraphs while preserving fallback for Unicode syntax', () => {
+    for (const text of ['café', 'e\u0301', '中文', 'العربية', '“quoted” 😀', '𝒜 ١ ① ©', 'a & b']) {
+      const source = `${text}\n\n${text}\n`
+      expect(tryFastHtml(source, {}), text).toBe(authoritative(source))
+    }
+    for (const text of ['- café', '1. 中文', 'café\n\n---', 'é*bold*', '# café', '`😀`', '[é](/x)', 'a\u00a0b', 'a\u2028b', '\ufeffcafé', 'a\u202eb', 'é\u200db', 'é\u0085b']) {
+      const source = `${text}\n`
+      expect(tryFastHtml(source, {}), text).toBeUndefined()
+      expect(carveToHtml(source), text).toBe(authoritative(source))
+    }
+  })
+
+  it('trims trailing paragraph spaces without changing verbatim blocks', () => {
+    for (const source of ['.   \n', 'plain  \nnext \n', 'café \n\n中文  \n', 'plain \n   \nnext \n']) {
+      expect(tryFastHtml(source, {}), source).toBe(authoritative(source))
+    }
+    for (const source of ['```\na \n```\n', '~~~\na \n~~~\n', '# title \n', '*bold* \n', '1. item \n', '  indented \n']) {
+      expect(tryFastHtml(source, {}), source).toBeUndefined()
+      expect(carveToHtml(source), source).toBe(authoritative(source))
+    }
+  })
+
+  it('hands lists beyond the parser nesting cap back to the AST', () => {
+    for (const levels of [200, 201]) {
+      const source = Array.from({ length: levels }, (_, level) => '  '.repeat(level) + '- item\n').join('')
+      const fast = tryFastHtml(source, {})
+      if (levels === 200) expect(fast).toBe(authoritative(source))
+      else expect(fast).toBeUndefined()
+      expect(carveToHtml(source)).toBe(authoritative(source))
+    }
   })
 
   it('keeps complex heading titles and block markers on the authoritative path', () => {
@@ -171,17 +203,17 @@ describe('borrowed HTML layout', () => {
     }
     // Pin the accepted population so an empty fast-path sweep cannot pass.
     // Re-derive the accepted set when changing the corpus or fast-path coverage.
-    // Blank-separated nesting adds 87-compact-list-blocks-2 to the previous 56 documents.
-    expect(accepted).toBe(57)
+    // Plain-space trimming adds corpus 104 and both corpus 268 documents.
+    expect(accepted).toBe(60)
   })
 
   it('falls back for normalization-sensitive or stateful shapes', () => {
     for (const source of [
-      '# *marked heading*\n', 'A “smart” quote.\n',
+      '# *marked heading*\n',
       '[^n]: note\n\nsee [^n]\n', '^[inline note]\n', '::: note\nbody\n:::\n',
       '![image](/x.png)\n', '{#id}\n# heading\n', '[x](java\0script:alert(1))\n',
       '[x](java-script:alert(1))\n', '- a\n- +\n', '- # H\n- next\n',
-      '> # H\n\ntail\n', '.   \n', '/*x*/\n', '$`a``b`\n', '`  a  `\n',
+      '> # H\n\ntail\n', '/*x*/\n', '$`a``b`\n', '`  a  `\n',
       '> a\nb\n', '-   x\n', '=marked= here\n', '- apples\n\n- oranges\n',
       '# a :smile: b\n', 'A #tag here.\n', '(c) 2026\n', '| h |\n|---|\v\n| a |\n',
       'a. only one\n', '````  js\nx\n````\n',

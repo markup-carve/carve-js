@@ -67,3 +67,21 @@ it('calls once for empty output and propagates sink errors', () => {
   const failure = new Error('sink failed')
   expect(() => tryRenderHtmlStreaming('text', {}, () => { throw failure })).toThrow(failure)
 })
+
+it('keeps supplementary characters whole at escaping and sink boundaries', () => {
+  for (const width of [508, 509, 510, 511, 512, 4091, 4092, 4093, 4094, 4095, 4096]) {
+    const source = 'a'.repeat(width) + '😀'.repeat(5000) + ' & tail\n'
+    const chunks: string[] = []
+    expect(tryRenderHtmlStreaming(source, {}, (chunk) => chunks.push(chunk))).toBe('complete')
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(4096)
+      expect(/[\uD800-\uDBFF]$|^[\uDC00-\uDFFF]/.test(chunk)).toBe(false)
+    }
+    expect(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString()).toBe(renderHtml(parse(source)))
+  }
+})
+
+it('hands deeply nested lists back without publishing a prefix', () => {
+  const source = Array.from({ length: 300 }, (_, level) => '  '.repeat(level) + '- item\n').join('')
+  expect(tryRenderHtmlStreaming(source, {}, () => { throw new Error('unexpected output') })).toBe('needs-ast')
+})
