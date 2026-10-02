@@ -1,4 +1,4 @@
-import type { Document, Position } from './ast.js'
+import type { Document, Position, Table } from './ast.js'
 import { codeTerminated } from './verbatim-payload.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 
@@ -25,6 +25,24 @@ function wirePos(value: unknown): ConversionDiagnostic['pos'] | undefined {
   if (![pos.startLine, pos.endLine, pos.startColumn, pos.endColumn].every((part) => Number.isSafeInteger(part) && part! >= 1)) return undefined
   if (![pos.startOffset, pos.endOffset].every((part) => Number.isSafeInteger(part) && part! >= 0)) return undefined
   return { startLine: pos.startLine, endLine: pos.endLine, startColumn: pos.startColumn!, endColumn: pos.endColumn!, startOffset: pos.startOffset!, endOffset: pos.endOffset! }
+}
+
+function preservesRowGroupPartition(table: Table): boolean {
+  const groups = table.rowGroups!
+  const kv = table.attrs?.keyValues
+  if (kv?.['header-rows'] === undefined && kv?.['footer-rows'] === undefined) return false
+  const rowCount = (value: string | undefined): number | undefined => {
+    if (value === undefined) return 0
+    if (value.trim() === '') return 1
+    return /^\d+$/.test(value.trim()) ? Number(value.trim()) : undefined
+  }
+  const headRows = rowCount(kv?.['header-rows'])
+  const footRows = rowCount(kv?.['footer-rows'])
+  if (headRows === undefined || footRows === undefined || headRows + footRows > table.rows.length) return false
+  const body = groups.bodies[0]
+  return body !== undefined && groups.headRows === headRows && groups.footRows === footRows && groups.bodies.length === 1
+    && body.headRows === 0 && body.bodyRows === table.rows.length - headRows - footRows
+    && body.rowHeadColumns === undefined
 }
 
 /** Report AST structures and fields the canonical writer cannot spell. */
@@ -58,6 +76,9 @@ export function renderCarveWithConversionReport(
     if ((type === 'figure' || type === 'table') && node.shortCaption !== undefined) report('field-unspellable', 'Carve source cannot spell a short caption', 'shortCaption')
     if (type === 'figure' && (node.target as { type?: string } | undefined)?.type === 'table') report('structure-unspellable', 'Carve source cannot spell a figure wrapper around a table')
     if (type === 'table' && node.rowGroups) {
+      if (!preservesRowGroupPartition(node as unknown as Table)) {
+        report('field-unspellable', 'The canonical Carve writer cannot preserve this explicit table row-group partition', 'rowGroups')
+      }
       const groups = node.rowGroups as { headAttrs?: object; footAttrs?: object; bodies: Array<{ attrs?: object }> }
       const fields: Array<[string, object | undefined]> = [
         ['rowGroups.headAttrs', groups.headAttrs], ['rowGroups.footAttrs', groups.footAttrs],

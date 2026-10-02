@@ -97,6 +97,7 @@ describe('the render-loss code enum', () => {
     expect(report.diagnostics.filter(d => d.code === 'field-unspellable').map(d => `${d.node}.${d.field}`).sort()).toEqual([
       'math.label',
       'math.number',
+      'table.rowGroups',
       'table.rowGroups.bodies[0].attrs',
       'table.rowGroups.footAttrs',
       'table.rowGroups.headAttrs',

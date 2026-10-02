@@ -11,6 +11,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- Report explicit table row groups dropped by canonical source conversion as a `field-unspellable` diagnostic for `rowGroups` (#2457).
 - Share schema child slots across AST conversion, diffs, sidecars, and text coalescing. Diffs report edits inside substitution arms, citation fields, short captions, and extension fallbacks at their child paths. AST depth checks cover singleton children (#2442).
 - Keep literal verse definitions consistent through lazy list continuations and attached opaque spans (#2442).
 - A colon closer inside a closed code or comment span stays inside verse, matching the executable spec (#2442).
