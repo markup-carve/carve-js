@@ -4777,9 +4777,39 @@ class Importer {
       remaining.set(table, left)
       if (left === 0) {
         dropped.add(table)
+        const names = table.attrs ? this.attrNames(table.attrs) : []
+        if (names.length > 0) {
+          let owner = domParent(origin.node)
+          while (owner && domTag(owner) !== 'table') owner = domParent(owner)
+          this.report.add('attribute-dropped', `Dropped ${names.join(', ')} on <table>: no row survives source conversion`, 'warning', origin.path.replace(/\/tr\[\d+\]$/, ''), owner ?? origin.node)
+        }
         if (table.caption !== undefined) {
           this.report.add('element-dropped', 'Dropped a caption whose table has no row left', 'warning', origin.path, origin.node)
         }
+      }
+    }
+    for (const table of remaining.keys()) {
+      if (!table.rowGroups) continue
+      const partitionPreserved = preservesTableRowGroups(table, tableSourceAttrs(table))
+      let cursor = 0
+      const keptCount = (count: number): number => {
+        const end = cursor + count
+        let kept = 0
+        for (; cursor < end; cursor++) if (!dropped.has(table.rows[cursor]!)) kept++
+        return kept
+      }
+      table.rowGroups.headRows = keptCount(table.rowGroups.headRows)
+      for (const body of table.rowGroups.bodies) {
+        body.headRows = keptCount(body.headRows)
+        body.bodyRows = keptCount(body.bodyRows)
+      }
+      table.rowGroups.footRows = keptCount(table.rowGroups.footRows)
+      if (!dropped.has(table) && partitionPreserved && !preservesTableRowGroups(table, tableSourceAttrs(table))) {
+        const row = table.rows.find(row => dropped.has(row))!
+        const origin = this.rowOrigins.get(row)!
+        let owner = domParent(origin.node)
+        while (owner && domTag(owner) !== 'table') owner = domParent(owner)
+        this.report.add('table-degraded', 'The retained table attributes cannot preserve its explicit row-group partition after removing blank rows', 'warning', origin.path.replace(/\/tr\[\d+\]$/, ''), owner ?? origin.node)
       }
     }
     for (const array of arrays) {
