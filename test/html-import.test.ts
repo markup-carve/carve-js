@@ -1331,6 +1331,25 @@ describe('table row groups on import', () => {
     expect(toAstJson(parse(written.value)).children[0]).toMatchObject({ rowGroups: { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 } })
   })
 
+  it.each([
+    ['leading', '<tbody></tbody><tbody><tr><th scope="col">H</th><th scope="col">G</th></tr><tr><td>a</td><td>b</td></tr></tbody>', [{ headRows: 0, bodyRows: 0 }, { headRows: 1, bodyRows: 1 }]],
+    ['middle', '<tbody><tr><td>a</td></tr></tbody><tbody></tbody><tbody><tr><td>b</td></tr></tbody>', [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 0 }, { headRows: 0, bodyRows: 1 }]],
+    ['trailing', '<tbody><tr><td>a</td></tr></tbody><tbody></tbody><tbody></tbody>', [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 0 }, { headRows: 0, bodyRows: 0 }]],
+    ['between head and foot', '<thead><tr><th scope="col">h</th></tr></thead><tbody></tbody><tfoot><tr><td>f</td></tr></tfoot>', [{ headRows: 0, bodyRows: 0 }]],
+    ['after head', '<thead><tr><th scope="col">h</th></tr></thead><tbody></tbody>', [{ headRows: 0, bodyRows: 0 }]],
+  ])('preserves %s empty bodies through HTML import and source', (_, sections, bodies) => {
+    const html = `<table>${sections}</table>`
+    const imported = htmlToAst(html)
+    expect(imported.report.diagnostics).toEqual([])
+    expect(imported.value.children[0]).toMatchObject({ rowGroups: { bodies } })
+    const written = htmlToCarve(html)
+    expect(written.report.diagnostics).toEqual([])
+    const reparsed = parse(written.value)
+    expect(reparsed.children[0]).toMatchObject({ rowGroups: { bodies } })
+    expect(carveToHtml(written.value).replace(/>\s+</g, "><").trim()).toBe(html)
+    expect(renderCarve(reparsed)).toBe(written.value)
+  })
+
   it('refuses to describe a head or foot that is not at the edge of the rows', () => {
     // The field can only say "the first N rows" and "the last N rows". A
     // `<thead>` after a `<tbody>` is a table it cannot describe, so the

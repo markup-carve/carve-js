@@ -3628,12 +3628,14 @@ class Importer {
     }
 
     const orderedSections = domChildren(node) ?? []
-    for (const [section, own] of [...sectionAttrs]) {
+    // Empty bodies have no rows to collect above, but still mark a boundary.
+    for (const section of orderedSections) {
+      const own = sectionAttrs.get(section)
       if (domTag(section) !== 'tbody' || tr.some(row => group.get(row) === section)) continue
       const sourceIndex = orderedSections.findIndex(child => child === section)
       const at = bodySections.findIndex(body => body !== undefined && orderedSections.findIndex(child => child === body) > sourceIndex)
       const index = at < 0 ? bodies.length : at
-      bodies.splice(index, 0, { headRows: 0, bodyRows: 0, attrs: own.attrs })
+      bodies.splice(index, 0, { headRows: 0, bodyRows: 0, ...(own ? { attrs: own.attrs } : {}) })
       bodySections.splice(index, 0, section)
       sectionAttrs.delete(section)
     }
@@ -3669,7 +3671,7 @@ class Importer {
       bodies.length <= 1 &&
       // A single body's row-head count is read off its cells' own header flags,
       // so it states nothing the rows do not (PART 12 §15, CARVE-P12-034).
-      bodies.every((body) => body.headRows === 0 && body.attrs === undefined)
+      bodies.every((body) => body.headRows === 0 && body.bodyRows > 0 && body.attrs === undefined)
     if (derivable) return undefined
     return { headRows: headRows2, bodies, footRows, ...(headAttrs ? { headAttrs } : {}), ...(footAttrs ? { footAttrs } : {}) }
   }
