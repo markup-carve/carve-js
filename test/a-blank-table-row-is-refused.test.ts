@@ -68,6 +68,19 @@ describe('the HTML importer', () => {
     })
   }, 90000)
 
+  for (const [prefix, suffix] of [
+    ['<table><caption>c</caption>', '</table>'],
+    ['<blockquote><table>', '</table></blockquote>'],
+    ['<ul><li><table>', '</table></li></ul>'],
+  ]) {
+    perfIt(`batches row refusals through ${prefix}`, () => {
+      expectScansLinearly((input) => void htmlToCarve(input), prefix
+        + '<tr><td></td></tr><tr><td>a</td></tr>' + suffix, {
+        smallRepeats: 128, minSampleMs: 100,
+      })
+    }, 90000)
+  }
+
   it('anchors an orphan caption to the last dropped row', () => {
     const result = htmlToCarve('<table><caption>c</caption><tr><td></td></tr><tr><td></td></tr></table>')
     expect(result.value).toBe('\n')
