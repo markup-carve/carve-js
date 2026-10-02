@@ -142,11 +142,6 @@ describe('the container layout does not re-scan a body per level', () => {
       (d: number) => Array.from({ length: d }, (_, i) => ' '.repeat(2 * i) + '- Note: a b c').join('\n') + '\n',
     ],
     [
-      'a colon run that opens nothing',
-      (d: number) =>
-        Array.from({ length: d }, (_, i) => ' '.repeat(2 * i) + '- ::: not an opener x').join('\n') + '\n',
-    ],
-    [
       'tab indentation',
       (d: number) => Array.from({ length: d }, (_, i) => '\t'.repeat(i) + '- x').join('\n') + '\n',
     ],
@@ -167,6 +162,54 @@ describe('the container layout does not re-scan a body per level', () => {
     const a = count(gen(100))
     const b = count(gen(200))
     expect(a.total).toBeGreaterThan(0)
+    expect(b.total / a.total).toBeLessThanOrEqual(4.4)
+  })
+
+  // A RECOVERED CONTAINER IS A CONTAINER, and pays a container's layout work.
+  //
+  // markup-carve/carve#2693 made an invalid opener keep its container instead
+  // of collapsing to text, which put `::: not an opener` on the nesting path
+  // for the first time (carve-js#2447). carve-php honoured the same ruling and
+  // two of its uncapped indentation walks then ran once per level, at 8.00x per
+  // depth doubling on this shape (carve-php#2817, capped in carve-php#2819).
+  //
+  // This shape was already in the sweep above, under a name that denied what it
+  // covers, and measured at the one depth pair it cannot carry: a line here
+  // costs TWO nesting levels (the item and the recovered container), so 200 of
+  // them reach MAX_NESTING_DEPTH and half the document degrades to literal
+  // text. The 100-to-200 ratio there compares a nested document against a
+  // half-degraded one. 50 and 100 are the deepest pair that stays a container
+  // at every level, and the count below is what keeps it one.
+  it('does not re-scan a body per level of a recovered container', () => {
+    const shape = (d: number): string =>
+      Array.from({ length: d }, (_, i) => ' '.repeat(2 * i) + '- ::: not an opener x').join('\n') + '\n'
+    const containers = (src: string): number => {
+      let found = 0
+      const walk = (value: unknown): void => {
+        if (!value || typeof value !== 'object') return
+        if (Array.isArray(value)) return value.forEach(walk)
+        if ((value as { type?: string }).type === 'admonition') found++
+        Object.entries(value).forEach(([key, child]) => key === 'pos' || walk(child))
+      }
+      walk(parse(src))
+      return found
+    }
+
+    // LIVENESS, and the reason this test is not a row in the sweep: every bound
+    // below is satisfied by a document that recovers nothing, which is what the
+    // shape parsed to before carve-js#2447 and what it would parse to again if
+    // MAX_NESTING_DEPTH moved under it.
+    expect(containers(shape(50))).toBe(50)
+    expect(containers(shape(100))).toBe(100)
+
+    const a = count(shape(50))
+    const b = count(shape(100))
+    // Bounded passes over the document, not a number that grows with depth:
+    // 4.7x here, 138.7x with the walks uncapped.
+    expect(b.total).toBeLessThanOrEqual(6 * b.bytes)
+    expect(a.total).toBeGreaterThan(0)
+    // The discriminating bound: 3.90x here against the document's own 3.41x,
+    // and 7.93x with the walks uncapped.
     expect(b.total / a.total).toBeLessThanOrEqual(4.4)
   })
 })
