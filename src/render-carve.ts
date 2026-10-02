@@ -1,4 +1,4 @@
-import { tableSourceAttrs } from './table-source-metadata.js'
+import { tableSourceAttrs, tableNeedsDelimiterHeader } from './table-source-metadata.js'
 import type {
   Attrs,
   BlockNode,
@@ -3623,10 +3623,7 @@ class CarveRenderSession {
   private renderTable(node: Table, ctx: CarveContext): string {
     const rows: string[] = []
     const first = node.rows[0]
-    const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
-    const firstSpan = headerRow ? first!.cells.findIndex((c) => c.span !== undefined) : -1
-    const trailingColspansOnly = firstSpan >= 1 && first!.cells.slice(firstSpan).every((c) => c.span === 'colspan')
-    const needsDelimiter = firstSpan >= 0 && !trailingColspansOnly
+    const needsDelimiter = tableNeedsDelimiterHeader(node)
 
     node.rows.forEach((row, rowIndex) => {
       const cells: string[] = []

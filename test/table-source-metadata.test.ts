@@ -161,3 +161,34 @@ it('distinguishes implicit zero bodies from an explicit empty body', () => {
   expect(exported.value).toContain('body-rows=0')
   expect(renderHtml(parse(exported.value!))).toBe(renderHtml(ast))
 })
+
+it.each(['colspan', 'rowspan'])('reports a header flag lost on a %s placeholder', (span) => {
+  const ast = document({})
+  const table = ast.children[0]
+  if (table.type !== 'table') throw new Error('Expected a table')
+  const cell = span === 'colspan' ? table.rows[0].cells[1] : table.rows[1].cells[0]
+  cell.span = span as 'colspan' | 'rowspan'
+  cell.header = true
+  cell.children = []
+  const result = renderCarveWithConversionReport(ast)
+  expect(result.report.diagnostics.map(({ code, node, field }) => ({ code, node, field }))).toEqual([{ code: 'field-unspellable', node: 'table_cell', field: 'header' }])
+  const reparsed = parse(result.value!)
+  const after = reparsed.children[0]
+  if (after.type !== 'table') throw new Error('Expected a table')
+  expect((span === 'colspan' ? after.rows[0].cells[1] : after.rows[1].cells[0]).header).toBe(false)
+  cell.header = false
+  expect(renderCarveWithConversionReport(ast).report.diagnostics).toEqual([])
+})
+
+it.each([
+  '| < | a |\n|---|---|\n| b | c |\n',
+  '| a | ^ |\n|---|---|\n| b | c |\n',
+])('keeps a delimiter-promoted placeholder header without a diagnostic: %s', source => {
+  const ast = parse(source)
+  const result = renderCarveWithConversionReport(ast)
+  expect(result.report.diagnostics).toEqual([])
+  const before = toAstJson(ast).children[0]
+  const after = toAstJson(parse(result.value!)).children[0]
+  if (before.type !== 'table' || after.type !== 'table') throw new Error('Expected tables')
+  expect(after.rows[0].cells.map(cell => cell.header)).toEqual(before.rows[0].cells.map(cell => cell.header))
+})

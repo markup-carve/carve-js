@@ -130,3 +130,10 @@ export function preservesTableColumns(table: Table, attrs: Attrs | undefined): b
     return column.align === other.align && column.valign === other.valign && column.width === other.width
   })
 }
+
+export function tableNeedsDelimiterHeader(table: Table): boolean {
+  const first = table.rows[0]
+  if (!first?.cells.length || !first.cells.every(cell => cell.header)) return false
+  const firstSpan = first.cells.findIndex(cell => cell.span !== undefined)
+  return firstSpan >= 0 && !(firstSpan >= 1 && first.cells.slice(firstSpan).every(cell => cell.span === 'colspan'))
+}
