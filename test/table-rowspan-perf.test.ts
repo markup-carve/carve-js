@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, htmlToAst } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // Regression guard for the O(rows^2) rowspan resolution. The renderer walked up
@@ -21,4 +21,11 @@ describe('table rowspan resolution (perf)', () => {
       smallRepeats: 4000,
     })
   })
+})
+
+perfIt('imports 4000 empty bodies without repeated DOM searches', () => {
+  const html = `<table>${'<tbody></tbody>'.repeat(4000)}</table>`
+  const start = performance.now()
+  htmlToAst(html)
+  expect(performance.now() - start).toBeLessThan(2000)
 })

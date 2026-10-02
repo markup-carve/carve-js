@@ -3637,7 +3637,7 @@ class Importer {
     }
 
     const orderedSections = domChildren(node) ?? []
-    const sectionIndices = new Map(orderedSections.map((section, index) => [section, index]))
+    const sectionIndices = new Map<P5Node, number>(orderedSections.map((section, index) => [section, index]))
     const sectionsWithRows = new Set(group.values())
     // Empty bodies have no rows to collect above, but still mark a boundary.
     for (const section of orderedSections) {
