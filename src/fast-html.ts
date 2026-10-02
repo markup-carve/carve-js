@@ -409,7 +409,9 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
     out.push('</li>')
     if (i >= lines.length) break
     if (lines[i]!.trim() === '') {
-      const next = lines.slice(i + 1).find((candidate) => candidate.trim() !== '')
+      let nextIndex = i + 1
+      while (lines[nextIndex]?.trim() === '') nextIndex++
+      const next = lines[nextIndex]
       if (next && next.length - next.trimStart().length === offset && next.trimStart().startsWith('- ')) return undefined
       break
     }
@@ -442,7 +444,9 @@ function renderOrderedList(lines: string[], start: number, depth: number, defs: 
   }
   if (lines[i] !== undefined && lines[i]!.trim() !== '') return undefined
   if (lines[i] !== undefined) {
-    const next = lines.slice(i + 1).find((candidate) => candidate.trim() !== '')
+    let nextIndex = i + 1
+    while (lines[nextIndex]?.trim() === '') nextIndex++
+    const next = lines[nextIndex]
     if (next !== undefined && decimalListItem(next) !== undefined) return undefined
   }
   out.push('\n', indent(depth), '</ol>')
