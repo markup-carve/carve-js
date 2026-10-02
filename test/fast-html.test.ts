@@ -9,6 +9,28 @@ function authoritative(source: string): string {
 }
 
 describe('borrowed HTML layout', () => {
+  it('keeps separate lists across intervening paragraphs and trailing blanks', () => {
+    for (const marker of ['- item', '1. item']) {
+      const source = `${marker}\n\nparagraph\n\n\n`.repeat(64) + '\n\n'
+      const result = tryFastHtmlWithStats(source, {})
+      expect(result, marker).toBeDefined()
+      expect(result!.html, marker).toBe(authoritative(source))
+      expect(result!.accepted.paragraphs, marker).toBe(64)
+      expect(result!.accepted.unorderedListItems + result!.accepted.orderedListItems, marker).toBe(64)
+    }
+  })
+
+  it('handles list lookahead through blank lines to EOF or loose siblings', () => {
+    for (const marker of ['- item', '1. item']) {
+      const source = `${marker}\n\n\n`
+      expect(tryFastHtml(source, {}), marker).toBe(authoritative(source))
+    }
+    for (const source of ['- a\n\n\n- b\n', '1. a\n\n\n2. b\n']) {
+      expect(tryFastHtml(source, {}), source).toBeUndefined()
+      expect(carveToHtml(source), source).toBe(authoritative(source))
+    }
+  })
+
   it('accepts blank lines before a nested bullet list without changing HTML', () => {
     for (const source of [
       '- first\n- second\n\n  - nested *strong*\n  - another\n',

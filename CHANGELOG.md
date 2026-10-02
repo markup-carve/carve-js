@@ -16,6 +16,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Keep literal verse definitions consistent through lazy list continuations and attached opaque spans (#2442).
 - A colon closer inside a closed code or comment span stays inside verse, matching the executable spec (#2442).
 
+### Performance
+
+- Fast HTML list lookahead skips blank lines by index instead of copying the remaining lines at each list boundary.
+
 ## [0.1.10] - 2026-10-01
 
 ### Breaking
