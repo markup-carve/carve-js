@@ -73,10 +73,12 @@ export type SocialLinkResolver = (input: SocialLinkResolverInput) => string | nu
 let abbrBudget: AbbrBudget | null = null
 let suppressAutomaticAbbreviation = false
 
-// Per-render document id namespace (extensions contract §2.6): seeded with
-// every explicit / heading id in the resolved AST, consumed by extensions via
-// ctx.uniqueId(). Same save/restore discipline as abbrBudget above.
+// Per-render id namespace, seeded before callbacks and otherwise collected
+// when core rendering first generates an id. Save/restore also covers deferred
+// collection when a callback renders another document.
 let docIds: DocumentIdRegistry | null = null
+// Holds the current document until deferred collection runs.
+let docIdSource: Document | null = null
 let admonitionCount = 0
 
 export interface RenderOptions extends RenderLossSinkOptions {
@@ -618,10 +620,15 @@ export function renderHtml(
   // previous tracker keeps the outer document's abbreviation budget intact.
   const prevBudget = abbrBudget
   const prevDocIds = docIds
+  const prevDocIdSource = docIdSource
   const prevOptions = activeRenderOptions
   const prevAdmonitionCount = admonitionCount
   abbrBudget = budgetForDocument(ast)
-  docIds = seededDocumentIds ?? collectDocumentIds(ast)
+  const needsEagerIds = Boolean(
+    opts.extensions?.length || opts.renderers || opts.resolveMention || opts.resolveTag || opts.onRenderLoss,
+  )
+  docIds = seededDocumentIds ?? (needsEagerIds ? collectDocumentIds(ast) : null)
+  docIdSource = docIds ? null : ast
   activeRenderOptions = opts
   admonitionCount = 0
   try {
@@ -629,6 +636,7 @@ export function renderHtml(
   } finally {
     abbrBudget = prevBudget
     docIds = prevDocIds
+    docIdSource = prevDocIdSource
     activeRenderOptions = prevOptions
     admonitionCount = prevAdmonitionCount
   }
@@ -832,7 +840,7 @@ interface PlacedTokens {
  */
 function mintTitleId(): string {
   const baseId = `adm-${++admonitionCount}`
-  return docIds?.uniqueId(baseId) ?? baseId
+  return uniqueId(baseId)
 }
 
 /**
@@ -1310,10 +1318,11 @@ function resolvedLabels(opts: RenderOptions): Record<LabelKey, string> {
   return out
 }
 
-/** Reserve an id in the per-render document id namespace (ctx.uniqueId). A
- *  render always installs a registry; the bare fallback only covers an
- *  extension calling a saved ctx outside renderHtml(). */
+/** Reserve an id in the per-render document id namespace (ctx.uniqueId).
+ *  Core rendering collects authored ids on demand. Extensions receive an eager
+ *  registry so callbacks keep the namespace captured at render entry. */
 function uniqueId(baseId: string): string {
+  if (!docIds && docIdSource) docIds = collectDocumentIds(docIdSource)
   return docIds ? docIds.uniqueId(baseId) : baseId
 }
 
