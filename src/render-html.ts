@@ -42,7 +42,7 @@ import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
-import { ownValue } from './own-property.js'
+import { ownValue, setOwn } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -1012,7 +1012,7 @@ function stripKeyValue(attrs: Attrs | undefined, key: string): Attrs | undefined
   const matches = (k: string) => k.toLowerCase() === lower
   if (!Object.keys(attrs.keyValues).some(matches)) return attrs
   const kv: Record<string, string> = {}
-  for (const [k, v] of Object.entries(attrs.keyValues)) if (!matches(k)) kv[k] = v
+  for (const [k, v] of Object.entries(attrs.keyValues)) if (!matches(k)) setOwn(kv, k, v)
   const result: Attrs = { ...attrs, keyValues: kv }
   if (attrs.order) result.order = attrs.order.filter((s) => !matches(s))
   return result
@@ -1082,7 +1082,7 @@ function withTextAlignDeclaration(attrs: Attrs, tag?: string): Attrs {
       if (styleKey === undefined) next['style'] = declaration
       continue
     }
-    next[k] = k === styleKey ? appendDeclaration(v, declaration) : v
+    setOwn(next, k, k === styleKey ? appendDeclaration(v, declaration) : v)
   }
   const result: Attrs = { ...attrs, keyValues: next }
   if (attrs.order) {

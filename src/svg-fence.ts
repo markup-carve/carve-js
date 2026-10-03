@@ -2,6 +2,7 @@ import type { Attrs, CodeBlock } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { sanitizeSvg, type SanitizeSvgOptions } from './svg-sanitize.js'
 import { codeSource } from './verbatim-payload.js'
+import { setOwn } from './own-property.js'
 
 /** Options for the {@link imgFence} factory. Extends the sanitizer options, so
  *  `allowStyle` / `allowLinks` / `allowAnimation` / `allowExternalImages` flow
@@ -54,7 +55,7 @@ function authorAttrs(attrs: Attrs | undefined): Attrs | undefined {
   if (!attrs?.keyValues) return attrs
   const keyValues: Record<string, string> = {}
   for (const [k, v] of Object.entries(attrs.keyValues)) {
-    if (!CONSUMED_KEYS.has(k.toLowerCase())) keyValues[k] = v
+    if (!CONSUMED_KEYS.has(k.toLowerCase())) setOwn(keyValues, k, v)
   }
   const cleaned: Attrs = { ...attrs, keyValues }
   if (attrs.order) cleaned.order = attrs.order.filter((o) => !CONSUMED_KEYS.has(o.toLowerCase()))
@@ -67,7 +68,7 @@ function stripKeys(attrs: Attrs | undefined, keys: string[]): Attrs | undefined 
   const drop = new Set(keys.map((k) => k.toLowerCase()))
   const keyValues: Record<string, string> = {}
   for (const [k, v] of Object.entries(attrs.keyValues)) {
-    if (!drop.has(k.toLowerCase())) keyValues[k] = v
+    if (!drop.has(k.toLowerCase())) setOwn(keyValues, k, v)
   }
   const cleaned: Attrs = { ...attrs, keyValues }
   if (attrs.order) cleaned.order = attrs.order.filter((o) => !drop.has(o.toLowerCase()))

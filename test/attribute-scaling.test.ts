@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseAttrs } from '../src/attribute-parser.js'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, parse, citations, imgFence } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 describe('attribute parsing work', () => {
@@ -15,6 +15,23 @@ describe('attribute parsing work', () => {
   it('stores prototype keys when adjacent attribute blocks are combined', () => {
     const html = carveToHtml('{__proto__=first}{.a}{__proto__=last}\npara\n')
     expect(html).toBe('<p __proto__="last" class="a">para</p>')
+  })
+
+  it('preserves own keys through text alignment and image-fence attribute filtering', () => {
+    expect(carveToHtml('{__proto__=x align=right}\npara\n'))
+      .toBe('<p __proto__="x" style="text-align: right;">para</p>')
+    const html = carveToHtml('{__proto__=x alt=map}\n```img\n<svg/>\n```\n', {
+      extensions: [imgFence()],
+    })
+    expect(html).toContain('<img')
+    expect(html).toContain('__proto__="x"')
+  })
+
+  it('retains prototype-named citation metadata as an own property', () => {
+    const doc = parse('[@k]: {__proto__="x" author="A"} entry\n', { extensions: [citations()] })
+    const definition = doc.children.find(node => node.type === 'citation_definition')
+    expect(definition?.attrs?.keyValues?.['__proto__']).toBe('x')
+    expect(Object.hasOwn(definition?.attrs?.keyValues ?? {}, '__proto__')).toBe(true)
   })
 
   it('keeps a valid wrapped block after malformed attribute openers', () => {

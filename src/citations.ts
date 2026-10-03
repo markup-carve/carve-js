@@ -1,3 +1,4 @@
+import { setOwn } from './own-property.js'
 import type {
   BlockNode,
   Citation,
@@ -660,7 +661,7 @@ function definitionNode(kids: InlineNode[]): CitationDefinition | null {
   const inside = takeLeadingAttrBlock(entry)
   if (inside !== null) {
     const keyValues: Record<string, string> = {}
-    for (const pair of inside.matchAll(KV_PAIR_RE)) keyValues[pair[1]!] = pair[2]!
+    for (const pair of inside.matchAll(KV_PAIR_RE)) setOwn(keyValues, pair[1]!, pair[2]!)
     if (Object.keys(keyValues).length > 0) node.attrs = { keyValues }
   }
   // Strip a leading space left behind by a consumed attr block.
