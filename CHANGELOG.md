@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Improvements
+
+- Add a separate table-preservation assessment and checked output API. Diagnose merged cells, caption associations, header ordering, and other declared fields without changing the render-loss schema.
+
 ### Fixes
 
 - Preserve multiple table bodies, intermediate body headers, empty bodies, and per-body row-header counts with positional source attributes. Keep authored conflicts and report partition loss.
