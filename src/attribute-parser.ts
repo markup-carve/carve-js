@@ -1,4 +1,5 @@
 import type { Attrs } from './ast.js'
+import { setOwn } from './own-property.js'
 
 /**
  * True when `inner` (the text between an attribute block's braces) is
@@ -79,8 +80,9 @@ export function unescapeAttrValue(v: string): string {
 export function parseAttrs(src: string): Attrs {
   const attrs: Attrs = {}
   const order: string[] = []
+  const seen = new Set<string>()
   const note = (slot: string) => {
-    if (!order.includes(slot)) order.push(slot)
+    if (!seen.has(slot)) { seen.add(slot); order.push(slot) }
   }
   const re = /(?:#([a-zA-Z0-9_][\w-]*))|(?:\.([a-zA-Z0-9_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^}|"'\\ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
   let m: RegExpExecArray | null
@@ -89,7 +91,7 @@ export function parseAttrs(src: string): Attrs {
       attrs.id = m[1]
       note('#id')
     } else if (m[2]) {
-      attrs.classes = [...(attrs.classes ?? []), m[2]]
+      ;(attrs.classes ??= []).push(m[2])
       note('.class')
     } else if (m[3]) {
       const val =
@@ -109,10 +111,10 @@ export function parseAttrs(src: string): Attrs {
         // The two spellings are not interchangeable in SOURCE - `.` reads an
         // `explicit_identifier`, so `-col` and `w-1/2` are classes only the
         // key-value form can spell (markup-carve/carve#2435).
-        attrs.classes = [...(attrs.classes ?? []), val]
+        ;(attrs.classes ??= []).push(val)
         note('.class')
       } else {
-        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
+        setOwn((attrs.keyValues ??= {}), m[3], val)
         note(m[3])
       }
     } else if (m[7] !== undefined) {
@@ -122,7 +124,7 @@ export function parseAttrs(src: string): Attrs {
       // It desugars during attribute parsing, so there is no new AST node, no
       // new field, and a consumer that has never heard of the shorthand sees an
       // ordinary `lang` key/value.
-      attrs.keyValues = { ...(attrs.keyValues ?? {}), lang: m[7] }
+      setOwn((attrs.keyValues ??= {}), 'lang', m[7])
       note('lang')
     } else if (m[8]) {
       if (m[8] === 'id') {
@@ -136,11 +138,11 @@ export function parseAttrs(src: string): Attrs {
         // (PART 4), so it feeds the class slot too - left in keyValues the two
         // spellings of one documented value would build different trees and the
         // duplicate `class` attribute would survive.
-        attrs.classes = [...(attrs.classes ?? []), '']
+        ;(attrs.classes ??= []).push('')
         note('.class')
       } else {
         // Boolean attribute: a bare word with no value.
-        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[8]]: '' }
+        setOwn((attrs.keyValues ??= {}), m[8], '')
         note(m[8])
       }
     }

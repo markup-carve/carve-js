@@ -41,7 +41,10 @@ export function resolveTableSpans(rows: readonly TableRow[]): SpanCell[][] {
   // against. Maintained incrementally so a '^' resolves in O(1) instead of
   // walking up every prior row (an all-'^' table was O(rows^2)).
   const base: number[] = []
+  // Only merged cells need a left origin; ordinary rows allocate no index.
+  const colspanOrigins: Array<number[] | undefined> = []
   for (let r = 0; r < grid.length; r++) {
+    let lastVisible = -1
     for (let c = 0; c < grid[r]!.length; c++) {
       const entry = grid[r]![c]!
       if (entry.skip) continue
@@ -50,8 +53,7 @@ export function resolveTableSpans(rows: readonly TableRow[]): SpanCell[][] {
         const src = up !== undefined ? grid[up]?.[c] : undefined
         let coveredByVisibleSpan = false
         if (src?.skip && up !== undefined) {
-          let left = c - 1
-          while (left >= 0 && grid[up]![left]!.skip) left--
+          const left = colspanOrigins[up]?.[c] ?? -1
           const origin = left >= 0 ? grid[up]![left] : undefined
           coveredByVisibleSpan = !!origin && left + origin.colspan > c && up + origin.rowspan > r
         }
@@ -63,14 +65,16 @@ export function resolveTableSpans(rows: readonly TableRow[]): SpanCell[][] {
           entry.skip = true
         }
       } else if (entry.cell.span === 'colspan' && c > 0) {
-        let left = c - 1
-        while (left >= 0 && grid[r]![left]!.skip) left--
+        const left = lastVisible
         const src = grid[r]![left]
         if (src) {
           src.colspan++
           entry.skip = true
+          const origins = (colspanOrigins[r] ??= [])
+          origins[c] = left
         }
       }
+      if (!entry.skip) lastVisible = c
       // Any cell that is not a RESOLVED '^' is what the cells below it in this
       // column resolve against - a merged '<' included, because the column it
       // covers is still a column of the grid.

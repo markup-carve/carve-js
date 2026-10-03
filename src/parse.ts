@@ -78,7 +78,7 @@ import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
-import { ownValue } from './own-property.js'
+import { ownValue, setOwn } from './own-property.js'
 import { codeContent, verbatimContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
@@ -2119,62 +2119,36 @@ function deriveTableMetadata(table: Table): void {
  * line (which then floats forward via parseBlocks).
  */
 function peekBlockAttributes(lexer: Lexer, firstLine?: string): boolean {
-  // Strict column-0 rule: a block-attribute line opens ONLY at its container's
-  // content column (column 0 in every parseBlocks context, since nested content
-  // is dedented into a sub-lexer). A `{...}` indented ABOVE that column does not
-  // attach -- it is literal paragraph text. So require the `{` flush, not `\s*{`.
-  //
-  // `firstLine` overrides only the line the flush test reads, for the one caller
-  // that classifies a line's CONTENT rather than the line at its indent
-  // (markup-carve/carve#932). The continuation lines are still the lexer's: a
-  // `{...}` block may span lines, and only its first one carries the residue.
-  if (!/^\{/.test(firstLine ?? lexer.peek()!)) return false
-  let collected = ''
-  let n = 0
-  let closed = false
-  for (;;) {
-    const ln = lexer.peek(n)
-    if (ln === undefined) break
-    if (n > 0 && isBlankLine(ln)) break
-    collected += (n === 0 ? '' : '\n') + ln
-    n++
-    if (ln.includes('}')) {
-      closed = true
-      break
-    }
-  }
-  if (!closed) return false
-  return parseBlockAttributeRun(collected) !== null
+  return probeBlockAttributes(lexer, firstLine) !== null
 }
 
 function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
-  // Strict column-0 rule (see peekBlockAttributes): only a flush `{` opens a
-  // block-attribute line; an indented one is literal paragraph text.
-  if (!/^\{/.test(lexer.peek()!)) return null
+  const result = probeBlockAttributes(lexer)
+  if (!result) return null
+  for (let k = 0; k < result.count; k++) lexer.consume()
+  return result.attrs
+}
+
+function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs: Attrs; count: number } | null {
+  // The override changes the opening-column test; continuation lines still
+  // come from this lexer, as they did in the paragraph classifier.
+  if (!/^\{/.test(firstLine ?? lexer.peek()!)) return null
   let collected = ''
-  let n = 0
-  let closed = false
-  // Multi-line collection stops at the first line containing `}`. A
-  // quoted attribute value containing a literal `}` that also spans
-  // lines (`{key="a}\nb"}`) is not supported across lines -- a
-  // pathological case; single-line quoted values are handled by the
-  // greedy `{...}` match below.
+  let count = 0
   for (;;) {
-    const ln = lexer.peek(n)
-    if (ln === undefined) break
-    if (n > 0 && isBlankLine(ln)) break // blank line inside an open brace: not a block
-    collected += (n === 0 ? '' : '\n') + ln
-    n++
-    if (ln.includes('}')) {
-      closed = true
-      break
+    const line = lexer.peek(count)
+    if (line === undefined || (count > 0 && isBlankLine(line))) return null
+    const closed = line.includes('}')
+    // A continuation is a complete attribute fragment: quoted values cannot
+    // cross a newline. Reject a later opener before re-reading its whole tail.
+    if (count > 0 && !closed && !isValidAttrPayload(line)) return null
+    collected += (count === 0 ? '' : '\n') + line
+    count++
+    if (closed) {
+      const attrs = parseBlockAttributeRun(collected)
+      return attrs ? { attrs, count } : null
     }
   }
-  if (!closed) return null
-  const attrs = parseBlockAttributeRun(collected)
-  if (!attrs) return null
-  for (let k = 0; k < n; k++) lexer.consume()
-  return attrs
 }
 
 function parseBlockAttributeRun(src: string): Attrs | null {
@@ -2246,7 +2220,7 @@ function parseBlockAttributeRun(src: string): Attrs | null {
     if (attrs.classes) for (const c of attrs.classes) classes.push(c)
     if (attrs.keyValues) {
       if (!keyValues) keyValues = {}
-      for (const [k, v] of Object.entries(attrs.keyValues)) keyValues[k] = v
+      for (const [k, v] of Object.entries(attrs.keyValues)) setOwn(keyValues, k, v)
     }
     if (attrs.order) {
       for (const slot of attrs.order) {
