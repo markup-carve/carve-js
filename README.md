@@ -119,3 +119,36 @@ ranges.
 
 Table body partitions and source attributes are documented in
 [Table source metadata](docs/table-source-metadata.md).
+
+## Check table preservation
+
+Render-loss reports cover the events defined by the Carve render-loss schema.
+They do not assess every semantic change. For example, GFM output flattens merged
+cells and moves table captions into paragraphs without emitting a render loss.
+
+Use the separate preservation assessment when those structures matter:
+
+```ts
+import { carveToPreservationReport } from '@markup-carve/carve'
+
+const result = carveToPreservationReport(source, 'markdown')
+console.log(result.value)
+console.log(result.losses)
+console.log(result.preservation.diagnostics)
+
+// Refuse any diagnosed table degradation, independently of strictLosses.
+carveToPreservationReport(source, 'markdown', { strictPreservation: true })
+```
+
+Targets are `html`, `markdown`, `plain`, and `ansi`. The `table-structure-v1`
+assessment checks spans, caption association, header roles, row groups,
+attributes, column metadata, block cells, and alignment. Diagnostics carry
+AST JSON node paths and field names. `maxDiagnostics` bounds retained detail
+while `totalDiagnostics` counts all findings; strict refusal uses that count.
+
+The report sets `complete: false` and lists its unchecked boundaries. A clean
+assessment does not establish preservation of non-table semantics, source
+spelling, assets, host behavior, or a final PDF. `assessTablePreservation` also
+accepts a validated AST JSON tree for callers that already have one.
+
+Table alignment checks treat an unset alignment as left alignment. Host CSS and default header styling are outside the assessment.

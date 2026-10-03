@@ -44,8 +44,10 @@ import {
   type RenderResult,
 } from './render-loss.js'
 import { createSourcePatch, type SourcePatch } from './source-patch.js'
+import { assessTablePreservation, type PreservationTarget, type PreservationOptions, type TablePreservationReport } from './table-preservation.js'
 import { renderCarveWithConversionReport as collectCarveConversionDiagnostics } from './conversion-diagnostics.js'
 
+export { assessTablePreservation, PreservationError, type PreservationTarget, type PreservationOptions, type PreservationDiagnostic, type TablePreservationReport } from './table-preservation.js'
 export * from './ast.js'
 export {
   htmlToAst,
@@ -963,4 +965,18 @@ export function carveToAnsiWithReport(
     (onRenderLoss) => carveToAnsi(source, { ...opts, onRenderLoss }),
     opts,
   )
+}
+
+/** Render source with separate render-loss and table-preservation assessments. */
+export function carveToPreservationReport(
+  source: string,
+  target: PreservationTarget,
+  opts: ParseOptions & ProfileOptions & RenderOptions & MarkdownRenderOptions & PlainTextRenderOptions & AnsiRenderOptions & CheckedRenderOptions & PreservationOptions = {},
+): RenderResult & { preservation: TablePreservationReport } {
+  const preservation = assessTablePreservation(carveToAstJson(source, opts), target, opts)
+  const renderers = {
+    html: carveToHtmlWithReport, markdown: carveToMarkdownWithReport,
+    plain: carveToPlainTextWithReport, ansi: carveToAnsiWithReport,
+  }
+  return { ...renderers[target](source, opts), preservation }
 }
