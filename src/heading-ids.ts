@@ -1246,11 +1246,15 @@ export function collapseLoneImageParagraphs(doc: Document): Document {
 /** Whether any block in `doc` is a lone-image paragraph. The cheap gate. */
 function hasLoneImageParagraph(doc: Document): boolean {
   const worklist: BlockNode[][] = [doc.children]
+  const seen = new WeakSet<BlockNode[]>()
   for (const blocks of Object.values(doc.footnoteDefs ?? {})) worklist.push(blocks)
   while (worklist.length > 0) {
-    for (const b of worklist.pop()!) {
+    const blocks = worklist.pop()!
+    if (seen.has(blocks)) continue
+    seen.add(blocks)
+    for (const b of blocks) {
       if (isLoneImageParagraph(b)) return true
-      pushChildBlockLists(b, worklist)
+      forEachCollapsibleBlockList(b, (children) => worklist.push(children))
     }
   }
   return false
@@ -1258,33 +1262,51 @@ function hasLoneImageParagraph(doc: Document): boolean {
 
 /** `blocks` with every lone-image paragraph, at any depth, replaced by its image. */
 function collapsedBlocks(blocks: BlockNode[]): BlockNode[] {
-  const root = blocks.slice()
-  const worklist: BlockNode[][] = [root]
+  const changed = new WeakMap<BlockNode[], BlockNode[]>()
+  const seen = new WeakSet<BlockNode[]>()
+  const worklist: Array<{ blocks: BlockNode[]; expanded: boolean }> = [{ blocks, expanded: false }]
   while (worklist.length > 0) {
-    const level = worklist.pop()!
-    for (let i = 0; i < level.length; i++) {
-      const b = level[i]!
-      if (isLoneImageParagraph(b)) {
-        const img = b.children[0] as Image
-        // A leading block-attribute line (`{#id}`) landed on the paragraph;
-        // carry it onto the image (the image's own inline attrs win on
-        // conflict, §15), so `{#id}` then an indented image renders the id the
-        // same way the flush spelling does - which is what carve-rs and
-        // carve-php emit. Written onto a COPY: the caller's image node is not
-        // ours to change.
-        level[i] = (
-          b.attrs ? { ...img, attrs: mergeAttrs(b.attrs, img.attrs ?? {}) } : img
-        ) as unknown as BlockNode
-        continue
+    const frame = worklist.pop()!
+    if (!frame.expanded) {
+      if (seen.has(frame.blocks)) continue
+      seen.add(frame.blocks)
+      worklist.push({ blocks: frame.blocks, expanded: true })
+      for (const node of frame.blocks) {
+        forEachCollapsibleBlockList(node, (children) => worklist.push({ blocks: children, expanded: false }))
       }
-      const cloned = withClonedChildBlockLists(b)
-      if (cloned !== b) {
-        level[i] = cloned
-        pushChildBlockLists(cloned, worklist)
+      continue
+    }
+    let result: BlockNode[] | undefined
+    for (let i = 0; i < frame.blocks.length; i++) {
+      const node = frame.blocks[i]!
+      let replacement = node
+      if (isLoneImageParagraph(node)) {
+        const image = node.children[0] as Image
+        replacement = (node.attrs ? { ...image, attrs: mergeAttrs(node.attrs, image.attrs ?? {}) } : image) as unknown as BlockNode
+      } else {
+        let hasChanges = false
+        forEachCollapsibleBlockList(node, (children) => { hasChanges ||= changed.has(children) })
+        if (hasChanges) {
+          replacement = withClonedChildBlockLists(node)
+          if (replacement !== node) {
+            const lists: BlockNode[][] = []
+            forEachCollapsibleBlockList(node, (children) => lists.push(children))
+            let index = 0
+            forEachCollapsibleBlockList(replacement, (children) => {
+              const updated = changed.get(lists[index++]!)
+              if (updated) for (let j = 0; j < updated.length; j++) children[j] = updated[j]!
+            })
+          }
+        }
+      }
+      if (replacement !== node) {
+        result ??= frame.blocks.slice()
+        result[i] = replacement
       }
     }
+    if (result) changed.set(frame.blocks, result)
   }
-  return root
+  return changed.get(blocks) ?? blocks
 }
 
 /**
@@ -1292,8 +1314,8 @@ function collapsedBlocks(blocks: BlockNode[]): BlockNode[] {
  * disagree about it. Both use the exhaustive block-child helper and leave
  * verse lines unchanged.
  */
-function pushChildBlockLists(b: BlockNode, out: BlockNode[][]): void {
-  if (b.type !== 'line_block') forEachChildBlockList(b, (children) => out.push(children))
+function forEachCollapsibleBlockList(b: BlockNode, visit: (children: BlockNode[]) => void): void {
+  if (b.type !== 'line_block') forEachChildBlockList(b, visit)
 }
 
 export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): void {
