@@ -135,6 +135,29 @@ describe('interchange sections and block-content cells', () => {
     expect(renderHtml(resolve(doc))).toContain('<img src="/a.png" alt="A">')
   })
 
+  it('shares unrelated containers when collapsing a lone image', () => {
+    const doc = { type: 'document', children: [
+      { type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'unchanged' }] }] },
+      { type: 'block_quote', children: [{ type: 'paragraph', attrs: { id: 'image' }, children: [{ type: 'image', src: '/a.png', alt: 'A' }] }] },
+    ] } satisfies import('../src/ast.js').Document
+    const before = structuredClone(doc)
+    const collapsed = collapseLoneImageParagraphs(doc)
+    expect(collapsed.children[0]).toBe(doc.children[0])
+    expect(collapsed.children[1]).not.toBe(doc.children[1])
+    expect((collapsed.children[1] as import('../src/ast.js').BlockQuote).children[0]).toMatchObject({ type: 'image', attrs: { id: 'image' } })
+    expect(doc).toEqual(before)
+  })
+
+  it('shares document children when only a footnote image needs collapsing', () => {
+    const doc = { type: 'document', children: [{ type: 'div', children: [] }], footnoteDefs: {
+      image: [{ type: 'paragraph', children: [{ type: 'image', src: '/a.png', alt: 'A' }] }],
+    } } satisfies import('../src/ast.js').Document
+    const collapsed = collapseLoneImageParagraphs(doc)
+    expect(collapsed.children).toBe(doc.children)
+    expect(collapsed.footnoteDefs?.image?.[0]?.type).toBe('image')
+    expect(doc.footnoteDefs.image[0]?.type).toBe('paragraph')
+  })
+
   it.each([
     { children: [], blocks: [] },
     {},

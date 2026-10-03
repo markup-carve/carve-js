@@ -7656,10 +7656,10 @@ class ParseSession {
     }
   }
 
-  private verseOwnedLines(lexer: Lexer): boolean[] {
+  private verseOwnedLines(lexer: Lexer): boolean[] | undefined {
+    if (!lexer.lines.some((line, index) => index >= lexer.pos && line.includes('::: ') && line.trimEnd().endsWith('|')) ||
+        !lexer.lines.some((line, index) => index >= lexer.pos && line.includes(']:'))) return undefined
     const owned = Array<boolean>(lexer.lines.length).fill(false)
-    if (!lexer.lines.slice(lexer.pos).some((line) => line.includes('::: ') && line.trimEnd().endsWith('|')) ||
-        !lexer.lines.slice(lexer.pos).some((line) => line.includes(']:'))) return owned
     const parser = new ParseSession()
     parser.probingLazyParagraph = true
     parser.definitionRegionLines = new Set()
@@ -7766,7 +7766,7 @@ class ParseSession {
     let prevBlank = true
     // Carried rather than scanned backwards: a document of blank lines would make
     // a backward walk quadratic, and this pre-pass is on the parse hot path.
-    let prevNonBlankLine = ''
+    let afterPreviousTerm = false
     // Track whether we are inside a footnote body. A footnote continuation is
     // indented, so an indented link def inside a note body must still be collected
     // (the note's content column, not column 0) -- matching the spec oracle, which
@@ -7826,9 +7826,12 @@ class ParseSession {
       // stayed literal, the same outcome carve#840 named one blank line further
       // up (carve-js#1586). A blank that really ends the list still refuses, its
       // previous non-blank line being the prose that ended it.
-      const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(prevNonBlankLine))
-      if (!isBlankLine(raw)) prevNonBlankLine = raw
-      const line = stripContainerPrefixes(raw, afterTerm)
+      const afterTerm = afterPreviousTerm
+      const kept = stripContainerPrefixesKeepIndent(raw, afterTerm)
+      const line = kept.replace(/^[ \t]+/, '')
+      if (!isBlankLine(raw)) {
+        afterPreviousTerm = RE_AFTER_TERM.test(afterTerm ? stripContainerPrefixes(raw) : line)
+      }
       // Content columns are measured INSIDE the block quote. `> - a` puts the
       // item's content column at 2 of the quoted content, not of the raw line -
       // which carries the `> ` and matches no marker, so the column stayed 0 and
@@ -8074,7 +8077,7 @@ class ParseSession {
       // strip the enclosing content column so a fence delimiter at that column
       // is recognized (kept-indent view keeps residual indent after markers)
       const contentCol = listCols.length ? listCols[listCols.length - 1]!.col : 0
-      if (verseLines[idx]) {
+      if (verseLines?.[idx]) {
         term = null
         paraState = 'no'
         continue
@@ -8314,8 +8317,7 @@ class ParseSession {
         raw.slice(quoteIndent).startsWith('>') &&
         (listCols.length === 0 || quoteIndent < Math.max(...listCols.map((entry) => entry.col)))
       if (quoteAtWrongColumn) continue
-      const kept = stripContainerPrefixesKeepIndent(raw, afterTerm)
-      const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
+      const keptIndent = kept.length - line.length
       // A FOOTNOTE BODY has a content column too, and it is not a list column.
       // `contentCol` tracks only list items, so inside a note body it is 0 and an
       // INDENTED fence opener matched nothing - the fence went untracked and the

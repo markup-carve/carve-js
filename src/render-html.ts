@@ -1675,7 +1675,7 @@ function renderListItem(
   // that shares the <li> line, and a name derived from another block would
   // announce something the reader cannot see.
   const lead = visible[0]
-  const taskName = lead?.type === 'paragraph'
+  const taskName = item.checked !== undefined && lead?.type === 'paragraph'
     ? inlineText(lead.children).replace(/[ \t\n\r\f\v]+/g, ' ').trim()
     : ''
   const taskNameAttr = taskName === '' ? '' : ` aria-label="${escapeAttr(taskName)}"`
@@ -1775,7 +1775,12 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     const boundaries = new Set<number>([node.rowGroups.headRows])
     let end = node.rowGroups.headRows
     for (const body of node.rowGroups.bodies) { end += body.headRows + body.bodyRows; boundaries.add(end) }
-    spanRows = node.rows.map((row, i) => boundaries.has(i) ? { ...row, cells: row.cells.map(cell => cell.span === 'rowspan' ? emptyContinuation(cell) : cell) } : row)
+    for (const index of boundaries) {
+      const row = node.rows[index]
+      if (!row?.cells.some(cell => cell.span === 'rowspan')) continue
+      if (spanRows === node.rows) spanRows = node.rows.slice()
+      spanRows[index] = { ...row, cells: row.cells.map(cell => cell.span === 'rowspan' ? emptyContinuation(cell) : cell) }
+    }
   }
   const grid = resolveTableSpans(spanRows)
 
