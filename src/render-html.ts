@@ -1825,13 +1825,18 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       if (v) grid[r]![c]!.valign = v
     }
   }
-  const sectionEnds = [headerEnd, footerStart]
+  const sectionEnds = new Set([headerEnd, footerStart])
   let sectionEnd = headerEnd
-  for (const body of node.rowGroups?.bodies ?? []) { sectionEnd += body.headRows + body.bodyRows; sectionEnds.push(sectionEnd) }
-  const crossesSection = grid.some((row, r) => row.some((entry) =>
-    !entry.skip && entry.rowspan > 1 &&
-    sectionEnds.some(end => r < end && r + entry.rowspan > end),
-  ))
+  for (const body of node.rowGroups?.bodies ?? []) { sectionEnd += body.headRows + body.bodyRows; sectionEnds.add(sectionEnd) }
+  let nextBoundary = Infinity
+  let crossesSection = false
+  for (let r = grid.length - 1; r >= 0; r--) {
+    if (sectionEnds.has(r + 1)) nextBoundary = r + 1
+    if (grid[r]!.some(entry => !entry.skip && entry.rowspan > 1 && r + entry.rowspan > nextBoundary)) {
+      crossesSection = true
+      break
+    }
+  }
   const rowContexts = Array.from({ length: grid.length }, (_, row) => ({ header: row < headerEnd, columns: 0 }))
   let contextStart = headerEnd
   for (const body of node.rowGroups?.bodies ?? []) {
