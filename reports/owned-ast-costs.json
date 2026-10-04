@@ -1,0 +1,2182 @@
+{
+  "parseRun": {
+    "node": "v22.22.2",
+    "generatedAt": "2026-10-04T16:12:23.898Z",
+    "builds": {
+      "baseline": "7463b94507087c0a5978c5ad33df89cdaadaa50df2e7b08648f96b66e4c825e4",
+      "candidate": "6c32b6d54332ad44b0447f730282d74ebe1941a6632e8de266fbd8e901f5524b"
+    },
+    "results": [
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          20.165260333333332,
+          19.2658626,
+          18.325135499999995,
+          18.117417433333323,
+          18.029003533333345
+        ],
+        "medianMs": 18.325135499999995,
+        "iterations": 30,
+        "loadStart": [
+          9.9,
+          7.81,
+          6.12
+        ],
+        "loadEnd": [
+          9.99,
+          7.86,
+          6.15
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          16.649985966666666,
+          14.988180100000003,
+          15.3501755,
+          14.01477843333333,
+          18.518732133333334
+        ],
+        "medianMs": 15.3501755,
+        "iterations": 30,
+        "loadStart": [
+          9.99,
+          7.86,
+          6.15
+        ],
+        "loadEnd": [
+          9.99,
+          7.86,
+          6.15
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          23.321095833333334,
+          18.500562300000002,
+          17.96967323333333,
+          14.524022733333322,
+          13.68953653333333
+        ],
+        "medianMs": 17.96967323333333,
+        "iterations": 30,
+        "loadStart": [
+          9.75,
+          7.85,
+          6.16
+        ],
+        "loadEnd": [
+          9.75,
+          7.85,
+          6.16
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          21.573669400000004,
+          19.6171078,
+          18.078011300000004,
+          18.231913866666673,
+          18.691603066666662
+        ],
+        "medianMs": 18.691603066666662,
+        "iterations": 30,
+        "loadStart": [
+          9.75,
+          7.85,
+          6.16
+        ],
+        "loadEnd": [
+          9.77,
+          7.89,
+          6.18
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse-no-positions",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          25.685475166666667,
+          30.929867566666665,
+          25.885103566666672,
+          26.824537766666662,
+          25.952600399999998
+        ],
+        "medianMs": 25.952600399999998,
+        "iterations": 30,
+        "loadStart": [
+          9.77,
+          7.89,
+          6.18
+        ],
+        "loadEnd": [
+          9.31,
+          7.82,
+          6.16
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse-no-positions",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          20.180585800000003,
+          16.7055148,
+          15.78332369999999,
+          14.545006966666673,
+          14.919927900000008
+        ],
+        "medianMs": 15.78332369999999,
+        "iterations": 30,
+        "loadStart": [
+          9.31,
+          7.82,
+          6.16
+        ],
+        "loadEnd": [
+          9.31,
+          7.82,
+          6.16
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse-no-positions",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          16.471452733333333,
+          15.233430866666671,
+          16.310447633333336,
+          14.867193100000001,
+          14.711238633333323
+        ],
+        "medianMs": 15.233430866666671,
+        "iterations": 30,
+        "loadStart": [
+          8.88,
+          7.76,
+          6.15
+        ],
+        "loadEnd": [
+          8.88,
+          7.76,
+          6.15
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "parse-no-positions",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          25.350726233333333,
+          23.917213866666664,
+          23.09490209999999,
+          24.500602666666662,
+          22.982080866666667
+        ],
+        "medianMs": 23.917213866666664,
+        "iterations": 30,
+        "loadStart": [
+          8.88,
+          7.76,
+          6.15
+        ],
+        "loadEnd": [
+          8.49,
+          7.7,
+          6.14
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          3.8913899000000014,
+          3.1874201666666675,
+          2.899061600000001,
+          3.076468466666669,
+          2.7957273666666653
+        ],
+        "medianMs": 3.076468466666669,
+        "iterations": 30,
+        "loadStart": [
+          8.49,
+          7.7,
+          6.14
+        ],
+        "loadEnd": [
+          8.49,
+          7.7,
+          6.14
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          3.6495436666666667,
+          3.3420701666666655,
+          2.6403199333333345,
+          2.4501755333333337,
+          2.6957317999999986
+        ],
+        "medianMs": 2.6957317999999986,
+        "iterations": 30,
+        "loadStart": [
+          8.49,
+          7.7,
+          6.14
+        ],
+        "loadEnd": [
+          8.49,
+          7.7,
+          6.14
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          3.4988485000000007,
+          3.1229199999999993,
+          2.6183642666666667,
+          2.3984824000000002,
+          2.307648933333333
+        ],
+        "medianMs": 2.6183642666666667,
+        "iterations": 30,
+        "loadStart": [
+          8.49,
+          7.7,
+          6.14
+        ],
+        "loadEnd": [
+          8.49,
+          7.7,
+          6.14
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          3.2413509333333326,
+          2.4633599000000004,
+          2.437774666666667,
+          2.356218800000003,
+          2.4186426666666687
+        ],
+        "medianMs": 2.437774666666667,
+        "iterations": 30,
+        "loadStart": [
+          8.49,
+          7.7,
+          6.14
+        ],
+        "loadEnd": [
+          8.49,
+          7.7,
+          6.14
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          3.7403844666666677,
+          3.0963963,
+          3.350478100000002,
+          3.232340433333335,
+          3.1122497333333325
+        ],
+        "medianMs": 3.232340433333335,
+        "iterations": 30,
+        "loadStart": [
+          8.49,
+          7.7,
+          6.14
+        ],
+        "loadEnd": [
+          8.05,
+          7.62,
+          6.12
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          3.3787658333333335,
+          2.934778400000001,
+          2.3552847000000003,
+          2.3245881000000015,
+          2.318310166666667
+        ],
+        "medianMs": 2.3552847000000003,
+        "iterations": 30,
+        "loadStart": [
+          8.05,
+          7.62,
+          6.12
+        ],
+        "loadEnd": [
+          8.05,
+          7.62,
+          6.12
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          3.552947266666666,
+          2.819913966666667,
+          2.394863199999999,
+          2.291406733333334,
+          2.2613647000000014
+        ],
+        "medianMs": 2.394863199999999,
+        "iterations": 30,
+        "loadStart": [
+          8.05,
+          7.62,
+          6.12
+        ],
+        "loadEnd": [
+          8.05,
+          7.62,
+          6.12
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          4.024398433333334,
+          3.524048366666667,
+          3.2653979000000013,
+          3.0907950000000026,
+          3.189913899999999
+        ],
+        "medianMs": 3.2653979000000013,
+        "iterations": 30,
+        "loadStart": [
+          8.05,
+          7.62,
+          6.12
+        ],
+        "loadEnd": [
+          8.05,
+          7.62,
+          6.12
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          25.479811766666668,
+          23.87182773333333,
+          23.441851600000003,
+          23.338671700000003,
+          23.622753133333344
+        ],
+        "medianMs": 23.622753133333344,
+        "iterations": 30,
+        "loadStart": [
+          8.05,
+          7.62,
+          6.12
+        ],
+        "loadEnd": [
+          7.73,
+          7.56,
+          6.11
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          24.367873666666664,
+          22.584398099999998,
+          17.499949066666666,
+          19.251858733333332,
+          17.76622203333333
+        ],
+        "medianMs": 19.251858733333332,
+        "iterations": 30,
+        "loadStart": [
+          7.73,
+          7.56,
+          6.11
+        ],
+        "loadEnd": [
+          7.27,
+          7.46,
+          6.09
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          18.610906300000003,
+          16.30423826666667,
+          17.085734566666662,
+          22.095307433333332,
+          22.039585266666656
+        ],
+        "medianMs": 18.610906300000003,
+        "iterations": 30,
+        "loadStart": [
+          7.27,
+          7.46,
+          6.09
+        ],
+        "loadEnd": [
+          7.27,
+          7.46,
+          6.09
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          22.889847133333333,
+          21.47321046666666,
+          20.87320646666667,
+          20.05529839999999,
+          20.956602166666666
+        ],
+        "medianMs": 20.956602166666666,
+        "iterations": 30,
+        "loadStart": [
+          7.27,
+          7.46,
+          6.09
+        ],
+        "loadEnd": [
+          7.09,
+          7.42,
+          6.08
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          1.2813017000000002,
+          1.186411533333332,
+          1.2005670333333343,
+          1.3080100999999995,
+          1.2409731000000004
+        ],
+        "medianMs": 1.2409731000000004,
+        "iterations": 30,
+        "loadStart": [
+          7.09,
+          7.42,
+          6.08
+        ],
+        "loadEnd": [
+          7.09,
+          7.42,
+          6.08
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          0.7043578333333339,
+          0.7061158333333329,
+          0.7079449666666666,
+          0.6846233666666668,
+          0.6645352000000002
+        ],
+        "medianMs": 0.7043578333333339,
+        "iterations": 30,
+        "loadStart": [
+          7.09,
+          7.42,
+          6.08
+        ],
+        "loadEnd": [
+          7.09,
+          7.42,
+          6.08
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          0.7288877333333327,
+          0.675742466666667,
+          0.6607005999999994,
+          0.648704166666668,
+          0.701180766666666
+        ],
+        "medianMs": 0.675742466666667,
+        "iterations": 30,
+        "loadStart": [
+          7.09,
+          7.42,
+          6.08
+        ],
+        "loadEnd": [
+          7.09,
+          7.42,
+          6.08
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          1.4412807999999993,
+          1.3624454333333327,
+          1.8401118000000016,
+          1.9883105333333333,
+          1.6166845333333337
+        ],
+        "medianMs": 1.6166845333333337,
+        "iterations": 30,
+        "loadStart": [
+          7.09,
+          7.42,
+          6.08
+        ],
+        "loadEnd": [
+          7.09,
+          7.42,
+          6.08
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          607.2601435999999,
+          614.9037142000001,
+          587.2618522,
+          568.5344917999998,
+          589.6109134000005
+        ],
+        "medianMs": 589.6109134000005,
+        "iterations": 5,
+        "loadStart": [
+          7.43,
+          7.48,
+          6.13
+        ],
+        "loadEnd": [
+          6.94,
+          7.38,
+          6.11
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          602.8673652,
+          601.5120598000001,
+          578.5664851999998,
+          554.9798276000001,
+          591.8247418000007
+        ],
+        "medianMs": 591.8247418000007,
+        "iterations": 5,
+        "loadStart": [
+          6.93,
+          7.36,
+          6.12
+        ],
+        "loadEnd": [
+          7.17,
+          7.4,
+          6.15
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          542.2974463999999,
+          586.1057256,
+          602.4987266,
+          571.4440673999998,
+          562.1257532000003
+        ],
+        "medianMs": 571.4440673999998,
+        "iterations": 5,
+        "loadStart": [
+          7.08,
+          7.37,
+          6.15
+        ],
+        "loadEnd": [
+          6.16,
+          7.16,
+          6.1
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          630.7647719999999,
+          596.3286009999999,
+          620.2564393999997,
+          679.2359701999994,
+          568.3270133999998
+        ],
+        "medianMs": 620.2564393999997,
+        "iterations": 5,
+        "loadStart": [
+          5.83,
+          7.05,
+          6.08
+        ],
+        "loadEnd": [
+          5.78,
+          6.98,
+          6.07
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse-no-positions",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          592.4218705999999,
+          600.0801326000001,
+          625.1541054000002,
+          608.1977284000001,
+          689.6148523999997
+        ],
+        "medianMs": 608.1977284000001,
+        "iterations": 5,
+        "loadStart": [
+          5.72,
+          6.95,
+          6.07
+        ],
+        "loadEnd": [
+          5.49,
+          6.84,
+          6.04
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse-no-positions",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          639.6057724,
+          576.2443596,
+          620.6471934000004,
+          581.6851021999995,
+          574.7597993999996
+        ],
+        "medianMs": 581.6851021999995,
+        "iterations": 5,
+        "loadStart": [
+          6.76,
+          7.06,
+          6.12
+        ],
+        "loadEnd": [
+          7.57,
+          7.22,
+          6.19
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse-no-positions",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          547.8963960000001,
+          534.4847202000001,
+          542.2498892,
+          558.6598554000004,
+          568.9777177999997
+        ],
+        "medianMs": 547.8963960000001,
+        "iterations": 5,
+        "loadStart": [
+          7.92,
+          7.3,
+          6.22
+        ],
+        "loadEnd": [
+          7.12,
+          7.15,
+          6.19
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "parse-no-positions",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          578.6657069999999,
+          592.0011928,
+          627.2726575999998,
+          624.1405101999997,
+          594.7333306
+        ],
+        "medianMs": 594.7333306,
+        "iterations": 5,
+        "loadStart": [
+          6.88,
+          7.1,
+          6.18
+        ],
+        "loadEnd": [
+          7.06,
+          7.13,
+          6.21
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          67.10402740000004,
+          59.23198459999994,
+          61.67660580000002,
+          62.36208340000003,
+          64.98314680000003
+        ],
+        "medianMs": 62.36208340000003,
+        "iterations": 5,
+        "loadStart": [
+          7.06,
+          7.13,
+          6.21
+        ],
+        "loadEnd": [
+          7.06,
+          7.13,
+          6.21
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          62.726538400000024,
+          58.6715878,
+          68.28062799999998,
+          71.0480372,
+          70.53551639999996
+        ],
+        "medianMs": 68.28062799999998,
+        "iterations": 5,
+        "loadStart": [
+          7.3,
+          7.18,
+          6.23
+        ],
+        "loadEnd": [
+          7.3,
+          7.18,
+          6.23
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          80.41036319999994,
+          76.51733400000003,
+          70.62444640000004,
+          66.64047620000001,
+          64.15743320000001
+        ],
+        "medianMs": 70.62444640000004,
+        "iterations": 5,
+        "loadStart": [
+          7.11,
+          7.14,
+          6.22
+        ],
+        "loadEnd": [
+          7.11,
+          7.14,
+          6.22
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          60.30917980000004,
+          60.251062999999974,
+          67.3071172,
+          64.17577879999999,
+          78.5159122
+        ],
+        "medianMs": 64.17577879999999,
+        "iterations": 5,
+        "loadStart": [
+          7.11,
+          7.14,
+          6.22
+        ],
+        "loadEnd": [
+          6.86,
+          7.09,
+          6.21
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          94.5494882,
+          93.88339500000002,
+          95.32845300000008,
+          88.38086439999998,
+          88.72324239999998
+        ],
+        "medianMs": 93.88339500000002,
+        "iterations": 5,
+        "loadStart": [
+          6.86,
+          7.09,
+          6.21
+        ],
+        "loadEnd": [
+          6.63,
+          7.04,
+          6.2
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          79.81208479999995,
+          67.5609582,
+          65.84137120000005,
+          66.84046939999999,
+          69.04743520000002
+        ],
+        "medianMs": 67.5609582,
+        "iterations": 5,
+        "loadStart": [
+          6.63,
+          7.04,
+          6.2
+        ],
+        "loadEnd": [
+          6.63,
+          7.04,
+          6.2
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          85.42127,
+          95.4700976,
+          93.64457859999993,
+          92.919596,
+          94.03496400000013
+        ],
+        "medianMs": 93.64457859999993,
+        "iterations": 5,
+        "loadStart": [
+          6.82,
+          7.07,
+          6.21
+        ],
+        "loadEnd": [
+          6.82,
+          7.07,
+          6.21
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          97.3775928,
+          94.64894199999999,
+          94.58082340000001,
+          92.27566060000008,
+          95.63046680000006
+        ],
+        "medianMs": 94.64894199999999,
+        "iterations": 5,
+        "loadStart": [
+          7.16,
+          7.13,
+          6.24
+        ],
+        "loadEnd": [
+          7.16,
+          7.13,
+          6.24
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          764.1997164,
+          779.8727642000001,
+          757.610067,
+          711.8525269999998,
+          748.5280577999998
+        ],
+        "medianMs": 757.610067,
+        "iterations": 5,
+        "loadStart": [
+          7.91,
+          7.3,
+          6.3
+        ],
+        "loadEnd": [
+          8.89,
+          7.57,
+          6.41
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          759.1864042000001,
+          807.0952443999998,
+          782.1164193999997,
+          735.8605729999996,
+          793.5376140000001
+        ],
+        "medianMs": 782.1164193999997,
+        "iterations": 5,
+        "loadStart": [
+          8.85,
+          7.6,
+          6.43
+        ],
+        "loadEnd": [
+          7.96,
+          7.48,
+          6.42
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          719.3801436000001,
+          720.1401506000002,
+          722.8140296000001,
+          724.0838733999997,
+          701.6750867999996
+        ],
+        "medianMs": 720.1401506000002,
+        "iterations": 5,
+        "loadStart": [
+          7.73,
+          7.44,
+          6.42
+        ],
+        "loadEnd": [
+          7.03,
+          7.31,
+          6.39
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          761.602793,
+          694.4039282000001,
+          646.9692884000003,
+          693.0468512,
+          702.7769582000001
+        ],
+        "medianMs": 694.4039282000001,
+        "iterations": 5,
+        "loadStart": [
+          7.02,
+          7.3,
+          6.4
+        ],
+        "loadEnd": [
+          6.56,
+          7.18,
+          6.37
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          12.848027000000002,
+          15.871099999999979,
+          13.165452000000005,
+          13.109321199999977,
+          12.827730199999996
+        ],
+        "medianMs": 13.109321199999977,
+        "iterations": 5,
+        "loadStart": [
+          6.27,
+          7.11,
+          6.36
+        ],
+        "loadEnd": [
+          6.27,
+          7.11,
+          6.36
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          14.897631999999977,
+          17.048981400000002,
+          17.812676999999987,
+          18.29179220000001,
+          18.096173399999998
+        ],
+        "medianMs": 17.812676999999987,
+        "iterations": 5,
+        "loadStart": [
+          6.27,
+          7.11,
+          6.36
+        ],
+        "loadEnd": [
+          6.27,
+          7.11,
+          6.36
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          13.024524800000018,
+          13.856100199999991,
+          14.1286838,
+          15.008709399999997,
+          15.224584800000002
+        ],
+        "medianMs": 14.1286838,
+        "iterations": 5,
+        "loadStart": [
+          6.27,
+          7.11,
+          6.36
+        ],
+        "loadEnd": [
+          6.01,
+          7.04,
+          6.34
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          12.926499599999989,
+          13.502944600000001,
+          13.632457599999999,
+          13.075519799999984,
+          13.684466799999973
+        ],
+        "medianMs": 13.502944600000001,
+        "iterations": 5,
+        "loadStart": [
+          6.01,
+          7.04,
+          6.34
+        ],
+        "loadEnd": [
+          6.01,
+          7.04,
+          6.34
+        ]
+      }
+    ]
+  },
+  "finalTraversalRun": {
+    "node": "v22.22.2",
+    "generatedAt": "2026-10-04T16:18:08.484Z",
+    "builds": {
+      "baseline": "7463b94507087c0a5978c5ad33df89cdaadaa50df2e7b08648f96b66e4c825e4",
+      "candidate": "34bab6c2ec8ef40706ef8df2a068bc02a9aa3c6dfed7caf30a948c61513ac316"
+    },
+    "results": [
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          3.4297956333333333,
+          2.5049670666666657,
+          3.4794669333333315,
+          2.453680033333334,
+          2.5686884333333335
+        ],
+        "medianMs": 2.5686884333333335,
+        "iterations": 30,
+        "loadStart": [
+          4.33,
+          5.89,
+          6
+        ],
+        "loadEnd": [
+          4.39,
+          5.88,
+          6
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          5.131757766666667,
+          3.3022860666666665,
+          3.7091043333333307,
+          3.4599680666666663,
+          3.1442229999999993
+        ],
+        "medianMs": 3.4599680666666663,
+        "iterations": 30,
+        "loadStart": [
+          4.39,
+          5.88,
+          6
+        ],
+        "loadEnd": [
+          4.39,
+          5.88,
+          6
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          3.8965763333333334,
+          3.2111053666666654,
+          2.786981533333331,
+          2.883828633333333,
+          2.8197299000000005
+        ],
+        "medianMs": 2.883828633333333,
+        "iterations": 30,
+        "loadStart": [
+          4.39,
+          5.88,
+          6
+        ],
+        "loadEnd": [
+          4.39,
+          5.88,
+          6
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          5.635215,
+          3.347636399999999,
+          2.2234540999999997,
+          2.2550379333333317,
+          2.233582066666668
+        ],
+        "medianMs": 2.2550379333333317,
+        "iterations": 30,
+        "loadStart": [
+          4.39,
+          5.88,
+          6
+        ],
+        "loadEnd": [
+          4.39,
+          5.88,
+          6
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          4.560268466666666,
+          5.273827633333334,
+          4.886016566666664,
+          4.303331366666665,
+          3.108101133333336
+        ],
+        "medianMs": 4.560268466666666,
+        "iterations": 30,
+        "loadStart": [
+          4.39,
+          5.88,
+          6
+        ],
+        "loadEnd": [
+          4.39,
+          5.88,
+          6
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          4.429236166666667,
+          4.264452333333335,
+          3.877249766666667,
+          3.3254040000000034,
+          3.230616100000001
+        ],
+        "medianMs": 3.877249766666667,
+        "iterations": 30,
+        "loadStart": [
+          4.39,
+          5.88,
+          6
+        ],
+        "loadEnd": [
+          4.39,
+          5.88,
+          6
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          4.134236266666666,
+          3.231447000000001,
+          2.2970592666666674,
+          2.1707066000000017,
+          2.231892133333334
+        ],
+        "medianMs": 2.2970592666666674,
+        "iterations": 30,
+        "loadStart": [
+          4.39,
+          5.88,
+          6
+        ],
+        "loadEnd": [
+          4.35,
+          5.84,
+          5.98
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          4.454498900000001,
+          3.3828550666666652,
+          3.2351116666666675,
+          3.5281805,
+          3.1485801666666666
+        ],
+        "medianMs": 3.3828550666666652,
+        "iterations": 30,
+        "loadStart": [
+          4.35,
+          5.84,
+          5.98
+        ],
+        "loadEnd": [
+          4.35,
+          5.84,
+          5.98
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          23.754671700000003,
+          22.053230800000005,
+          21.979210000000005,
+          22.7915134,
+          23.64333173333333
+        ],
+        "medianMs": 22.7915134,
+        "iterations": 30,
+        "loadStart": [
+          4.35,
+          5.84,
+          5.98
+        ],
+        "loadEnd": [
+          4.41,
+          5.83,
+          5.98
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          20.980166666666666,
+          20.362408566666666,
+          21.25537563333334,
+          25.03841656666667,
+          20.794280799999992
+        ],
+        "medianMs": 20.980166666666666,
+        "iterations": 30,
+        "loadStart": [
+          4.41,
+          5.83,
+          5.98
+        ],
+        "loadEnd": [
+          4.41,
+          5.83,
+          5.98
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          23.20733693333333,
+          21.2735102,
+          20.655936533333335,
+          19.503231966666664,
+          19.770641499999996
+        ],
+        "medianMs": 20.655936533333335,
+        "iterations": 30,
+        "loadStart": [
+          4.41,
+          5.83,
+          5.98
+        ],
+        "loadEnd": [
+          4.45,
+          5.82,
+          5.97
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "owned",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          26.69118183333334,
+          27.05911373333334,
+          23.705267500000005,
+          21.575949933333337,
+          22.92893163333333
+        ],
+        "medianMs": 23.705267500000005,
+        "iterations": 30,
+        "loadStart": [
+          4.45,
+          5.82,
+          5.97
+        ],
+        "loadEnd": [
+          5.06,
+          5.92,
+          6.01
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          1.413505433333334,
+          1.3405124333333334,
+          1.1671813000000004,
+          1.1620521999999993,
+          1.222827966666667
+        ],
+        "medianMs": 1.222827966666667,
+        "iterations": 30,
+        "loadStart": [
+          5.06,
+          5.92,
+          6.01
+        ],
+        "loadEnd": [
+          5.06,
+          5.92,
+          6.01
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          0.7894572666666676,
+          0.7628699333333334,
+          0.7154322666666663,
+          0.9121816333333338,
+          0.8317417666666681
+        ],
+        "medianMs": 0.7894572666666676,
+        "iterations": 30,
+        "loadStart": [
+          5.06,
+          5.92,
+          6.01
+        ],
+        "loadEnd": [
+          5.06,
+          5.92,
+          6.01
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          1.0165106666666675,
+          0.9323477000000007,
+          1.0279801666666666,
+          0.8351085333333326,
+          0.6873387333333331
+        ],
+        "medianMs": 0.9323477000000007,
+        "iterations": 30,
+        "loadStart": [
+          5.06,
+          5.92,
+          6.01
+        ],
+        "loadEnd": [
+          5.06,
+          5.92,
+          6.01
+        ]
+      },
+      {
+        "fixture": "carve.crv",
+        "bytes": 49270,
+        "sha256": "9e17569764af6cbdf23c9a5e70439b4dfc87fbe24dbcb022eb4c4577533119d5",
+        "mode": "ids",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          1.7417225666666658,
+          1.2763261999999997,
+          1.1419292000000003,
+          1.2306128,
+          1.150754333333333
+        ],
+        "medianMs": 1.2306128,
+        "iterations": 30,
+        "loadStart": [
+          5.06,
+          5.92,
+          6.01
+        ],
+        "loadEnd": [
+          5.06,
+          5.92,
+          6.01
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          74.39445560000004,
+          87.30449680000001,
+          64.28055800000001,
+          66.78952800000006,
+          65.50935200000004
+        ],
+        "medianMs": 66.78952800000006,
+        "iterations": 5,
+        "loadStart": [
+          5.5,
+          5.99,
+          6.03
+        ],
+        "loadEnd": [
+          6.42,
+          6.17,
+          6.09
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          74.55569059999998,
+          64.71218840000002,
+          73.85371320000004,
+          68.34985139999999,
+          69.69926139999998
+        ],
+        "medianMs": 69.69926139999998,
+        "iterations": 5,
+        "loadStart": [
+          6.42,
+          6.17,
+          6.09
+        ],
+        "loadEnd": [
+          6.87,
+          6.27,
+          6.12
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          68.22935239999997,
+          68.66995740000002,
+          71.71357719999996,
+          74.14780880000008,
+          66.23738239999993
+        ],
+        "medianMs": 68.66995740000002,
+        "iterations": 5,
+        "loadStart": [
+          6.87,
+          6.27,
+          6.12
+        ],
+        "loadEnd": [
+          6.87,
+          6.27,
+          6.12
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          77.74152880000001,
+          69.41351880000002,
+          69.4998028,
+          78.54796379999998,
+          79.19574500000007
+        ],
+        "medianMs": 77.74152880000001,
+        "iterations": 5,
+        "loadStart": [
+          7.84,
+          6.48,
+          6.19
+        ],
+        "loadEnd": [
+          7.84,
+          6.48,
+          6.19
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          117.44948279999998,
+          94.64630779999997,
+          92.96561260000007,
+          91.41856060000009,
+          95.78304299999999
+        ],
+        "medianMs": 94.64630779999997,
+        "iterations": 5,
+        "loadStart": [
+          8.09,
+          6.55,
+          6.21
+        ],
+        "loadEnd": [
+          8.09,
+          6.55,
+          6.21
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          82.22064259999998,
+          100.60001179999999,
+          78.52322699999995,
+          69.74712639999998,
+          69.10606159999998
+        ],
+        "medianMs": 78.52322699999995,
+        "iterations": 5,
+        "loadStart": [
+          8.08,
+          6.58,
+          6.22
+        ],
+        "loadEnd": [
+          8.08,
+          6.58,
+          6.22
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          64.61995299999998,
+          62.28997020000006,
+          64.64300700000004,
+          72.72401100000006,
+          68.82845080000007
+        ],
+        "medianMs": 64.64300700000004,
+        "iterations": 5,
+        "loadStart": [
+          7.84,
+          6.55,
+          6.22
+        ],
+        "loadEnd": [
+          7.84,
+          6.55,
+          6.22
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "render-no-positions",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          100.91468260000002,
+          93.42956679999998,
+          94.13785120000003,
+          95.69782539999997,
+          102.13731319999988
+        ],
+        "medianMs": 95.69782539999997,
+        "iterations": 5,
+        "loadStart": [
+          7.84,
+          6.55,
+          6.22
+        ],
+        "loadEnd": [
+          7.69,
+          6.54,
+          6.22
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          759.6262798,
+          761.5918224000001,
+          800.3142533999999,
+          765.3455308000005,
+          766.7067448000001
+        ],
+        "medianMs": 765.3455308000005,
+        "iterations": 5,
+        "loadStart": [
+          7.65,
+          6.57,
+          6.23
+        ],
+        "loadEnd": [
+          6.81,
+          6.45,
+          6.2
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          781.6972840000002,
+          782.6723410000002,
+          792.0177206000001,
+          794.8452497999999,
+          812.3451254000007
+        ],
+        "medianMs": 792.0177206000001,
+        "iterations": 5,
+        "loadStart": [
+          6.3,
+          6.36,
+          6.17
+        ],
+        "loadEnd": [
+          6.14,
+          6.3,
+          6.15
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          775.6581507999999,
+          791.9085278000002,
+          750.6249336000001,
+          752.1649266000001,
+          964.5388827999996
+        ],
+        "medianMs": 775.6581507999999,
+        "iterations": 5,
+        "loadStart": [
+          6.47,
+          6.37,
+          6.18
+        ],
+        "loadEnd": [
+          6.55,
+          6.39,
+          6.19
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "owned",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          1151.7442446,
+          714.8002974000003,
+          717.7626960000001,
+          706.8372007999999,
+          726.6442397999999
+        ],
+        "medianMs": 717.7626960000001,
+        "iterations": 5,
+        "loadStart": [
+          8.87,
+          6.88,
+          6.35
+        ],
+        "loadEnd": [
+          7.61,
+          6.74,
+          6.32
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 0,
+        "reader": "baseline",
+        "samples": [
+          12.568414200000007,
+          13.031120799999963,
+          13.142779199999996,
+          13.336932800000023,
+          12.899225799999977
+        ],
+        "medianMs": 13.031120799999963,
+        "iterations": 5,
+        "loadStart": [
+          7.24,
+          6.68,
+          6.3
+        ],
+        "loadEnd": [
+          7.24,
+          6.68,
+          6.3
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 0,
+        "reader": "candidate",
+        "samples": [
+          15.108240200000001,
+          15.338179800000034,
+          12.677511600000026,
+          12.848948000000018,
+          12.966339400000015
+        ],
+        "medianMs": 12.966339400000015,
+        "iterations": 5,
+        "loadStart": [
+          7.24,
+          6.68,
+          6.3
+        ],
+        "loadEnd": [
+          7.24,
+          6.68,
+          6.3
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 1,
+        "reader": "candidate",
+        "samples": [
+          15.238449799999989,
+          15.511465400000043,
+          14.6562496,
+          15.321726200000011,
+          15.147382600000038
+        ],
+        "medianMs": 15.238449799999989,
+        "iterations": 5,
+        "loadStart": [
+          7.24,
+          6.68,
+          6.3
+        ],
+        "loadEnd": [
+          7.24,
+          6.68,
+          6.3
+        ]
+      },
+      {
+        "fixture": "large.crv",
+        "bytes": 520855,
+        "sha256": "3b97269724132551ee49466b474f75c9df9f95e228d73153d81e0d25c971c755",
+        "mode": "ids",
+        "round": 1,
+        "reader": "baseline",
+        "samples": [
+          13.0925252,
+          13.067431400000032,
+          12.917856800000028,
+          13.969101799999999,
+          13.423615199999995
+        ],
+        "medianMs": 13.0925252,
+        "iterations": 5,
+        "loadStart": [
+          6.98,
+          6.63,
+          6.29
+        ],
+        "loadEnd": [
+          6.98,
+          6.63,
+          6.29
+        ]
+      }
+    ]
+  }
+}
