@@ -11,6 +11,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Improvements
 
+- Extract colon-group extent scanning from list-body rebasing while preserving folded-line ownership, opaque payload tracking, and closer caches.
 - Extract quote and code-fence extent scans from list-body rebasing while preserving scan order, callbacks, and closer caches.
 - Add a separate table-preservation assessment and checked output API. Diagnose merged cells, caption associations, header ordering, and other declared fields without changing the render-loss schema.
 

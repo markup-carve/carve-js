@@ -6157,6 +6157,98 @@ function rebasedCodeFenceEnd(
   return end
 }
 
+// Find a colon group's extent while retaining folded-line ownership.
+function rebasedColonGroupEnd(
+  lines: string[],
+  start: number,
+  base: number,
+  width: number,
+  heldFoldedLines: Set<number>,
+  takenBelowColumn?: ReadonlySet<number>,
+  onFenceBodyLine?: (index: number) => void,
+): number {
+  let end = start
+  const stack = [width]
+  const holdsFoldedLines = base > 0 && takenBelowColumn !== undefined && takenBelowColumn.size > 0
+  const closerMemo: GroupCloserMemo = { verbatim: new Map(), comment: new Map() }
+  // The opaque group open inside this container, if any. Only the hold below
+  // consults it: a folded line inside a verbatim or comment payload is that
+  // payload's, and its delimiter has to travel with the dedent.
+  let opaque: OpaqueGroup | null = null
+  for (let j = start + 1; j < lines.length; j++) {
+    const candidate = lines[j]!
+    end = j
+    // The container parses its own list markers after paragraph folding.
+    // They must not split the host item's collected stream (carve#2474).
+    onFenceBodyLine?.(j)
+    if (isBlankLine(candidate)) continue
+    const column = indentColumns(candidate, base)
+    // THE OPAQUE GROUP IS TRACKED BEFORE THE COLUMN TEST, because its closing
+    // run may be written below the base and this pass still has to know the
+    // payload ended there.
+    const insideOpaque = opaque !== null
+    if (
+      opaque !== null &&
+      (opaque.belowBaseCloses || closerReachesBase(candidate, j, base, takenBelowColumn)) &&
+      opaque.closes(groupLineContent(candidate, base))
+    ) {
+      opaque = null
+    }
+    // A below-base run is payload unless it closes at the container's own column.
+    if (column < base) {
+      const closesAtColumn =
+        column === 0 &&
+        RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length === stack[stack.length - 1]
+      if (!closesAtColumn) continue
+    }
+    const local = column === 0 ? candidate : sliceColumns(candidate, base, true)
+    if (insideOpaque) {
+      // Inside a payload, so nothing here opens or holds.
+    } else if (holdsFoldedLines && takenBelowColumn?.has(j) === true) {
+      // A FOLDED LINE IS NOT AT THIS GROUP'S BASE. Its leading run is
+      // alignment under the host that folded it in from below that host's own
+      // content column, not an authored column - and at an over-indent of ONE
+      // the two spellings collide, because a line written in the band between
+      // column zero and the host's content column keeps exactly the single
+      // residual column the rebased opener carries. So a `:::` there closed a
+      // group the host never placed it in, and a heading, rule or quote there
+      // became a block (markup-carve/carve-js#2243).
+      //
+      // Held rather than skipped, because the dedent below must leave the line
+      // alone too - moving it onto the base is what re-classified it.
+      //
+      // NOT INSIDE AN OPAQUE PAYLOAD, which is the arm above: a fence's own
+      // closing run can be written in that band, and holding it there left the
+      // payload open and the container's own closer nested inside it.
+      heldFoldedLines.add(j)
+      continue
+    } else if (holdsFoldedLines && column >= base) {
+      // ONLY A FENCE THAT CLOSES OPENS A PAYLOAD (§10 I4 for the verbatim
+      // kinds, §28 for the comment one). Without the lookahead an
+      // unterminated run made every line after it payload, which handed a
+      // folded heading, rule or quote marker to the dedent again.
+      //
+      // Asked only for a group that HOLDS a folded line, which is the one
+      // question the payload state answers here, so a document with none
+      // pays nothing for it.
+      const group = opaqueGroupCloser(local)
+      if (group !== null && opaqueGroupCloses(group, lines, j + 1, base, takenBelowColumn, closerMemo)) {
+        opaque = group
+      }
+    }
+    const run = RE_ADMONITION_CLOSE.exec(local)
+    if (!run) continue
+    const width = run[1]!.length
+    if (stack[stack.length - 1] === width) {
+      stack.pop()
+      if (stack.length === 0) break
+    } else {
+      stack.push(width)
+    }
+  }
+  return end
+}
+
 /**
  * Apply an over-indented list block opener's authored column as a temporary
  * local block base (PART 9 §24 C3, carve#1705).
@@ -6368,84 +6460,9 @@ function rebaseOverindentedBlocks(
         if (j < closeAt) heldFoldedLines.add(j)
       }
     } else if (colon !== null) {
-      const stack = [colon]
-      const holdsFoldedLines = base > 0 && takenBelowColumn !== undefined && takenBelowColumn.size > 0
-      const closerMemo: GroupCloserMemo = { verbatim: new Map(), comment: new Map() }
-      // The opaque group open inside this container, if any. Only the hold below
-      // consults it: a folded line inside a verbatim or comment payload is that
-      // payload's, and its delimiter has to travel with the dedent.
-      let opaque: OpaqueGroup | null = null
-      for (let j = i + 1; j < lines.length; j++) {
-        const candidate = lines[j]!
-        end = j
-        // The container parses its own list markers after paragraph folding.
-        // They must not split the host item's collected stream (carve#2474).
-        onFenceBodyLine?.(j)
-        if (isBlankLine(candidate)) continue
-        const column = indentColumns(candidate, base)
-        // THE OPAQUE GROUP IS TRACKED BEFORE THE COLUMN TEST, because its closing
-        // run may be written below the base and this pass still has to know the
-        // payload ended there.
-        const insideOpaque = opaque !== null
-        if (
-          opaque !== null &&
-          (opaque.belowBaseCloses || closerReachesBase(candidate, j, base, takenBelowColumn)) &&
-          opaque.closes(groupLineContent(candidate, base))
-        ) {
-          opaque = null
-        }
-        // A below-base run is payload unless it closes at the container's own column.
-        if (column < base) {
-          const closesAtColumn =
-            column === 0 &&
-            RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length === stack[stack.length - 1]
-          if (!closesAtColumn) continue
-        }
-        const local = column === 0 ? candidate : sliceColumns(candidate, base, true)
-        if (insideOpaque) {
-          // Inside a payload, so nothing here opens or holds.
-        } else if (holdsFoldedLines && takenBelowColumn?.has(j) === true) {
-          // A FOLDED LINE IS NOT AT THIS GROUP'S BASE. Its leading run is
-          // alignment under the host that folded it in from below that host's own
-          // content column, not an authored column - and at an over-indent of ONE
-          // the two spellings collide, because a line written in the band between
-          // column zero and the host's content column keeps exactly the single
-          // residual column the rebased opener carries. So a `:::` there closed a
-          // group the host never placed it in, and a heading, rule or quote there
-          // became a block (markup-carve/carve-js#2243).
-          //
-          // Held rather than skipped, because the dedent below must leave the line
-          // alone too - moving it onto the base is what re-classified it.
-          //
-          // NOT INSIDE AN OPAQUE PAYLOAD, which is the arm above: a fence's own
-          // closing run can be written in that band, and holding it there left the
-          // payload open and the container's own closer nested inside it.
-          heldFoldedLines.add(j)
-          continue
-        } else if (holdsFoldedLines && column >= base) {
-          // ONLY A FENCE THAT CLOSES OPENS A PAYLOAD (§10 I4 for the verbatim
-          // kinds, §28 for the comment one). Without the lookahead an
-          // unterminated run made every line after it payload, which handed a
-          // folded heading, rule or quote marker to the dedent again.
-          //
-          // Asked only for a group that HOLDS a folded line, which is the one
-          // question the payload state answers here, so a document with none
-          // pays nothing for it.
-          const group = opaqueGroupCloser(local)
-          if (group !== null && opaqueGroupCloses(group, lines, j + 1, base, takenBelowColumn, closerMemo)) {
-            opaque = group
-          }
-        }
-        const run = RE_ADMONITION_CLOSE.exec(local)
-        if (!run) continue
-        const width = run[1]!.length
-        if (stack[stack.length - 1] === width) {
-          stack.pop()
-          if (stack.length === 0) break
-        } else {
-          stack.push(width)
-        }
-      }
+      end = rebasedColonGroupEnd(
+        lines, i, base, colon, heldFoldedLines, takenBelowColumn, onFenceBodyLine,
+      )
     } else if (!definitionEntry && (
       RE_BLOCKQUOTE.test(opener) ||
       // A LINK REFERENCE DEFINITION HAS NO BODY, so it owns no run at all - it
