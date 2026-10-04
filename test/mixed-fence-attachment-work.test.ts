@@ -97,6 +97,40 @@ describe('false fence closers in colon attachments', () => {
     const source = '- item\n+\n::: a\n+\n::: b\n:::\n'
     expect(bounded(source).html).toContain('class="b"')
   })
+  it('bounds short attachments at many distinct content columns', () => {
+    const source = Array.from({ length: 32 }, (_, i) => ' '.repeat(i + 1)
+      + '- item\n' + ' '.repeat(i + 1) + '+\n```x\npayload\n```\n\n').join('')
+    expect(bounded(source).html).toContain('payload')
+  })
+  it('reuses shared indices across six rotating content columns', () => {
+    const source = Array.from({ length: 36 }, (_, i) => ' '.repeat(i % 6 + 1) + '- item\n'
+      + ' '.repeat(i % 6 + 1) + '+\n::: box\n```x\n\n').join('') + '        ```\n        :::\n'
+    expect(bounded(source).html).toContain('item')
+  })
+  for (const count of [16, 128, 512]) {
+    for (const pairedTail of [false, true]) {
+      it(`bounds long tails, paired=${pairedTail}, after ${count} overlapping opaque attachments`, () => {
+        const source = '- item\n' + Array.from({ length: count }, (_, i) => '+\n::: box\n' + '`'.repeat(count + 3 - i) + '\n').join('')
+          + '`'.repeat(count + 4) + '\n' + 'payload\n'.repeat(2000) + (pairedTail ? '::: tail\n:::\n' : '') + ' :::\n'
+        expect(bounded(source).html).toContain('payload')
+      })
+    }
+  }
+  for (const depth of [8, 32, 64]) {
+    it(`shares an index across ${depth} borrowed colon bodies`, () => {
+      const source = Array.from({ length: depth }, (_, i) => ':'.repeat(i + 4)
+        + ' outer\n- item\n+\n::: box\npayload\n:::\n\n').join('')
+        + 'tail\n'.repeat(2000) + Array.from({ length: depth }, (_, i) => ':'.repeat(depth + 3 - i) + '\n').join('')
+      expect(bounded(source).html).toContain('payload')
+    })
+  }
+  for (const count of [16, 32, 64]) {
+    it(`retains ${count} disjoint failed tails`, () => {
+      const source = '- item\n' + Array.from({ length: count }, (_, i) => '+\n::: box\n' + '`'.repeat(count + 3 - i) + '\n').join('')
+        + Array.from({ length: count }, (_, i) => '`'.repeat(i + 4) + '\n' + 'payload\n'.repeat(32) + '::: tail\n:::\n').join('')
+      expect(bounded(source).html).toContain('payload')
+    })
+  }
   it('keeps cached closer characters separate', () => {
     const source = '- item\n+\n::: box\n````x\n~~~x\npayload\n~~~\n ````\n:::\n'
     const result = bounded(source)
