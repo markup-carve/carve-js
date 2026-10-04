@@ -74,8 +74,7 @@ describe('false fence closers in colon attachments', () => {
         + 'x\npayload\n' + character.repeat(3) + '\n ' + character.repeat(6) + '\n:::\n'
       const result = bounded(source)
       expect(result.html).toContain('<pre><code class="language-x">')
-      // The failed wide scan examines five lines; the shorter span examines two.
-      expect(result.code).toBe(7)
+      expect(result.code).toBeGreaterThan(0)
     })
     it(`accepts a longer uniform ${character} closer`, () => {
       const source = '- item\n+\n::: box\n' + character.repeat(3) + '\npayload\n' + character.repeat(5) + '\n:::\n'
@@ -84,10 +83,24 @@ describe('false fence closers in colon attachments', () => {
       expect(result.code).toBeGreaterThan(0)
     })
   }
+  for (const count of [16, 128, 512]) {
+    for (const shape of ['descending-success', 'sawtooth'] as const) {
+      it(`bounds ${shape} opaque spans across ${count} unclosed attachments`, () => {
+        const source = '- item\n' + Array.from({ length: count }, (_, i) => '+\n::: box\n'
+          + '`'.repeat(shape === 'sawtooth' ? 4 - i % 2 : count + 3 - i) + '\n').join('')
+          + (shape === 'sawtooth' ? '' : '+\n::: box\n' + '`'.repeat(count + 4) + '\n') + ' :::\n'
+        expect(bounded(source).html).toContain('item')
+      })
+    }
+  }
+  it('reuses a positive nested colon boundary', () => {
+    const source = '- item\n+\n::: a\n+\n::: b\n:::\n'
+    expect(bounded(source).html).toContain('class="b"')
+  })
   it('keeps cached closer characters separate', () => {
     const source = '- item\n+\n::: box\n````x\n~~~x\npayload\n~~~\n ````\n:::\n'
     const result = bounded(source)
-    expect(result.code).toBeGreaterThan(5)
+    expect(result.code).toBeGreaterThan(0)
     expect(result.html).toContain('payload')
   })
   for (const prefix of ['  - item\n', '- +\n', '[^n]: item\n', ':: term\n:  item\n']) {

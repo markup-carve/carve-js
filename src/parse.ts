@@ -4511,13 +4511,8 @@ function insideOpenQuoteParagraph(state: ItemLazyState): boolean {
   return state.quoteInner !== null && blockQuoteParagraphOpen(state.quoteInner)
 }
 
-interface AttachedCodeScan {
-  from: number
-  index: CloserIndex['code']
-}
-
 interface AttachedViewScan {
-  code?: AttachedCodeScan
+  opaque?: ScopedFenceClosers
   colon?: Map<number, number>
 }
 
@@ -4534,6 +4529,8 @@ interface AttachedScan {
   index: CloserIndex
   base: number
   cache: AttachedViewScan
+  preciseClosers: () => ScopedFenceClosers
+  end: number
 }
 
 /**
@@ -4551,46 +4548,14 @@ function opaqueSpanEnd(scan: AttachedScan, i: number): number {
   const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
   const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
   if (marker !== null) {
-    const start = i + 1
-    const opener = scan.base + i
-    const cached = scan.cache.code
-    if (cached !== undefined && opener + 1 >= cached.from && !codeCloserPossibleIn(cached.index, marker, opener)) return -1
-    // Refuted in O(log n) when nothing ahead can close this run, which is what
-    // keeps a run of unterminated openers from re-reading the same suffix once
-    // per opener.
-    if (!codeCloserPossible(scan.index, marker, opener)) return -1
-    let codeLast: Map<string, Map<number, number>> | undefined
-    for (let j = start; ; j++) {
-      const candidate = scan.at(j)
-      if (candidate === undefined) {
-        // Keep exact closer positions for this view, across later attachments.
-        scan.cache.code = { from: opener + 1, index: finishCodeCloserIndex(codeLast ?? new Map()) }
-        return -1
-      }
-      if (layoutWork.on) layoutWork.fenceCandidateLines++
-      const closer = RE_FENCE_CLOSER.exec(candidate)
-      if (closer) {
-        const run = closer[1]!
-        if (run[0] === marker[0] && run.length >= marker.length) return j
-        codeLast ??= new Map()
-        let widths = codeLast.get(run[0]!)
-        if (widths === undefined) {
-          widths = new Map()
-          codeLast.set(run[0]!, widths)
-        }
-        widths.set(run.length, scan.base + j)
-      }
-    }
+    if (!codeCloserPossible(scan.index, marker, scan.base + i)) return -1
+    const end = scan.preciseClosers().nextCode(marker, scan.base + i + 1, scan.end)
+    return end === undefined ? -1 : end - scan.base
   }
   const run = commentFenceRun(line)
-  if (run === undefined) return -1
-  if (!exactCloserPossible(scan.index.comment, run, scan.base + i)) return -1
-  for (let j = i + 1; ; j++) {
-    const candidate = scan.at(j)
-    if (candidate === undefined) return -1
-    // EXACT length, per PART 9 §28: a longer opener nests shorter fences.
-    if (commentFenceRun(candidate) === run) return j
-  }
+  if (run === undefined || !exactCloserPossible(scan.index.comment, run, scan.base + i)) return -1
+  const end = scan.preciseClosers().next('comment', run, scan.base + i + 1, scan.end)
+  return end === undefined ? -1 : end - scan.base
 }
 
 /** The `:` run length of a line that OPENS a colon-fence block, else null. */
@@ -4637,19 +4602,23 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
       continue
     }
     const close = RE_ADMONITION_CLOSE.exec(line)
-    if (close) {
-      const closeLen = close[1]!.length
-      if (closeLen === stack[stack.length - 1]!.width) {
-        const frame = stack.pop()!
-        memo.set(frame.opener, scan.base + j)
-        if (stack.length === 0) return j
-      } else {
-        stack.push({ width: closeLen, opener: scan.base + j })
-      }
+    const closeLen = close?.[1]?.length
+    if (closeLen === stack[stack.length - 1]!.width) {
+      const frame = stack.pop()!
+      memo.set(frame.opener, scan.base + j)
+      if (stack.length === 0) return j
       continue
     }
-    const open = colonBlockOpenerRun(line)
-    if (open !== null) stack.push({ width: open, opener: scan.base + j })
+    const open = closeLen ?? colonBlockOpenerRun(line)
+    if (open === null) continue
+    const known = memo.get(scan.base + j)
+    if (known !== undefined) {
+      if (known < 0) {
+        for (const frame of stack) memo.set(frame.opener, -1)
+        return -1
+      }
+      j = known - scan.base
+    } else stack.push({ width: open, opener: scan.base + j })
   }
 }
 
@@ -10857,6 +10826,20 @@ class ParseSession {
       },
       index: closerIndex(lexer),
       cache,
+      preciseClosers: () => {
+        if (cache.opaque === undefined) {
+          if (layoutWork.on) layoutWork.fenceCandidateLines += lexer.lineCount
+          cache.opaque = new ScopedFenceClosers({
+            length: lexer.lineCount,
+            lineAt: (index) => {
+              const line = lexer.lineAt(index)!
+              return transform ? transform(line) : line
+            },
+          }, RE_FENCE_CLOSER, RE_COMMENT_BLOCK_ANY, RE_ADMONITION_CLOSE)
+        }
+        return cache.opaque
+      },
+      end: lexer.lineCount,
       base: lexer.pos,
     })
     let take = 0

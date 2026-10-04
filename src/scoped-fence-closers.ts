@@ -4,13 +4,13 @@ export class ScopedFenceClosers {
   private readonly comment = new Map<number, number[]>()
   private readonly colon = new Map<number, number[]>()
 
-  constructor(lines: readonly string[], codePattern: RegExp, commentPattern: RegExp, colonPattern: RegExp) {
+  constructor(lines: readonly string[] | { length: number; lineAt: (index: number) => string }, codePattern: RegExp, commentPattern: RegExp, colonPattern: RegExp) {
     let leaves = 1
     while (leaves < lines.length) leaves *= 2
     this.leaves = leaves
     this.code = [new Uint32Array(leaves * 2), new Uint32Array(leaves * 2)]
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!
+      const line = 'lineAt' in lines ? lines.lineAt(i) : lines[i]!
       const code = codePattern.exec(line)
       if (code) this.code[code[1]![0] === '~' ? 1 : 0][leaves + i] = code[1]!.length
       for (const [index, match] of [[this.comment, commentPattern.exec(line)], [this.colon, colonPattern.exec(line)]] as const) {
@@ -60,5 +60,31 @@ export class ScopedFenceClosers {
       right = Math.floor(right / 2)
     }
     return false
+  }
+
+  next(kind: 'comment' | 'colon', width: number, start: number, end: number): number | undefined {
+    const positions = this[kind].get(width)
+    if (!positions) return undefined
+    let left = 0
+    let right = positions.length
+    while (left < right) {
+      const mid = Math.floor((left + right) / 2)
+      if (positions[mid]! < start) left = mid + 1
+      else right = mid
+    }
+    const next = positions[left]
+    return next !== undefined && next < end ? next : undefined
+  }
+
+  nextCode(marker: string, start: number, end: number): number | undefined {
+    if (start >= end || (marker[0] !== '`' && marker[0] !== '~')) return undefined
+    const tree = this.code[marker[0] === '~' ? 1 : 0]
+    const find = (node: number, left: number, right: number): number | undefined => {
+      if (right <= start || left >= end || tree[node]! < marker.length) return undefined
+      if (right - left === 1) return left
+      const middle = (left + right) / 2
+      return find(node * 2, left, middle) ?? find(node * 2 + 1, middle, right)
+    }
+    return find(1, 0, this.leaves)
   }
 }
