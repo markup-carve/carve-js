@@ -715,12 +715,8 @@ const stripTrailingComment = (text: string): string => {
   const start = last.pos?.startOffset
   return start === undefined ? text : text.slice(0, start).replace(/[ \t]+$/, '')
 }
-// A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
-// paragraph-interruption closer lookahead's negative cache (§10).
+// A bare uniform fence closer, shared by native and prepass lookahead.
 const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_TRAILING_WS)
-// The same line seen by the definition prepass, which has already re-based it to
-// the fence's content column and so matches the run alone.
-const RE_FENCE_CLOSER_PREPASS = new RegExp('^([`~]{3,})' + FENCE_TRAILING_WS)
 
 // Maximum block-container nesting depth, applied UNIFORMLY to blockquote, list,
 // fenced-div / admonition (and footnote) nesting. Each level recurses
@@ -767,6 +763,8 @@ export const layoutWork = {
   colonLines: 0,
   bodyEntries: 0,
   closerLines: 0,
+  fenceCandidateLines: 0,
+  attachmentColonLines: 0,
   geometryEntries: 0,
   reset(): void {
     this.gate = 0
@@ -776,6 +774,8 @@ export const layoutWork = {
     this.colonLines = 0
     this.bodyEntries = 0
     this.closerLines = 0
+    this.fenceCandidateLines = 0
+    this.attachmentColonLines = 0
     this.geometryEntries = 0
   },
   get total(): number {
@@ -1000,6 +1000,8 @@ class Lexer {
   // Where a closer of each fence shape LAST occurs in these lines, built once
   // by `closerIndex`. See `CloserIndex`.
   fenceCloserIndex: CloserIndex | undefined = undefined
+  /** Attachment lookahead results, keyed by the view's content column. */
+  attachmentScans?: Map<number, AttachedViewScan>
   scopedFenceCloserIndex: ScopedFenceClosers | undefined = undefined
 
   /** Container-scoped §10 fence lookahead answers, keyed by source line. */
@@ -2538,10 +2540,10 @@ const RE_ANY_COLON_CLOSER = /^[ \t]*(:{3,})[ \t]*$/
 // document past a closer that is really there. So this constant follows the
 // real matcher whenever the real matcher WIDENS, and may lag it only when it
 // narrows.
-const RE_ANY_FENCE_CLOSER = new RegExp('^[ \\t]*([`~]{3,})' + FENCE_TRAILING_WS)
+const RE_ANY_FENCE_CLOSER = new RegExp('^[ \\t]*(`{3,}|~{3,})' + FENCE_TRAILING_WS)
 
 const RE_PREPASS_ANY_FENCE_CLOSER = new RegExp(
-  '^(?:[ \\t]*>)*[ \\t]*(?:(?:[-*+]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]+)*[ \\t]*([`~]{3,})' + FENCE_TRAILING_WS,
+  '^(?:[ \\t]*>)*[ \\t]*(?:(?:[-*+]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]+)*[ \\t]*(`{3,}|~{3,})' + FENCE_TRAILING_WS,
 )
 
 /**
@@ -2594,6 +2596,10 @@ function buildCodeCloserIndex(lines: readonly string[], re: RegExp): CloserIndex
       byRun.set(run.length, i)
     }
   }
+  return finishCodeCloserIndex(codeLast)
+}
+
+function finishCodeCloserIndex(codeLast: Map<string, Map<number, number>>): CloserIndex['code'] {
   const code = new Map<string, { runs: number[]; lastAtLeast: number[] }>()
   for (const [char, byRun] of codeLast) {
     const runs = [...byRun.keys()].sort((a, b) => a - b)
@@ -4505,6 +4511,11 @@ function insideOpenQuoteParagraph(state: ItemLazyState): boolean {
   return state.quoteInner !== null && blockQuoteParagraphOpen(state.quoteInner)
 }
 
+interface AttachedViewScan {
+  opaque?: ScopedFenceClosers
+  colon?: Map<number, number>
+}
+
 /**
  * A lookahead over the lines an attached block may hold, already in the form
  * the block will be parsed in.
@@ -4517,6 +4528,9 @@ interface AttachedScan {
   at: (offset: number) => string | undefined
   index: CloserIndex
   base: number
+  cache: AttachedViewScan
+  preciseClosers: () => ScopedFenceClosers
+  end: number
 }
 
 /**
@@ -4534,26 +4548,14 @@ function opaqueSpanEnd(scan: AttachedScan, i: number): number {
   const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
   const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
   if (marker !== null) {
-    // Refuted in O(log n) when nothing ahead can close this run, which is what
-    // keeps a run of unterminated openers from re-reading the same suffix once
-    // per opener.
     if (!codeCloserPossible(scan.index, marker, scan.base + i)) return -1
-    const closeRe = fenceCloseRe(marker)
-    for (let j = i + 1; ; j++) {
-      const candidate = scan.at(j)
-      if (candidate === undefined) return -1
-      if (closeRe.test(candidate)) return j
-    }
+    const end = scan.preciseClosers().nextCode(marker, scan.base + i + 1, scan.end)
+    return end === undefined ? -1 : end - scan.base
   }
   const run = commentFenceRun(line)
-  if (run === undefined) return -1
-  if (!exactCloserPossible(scan.index.comment, run, scan.base + i)) return -1
-  for (let j = i + 1; ; j++) {
-    const candidate = scan.at(j)
-    if (candidate === undefined) return -1
-    // EXACT length, per PART 9 §28: a longer opener nests shorter fences.
-    if (commentFenceRun(candidate) === run) return j
-  }
+  if (run === undefined || !exactCloserPossible(scan.index.comment, run, scan.base + i)) return -1
+  const end = scan.preciseClosers().next('comment', run, scan.base + i + 1, scan.end)
+  return end === undefined ? -1 : end - scan.base
 }
 
 /** The `:` run length of a line that OPENS a colon-fence block, else null. */
@@ -4576,11 +4578,22 @@ function colonBlockOpenerRun(line: string): number | null {
 function findColonCloser(scan: AttachedScan, openIdx: number, len: number): number {
   // The OUTERMOST width has to reappear for the stack to empty, so nothing
   // ahead carrying it refutes the whole scan before it starts.
-  if (!exactCloserPossible(scan.index.colon, len, scan.base + openIdx)) return -1
-  const stack = [len]
+  const memo = scan.cache.colon ??= new Map()
+  const opener = scan.base + openIdx
+  const cached = memo.get(opener)
+  if (cached !== undefined) return cached < 0 ? -1 : cached - scan.base
+  if (!exactCloserPossible(scan.index.colon, len, opener)) {
+    memo.set(opener, -1)
+    return -1
+  }
+  const stack = [{ width: len, opener }]
   for (let j = openIdx + 1; ; j++) {
     const line = scan.at(j)
-    if (line === undefined) return -1
+    if (line === undefined) {
+      for (const frame of stack) memo.set(frame.opener, -1)
+      return -1
+    }
+    if (layoutWork.on) layoutWork.attachmentColonLines++
     // Skipped from the line AFTER its opener: an opener with no info string is
     // closer-shaped itself and would otherwise end the span where it began.
     const span = opaqueSpanEnd(scan, j)
@@ -4589,18 +4602,23 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
       continue
     }
     const close = RE_ADMONITION_CLOSE.exec(line)
-    if (close) {
-      const closeLen = close[1]!.length
-      if (closeLen === stack[stack.length - 1]) {
-        stack.pop()
-        if (stack.length === 0) return j
-      } else {
-        stack.push(closeLen)
-      }
+    const closeLen = close?.[1]?.length
+    if (closeLen === stack[stack.length - 1]!.width) {
+      const frame = stack.pop()!
+      memo.set(frame.opener, scan.base + j)
+      if (stack.length === 0) return j
       continue
     }
-    const open = colonBlockOpenerRun(line)
-    if (open !== null) stack.push(open)
+    const open = closeLen ?? colonBlockOpenerRun(line)
+    if (open === null) continue
+    const known = memo.get(scan.base + j)
+    if (known !== undefined) {
+      if (known < 0) {
+        for (const frame of stack) memo.set(frame.opener, -1)
+        return -1
+      }
+      j = known - scan.base
+    } else stack.push({ width: open, opener: scan.base + j })
   }
 }
 
@@ -8018,7 +8036,7 @@ class ParseSession {
         // the block lexer does, and a definition written after a fence that only
         // ONE of the two reads as closed is collected by one and rendered by the
         // other.
-        const close = d.match(RE_FENCE_CLOSER_PREPASS)
+        const close = d.match(RE_FENCE_CLOSER)
         if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
           fence = null
           continue
@@ -10778,8 +10796,9 @@ class ParseSession {
   private collectAttachedBlock(
     lexer: Lexer,
     isBoundary: (line: string) => boolean,
-    transform?: (line: string) => string,
+    contentColumn = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
+    const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // AND FLUSH-LEFT MEANS COLUMN 0 IS ASKED HERE, ONCE, FOR EVERY CONTAINER
     // (§17 L3, markup-carve/carve#1814). The predicate existed but only the list
     // item's three attach paths called it, so the footnote body, the definition
@@ -10794,12 +10813,33 @@ class ParseSession {
     if (!attachesAtDocumentColumnZero(lexer)) {
       return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
     }
+    const scans = lexer.attachmentScans ??= new Map()
+    let cache = scans.get(contentColumn)
+    if (cache === undefined) {
+      cache = {}
+      scans.set(contentColumn, cache)
+    }
     const fenced = fencedBlockEnd({
       at: (offset) => {
         const line = lexer.peek(offset)
         return line === undefined ? undefined : transform ? transform(line) : line
       },
       index: closerIndex(lexer),
+      cache,
+      preciseClosers: () => {
+        if (cache.opaque === undefined) {
+          if (layoutWork.on) layoutWork.fenceCandidateLines += lexer.lineCount
+          cache.opaque = new ScopedFenceClosers({
+            length: lexer.lineCount,
+            lineAt: (index) => {
+              const line = lexer.lineAt(index)!
+              return transform ? transform(line) : line
+            },
+          }, RE_FENCE_CLOSER, RE_COMMENT_BLOCK_ANY, RE_ADMONITION_CLOSE)
+        }
+        return cache.opaque
+      },
+      end: lexer.lineCount,
       base: lexer.pos,
     })
     let take = 0
@@ -10967,7 +11007,7 @@ class ParseSession {
           lines: attached,
           lineNumbers: attachedLineNumbers,
           startLineIndex: attachedStartLineIndex,
-        } = this.collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
+        } = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent)
         // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
         // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
         // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
@@ -10982,9 +11022,7 @@ class ParseSession {
         while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
           const plusLineIndex = lexer.pos
           lexer.consume()
-          const more = this.collectAttachedBlock(lexer, isItemAttachBoundary, (a) =>
-            sliceColumns(a, baseIndent),
-          )
+          const more = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent)
           // An empty result is the column gate's refusal as well as an exhausted
           // boundary set, and a second marker that attaches nothing ends the run
           // either way (markup-carve/carve#1814).
@@ -11344,7 +11382,7 @@ class ParseSession {
           const { lines: attachedLines, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
             lexer,
             isItemAttachBoundary,
-            (a) => sliceColumns(a, baseIndent),
+            baseIndent,
           )
           for (let k = 0; k < attachedLines.length; k++) {
             nested.push(attachedLines[k]!)
