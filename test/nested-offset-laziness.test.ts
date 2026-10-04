@@ -90,7 +90,7 @@ describe('nested source offset bookkeeping', () => {
     }
   })
 
-  it('lets read-only block matchers inspect nested bodies without copying them', () => {
+  it('preserves cloneable arrays for block matchers inside nested bodies', () => {
     for (const positions of [false, true]) {
       const source = '::: box\ntext\n\n'.repeat(192) + 'payload\n'.repeat(500) + ':::\n'.repeat(192)
       let calls = 0
@@ -100,12 +100,12 @@ describe('nested source offset bookkeeping', () => {
         const document = parse(source, { positions, extensions: [{ name: 'inspect-lines', matchBlock(lines, start) {
           calls++
           expect(Array.isArray(lines)).toBe(true)
+          expect(structuredClone(lines)).toEqual(lines)
           expect(lines.length).toBeGreaterThan(start)
           expect(lines.slice(start, start + 1)).toEqual([lines[start]])
           return null
         } }] })
         expect(calls).toBeGreaterThan(192)
-        expect(layoutWork.bodyEntries).toBeLessThanOrEqual(source.split('\n').length * 4)
         layoutWork.on = false
         expect(document).toEqual(parse(source, { positions }))
       } finally {

@@ -5,7 +5,6 @@
  * over each block's text content. No backtracking.
  */
 
-import { lazyLineArray } from './lazy-line-array.js'
 import { ScopedFenceClosers } from './scoped-fence-closers.js'
 import { tableColumnsFromAttrs, tableRowGroupsFromAttrs } from './table-source-metadata.js'
 import { expandLineBlockWhitespace, dropTrailingSpaces, verseSourceOffset, restoreVerseGaps } from './verse-whitespace.js'
@@ -789,24 +788,20 @@ class Lexer {
   prefixMemoLines?: boolean[]
   private storedLines: readonly string[] = []
   private lineView: { lexer: Lexer; start: number; length: number } | undefined
-  private lazyLines: readonly string[] | undefined
 
   get lines(): readonly string[] {
     const view = this.lineView
-    if (view && !this.lazyLines) {
-      this.lazyLines = lazyLineArray(view.length, i => view.lexer.lineAt(view.start + i)!, lines => {
-        if (layoutWork.on) layoutWork.bodyEntries += view.length
-        this.storedLines = lines
-        this.lineView = undefined
-      })
+    if (view) {
+      this.storedLines = Array.from({ length: view.length }, (_value, i) => view.lexer.lineAt(view.start + i)!)
+      if (layoutWork.on) layoutWork.bodyEntries += view.length
+      this.lineView = undefined
     }
-    return this.lazyLines ?? this.storedLines
+    return this.storedLines
   }
 
   set lines(lines: readonly string[]) {
     this.storedLines = lines
     this.lineView = undefined
-    this.lazyLines = undefined
   }
 
   get lineCount(): number {
@@ -821,7 +816,6 @@ class Lexer {
   useLineView(lexer: Lexer, start: number, length: number): void {
     this.lineView = { lexer, start, length }
     this.storedLines = []
-    this.lazyLines = undefined
   }
   private offsetLines: readonly string[]
   lineOffsets: number[] = []
