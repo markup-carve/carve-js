@@ -6,6 +6,7 @@
  */
 
 import { ScopedFenceClosers } from './scoped-fence-closers.js'
+import { AttachmentFenceClosers, FailedScanRanges } from './attachment-fence-closers.js'
 import { tableColumnsFromAttrs, tableRowGroupsFromAttrs } from './table-source-metadata.js'
 import { expandLineBlockWhitespace, dropTrailingSpaces, verseSourceOffset, restoreVerseGaps } from './verse-whitespace.js'
 import { parseAttrs, isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue, isEmptyAttrs } from './attribute-parser.js'
@@ -1002,7 +1003,7 @@ class Lexer {
   fenceCloserIndex: CloserIndex | undefined = undefined
   /** Attachment lookahead results, keyed by the view's content column. */
   attachmentScans?: Map<number, AttachedViewScan>
-  attachmentIndexThreshold?: number
+  attachmentFenceClosers?: AttachmentFenceClosers
   scopedFenceCloserIndex: ScopedFenceClosers | undefined = undefined
 
   /** Container-scoped §10 fence lookahead answers, keyed by source line. */
@@ -4513,10 +4514,8 @@ function insideOpenQuoteParagraph(state: ItemLazyState): boolean {
 }
 
 interface AttachedViewScan {
-  scanned: number
-  opaque?: ScopedFenceClosers
   colon?: Map<number, number>
-  colonMisses?: Map<number, { start: number; end: number }[]>
+  colonMisses?: Map<number, FailedScanRanges>
 }
 
 /**
@@ -4532,10 +4531,10 @@ interface AttachedScan {
   index: CloserIndex
   base: number
   cache: AttachedViewScan
-  preciseClosers: () => ScopedFenceClosers
+  preciseClosers: () => AttachmentFenceClosers
   end: number
-  eagerIndex: boolean
-  indexThreshold: number
+  contentColumn: number
+  indexBase: number
 }
 
 /**
@@ -4555,25 +4554,11 @@ function opaqueSpanEnd(scan: AttachedScan, i: number): number {
   const run = marker === null ? commentFenceRun(line) : undefined
   if (marker !== null ? !codeCloserPossible(scan.index, marker, scan.base + i)
     : run === undefined || !exactCloserPossible(scan.index.comment, run, scan.base + i)) return -1
-  const indexed = (): number => {
-    const index = scan.preciseClosers()
-    const end = marker !== null
-      ? index.nextCode(marker, scan.base + i + 1, scan.end)
-      : index.next('comment', run!, scan.base + i + 1, scan.end)
-    return end === undefined ? -1 : end - scan.base
-  }
-  if (scan.eagerIndex || scan.cache.opaque !== undefined) return indexed()
-  for (let j = i + 1; ; j++) {
-    const candidate = scan.at(j)
-    if (candidate === undefined) return -1
-    scan.cache.scanned += candidate.length + 1
-    if (layoutWork.on) layoutWork.fenceCandidateLines++
-    if (marker !== null) {
-      const close = RE_FENCE_CLOSER.exec(candidate)?.[1]
-      if (close !== undefined && close[0] === marker[0] && close.length >= marker.length) return j
-    } else if (commentFenceRun(candidate) === run) return j
-    if (scan.cache.scanned >= scan.indexThreshold) return indexed()
-  }
+  const index = scan.preciseClosers()
+  const end = marker !== null
+    ? index.nextCode(marker, scan.indexBase + scan.base + i + 1, scan.indexBase + scan.end, scan.contentColumn)
+    : index.nextComment(run!, scan.indexBase + scan.base + i + 1, scan.indexBase + scan.end)
+  return end === undefined ? -1 : end - scan.indexBase - scan.base
 }
 
 /** The `:` run length of a line that OPENS a colon-fence block, else null. */
@@ -4608,51 +4593,33 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
   const ranges: { start: number; end: number }[] = []
   const fail = (stack: { opener: number }[]): number => {
     for (const frame of stack) memo.set(frame.opener, -1)
-    const retained = misses.get(len) ?? []
-    // A failed depth-one state stays failed at every visited line in its range.
-    // Keep eight long ranges per width without growing a table per line/state.
-    for (const range of ranges) {
-      if (range.end - range.start < 2) continue
-      let start = range.start, end = range.end
-      for (let at = retained.length - 1; at >= 0; at--) {
-        const previous = retained[at]!
-        if (previous.start <= end && previous.end >= start) {
-          start = Math.min(start, previous.start)
-          end = Math.max(end, previous.end)
-          retained.splice(at, 1)
-        }
-      }
-      if (retained.length < 8) retained.push({ start, end })
-      else {
-        let shortest = 0
-        for (let at = 1; at < retained.length; at++) {
-          if (retained[at]!.end - retained[at]!.start < retained[shortest]!.end - retained[shortest]!.start) shortest = at
-        }
-        if (end - start > retained[shortest]!.end - retained[shortest]!.start) retained[shortest] = { start, end }
-      }
+    let retained = misses.get(len)
+    if (retained === undefined) {
+      retained = new FailedScanRanges()
+      misses.set(len, retained)
     }
-    if (retained.length > 0) misses.set(len, retained)
+    for (const range of ranges) retained.add(range.start, range.end)
     return -1
   }
-  if (scan.eagerIndex || scan.cache.opaque !== undefined) {
-    if (scan.preciseClosers().last('colon', len, opener + 1, scan.end) === undefined) return fail([{ opener }])
+  const lastClose = (width: number, from: number): number => {
+    const last = scan.preciseClosers().lastColon(width, scan.indexBase + from, scan.indexBase + scan.end, scan.contentColumn)
+    return last === undefined ? -1 : last - scan.indexBase
   }
-  const stack = [{ width: len, opener }]
+  const rootLastClose = lastClose(len, opener + 1)
+  if (rootLastClose < 0) return fail([{ opener }])
+  const stack = [{ width: len, opener, lastClose: rootLastClose }]
   for (let j = openIdx + 1; ; j++) {
     if (stack.length === 1) {
       const position = scan.base + j
-      if (misses.get(len)?.some(range => position >= range.start && position < range.end)) return fail(stack)
+      if (misses.get(len)?.has(position)) return fail(stack)
       const previous = ranges[ranges.length - 1]
       if (previous?.end === position) previous.end++
       else ranges.push({ start: position, end: position + 1 })
     }
     const line = scan.at(j)
     if (line === undefined) return fail(stack)
-    scan.cache.scanned += line.length + 1
     if (layoutWork.on) layoutWork.attachmentColonLines++
-    if (scan.cache.opaque !== undefined || scan.cache.scanned >= scan.indexThreshold) {
-      if (scan.preciseClosers().last('colon', stack[stack.length - 1]!.width, scan.base + j, scan.end) === undefined) return fail(stack)
-    }
+    if (scan.base + j > stack[stack.length - 1]!.lastClose) return fail(stack)
     // Skipped from the line AFTER its opener: an opener with no info string is
     // closer-shaped itself and would otherwise end the span where it began.
     const span = opaqueSpanEnd(scan, j)
@@ -4674,7 +4641,7 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
     if (known !== undefined) {
       if (known < 0) return fail(stack)
       j = known - scan.base
-    } else stack.push({ width: open, opener: scan.base + j })
+    } else stack.push({ width: open, opener: scan.base + j, lastClose: lastClose(open, scan.base + j + 1) })
   }
 }
 
@@ -10872,21 +10839,11 @@ class ParseSession {
     const scans = lexer.attachmentScans ??= new Map()
     let cache = scans.get(contentColumn)
     if (cache === undefined) {
-      // Keep column zero plus at most three transformed attachment views.
-      if (contentColumn !== 0 && [...scans.keys()].filter(column => column !== 0).length >= 3) {
-        const oldest = [...scans.keys()].find(column => column !== 0)!
-        scans.delete(oldest)
-      }
-      cache = { scanned: 0 }
+      cache = {}
       scans.set(contentColumn, cache)
     }
-    scans.delete(contentColumn)
-    scans.set(contentColumn, cache)
-    if (contentColumn !== 0 && lexer.attachmentIndexThreshold === undefined) {
-      let characters = 0
-      for (let index = 0; index < lexer.lineCount; index++) characters += lexer.lineAt(index)!.length + 1
-      lexer.attachmentIndexThreshold = Math.max(256, Math.ceil(characters / 8))
-    }
+    const origin = lexer.contiguousOrigin?.lexer ?? lexer
+    const indexBase = lexer.contiguousOrigin?.start ?? 0
     const fenced = fencedBlockEnd({
       at: (offset) => {
         const line = lexer.peek(offset)
@@ -10895,21 +10852,18 @@ class ParseSession {
       index: closerIndex(lexer),
       cache,
       preciseClosers: () => {
-        if (cache.opaque === undefined) {
-          if (layoutWork.on) layoutWork.fenceCandidateLines += lexer.lineCount
-          cache.opaque = new ScopedFenceClosers({
-            length: lexer.lineCount,
-            lineAt: (index) => {
-              const line = lexer.lineAt(index)!
-              return transform ? transform(line) : line
-            },
-          }, RE_FENCE_CLOSER, RE_COMMENT_BLOCK_ANY, RE_ADMONITION_CLOSE)
+        if (origin.attachmentFenceClosers === undefined) {
+          if (layoutWork.on) layoutWork.fenceCandidateLines += origin.lineCount
+          origin.attachmentFenceClosers = new AttachmentFenceClosers({
+            length: origin.lineCount,
+            lineAt: (index) => origin.lineAt(index)!,
+          }, RE_ANY_FENCE_CLOSER, RE_COMMENT_BLOCK_ANY, RE_ANY_COLON_CLOSER)
         }
-        return cache.opaque
+        return origin.attachmentFenceClosers
       },
       end: lexer.lineCount,
-      eagerIndex: contentColumn === 0,
-      indexThreshold: lexer.attachmentIndexThreshold ?? Infinity,
+      contentColumn,
+      indexBase,
       base: lexer.pos,
     })
     let take = 0
