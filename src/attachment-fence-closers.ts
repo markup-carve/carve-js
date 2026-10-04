@@ -88,15 +88,20 @@ function flushColumn(line: string): number {
 /** Source-line closer indices shared by every attachment indentation view. */
 export class AttachmentFenceClosers {
   private readonly code: [ColumnIndex, ColumnIndex]
+  private readonly events: ColumnIndex
   private readonly colon = new Map<number, ColumnIndex>()
   private readonly comments = new Map<number, number[]>()
 
-  constructor(lines: { length: number; lineAt: (index: number) => string }, codePattern: RegExp, commentPattern: RegExp, colonPattern: RegExp) {
+  constructor(lines: { length: number; lineAt: (index: number) => string }, codePattern: RegExp, commentPattern: RegExp, colonPattern: RegExp, eventOpen?: (line: string) => boolean) {
+    this.events = new ColumnIndex(lines.length)
     this.code = [new ColumnIndex(lines.length), new ColumnIndex(lines.length)]
     for (let position = 0; position < lines.length; position++) {
       const line = lines.lineAt(position)
       const code = codePattern.exec(line)?.[1]
       const colon = colonPattern.exec(line)?.[1]
+      const event = code !== undefined || colon !== undefined
+        || (/^[ \t]*[`~:]{3}/.test(line) && eventOpen?.(line.replace(/^[ \t]+/, '')) === true)
+      if (event) this.events.add(flushColumn(line), position, 1)
       if (code !== undefined || colon !== undefined) {
         const column = flushColumn(line)
         if (code !== undefined) this.code[code[0] === '~' ? 1 : 0].add(column, position, code.length)
@@ -111,6 +116,7 @@ export class AttachmentFenceClosers {
       }
       const comment = commentPattern.exec(line)?.[1]
       if (comment !== undefined) {
+        this.events.add(0, position, 1)
         let positions = this.comments.get(comment.length)
         if (positions === undefined) {
           positions = []
@@ -119,8 +125,13 @@ export class AttachmentFenceClosers {
         positions.push(position)
       }
     }
+    this.events.build()
     for (const index of this.code) index.build()
     for (const index of this.colon.values()) index.build()
+  }
+
+  nextEvent(start: number, end: number, column: number): number | undefined {
+    return this.events.find(1, start, end, column)
   }
 
   nextCode(marker: string, start: number, end: number, column: number): number | undefined {
@@ -157,6 +168,11 @@ interface RangeNode {
 /** Failed scan positions, stored as disjoint half-open intervals. */
 export class FailedScanRanges {
   private root: RangeNode | undefined
+
+  get depth(): number {
+    const depth = (node: RangeNode | undefined): number => node === undefined ? 0 : 1 + Math.max(depth(node.left), depth(node.right))
+    return depth(this.root)
+  }
 
   has(position: number): boolean {
     const previous = this.before(position)

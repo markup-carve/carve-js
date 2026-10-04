@@ -12,14 +12,20 @@ function dedent(line: string, columns: number): string {
 
 describe('attachment closer column views', () => {
   it('matches direct scans for every range, width and dedent column', () => {
-    const lines = ['text', '```', ' \t`````', '\t~~~', '  :::', '\t::::', '%%% tail', '  %%%', '```~', '    ```', ' \t ~~~~', ':::']
+    const lines = ['text', '```', ' \t`````', '\t~~~', '  :::', '\t::::', '%%% tail', '  %%%', '```~', '    ```', ' \t ~~~~', ':::', ' ```x', '  ::: box']
     const code = /^[ \t]*(`{3,}|~{3,})[ \t]*$/
     const comment = /^[ \t]*(%{3,})(.*)$/
     const colon = /^[ \t]*(:{3,})[ \t]*$/
-    const index = new AttachmentFenceClosers({ length: lines.length, lineAt: i => lines[i]! }, code, comment, colon)
+    const index = new AttachmentFenceClosers({ length: lines.length, lineAt: i => lines[i]! }, code, comment, colon, line => /^(`{3,}|~{3,})(?:x)?$/.test(line) || /^:{3,}(?: box)?$/.test(line))
     for (const column of [0, 1, 2, 3, 4, 5, 8]) {
       for (let start = 0; start <= lines.length; start++) {
         for (let end = start; end <= lines.length; end++) {
+          const firstEvent = lines.findIndex((line, at) => {
+            const view = dedent(line, column)
+            return at >= start && at < end && (/^(`{3,}|~{3,})(?:x)?$/.test(view)
+              || /^:{3,}(?: box)?$/.test(view) || comment.test(view))
+          })
+          expect(index.nextEvent(start, end, column)).toBe(firstEvent < 0 ? undefined : firstEvent)
           for (const width of [3, 4, 5, 8]) {
             for (const character of ['`', '~']) {
               const expected = lines.findIndex((line, at) => {
@@ -61,5 +67,21 @@ it('merges failed ranges without filling gaps, under shuffled inserts', () => {
     ranges.add(start, end)
     for (let position = start; position < end; position++) expected.add(position)
     for (let position = 0; position < 520; position++) expect(ranges.has(position)).toBe(expected.has(position))
+  }
+})
+
+it('keeps monotone disjoint insertions logarithmic in depth', () => {
+  for (const backwards of [false, true]) {
+    const ranges = new FailedScanRanges()
+    const count = 2048
+    for (let at = 0; at < count; at++) {
+      const position = (backwards ? count - at - 1 : at) * 3
+      ranges.add(position, position + 1)
+    }
+    expect(ranges.depth).toBeLessThanOrEqual(Math.ceil(Math.log2(count + 1)) * 2)
+    for (let at = 0; at < count; at++) {
+      expect(ranges.has(at * 3)).toBe(true)
+      expect(ranges.has(at * 3 + 1)).toBe(false)
+    }
   }
 })
