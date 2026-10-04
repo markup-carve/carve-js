@@ -100,3 +100,20 @@ it('reuses the resolved reservations without rebuilding or leaking render-local 
     expect(reserve).not.toHaveBeenCalled()
   } finally { reserve.mockRestore() }
 })
+
+
+it('terminates malformed singleton edges on ordinary nodes and records', () => {
+  for (const [type, field] of [['paragraph', 'children'], ['table', 'rows'], [undefined, 'base']]) {
+    const node: Record<string, unknown> = { type, attrs: { id: 'cycle' } }
+    node[field!] = node
+    expect(collectDocumentIds({ type: 'document', children: [node] } as unknown as Document).uniqueId('cycle')).toBe('cycle-2')
+  }
+  const doc = { type: 'document', children: [], footnoteDefs: {}, trailerBlocks: [] } as unknown as Document
+  Object.assign(doc, { footnoteDefs: { a: doc }, trailerBlocks: doc })
+  expect(collectDocumentIds(doc).uniqueId('absent')).toBe('absent')
+})
+
+it('does not coerce host-supplied type values', () => {
+  const node = { type: Object.create(null), base: [{ type: 'text', attrs: { id: 'nested' } }] }
+  expect(collectDocumentIds({ type: 'document', children: [node] } as unknown as Document).uniqueId('nested')).toBe('nested-2')
+})

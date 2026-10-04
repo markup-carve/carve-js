@@ -139,6 +139,15 @@ export const RECORD_CHILD_FIELDS: readonly string[] = ['terms', 'definitions', '
 export function visitDocumentIds(doc: Document, visit: (id: string) => void): void {
   const stack: unknown[] = [doc]
   const seen = new Set<object>()
+  const singletonEdges = new Set<object>([doc])
+  const pushChild = (child: unknown): void => {
+    if (!child || typeof child !== 'object') return
+    if (!Array.isArray(child)) {
+      if (singletonEdges.has(child)) return
+      singletonEdges.add(child)
+    }
+    stack.push(child)
+  }
   while (stack.length > 0) {
     const value = stack.pop()
     if (!value || typeof value !== 'object') continue
@@ -148,7 +157,7 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
       for (const child of value) {
         if (child && typeof child === 'object') {
           const node = child as { type?: string; attrs?: unknown }
-          if (node.attrs === undefined && node.type !== 'heading_ref' && node.type !== undefined &&
+          if (node.attrs === undefined && node.type !== 'heading_ref' && typeof node.type === 'string' &&
               (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[node.type] === NO_CHILDREN) continue
           stack.push(child)
         }
@@ -170,18 +179,18 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
     if (typeof id === 'string') visit(id)
     for (const field of fields) {
       const child = node[field]
-      if (child && typeof child === 'object') stack.push(child)
+      pushChild(child)
     }
     if (type === 'heading_ref' && Array.isArray(node['resolvedText'])) stack.push(node['resolvedText'])
     if (type === 'document' || type === 'doc') {
-      stack.push(node['trailerBlocks'])
+      pushChild(node['trailerBlocks'])
       const defs = node['footnoteDefs'] as Record<string, unknown> | undefined
-      if (defs) for (const key in defs) if (Object.hasOwn(defs, key)) stack.push(defs[key])
+      if (defs) for (const key in defs) if (Object.hasOwn(defs, key)) pushChild(defs[key])
     } else if (type === 'table') {
       const groups = node['rowGroups'] as {
         bodies?: unknown[]; headAttrs?: { id?: string }; footAttrs?: { id?: string }
       } | undefined
-      if (groups?.bodies) stack.push(groups.bodies)
+      if (groups?.bodies) pushChild(groups.bodies)
       if (typeof groups?.headAttrs?.id === 'string') visit(groups.headAttrs.id)
       if (typeof groups?.footAttrs?.id === 'string') visit(groups.footAttrs.id)
     }
