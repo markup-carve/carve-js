@@ -97,6 +97,18 @@ describe('false fence closers in colon attachments', () => {
     const source = '- item\n+\n::: a\n+\n::: b\n:::\n'
     expect(bounded(source).html).toContain('class="b"')
   })
+  it('bounds short attachments at many distinct content columns', () => {
+    const source = Array.from({ length: 32 }, (_, i) => ' '.repeat(i + 1)
+      + '- item\n+\n```x\npayload\n```\n\n').join('')
+    expect(bounded(source).html).toContain('payload')
+  })
+  for (const count of [16, 128, 512]) {
+    it(`bounds long tails after ${count} overlapping opaque attachments`, () => {
+      const source = '- item\n' + Array.from({ length: count }, (_, i) => '+\n::: box\n' + '`'.repeat(count + 3 - i) + '\n').join('')
+        + '`'.repeat(count + 4) + '\n' + 'payload\n'.repeat(2000) + ' :::\n'
+      expect(bounded(source).html).toContain('payload')
+    })
+  }
   it('keeps cached closer characters separate', () => {
     const source = '- item\n+\n::: box\n````x\n~~~x\npayload\n~~~\n ````\n:::\n'
     const result = bounded(source)
