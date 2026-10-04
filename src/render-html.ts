@@ -38,7 +38,7 @@ import type {
 } from './extension.js'
 
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
-import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
+import { collectDocumentIds, inheritDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
@@ -594,7 +594,9 @@ export function renderHtml(
   // `renderInlines` directly, never through `renderBlockNode`, so a collapse
   // that lives in that arm cannot reach them (carve-js#1440). Copy on write -
   // `ast` belongs to the caller.
+  const original = ast
   ast = collapseLoneImageParagraphs(ast)
+  inheritDocumentIds(original, ast)
   // PART 9 §10: an extension may add semantic span names. Core renders them,
   // so the order below is the union in the canonical order rather than
   // whatever sequence the extensions were registered in.

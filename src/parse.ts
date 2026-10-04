@@ -89,9 +89,10 @@ export { normalizeRefLabel } from './label-key.js'
 
 export interface ParseOptions {
   /**
-   * Record source positions on the returned tree. Default true. Disabling this
-   * is safe for parsing alone; positions also guide figure resolution and lint
-   * offsets in a manually composed parse/resolve/render pipeline.
+   * Record source positions on the returned tree. Default true. Set false for
+   * a smaller tree to serialize or compare. Internal spans needed for source
+   * ownership remain available during parsing; lint and source-line rendering
+   * require positions. This option is not a guarantee of faster parsing.
    */
   positions?: boolean
   /** Format label applied to a bare `---` frontmatter fence. Default 'yaml'. */
@@ -1718,26 +1719,26 @@ export const RE_AFTER_TERM = /^[ \t]*(?:::(?!:)|:)[ \t]/
  * look like a definition.
  */
 export function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): string {
-  let line = raw
-  let prev: string
-  do {
-    prev = line
-    line = line
-      .replace(/^[ \t]*>(?: |$)/, '') // blockquote (NBSP and U+FEFF are content)
-      // THE MARKER SEPARATOR IS A SPACE, in the list marker and in the task box
-      // alike: `unordered_item` and `ordered_item` spell it `space`, as does
-      // `task_marker`, and `space = ' '`. A tab does not satisfy it, so
-      // `-<TAB>x` opens no item. Spelled `[ \t]+` here, this strip handed the
-      // definition collector an item's content view of a line the block parser
-      // reads as a paragraph, so `-<TAB>[t]: /t` both printed and resolved
-      // (markup-carve/carve-js#1870). `RE_PREPASS_MARKER` beside it always
-      // spelled the separator this way. The leading run keeps its tab: there a
-      // tab is indentation, which is the one place PART 7 makes it syntax.
-    const marker = prepassMarker(line, RE_PREPASS_MARKER_STRIP)
-    if (marker) line = line.slice(marker[0].length)
-    if (afterTerm) line = line.replace(RE_DESCRIPTION_PREFIX, '')
-  } while (line !== prev)
-  return line
+  let offset = 0
+  for (;;) {
+    const before = offset
+    let quote = offset
+    while (raw[quote] === ' ' || raw[quote] === '\t') quote++
+    if (raw[quote] === '>' && (raw[quote + 1] === ' ' || quote + 1 === raw.length)) {
+      offset = Math.min(quote + 2, raw.length)
+    }
+    RE_PREPASS_MARKER_STRIP_AT.lastIndex = offset
+    const marker = RE_PREPASS_MARKER_STRIP_AT.exec(raw)
+    if (marker && (marker[2] === undefined || isValidInlineAttrPayload(marker[2]))) {
+      offset += marker[0].length
+    }
+    if (afterTerm) {
+      RE_DESCRIPTION_PREFIX_AT.lastIndex = offset
+      const description = RE_DESCRIPTION_PREFIX_AT.exec(raw)
+      if (description) offset += description[0].length
+    }
+    if (offset === before) return raw.slice(offset)
+  }
 }
 
 export function stripContainerPrefixes(raw: string, afterTerm = false): string {
@@ -1781,6 +1782,9 @@ const RE_PREPASS_MARKER =
 // The same marker with a task box after it, for the `afterMarker` strip below.
 const RE_PREPASS_MARKER_STRIP =
   /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])(?:\{([^}]*)\})? +(?:\[[ xX\-_>?]\] +)?/
+
+const RE_PREPASS_MARKER_STRIP_AT = new RegExp(RE_PREPASS_MARKER_STRIP.source.slice(1), 'y')
+const RE_DESCRIPTION_PREFIX_AT = new RegExp(RE_DESCRIPTION_PREFIX.source.slice(1), 'y')
 
 /**
  * The prepass marker at the head of `text`, or null when there is none.
@@ -2401,7 +2405,7 @@ function attachBlockPos(
   startLineIndex: number,
   endLineIndexExclusive: number,
 ): void {
-  if (lexer.suppressPositions) return
+  if (lexer.suppressPositions || lexer.parseOptions.positions === false) return
   const endLineIndex = Math.max(startLineIndex, endLineIndexExclusive - 1)
   // A LAZY-FRAMED end line carries three codepoints the source never held (the
   // #1630 frame that keeps a container-folded closer from closing an
@@ -4208,26 +4212,40 @@ function verbatimOpener(line: string): string | null {
 }
 
 function lineOpensBlock(line: string): boolean {
-  return (
-    RE_RAW_FENCE.test(line) ||
-    RE_FENCE.test(line) ||
-    RE_COMMENT_BLOCK.test(line) ||
-    (indentColumns(line, 1) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
-    RE_HR.test(line) ||
-    RE_HEADING.test(line) ||
-    RE_DEFLIST_TERM.test(line) ||
-    RE_BLOCKQUOTE.test(line) ||
-    RE_TASK.test(line) ||
-    RE_UNORDERED.test(line) ||
-    RE_ORDERED.test(line) ||
-    extractItemAttr(line) !== null ||
-    isTableRow(line) ||
-    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
-    RE_DIV_OPEN.test(line) ||
-    RE_LINE_BLOCK_OPEN.test(line) ||
-    RE_HARDBREAKS_OPEN.test(line) ||
-    RE_QUOTE_BLOCK_OPEN.test(line)
-  )
+  const first = line.charCodeAt(0)
+  switch (first) {
+    case 96: case 126:
+      return RE_RAW_FENCE.test(line) || RE_FENCE.test(line)
+    case 37:
+      return RE_COMMENT_BLOCK.test(line)
+    case 91:
+      return RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line)
+    case 35:
+      return RE_HEADING.test(line)
+    case 58:
+      return RE_DEFLIST_TERM.test(line) ||
+        (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
+        RE_DIV_OPEN.test(line) || RE_LINE_BLOCK_OPEN.test(line) ||
+        RE_HARDBREAKS_OPEN.test(line) || RE_QUOTE_BLOCK_OPEN.test(line)
+    case 62:
+      return RE_BLOCKQUOTE.test(line)
+    case 124:
+      return isTableRow(line)
+    case 95:
+      return RE_HR.test(line)
+    case 45: case 42:
+      return RE_HR.test(line) || RE_TASK.test(line) || RE_UNORDERED.test(line) ||
+        extractItemAttr(line) !== null
+    default:
+      // List markers alone allow indentation and decimal/letter prefixes.
+      if (first === 32 || first === 9 || first === 46 ||
+          (first >= 48 && first <= 57) || (first >= 65 && first <= 90) ||
+          (first >= 97 && first <= 122)) {
+        return RE_TASK.test(line) || RE_UNORDERED.test(line) ||
+          RE_ORDERED.test(line) || extractItemAttr(line) !== null
+      }
+      return false
+  }
 }
 
 /**
@@ -7598,6 +7616,7 @@ class ParseSession {
    * The document being parsed, for the one field that promises VERBATIM SOURCE.
    */
   private activeDocument: string | null = null
+  private recordPositions = true
 
   // A definition pre-pass probe parses a source fragment through the block layer.
   // Matchers remain active during that parse, but its own definition scan must not
@@ -7607,6 +7626,7 @@ class ParseSession {
   private inMatcherRequest = false
 
   parse(source: string, opts: ParseOptions = {}): Document {
+    this.recordPositions = opts.positions !== false
     this.newlineIndexCache.clear()
     this.markerPrefixMemos = new WeakMap()
     this.activeQuoteCharacters = opts.extensions
@@ -7667,7 +7687,7 @@ class ParseSession {
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
-    if (opts.positions === false) dropPositions(doc)
+    if (opts.positions === false) return dropPositions(doc)
     else toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
     return doc
   }
@@ -7868,9 +7888,13 @@ class ParseSession {
 
   private collectLinkDefs(lexer: Lexer) {
     if (this.definitionRegionLines) return
-    // Every definition spelling contains `]: `, including those behind
-    // container markers. Retain the full ownership scan for any candidate.
-    if (!lexer.lines.some((line, index) => index >= lexer.pos && line.includes(']: '))) return
+    // Ownership before a candidate still matters; lines after the last one
+    // cannot add definitions. Lookahead keeps access to the complete lexer.
+    let lastDefinitionLine = -1
+    for (let index = lexer.pos; index < lexer.lineCount; index++) {
+      if (lexer.lineAt(index)!.includes(']: ')) lastDefinitionLine = index
+    }
+    if (lastDefinitionLine === -1) return
     // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
     // opened, or null when there was none. A fence inside a div ends at that div's
     // closer, exactly as it ends at the end of a quote or a list item - and the
@@ -7986,12 +8010,7 @@ class ParseSession {
     let prepassClosers: CloserIndex['code'] | null = null
     // The definition term whose column later lines are measured against (carve#2411).
     let term: { col: number; quotes: number } | null = null
-    for (let idx = 0; idx < lexer.lineCount; idx++) {
-      // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
-      // none, including an unclosed opener that is NOT frontmatter), so a
-      // `[ref]: ...` inside it is not collected, while content after an
-      // unclosed opener still is.
-      if (idx < lexer.pos) continue
+    for (let idx = lexer.pos; idx <= lastDefinitionLine; idx++) {
       const raw = lexer.lineAt(idx)!
       // A description continues an entry opened by a `::` term or by a previous
       // description, and only then does its marker open content here.
@@ -14080,7 +14099,7 @@ class ParseSession {
     start: number,
     end: number,
   ): T {
-    if (source.anchored === false) return node
+    if (source.anchored === false || (!this.recordPositions && node.type !== 'soft_break' && node.type !== 'hard_break')) return node
     const pos = this.sourcePos(source, text, start, end)
     if (pos) node.pos = pos
     return node
@@ -14093,7 +14112,7 @@ class ParseSession {
     text: string,
     groupStart: number,
   ): void {
-    if (source.anchored === false) return
+    if (!this.recordPositions || source.anchored === false) return
     const innerStart = node.mode === 'integral' ? 2 : 1
     const inner = node.raw.slice(innerStart, -1)
     let cursor = 0

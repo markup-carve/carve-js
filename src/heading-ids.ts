@@ -1,3 +1,4 @@
+import { visitDocumentIds } from './document-ids.js'
 import { resolveReferenceDestination } from './reference-state.js'
 import { forEachChildBlockList, withClonedChildBlockLists } from './block-children.js'
 /*
@@ -23,7 +24,7 @@ import type {
   Table,
   Text,
 } from './ast.js'
-import type { DocumentIdRegistry } from './document-ids.js'
+import { DocumentIdRegistry } from './document-ids.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
@@ -539,8 +540,7 @@ function resolveHeadingIdsImpl(
   ingestedCaptionTargets?: Map<string, InlineNode[]>,
 ): Document {
   const ingested = ingestedCaptionTargets !== undefined
-  const used = new Set<string>()
-  const nextCounters = new Map<string, number>()
+  const used = documentIds ?? new DocumentIdRegistry()
   const targets = new Map<string, InlineNode[]>()
   // Case-insensitive `</#id>` index: case-folded id -> actual (verbatim) id,
   // first occurrence wins. Lets `</#getting-started>` resolve to a
@@ -571,21 +571,10 @@ function resolveHeadingIdsImpl(
       // (`{id=""}` then `# T` -> `<section id="">`): it suppresses the auto
       // slug rather than being treated as absent.
       id = heading.attrs.id
-      used.add(id)
-      documentIds?.reserve(id)
+      used.reserve(id)
     } else {
       const base = slugify(inlineText(heading.children), opts)
-      if (!used.has(base)) {
-        id = base
-        nextCounters.set(base, 2)
-      } else {
-        let n = nextCounters.get(base) ?? 2
-        while (used.has(`${base}-${n}`)) n++
-        id = `${base}-${n}`
-        nextCounters.set(base, n + 1)
-      }
-      used.add(id)
-      documentIds?.reserve(id)
+      id = used.uniqueId(base)
       heading.attrs = { ...heading.attrs, id }
     }
     if (!targets.has(id)) targets.set(id, heading.children)
@@ -639,37 +628,9 @@ function resolveHeadingIdsImpl(
   // before auto-slugging headings, so a heading's auto id never collides with
   // an explicit `{#id}` elsewhere -- two elements sharing a DOM id is invalid
   // HTML. Matches carve-php, which reserves all explicit ids up front.
-  const reserveExplicitIds = (node: unknown): void => {
-    if (!node || typeof node !== 'object') return
-    const id = (node as { attrs?: Attrs }).attrs?.id
-    if (typeof id === 'string') {
-      used.add(id)
-      documentIds?.reserve(id)
-    }
-    for (const key of Object.keys(node as Record<string, unknown>)) {
-      if (key === 'pos') continue
-      const v = (node as Record<string, unknown>)[key]
-      if (Array.isArray(v)) for (const el of v) reserveExplicitIds(el)
-      else if (v && typeof v === 'object') reserveExplicitIds(v)
-    }
-  }
-  // Reserving is what keeps a GENERATED slug off an explicit id, and the ingest
-  // path generates none - `used` and `nextCounters` are read only by the branch
-  // it returns before. So the generic deep walk, which visits every key of every
-  // node, is dead there, and skipping it keeps the ingest of a large
-  // reference-free document at its old cost.
-  if (!ingested) for (const b of doc.children) reserveExplicitIds(b)
-  // A footnote body is part of the same DOCUMENT and renders into the same
-  // page, so its ids share one pool with everything else - two elements with
-  // the same DOM id is invalid HTML whichever container they sit in. The map
-  // was already walked for reference resolution and caption numbering below;
-  // id assignment was the one pass that skipped it, so a heading in a note
-  // came out with no id at all while the same heading in a quote, a div or a
-  // list item got one (carve-js#669).
-  if (!ingested) {
-    for (const body of Object.values(doc.footnoteDefs ?? {}))
-      for (const b of body) reserveExplicitIds(b)
-  }
+  if (!ingested) visitDocumentIds(doc, (id) => {
+    used.reserve(id)
+  })
 
   assignIds(doc.children, false)
   // Not `inBlockquote`: a note body is not quoted material, and the flag only
