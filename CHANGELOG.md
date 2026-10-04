@@ -17,6 +17,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- Keep reference definitions inside code samples literal when a mixed backtick/tilde run appears in the payload.
+
 - Preserve multiple table bodies, intermediate body headers, empty bodies, and per-body row-header counts with positional source attributes. Keep authored conflicts and report partition loss.
 
 - Preserve source-spellable table heads, single bodies, and footers during canonical conversion and HTML import. Diagnose conflicting column attributes and keep fractional widths exact through percentage conversion. Keep decimal percentages precise in HTML output (#2460).
@@ -27,6 +29,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Performance
 
+- Cache attachment fence boundaries and failed code lookahead across repeated `+` blocks. Reject mixed runs as possible code closers.
 - Fast HTML eligibility uses one native ASCII/control scan and avoids repeated heading and paragraph checks (#2467).
 - Fast HTML list lookahead skips blank lines by index instead of copying the remaining lines at each list boundary (#2461).
 
