@@ -6081,6 +6081,82 @@ const closerReachesBase = (
   return column >= base || column === 0
 }
 
+// Skip a quote's marked lines and lazy paragraph continuation during rebasing.
+function rebasedQuoteEnd(lines: string[], start: number, quote: Lexer): number {
+  const state = markerLineQuoteState(lines[start]!)!
+  let fenceCloserMemo: QuotedFenceCloserMemo | undefined
+  while (++quote.pos < lines.length) {
+    const next = lines[quote.pos]!
+    const marked = RE_BLOCKQUOTE.exec(next)
+    if (marked) {
+      trackBlockQuoteLazyState(
+        marked[1] ?? '', state,
+        (width) => quotedCommentHasCloser(quote, width, quote.pos),
+        (marker, depth, column) => quotedFenceHasCloser(quote, marker, quote.pos, fenceCloserMemo ??= new Map(), depth, column),
+      )
+      continue
+    }
+    if (isBlankLine(next) || RE_CAPTION.test(next) ||
+        colonFenceShapeEndsLazyContinuation(next) ||
+        startsInterruptingBlock(quote, undefined, false) || !blockQuoteParagraphOpen(state)) break
+  }
+  return quote.pos - 1
+}
+
+// Keep a code fence's payload and closer in the same rebasing group.
+function rebasedCodeFenceEnd(
+  lines: string[],
+  start: number,
+  base: number,
+  marker: string,
+  heldFoldedLines: Set<number>,
+  takenBelowColumn?: ReadonlySet<number>,
+  onFenceBodyLine?: (index: number) => void,
+  onUnclosedCodeFence?: () => void,
+): number {
+  let end = start
+  const close = fenceCloseRe(marker)
+  // A closing run BELOW the base reaches neither column, so it is payload and
+  // the scan carries on past it; only a run AT the base or at the container's
+  // own column closes (CARVE-P0-004, markup-carve/carve-js#2205).
+  let closed = false
+  for (let j = start + 1; j < lines.length; j++) {
+    const candidate = lines[j]!
+    end = j
+    onFenceBodyLine?.(j)
+    if (isBlankLine(candidate)) continue
+    const column = indentColumns(candidate, base)
+    if (column < base) {
+      if (column === 0 && close.test(candidate)) {
+        closed = true
+        break
+      }
+      continue
+    }
+    // A FOLDED LINE IS NOT AT THIS GROUP'S BASE, the same reading the colon
+    // arm below takes: its leading run is the host's alignment clamp, not an
+    // authored column, and at an over-indent of ONE the clamp leaves exactly
+    // the single residual column the rebased opener carries. So a run the
+    // host folded in from below its own content column closed a fence it was
+    // never written inside, and the paragraph that had folded it lost its
+    // inline verbatim run to a code block (markup-carve/carve-js#2243).
+    //
+    // Held rather than skipped, so the dedent leaves it where the host put
+    // it. CARVE-P0-004 re-bases a verbatim closer, so an unterminated run is
+    // what the author wrote here and §10 I4 keeps it inside the paragraph.
+    if (takenBelowColumn?.has(j) === true) {
+      heldFoldedLines.add(j)
+      continue
+    }
+    if (close.test(sliceColumns(candidate, base, true))) {
+      closed = true
+      break
+    }
+  }
+  if (!closed) onUnclosedCodeFence?.()
+  return end
+}
+
 /**
  * Apply an over-indented list block opener's authored column as a temporary
  * local block base (PART 9 §24 C3, carve#1705).
@@ -6163,24 +6239,7 @@ function rebaseOverindentedBlocks(
       const quote = quoteProbe ??= new Lexer([])
       quote.lines = lines
       quote.pos = i
-      const state = markerLineQuoteState(line)!
-      let fenceCloserMemo: QuotedFenceCloserMemo | undefined
-      while (++quote.pos < lines.length) {
-        const next = lines[quote.pos]!
-        const marked = RE_BLOCKQUOTE.exec(next)
-        if (marked) {
-          trackBlockQuoteLazyState(
-            marked[1] ?? '', state,
-            (width) => quotedCommentHasCloser(quote, width, quote.pos),
-            (marker, depth, column) => quotedFenceHasCloser(quote, marker, quote.pos, fenceCloserMemo ??= new Map(), depth, column),
-          )
-          continue
-        }
-        if (isBlankLine(next) || RE_CAPTION.test(next) ||
-            colonFenceShapeEndsLazyContinuation(next) ||
-            startsInterruptingBlock(quote, undefined, false) || !blockQuoteParagraphOpen(state)) break
-      }
-      i = quote.pos - 1
+      i = rebasedQuoteEnd(lines, i, quote)
       continue
     }
     if (base === 0) {
@@ -6291,45 +6350,10 @@ function rebaseOverindentedBlocks(
 
     if (code) {
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
-      const close = fenceCloseRe(marker)
-      // A closing run BELOW the base reaches neither column, so it is payload and
-      // the scan carries on past it; only a run AT the base or at the container's
-      // own column closes (CARVE-P0-004, markup-carve/carve-js#2205).
-      let closed = false
-      for (let j = i + 1; j < lines.length; j++) {
-        const candidate = lines[j]!
-        end = j
-        onFenceBodyLine?.(j)
-        if (isBlankLine(candidate)) continue
-        const column = indentColumns(candidate, base)
-        if (column < base) {
-          if (column === 0 && close.test(candidate)) {
-            closed = true
-            break
-          }
-          continue
-        }
-        // A FOLDED LINE IS NOT AT THIS GROUP'S BASE, the same reading the colon
-        // arm below takes: its leading run is the host's alignment clamp, not an
-        // authored column, and at an over-indent of ONE the clamp leaves exactly
-        // the single residual column the rebased opener carries. So a run the
-        // host folded in from below its own content column closed a fence it was
-        // never written inside, and the paragraph that had folded it lost its
-        // inline verbatim run to a code block (markup-carve/carve-js#2243).
-        //
-        // Held rather than skipped, so the dedent leaves it where the host put
-        // it. CARVE-P0-004 re-bases a verbatim closer, so an unterminated run is
-        // what the author wrote here and §10 I4 keeps it inside the paragraph.
-        if (takenBelowColumn?.has(j) === true) {
-          heldFoldedLines.add(j)
-          continue
-        }
-        if (close.test(sliceColumns(candidate, base, true))) {
-          closed = true
-          break
-        }
-      }
-      if (!closed) onUnclosedCodeFence?.()
+      end = rebasedCodeFenceEnd(
+        lines, i, base, marker, heldFoldedLines, takenBelowColumn,
+        onFenceBodyLine, onUnclosedCodeFence,
+      )
     } else if (comment !== undefined) {
       const closeAt = (commentCloser ??= commentCloserLookup(lines))(comment, i)
       for (let j = i + 1; j < lines.length; j++) {
