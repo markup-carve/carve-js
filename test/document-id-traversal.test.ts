@@ -1,9 +1,9 @@
 import { WIRE_FIELDS } from '../src/wire-fields.js'
 import { ownedChildFields } from '../src/owned-child-fields.js'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { parse, resolve, renderHtml } from '../src/index.js'
 import type { Document } from '../src/ast.js'
-import { collectDocumentIds, DOCUMENT_ID_CHILD_FIELDS, RECORD_CHILD_FIELDS } from '../src/document-ids.js'
+import { collectDocumentIds, DOCUMENT_ID_CHILD_FIELDS, RECORD_CHILD_FIELDS, DocumentIdRegistry } from '../src/document-ids.js'
 
 it('reserves ids in captions, ruby pairs, definition matrices, footnotes and table body groups', () => {
   const text = (id: string) => ({ type: 'text', value: id, attrs: { id } })
@@ -76,4 +76,27 @@ it('terminates when a host supplies a cyclic node graph', () => {
   const doc: Document = { type: 'document', children: [] }
   doc.children.push(doc as never)
   expect(collectDocumentIds(doc).uniqueId('free')).toBe('free')
+})
+
+it.each([['figure', 'target'], ['block_extension', 'fallback'], ['custom', 'target']])(
+  'terminates a cycle through the singleton %s.%s slot', (type, field) => {
+    const node: Record<string, unknown> = { type, attrs: { id: 'cycle' } }
+    node[field] = node
+    const doc = { type: 'document', children: [node] } as unknown as Document
+    expect(collectDocumentIds(doc).uniqueId('cycle')).toBe('cycle-2')
+  },
+)
+
+it('reuses the resolved reservations without rebuilding or leaking render-local ids', () => {
+  const doc = resolve(parse('{#taken}\nparagraph\n'))
+  const reserve = vi.spyOn(DocumentIdRegistry.prototype, 'reserve')
+  try {
+    const first = collectDocumentIds(doc)
+    expect(first.uniqueId('taken')).toBe('taken-2')
+    expect(first.uniqueId('generated')).toBe('generated')
+    const second = collectDocumentIds(doc)
+    expect(second.uniqueId('taken')).toBe('taken-2')
+    expect(second.uniqueId('generated')).toBe('generated')
+    expect(reserve).not.toHaveBeenCalled()
+  } finally { reserve.mockRestore() }
 })

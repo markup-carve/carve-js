@@ -33,7 +33,7 @@ import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-a
 import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 import { coalesceTextRuns } from './coalesce-text-runs.js'
-import { DocumentIdRegistry } from './document-ids.js'
+import { DocumentIdRegistry, inheritDocumentIds, rememberDocumentIds } from './document-ids.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 import { toAuthoredProvenance as authoredProvenance, type ProvenanceSidecar } from './ast-sidecars.js'
 import { tryFastHtml } from './fast-html.js'
@@ -459,7 +459,9 @@ export function createEditorSession(source: string, opts: ParseOptions = {}) {
 
 /** Render a Carve AST to HTML matching the spec corpus. */
 export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
-  return renderHtmlImpl(adoptBlockFootnoteDefs(ast), opts)
+  const ready = adoptBlockFootnoteDefs(ast)
+  inheritDocumentIds(ast, ready)
+  return renderHtmlImpl(ready, opts)
 }
 
 export function renderHtmlWithReport(
@@ -550,7 +552,10 @@ export function resolve(
   doc: Document,
   opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): Document {
-  return resolveDocument(doc, opts)
+  const registry = new DocumentIdRegistry()
+  const resolved = resolveDocument(doc, opts, registry)
+  rememberDocumentIds(resolved, registry)
+  return resolved
 }
 
 function resolveDocument(

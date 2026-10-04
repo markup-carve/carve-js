@@ -12,10 +12,29 @@ import { ALL_OWNED_CHILD_FIELDS } from './owned-child-fields.js'
 export class DocumentIdRegistry {
   /** id -> next 1-based suffix candidate (mirrors carve-php usedIds). */
   private usedIds = new Map<string, number>()
+  private parentIds: ReadonlyMap<string, number> | undefined
+
+  /** Reuse authored reservations while isolating each render's generated ids. */
+  fork(): DocumentIdRegistry {
+    const registry = new DocumentIdRegistry()
+    registry.parentIds = this.usedIds
+    return registry
+  }
+
+  /** Public trees can change between resolution and rendering. */
+  matches(ids: ReadonlySet<string>): boolean {
+    if (ids.size !== this.usedIds.size) return false
+    for (const id of ids) if (!this.usedIds.has(id)) return false
+    return true
+  }
+
+  private has(id: string): boolean {
+    return this.usedIds.has(id) || this.parentIds?.has(id) === true
+  }
 
   /** Reserve an id verbatim (explicit attribute or already-assigned id). */
   reserve(id: string): void {
-    if (id !== '' && !this.usedIds.has(id)) this.usedIds.set(id, 1)
+    if (id !== '' && !this.has(id)) this.usedIds.set(id, 1)
   }
 
   /**
@@ -24,16 +43,16 @@ export class DocumentIdRegistry {
    * by explicit attributes or previously generated ids.
    */
   uniqueId(baseId: string): string {
-    if (!this.usedIds.has(baseId)) {
+    if (!this.has(baseId)) {
       this.usedIds.set(baseId, 1)
       return baseId
     }
-    let n = this.usedIds.get(baseId)!
+    let n = this.usedIds.get(baseId) ?? this.parentIds!.get(baseId)!
     let candidate: string
     do {
       n++
       candidate = `${baseId}-${n}`
-    } while (this.usedIds.has(candidate))
+    } while (this.has(candidate))
     this.usedIds.set(baseId, n)
     this.usedIds.set(candidate, 1)
     return candidate
@@ -112,30 +131,43 @@ export const DOCUMENT_ID_CHILD_FIELDS = {
   thematic_break: NO_CHILDREN,
   underline: ["children"],
 } satisfies Record<AnyNode['type'], readonly string[]> & Record<string, readonly string[]>
+Object.setPrototypeOf(DOCUMENT_ID_CHILD_FIELDS, null)
 
 export const RECORD_CHILD_FIELDS: readonly string[] = ['terms', 'definitions', 'base', 'annotation']
 
 /** Visit id-bearing AST slots without traversing positions or attribute values. */
 export function visitDocumentIds(doc: Document, visit: (id: string) => void): void {
   const stack: unknown[] = [doc]
-  const seen = new WeakSet<object>()
+  const seen = new Set<object>()
   while (stack.length > 0) {
     const value = stack.pop()
-    if (!value || typeof value !== 'object' || seen.has(value)) continue
-    seen.add(value)
+    if (!value || typeof value !== 'object') continue
     if (Array.isArray(value)) {
-      for (const child of value) stack.push(child)
+      if (seen.has(value)) continue
+      seen.add(value)
+      for (const child of value) {
+        if (child && typeof child === 'object') {
+          const node = child as { type?: string; attrs?: unknown }
+          if (node.attrs === undefined && node.type !== 'heading_ref' && node.type !== undefined &&
+              (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[node.type] === NO_CHILDREN) continue
+          stack.push(child)
+        }
+      }
       continue
     }
     const node = value as Record<string, unknown>
     const type = node['type']
+    const fields = typeof type === 'string'
+      ? (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[type] ?? ALL_OWNED_CHILD_FIELDS
+      : RECORD_CHILD_FIELDS
+    // Array edges are checked when popped. Only singleton child edges and
+    // host-defined kinds need record tracking as well.
+    if (type === 'figure' || type === 'block_extension' || fields === ALL_OWNED_CHILD_FIELDS) {
+      if (seen.has(value)) continue
+      seen.add(value)
+    }
     const id = (node['attrs'] as { id?: unknown } | undefined)?.id
     if (typeof id === 'string') visit(id)
-    const fields = typeof type === 'string'
-      ? Object.hasOwn(DOCUMENT_ID_CHILD_FIELDS, type)
-        ? (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[type]!
-        : ALL_OWNED_CHILD_FIELDS
-      : RECORD_CHILD_FIELDS
     for (const field of fields) {
       const child = node[field]
       if (child && typeof child === 'object') stack.push(child)
@@ -156,8 +188,31 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
   }
 }
 
-/** Build a render-local namespace for mutable or transformed public trees. */
+const resolvedNamespaces = new WeakMap<Document, DocumentIdRegistry>()
+
+/** The resolution pass has already reserved authored ids and heading ids. */
+export function rememberDocumentIds(doc: Document, registry: DocumentIdRegistry): void {
+  resolvedNamespaces.set(doc, registry)
+}
+
+/** Normalization can copy the document root without changing its namespace. */
+export function inheritDocumentIds(source: Document, target: Document): void {
+  if (source === target) return
+  const registry = resolvedNamespaces.get(source)
+  if (registry) resolvedNamespaces.set(target, registry)
+}
+
+/** Validate mutable trees and reuse reservations without copying their map. */
 export function collectDocumentIds(doc: Document): DocumentIdRegistry {
+  const cached = resolvedNamespaces.get(doc)
+  if (cached) {
+    const ids = new Set<string>()
+    visitDocumentIds(doc, (id) => { if (id !== '') ids.add(id) })
+    if (cached.matches(ids)) return cached.fork()
+    const registry = new DocumentIdRegistry()
+    for (const id of ids) registry.reserve(id)
+    return registry
+  }
   const registry = new DocumentIdRegistry()
   visitDocumentIds(doc, (id) => registry.reserve(id))
   return registry
