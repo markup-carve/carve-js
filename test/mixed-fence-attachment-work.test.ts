@@ -131,6 +131,13 @@ describe('false fence closers in colon attachments', () => {
       expect(bounded(source).html).toContain('payload')
     })
   }
+  for (const count of [16, 128, 512]) {
+    it(`retains failed tails reached with an inner frame across ${count} attachments`, () => {
+      const source = '- item\n' + '+\n::: box\n:::: inner\n```x\n'.repeat(count)
+        + '```\n' + 'payload\n'.repeat(2000) + ':::\n::::\n'
+      expect(bounded(source).html).toContain('payload')
+    })
+  }
   it('keeps cached closer characters separate', () => {
     const source = '- item\n+\n::: box\n````x\n~~~x\npayload\n~~~\n ````\n:::\n'
     const result = bounded(source)

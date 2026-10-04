@@ -4590,15 +4590,17 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
     return -1
   }
   const misses = scan.cache.colonMisses ??= new Map()
-  const ranges: { start: number; end: number }[] = []
-  const fail = (stack: { opener: number }[]): number => {
+  const fail = (stack: { opener: number; width?: number; ranges?: { start: number; end: number }[] }[]): number => {
     for (const frame of stack) memo.set(frame.opener, -1)
-    let retained = misses.get(len)
-    if (retained === undefined) {
-      retained = new FailedScanRanges()
-      misses.set(len, retained)
+    for (const frame of stack) {
+      if (frame.width === undefined || frame.ranges === undefined) continue
+      let retained = misses.get(frame.width)
+      if (retained === undefined) {
+        retained = new FailedScanRanges()
+        misses.set(frame.width, retained)
+      }
+      for (const range of frame.ranges) retained.add(range.start, range.end)
     }
-    for (const range of ranges) retained.add(range.start, range.end)
     return -1
   }
   const lastClose = (width: number, from: number): number => {
@@ -4607,19 +4609,20 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
   }
   const rootLastClose = lastClose(len, opener + 1)
   if (rootLastClose < 0) return fail([{ opener }])
-  const stack = [{ width: len, opener, lastClose: rootLastClose }]
+  const stack = [{ width: len, opener, lastClose: rootLastClose, ranges: [] as { start: number; end: number }[] }]
   for (let j = openIdx + 1; ; j++) {
-    if (stack.length === 1) {
-      const position = scan.base + j
-      if (misses.get(len)?.has(position)) return fail(stack)
-      const previous = ranges[ranges.length - 1]
-      if (previous?.end === position) previous.end++
-      else ranges.push({ start: position, end: position + 1 })
-    }
-    const line = scan.at(j)
-    if (line === undefined) return fail(stack)
+    const frame = stack[stack.length - 1]!
+    const position = scan.base + j
+    if (misses.get(frame.width)?.has(position)) return fail(stack)
+    const event = scan.preciseClosers().nextEvent(scan.indexBase + position, scan.indexBase + scan.end, scan.contentColumn)
+    const next = event === undefined ? scan.end : event - scan.indexBase
+    const previous = frame.ranges[frame.ranges.length - 1]
+    if (previous?.end === position) previous.end = next + 1
+    else frame.ranges.push({ start: position, end: next + 1 })
+    if (event === undefined || next > frame.lastClose) return fail(stack)
+    j = next - scan.base
+    const line = scan.at(j)!
     if (layoutWork.on) layoutWork.attachmentColonLines++
-    if (scan.base + j > stack[stack.length - 1]!.lastClose) return fail(stack)
     // Skipped from the line AFTER its opener: an opener with no info string is
     // closer-shaped itself and would otherwise end the span where it began.
     const span = opaqueSpanEnd(scan, j)
@@ -4641,7 +4644,7 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
     if (known !== undefined) {
       if (known < 0) return fail(stack)
       j = known - scan.base
-    } else stack.push({ width: open, opener: scan.base + j, lastClose: lastClose(open, scan.base + j + 1) })
+    } else stack.push({ width: open, opener: scan.base + j, lastClose: lastClose(open, scan.base + j + 1), ranges: [] })
   }
 }
 
@@ -10857,7 +10860,8 @@ class ParseSession {
           origin.attachmentFenceClosers = new AttachmentFenceClosers({
             length: origin.lineCount,
             lineAt: (index) => origin.lineAt(index)!,
-          }, RE_ANY_FENCE_CLOSER, RE_COMMENT_BLOCK_ANY, RE_ANY_COLON_CLOSER)
+          }, RE_ANY_FENCE_CLOSER, RE_COMMENT_BLOCK_ANY, RE_ANY_COLON_CLOSER,
+          line => RE_FENCE.exec(line) !== null || RE_RAW_FENCE.exec(line) !== null || colonBlockOpenerRun(line) !== null)
         }
         return origin.attachmentFenceClosers
       },

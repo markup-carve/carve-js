@@ -29,6 +29,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Performance
 
+- Reuse failed colon states at every stack depth and skip plain lines through the attachment event index.
 - Share attachment closer indices across indentation columns and borrowed bodies. Reuse failed colon tails, including tails containing balanced containers.
 - Cache attachment fence boundaries and failed code lookahead across repeated `+` blocks. Reject mixed runs as possible code closers.
 - Fast HTML eligibility uses one native ASCII/control scan and avoids repeated heading and paragraph checks (#2467).
