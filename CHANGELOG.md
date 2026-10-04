@@ -29,6 +29,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Performance
 
+- Bound transformed attachment index caches and reuse failed colon tails, including tails containing balanced containers.
 - Cache attachment fence boundaries and failed code lookahead across repeated `+` blocks. Reject mixed runs as possible code closers.
 - Fast HTML eligibility uses one native ASCII/control scan and avoids repeated heading and paragraph checks (#2467).
 - Fast HTML list lookahead skips blank lines by index instead of copying the remaining lines at each list boundary (#2461).

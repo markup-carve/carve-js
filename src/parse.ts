@@ -4516,6 +4516,7 @@ interface AttachedViewScan {
   scanned: number
   opaque?: ScopedFenceClosers
   colon?: Map<number, number>
+  colonMisses?: Map<number, { start: number; end: number }[]>
 }
 
 /**
@@ -4603,8 +4604,34 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
     memo.set(opener, -1)
     return -1
   }
+  const misses = scan.cache.colonMisses ??= new Map()
+  const ranges: { start: number; end: number }[] = []
   const fail = (stack: { opener: number }[]): number => {
     for (const frame of stack) memo.set(frame.opener, -1)
+    const retained = misses.get(len) ?? []
+    // A failed depth-one state stays failed at every visited line in its range.
+    // Keep eight long ranges per width without growing a table per line/state.
+    for (const range of ranges) {
+      if (range.end - range.start < 2) continue
+      let start = range.start, end = range.end
+      for (let at = retained.length - 1; at >= 0; at--) {
+        const previous = retained[at]!
+        if (previous.start <= end && previous.end >= start) {
+          start = Math.min(start, previous.start)
+          end = Math.max(end, previous.end)
+          retained.splice(at, 1)
+        }
+      }
+      if (retained.length < 8) retained.push({ start, end })
+      else {
+        let shortest = 0
+        for (let at = 1; at < retained.length; at++) {
+          if (retained[at]!.end - retained[at]!.start < retained[shortest]!.end - retained[shortest]!.start) shortest = at
+        }
+        if (end - start > retained[shortest]!.end - retained[shortest]!.start) retained[shortest] = { start, end }
+      }
+    }
+    if (retained.length > 0) misses.set(len, retained)
     return -1
   }
   if (scan.eagerIndex || scan.cache.opaque !== undefined) {
@@ -4612,6 +4639,13 @@ function findColonCloser(scan: AttachedScan, openIdx: number, len: number): numb
   }
   const stack = [{ width: len, opener }]
   for (let j = openIdx + 1; ; j++) {
+    if (stack.length === 1) {
+      const position = scan.base + j
+      if (misses.get(len)?.some(range => position >= range.start && position < range.end)) return fail(stack)
+      const previous = ranges[ranges.length - 1]
+      if (previous?.end === position) previous.end++
+      else ranges.push({ start: position, end: position + 1 })
+    }
     const line = scan.at(j)
     if (line === undefined) return fail(stack)
     scan.cache.scanned += line.length + 1

@@ -103,11 +103,13 @@ describe('false fence closers in colon attachments', () => {
     expect(bounded(source).html).toContain('payload')
   })
   for (const count of [16, 128, 512]) {
-    it(`bounds long tails after ${count} overlapping opaque attachments`, () => {
-      const source = '- item\n' + Array.from({ length: count }, (_, i) => '+\n::: box\n' + '`'.repeat(count + 3 - i) + '\n').join('')
-        + '`'.repeat(count + 4) + '\n' + 'payload\n'.repeat(2000) + ' :::\n'
-      expect(bounded(source).html).toContain('payload')
-    })
+    for (const pairedTail of [false, true]) {
+      it(`bounds long tails, paired=${pairedTail}, after ${count} overlapping opaque attachments`, () => {
+        const source = '- item\n' + Array.from({ length: count }, (_, i) => '+\n::: box\n' + '`'.repeat(count + 3 - i) + '\n').join('')
+          + '`'.repeat(count + 4) + '\n' + 'payload\n'.repeat(2000) + (pairedTail ? '::: tail\n:::\n' : '') + ' :::\n'
+        expect(bounded(source).html).toContain('payload')
+      })
+    }
   }
   it('keeps cached closer characters separate', () => {
     const source = '- item\n+\n::: box\n````x\n~~~x\npayload\n~~~\n ````\n:::\n'
