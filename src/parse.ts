@@ -5,6 +5,8 @@
  * over each block's text content. No backtracking.
  */
 
+import { lazyLineArray } from './lazy-line-array.js'
+import { ScopedFenceClosers } from './scoped-fence-closers.js'
 import { tableColumnsFromAttrs, tableRowGroupsFromAttrs } from './table-source-metadata.js'
 import { expandLineBlockWhitespace, dropTrailingSpaces, verseSourceOffset, restoreVerseGaps } from './verse-whitespace.js'
 import { parseAttrs, isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue, isEmptyAttrs } from './attribute-parser.js'
@@ -764,6 +766,8 @@ export const layoutWork = {
   /** Entries built for local line-offset tables. */
   offsets: 0,
   colonLines: 0,
+  bodyEntries: 0,
+  closerLines: 0,
   geometryEntries: 0,
   reset(): void {
     this.gate = 0
@@ -771,6 +775,8 @@ export const layoutWork = {
     this.seam = 0
     this.offsets = 0
     this.colonLines = 0
+    this.bodyEntries = 0
+    this.closerLines = 0
     this.geometryEntries = 0
   },
   get total(): number {
@@ -781,7 +787,42 @@ export const layoutWork = {
 class Lexer {
   attachmentBoundaries: Set<number>
   prefixMemoLines?: boolean[]
-  lines: readonly string[]
+  private storedLines: readonly string[] = []
+  private lineView: { lexer: Lexer; start: number; length: number } | undefined
+  private lazyLines: readonly string[] | undefined
+
+  get lines(): readonly string[] {
+    const view = this.lineView
+    if (view && !this.lazyLines) {
+      this.lazyLines = lazyLineArray(view.length, i => view.lexer.lineAt(view.start + i)!, lines => {
+        if (layoutWork.on) layoutWork.bodyEntries += view.length
+        this.storedLines = lines
+        this.lineView = undefined
+      })
+    }
+    return this.lazyLines ?? this.storedLines
+  }
+
+  set lines(lines: readonly string[]) {
+    this.storedLines = lines
+    this.lineView = undefined
+    this.lazyLines = undefined
+  }
+
+  get lineCount(): number {
+    return this.lineView?.length ?? this.storedLines.length
+  }
+
+  lineAt(index: number): string | undefined {
+    if (index < 0 || index >= this.lineCount) return undefined
+    return this.lineView ? this.lineView.lexer.lineAt(this.lineView.start + index) : this.storedLines[index]
+  }
+
+  useLineView(lexer: Lexer, start: number, length: number): void {
+    this.lineView = { lexer, start, length }
+    this.storedLines = []
+    this.lazyLines = undefined
+  }
   private offsetLines: readonly string[]
   lineOffsets: number[] = []
   private localOffsetsReady = false
@@ -965,6 +1006,7 @@ class Lexer {
   // Where a closer of each fence shape LAST occurs in these lines, built once
   // by `closerIndex`. See `CloserIndex`.
   fenceCloserIndex: CloserIndex | undefined = undefined
+  scopedFenceCloserIndex: ScopedFenceClosers | undefined = undefined
 
   /** Container-scoped §10 fence lookahead answers, keyed by source line. */
   fenceLookaheadAnswers: Map<string, boolean>
@@ -994,7 +1036,7 @@ class Lexer {
   private leadingWhitespaceLines: number[] = []
 
   lineLeadingWhitespace(index: number): number {
-    return this.leadingWhitespaceLines[index] ??= /^[ \t]*/.exec(this.lines[index] ?? '')![0].length
+    return this.leadingWhitespaceLines[index] ??= /^[ \t]*/.exec(this.lineAt(index) ?? '')![0].length
   }
 
   inheritLeadingWhitespace(index: number, parent: Lexer, parentIndex: number, prefix: number): void {
@@ -1003,7 +1045,7 @@ class Lexer {
   }
 
   lineTerminatorFree(index: number): boolean {
-    return this.terminatorFreeLines[index] ??= !/[\n\r\u2028\u2029]/.test(this.lines[index] ?? '')
+    return this.terminatorFreeLines[index] ??= !/[\n\r\u2028\u2029]/.test(this.lineAt(index) ?? '')
   }
 
   inheritTerminatorFree(index: number, parent: Lexer, parentIndex: number): void {
@@ -1063,7 +1105,7 @@ class Lexer {
     // join-then-split round trip lost it the same way; reproducing that here
     // reproduced the loss with it.
     if (typeof source === 'string') {
-      this.documentLineCount = this.lines.length
+      this.documentLineCount = this.lineCount
       // The last CHARACTER, not a suffix scan over a normalized copy: `\r\n`
       // ends in LF and a lone `\r` normalizes to one, so both are breaks.
       const last = source.charCodeAt(source.length - 1)
@@ -1108,18 +1150,18 @@ class Lexer {
   }
 
   consumeFrontmatter() {
-    if (this.lines.length < 2) return
-    const open = RE_FRONTMATTER_OPEN.exec(this.lines[0]!)
+    if (this.lineCount < 2) return
+    const open = RE_FRONTMATTER_OPEN.exec(this.lineAt(0)!)
     if (!open) return
-    for (let i = 1; i < this.lines.length; i++) {
-      if (RE_FRONTMATTER_CLOSE.test(this.lines[i]!)) {
+    for (let i = 1; i < this.lineCount; i++) {
+      if (RE_FRONTMATTER_CLOSE.test(this.lineAt(i)!)) {
         const content = this.lines.slice(1, i).join('\n')
         const format = open[1] !== '' ? open[1]! : this.defaultFrontmatterFormat
         // The block runs from the opening fence to the closing one. Frontmatter
         // is document-leading, so it starts at the first byte - but the END has
         // to be measured, and without it the node `toAstJson` builds has no
         // position at all (carve-js#480).
-        const closeOffset = (this.lineOffsets[i] ?? 0) + this.lines[i]!.length
+        const closeOffset = (this.lineOffsets[i] ?? 0) + this.lineAt(i)!.length
         this.frontmatter = {
           format,
           content,
@@ -1127,7 +1169,7 @@ class Lexer {
             startLine: 1,
             endLine: i + 1,
             startColumn: 1,
-            endColumn: this.lines[i]!.length + 1,
+            endColumn: this.lineAt(i)!.length + 1,
             startOffset: 0,
             endOffset: closeOffset,
           },
@@ -1139,15 +1181,15 @@ class Lexer {
   }
 
   peek(offset = 0): string | undefined {
-    return this.lines[this.pos + offset]
+    return this.lineAt(this.pos + offset)
   }
 
   consume(): string {
-    return this.lines[this.pos++]!
+    return this.lineAt(this.pos++)!
   }
 
   eof(): boolean {
-    return this.pos >= this.lines.length
+    return this.pos >= this.lineCount
   }
 
   lineOffset(lineIndex: number): number {
@@ -1213,7 +1255,7 @@ class Lexer {
     if (!this.hasDocumentOffsets) return
     if (!this.parseOptions.onDanglingBlockAttributes) return
     const startOffset = this.lineOffset(lineIndex)
-    const endOffset = startOffset + (this.lines[lineIndex]?.length ?? 0)
+    const endOffset = startOffset + (this.lineAt(lineIndex)?.length ?? 0)
     const seen = this.unclosedContainerKeys
     const key = `attr:${startOffset}:${endOffset}`
     if (seen?.has(key)) return
@@ -1260,7 +1302,7 @@ function subLexer(
   const sub = new Lexer(source, opts, lineNumberOffset, unclosedContainerKeys, inherited)
   if (sourceLineMap) sub.sourceLineMap = sourceLineMap
   // A source fragment's EOF uses the same line coordinates as its payload.
-  if (typeof source === 'string') sub.documentLineCount = sub.lineNumber(sub.lines.length - 1)
+  if (typeof source === 'string') sub.documentLineCount = sub.lineNumber(sub.lineCount - 1)
   return sub
 }
 
@@ -1399,10 +1441,10 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   // per child it made an ordinary flat list quadratic (see the field's docblock
   // and markup-carve/carve-js#885).
 
-  for (let i = 0; i < sub.lines.length; i++) {
+  for (let i = 0; i < sub.lineCount; i++) {
     if (layoutWork.on) layoutWork.geometryEntries++
     const mapped = sub.sourceLineMap?.[i]
-    const subLine = sub.lines[i]
+    const subLine = sub.lineAt(i)
     if (subLine === undefined) return
     const origin = origins?.get(i)
     if (origin && origin.text === subLine && origin.parentIndex >= previousIndex &&
@@ -1429,7 +1471,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     const unframed = stripLazyFrame(subLine)
     const framed = unframed !== subLine
     const anchorsTo = (candidate: number): boolean => {
-      const parentLine = parent.lines[candidate] ?? ''
+      const parentLine = parent.lineAt(candidate) ?? ''
       literalSuffix = parentLine.endsWith(subLine)
       return (
         literalSuffix ||
@@ -1449,7 +1491,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // cannot reason about, so it declines rather than emitting that.
     if (i > 0 && parentIndex < previousIndex) return declinePositions(sub)
     previousIndex = parentIndex
-    const parentLine = parent.lines[parentIndex]
+    const parentLine = parent.lineAt(parentIndex)
     if (parentLine === undefined) return
     // SYNTHESIZED LEADING SPACES. Dedenting a line whose indentation ends in a
     // tab that straddles the content column re-emits the unconsumed columns as
@@ -1521,7 +1563,7 @@ function parentLineIndices(lexer: Lexer): Map<number, number[]> {
   const cached = lexer.lineIndicesByNumber
   if (cached !== undefined) return cached
   const built = new Map<number, number[]>()
-  for (let i = 0; i < lexer.lines.length; i++) {
+  for (let i = 0; i < lexer.lineCount; i++) {
     const number = lexer.lineNumber(i)
     const bucket = built.get(number)
     if (bucket) bucket.push(i)
@@ -2046,12 +2088,12 @@ function lazyProbeFrame(blocks: BlockNode[]): LazyProbeFrame {
 
 function lazyProbeCost(lexer: Lexer, candidate: number): { start: number; cost: number } | null {
   let start = candidate - 1
-  while (start >= 0 && !isBlankLine(lexer.lines[start]!)) start--
+  while (start >= 0 && !isBlankLine(lexer.lineAt(start)!)) start--
   start++
   if (start === candidate) return null
   let runBytes = 0
-  for (let i = start; i < candidate; i++) runBytes += utf8ByteLength(lexer.lines[i]!) + 1
-  return { start, cost: runBytes * 2 + utf8ByteLength(lexer.lines[candidate]!) }
+  for (let i = start; i < candidate; i++) runBytes += utf8ByteLength(lexer.lineAt(i)!) + 1
+  return { start, cost: runBytes * 2 + utf8ByteLength(lexer.lineAt(candidate)!) }
 }
 
 function spendLazyProbeBudget(lexer: Lexer, candidate: number, budget: number): number {
@@ -2371,7 +2413,7 @@ function attachBlockPos(
   // the frame here leaked its width into every span whose end fell on a framed
   // line, running a fence's end three columns past its last character and its
   // end offset past document length (carve-js#1963, mirroring carve-rs#1559).
-  const endLine = stripLazyFrame(lexer.lines[endLineIndex] ?? '')
+  const endLine = stripLazyFrame(lexer.lineAt(endLineIndex) ?? '')
   node.pos = {
     startLine: lexer.lineNumber(startLineIndex),
     endLine: lexer.lineNumber(endLineIndex),
@@ -2387,7 +2429,7 @@ function attachBlockPos(
   // space rather than on its `%`. Containers keep the latitude and are excluded;
   // `paragraph` is in neither camp and is overwritten by its first inline below.
   if (type !== undefined && !INDENT_LATITUDE.has(type)) {
-    const startLine = lexer.lines[startLineIndex] ?? ''
+    const startLine = lexer.lineAt(startLineIndex) ?? ''
     const lead = leadingWhitespace(startLine)
     if (lead > 0) {
       node.pos.startOffset = (node.pos.startOffset ?? 0) + lead
@@ -2395,7 +2437,7 @@ function attachBlockPos(
     }
   }
   if ((type === 'list' || type === 'list_item') && lexer.sublistsCarryAuthoredBase) {
-    const startLine = lexer.lines[startLineIndex] ?? ''
+    const startLine = lexer.lineAt(startLineIndex) ?? ''
     const leadChars = leadingWhitespace(startLine)
     if (leadChars > 0) {
       const markerLine = startLine.slice(leadChars)
@@ -2443,7 +2485,7 @@ function attachBlockPos(
       if (lastOwned.endColumn !== undefined) node.pos.endColumn = lastOwned.endColumn
       if (lastOwned.endOffset !== undefined) node.pos.endOffset = lastOwned.endOffset
     } else if (EMPTIED_CONTAINER_MARKUP[type]) {
-      const startLine = lexer.lines[startLineIndex] ?? ''
+      const startLine = lexer.lineAt(startLineIndex) ?? ''
       const lead = leadingWhitespace(startLine)
       const marker = EMPTIED_CONTAINER_MARKUP[type]!.exec(startLine.slice(lead))?.[0]?.length ?? 0
       node.pos.endLine = node.pos.startLine
@@ -2528,9 +2570,10 @@ const RE_PREPASS_ANY_FENCE_CLOSER = new RegExp(
  * the answer for length L is the entry of the smallest recorded run >= L.
  */
 interface CloserIndex {
-  comment: Map<number, number>
-  colon: Map<number, number>
+  comment: Pick<ReadonlyMap<number, number>, 'get'>
+  colon: Pick<ReadonlyMap<number, number>, 'get'>
   code: Map<string, { runs: number[]; lastAtLeast: number[] }>
+  scopedCode?: (marker: string, after: number) => boolean
 }
 
 /**
@@ -2588,6 +2631,21 @@ function buildCloserIndex(lines: readonly string[]): CloserIndex {
 
 /** `buildCloserIndex` over a lexer's own lines, built at most once. */
 function closerIndex(lexer: Lexer): CloserIndex {
+  if (!lexer.fenceCloserIndex && lexer.contiguousOrigin) {
+    const { lexer: origin, start } = lexer.contiguousOrigin
+    if (!origin.scopedFenceCloserIndex) {
+      if (layoutWork.on) layoutWork.closerLines += origin.lineCount
+      origin.scopedFenceCloserIndex = new ScopedFenceClosers(origin.lines, RE_ANY_FENCE_CLOSER, RE_COMMENT_BLOCK_ANY, RE_ANY_COLON_CLOSER)
+    }
+    const shared = origin.scopedFenceCloserIndex
+    const end = start + lexer.lineCount
+    const last = (kind: 'comment' | 'colon') => ({ get(width: number): number | undefined {
+      const at = shared.last(kind, width, start, end)
+      return at === undefined ? undefined : at - start
+    } })
+    lexer.fenceCloserIndex = { comment: last('comment'), colon: last('colon'), code: new Map(),
+      scopedCode: (marker, after) => shared.codeIn(marker, start + after + 1, end) }
+  }
   lexer.fenceCloserIndex ??= buildCloserIndex(lexer.lines)
 
   return lexer.fenceCloserIndex
@@ -2595,7 +2653,7 @@ function closerIndex(lexer: Lexer): CloserIndex {
 
 /** Whether a code/raw closer for `marker` may occur after line index `after`. */
 function codeCloserPossible(index: CloserIndex, marker: string, after: number): boolean {
-  return codeCloserPossibleIn(index.code, marker, after)
+  return index.scopedCode ? index.scopedCode(marker, after) : codeCloserPossibleIn(index.code, marker, after)
 }
 
 /** `codeCloserPossible` against a code index built over any closer pattern. */
@@ -2614,7 +2672,7 @@ function codeCloserPossibleIn(code: CloserIndex['code'], marker: string, after: 
 }
 
 /** Whether a closer of EXACTLY `len` may occur after line index `after`. */
-function exactCloserPossible(last: Map<number, number>, len: number, after: number): boolean {
+function exactCloserPossible(last: Pick<ReadonlyMap<number, number>, 'get'>, len: number, after: number): boolean {
   const at = last.get(len)
 
   return at !== undefined && at > after
@@ -2743,9 +2801,9 @@ function commentCloserInScope(
 function commentRunLines(lexer: Lexer): Map<number, { line: number; depth: number }[]> {
   if (lexer.commentRunLines !== undefined) return lexer.commentRunLines
   const m = new Map<number, { line: number; depth: number }[]>()
-  for (let i = 0; i < lexer.lines.length; i++) {
-    const raw = lexer.lines[i]!
-    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[i - 1] ?? ''))
+  for (let i = 0; i < lexer.lineCount; i++) {
+    const raw = lexer.lineAt(i)!
+    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lineAt(i - 1) ?? ''))
     const c = RE_COMMENT_BLOCK_ANY.exec(stripContainerPrefixes(raw, afterTerm))
     if (c === null) continue
     const entry = {
@@ -2780,12 +2838,12 @@ function commentScopeEnd(
   const key = `${scope.quoteDepth}|${scope.contentCol}`
   const e = memo.get(key)
   if (e !== undefined && from >= e.from && from < e.end) return e.end
-  let end = lexer.lines.length
-  for (let i = from + 1; i < lexer.lines.length; i++) {
-    const raw = lexer.lines[i]!
+  let end = lexer.lineCount
+  for (let i = from + 1; i < lexer.lineCount; i++) {
+    const raw = lexer.lineAt(i)!
     // The blank-line half first: it is two array reads, where the quote and
     // column measurements below are regexes, and it rejects almost every line.
-    if (isBlankLine(raw) || !isBlankLine(lexer.lines[i - 1] ?? '')) continue
+    if (isBlankLine(raw) || !isBlankLine(lexer.lineAt(i - 1) ?? '')) continue
     // AND A CONTINUATION MARKER IS NOT A DEPARTURE. `+` at column 0 after a
     // blank line attaches the next block to the item rather than ending it
     // (PART 17), so the fence is still inside its container and the closer
@@ -2822,8 +2880,8 @@ function commentScopeEnd(
  * Whether a comment fence of width `fence` closes LATER IN THIS QUOTE.
  */
 function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
-  for (let i = fromIndex + 1; i < lexer.lines.length; i++) {
-    const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
+  for (let i = fromIndex + 1; i < lexer.lineCount; i++) {
+    const quoted = RE_BLOCKQUOTE.exec(lexer.lineAt(i)!)
     if (!quoted) return false
     const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
     if (run && run[1]!.length === fence) return true
@@ -2875,8 +2933,8 @@ function itemFenceHasCloser(
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
   let afterBlank = false
-  for (let i = start; i < lexer.lines.length; i++) {
-    const line = lexer.lines[i]!
+  for (let i = start; i < lexer.lineCount; i++) {
+    const line = lexer.lineAt(i)!
     if (endsContainer(line, afterBlank)) break
     if (isBlankLine(line)) {
       afterBlank = true
@@ -3029,8 +3087,8 @@ function quotedFenceHasCloser(
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
   let end = start
-  for (; end < lexer.lines.length; end++) {
-    const line = lexer.lines[end]!
+  for (; end < lexer.lineCount; end++) {
+    const line = lexer.lineAt(end)!
     let at = 0
     for (let level = 0; level <= depth; level++) {
       const width = quotePrefixLength(line, at, line.length)
@@ -3207,16 +3265,36 @@ function consumeOpaqueColonFenceBodySpan(
   return false
 }
 
-function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {
+interface ColonFenceBodyView {
+  lexer: Lexer
+  start: number
+  length: number
+  closed: boolean
+}
+
+type ColonFenceBody = ColonFenceBodyLine[] | ColonFenceBodyView
+
+function nestedColonLexer(parent: Lexer, body: ColonFenceBody, start: number): Lexer {
+  if (Array.isArray(body)) {
+    if (layoutWork.on) layoutWork.bodyEntries += body.length * 2
+    return nestedSubLexer(parent, body.map((line) => line.text), start, undefined, undefined, true)
+  }
+  const sub = nestedSubLexer(parent, [], start, undefined, undefined, true)
+  sub.useLineView(body.lexer, body.start, body.length)
+  return sub
+}
+
+function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBody {
   const origin = lexer.contiguousOrigin
   const index = (origin?.lexer ?? lexer).colonFenceEnds
   const base = origin?.start ?? 0
   const knownEnd = layoutWork.reuseColonViews ? index.get(base + opener.lineIndex) : undefined
-  if (knownEnd !== undefined && knownEnd - base < lexer.lines.length) {
+  if (knownEnd !== undefined && knownEnd - base <= lexer.lineCount) {
     const end = knownEnd - base
-    const body = lexer.lines.slice(lexer.pos, end).map((text, offset) => ({ text, lineIndex: lexer.pos + offset }))
-    lexer.pos = end + 1
-    return body
+    const start = lexer.pos
+    const closed = end < lexer.lineCount
+    lexer.pos = end + Number(closed)
+    return { lexer: origin?.lexer ?? lexer, start: base + start, length: end - start, closed }
   }
   const lines: ColonFenceBodyLine[] = []
   const stack: ColonFenceOpener[] = [opener]
@@ -3258,6 +3336,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     paragraphOpen = !isBlankLine(text) && !interruptsParagraph && (paragraphOpen || !lineOpensBlock(text))
   }
 
+  for (const unclosed of stack) index.set(base + unclosed.lineIndex, base + lexer.pos)
   for (const unclosed of stack.slice(0, Math.max(0, MAX_NESTING_DEPTH - lexer.depth))) {
     lexer.reportUnclosedContainer(unclosedContainerFromOpener(lexer, unclosed))
   }
@@ -5694,8 +5773,8 @@ function fenceHasCloser(lexer: Lexer, marker: string): boolean {
   if (fenceCloserMemoRefutes(lexer.fenceCloserMemo, char, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
-  for (let i = start; i < lexer.lines.length; i++) {
-    const l = lexer.lines[i]!
+  for (let i = start; i < lexer.lineCount; i++) {
+    const l = lexer.lineAt(i)!
     // A quote's lazy line is paragraph text wherever it was spliced, so it
     // closes no fence it lands inside (markup-carve/carve-js#2272).
     if (lexer.quoteLazyLines.has(lexer.lineNumber(i))) continue
@@ -7595,7 +7674,7 @@ class ParseSession {
     const anchor = root.pos + 1
     const sourceLineMap =
       sourceLines.length > 0 &&
-      sourceLines.every((line, i) => root.lines[anchor + i] === line)
+      sourceLines.every((line, i) => root.lineAt(anchor + i) === line)
         ? sourceLines.map((_line, i) => root.lineNumber(anchor + i))
         : undefined
     const sub = subLexer(
@@ -7698,7 +7777,7 @@ class ParseSession {
     const priced = lazyProbeCost(lexer, candidate)
     if (!priced || priced.cost > budget) return 'unknown'
     const before = lexer.lines.slice(priced.start, candidate).join('\n')
-    const after = `${before}\n${lexer.lines[candidate]!}`
+    const after = `${before}\n${lexer.lineAt(candidate)!}`
     const probe = (source: string): LazyProbeFrame => {
       const { onUnclosedContainer: _ignored, onInvalidContainerMetadata: _invalidIgnored, ...callerOptions } = lexer.parseOptions
       const options: ParseOptions = { ...callerOptions, positions: false }
@@ -7727,7 +7806,7 @@ class ParseSession {
   private verseOwnedLines(lexer: Lexer): boolean[] | undefined {
     if (!lexer.lines.some((line, index) => index >= lexer.pos && line.includes('::: ') && line.trimEnd().endsWith('|')) ||
         !lexer.lines.some((line, index) => index >= lexer.pos && line.includes(']:'))) return undefined
-    const owned = Array<boolean>(lexer.lines.length).fill(false)
+    const owned = Array<boolean>(lexer.lineCount).fill(false)
     const parser = new ParseSession()
     parser.probingLazyParagraph = true
     parser.definitionRegionLines = new Set()
@@ -7869,13 +7948,13 @@ class ParseSession {
     let prepassClosers: CloserIndex['code'] | null = null
     // The definition term whose column later lines are measured against (carve#2411).
     let term: { col: number; quotes: number } | null = null
-    for (let idx = 0; idx < lexer.lines.length; idx++) {
+    for (let idx = 0; idx < lexer.lineCount; idx++) {
       // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
       // none, including an unclosed opener that is NOT frontmatter), so a
       // `[ref]: ...` inside it is not collected, while content after an
       // unclosed opener still is.
       if (idx < lexer.pos) continue
-      const raw = lexer.lines[idx]!
+      const raw = lexer.lineAt(idx)!
       // A description continues an entry opened by a `::` term or by a previous
       // description, and only then does its marker open content here.
       // Tested on the PREFIX-STRIPPED previous line, the way the current line is
@@ -9173,13 +9252,13 @@ class ParseSession {
       // container the numbers mean something else, and §4 forbids inventing one.
       if (lexer.hasDocumentOffsets) {
         let lastIndex = Math.max(defLineIndex, lexer.pos - 1)
-        while (lastIndex > defLineIndex && isBlankLine(lexer.lines[lastIndex] ?? '')) lastIndex--
-        const lastLine = lexer.lines[lastIndex] ?? ''
+        while (lastIndex > defLineIndex && isBlankLine(lexer.lineAt(lastIndex) ?? '')) lastIndex--
+        const lastLine = lexer.lineAt(lastIndex) ?? ''
         // A span begins at the `[^label]:` marker, not at the line start. When
         // this definition is nested one column shy of its parent's body margin,
         // the sub-lexer strips a fixed margin and leaves a residual space ahead
         // of the marker; the start must skip it (PART 12 §4, carve#1963).
-        const defLine = lexer.lines[defLineIndex] ?? ''
+        const defLine = lexer.lineAt(defLineIndex) ?? ''
         const defLead = defLine.length - defLine.replace(/^[ \t]+/, '').length
         const pos: Position = {
           startLine: lexer.lineNumber(defLineIndex),
@@ -9244,7 +9323,7 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
+    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
     subLexer.consumesHostedLinkDefs =
       lexer.hostBody === 'description' || lexer.hostBody === 'footnote' ? 'all' : false
     if (isFigureGroup) subLexer.inFigureGroup = true
@@ -9401,12 +9480,12 @@ class ParseSession {
         const next = lines[index + 1]
         if (!next) return undefined
         const lineOffset = lexer.lineOffset(line.lineIndex)
-        const sourceLineEnd = lineOffset + (lexer.lines[line.lineIndex]?.length ?? 0)
+        const sourceLineEnd = lineOffset + (lexer.lineAt(line.lineIndex)?.length ?? 0)
         return {
           startLine: lexer.lineNumber(line.lineIndex),
           endLine: lexer.lineNumber(next.lineIndex),
           startColumn:
-            lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0),
+            lexer.lineStartColumn(line.lineIndex) + (lexer.lineAt(line.lineIndex)?.length ?? 0),
           endColumn: lexer.lineStartColumn(next.lineIndex),
           // A COMMENT LINE IS MEASURED FROM ITS SOURCE, not from the empty text
           // the block layer left behind. The clamp above reads the parsed text's
@@ -9635,9 +9714,9 @@ class ParseSession {
           startLine: lexer.lineNumber(first.lineIndex),
           endLine: lexer.lineNumber(last.lineIndex),
           startColumn: lexer.lineStartColumn(first.lineIndex),
-          endColumn: lexer.lineStartColumn(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
+          endColumn: lexer.lineStartColumn(last.lineIndex) + (lexer.lineAt(last.lineIndex)?.length ?? 0),
           startOffset: lexer.lineOffset(first.lineIndex),
-          endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
+          endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lineAt(last.lineIndex)?.length ?? 0),
         }
         const placed = anchorable && unchangedColumns ? inline.filter((node) => node.pos !== undefined) : []
         const firstPos = placed.find(
@@ -9679,7 +9758,7 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
+    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
     const children = this.parseBlocks(subLexer, 0)
     for (const child of children) {
       if (child.type === 'paragraph') {
@@ -9713,12 +9792,12 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
+    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
     const bq: BlockQuote = { type: 'block_quote', fenced: true, children: this.parseBlocks(subLexer, 0) }
     const quoteEndIndex = lexer.pos
     // The collector excludes its own closer from `inner`. At EOF without a
     // closer, the last consumed line is still part of the body.
-    if ((inner.at(-1)?.lineIndex ?? openLineIndex) < quoteEndIndex - 1) {
+    if (Array.isArray(inner) ? (inner.at(-1)?.lineIndex ?? openLineIndex) < quoteEndIndex - 1 : inner.closed) {
       explicitlyClosedQuotes.add(bq)
     }
     // §4's seventh caption host. The slot hangs on the CLOSING fence, as the
@@ -9757,7 +9836,7 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
+    const subLexer = nestedColonLexer(lexer, inner, openLineIndex + 1)
     // No inline opener attributes (strict djot): a bare `:::` carries none;
     // a preceding block-attribute line attaches them in parseBlocks.
     const node: Div = { type: 'div', children: this.parseBlocks(subLexer, 0) }
@@ -10205,7 +10284,7 @@ class ParseSession {
      */
     function lineRange(lx: Lexer, first: number, last: number): Position | undefined {
       // Measure the final line after stripping its lazy frame.
-      const lastLine = lx.lines[last] === undefined ? undefined : stripLazyFrame(lx.lines[last]!)
+      const lastLine = lx.lineAt(last) === undefined ? undefined : stripLazyFrame(lx.lineAt(last)!)
       if (lastLine === undefined) return undefined
 
       return {
@@ -10299,7 +10378,7 @@ class ParseSession {
         // output - a framed line only ever reaches an item body sub-lexer, which
         // is unanchored and publishes no positions, so no document of the 13790
         // swept moves. It is here so the two halves read the same string.
-        const termStart = stripLazyFrame(lexer.lines[termLineIndex]!).indexOf(t[1]!)
+        const termStart = stripLazyFrame(lexer.lineAt(termLineIndex)!).indexOf(t[1]!)
         // A continuation line folds in whole, indent included, and the scanner
         // strips that indent when it builds the text node - so a single base
         // offset drifts by the indent on every line after the first. Each line
@@ -11432,8 +11511,8 @@ class ParseSession {
             const run = commentFenceRun(markerContent)
             if (run !== undefined && commentBlockHasCloser(lexer, run)) {
               const hostColumn = contentCol + markerContentColumn(dedented)
-              for (let at = lexer.pos + 1; at < lexer.lines.length; at++) {
-                const line = lexer.lines[at]!
+              for (let at = lexer.pos + 1; at < lexer.lineCount; at++) {
+                const line = lexer.lineAt(at)!
                 if (commentFenceRun(line) === run) {
                   trackedContent = markerContent
                   break
@@ -12204,7 +12283,7 @@ class ParseSession {
 
       const item: ListItem = { type: 'list_item', children }
       let itemEnd = lexer.pos
-      while (itemEnd > itemStartLineIndex + 1 && isBlankLine(lexer.lines[itemEnd - 1]!)) itemEnd--
+      while (itemEnd > itemStartLineIndex + 1 && isBlankLine(lexer.lineAt(itemEnd - 1)!)) itemEnd--
       // The end-at-the-last-placed-child fixup that used to sit here moved into
       // `attachBlockPos`, which now applies it to every closerless container
       // rather than to items alone (markup-carve/carve#1522).
@@ -12554,7 +12633,7 @@ class ParseSession {
    */
   private parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
     const capIndex = lexer.pos - 1
-    const capLine = lexer.lines[capIndex]
+    const capLine = lexer.lineAt(capIndex)
     const anchors: Array<{ offset: number; column: number; line: number }> = []
     const anchorable =
       lexer.hasDocumentOffsets && capLine !== undefined && capLine.endsWith(firstLine)

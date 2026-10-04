@@ -41,10 +41,75 @@ describe('nested source offset bookkeeping', () => {
         expect(doc.children.length).toBe(1)
         expect(layoutWork.offsets).toBeLessThanOrEqual(source.split('\n').length * 2)
         expect(layoutWork.geometryEntries).toBeLessThanOrEqual(source.split('\n').length * 2)
+        expect(layoutWork.bodyEntries).toBeGreaterThan(0)
+        expect(layoutWork.bodyEntries).toBeLessThanOrEqual(source.split('\n').length * 4)
         expect(layoutWork.colonLines).toBeGreaterThan(0)
         expect(layoutWork.colonLines).toBeLessThanOrEqual(source.split('\n').length * 2)
       } finally {
         layoutWork.on = wasOn
+        layoutWork.reset()
+      }
+    }
+  })
+
+  it('keeps body materialization linear through nested block kinds', () => {
+    for (const positions of [false, true]) {
+      for (const depth of [24, 96, 192]) {
+        for (const prefix of ['::: box\ntext\n\n', '::: box\n- item\n\n', '::: box\n```text\ncode\n```\n\n', '::: box\n%%%\ncomment\n%%%\n\n']) {
+          for (const closed of [true, false]) {
+            for (const payload of ['payload\n'.repeat(500), '``` =html\n<pre>\n' + 'payload\n'.repeat(500) + '</pre>\n```\n']) {
+              const source = prefix.repeat(depth) + payload + (closed ? ':::\n'.repeat(depth) : '')
+              layoutWork.reset()
+              layoutWork.on = true
+              try {
+                const candidateEvents: unknown[] = []
+                const candidate = parse(source, { positions,
+                  onUnclosedContainer: value => candidateEvents.push(value),
+                  onDanglingBlockAttributes: value => candidateEvents.push(value),
+                })
+                expect(layoutWork.bodyEntries).toBeLessThanOrEqual(source.split('\n').length * 4)
+                expect(layoutWork.colonLines).toBeLessThanOrEqual(source.split('\n').length * 2)
+                expect(layoutWork.closerLines).toBeLessThanOrEqual(source.split('\n').length * 2)
+                layoutWork.on = false
+                layoutWork.reuseColonViews = false
+                const referenceEvents: unknown[] = []
+                const reference = parse(source, { positions,
+                  onUnclosedContainer: value => referenceEvents.push(value),
+                  onDanglingBlockAttributes: value => referenceEvents.push(value),
+                })
+                expect({ doc: candidate, events: candidateEvents }).toEqual({ doc: reference, events: referenceEvents })
+              } finally {
+                layoutWork.on = false
+                layoutWork.reuseColonViews = true
+                layoutWork.reset()
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+
+  it('lets read-only block matchers inspect nested bodies without copying them', () => {
+    for (const positions of [false, true]) {
+      const source = '::: box\ntext\n\n'.repeat(192) + 'payload\n'.repeat(500) + ':::\n'.repeat(192)
+      let calls = 0
+      layoutWork.reset()
+      layoutWork.on = true
+      try {
+        const document = parse(source, { positions, extensions: [{ name: 'inspect-lines', matchBlock(lines, start) {
+          calls++
+          expect(Array.isArray(lines)).toBe(true)
+          expect(lines.length).toBeGreaterThan(start)
+          expect(lines.slice(start, start + 1)).toEqual([lines[start]])
+          return null
+        } }] })
+        expect(calls).toBeGreaterThan(192)
+        expect(layoutWork.bodyEntries).toBeLessThanOrEqual(source.split('\n').length * 4)
+        layoutWork.on = false
+        expect(document).toEqual(parse(source, { positions }))
+      } finally {
+        layoutWork.on = false
         layoutWork.reset()
       }
     }
