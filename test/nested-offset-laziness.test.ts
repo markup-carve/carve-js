@@ -40,9 +40,42 @@ describe('nested source offset bookkeeping', () => {
         const doc = parse(source, { positions })
         expect(doc.children.length).toBe(1)
         expect(layoutWork.offsets).toBeLessThanOrEqual(source.split('\n').length * 2)
+        expect(layoutWork.geometryEntries).toBeLessThanOrEqual(source.split('\n').length * 2)
+        expect(layoutWork.colonLines).toBeGreaterThan(0)
+        expect(layoutWork.colonLines).toBeLessThanOrEqual(source.split('\n').length * 2)
       } finally {
         layoutWork.on = wasOn
         layoutWork.reset()
+      }
+    }
+  })
+
+  it('matches fresh geometry and boundaries on transformed and capped bodies', () => {
+    for (const depth of [2, 65, 201]) {
+      for (const ending of ['\n', '\r\n']) {
+        for (const closed of [false, true]) {
+          const source = '\ufeff' + (':::: box\n::: >\n'.repeat(depth) +
+            '> - α *bold*\n>   continued\n\n[ref]: /target\n[link][ref]\n{.dangling}\n' +
+            (closed ? ':::\n::::\n'.repeat(depth) : '')).replaceAll('\n', ending)
+          for (const positions of [false, true]) {
+            const results: unknown[] = []
+            try {
+              for (const reuse of [false, true]) {
+                layoutWork.reuseColonViews = reuse
+                const diagnostics: unknown[] = []
+                const doc = parse(source, { positions,
+                  onUnclosedContainer: value => diagnostics.push(value),
+                  onInvalidContainerMetadata: value => diagnostics.push(value),
+                  onDanglingBlockAttributes: value => diagnostics.push(value),
+                })
+                results.push({ doc, diagnostics })
+              }
+              expect(results[1]).toEqual(results[0])
+            } finally {
+              layoutWork.reuseColonViews = true
+            }
+          }
+        }
       }
     }
   })
