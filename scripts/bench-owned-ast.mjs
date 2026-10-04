@@ -45,7 +45,8 @@ if (command === '--worker') {
       assert.equal(candidate.renderHtml(candidate.resolve(candidate.parse(source, options))),
         baseline.renderHtml(baseline.resolve(baseline.parse(source, options))))
     }
-    for (const mode of ['parse', 'parse-no-positions', 'render', 'render-no-positions', 'owned', 'ids']) {
+    const modes = process.argv.slice(5)
+    for (const mode of modes.length ? modes : ['parse', 'parse-no-positions', 'render', 'render-no-positions', 'owned', 'ids']) {
       console.error(`${basename(fixture)}: ${mode}`)
       for (const [round, order] of [['baseline', 'candidate'], ['candidate', 'baseline']].entries()) {
         for (const reader of order) {

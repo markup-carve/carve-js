@@ -169,8 +169,8 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
     const fields = typeof type === 'string'
       ? (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[type] ?? ALL_OWNED_CHILD_FIELDS
       : RECORD_CHILD_FIELDS
-    // Array edges are checked when popped. Only singleton child edges and
-    // host-defined kinds need record tracking as well.
+    // Array edges are checked when popped. Record checks avoid repeat visits
+    // to singleton owners and host-defined kinds reached through arrays.
     if (type === 'figure' || type === 'block_extension' || fields === ALL_OWNED_CHILD_FIELDS) {
       if (seen.has(value)) continue
       seen.add(value)
@@ -179,7 +179,8 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
     if (typeof id === 'string') visit(id)
     for (const field of fields) {
       const child = node[field]
-      pushChild(child)
+      if (Array.isArray(child)) stack.push(child)
+      else pushChild(child)
     }
     if (type === 'heading_ref' && Array.isArray(node['resolvedText'])) stack.push(node['resolvedText'])
     if (type === 'document' || type === 'doc') {
