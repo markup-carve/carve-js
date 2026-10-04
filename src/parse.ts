@@ -7500,9 +7500,20 @@ interface EmphasisMatch {
   end: number
 }
 
-function findClose(text: string, from: number, marker: string): number {
-  // Search forward for marker, simple substring match
-  return text.indexOf(marker, from)
+interface CrossrefMemo {
+  lastCloser: number
+  invalidRange?: [number, number]
+}
+
+function crossrefBodyCanEnd(text: string, from: number, memo: CrossrefMemo): boolean {
+  if (memo.lastCloser < from) return false
+  const range = memo.invalidRange
+  if (range && from >= range[0] && from <= range[1]) return false
+  let end = from
+  while (text[end] !== '>' && !isCarveWhitespace(text[end])) end++
+  if (text[end] === '>') return true
+  memo.invalidRange = [from, end]
+  return false
 }
 
 interface EmphasisMemo {
@@ -7510,11 +7521,34 @@ interface EmphasisMemo {
   // an opener inside a skipped plain brace group does not scan a suffix.
   failed: Map<string, Uint8Array>
   lastBrace: number
+  boldItalic?: number[]
   // Each link or image destination's `(` mapped to its closing `)`, built once.
   destinations?: Map<number, number>
   // Each `[` mapped to its balanced `]`, built once. Same map the inline pass
   // resolves a label with, so the scan hides exactly the run the parser builds.
   brackets?: BracketClose
+}
+
+function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo): number | undefined {
+  if (!memo.boldItalic) {
+    memo.boldItalic = []
+    let offset = 0
+    for (;;) {
+      const close = text.indexOf('*/', offset)
+      if (close === -1) break
+      if (close > 0 && !isCarveWhitespace(text[close - 1])) memo.boldItalic.push(close)
+      offset = close + 1
+    }
+  }
+  const closers = memo.boldItalic
+  let low = 0
+  let high = closers.length
+  while (low < high) {
+    const mid = (low + high) >>> 1
+    if (closers[mid]! <= start) low = mid + 1
+    else high = mid
+  }
+  return closers[low]
 }
 
 function newEmphasisMemo(): EmphasisMemo {
@@ -13142,6 +13176,7 @@ class ParseSession {
     // once the rope gets deep). A scalar keeps the smart-quote context check O(1).
     let bufLast = ''
     const emphasisNoClose = newEmphasisMemo()
+    let crossrefMemo: CrossrefMemo | undefined
 
     // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
     // branches resolve the close bracket in O(1); see buildBracketMap.
@@ -13730,7 +13765,11 @@ class ParseSession {
 
       // Autolink <url>
       if (c === '<') {
-        const cr = RE_CROSSREF.exec(rest)
+        let cr: RegExpExecArray | null = null
+        if (text.startsWith('</#', i)) {
+          crossrefMemo ??= { lastCloser: text.lastIndexOf('>') }
+          if (crossrefBodyCanEnd(text, i + 3, crossrefMemo)) cr = RE_CROSSREF.exec(rest)
+        }
         if (cr) {
           flush()
           const cref: CrossRef = { type: 'heading_ref', target: cr[1]! }
@@ -13984,18 +14023,9 @@ class ParseSession {
       // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
       // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
       if (start < text.length && !isCarveWhitespace(text[start])) {
-        let searchPos = start
-        for (;;) {
-          const close = findClose(text, searchPos, '*/')
-          if (close === -1 || close + 2 > end) break
+        const close = combinedSpanCloser(text, start, noClose)
+        if (close !== undefined && close + 2 <= end) {
           const inner = text.slice(start, close)
-          // The content must not end in whitespace (nor be empty). A trailing
-          // space closer like `/*x */` is not bold-italic; skip this `*/` and
-          // look for a later one before giving up (parity with carve-php).
-          if (inner === '' || isCarveWhitespace(inner[inner.length - 1])) {
-            searchPos = close + 1
-            continue
-          }
           const children = this.scanInline(inner, this.shiftSource(source, text, start), inFootnote, false, new Set([...this.openKinds, '/', '*']))
           return {
             // `boldItalic` records that the author used the combined form. The
