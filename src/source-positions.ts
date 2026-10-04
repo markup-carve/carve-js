@@ -1,4 +1,5 @@
-import type { Document, Position } from './ast.js'
+import { isAtContentColumn, markAboveContentColumn } from './paragraph-indent.js'
+import type { Document, Paragraph, Position } from './ast.js'
 
 /** Node positions and the sidecar fields that also carry source locations. */
 const POSITION_FIELDS: readonly string[] = [
@@ -29,30 +30,61 @@ export function definitionLinePosition(
   }
 }
 
-/**
- * Remove source-position fields from the finished tree. The parser still tracks positions;
- * this option reduces the returned tree rather than skipping scanner work.
- */
-export function dropPositions(doc: Document): void {
-  const seen = new Set<object>()
-  const walk = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return
-    if (seen.has(value)) return
-    seen.add(value)
+/** Copy position-bearing records without changing their property shapes by deletion. */
+export function dropPositions(doc: Document): Document {
+  const copies = new WeakMap<object, unknown>()
+  const walk = (value: unknown, preserveKeys = false): unknown => {
+    if (!value || typeof value !== 'object') return value
+    if (!Array.isArray(value)) {
+      const record = value as Record<string, unknown>
+      let leaf = true
+      for (const key in record) {
+        if (!Object.hasOwn(record, key) || (!preserveKeys && (key === 'attrs' || key === 'headAttrs' || key === 'footAttrs'))) continue
+        if ((!preserveKeys && POSITION_FIELDS.includes(key)) || (record[key] && typeof record[key] === 'object')) {
+          leaf = false
+          break
+        }
+      }
+      if (leaf) return value
+    }
+    const existing = copies.get(value)
+    if (existing) return existing
     if (Array.isArray(value)) {
-      for (const item of value) walk(item)
-      return
+      const copy: unknown[] = []
+      copies.set(value, copy)
+      let changed = false
+      for (const item of value) {
+        const next = walk(item)
+        copy.push(next)
+        if (next !== item) changed = true
+      }
+      const result = changed ? copy : value
+      copies.set(value, result)
+      return result
     }
     const record = value as Record<string, unknown>
-    // Visit the original object shape before deletion changes enumeration.
-    const node = typeof record['type'] === 'string'
-    for (const key in record) {
-      if (!Object.hasOwn(record, key) || POSITION_FIELDS.includes(key)) continue
-      if (key !== 'attrs' || !node) walk(record[key])
+    const prototype = Object.getPrototypeOf(value) as object | null
+    const copy = Object.create(prototype) as Record<string, unknown>
+    copies.set(value, copy)
+    if (record['type'] === 'paragraph' && !isAtContentColumn(record as unknown as Paragraph)) {
+      markAboveContentColumn(copy as unknown as Paragraph)
     }
-    for (const field of POSITION_FIELDS) delete record[field]
+    let changed = false
+    for (const key in record) {
+      if (!Object.hasOwn(record, key)) continue
+      if (!preserveKeys && POSITION_FIELDS.includes(key)) { changed = true; continue }
+      const next = !preserveKeys && (key === 'attrs' || key === 'headAttrs' || key === 'footAttrs')
+        ? record[key] : walk(record[key], key === 'footnoteDefs')
+      if (next !== record[key]) changed = true
+      if (key === '__proto__' || (prototype !== null && prototype !== Object.prototype)) {
+        Object.defineProperty(copy, key, { value: next, enumerable: true, configurable: true, writable: true })
+      } else copy[key] = next
+    }
+    const result = changed ? copy : value
+    copies.set(value, result)
+    return result
   }
-  walk(doc)
+  return walk(doc) as Document
 }
 
 /**

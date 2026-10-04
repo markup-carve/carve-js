@@ -13,16 +13,30 @@ describe('position removal traversal', () => {
     const sidecar = { attrs: { pos: { remove: true } } }
     const doc = { sidecar, type: 'document', children: [{ type: 'extension', attrs, shared }, { type: 'extension', shared }], footnoteDefPos: {} } as unknown as Document
     shared.children.push(doc)
-    dropPositions(doc)
-    expect(Object.hasOwn(shared, 'pos')).toBe(false)
-    expect(shared.pos).toEqual({ inherited: true })
-    expect(shared.value.pos).toEqual({ inherited: true })
-    expect(shared.termSpans).toBeUndefined()
-    expect(Object.hasOwn(shared, 'definitionSpans')).toBe(false)
-    expect(sidecar.attrs.pos).toBeUndefined()
+    const stripped = dropPositions(doc)
+    const strippedShared = (stripped.children[0] as unknown as { shared: typeof shared }).shared
+    expect((stripped.children[1] as unknown as { shared: typeof shared }).shared).toBe(strippedShared)
+    expect(strippedShared.children[0]).toBe(stripped)
+    expect(Object.hasOwn(strippedShared, 'pos')).toBe(false)
+    expect(strippedShared.pos).toEqual({ inherited: true })
+    expect(strippedShared.value.pos).toEqual({ inherited: true })
+    expect(strippedShared.termSpans).toBeUndefined()
+    expect(Object.hasOwn(strippedShared, 'definitionSpans')).toBe(false)
+    expect((stripped as unknown as { sidecar: typeof sidecar }).sidecar.attrs.pos).toEqual({ remove: true })
     expect(attrs).toEqual({ pos: 'attribute value', nested: { pos: 'attribute child' } })
-    expect(doc.footnoteDefPos).toBeUndefined()
+    expect(stripped.footnoteDefPos).toBeUndefined()
   })
+})
+
+it('omits positions from text sidecars and preserves own prototype-named footnote labels', () => {
+  const sidecar = { pos: { startLine: 1, endLine: 1 } }
+  const doc = { type: 'document', children: [{ type: 'text', value: 'x', sidecar }],
+    footnoteDefs: Object.fromEntries([['__proto__', []]]) } as unknown as Document
+  const stripped = dropPositions(doc)
+  expect((stripped.children[0] as unknown as { sidecar: object }).sidecar).toEqual({})
+  expect(Object.hasOwn(stripped.footnoteDefs!, '__proto__')).toBe(true)
+  expect(Object.getPrototypeOf(stripped.footnoteDefs)).toBe(Object.prototype)
+  expect(sidecar.pos).toEqual({ startLine: 1, endLine: 1 })
 })
 
 describe('definition candidate filtering', () => {
@@ -83,4 +97,21 @@ perfIt('plain ASCII inline scanning scales linearly', () => {
   expectScansLinearly(source => void parse(source), 'alpha beta ', {
     smallRepeats: 12500, suffix: '\n', label: 'ordinary inline text',
   })
+})
+
+it.each(['pos', 'termSpans', 'definitionSpans', 'definitionLines', 'footnoteDefPos', 'attrs', 'headAttrs', 'footAttrs', 'children', 'type'])(
+  'preserves the authored footnote label %s with positions disabled', (label) => {
+    const source = `See[^${label}].\n\n[^${label}]: Note.\n`
+    const doc = parse(source, { positions: false })
+    expect(Object.hasOwn(doc.footnoteDefs!, label)).toBe(true)
+    expect(doc.footnoteDefs![label]).toMatchObject([{ type: 'paragraph', children: [{ type: 'text', value: 'Note.' }] }])
+  },
+)
+
+it('keeps attribute names that resemble positions on table groups', () => {
+  const attrs = { keyValues: { pos: 'value', termSpans: 'value' } }
+  const doc = { type: 'document', children: [{ type: 'table', rows: [], rowGroups: {
+    headAttrs: attrs, footAttrs: attrs, bodies: [{ attrs }],
+  } }] } as unknown as Document
+  expect(dropPositions(doc)).toEqual(doc)
 })

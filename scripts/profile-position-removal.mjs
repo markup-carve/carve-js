@@ -24,7 +24,7 @@ if (command === '--worker') {
     const prepared = docs()
     global.gc()
     const cpu = process.cpuUsage(), start = performance.now()
-    for (const doc of prepared) dropPositions(doc)
+    for (let i = 0; i < prepared.length; i++) prepared[i] = dropPositions(prepared[i]) ?? prepared[i]
     const elapsed = performance.now() - start, usage = process.cpuUsage(cpu)
     samples.push({ wallMs: elapsed / 100, cpuMs: (usage.user + usage.system) / 100000 })
     for (const doc of prepared) assert.deepEqual(doc, parse(source, { positions: false }))
@@ -36,7 +36,7 @@ if (command === '--worker') {
   await post('HeapProfiler.enable')
   await post('HeapProfiler.startSampling', { samplingInterval: 4096, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true })
   await post('Profiler.enable'); await post('Profiler.setSamplingInterval', { interval: 100 }); await post('Profiler.start')
-  for (const doc of prepared) dropPositions(doc)
+  for (let i = 0; i < prepared.length; i++) prepared[i] = dropPositions(prepared[i]) ?? prepared[i]
   const { profile: cpuProfile } = await post('Profiler.stop')
   const { profile: heapProfile } = await post('HeapProfiler.stopSampling'); session.disconnect()
   const sum = n => n.selfSize + n.children.reduce((total, child) => total + sum(child), 0)

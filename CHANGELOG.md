@@ -17,6 +17,9 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- Reserve table head, footer, document, and trailer ids before assigning heading ids in constructed trees (#2490).
+- Keep footnote labels and attribute names that match position-field names when positions are disabled (#2489).
+
 - Keep reference definitions inside code samples literal when a mixed backtick/tilde run appears in the payload.
 
 - Preserve multiple table bodies, intermediate body headers, empty bodies, and per-body row-header counts with positional source attributes. Keep authored conflicts and report partition loss.
@@ -28,6 +31,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - A colon closer inside a closed code or comment span stays inside verse, matching the executable spec (#2442).
 
 ### Performance
+
+- Skip ordinary inline and block position construction for `positions: false`; copy the remaining position-bearing records without deleting AST fields (#2489).
+- Collect document ids through explicit schema child slots and reuse that visitor during heading resolution (#2490).
+- Stop definition ownership scanning after the last candidate, strip container prefixes by offset, and dispatch block opener checks by first character (#2491).
 
 - Reuse failed colon states at every stack depth and skip plain lines through the attachment event index.
 - Share attachment closer indices across indentation columns and borrowed bodies. Reuse failed colon tails, including tails containing balanced containers.

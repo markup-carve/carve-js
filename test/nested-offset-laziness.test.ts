@@ -25,8 +25,7 @@ describe('nested source offset bookkeeping', () => {
     expect(textOffsets.length).toBeGreaterThan(4)
     const points = Array.from(source)
     for (const [text, start, end] of textOffsets) expect(points.slice(start, end).join('')).toBe(text)
-    const expected = structuredClone(doc)
-    dropPositions(expected)
+    const expected = dropPositions(structuredClone(doc))
     expect(parse(source, { positions: false })).toEqual(expected)
   })
 
