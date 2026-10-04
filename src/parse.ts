@@ -754,6 +754,7 @@ export const MAX_NESTING_DEPTH = 200
 export const layoutWork = {
   /** Whether to accumulate. Tests turn this on around a single parse. */
   on: false,
+  reuseColonViews: true,
   /** Characters walked by the indentation gate (`indentColumns`). */
   gate: 0,
   /** Characters walked by the column strip (`sliceColumns`). */
@@ -762,11 +763,15 @@ export const layoutWork = {
   seam: 0,
   /** Entries built for local line-offset tables. */
   offsets: 0,
+  colonLines: 0,
+  geometryEntries: 0,
   reset(): void {
     this.gate = 0
     this.strip = 0
     this.seam = 0
     this.offsets = 0
+    this.colonLines = 0
+    this.geometryEntries = 0
   },
   get total(): number {
     return this.gate + this.strip + this.seam
@@ -783,6 +788,8 @@ class Lexer {
   private rawLineSource: string | undefined
   lineNumberOffset: number
   sourceLineMap?: number[]
+  contiguousOrigin?: { lexer: Lexer; start: number }
+  colonFenceEnds = new Map<number, number>()
   /**
    * Document offset of each line's CONTENT start, for a sub-lexer over stripped
    * container lines. Without it `lineOffset` reports an offset into the
@@ -1144,11 +1151,13 @@ class Lexer {
   }
 
   lineOffset(lineIndex: number): number {
+    if (this.contiguousOrigin) return this.contiguousOrigin.lexer.lineOffset(this.contiguousOrigin.start + lineIndex)
     return this.sourceOffsetMap?.[lineIndex] ?? (this.localOffsetsReady ? this.lineOffsets : this.measureLineOffsets())[lineIndex] ?? 0
   }
 
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */
   lineStartColumn(lineIndex: number): number {
+    if (this.contiguousOrigin) return this.contiguousOrigin.lexer.lineStartColumn(this.contiguousOrigin.start + lineIndex)
     return (this.linePrefixWidths?.[lineIndex] ?? 0) + 1
   }
 
@@ -1163,11 +1172,18 @@ class Lexer {
    * 12 section 4 forbids.
    */
   get hasDocumentOffsets(): boolean {
-    return !this.nested || this.sourceOffsetMap !== undefined
+    return !this.nested || this.sourceOffsetMap !== undefined || (this.contiguousOrigin?.lexer.hasDocumentOffsets ?? false)
   }
 
   lineNumber(lineIndex: number): number {
+    if (this.contiguousOrigin) return this.contiguousOrigin.lexer.lineNumber(this.contiguousOrigin.start + lineIndex)
     return this.sourceLineMap?.[lineIndex] ?? this.lineNumberOffset + lineIndex + 1
+  }
+
+  prefixMemoAllowed(lineIndex: number): boolean {
+    return this.contiguousOrigin
+      ? this.contiguousOrigin.lexer.prefixMemoAllowed(this.contiguousOrigin.start + lineIndex)
+      : this.prefixMemoLines?.[lineIndex] !== false
   }
 
   reportInvalidContainerMetadata(container: UnclosedContainer): void {
@@ -1300,18 +1316,21 @@ function nestedSubLexer(
   startLineIndex: number,
   sourceLineMap?: number[],
   origins?: ReadonlyMap<number, StrippedLineOrigin>,
+  contiguous = false,
 ): Lexer {
   // The default map is parallel to the Lexer's OWN lines, which drop one
   // trailing blank (see the constructor), so it is built to that length -
   // the length `normalizedSourceLines` used to report for the joined text.
   // Parallel to the Lexer's OWN lines, which no longer drop a trailing blank
   // from an array source, so the map covers every line handed over.
+  contiguous = contiguous && layoutWork.reuseColonViews
   const mapLength = lines.length
+  if (layoutWork.on && !sourceLineMap && !contiguous) layoutWork.geometryEntries += mapLength
   const sub = subLexer(
     lines,
     parent.parseOptions,
     parent.lineNumberOffset + startLineIndex,
-    sourceLineMap ?? Array.from({ length: mapLength }, (_l, i) => parent.lineNumber(startLineIndex + i)),
+    sourceLineMap ?? (contiguous ? undefined : Array.from({ length: mapLength }, (_l, i) => parent.lineNumber(startLineIndex + i))),
     parent.unclosedContainerKeys,
     parent,
   )
@@ -1325,7 +1344,12 @@ function nestedSubLexer(
   sub.inFootnoteBody = parent.inFootnoteBody
   sub.hostBody = parent.hostBody
   sub.consumesHostedLinkDefs = parent.consumesHostedLinkDefs
-  attachDocumentOffsets(sub, parent, startLineIndex, origins)
+  if (contiguous) {
+    const origin = parent.contiguousOrigin
+    sub.contiguousOrigin = { lexer: origin?.lexer ?? parent, start: (origin?.start ?? 0) + startLineIndex }
+  } else {
+    attachDocumentOffsets(sub, parent, startLineIndex, origins)
+  }
   return sub
 }
 
@@ -1376,6 +1400,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   // and markup-carve/carve-js#885).
 
   for (let i = 0; i < sub.lines.length; i++) {
+    if (layoutWork.on) layoutWork.geometryEntries++
     const mapped = sub.sourceLineMap?.[i]
     const subLine = sub.lines[i]
     if (subLine === undefined) return
@@ -1386,7 +1411,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       previousIndex = parentIndex
       offsets.push(parent.lineOffset(parentIndex) + origin.prefix)
       widths.push(parent.lineStartColumn(parentIndex) - 1 + origin.prefix)
-      prefixMemoLines.push(parent.prefixMemoLines?.[parentIndex] ?? true)
+      prefixMemoLines.push(parent.prefixMemoAllowed(parentIndex))
       sub.inheritTerminatorFree(i, parent, parentIndex)
       sub.inheritLeadingWhitespace(i, parent, parentIndex, origin.prefix)
       continue
@@ -1442,7 +1467,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       sub.inheritTerminatorFree(i, parent, parentIndex)
       sub.inheritLeadingWhitespace(i, parent, parentIndex, parentLine.length - subLine.length)
     }
-    prefixMemoLines.push(isLiteralSuffix && (parent.prefixMemoLines?.[parentIndex] ?? true))
+    prefixMemoLines.push(isLiteralSuffix && (parent.prefixMemoAllowed(parentIndex)))
     let prefix = parentLine.length - subLine.length
     if (framed && parentLine.endsWith(unframed)) {
       // The frame occupies no source, so the anchor is the unframed content's
@@ -3183,11 +3208,22 @@ function consumeOpaqueColonFenceBodySpan(
 }
 
 function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {
+  const origin = lexer.contiguousOrigin
+  const index = (origin?.lexer ?? lexer).colonFenceEnds
+  const base = origin?.start ?? 0
+  const knownEnd = layoutWork.reuseColonViews ? index.get(base + opener.lineIndex) : undefined
+  if (knownEnd !== undefined && knownEnd - base < lexer.lines.length) {
+    const end = knownEnd - base
+    const body = lexer.lines.slice(lexer.pos, end).map((text, offset) => ({ text, lineIndex: lexer.pos + offset }))
+    lexer.pos = end + 1
+    return body
+  }
   const lines: ColonFenceBodyLine[] = []
   const stack: ColonFenceOpener[] = [opener]
   let paragraphOpen: boolean = false
 
   while (!lexer.eof()) {
+    if (layoutWork.on) layoutWork.colonLines++
     const lineIndex = lexer.pos
     const text = lexer.peek()!
     const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
@@ -3199,7 +3235,8 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
 
     if (close && close[1]!.length === stack[stack.length - 1]?.fenceWidth) {
       lexer.consume()
-      stack.pop()
+      const closed = stack.pop()!
+      index.set(base + closed.lineIndex, base + lineIndex)
       if (stack.length === 0) break
       lines.push({ text, lineIndex })
       paragraphOpen = false
@@ -7383,7 +7420,7 @@ class ParseSession {
 
   // Only literal source suffixes share numeric offsets; reconstructed lines do not.
   private markerPrefixMemo(lexer: Lexer, index: number): Map<number, number> | undefined {
-    if (!lexer.hasDocumentOffsets || lexer.prefixMemoLines?.[index] === false) return undefined
+    if (!lexer.hasDocumentOffsets || !lexer.prefixMemoAllowed(index)) return undefined
     const root = lexer.rootLines ?? lexer.lines
     let lines = this.markerPrefixMemos.get(root)
     if (!lines) this.markerPrefixMemos.set(root, lines = new Map())
@@ -9166,7 +9203,7 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
     subLexer.consumesHostedLinkDefs =
       lexer.hostBody === 'description' || lexer.hostBody === 'footnote' ? 'all' : false
     if (isFigureGroup) subLexer.inFigureGroup = true
@@ -9601,7 +9638,7 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
     const children = this.parseBlocks(subLexer, 0)
     for (const child of children) {
       if (child.type === 'paragraph') {
@@ -9635,7 +9672,7 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
     const bq: BlockQuote = { type: 'block_quote', fenced: true, children: this.parseBlocks(subLexer, 0) }
     const quoteEndIndex = lexer.pos
     // The collector excludes its own closer from `inner`. At EOF without a
@@ -9679,7 +9716,7 @@ class ParseSession {
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })
-    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+    const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1, undefined, undefined, true)
     // No inline opener attributes (strict djot): a bare `:::` carries none;
     // a preceding block-attribute line attaches them in parseBlocks.
     const node: Div = { type: 'div', children: this.parseBlocks(subLexer, 0) }
