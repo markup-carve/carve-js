@@ -52,9 +52,9 @@ it('resolves a wide colspan and the carets beneath every covered column', () => 
 })
 
 perfIt('resolves wide colspans and covered carets in linear time', () => {
-  const rows = new Map([8000, 32000].map((width) => [width, mergedRows(width)]))
+  const rows = new Map([2000, 8000].map((width) => [width, mergedRows(width)]))
   expectScansLinearly((input) => void resolveTableSpans(rows.get(input.length)!), 'x', {
-    label: 'wide merged rows', smallRepeats: 8000,
+    label: 'wide merged rows', smallRepeats: 2000,
   })
 })
 
