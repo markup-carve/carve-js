@@ -254,7 +254,7 @@ export function opensCodeFence(line: string): boolean {
   return RE_FENCE.test(line) || RE_RAW_FENCE.test(line)
 }
 
-const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t].*)$/
+const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t\r\n][^\r\n]*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
@@ -267,10 +267,10 @@ const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t].*)$/
 // shorthand) uses `.` only. Capture groups are unchanged, so every call site
 // keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
 const RE_ORDERED =
-  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*([^ \t].*)$/
+  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*([^ \t\r\n][^\r\n]*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*([^ \t].*)$/
+const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*([^ \t\r\n][^\r\n]*)$/
 
 /** PART 11 §6g. A checked box records nothing: `[X]` and `[x]` are one state. */
 function authoredTaskState(state: string, checked: boolean): TaskState | undefined {
@@ -288,7 +288,7 @@ function authoredTaskState(state: string, checked: boolean): TaskState | undefin
 // space rather than competing with it. A block with nothing after it is not a
 // marker in any form (`.{#x}text`, `1.{#x}text`, `-{#x}text` are all text).
 const RE_ITEM_ATTR =
-  /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[^ \t].*)$/
+  /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[^ \t\r\n][^\r\n]*)$/
 const RE_ITEM_ATTR_HEAD =
   /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +)(?=[^ \t])/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
