@@ -760,10 +760,13 @@ export const layoutWork = {
   strip: 0,
   /** Characters re-copied at container or attributed-marker seams. */
   seam: 0,
+  /** Entries built for local line-offset tables. */
+  offsets: 0,
   reset(): void {
     this.gate = 0
     this.strip = 0
     this.seam = 0
+    this.offsets = 0
   },
   get total(): number {
     return this.gate + this.strip + this.seam
@@ -774,7 +777,10 @@ class Lexer {
   attachmentBoundaries: Set<number>
   prefixMemoLines?: boolean[]
   lines: readonly string[]
-  lineOffsets: number[]
+  private offsetLines: readonly string[]
+  lineOffsets: number[] = []
+  private localOffsetsReady = false
+  private rawLineSource: string | undefined
   lineNumberOffset: number
   sourceLineMap?: number[]
   /**
@@ -1067,21 +1073,31 @@ class Lexer {
     // and a lone '\r', so all three are counted at their real width. Lines
     // handed in already split carry no endings at all, so every width is 1 -
     // which is exactly what the join they replace produced.
-    const raw = typeof source === 'string' ? source : undefined
-    this.lineOffsets = []
+    this.offsetLines = this.lines
+    this.rawLineSource = typeof source === 'string' ? source : undefined
+    if (!inherited) this.measureLineOffsets()
+    // Frontmatter is document-leading only; the root lexer consumes it
+    // explicitly in parse(). Sub-lexers (list items, divs, admonitions)
+    // must NOT, or nested `---`-fenced content would be swallowed.
+  }
+
+  private measureLineOffsets(): number[] {
+    if (layoutWork.on) layoutWork.offsets += this.offsetLines.length
+    const offsets = this.lineOffsets
+    const raw = this.rawLineSource
     let offset = 0
     let index = 0
-    for (const line of this.lines) {
-      this.lineOffsets.push(offset)
+    for (const line of this.offsetLines) {
+      offsets.push(offset)
       index += line.length
       let width = 1
       if (raw !== undefined && raw[index] === '\r') width = raw[index + 1] === '\n' ? 2 : 1
       offset += line.length + width
       index += width
     }
-    // Frontmatter is document-leading only; the root lexer consumes it
-    // explicitly in parse(). Sub-lexers (list items, divs, admonitions)
-    // must NOT, or nested `---`-fenced content would be swallowed.
+    this.localOffsetsReady = true
+    this.rawLineSource = undefined
+    return offsets
   }
 
   consumeFrontmatter() {
@@ -1128,7 +1144,7 @@ class Lexer {
   }
 
   lineOffset(lineIndex: number): number {
-    return this.sourceOffsetMap?.[lineIndex] ?? this.lineOffsets[lineIndex] ?? 0
+    return this.sourceOffsetMap?.[lineIndex] ?? (this.localOffsetsReady ? this.lineOffsets : this.measureLineOffsets())[lineIndex] ?? 0
   }
 
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */
