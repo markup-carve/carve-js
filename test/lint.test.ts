@@ -46,6 +46,93 @@ describe('lintCarve — broken cross-references', () => {
     expect(w[0]!.line).toBe(3)
     expect(w[0]!.column).toBe(3)
   })
+  it.each([
+    ['a paragraph', '{#para}\nA para.\n\nSee </#para>.', 'paragraph', 'para'],
+    ['an uncaptioned table', '{#tbl}\n| A |\n|---|\n| 1 |\n\nSee </#tbl>.', 'table', 'tbl'],
+    ['an inline span, in another case', '[x]{#Spot}\n\nSee </#spot>.', 'span', 'Spot'],
+  ])('names the element when the id exists on %s', (_, src, kind, id) => {
+    const w = lintCarve(src)
+    expect(w.map((x) => x.rule)).toEqual(['broken-crossref'])
+    expect(w[0]!.message).toContain(`which is on a ${kind}`)
+    expect(w[0]!.message).toContain(`[text](#${id})`)
+    expect(w[0]!.data).toEqual({ id, kind })
+  })
+
+  it('keeps the generic message when no element carries the id', () => {
+    expect(lintCarve('See </#nope>.')[0]!.message).toContain('has no matching heading id')
+  })
+})
+
+describe('lintCarve — broken fragment links', () => {
+  it('flags a link whose fragment matches no id, at the link', () => {
+    const w = lintCarve('# Intro\n\nSee [bad](#nope).')
+    expect(w.map((x) => x.rule)).toEqual(['broken-fragment-link'])
+    expect(w[0]!.message).toContain('"#nope"')
+    expect([w[0]!.line, w[0]!.column]).toEqual([3, 5])
+  })
+
+  it.each([
+    ['a blockquote', '> [x](#nope)'],
+    ['a list item', '- [x](#nope)'],
+    ['a footnote body', 'Text[^n].\n\n[^n]: [x](#nope)'],
+    ['a reference definition', '[x][r]\n\n[r]: #nope'],
+  ])('flags one inside %s', (_, src) => {
+    expect(rules(src)).toEqual(['broken-fragment-link'])
+  })
+
+  it('names a target that differs only in case', () => {
+    const w = lintCarve('# Getting Started\n\n[x](#getting-started)')
+    expect(w.map((x) => x.rule)).toEqual(['broken-fragment-link'])
+    expect(w[0]!.message).toContain('"Getting-Started" differs only in case')
+  })
+
+  it.each([
+    ['an auto heading id', '# Getting Started\n\n[x](#Getting-Started)'],
+    ['a lowercased heading id', '# Getting Started\n\n[x](#getting-started)', { lowercaseHeadingIds: true }],
+    ['a suffixed duplicate heading id', '# A\n\n# A\n\n[x](#A-2)'],
+    ['a percent-encoded heading id', '# Über uns\n\n[x](#%C3%9Cber-uns) [y](#Über-uns)'],
+    ['an explicit block id', '{#tbl}\n| A |\n|---|\n| 1 |\n\n[x](#tbl)'],
+    ['an inline span id', '[x]{#sp}\n\n[y](#sp)'],
+    ['a footnote id', 'Text[^n].\n\n[^n]: Back to [ref](#fnref1).\n\n[x](#fn1)'],
+    ['an id inside raw HTML', '``` =html\n<div id="raw"></div>\n```\n\n[x](#raw)'],
+    ['an anchor name inside raw HTML', '``` =html\n<a name="old"></a>\n```\n\n[x](#old)'],
+    ['the top of the page', '[x](#top) [y](#)'],
+    ['a text fragment', '[x](#:~:text=word)'],
+    ['an id followed by a text directive', '# Intro\n\n[x](#Intro:~:text=word)'],
+    ['a link into another file', '[x](other.crv#nope) [y](https://example.com/#nope)'],
+  ] as Array<[string, string, { lowercaseHeadingIds?: boolean }?]>)('does not flag a link to %s', (_, src, opts = {}) => {
+    expect(lintCarve(src, opts).map((w) => w.rule)).not.toContain('broken-fragment-link')
+  })
+
+  it.each([
+    ['an attribute value', '<div title=" id=phantom"></div>'],
+    ['an HTML comment', '<!-- <div id="phantom"></div> -->'],
+  ])('does not count an id spelled inside %s of raw HTML', (_, html) => {
+    expect(rules('``` =html\n' + html + '\n```\n\n[x](#phantom)')).toEqual(['broken-fragment-link'])
+  })
+
+  it('reads raw HTML ids the way a browser decodes them', () => {
+    const src = '``` =html\n<div title=">" id="r&amp;d"></div><p id="&#1114112;"></p>\n```\n\n[x](#r&d) [y](#nope)'
+    expect(rules(src)).toEqual(['broken-fragment-link'])
+  })
+
+  it('reads ids out of deeply nested raw HTML', () => {
+    const src = '``` =html\n' + '<div>'.repeat(10000) + '<p id="deep"></p>\n```\n\n[x](#deep) [y](#nope)'
+    expect(rules(src)).toEqual(['broken-fragment-link'])
+  })
+
+  it('does not count an id quoted in a code block', () => {
+    expect(rules('``` html\n<div id="raw"></div>\n```\n\n[x](#raw)')).toEqual(['broken-fragment-link'])
+  })
+
+  it('leaves citation ids alone when citations render', () => {
+    expect(lintCarve('[x](#ref-smith) [y](#nope)', { extensions: [{ name: 'citations' }] }).map((w) => w.rule))
+      .toEqual(['broken-fragment-link'])
+  })
+
+  it('stays silent when an extension it cannot model may generate ids', () => {
+    expect(lintCarve('[x](#tab-1)', { extensions: [{ name: 'tabs' }] })).toEqual([])
+  })
 })
 
 describe('lintCarve — duplicate heading ids', () => {
