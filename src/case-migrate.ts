@@ -1,5 +1,5 @@
 import { lintCarve } from './lint.js'
-import { caseOnlyKey, normalizeHeadingRefLabel } from './heading-ids.js'
+import { caseOnlyKey, normalizeHeadingRefLabel, type AsciiHeadingIdMode } from './heading-ids.js'
 import { normalizeRefLabel } from './label-key.js'
 
 interface Edit {
@@ -12,10 +12,15 @@ interface Edit {
  * `carve fmt --migrate` for CARVE-P9R-010: respell a `</#id>` or reference
  * label that misses its target only by case, when exactly one target matches
  * it case-insensitively. Several candidates leave the reference to lint.
+ * Pass the heading-id options the document renders with, so a reference is
+ * judged against the ids that render actually produces.
  */
-export function migrateCaseOnlyReferences(source: string): string {
+export function migrateCaseOnlyReferences(
+  source: string,
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
+): string {
   const edits: Edit[] = []
-  for (const warning of lintCarve(source)) {
+  for (const warning of lintCarve(source, opts)) {
     const variants = warning.data?.['caseVariants']
     if (!Array.isArray(variants) || variants.length !== 1) continue
     const wanted = variants[0] as string
