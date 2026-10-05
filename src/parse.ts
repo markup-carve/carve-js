@@ -289,9 +289,9 @@ function authoredTaskState(state: string, checked: boolean): TaskState | undefin
 // space rather than competing with it. A block with nothing after it is not a
 // marker in any form (`.{#x}text`, `1.{#x}text`, `-{#x}text` are all text).
 const RE_ITEM_ATTR =
-  /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[^ \t\r\n][^\r\n]*)$/
+  /^(?=([ \t]*))\1((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[^ \t\r\n][^\r\n]*)$/
 const RE_ITEM_ATTR_HEAD =
-  /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +)(?=[^ \t])/
+  /^(?=([ \t]*))\1((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +)(?=[^ \t])/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
 // when there is no abutting brace or the brace is not a valid attribute payload
@@ -380,11 +380,14 @@ const trimCellPadding = (text: string): string => {
 // A literal class, not a trim, because a trim is what let a wider set in: there
 // is no `String.prototype` method that spells THIS class, and the native `trim()`
 // fast path `trimStructural` takes carries the legacy set too.
-const RE_BLANK_LINE = /^[ \t]*$/
+//
+// Asked as "is there a character outside the class": the anchored `^[ \t]*$`
+// backtracked through the whole indent of a deep line before failing.
+const RE_NOT_BLANK = /[^ \t]/
 
 export function isBlankLine(line: string | undefined): boolean {
   // EOF ends lookahead. Keep the regex: a hand-written scan was slower on deep containers.
-  return line !== undefined && RE_BLANK_LINE.test(line)
+  return line !== undefined && !RE_NOT_BLANK.test(line)
 }
 
 const RE_CONTINUATION_MARKER = new RegExp('^[ \\t]*\\+' + TRAILING_WS)
@@ -3919,7 +3922,7 @@ function unorderedMarkerChar(line: string): string {
 /** Preserve capture indices while matching only the marker on terminator-free lines. */
 function unorderedMatch(line: string, terminatorFree = false): RegExpExecArray | null {
   if (!terminatorFree) return RE_UNORDERED.exec(line)
-  const match = /^([ \t]*)[-*] +[ \t]*(?=[^ \t])/.exec(line)
+  const match = RE_UNORDERED_HEAD.exec(line)
   if (!match) return null
   const content = line.slice(match[0].length)
   match[0] = line
@@ -3927,8 +3930,9 @@ function unorderedMatch(line: string, terminatorFree = false): RegExpExecArray |
   return match
 }
 
-const RE_ORDERED_HEAD = /^([ \t]*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*(?=[^ \t])/
-const RE_TASK_HEAD = /^([ \t]*)[-*] +\[([ xX\-_>?])\] +[ \t]*(?=[^ \t])/
+const RE_UNORDERED_HEAD = /^(?=([ \t]*))\1[-*] +[ \t]*(?=[^ \t])/
+const RE_ORDERED_HEAD = /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*(?=[^ \t])/
+const RE_TASK_HEAD = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*(?=[^ \t])/
 
 function markerMatch(line: string, full: RegExp, head: RegExp, terminatorFree: boolean): RegExpExecArray | null {
   if (!terminatorFree) return full.exec(line)
@@ -4822,15 +4826,24 @@ function quotePrefixLength(content: string, from: number, bound: number): number
  * hide one, which is what the widening answers.
  */
 function markerPrefixLength(content: string, from: number, bound: number): number {
+  // Every pattern opens with `[ \t]*` and then needs a non-blank character, so
+  // the indent is counted once and only the window past it reaches the regexes.
+  // The window ENDS stay where they were: a window cut through a task box can
+  // match as a bare bullet, and moving the cut would change that answer.
+  let lead = from
+  for (let code = content.charCodeAt(lead); lead < bound && (code === 32 || code === 9); code = content.charCodeAt(++lead));
+  if (lead === bound) return 0
   for (let width = PREFIX_WINDOW; ; width *= 2) {
     const end = Math.min(from + width, bound)
-    const window = content.slice(from, end)
-    const marked = extractItemAttr(window)?.stripped ?? window
-    const item = RE_TASK.exec(marked) ?? RE_ORDERED.exec(marked) ?? RE_UNORDERED.exec(marked)
-    // The attribute block is stripped OUT of `marked`, so the marker length is
-    // measured against the window rather than against `marked`: the content is
-    // a suffix of both, and only the window still holds the braces.
-    if (item) return window.length - item[item.length - 1]!.length
+    if (end > lead) {
+      const window = content.slice(lead, end)
+      const marked = extractItemAttr(window)?.stripped ?? window
+      const item = RE_TASK.exec(marked) ?? RE_ORDERED.exec(marked) ?? RE_UNORDERED.exec(marked)
+      // The attribute block is stripped OUT of `marked`, so the marker length is
+      // measured against the window rather than against `marked`: the content is
+      // a suffix of both, and only the window still holds the braces.
+      if (item) return lead - from + window.length - item[item.length - 1]!.length
+    }
     if (end === bound) return 0
   }
 }
@@ -8097,7 +8110,7 @@ class ParseSession {
       const wasPrevBlank = prevBlank
       // `isBlankLine`, not `raw.trim() === ''`: this prepass decides the same
       // `blank_line` the block lexer does, and the native trim carries the wider
-      // legacy set (see `RE_BLANK_LINE`). Spelling one rule twice is what let the
+      // legacy set (see `RE_NOT_BLANK`). Spelling one rule twice is what let the
       // two answers drift.
       prevBlank = isBlankLine(raw)
       // A fence is quoted if a blockquote marker stands anywhere in the line's
