@@ -4937,6 +4937,24 @@ function markerLineBottomBlock(content: string, memo?: Map<number, number>): str
  * `quote` carries it there. Claiming it at this level as well would let a
  * continuation row written outside the quote join a table that is not there.
  */
+/**
+ * Does the description body's own nested lead open a fence that none of the
+ * entries collected so far has closed?
+ *
+ * The fence sits on the lead's BOTTOM block (`: - ```$`), where neither the
+ * body's trailing state nor the nested-column tracker can see it: `RE_FENCE` is
+ * anchored at column 0 and the marker run stands in front of it. So the lead is
+ * read structurally, the same walk `markerLineState` uses.
+ */
+function descriptionLeadFenceStaysOpen(lead: string, bodyLines: string[]): boolean {
+  const bottom = markerLineBottomBlock(lead)
+  if (bottom === lead) return false
+  const fence = RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom)
+  if (!fence) return false
+  const close = fenceCloseRe(RE_FENCE.test(bottom) ? fence[2]! : fence[1]!)
+  return !bodyLines.some((line, index) => index > 0 && close.test(line.replace(/^[ \t]+/, '')))
+}
+
 function markerLineState(content: string, memo?: Map<number, number>): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
@@ -10349,9 +10367,21 @@ class ParseSession {
           lexer.consume()
           continue
         }
+        // A FLUSH-LEFT FENCE LINE IS THE OPEN NESTED FENCE'S OWN CONTENT
+        // (markup-carve/carve#1958, corpus 455). Column 0 is outside the body, so
+        // it cannot close the fence the body's nested lead left open; the veto
+        // below read it as an opener instead, ended the body on it, and the
+        // document took it for a fresh fence - the nested fence came out empty
+        // and the entry after it was swallowed (markup-carve/carve-js#2500). The
+        // fold frame this branch already records is what keeps the line verbatim.
+        const nestedFenceOwnsLine =
+          atDocumentColumn &&
+          opensCodeFence(ln) &&
+          descriptionLeadFenceStaysOpen(first, bodyLines)
         if (
           lazyState.lazyFoldable &&
-          !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
+          (!startsInterruptingBlock(lexer, below, true, false, atDocumentColumn) ||
+            nestedFenceOwnsLine)
         ) {
           const lineIndex = lexer.pos
           // RECORD THE FOLD so the reparse can read it (markup-carve/carve-js#1650,
@@ -10469,10 +10499,17 @@ class ParseSession {
           // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
           // because a framed heading is the term's text rather than a block.
           const nextEntry = stripLazyFrame(next)
+          // AN UNTERMINATED FENCE ENDS A TERM (markup-carve/carve-js#2500).
+          // `endsHeadingOrQuote` inherits §10's closer lookahead, which withholds
+          // interruption from a fence with no closer ahead so an OPEN PARAGRAPH
+          // keeps it as text. A term is not a paragraph: the oracle ends the term
+          // and hands the document the fence, as it already does under a heading.
+          // The test is column-0 anchored, so an indented fence still folds in.
           if (
             isBlankLine(next) ||
             RE_DEFLIST_TERM.test(nextEntry) ||
             RE_DEFLIST_DEF.test(nextEntry) ||
+            opensCodeFence(next) ||
             endsHeadingOrQuote(lexer)
           )
             break
