@@ -106,7 +106,7 @@ interface Positioned {
 /**
  * Parser offset -> UTF-16 offset into the source the CALLER passed.
  */
-function codepointToUtf16Map(source: string): Uint32Array | undefined {
+export function codepointToUtf16Map(source: string): Uint32Array | undefined {
   let needsMap = false
   for (let i = 0; i < source.length; i++) {
     const code = source.charCodeAt(i)

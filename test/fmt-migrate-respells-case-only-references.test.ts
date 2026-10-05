@@ -64,6 +64,37 @@ describe('migrateCaseOnlyReferences', () => {
     expect(migrateCaseOnlyReferences('# Café\n\nSee </#cafe>.\n', { asciiHeadingIds: 'fold' })).toBe(source)
   })
 
+  it('respells a reference image label like a link label', () => {
+    const migrated = migrateCaseOnlyReferences('A ![b][Logo] here.\n\n[logo]: logo.png\n')
+    expect(migrated).toBe('A ![b][logo] here.\n\n[logo]: logo.png\n')
+    expect(carveToHtml(migrated)).toContain('<img src="logo.png" alt="b">')
+  })
+
+  it('respells a collapsed reference image to the definition label', () => {
+    expect(migrateCaseOnlyReferences('![Logo][]\n\n[logo]: logo.png\n')).toBe('![logo][]\n\n[logo]: logo.png\n')
+  })
+
+  it('keeps use-site attributes on a respelled reference image', () => {
+    const migrated = migrateCaseOnlyReferences('![b][Logo]{width=10} and ![Logo][]{.c}\n\n[logo]: logo.png\n')
+    expect(migrated).toBe('![b][logo]{width=10} and ![logo][]{.c}\n\n[logo]: logo.png\n')
+    expect(carveToHtml(migrated)).toContain('width="10"')
+  })
+
+  it('respells an image and a link in one paragraph', () => {
+    expect(migrateCaseOnlyReferences('😀 ![b][Logo] and [x][Logo]\n\n[logo]: logo.png\n')).toBe(
+      '😀 ![b][logo] and [x][logo]\n\n[logo]: logo.png\n',
+    )
+  })
+
+  it('leaves a reference image with several case variants or a heading-only match', () => {
+    const several = '![b][LOGO]\n\n[logo]: a.png\n[Logo]: b.png\n'
+    expect(migrateCaseOnlyReferences(several)).toBe(several)
+    const multiline = '![a][Lo\ngo]\n\n[lo go]: /a\n'
+    expect(migrateCaseOnlyReferences(multiline)).toBe(multiline)
+    const heading = '![plan][]\n\n# Plan\n'
+    expect(migrateCaseOnlyReferences(heading)).toBe(heading)
+  })
+
   it('does not rewrite when several ids match', () => {
     const source = '{#Tip}\n# A\n\n{#TIP}\n# B\n\nSee </#tip>.\n'
     expect(migrateCaseOnlyReferences(source)).toBe(source)
