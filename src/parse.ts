@@ -5,6 +5,8 @@
  * over each block's text content. No backtracking.
  */
 
+import { backtickRunEnds } from './backtick-run-index.js'
+import { SubstitutionScanner } from './substitution-scanner.js'
 import { ScopedFenceClosers } from './scoped-fence-closers.js'
 import { AttachmentFenceClosers, FailedScanRanges } from './attachment-fence-closers.js'
 import { tableColumnsFromAttrs, tableRowGroupsFromAttrs } from './table-source-metadata.js'
@@ -12960,50 +12962,18 @@ class ParseSession {
     return paragraphNode
   }
 
+  private substitutionScans: SubstitutionScanner | undefined
+
   /**
-   * Where a braced inline opened at `open` closes, or -1.
-   *
-   * The scan skips verbatim spans, whose closer is searched for across the rest
-   * of the BLOCK (PART 3 UNCLOSED RUN, ruling markup-carve/carve#2079), so a
-   * closer a code span holds is code and the brace pair closes later or not at
-   * all.
-   */
-  /**
-   * A substitution opening at `open`: where the pair ends and where its `~>`
-   * sits, or null for a strike or no pair at all.
-   *
-   * Only a top-level `~>` splits the pair. Verbatim content (a code span, which
-   * math and an inline literal are prefixes of), a comment and an escape are
-   * skipped (markup-carve/carve#2083).
+   * A substitution's pair end and top-level arrow, or null for a forced strike.
+   * Escapes, code spans and closed comments hide their contents.
    */
   private substitutionAt(text: string, open: number): { end: number; arrow: number } | null {
     if (text[open + 1] !== '~') return null
     const end = this.bracedPairEnd(text, open, '~}')
     if (end === -1) return null
-    const to = end - 2
-    for (let j = open + 2; j < to; j++) {
-      const ch = text[j]!
-      if (ch === '\\') {
-        j++
-        continue
-      }
-      if (ch === '`') {
-        const span = verbatimSpanEnd(text, j)
-        if (!span.closed) return null
-        j = span.end - 1
-        continue
-      }
-      if (ch === '{' && (text[j + 1] === '%' || text[j + 1] === '#')) {
-        const close = text.indexOf(`${text[j + 1]}}`, j + 2)
-        if (close !== -1 && close < to) {
-          j = close + 1
-          continue
-        }
-      }
-      if (ch === '~' && text[j + 1] === '>') return { end, arrow: j }
-    }
-
-    return null
+    const arrow = (this.substitutionScans ??= new SubstitutionScanner(text)).findArrow(open + 2, end - 2)
+    return arrow === -1 ? null : { end, arrow }
   }
 
   private commentCloserPositions: Map<string, number> | undefined
@@ -13022,6 +12992,24 @@ class ParseSession {
 
   private pairEndTable: Array<Int32Array | undefined> = []
 
+  private pairEndCache = new Map<string, { tables: Array<Int32Array | undefined>; bytes: number }>()
+  private pairEndCacheBytes = 0
+  private pairEndCacheBudget = 0
+  private inlinePairFrameDepth = 0
+
+  private rememberPairTables(text: string, tables: Array<Int32Array | undefined>): void {
+    const bytes = 128 + text.length * 2 + tables.reduce((sum, table) => sum + (table?.byteLength ?? 0), 0)
+    while (this.pairEndCacheBytes + bytes > this.pairEndCacheBudget && this.pairEndCache.size > 0) {
+      const oldest = this.pairEndCache.keys().next().value!
+      this.pairEndCacheBytes -= this.pairEndCache.get(oldest)!.bytes
+      this.pairEndCache.delete(oldest)
+    }
+    this.pairEndCache.set(text, { tables, bytes })
+    this.pairEndCacheBytes += bytes
+    this.pairEndText = text
+    this.pairEndTable = tables
+  }
+
   /**
    * For each marker the text opens a pair with, where a scan for its closer
    * starting at each position stops: the closer's index, or -1. Built right to
@@ -13031,6 +13019,14 @@ class ParseSession {
    */
   private pairEndTables(text: string): Array<Int32Array | undefined> {
     if (text === this.pairEndText) return this.pairEndTable
+    const cached = this.pairEndCache.get(text)
+    if (cached !== undefined) {
+      this.pairEndCache.delete(text)
+      this.pairEndCache.set(text, cached)
+      this.pairEndText = text
+      this.pairEndTable = cached.tables
+      return cached.tables
+    }
     const n = text.length
     const markers: number[] = []
     for (let m = 0; m < PAIR_MARKERS.length; m++) {
@@ -13042,8 +13038,12 @@ class ParseSession {
       tables[m] = new Int32Array(n + 2).fill(-1)
       raws[m] = new Int32Array(n + 2).fill(-1)
     }
+    if (markers.length === 0) {
+      this.rememberPairTables(text, tables)
+      return tables
+    }
     const ends = new Int32Array(n + 2).fill(-1)
-    const hasTick = text.includes('`')
+    const codeEnds = backtickRunEnds(text)
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
       const next = text[j + 1]
@@ -13053,7 +13053,7 @@ class ParseSession {
         const stop = tables[nextId]![j + 2]!
         ends[j] = stop === -1 ? -1 : stop + 2
       }
-      const span = hasTick && ch === '`' ? verbatimSpanEnd(text, j) : undefined
+      const codeEnd = ch === '`' ? codeEnds![j]! : undefined
       for (const m of markers) {
         const table = tables[m]!
         const raw = raws[m]!
@@ -13072,10 +13072,10 @@ class ParseSession {
         const isCloser = next === '}' && ch === PAIR_MARKERS[m]
         raw[j] = isCloser ? j : raw[j + 1]!
         let stop: number
-        if (span !== undefined) {
+        if (codeEnd !== undefined) {
           // An unclosed run ends at the pair's closer instead of running to the
           // end of the block (markup-carve/carve#2056).
-          stop = span.closed ? table[span.end]! : raw[j]!
+          stop = codeEnd !== -1 ? table[codeEnd]! : raw[j]!
         } else if (isCloser) stop = j
         else if (ch === '{' && nextId !== -1 && nextId !== m && ends[j] !== -1) {
           // A braced pair of another kind is its own scope, so a closer inside
@@ -13086,8 +13086,7 @@ class ParseSession {
         table[j] = stop
       }
     }
-    this.pairEndText = text
-    this.pairEndTable = tables
+    this.rememberPairTables(text, tables)
 
     return tables
   }
@@ -13237,7 +13236,18 @@ class ParseSession {
     if (inlineDepth >= MAX_NESTING_DEPTH) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
     }
+    if (this.inlinePairFrameDepth === 0) {
+      this.pairEndCache.clear()
+      this.pairEndCacheBytes = 0
+      this.pairEndCacheBudget = Math.max(text.length * 64, 65536)
+      this.pairEndText = undefined
+      this.pairEndTable = []
+    }
     inlineDepth++
+    this.inlinePairFrameDepth++
+    const outerPairText = this.pairEndText
+    const outerSubstitutions = this.substitutionScans
+    this.substitutionScans = undefined
     const outer = this.openKinds
     this.openKinds = kinds
     try {
@@ -13245,8 +13255,13 @@ class ParseSession {
         text, source, inFootnote, captionContext, opensHostRun || inlineDepth === 1,
       )
     } finally {
+      const outerTables = outerPairText === undefined ? undefined : this.pairEndCache.get(outerPairText)?.tables
+      this.pairEndText = outerTables === undefined ? undefined : outerPairText
+      this.pairEndTable = outerTables ?? []
+      this.substitutionScans = outerSubstitutions
       this.openKinds = outer
       inlineDepth--
+      this.inlinePairFrameDepth--
     }
   }
 
