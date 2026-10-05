@@ -1426,8 +1426,8 @@ function alignMarker(align: TableCell['align']): string {
  * paragraphs - `to_html(fmt(x)) == to_html(x)` false, with no character in the
  * document that the parser calls whitespace.
  *
- * The parser answers the same question with `RE_BLANK_LINE` in src/parse.ts,
- * which is this pattern. Keep them in step.
+ * The parser answers the same question with `isBlankLine` in src/parse.ts,
+ * which reads this class. Keep them in step.
  */
 const RE_WRITER_BLANK = /^[ \t]*$/
 
