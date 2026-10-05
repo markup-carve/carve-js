@@ -29,7 +29,7 @@ export function migrateCaseOnlyReferences(
     const edit =
       warning.rule === 'broken-crossref'
         ? crossrefEdit(written, warning.data?.['target'], wanted)
-        : warning.rule === 'unresolved-reference-link'
+        : warning.rule === 'unresolved-reference-link' && !written.startsWith('!')
           ? referenceEdit(written, warning.data?.['label'], wanted)
           : undefined
     if (edit !== undefined) edits.push({ start: warning.start, end: warning.end, text: edit })
@@ -64,9 +64,9 @@ function referenceEdit(written: string, label: unknown, wanted: string): string 
 }
 
 /**
- * Unresolved reference images, which lint does not report: an image resolves
- * against link definitions only, never the heading index, so only definition
- * labels are candidates.
+ * Unresolved reference images, respelled here rather than from their lint
+ * finding so use-site attributes after the bracket carry over: an image
+ * resolves against link definitions only, so only their labels are candidates.
  */
 function imageEdits(source: string): Edit[] {
   const doc = parse(source, { positions: true })

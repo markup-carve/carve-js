@@ -268,17 +268,20 @@ function decodeFragment(fragment: string): string {
 
 function collectUnresolvedRefLinks(
   doc: Document,
-): Array<{ ref: string; rawRef: string; collapsed: boolean; node: Positioned }> {
-  const found: Array<{ ref: string; rawRef: string; collapsed: boolean; node: Positioned }> = []
+): Array<{ ref: string; rawRef: string; collapsed: boolean; image: boolean; node: Positioned }> {
+  const found: Array<{ ref: string; rawRef: string; collapsed: boolean; image: boolean; node: Positioned }> = []
   walkDocument(doc, (node) => {
     // UNRESOLVED means no destination. PART 12 §3a keeps `ref` and `rawRef` on
     // a RESOLVED reference too, so a ref alone no longer answers this
     // (carve#596) - flagging on it reported every working reference link.
-    if (node.type !== 'link' || typeof node.ref !== 'string') return
-    if (typeof node.href === 'string' && node.href !== '') return
+    if ((node.type !== 'link' && node.type !== 'image') || typeof node.ref !== 'string') return
+    const image = node.type === 'image'
+    const destination = image ? node.src : node.href
+    if (typeof destination === 'string' && destination !== '') return
     found.push({
       ref: node.ref,
-      rawRef: typeof node.rawRef === 'string' ? node.rawRef : `[${node.ref}]`,
+      rawRef: typeof node.rawRef === 'string' ? node.rawRef : `${image ? '!' : ''}[${node.ref}]`,
+      image,
       // The SPELLING, read off the same field the resolver reads it off, so the
       // mirror below cannot disagree with resolveHeadingIds about which
       // references the heading index is even offered to.
@@ -900,7 +903,21 @@ export function lintCarve(
   // every reference, plus heading text for the collapsed form.
   const defLabelsByFold = groupByCaseOnlyKey(collectDefinitionLabels(doc))
   const headingTextByFold = groupByCaseOnlyKey(headingTexts)
-  for (const { ref, rawRef, collapsed, node } of collectUnresolvedRefLinks(doc)) {
+  for (const { ref, rawRef, collapsed, image, node } of collectUnresolvedRefLinks(doc)) {
+    // A reference image resolves against link definitions only, never the
+    // heading index, even in the collapsed `![alt][]` spelling.
+    if (image) {
+      const caseVariants = defLabelsByFold.get(foldId(normalizeRefLabel(ref))) ?? []
+      out.push({
+        ...locate(node, toUtf16),
+        rule: 'unresolved-reference-link',
+        message: caseVariants.length > 0
+          ? `Reference image ${rawRef} matches no link definition; ${caseOnlyPhrase('label', caseVariants)}, and reference labels are case-sensitive, so it renders as literal text.`
+          : `Reference image ${rawRef} has no matching link definition; it renders as literal text.`,
+        ...(caseVariants.length > 0 ? { data: { label: ref, caseVariants } } : {}),
+      })
+      continue
+    }
     // BOTH keys, in resolveHeadingIds' order: the label as written, then its
     // rendered plain text (PART 9R R1). Checking only the first reported a
     // reference that resolves - `[*bold* heading][]` under `# *bold* heading` -

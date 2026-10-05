@@ -237,6 +237,50 @@ describe('lintCarve — unresolved reference links', () => {
   })
 })
 
+describe('lintCarve — unresolved reference images', () => {
+  it('flags a reference image with no link definition', () => {
+    const w = lintCarve('![a][missing]')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w[0]!.message).toBe('Reference image ![a][missing] has no matching link definition; it renders as literal text.')
+    expect(w[0]!.data).toBeUndefined()
+    expect([w[0]!.start, w[0]!.end]).toEqual([0, 13])
+  })
+
+  it('names the definition label a reference image misses only by case', () => {
+    const w = lintCarve('![b][Logo]\n\n[logo]: logo.png')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w[0]!.message).toBe(
+      'Reference image ![b][Logo] matches no link definition; the label "logo" differs only in case, and reference labels are case-sensitive, so it renders as literal text.',
+    )
+    expect(w[0]!.data).toEqual({ label: 'Logo', caseVariants: ['logo'] })
+  })
+
+  it('does not let a collapsed reference image fall back to a heading', () => {
+    const w = lintCarve('# Nope\n\n![Nope][]')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w[0]!.message).toBe('Reference image ![Nope][] has no matching link definition; it renders as literal text.')
+  })
+
+  it('does not offer heading text as a case variant to a reference image', () => {
+    const w = lintCarve('# Nope\n\n![nope][]')
+    expect(w[0]!.data).toBeUndefined()
+  })
+
+  it('does not flag a resolved reference image or an inline image', () => {
+    expect(lintCarve('![a][logo] ![b][] ![c](x.png)\n\n[logo]: logo.png\n[b]: b.png')).toEqual([])
+  })
+
+  it('reports each unresolved reference image once, the link variant alongside', () => {
+    const w = lintCarve('![a][missing] and [x][missing]')
+    expect(w.map((x) => x.message.split(' ').slice(0, 2).join(' '))).toEqual(['Reference image', 'Reference link'])
+  })
+
+  it('finds unresolved reference images inside footnote definitions and link text', () => {
+    expect(rules('See[^n].\n\n[^n]: ![a][missing]')).toEqual(['unresolved-reference-link'])
+    expect(rules('[![a][missing]](https://example.com)')).toEqual(['unresolved-reference-link'])
+  })
+})
+
 describe('lintCarve — footnotes', () => {
   it('flags a footnote reference with no definition', () => {
     const w = lintCarve('See[^missing].')
