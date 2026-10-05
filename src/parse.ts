@@ -4969,6 +4969,33 @@ function markerRunContainers(content: string): { list: boolean; quote: boolean }
 }
 
 /**
+ * Is the first LIST in this marker line's run nested INSIDE a quote?
+ *
+ * `markerRunContainers` reports which kinds a run holds, not their order, and
+ * the order is the whole question here: the list in `> - ` is the quote's and
+ * dies with it, where the list in `- > ` is the outer container and outlives the
+ * quote it holds (markup-carve/carve-js#2540). Asking only "both kinds present"
+ * moved all 30 of the `- > ` shapes off the oracle.
+ */
+function markerRunListIsQuoteHeld(content: string): boolean {
+  const bound = prefixWalkBound(content)
+  let at = 0
+  let quoted = false
+  for (;;) {
+    const quote = quotePrefixLength(content, at, bound)
+    if (quote > 0) {
+      quoted = true
+      at += quote
+      continue
+    }
+    const marker = markerPrefixLength(content, at, bound)
+    if (marker === 0) return false
+
+    return quoted
+  }
+}
+
+/**
  * Does this marker line leave a LIST collecting for the description body below
  * it?
  *
@@ -10157,6 +10184,8 @@ class ParseSession {
        * body's column replaces the container standing there.
        */
       let nestedItemColumn = -1
+      /** Is the list the lead opened held by a QUOTE, and so the quote's to lose? */
+      let leadListIsQuoteHeld = false
       /** Whether that nested item still holds an open paragraph to fold into. */
       let nestedItemParagraphOpen = false
       // The next entry ends the body, and so does a line below its column after a
@@ -10299,6 +10328,7 @@ class ParseSession {
           !firstIsColonContainer &&
           leadLeavesListCollecting(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
         nestedItemColumn = markerContentColumn(first)
+        leadListIsQuoteHeld = markerRunListIsQuoteHeld(first)
         nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(
           first,
           parseSession.markerPrefixMemo(lexer, firstLineIndex),
@@ -10501,7 +10531,7 @@ class ParseSession {
             true,
             bodyReadsFlush ? contentCol + residual : contentCol,
           )
-          if (!wasVerbatim && flush === dedented) {
+          if (!wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
             nestedListStillOpen = leadLeavesListCollecting(flush)
             nestedItemColumn = markerContentColumn(flush)
             nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
