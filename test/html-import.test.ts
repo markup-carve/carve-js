@@ -1295,10 +1295,11 @@ describe('table row groups on import', () => {
 
   it('preserves a long sequence of empty body groups', () => {
     const count = 1024
-    const groups = groupsOf('<table>' + '<tbody></tbody>'.repeat(count) + '<tbody><tr><td>Z</td></tr></tbody></table>')!
-    expect(groups.bodies).toHaveLength(count + 1)
-    expect(groups.bodies[0]).toEqual({ headRows: 0, bodyRows: 0 })
-    expect(groups.bodies[count]).toEqual({ headRows: 0, bodyRows: 1 })
+    expect(groupsOf('<table>' + '<tbody></tbody>'.repeat(count) + '<tbody><tr><td>Z</td></tr></tbody></table>')).toEqual({
+      headRows: 0,
+      bodies: [...Array.from({ length: count }, () => ({ headRows: 0, bodyRows: 0 })), { headRows: 0, bodyRows: 1 }],
+      footRows: 0,
+    })
   })
 
   it('retains the header origin throughout a long rowspan chain', () => {
