@@ -6736,6 +6736,16 @@ function rebaseOverindentedBlocks(
       // reached by its marker rather than by a column, and a link definition
       // has no body at all.
       const runColumn = RE_FOOTNOTE_DEF.test(opener) ? Math.max(base, FOOTNOTE_BODY_COLUMN) : base
+      // A QUOTE IS REACHED BY ITS MARKER, so the run ends where the quote stops
+      // reaching: a line that carries no marker is the quote's only as the lazy
+      // continuation of an OPEN PARAGRAPH (markup-carve/carve-js#2536). The
+      // column test below answers the footnote body's question, and asking it of
+      // a quote let one that ended in a table, a heading or a break claim every
+      // indented line under it - so an over-indented table row below
+      // `: > | a |` was never reconsidered as a block of its own, kept the
+      // residual indent, and reached the page as prose. `rebasedQuoteEnd` is the
+      // same reach the `!includeSublists` arm above already measures.
+      const quoted = RE_FOOTNOTE_DEF.test(opener) ? null : markerLineQuoteState(opener)
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate)) {
@@ -6749,6 +6759,17 @@ function rebaseOverindentedBlocks(
           continue
         }
         if (indentColumns(candidate, runColumn) < runColumn) break
+        if (quoted !== null) {
+          // AN OVER-INDENTED MARKER IS STILL THE MARKER, and `RE_BLOCKQUOTE` is
+          // anchored - reading a line the author wrote one column in as
+          // unmarked would end the run on a question about indentation rather
+          // than about the quote's reach.
+          const local = sliceColumns(candidate, base, true)
+          const marked = RE_BLOCKQUOTE.exec(local.replace(/^[ \t]+/, ''))
+          if (marked) trackBlockQuoteLazyState(marked[1] ?? '', quoted, () => true, () => true)
+          else if (!blockQuoteParagraphOpen(quoted)) break
+          else trackBlockQuoteLazyState(local, quoted, () => true, () => true)
+        }
         end = j
       }
     }
@@ -10359,7 +10380,20 @@ class ParseSession {
           if (flush.startsWith('>')) bodyHoldsQuote = true
           const residual = indentColumns(ln) - contentCol
           let bodyReadsFlush = false
-          if (!bodyHoldsQuote && lazyState.quoteInner === null && flush !== dedented && lineOpensItemBlock(flush)) {
+          // A QUOTE THAT COLLECTS NOTHING OWNS NOTHING. The question is whether
+          // the open quote still takes this line, and only a quote with an OPEN
+          // PARAGRAPH does: an unquoted line below one ending in a table, a
+          // heading or a break is not the quote's, so it is the body's own block
+          // and gets the body's own reading (markup-carve/carve-js#2536). Asking
+          // merely whether a quote was TRACKED withheld the flush reading from
+          // every such line, and an over-indented table row below `: > | a |`
+          // came out as prose where the oracle starts a fresh table.
+          if (
+            !bodyHoldsQuote &&
+            !insideOpenQuoteParagraph(lazyState) &&
+            flush !== dedented &&
+            lineOpensItemBlock(flush)
+          ) {
             // A COPY, and one that cannot write back. `quoteInner` is the state's
             // only mutable object and `trackBlockQuoteLazyState` advances it IN
             // PLACE, so a plain spread would let this probe move the real quote
