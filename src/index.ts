@@ -334,6 +334,7 @@ export {
   canonicalType,
   CANONICAL_BLOCK_TYPES,
   CANONICAL_INLINE_TYPES,
+  FOLDED_NODE_TYPES,
   type DisallowedAction,
   type ProfileViolation,
 } from './profile.js'
