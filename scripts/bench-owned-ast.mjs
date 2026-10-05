@@ -7,7 +7,20 @@ import { loadavg } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const [command, entry, file, mode] = process.argv.slice(2)
-const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
+const median = values => {
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+}
+const configured = (name, fallback) => {
+  const value = Number(process.env[name] ?? fallback)
+  assert.ok(Number.isSafeInteger(value) && value > 0, `${name} must be a positive integer`)
+  return value
+}
+const batches = configured('CARVE_BENCH_BATCHES', 5)
+const warmup = configured('CARVE_BENCH_WARMUP', 10)
+const timeout = configured('CARVE_BENCH_TIMEOUT_MS', 120000)
+configured('CARVE_BENCH_CALLS', 1)
 if (command === '--worker') {
   const api = await import(pathToFileURL(entry))
   const source = readFileSync(file, 'utf8')
@@ -18,18 +31,18 @@ if (command === '--worker') {
     : mode.startsWith('render') ? () => api.renderHtml(doc)
     : mode === 'owned' ? () => api.renderHtml(api.resolve(api.parse(source)))
     : () => api.parse(source, options)
-  const iterations = Buffer.byteLength(source) > 100000 ? 5 : 30
-  for (let index = 0; index < 10; index++) run()
+  const iterations = configured('CARVE_BENCH_CALLS', Buffer.byteLength(source) > 100000 ? 5 : 30)
+  for (let index = 0; index < warmup; index++) run()
   const loadStart = loadavg()
   const samples = []
-  for (let batch = 0; batch < 5; batch++) {
+  for (let batch = 0; batch < batches; batch++) {
     const start = performance.now()
     for (let index = 0; index < iterations; index++) run()
     samples.push((performance.now() - start) / iterations)
   }
-  console.log(JSON.stringify({ samples, medianMs: median(samples), iterations, loadStart, loadEnd: loadavg() }))
+  console.log(JSON.stringify({ samples, medianMs: median(samples), iterations, batches, warmup, loadStart, loadEnd: loadavg() }))
 } else {
-  assert.ok(command && entry && file, 'Usage: BASELINE_DIST_INDEX COMPARISON_CRV LARGE_CRV')
+  assert.ok(command && entry && file, 'Usage: BASELINE_DIST_INDEX COMPARISON_CRV LARGE_CRV [MODES...]')
   const entries = { baseline: resolve(command), candidate: fileURLToPath(new URL('../dist/index.js', import.meta.url)) }
   const baseline = await import(pathToFileURL(entries.baseline))
   const candidate = await import(pathToFileURL(entries.candidate))
@@ -51,8 +64,8 @@ if (command === '--worker') {
       for (const [round, order] of [['baseline', 'candidate'], ['candidate', 'baseline']].entries()) {
         for (const reader of order) {
           const worker = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--worker', entries[reader], resolve(fixture), mode],
-            { encoding: 'utf8', timeout: 120000 })
-          assert.equal(worker.status, 0, worker.stderr)
+            { encoding: 'utf8', timeout })
+          assert.equal(worker.status, 0, worker.error?.message || worker.stderr || `Worker terminated: ${worker.signal}`)
           results.push({ fixture: basename(fixture), bytes: Buffer.byteLength(source), sha256: createHash('sha256').update(source).digest('hex'),
             mode, round, reader, ...JSON.parse(worker.stdout) })
         }
