@@ -168,3 +168,38 @@ describe('bbcodeToCarve — bounds', () => {
     expect(bbcodeToCarve('')).toBe('\n')
   })
 })
+
+describe('bbcodeToCarve — punctuation the post typed itself', () => {
+  const render = (bbcode: string) =>
+    carveToHtml(bbcodeToCarve(bbcode)).replace(/\s+/g, ' ').trim()
+
+  // BBCode has no smart typography: two hyphens in a post are two hyphens. Left
+  // unescaped they reach the parse as `smart_punctuation` and the migrated
+  // document renders a dash, ellipsis or arrow the author never typed.
+  it('keeps a dash, ellipsis and arrow run as the characters they are', () => {
+    expect(bbcodeToCarve('a -- b ... c -> d')).toBe('a \\-- b \\... c \\-> d\n')
+    expect(render('a -- b ... c -> d')).toBe('<p>a -- b ... c -&gt; d</p>')
+  })
+
+  it('keeps the longer dash and arrow runs too', () => {
+    expect(render('wait --- what')).toBe('<p>wait --- what</p>')
+    expect(render('a <- b <-> c')).toBe('<p>a &lt;- b &lt;-&gt; c</p>')
+  })
+
+  it('keeps a straight apostrophe and straight quotes uncurled', () => {
+    expect(render("it's a 'quote'")).toBe("<p>it's a 'quote'</p>")
+    expect(render('he said "hi"')).toBe('<p>he said "hi"</p>')
+  })
+
+  it('keeps the punctuation inside a formatting tag it does write', () => {
+    expect(bbcodeToCarve('[b]"hi"[/b] -- x')).toBe('*\\"hi\\"* \\-- x\n')
+    expect(render('[b]"hi"[/b] -- x')).toBe('<p><strong>"hi"</strong> -- x</p>')
+  })
+
+  // The other direction: a post that genuinely wants the typographic character
+  // types the character, and nothing here touches it.
+  it('leaves a dash, ellipsis or quote the post spelled as a character alone', () => {
+    expect(bbcodeToCarve('a – b — c … d → e')).toBe('a – b — c … d → e\n')
+    expect(render('a “hi” b')).toBe('<p>a “hi” b</p>')
+  })
+})
