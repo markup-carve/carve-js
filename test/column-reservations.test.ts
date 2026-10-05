@@ -6,6 +6,12 @@ it.each([1, 37, 64])('matches column scans across sparse holds, overlapping exte
   const held = new Array<number>(limit).fill(0)
   expect(index.nextFree(0, 0)).toBe(0)
   expect(index.reach(0)).toBe(0)
+  held[limit - 1] = 1
+  index.hold(limit - 1, 1)
+  expect(index.nextFree(limit - 1, 0)).toBe(limit)
+  expect(index.reach(0)).toBe(limit)
+  expect(index.nextFree(0, 1)).toBe(0)
+  expect(index.reach(1)).toBe(0)
   for (let row = 0; row < 20; row++) {
     if (row < 12) for (let j = 0; j < 16; j++) {
       const col = (row * 17 + j * 13) % limit, end = row + 2 + j % 7

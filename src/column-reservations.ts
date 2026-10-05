@@ -3,24 +3,36 @@ export class ColumnReservations {
   private minimum: Float64Array | undefined
   private maximum: Float64Array | undefined
   private readonly limit: number
+  private singleColumn = -1
+  private singleUntil = 0
 
   constructor(limit: number) {
     this.limit = Math.max(1, limit)
   }
 
   hold(column: number, until: number): void {
-    this.minimum ??= new Float64Array(4 * this.limit)
-    this.maximum ??= new Float64Array(4 * this.limit)
+    if (!this.maximum) {
+      if (this.singleColumn < 0 || this.singleColumn === column) {
+        this.singleColumn = column
+        this.singleUntil = Math.max(this.singleUntil, until)
+        return
+      }
+      this.minimum = new Float64Array(4 * this.limit)
+      this.maximum = new Float64Array(4 * this.limit)
+      this.set(1, 0, this.limit, this.singleColumn, this.singleUntil)
+    }
     this.set(1, 0, this.limit, column, until)
   }
 
   nextFree(from: number, row: number): number {
-    if (!this.maximum || this.maximum[1]! <= row || from >= this.limit) return from
+    if (!this.maximum) return from === this.singleColumn && this.singleUntil > row ? from + 1 : from
+    if (this.maximum[1]! <= row || from >= this.limit) return from
     return this.findFree(1, 0, this.limit, from, row)
   }
 
   reach(row: number): number {
-    if (!this.maximum || this.maximum[1]! <= row) return 0
+    if (!this.maximum) return this.singleUntil > row ? this.singleColumn + 1 : 0
+    if (this.maximum[1]! <= row) return 0
     let node = 1, left = 0, right = this.limit
     while (right - left > 1) {
       const middle = Math.floor((left + right) / 2)
