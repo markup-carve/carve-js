@@ -7664,6 +7664,9 @@ class ParseSession {
   private probingLazyParagraph = false
   private definitionRegionLines: Set<number> | null = null
   private inMatcherRequest = false
+  // Set on the line-ownership probe only: a paragraph's inlines never decide
+  // which lines a block consumes, so the probe leaves them unscanned.
+  private skipParagraphInlines = false
 
   parse(source: string, opts: ParseOptions = {}): Document {
     this.recordPositions = opts.positions !== false
@@ -7908,10 +7911,13 @@ class ParseSession {
     const parser = new ParseSession()
     parser.probingLazyParagraph = true
     parser.definitionRegionLines = new Set()
+    // Ownership is a set of line numbers; spans and paragraph text are discarded.
+    parser.recordPositions = false
+    parser.skipParagraphInlines = true
     // Core inline callbacks do not participate in source-line ownership.
     // Explicit matcher context requests still use the complete matcher set.
     parser.activeMatchers = this.activeMatchers
-    const probe = new Lexer(lexer.lines)
+    const probe = new Lexer(lexer.lines, { positions: false })
     probe.pos = lexer.pos
     probe.depth = lexer.depth
     probe.nested = lexer.nested
@@ -12859,7 +12865,7 @@ class ParseSession {
         : undefined
     const paragraphNode: Paragraph = {
       type: 'paragraph',
-      children: this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      children: this.skipParagraphInlines && !this.inMatcherRequest ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
         anchored: lexer.hasDocumentOffsets,
         baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
         startLine: lexer.lineNumber(startLineIndex),

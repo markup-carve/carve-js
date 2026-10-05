@@ -136,13 +136,15 @@ export function toCodepointPositions(doc: Document, source: string): void {
     }
   }
 
-  const seen = new Set<object>()
+  // Only a Position is deduplicated: the tree is acyclic, and a shared subtree
+  // walked twice must still convert its spans once.
+  const converted = new Set<Position>()
   const walk = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return
-    if (seen.has(value as object)) return
-    seen.add(value as object)
     if (Array.isArray(value)) {
-      for (const item of value) walk(item)
+      for (let i = 0; i < value.length; i++) {
+        const item: unknown = value[i]
+        if (item && typeof item === 'object') walk(item)
+      }
       return
     }
     const record = value as Record<string, unknown>
@@ -150,11 +152,17 @@ export function toCodepointPositions(doc: Document, source: string): void {
       // A Position and nothing else: no node type in this engine carries
       // `startLine` directly, they all carry it inside a `pos`. Its fields are
       // scalars, so there is nothing below it to walk.
-      convert(record as unknown as Position)
+      const pos = record as unknown as Position
+      if (converted.has(pos)) return
+      converted.add(pos)
+      convert(pos)
       return
     }
-    for (const key of Object.keys(record)) {
-      if (key !== 'attrs' || typeof record['type'] !== 'string') walk(record[key])
+    const skipAttrs = typeof record['type'] === 'string'
+    for (const key in record) {
+      if (!Object.hasOwn(record, key) || (skipAttrs && key === 'attrs')) continue
+      const child = record[key]
+      if (child && typeof child === 'object') walk(child)
     }
   }
   walk(doc)
