@@ -126,6 +126,41 @@ describe('expandIncludes', () => {
     expect(result.html).not.toContain('skip')
   })
 
+  it('#section matches a heading id exactly, case included', () => {
+    const child = '{#Plan}\n# Plan\n\nplan text'
+    const exact = expand('{{ child #Plan }}', { child })
+    expect(exact.warnings).toEqual([])
+    expect(exact.html).toContain('<p>plan text</p>')
+    const folded = expand('{{ child #plan }}', { child })
+    expect(folded.warnings.map((w) => w.rule)).toContain('include-section')
+    expect(folded.html).not.toContain('plan text')
+  })
+
+  it('#section selects a repeated heading by its deduplicated slug', () => {
+    const child = '# Overview\n\nfirst\n\n# Overview\n\nsecond'
+    const result = expand('{{ dup.crv #Overview-2 }}', { 'dup.crv': child })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<p>second</p>')
+    expect(result.html).not.toContain('first')
+    // The id is re-derived in the assembled document, where this is the only
+    // Overview (I5 rule 4).
+    expect(result.html).toContain('<section id="Overview">')
+    const first = expand('{{ dup.crv #Overview }}', { 'dup.crv': child })
+    expect(first.html).toContain('<p>first</p>')
+    expect(first.html).not.toContain('second')
+  })
+
+  it('#section dedups a slug against explicit ids and nested headings, as the child reads alone', () => {
+    // The explicit {#Intro} paragraph takes the base slug, so the heading is Intro-2.
+    const explicit = expand('{{ c #Intro-2 }}', { c: '{#Intro}\npara\n\n# Intro\n\nyes' })
+    expect(explicit.warnings).toEqual([])
+    expect(explicit.html).toContain('<p>yes</p>')
+    // A heading inside a quote takes the slug first, so the top-level one is A-2.
+    const nested = expand('{{ c #A-2 }}', { c: '> # A\n\n# A\n\nyes' })
+    expect(nested.warnings).toEqual([])
+    expect(nested.html).toContain('<p>yes</p>')
+  })
+
   it('@lines includes an inclusive physical line range', () => {
     const result = expand('{{ child @lines:2-3 }}', { child: 'skip\nOne\nTwo\nskip' })
     expect(result.warnings).toEqual([])
