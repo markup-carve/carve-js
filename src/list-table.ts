@@ -329,7 +329,16 @@ interface Placement {
  * fills, including rowspan coverage from above) and the overall column count.
  */
 function placeColumns(grid: GridEntry[][]): Placement {
-  const capacity = grid.reduce((sum, row) => sum + row.reduce((n, cell) => n + (cell.skip ? 0 : cell.colspan), 0), 0)
+  let heldWidth = 0, rowWidth = 0
+  for (const row of grid) {
+    let width = 0
+    for (const cell of row) if (!cell.skip) {
+      width += cell.colspan
+      if (cell.rowspan > 1) heldWidth += cell.colspan
+    }
+    rowWidth = Math.max(rowWidth, width)
+  }
+  const capacity = heldWidth + rowWidth
   const occupied = new ColumnReservations(capacity)
   const cols: number[][] = []
   const rowReach: number[] = []
