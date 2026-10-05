@@ -8,6 +8,27 @@ const h = (s: string): string => carveToHtml(s, { extensions: [listTable()] }).t
 const plain = (s: string): string => carveToHtml(s).trim()
 
 describe('list-table Tier-3 extension', () => {
+  it('keeps a wide active span and then releases its columns for narrow rows', () => {
+    const wide = '- - A\n' + '  - <\n'.repeat(127)
+    const active = h('::: list-table\n' + wide + '- - ^\n'.repeat(512) + ':::\n')
+    expect(active).toContain('rowspan="513"')
+    expect(active).toContain('colspan="128"')
+    expect(active.match(/<td/g)).toHaveLength(1)
+    const expired = h('::: list-table\n' + wide + '- - ^\n' + '- - Z\n'.repeat(512) + ':::\n')
+    expect(expired).toContain('rowspan="2"')
+    expect(expired.match(/<td/g)).toHaveLength(65537)
+  })
+
+  it('keeps a wide colspan origin across the following caret row', () => {
+    const width = 2048
+    const source = '::: list-table\n- - A\n' + '  - <\n'.repeat(width - 1)
+      + '- - ^\n' + '  - ^\n'.repeat(width - 1) + ':::\n'
+    const html = h(source)
+    expect(html).toContain('colspan="2048"')
+    expect(html).toContain('rowspan="2"')
+    expect(html.match(/<td/g)).toHaveLength(1)
+  })
+
   it('lets cell alignment override column defaults', () => {
     const html = h([
       '{aligns="left,right" valigns="top,bottom"}',

@@ -1,3 +1,4 @@
+import { ColumnReservations } from './column-reservations.js'
 import type {
   Admonition,
   Attrs,
@@ -328,8 +329,17 @@ interface Placement {
  * fills, including rowspan coverage from above) and the overall column count.
  */
 function placeColumns(grid: GridEntry[][]): Placement {
-  // occupiedUntil[col] = exclusive row index through which a rowspan holds col.
-  const occupiedUntil: Record<number, number> = {}
+  let heldWidth = 0, rowWidth = 0
+  for (const row of grid) {
+    let width = 0
+    for (const cell of row) if (!cell.skip) {
+      width += cell.colspan
+      if (cell.rowspan > 1) heldWidth += cell.colspan
+    }
+    rowWidth = Math.max(rowWidth, width)
+  }
+  const capacity = heldWidth + rowWidth
+  const occupied = new ColumnReservations(capacity)
   const cols: number[][] = []
   const rowReach: number[] = []
   let columnCount = 0
@@ -337,11 +347,7 @@ function placeColumns(grid: GridEntry[][]): Placement {
   for (let r = 0; r < grid.length; r++) {
     const rowCols: number[] = []
     let col = 0
-    let reach = 0
-    // A rowspan descending from above into this row reaches at least its column.
-    for (const [colStr, end] of Object.entries(occupiedUntil)) {
-      if (end > r) reach = Math.max(reach, Number(colStr) + 1)
-    }
+    let reach = occupied.reach(r)
 
     for (const entry of grid[r]!) {
       if (entry.skip) {
@@ -349,11 +355,11 @@ function placeColumns(grid: GridEntry[][]): Placement {
         continue
       }
       // Flow past columns a rowspan from above still holds in this row.
-      while ((occupiedUntil[col] ?? 0) > r) col++
+      col = occupied.nextFree(col, r)
       rowCols.push(col)
       if (entry.rowspan > 1) {
         for (let c = col; c < col + entry.colspan; c++) {
-          occupiedUntil[c] = Math.max(occupiedUntil[c] ?? 0, r + entry.rowspan)
+          occupied.hold(c, r + entry.rowspan)
         }
       }
       col += entry.colspan
@@ -432,7 +438,9 @@ function resolveSpans(rows: CellEntry[][]): GridEntry[][] {
   // resolves against. Maintained incrementally so an all-`^` column resolves in
   // O(1) (pipe-table parity).
   const base: number[] = []
+  const colspanOrigins: Array<number[] | undefined> = []
   for (let r = 0; r < grid.length; r++) {
+    let lastVisible = -1
     for (let c = 0; c < grid[r]!.length; c++) {
       const entry = grid[r]![c]!
       if (entry.skip) continue
@@ -442,8 +450,7 @@ function resolveSpans(rows: CellEntry[][]): GridEntry[][] {
         const src = up !== undefined ? grid[up]?.[c] : undefined
         let coveredByVisibleSpan = false
         if (src?.skip && up !== undefined) {
-          let left = c - 1
-          while (left >= 0 && grid[up]![left]!.skip) left--
+          const left = colspanOrigins[up]?.[c] ?? -1
           const origin = left >= 0 ? grid[up]![left] : undefined
           coveredByVisibleSpan = !!origin && left + origin.colspan > c && up + origin.rowspan > r
         }
@@ -456,14 +463,16 @@ function resolveSpans(rows: CellEntry[][]): GridEntry[][] {
           entry.skip = true
         }
       } else if (entry.marker === '<' && c > 0) {
-        let left = c - 1
-        while (left >= 0 && grid[r]![left]!.skip) left--
+        const left = lastVisible
         const src = left >= 0 ? grid[r]![left] : undefined
         if (src) {
           src.colspan++
           entry.skip = true
+          const origins = (colspanOrigins[r] ??= [])
+          origins[c] = left
         }
       }
+      if (!entry.skip) lastVisible = c
 
       // Any cell that is not a RESOLVED `^` is what the cells below it in this
       // column resolve against - a merged `<` included, because the column it

@@ -3604,8 +3604,15 @@ class Importer {
     const headAttrs = takeSectionAttrs('thead')
     const footAttrs = takeSectionAttrs('tfoot')
     const bodyPaths = new Map([...sectionAttrs].map(([section, own]) => [section, own.path]))
-    const bodies: TableBodyGroup[] = []
-    const bodySections: Array<P5Node | undefined> = []
+    const headers: boolean[][] = []
+    for (const row of rows) {
+      const previous = headers[headers.length - 1]
+      headers.push(row.cells.map((cell, column) => cell.span === 'rowspan'
+        ? previous?.[column] ?? false
+        : cell.header))
+    }
+    let bodies: TableBodyGroup[] = []
+    let bodySections: Array<P5Node | undefined> = []
     let index = 0
     while (index < middle.length) {
       const section = group.get(middle[index]!)
@@ -3616,9 +3623,9 @@ class Importer {
       // A group whose rows are ALL header rows is an intermediate header with
       // nothing under it, which is what the counts say and not something to
       // reinterpret.
-      const first = tr.indexOf(groupRows[groupHead] ?? groupRows[0]!)
+      const first = headRows + index - groupRows.length + groupHead
       const rowHeadColumns = groupHead < groupRows.length
-        ? this.rowHeadColumns(rows.slice(first, first + groupRows.length - groupHead), rows, first)
+        ? this.rowHeadColumns(rows.slice(first, first + groupRows.length - groupHead), headers, first)
         : 0
       // The `<tbody>`'s own attributes: the body group is where the exchanged
       // model puts them, and it is the only section with a slot.
@@ -3639,16 +3646,35 @@ class Importer {
     const orderedSections = domChildren(node) ?? []
     const sectionIndices = new Map<P5Node, number>(orderedSections.map((section, index) => [section, index]))
     const sectionsWithRows = new Set(group.values())
-    // Empty bodies have no rows to collect above, but still mark a boundary.
+    // Empty bodies retain their position among the groups with rows.
+    const emptyBodies: Array<{ section: P5Node; index: number; body: TableBodyGroup }> = []
     for (const section of orderedSections) {
       const own = sectionAttrs.get(section)
       if (domTag(section) !== 'tbody' || sectionsWithRows.has(section)) continue
-      const sourceIndex = sectionIndices.get(section)!
-      const at = bodySections.findIndex(body => body !== undefined && (sectionIndices.get(body) ?? -1) > sourceIndex)
-      const index = at < 0 ? bodies.length : at
-      bodies.splice(index, 0, { headRows: 0, bodyRows: 0, ...(own ? { attrs: own.attrs } : {}) })
-      bodySections.splice(index, 0, section)
+      emptyBodies.push({ section, index: sectionIndices.get(section)!, body: { headRows: 0, bodyRows: 0, ...(own ? { attrs: own.attrs } : {}) } })
       sectionAttrs.delete(section)
+    }
+    if (emptyBodies.length > 0) {
+      const mergedBodies: TableBodyGroup[] = []
+      const mergedSections: Array<P5Node | undefined> = []
+      let empty = 0
+      const appendEmpty = (): void => {
+        const entry = emptyBodies[empty++]!
+        mergedBodies.push(entry.body)
+        mergedSections.push(entry.section)
+      }
+      for (let i = 0; i < bodies.length; i++) {
+        const section = bodySections[i]
+        if (section !== undefined) {
+          const at = sectionIndices.get(section) ?? -1
+          while (empty < emptyBodies.length && emptyBodies[empty]!.index < at) appendEmpty()
+        }
+        mergedBodies.push(bodies[i]!)
+        mergedSections.push(section)
+      }
+      while (empty < emptyBodies.length) appendEmpty()
+      bodies = mergedBodies
+      bodySections = mergedSections
     }
 
     // No `<thead>` at all: the leading run of header rows is what every renderer
@@ -3700,41 +3726,22 @@ class Importer {
    * nearest cell to its left that is not one, `^` to the nearest row above
    * whose cell at the same index is not itself a `^`.
    */
-  private rowHeadColumns(groupRows: TableRow[], allRows: TableRow[], firstIndex: number): number {
+  private rowHeadColumns(groupRows: TableRow[], headers: boolean[][], firstIndex: number): number {
     if (groupRows.length === 0) return 0
-    const headerAt = (r: number, c: number): boolean => {
-      const cell = allRows[r]?.cells[c]
-      if (cell === undefined) return false
-      // A `<` needs no resolution: `spanGrid` builds a colspan continuation
-      // carrying its ORIGIN's header flag, so reading the flag off the
-      // continuation gives the same answer as walking left to the origin. A
-      // branch for it was here and no mutation of it could change an output.
-      // A `^` is different - it is built with the flag cleared, because the
-      // cell it continues is in another row - so that one is resolved.
-      if (cell.span === 'rowspan') {
-        // Only a `^` is walked past. The cell above may be a `<`, and that one
-        // ALREADY carries its origin's header flag, so reading the flag off it
-        // is the answer; walking past it reached the cell two rows up, which
-        // says nothing about this column and reported a header column short
-        // under a `<th rowspan colspan>`.
-        let up = r - 1
-        while (up >= 0 && allRows[up]!.cells[c]?.span === 'rowspan') up -= 1
-        return up >= 0 ? headerAt(up, c) : false
-      }
-      return cell.header
-    }
     // Every slot is exactly one COLUMN: a source cell contributes its origin
     // plus a `<` per further column, and a carried span contributes a `^` per
     // column it covers, so the array index a continuation resolves by IS the
     // grid column here.
     const leading = (row: TableRow, r: number): number => {
       let slot = 0
-      while (slot < row.cells.length && headerAt(r, slot)) slot += 1
+      while (slot < row.cells.length && headers[r]?.[slot] === true) slot += 1
       // An all-header row would say every column is a row head, which is what
       // an intermediate HEADER row is, not a row-head column.
       return slot === row.cells.length ? 0 : slot
     }
-    return Math.min(...groupRows.map((row, offset) => leading(row, firstIndex + offset)))
+    let minimum = Infinity
+    for (let offset = 0; offset < groupRows.length; offset++) minimum = Math.min(minimum, leading(groupRows[offset]!, firstIndex + offset))
+    return minimum
   }
 
   /**

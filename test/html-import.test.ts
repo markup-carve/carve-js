@@ -1293,6 +1293,23 @@ describe('table row groups on import', () => {
     })
   })
 
+  it('preserves a long sequence of empty body groups', () => {
+    const count = 1024
+    expect(groupsOf('<table>' + '<tbody></tbody>'.repeat(count) + '<tbody><tr><td>Z</td></tr></tbody></table>')).toEqual({
+      headRows: 0,
+      bodies: [...Array.from({ length: count }, () => ({ headRows: 0, bodyRows: 0 })), { headRows: 0, bodyRows: 1 }],
+      footRows: 0,
+    })
+  })
+
+  it('retains the header origin throughout a long rowspan chain', () => {
+    const count = 2048
+    const html = '<table><tbody><tr><th rowspan="' + count + '">R</th><td>A</td></tr>'
+      + '<tr><td>B</td></tr>'.repeat(count - 1)
+      + '</tbody><tfoot><tr><td>F</td></tr></tfoot></table>'
+    expect(groupsOf(html)).toEqual({ headRows: 0, bodies: [{ headRows: 0, bodyRows: count, rowHeadColumns: 1 }], footRows: 1 })
+  })
+
   it('counts row-head COLUMNS, which spans make different from cells', () => {
     // `<th colspan="2">` is one element and two columns; a `<th rowspan="2">`
     // leaves the row below it starting with a data ELEMENT while a header still
