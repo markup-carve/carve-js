@@ -1,4 +1,5 @@
-import { lintCarve } from './lint.js'
+import { codepointToUtf16Map, lintCarve } from './lint.js'
+import { parse } from './parse.js'
 import { caseOnlyKey, normalizeHeadingRefLabel, type AsciiHeadingIdMode } from './heading-ids.js'
 import { normalizeRefLabel } from './label-key.js'
 
@@ -33,6 +34,7 @@ export function migrateCaseOnlyReferences(
           : undefined
     if (edit !== undefined) edits.push({ start: warning.start, end: warning.end, text: edit })
   }
+  edits.push(...imageEdits(source))
   let out = source
   let limit = Infinity
   for (const edit of edits.sort((a, b) => b.start - a.start)) {
@@ -59,4 +61,69 @@ function referenceEdit(written: string, label: unknown, wanted: string): string 
   const suffix = `][${label}]`
   if (!written.endsWith(suffix) || caseOnlyKey(normalizeRefLabel(label)) !== caseOnlyKey(wanted)) return undefined
   return `${written.slice(0, written.length - suffix.length)}][${wanted}]`
+}
+
+/**
+ * Unresolved reference images, which lint does not report: an image resolves
+ * against link definitions only, never the heading index, so only definition
+ * labels are candidates.
+ */
+function imageEdits(source: string): Edit[] {
+  const doc = parse(source, { positions: true })
+  const labels = new Map<string, Set<string>>()
+  const images: Record<string, unknown>[] = []
+  walk(doc, (node) => {
+    if (node.type === 'link_reference_definition' && typeof node.label === 'string') {
+      const label = normalizeRefLabel(node.label)
+      const key = caseOnlyKey(label)
+      if (!labels.has(key)) labels.set(key, new Set())
+      labels.get(key)!.add(label)
+    } else if (node.type === 'image' && typeof node.ref === 'string' && !node.src) {
+      images.push(node)
+    }
+  })
+  const utf16At = codepointToUtf16Map(source)
+  const toUtf16 = (offset: number): number => (utf16At ? (utf16At[offset] ?? source.length) : offset)
+  const edits: Edit[] = []
+  for (const image of images) {
+    const pos = image.pos as { startOffset?: number; endOffset?: number } | undefined
+    if (pos?.startOffset === undefined || pos.endOffset === undefined) continue
+    const label = image.ref as string
+    // A multiline label misses for a reason other than case.
+    if (/[\r\n]/.test(label)) continue
+    const written = normalizeRefLabel(label)
+    const variants = [...(labels.get(caseOnlyKey(written)) ?? [])].filter((v) => v !== written)
+    if (variants.length !== 1) continue
+    const start = toUtf16(pos.startOffset)
+    const end = toUtf16(pos.endOffset)
+    const text = imageReferenceEdit(source.slice(start, end), label, String(image.alt ?? ''), variants[0]!)
+    if (text !== undefined) edits.push({ start, end, text })
+  }
+  return edits
+}
+
+function imageReferenceEdit(written: string, label: string, alt: string, wanted: string): string | undefined {
+  // Only a plain alt proves the bracket found is the reference's own. Use-site
+  // attributes after the bracket are carried over unchanged.
+  const collapsed = `![${label}][]`
+  const explicit = `![${alt}][${label}]`
+  const head = written.startsWith(collapsed) ? collapsed : written.startsWith(explicit) ? explicit : undefined
+  if (head === undefined) return undefined
+  const attrs = written.slice(head.length)
+  if (attrs !== '' && !attrs.startsWith('{')) return undefined
+  if (head === collapsed) {
+    return label === alt && caseOnlyKey(normalizeRefLabel(label)) === caseOnlyKey(wanted) ? `![${wanted}][]${attrs}` : undefined
+  }
+  return `![${alt}][${wanted}]${attrs}`
+}
+
+function walk(value: unknown, visit: (node: Record<string, unknown>) => void): void {
+  if (Array.isArray(value)) {
+    for (const item of value) walk(item, visit)
+    return
+  }
+  if (!value || typeof value !== 'object') return
+  const node = value as Record<string, unknown>
+  if (typeof node.type === 'string') visit(node)
+  for (const [key, child] of Object.entries(node)) if (key !== 'pos') walk(child, visit)
 }

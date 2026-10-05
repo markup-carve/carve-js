@@ -56,8 +56,8 @@ idempotent; it renders nothing and a plain `carve fmt` preserves it. Use
 as `stampCarve(formatted, 'carve-js 0.1.0')`.
 
 `carve fmt --migrate` rewrites references that broke when name lookups became
-case-sensitive (spec rule `CARVE-P9R-010`). A `</#id>` or a reference label that
-misses its target only by case is respelled to that target, but only when exactly
+case-sensitive (spec rule `CARVE-P9R-010`). A `</#id>` or a link or image
+reference label that misses its target only by case is respelled to that target, but only when exactly
 one target matches it case-insensitively. With several candidates, such as
 `{#Tip}` and `{#tip}`, nothing is rewritten and `carve lint` names both. The same
 rewrite is available as `migrateCaseOnlyReferences(src)`. A caller that renders
