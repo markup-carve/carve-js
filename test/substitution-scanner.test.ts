@@ -49,3 +49,18 @@ it('matches the original scanner for varying limits inside opaque spans', () => 
     }
   }
 })
+
+it('keeps auxiliary storage linear for dense escapes and comments', () => {
+  const storage = (value: unknown, seen = new Set<object>()): number => {
+    if (value === null || typeof value !== 'object' || seen.has(value)) return 0
+    seen.add(value)
+    if (ArrayBuffer.isView(value)) return value.byteLength
+    return Object.values(value).reduce<number>((sum, child: unknown) => sum + storage(child, seen), 0)
+  }
+  for (const source of ['\\'.repeat(100_000), '{%'.repeat(20_000) + '~>%}']) {
+    const scanner = new SubstitutionScanner(source)
+    scanner.findArrow(0, 0)
+    expect(scanner.findArrow(1, source.length - 2)).toBe(reference(source, 1, source.length - 2))
+    expect(storage(scanner)).toBeLessThan(source.length * 80)
+  }
+})

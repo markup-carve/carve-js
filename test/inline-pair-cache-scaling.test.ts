@@ -10,6 +10,18 @@ describe('nested inline pair tables', () => {
     expect(html).toContain('<u>x</u>')
   })
 
+  it('restores scopes after nested tables exceed the cache budget', () => {
+    let source = 'x'.repeat(8192)
+    let expected = source
+    for (let depth = 0; depth < 16; depth++) {
+      const marker = depth % 2 === 0 ? '*' : '_'
+      const tag = depth % 2 === 0 ? 'strong' : 'u'
+      source = `{${marker}prefix${depth} ${source} suffix${depth}${marker}}`
+      expected = `<${tag}>prefix${depth} ${expected} suffix${depth}</${tag}>`
+    }
+    expect(carveToHtml(`${source} {_after_}`)).toContain(`${expected} <u>after</u>`)
+  })
+
   perfIt('shares substitution suffix scans', () => {
     expectScansLinearly(input => void carveToHtml(`~a ${input}~}`), '{~b ', {
       label: 'substitution openers without an arrow', smallRepeats: 1000,
