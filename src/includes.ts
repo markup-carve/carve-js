@@ -14,7 +14,7 @@ import type {
 } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { utf8ByteLength } from './abbr-budget.js'
-import { inlineText, promoteBlockImages, slugify } from './heading-ids.js'
+import { foldIdentifier, inlineText, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
 import { mergeRun } from './coalesce-text-runs.js'
@@ -295,7 +295,12 @@ interface State {
    */
   sites: IncludeSite[]
   docs: Document[]
-  usedHeadingIds: Set<string>
+  /** Explicit ids as written: the parent's and every accepted child's, before any rename. */
+  usedIds: Set<string>
+  /** Renamed ids awaiting their suffix, which needs the whole assembled document. */
+  renames: PendingRename[]
+  /** The block list of an inline include's child, whose sole paragraph is unwrapped. */
+  unwrapped: BlockNode[] | null
   /** Include targets in first-encounter order; value is the resolved flag. */
   dependencies: Map<string, { resolved: boolean; denial?: IncludeDenial }>
   /**
@@ -338,13 +343,13 @@ function warn(
   detail?: string,
   /** Overrides the reported reach, for the same reason `file` is overridden. */
   sites: IncludeSite[] = state.sites,
-): void {
+): IncludeWarning | undefined {
   // A rule not yet represented is always kept, so a capped report still shows
   // every distinct failure class; only repeats of a class already shown are
   // counted instead of stored.
   if (state.warnings.length >= state.maxWarnings && state.seenRules.has(rule)) {
     state.suppressedWarnings++
-    return
+    return undefined
   }
   const warning: IncludeWarning = { ...locate(node ?? {}), rule, message }
   if (file !== undefined) warning.file = file
@@ -354,6 +359,7 @@ function warn(
   if (sites.length > 0) warning.includedBy = [...sites]
   state.seenRules.add(rule)
   state.warnings.push(warning)
+  return warning
 }
 
 function sourceLines(source: string): string[] {
@@ -604,21 +610,64 @@ function headingIdsAsRead(doc: Document): Map<Heading, string> {
     }
   }
   visit(doc.children)
+  for (const body of Object.values(doc.footnoteDefs ?? {})) visit(body)
   return ids
 }
 
-function selectSection(doc: Document, section: string): BlockNode[] | null {
-  const ids = headingIdsAsRead(doc)
-  const start = doc.children.findIndex((b) => b.type === 'heading' && ids.get(b) === section)
-  if (start < 0) return null
-  const level = (doc.children[start] as Heading).level
-  let end = start + 1
-  while (end < doc.children.length) {
-    const b = doc.children[end]!
-    if (b.type === 'heading' && b.level <= level) break
-    end++
+/** Blocks a name never selects: definitions and comments (I1a step 2). */
+const NOT_SELECTABLE = new Set<BlockNode['type']>([
+  'link_reference_definition',
+  'abbreviation_def',
+  'citation_definition',
+  'comment',
+])
+
+/**
+ * The block sequences directly inside `block`. A figure's target is a
+ * sequence of one; a line block holds lines, not selectable blocks.
+ */
+function childSequences(block: BlockNode, visit: (seq: BlockNode[]) => void): void {
+  if (block.type === 'line_block') return
+  if (block.type === 'figure') visit([block.target])
+  else forEachChildBlockList(block, visit)
+}
+
+/** The first block in document order passing `test`; a container precedes its contents. */
+function firstBlock(seq: BlockNode[], test: (b: BlockNode) => boolean): { seq: BlockNode[]; index: number } | null {
+  for (let i = 0; i < seq.length; i++) {
+    const block = seq[i]!
+    if (test(block)) return { seq, index: i }
+    let hit: { seq: BlockNode[]; index: number } | null = null
+    childSequences(block, (inner) => {
+      hit ??= firstBlock(inner, test)
+    })
+    if (hit) return hit
   }
-  return doc.children.slice(start, end)
+  return null
+}
+
+/**
+ * Spec I1a: `#name` selects a heading's section, else the first block with
+ * that EXPLICIT id, at any depth. Names compare exactly, case included. A section
+ * nested in a container ends with the container. Ids on anything that is not
+ * a body block (inlines, list items, rows, cells, footnotes) select nothing.
+ */
+function selectFragment(doc: Document, name: string, ids: Map<Heading, string>): BlockNode[] | null {
+  const named = (id: string | undefined): boolean => id === name
+  const heading = firstBlock(doc.children, (b) => b.type === 'heading' && named(ids.get(b)))
+  if (heading) {
+    const { seq, index } = heading
+    const level = (seq[index] as Heading).level
+    let end = index + 1
+    while (end < seq.length) {
+      const b = seq[end]!
+      if (b.type === 'heading' && b.level <= level) break
+      end++
+    }
+    return seq.slice(index, end)
+  }
+  const block = firstBlock(doc.children, (b) => b.type !== 'heading' && !NOT_SELECTABLE.has(b.type) && named(b.attrs?.id))
+  return block ? [block.seq[block.index]!] : null
 }
 
 function shiftBlocks(blocks: BlockNode[], shift: number, state: State): void {
@@ -660,6 +709,7 @@ function shiftBlocks(blocks: BlockNode[], shift: number, state: State): void {
  */
 interface Reservations {
   headingIds: Set<string>
+  renames: number
   target: Document
   footnoteDefs: Record<string, BlockNode[]> | undefined
   warnings: number
@@ -668,7 +718,8 @@ interface Reservations {
 function beginReservations(state: State): Reservations {
   const target = state.docs[state.docs.length - 1]!
   return {
-    headingIds: new Set(state.usedHeadingIds),
+    headingIds: new Set(state.usedIds),
+    renames: state.renames.length,
     target,
     footnoteDefs: target.footnoteDefs ? { ...target.footnoteDefs } : undefined,
     warnings: state.warnings.length,
@@ -682,8 +733,9 @@ function beginReservations(state: State): Reservations {
  * with the rename it reported, since neither survives into the document.
  */
 function rollbackReservations(state: State, snap: Reservations): void {
-  state.usedHeadingIds.clear()
-  for (const id of snap.headingIds) state.usedHeadingIds.add(id)
+  state.usedIds.clear()
+  for (const id of snap.headingIds) state.usedIds.add(id)
+  state.renames.length = snap.renames
   if (snap.footnoteDefs === undefined) delete snap.target.footnoteDefs
   else snap.target.footnoteDefs = snap.footnoteDefs
   const dropped = new Set(['include-heading-id-rename', 'include-footnote-rename'])
@@ -722,9 +774,10 @@ function includeChild<T>(
   node: Text,
   site: IncludeSite,
   merge: (child: Document, file: string, reach: IncludeSite[]) => T | null,
+  inline = false,
 ): T | null {
   const snap = beginReservations(state)
-  const expanded = expandChild(d, state, node, site)
+  const expanded = expandChild(d, state, node, site, inline)
   const merged = expanded === null ? null : merge(expanded.doc, expanded.file, expanded.reach)
   if (merged === null) rollbackReservations(state, snap)
   return merged
@@ -755,6 +808,7 @@ function expandChild(
   state: State,
   node: Text,
   site: IncludeSite,
+  inline: boolean,
 ): { doc: Document; file: string; reach: IncludeSite[] } | null {
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
@@ -764,8 +818,10 @@ function expandChild(
   rebaseSlicedChild(child, resolved.base)
   // Select before expanding: nested includes outside the wanted section must
   // not be resolved (no budget charge) and must not move section boundaries.
+  // The child as read on its own: what a name and a crossref resolve against.
+  const asRead = headingIdsAsRead(child)
   if (d.section) {
-    const selected = selectSection(child, d.section)
+    const selected = selectFragment(child, d.section, asRead)
     if (!selected) {
       // The dependency stays RESOLVED (spec I11): `resolved` reflects only
       // whether the source was READ, and it was. The host must keep watching
@@ -785,7 +841,11 @@ function expandChild(
   // child as its file and this directive as the last hop that reached it.
   state.sites.push(site)
   const reach = [...state.sites]
-  renameChildHeadingIds(child, state)
+  // An inline include keeps only the paragraph's inlines, so its id never lands.
+  if (inline && child.children.length === 1 && child.children[0]!.type === 'paragraph') {
+    delete child.children[0].attrs
+  }
+  renameChildIds(child, asRead, state)
   const auto = d.shift === 'auto'
   const stated = auto ? 0 : (d.shift as number)
   state.stack.push(resolved.id)
@@ -802,7 +862,10 @@ function expandChild(
   // the measurement then reads.
   const outerContext = state.contextLevel
   state.contextLevel = outerContext - stated
+  const outerUnwrapped = state.unwrapped
+  state.unwrapped = inline ? child.children : null
   expandBlocks(child.children, state)
+  state.unwrapped = outerUnwrapped
   if (child.footnoteDefs) {
     // A footnote body is its own container: no heading precedes it.
     for (const body of Object.values(child.footnoteDefs)) {
@@ -870,33 +933,124 @@ function autoShift(child: Document, state: State): number {
   return state.contextLevel + 1 - top
 }
 
-/**
- * Merge-time collision pass for explicit heading ids (spec I5): parent ids and
- * earlier includes win, a later duplicate gets the least free "-N" suffix, and
- * the child's own crossrefs follow the rename so they keep resolving within
- * the child's scope. Runs depth-first at merge time because after splicing,
- * file provenance (which crossref belongs to which file) is gone.
- */
-function renameChildHeadingIds(child: Document, state: State): void {
-  const rename = new Map<string, string>()
-  walkBlocks(child.children, (block) => {
-    if (block.type !== 'heading' || block.attrs?.id === undefined) return
-    const id = block.attrs.id
-    if (!state.usedHeadingIds.has(id)) {
-      state.usedHeadingIds.add(id)
+/** Every node of the child, children first, then footnote bodies. */
+function walkNodes(child: Document, fn: (node: Record<string, unknown>) => void): void {
+  const seen = new Set<object>()
+  const visit = (value: unknown): void => {
+    if (value === null || typeof value !== 'object' || seen.has(value)) return
+    seen.add(value)
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
       return
     }
-    const renamed = nextFree(id, state.usedHeadingIds)
-    block.attrs.id = renamed
-    state.usedHeadingIds.add(renamed)
-    rename.set(id, renamed)
-    warn(state, 'include-heading-id-rename', `Heading id "${id}" was renamed to "${renamed}".`, block)
-  })
-  if (rename.size) {
-    renameInBlocks(child.children, new Map(), rename)
-    if (child.footnoteDefs) {
-      for (const body of Object.values(child.footnoteDefs)) renameInBlocks(body, new Map(), rename)
+    const node = value as Record<string, unknown>
+    if (typeof node['type'] === 'string') fn(node)
+    for (const [key, inner] of Object.entries(node)) {
+      if (key !== 'pos' && key !== 'attrs' && key !== 'resolvedText') visit(inner)
     }
+  }
+  visit(child.children)
+  if (child.footnoteDefs) visit(Object.values(child.footnoteDefs))
+}
+
+/** A renamed id and every place that must carry its final value. */
+interface PendingRename {
+  base: string
+  attrs: { id: string }
+  refs: { node: Record<string, unknown>; key: string; prefix: string }[]
+  warning: IncludeWarning | undefined
+}
+
+/**
+ * Spec I5 collision pass for explicit element ids. Every `{#id}` on any
+ * element is one namespace, compared exactly. An occurrence of an id the
+ * parent or an earlier inclusion holds is renamed, each occurrence on its own;
+ * duplicates within this child alone are left as they are. The suffix is
+ * chosen by {@link assignRenamedIds} once the whole document is assembled.
+ *
+ * References in this child that resolve to a renamed occurrence when the
+ * child is read alone follow it: `</#id>` (folded, headings first),
+ * `#id` link and image destinations and reference definitions (exact, first
+ * occurrence). Runs before nested expansion, so grandchild content is not in
+ * reach.
+ */
+function renameChildIds(child: Document, asRead: Map<Heading, string>, state: State): void {
+  const occurrences: { node: Record<string, unknown>; attrs: { id: string }; id: string }[] = []
+  walkNodes(child, (node) => {
+    const attrs = node['attrs'] as { id?: unknown } | undefined
+    if (typeof attrs?.id === 'string' && attrs.id !== '') {
+      occurrences.push({ node, attrs: attrs as { id: string }, id: attrs.id })
+    }
+    if (node['type'] === 'table') {
+      const groups = node['rowGroups'] as { headAttrs?: { id?: unknown }; footAttrs?: { id?: unknown } } | undefined
+      for (const group of [groups?.headAttrs, groups?.footAttrs]) {
+        if (typeof group?.id === 'string' && group.id !== '') {
+          occurrences.push({ node, attrs: group as { id: string }, id: group.id })
+        }
+      }
+    }
+  })
+  const renamed = new Map<object, PendingRename>()
+  for (const o of occurrences) {
+    if (!state.usedIds.has(o.id)) continue
+    const pending: PendingRename = {
+      base: o.id,
+      attrs: o.attrs,
+      refs: [],
+      warning: warn(state, 'include-heading-id-rename', '', o.node as { pos?: Position }),
+    }
+    renamed.set(o.attrs, pending)
+    state.renames.push(pending)
+  }
+  for (const o of occurrences) state.usedIds.add(o.id)
+  if (!renamed.size) return
+
+  // What each reference reaches in the child read alone.
+  const exact = new Map<string, PendingRename | undefined>()
+  const folded = new Map<string, PendingRename | undefined>()
+  for (const [heading, id] of asRead) {
+    const key = foldIdentifier(id)
+    if (!folded.has(key)) folded.set(key, heading.attrs ? renamed.get(heading.attrs) : undefined)
+  }
+  for (const o of occurrences) {
+    if (!exact.has(o.id)) exact.set(o.id, renamed.get(o.attrs))
+    const key = foldIdentifier(o.id)
+    if (!folded.has(key)) folded.set(key, renamed.get(o.attrs))
+  }
+  const follow = (node: Record<string, unknown>, key: string, target: PendingRename | undefined, prefix: string): void => {
+    if (target) target.refs.push({ node, key, prefix })
+  }
+  const fragment = (href: string): PendingRename | undefined =>
+    href.startsWith('#') ? exact.get(href.slice(1)) : undefined
+  walkNodes(child, (node) => {
+    switch (node['type']) {
+      case 'heading_ref':
+        follow(node, 'target', folded.get(foldIdentifier(node['target'] as string)), '')
+        break
+      case 'link':
+      case 'link_reference_definition':
+        follow(node, 'href', fragment(node['href'] as string), '#')
+        break
+      case 'image':
+        follow(node, 'src', fragment(node['src'] as string), '#')
+        break
+    }
+  })
+}
+
+/**
+ * Spec I5 suffix: the least "-N" (N >= 2) no explicit id anywhere in the
+ * assembled document holds, including ids written after this inclusion and
+ * suffixes already handed out.
+ */
+function assignRenamedIds(state: State): void {
+  const taken = new Set(state.usedIds)
+  for (const pending of state.renames) {
+    const next = nextFree(pending.base, taken)
+    taken.add(next)
+    pending.attrs.id = next
+    for (const ref of pending.refs) ref.node[ref.key] = `${ref.prefix}${next}`
+    if (pending.warning) pending.warning.message = `Id "${pending.base}" was renamed to "${next}".`
   }
 }
 
@@ -1023,7 +1177,7 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
       const inlines = child.children.length === 1 ? (child.children[0] as Paragraph).children : []
       mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
       return inlines
-    })
+    }, true)
     if (blockInInline) {
       warn(state, 'include-block-in-inline', `Inline include "${d.path}" resolved to block content.`, anchor)
     }
@@ -1129,48 +1283,6 @@ function directiveSource(nodes: InlineNode[]): string | null {
   return out
 }
 
-function renameInlines(nodes: InlineNode[], footnotes: Map<string, string>, headings: Map<string, string>): void {
-  for (const node of nodes) {
-    if (node.type === 'footnote_ref' && node.id !== undefined) node.id = footnotes.get(node.id) ?? node.id
-    if (node.type === 'heading_ref') node.target = headings.get(node.target) ?? node.target
-    if ('children' in node && Array.isArray(node.children)) renameInlines(node.children, footnotes, headings)
-    if (node.type === 'inline_extension') renameInlines(node.content, footnotes, headings)
-    if (node.type === 'inline_footnote' && node.inline) renameInlines(node.inline, footnotes, headings)
-    if (node.type === 'substitution') {
-      renameInlines(node.old, footnotes, headings)
-      renameInlines(node.new, footnotes, headings)
-    }
-    if (node.type === 'citation_group') {
-      for (const item of node.items) {
-        if (item.prefix) renameInlines(item.prefix, footnotes, headings)
-        if (item.locator) renameInlines(item.locator, footnotes, headings)
-        if (item.suffix) renameInlines(item.suffix, footnotes, headings)
-      }
-    }
-  }
-}
-
-function renameInBlocks(blocks: BlockNode[], footnotes: Map<string, string>, headings: Map<string, string>): void {
-  walkBlocks(blocks, (block) => {
-    switch (block.type) {
-      case 'heading':
-      case 'paragraph':
-        renameInlines(block.children, footnotes, headings)
-        break
-      case 'table':
-        if (block.caption) renameInlines(block.caption, footnotes, headings)
-        for (const row of block.rows) for (const cell of row.cells) {
-          if (!cell.blocks) renameInlines(cell.children ?? [], footnotes, headings)
-        }
-        break
-      case 'figure':
-        renameInlines(block.caption, footnotes, headings)
-        if (block.target.type === 'paragraph') renameInlines(block.target.children, footnotes, headings)
-        break
-    }
-  })
-}
-
 /**
  * `childFile` and `reach` are the child's: the renamed label is the child's
  * own, and the merge runs after expansion has already restored the parent as
@@ -1206,10 +1318,14 @@ function mergeFootnotes(
     }
     target.footnoteDefs[finalLabel] = child.footnoteDefs[label]!
   }
-  if (rename.size) renameInBlocks(child.children, rename, new Map())
+  if (!rename.size) return
+  walkNodes(child, (node) => {
+    if (node['type'] !== 'footnote_ref' || typeof node['id'] !== 'string') return
+    node['id'] = rename.get(node['id']) ?? node['id']
+  })
 }
 
-function expandParagraph(block: Paragraph, state: State): BlockNode[] {
+function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): BlockNode[] {
   const source = directiveSource(block.children)
   if (source !== null) {
     const text = block.children.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: source } as Text)
@@ -1221,7 +1337,7 @@ function expandParagraph(block: Paragraph, state: State): BlockNode[] {
       const merged = includeChild(d, state, text, site, (child, file, reach) => {
         mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
         return child.children
-      })
+      }, unwrapped)
       // Degrade to literal: the original inline nodes render exactly as the
       // core does with no resolver (spec I7).
       return merged ?? [block]
@@ -1244,7 +1360,7 @@ function expandBlocks(blocks: BlockNode[], state: State): void {
     let replacement: BlockNode[] | null = null
     switch (block.type) {
       case 'paragraph':
-        replacement = expandParagraph(block, state)
+        replacement = expandParagraph(block, state, blocks === state.unwrapped && blocks.length === 1)
         break
       case 'block_quote':
       case 'div':
@@ -1366,7 +1482,9 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     file: options.sourcePath,
     sites: [],
     docs: [doc],
-    usedHeadingIds: new Set(),
+    usedIds: new Set(),
+    renames: [],
+    unwrapped: null,
     dependencies: new Map(),
     contextLevel: 0,
   }
@@ -1375,10 +1493,10 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
   // skipped outright. This keeps directive-free documents at parse cost.
   if (options.resolve && source.includes('{{')) {
     // Parent explicit ids are claimed first (spec I5: parent before child), so
-    // an included duplicate is the one renamed - even against a parent heading
+    // an included duplicate is the one renamed - even against a parent id
     // after the include site.
-    walkBlocks(doc.children, (block) => {
-      if (block.type === 'heading' && block.attrs?.id !== undefined) state.usedHeadingIds.add(block.attrs.id)
+    visitDocumentIds(doc, (id) => {
+      if (id !== '') state.usedIds.add(id)
     })
     expandBlocks(doc.children, state)
     if (doc.footnoteDefs) {
@@ -1388,6 +1506,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
         expandBlocks(body, state)
       }
     }
+    assignRenamedIds(state)
   }
   return {
     doc,
