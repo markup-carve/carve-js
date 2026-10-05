@@ -32,7 +32,9 @@
           2.33,
           1.5,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -59,7 +61,9 @@
           2.23,
           1.49,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -86,7 +90,9 @@
           2.23,
           1.49,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -113,7 +119,9 @@
           2.21,
           1.5,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -140,7 +148,9 @@
           2.21,
           1.5,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -167,7 +177,9 @@
           2.21,
           1.5,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -194,7 +206,9 @@
           2.21,
           1.5,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -221,7 +235,9 @@
           2.21,
           1.5,
           1.43
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -248,7 +264,9 @@
           3.25,
           1.79,
           1.53
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -275,7 +293,9 @@
           3.25,
           1.92,
           1.58
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -302,7 +322,9 @@
           3.12,
           1.99,
           1.61
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -329,7 +351,9 @@
           3.7,
           2.22,
           1.7
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -356,7 +380,9 @@
           3.7,
           2.22,
           1.7
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -383,7 +409,9 @@
           3.7,
           2.22,
           1.7
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -410,7 +438,9 @@
           3.97,
           2.3,
           1.73
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -437,7 +467,9 @@
           3.97,
           2.3,
           1.73
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       }
     ]
   },
@@ -474,7 +506,9 @@
           8.41,
           4.29,
           2.57
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -501,7 +535,9 @@
           8.41,
           4.29,
           2.57
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -528,7 +564,9 @@
           8.41,
           4.29,
           2.57
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -555,7 +593,9 @@
           8.41,
           4.29,
           2.57
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -582,7 +622,9 @@
           7.89,
           4.25,
           2.56
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -609,7 +651,9 @@
           7.34,
           4.2,
           2.55
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -636,7 +680,9 @@
           7.34,
           4.2,
           2.55
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -663,7 +709,9 @@
           6.83,
           4.14,
           2.55
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -690,7 +738,9 @@
           6.83,
           4.14,
           2.55
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -717,7 +767,9 @@
           6.83,
           4.14,
           2.55
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -744,7 +796,9 @@
           6.83,
           4.14,
           2.55
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "carve.crv",
@@ -771,7 +825,9 @@
           6.83,
           4.14,
           2.55
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -798,7 +854,9 @@
           6.09,
           4.07,
           2.54
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -825,7 +883,9 @@
           6.09,
           4.07,
           2.54
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -852,7 +912,9 @@
           5.84,
           4.06,
           2.54
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -879,7 +941,9 @@
           5.45,
           4.01,
           2.53
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -906,7 +970,9 @@
           4.47,
           3.87,
           2.52
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -933,7 +999,9 @@
           3.69,
           3.74,
           2.51
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -960,7 +1028,9 @@
           3.07,
           3.59,
           2.49
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -987,7 +1057,9 @@
           3.34,
           3.61,
           2.53
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -1014,7 +1086,9 @@
           3.34,
           3.61,
           2.53
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -1041,7 +1115,9 @@
           3.24,
           3.58,
           2.52
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -1068,7 +1144,9 @@
           3.24,
           3.58,
           2.52
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       },
       {
         "fixture": "large.crv",
@@ -1095,7 +1173,9 @@
           3.24,
           3.58,
           2.52
-        ]
+        ],
+        "batches": 5,
+        "warmup": 10
       }
     ]
   },
@@ -1460,5 +1540,6 @@
         ]
       }
     ]
-  }
+  },
+  "samplingMetadataNote": "Batch and warm-up counts for the first two runs were added from the benchmark defaults used when those runs were recorded."
 }

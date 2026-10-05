@@ -11,7 +11,7 @@ The earlier 3–8% composed-conversion slowdown did not consistently reproduce
 on a quieter host. Compared with the pre-#2492 baseline, current main was 1.7%
 slower in one large-document round and 3.1% faster in the other. Current main
 includes #2493, so these measurements describe today's code rather than
-isolating #2492. ID collection remained 7–17% slower in that initial run.
+isolating #2492. Large-document ID collection remained 7–17% slower in that initial run.
 
 Separate CPU profiles on current main identified ID traversal as a cost in
 resolution and rendering: the visitor accounted for about 19% and 18% of
@@ -35,7 +35,10 @@ an ID on a single text child after resolution and a self-referencing array.
 ## Results
 
 Milliseconds per call, rounds 1 and 2. Each round uses separate workers;
-order reverses from baseline/candidate to candidate/baseline.
+order reverses from baseline/candidate to candidate/baseline. Render and
+composed-conversion rows use `fixedVersusCurrent`; ID rows use the longer
+`longIdRun`. The initial five-batch large-document ID results were unchanged
+in the first round and 9.4% faster in the second; both are retained in the JSON.
 
 | Input | Operation | Baseline, rounds 1 / 2 | Candidate, rounds 1 / 2 |
 |---|---|---:|---:|
