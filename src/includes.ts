@@ -18,6 +18,8 @@ import { inlineText, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
 import { mergeRun } from './coalesce-text-runs.js'
+import { forEachChildBlockList } from './block-children.js'
+import { DocumentIdRegistry, visitDocumentIds } from './document-ids.js'
 import {
   DIRECTIVE_SCAN_RE,
   DIRECTIVE_SHAPE_RE,
@@ -582,12 +584,32 @@ function resolveChild(
   return { source: sliceLines(source, d.lines), id, base: sliceBase(source, d.lines) }
 }
 
-function headingId(h: Heading): string {
-  return h.attrs?.id ?? slugify(inlineText(h.children))
+/**
+ * Every heading's id as the child reads ON ITS OWN (I1a matches the child's
+ * own parse): explicit ids verbatim, auto slugs deduplicated against every
+ * explicit id and earlier slug in document order, as `resolveHeadingIds` does.
+ * Nothing is stamped: the assembled document re-derives auto ids (I5 rule 4).
+ */
+function headingIdsAsRead(doc: Document): Map<Heading, string> {
+  const used = new DocumentIdRegistry()
+  visitDocumentIds(doc, (id) => used.reserve(id))
+  const ids = new Map<Heading, string>()
+  const visit = (blocks: BlockNode[]): void => {
+    for (const block of blocks) {
+      if (block.type === 'heading') {
+        ids.set(block, block.attrs?.id ?? used.uniqueId(slugify(inlineText(block.children))))
+      } else {
+        forEachChildBlockList(block, visit)
+      }
+    }
+  }
+  visit(doc.children)
+  return ids
 }
 
 function selectSection(doc: Document, section: string): BlockNode[] | null {
-  const start = doc.children.findIndex((b) => b.type === 'heading' && headingId(b) === section)
+  const ids = headingIdsAsRead(doc)
+  const start = doc.children.findIndex((b) => b.type === 'heading' && ids.get(b) === section)
   if (start < 0) return null
   const level = (doc.children[start] as Heading).level
   let end = start + 1
