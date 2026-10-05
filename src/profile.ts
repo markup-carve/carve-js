@@ -135,6 +135,35 @@ export const CANONICAL_INLINE_TYPES = [
   'substitution',
 ] as const
 
+/*
+ * Three types `ast.ts` declares are deliberately NOT in the lists above:
+ * `smart_punctuation`, `literal_inline` and `tag`. Each folds into a broader
+ * canonical name in `canonicalType()` below, so naming it separately would deny
+ * nothing a profile cannot already deny, and `spec/docs/profiles.md` keeps all
+ * three out of the normative vocabulary - as it does `caption`, which is no node
+ * at all. The folds are recorded in FOLDED_NODE_TYPES rather than left implicit,
+ * because the vocabulary is also read as an INVENTORY of node types and a
+ * consumer enumerating it needs the folded names too (markup-carve/carve-js#2499).
+ */
+
+/**
+ * Node types `ast.ts` declares that are not canonical names, mapped to the
+ * canonical name each one folds into.
+ *
+ * A profile cannot name these, and does not need to: a deny on the value denies
+ * the key with it. Enumerate this alongside CANONICAL_BLOCK_TYPES and
+ * CANONICAL_INLINE_TYPES to get every type a tree can carry.
+ */
+export const FOLDED_NODE_TYPES: Readonly<Record<string, string>> = {
+  // Smart typography is ordinary visible prose, so it shares `text`'s trust class.
+  smart_punctuation: 'text',
+  // A code span with the `<code>` wrapper dropped: same verbatim capture, same
+  // escaping, same trailing-attribute surface.
+  literal_inline: 'code',
+  // carve-php treats `#tag` under the mention feature.
+  tag: 'mention',
+}
+
 const BLOCK_SET: ReadonlySet<string> = new Set(CANONICAL_BLOCK_TYPES)
 const INLINE_SET: ReadonlySet<string> = new Set(CANONICAL_INLINE_TYPES)
 
