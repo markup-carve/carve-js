@@ -25,7 +25,7 @@ import {
   HANDLED_PLAIN,
 } from './carve-escape.js'
 import { parse } from './parse.js'
-import { CANONICAL_INLINE_TYPES } from './profile.js'
+import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
 /**
@@ -530,12 +530,30 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): Writt
 }
 
 const FORMATTING = new Set(['strong', 'emphasis', 'underline', 'strike'])
-// Inline constructs bbcode has no way to ask for at this stage. Links, images
-// and autolinks were converted before it, and the rest is prose; `tag` is the
-// hashtag extension's node.
+// Constructs this stage does not write, so a parse finding one found the post's
+// own text. Named here as the complement: everything the earlier passes do write.
+const WRITTEN = new Set([
+  'text',
+  'soft_break',
+  'hard_break',
+  'escaped_text',
+  // Converted before this pass, which marks what it writes.
+  'link',
+  'image',
+  'autolink',
+  // Unreachable from a post: `literal_inline` needs a `!` before a backtick, and
+  // the backtick pass escapes every backtick the post's text carries before this
+  // parse runs, so the construct never forms. Listed rather than omitted so the
+  // absence is a decision.
+  'literal_inline',
+])
+// Derived from both vocabularies, never spliced. The folded types are outside
+// CANONICAL_INLINE_TYPES but a parse still yields them, and the splice that used
+// to add `tag` by hand walked past `smart_punctuation`: a post's literal `--`,
+// `...` or `->` migrated to an en dash, ellipsis or arrow nobody typed.
 const UNWRITTEN = new Set(
-  [...CANONICAL_INLINE_TYPES, 'tag'].filter(
-    (type) => !FORMATTING.has(type) && !['text', 'soft_break', 'hard_break', 'escaped_text', 'link', 'image', 'autolink'].includes(type),
+  [...CANONICAL_INLINE_TYPES, ...Object.keys(FOLDED_NODE_TYPES)].filter(
+    (type) => !FORMATTING.has(type) && !WRITTEN.has(type),
   ),
 )
 const REPAIR_ROUNDS = 16
