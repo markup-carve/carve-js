@@ -202,48 +202,75 @@ function change(kind: ChangeKind, node: Node, path: string, detail?: string): Ch
   return out
 }
 
-/** Exact LCS below the cell budget; monotone exact matches above it. */
+/** Exact LCS below the cell budget; occurrence-based LIS above it. */
 function lcs(a: string[], b: string[]): [number, number][] {
-  if (a.length * b.length > 1_000_000) {
+  let start = 0
+  const exceedsBudget = a.length * b.length > 1_000_000
+  while (exceedsBudget && start < a.length && start < b.length && a[start] === b[start]) start++
+  let suffix = 0
+  while (exceedsBudget && suffix < a.length - start && suffix < b.length - start && a[a.length - suffix - 1] === b[b.length - suffix - 1]) suffix++
+  const aEnd = a.length - suffix
+  const bEnd = b.length - suffix
+  const pairs: [number, number][] = Array.from({ length: start }, (_, i) => [i, i])
+  if ((aEnd - start) * (bEnd - start) > 1_000_000) {
     const indexes = new Map<string, { values: number[]; cursor: number }>()
-    b.forEach((key, index) => {
-      const bucket = indexes.get(key) ?? { values: [], cursor: 0 }
-      bucket.values.push(index)
-      indexes.set(key, bucket)
-    })
-    const pairs: [number, number][] = []
-    let after = -1
-    a.forEach((key, index) => {
-      const bucket = indexes.get(key)
-      if (!bucket) return
+    for (let j = start; j < bEnd; j++) {
+      const bucket = indexes.get(b[j]!) ?? { values: [], cursor: 0 }
+      bucket.values.push(j)
+      indexes.set(b[j]!, bucket)
+    }
+    const candidates: [number, number][] = []
+    for (let i = start; i < aEnd; i++) {
+      const bucket = indexes.get(a[i]!)
+      const j = bucket?.values[bucket.cursor++]
+      if (j !== undefined) candidates.push([i, j])
+    }
+    const tails: number[] = []
+    const previous: number[] = []
+    for (let i = 0; i < candidates.length; i++) {
+      let low = 0
+      let high = tails.length
+      while (low < high) {
+        const mid = (low + high) >> 1
+        if (candidates[tails[mid]!]![1] < candidates[i]![1]) low = mid + 1
+        else high = mid
+      }
+      previous[i] = low === 0 ? -1 : tails[low - 1]!
+      tails[low] = i
+    }
+    const core: [number, number][] = []
+    for (let i = tails.at(-1) ?? -1; i !== -1; i = previous[i]!) core.push(candidates[i]!)
+    for (const bucket of indexes.values()) bucket.cursor = 0
+    const greedy: [number, number][] = []
+    let after = start - 1
+    for (let i = start; i < aEnd; i++) {
+      const bucket = indexes.get(a[i]!)
+      if (!bucket) continue
       while (bucket.cursor < bucket.values.length && bucket.values[bucket.cursor]! <= after) bucket.cursor++
-      const next = bucket.values[bucket.cursor++]
-      if (next !== undefined) { pairs.push([index, next]); after = next }
-    })
-    return pairs
-  }
-  const table: number[][] = Array.from({ length: a.length + 1 }, () =>
-    new Array<number>(b.length + 1).fill(0),
-  )
-  for (let i = a.length - 1; i >= 0; i--) {
-    for (let j = b.length - 1; j >= 0; j--) {
-      table[i]![j] = a[i] === b[j] ? table[i + 1]![j + 1]! + 1 : Math.max(table[i + 1]![j]!, table[i]![j + 1]!)
+      const j = bucket.values[bucket.cursor++]
+      if (j !== undefined) { greedy.push([i, j]); after = j }
     }
-  }
-  const pairs: [number, number][] = []
-  let i = 0
-  let j = 0
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      pairs.push([i, j])
-      i++
-      j++
-    } else if (table[i + 1]![j]! >= table[i]![j + 1]!) {
-      i++
+    if (greedy.length > core.length) {
+      for (const pair of greedy) pairs.push(pair)
     } else {
-      j++
+      for (let i = core.length - 1; i >= 0; i--) pairs.push(core[i]!)
+    }
+  } else if (aEnd > start && bEnd > start) {
+    const table: number[][] = Array.from({ length: aEnd - start + 1 }, () => new Array<number>(bEnd - start + 1).fill(0))
+    for (let i = aEnd - start - 1; i >= 0; i--) {
+      for (let j = bEnd - start - 1; j >= 0; j--) {
+        table[i]![j] = a[start + i] === b[start + j] ? table[i + 1]![j + 1]! + 1 : Math.max(table[i + 1]![j]!, table[i]![j + 1]!)
+      }
+    }
+    let i = 0
+    let j = 0
+    while (i < aEnd - start && j < bEnd - start) {
+      if (a[start + i] === b[start + j]) { pairs.push([start + i, start + j]); i++; j++ }
+      else if (table[i + 1]![j]! >= table[i]![j + 1]!) i++
+      else j++
     }
   }
+  for (let i = 0; i < suffix; i++) pairs.push([aEnd + i, bEnd + i])
   return pairs
 }
 

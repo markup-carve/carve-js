@@ -1997,15 +1997,21 @@ function collectSilentFailures(
 
   for (const table of tables) {
     const kv = table.attrs?.keyValues ?? {}
-    const widest = Math.max(0, ...table.rows.map((row) => row.cells.length))
+    const widest = table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0)
     const lineNo = table.pos?.startLine ?? 1
     const tableStart = lineStart[lineNo - 1] ?? source.length
     const addTableWarning = (rule: string, key: string, message: string): void => {
       const found = source.lastIndexOf(key, tableStart)
       const start = found >= 0 ? found : (lineStart[lineNo - 1] ?? 0)
-      const before = source.slice(0, start)
-      const warningLine = before.split('\n').length
-      const warningColumn = start - before.lastIndexOf('\n')
+      let low = 0
+      let high = lineStart.length
+      while (low + 1 < high) {
+        const mid = (low + high) >> 1
+        if (lineStart[mid]! <= start) low = mid
+        else high = mid
+      }
+      const warningLine = low + 1
+      const warningColumn = start - lineStart[low]! + 1
       out.push({ line: warningLine, column: warningColumn, rule, message, start, end: start + key.length })
     }
     for (const key of ['aligns', 'valigns', 'widths'] as const) {

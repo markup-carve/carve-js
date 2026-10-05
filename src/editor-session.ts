@@ -109,6 +109,7 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
     if (hasAttrs.has(node.path)) {
       let end = node.start
       if (source[end - 1] === '\n') { end--; if (source[end - 1] === '\r') end-- }
+      else if (source[end - 1] === '\r') end--
       const lineStart = lineStarts[end]!
       const line = source.slice(lineStart, end)
       if (/^\{[^\r\n]+\}$/.test(line)) token('attribute', lineStart, lineStart + line.length)

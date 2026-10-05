@@ -18,24 +18,62 @@ describe('remaining scan costs', () => {
   })
 
   it('keeps platform lint columns after astral text', () => {
-    const diagnostics = lintCarve('😀😀 [x](u#12) #34', { platforms: ['github'] })
+    const diagnostics = lintCarve('😀😀[x](uu)#12', { platforms: ['github'] })
     const findings = diagnostics.filter(diagnostic => diagnostic.rule === 'platform-issue-reference')
     expect(findings).toHaveLength(1)
-    expect(findings[0]!.column).toBe(16)
+    expect(findings[0]!.column).toBe(12)
   })
 
   it('maps scalar offsets to UTF-8 bytes', () => {
     const source = '# 😀é\n\ntext\n'
     const { layout } = parseWithSourceLayout(source)
-    for (const node of layout.nodes) {
-      expect(node.startByte).toBeLessThanOrEqual(node.endByte)
-      expect(node.endByte).toBeLessThanOrEqual(new TextEncoder().encode(source).length)
-    }
+    expect(layout.nodes).toContainEqual({ path: '/children/0/children/0', startByte: 2, endByte: 8 })
+    expect(layout.nodes).toContainEqual({ path: '/children/1', startByte: 10, endByte: 14 })
   })
 
   it('reports every changed paragraph past the LCS limit', () => {
     const changes = diffAst(carveToAstJson(paragraphs(1100, 'a')), carveToAstJson(paragraphs(1100, 'b')))
     expect(changes.filter(change => change.kind === 'changed')).toHaveLength(1100)
+  })
+
+  it('reports a single move across the diff budget', () => {
+    const blocks = Array.from({ length: 1100 }, (_, i) => `p${i}`)
+    for (const moved of [[...blocks.slice(1), blocks[0]!], [blocks.at(-1)!, ...blocks.slice(0, -1)]]) {
+      const changes = diffAst(carveToAstJson(blocks.join('\n\n')), carveToAstJson(moved.join('\n\n')))
+      expect(changes.filter(change => change.kind === 'moved')).toHaveLength(1)
+    }
+  })
+
+  it('keeps small duplicate diff tie breaks', () => {
+    const changes = diffAst(carveToAstJson('y\n\np\n\nx\n\np\n\np\n\ny'), carveToAstJson('p\n\ny'))
+    expect(changes.filter(change => change.kind === 'removed').map(change => change.path)).toEqual(['/children[0]', '/children[2]', '/children[3]', '/children[4]'])
+  })
+
+  it('keeps shifted duplicate diffs compact past the budget', () => {
+    const blocks = Array.from({ length: 1500 }, (_, i) => `q${i % 3}`)
+    const shifted = ['z', ...blocks.slice(1), blocks[0]!, 'z']
+    const changes = diffAst(carveToAstJson(blocks.join('\n\n')), carveToAstJson(shifted.join('\n\n')))
+    expect(changes.filter(change => change.kind === 'moved').length).toBeLessThanOrEqual(2)
+    expect(changes.filter(change => change.kind === 'added')).toHaveLength(2)
+  })
+
+  it('preserves editor attribute tokens across CRLF and CR lines', () => {
+    for (const ending of ['\r\n', '\r']) {
+      const nodes = createEditorSession(`{.a}${ending}word${ending}`).snapshot().nodes
+      const paragraph = nodes.find(node => node.type === 'paragraph')
+      expect(paragraph?.tokens).toContainEqual({ role: 'attribute', start: 0, end: 4 })
+    }
+  })
+
+  it('rejects concurrent additions with the same identity and different content', () => {
+    const base = carveToAstJson('')
+    const ours = carveToAstJson('{#h}\na\n')
+    const different = mergeAst(base, ours, carveToAstJson('{#h}\nb\n'))
+    expect(different.ok).toBe(false)
+    if (!different.ok) expect(different.conflicts[0]!.reason).toBe('concurrent-sequence-edit')
+    const identical = mergeAst(base, ours, carveToAstJson('{#h}\na\n\nextra\n'))
+    expect(identical.ok).toBe(true)
+    if (identical.ok) expect(identical.ast.children).toHaveLength(2)
   })
 
   it('deduplicates concurrent additions in occurrence order', () => {
@@ -49,6 +87,16 @@ describe('remaining scan costs', () => {
       expectBuiltInputScansLinearly(input => void carveToHtml(input), n => unit.repeat(n) + (unit.includes('{') ? '"}' : ')'), { smallRepeats: 2000, label: unit })
     })
   }
+
+  for (const [unit, suffix] of [['[x][r]{', ''], ['[x][r]{.b ', '}'], ['[^a ', '\n]'], ['[x]{k=', '}'], ['[x]{k=', '']]) {
+    perfIt(`failed tail ${unit} with ${JSON.stringify(suffix)} stays bounded`, () => {
+      expectBuiltInputScansLinearly(input => void carveToHtml(input), n => unit!.repeat(n) + suffix!, { smallRepeats: 2000, label: unit })
+    })
+  }
+
+  perfIt('table warning positions avoid document prefix scans', () => {
+    expectBuiltInputScansLinearly(input => void lintCarve(input), n => '{widths="60,50"}\n| a | b |\n\n'.repeat(n), { smallRepeats: 500, label: 'table warning positions' })
+  })
 
   perfIt('source layout scales with positioned paragraphs', () => {
     expectBuiltInputScansLinearly(input => void parseWithSourceLayout(input), n => paragraphs(n, 'a'), { smallRepeats: 1000, label: 'source layout' })

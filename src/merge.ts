@@ -386,13 +386,13 @@ function mergeSequence(
   for (const ti of tm.additions) {
     const key = semanticKey(theirs[ti], nodePosition)
     const anchor = theirsAnchors[ti]!
-    const bucketKey = JSON.stringify([anchor, key])
+    const bucketKey = anchor + '\0' + key
     const bucket = additions.get(bucketKey) ?? { indexes: [], cursor: 0 }
     bucket.indexes.push(ti)
     additions.set(bucketKey, bucket)
     const hint = identityHint(theirs[ti])
     if (hint !== undefined) {
-      const hintKey = JSON.stringify([anchor, hint])
+      const hintKey = anchor + '\0' + hint
       const keys = identities.get(hintKey) ?? new Set<string>()
       keys.add(key)
       identities.set(hintKey, keys)
@@ -402,11 +402,11 @@ function mergeSequence(
     const anchor = oursAnchors[oi]!
     const key = semanticKey(ours[oi], nodePosition)
     const hint = identityHint(ours[oi])
-    const keys = hint === undefined ? undefined : identities.get(JSON.stringify([anchor, hint]))
+    const keys = hint === undefined ? undefined : identities.get(anchor + '\0' + hint)
     if (keys && (keys.size > 1 || !keys.has(key))) {
       return conflict('concurrent-sequence-edit', path, base, ours, theirs, conflicts, options)
     }
-    const bucket = additions.get(JSON.stringify([anchor, key]))
+    const bucket = additions.get(anchor + '\0' + key)
     const same = bucket?.indexes[bucket.cursor++]
     const token = `o${oi}`
     oursAdditionTokens.set(oi, token)

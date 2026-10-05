@@ -7051,7 +7051,7 @@ function execLinkTail(tail: string, canReadAttrs?: (offset: number) => boolean):
     ? RE_INLINE_ATTR.exec(tail.slice(end)) : null
   return [tail.slice(0, end + (attrs?.[0].length ?? 0)), scanned.dest, rest[1], rest[2], attrs?.[1]]
 }
-const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+const RE_REF_TAIL = /^\[([^\]]*)\]/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 
 /**
@@ -13554,6 +13554,13 @@ class ParseSession {
     const rbraceSuf = text.includes('}') ? suffixHasChar(text, '}') : null
     const rbracketSuf = text.includes(']') ? suffixHasChar(text, ']') : null
     const criticCmtSuf = text.includes('#}') ? suffixHasPair(text, '#', '}') : null
+    const footnoteStops = text.includes('[^') ? new Int32Array(text.length + 1) : undefined
+    if (footnoteStops) {
+      footnoteStops[text.length] = text.length
+      for (let at = text.length - 1; at >= 0; at--) {
+        footnoteStops[at] = /[\]\r\n]/.test(text[at]!) ? at : footnoteStops[at + 1]!
+      }
+    }
     let valueStops: Int32Array | undefined
     const valueEnd = (start: number): number => {
       if (!valueStops) {
@@ -13584,6 +13591,15 @@ class ParseSession {
         quoteStops = { double, single }
       }
       return (text[start] === '"' ? quoteStops.double : quoteStops.single)[start + 1]!
+    }
+    const execReferenceTail = (tail: string, start: number): RegExpExecArray | null => {
+      const match = RE_REF_TAIL.exec(tail)
+      if (!match) return null
+      const brace = start + match[0].length
+      const attrs = text[brace] === '{' && rbraceSuf?.[brace] && !spanAttrProvablyInvalid(text, brace, quoteEnd, valueEnd)
+        ? RE_INLINE_ATTR.exec(text.slice(brace)) : null
+      if (attrs) { match[0] += attrs[0]; match[2] = attrs[1]! }
+      return match
     }
     const insSuf = text.includes('+}') ? suffixHasPair(text, '+', '}') : null
     const delSuf = text.includes('-}') ? suffixHasPair(text, '-', '}') : null
@@ -13945,7 +13961,7 @@ class ParseSession {
           // alt as the label. The image form of a reference link — same explicit
           // `[label]: url` resolution (applyLinkDefs), src instead of href. Alt
           // must be non-empty (as for a reference link's text).
-          const mref = RE_REF_TAIL.exec(tail)
+          const mref = execReferenceTail(tail, i + close + 1)
           // Full `![alt][ref]` allows an empty alt (`![][ref]`, label = ref);
           // collapsed `![alt][]` needs a non-empty alt to use as the label.
           if (mref && (mref[1]! !== '' || alt !== '')) {
@@ -14007,7 +14023,7 @@ class ParseSession {
           // refs like `[^a][^a]` are two notes, not one unresolved `[text][ref]`.
           // Inside footnote content a `[^x]` is literal, not a reference
           // (no notes inside notes, design §3.1).
-          const mfn = inFootnote || !rbracketSuf?.[i] ? null : RE_FOOTNOTE_REF.exec(rest)
+          const mfn = inFootnote || !footnoteStops || text[footnoteStops[i + 2]!] !== ']' ? null : RE_FOOTNOTE_REF.exec(rest)
           if (mfn) {
             flush()
             out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
@@ -14041,7 +14057,7 @@ class ParseSession {
             i += len
             continue
           }
-          const mref = RE_REF_TAIL.exec(tail)
+          const mref = execReferenceTail(tail, i + close + 1)
           if (mref && (innerText !== '' || !mref[1]!.startsWith('@'))) {
             flush()
             let len = close + 1 + mref[0].length
@@ -14072,7 +14088,7 @@ class ParseSession {
         // footnote ref (the `{.c}` then attaches via the inline-attr pass)
         // rather than becoming a <span> of `^x`. Footnote labels hold no
         // nested brackets, so its own regex stays authoritative.
-        const mfn = inFootnote || !rbracketSuf?.[i] ? null : RE_FOOTNOTE_REF.exec(rest)
+        const mfn = inFootnote || !footnoteStops || text[footnoteStops[i + 2]!] !== ']' ? null : RE_FOOTNOTE_REF.exec(rest)
         if (mfn) {
           flush()
           out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
