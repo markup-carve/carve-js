@@ -60,6 +60,14 @@ export function normalizeHeadingRefLabel(label: string): string {
 }
 
 /**
+ * The key a `</#id>` cross-reference compares ids on (R4): NFC, then case
+ * folded per code point. Include fragment names match on it too.
+ */
+export function foldIdentifier(id: string): string {
+  return Array.from(id.normalize('NFC'), (c) => c.toLowerCase()).join('')
+}
+
+/**
  * The heading-index key a REFERENCE LABEL contributes (PART 9R R1,
  * markup-carve/carve#949).
  *
@@ -547,8 +555,7 @@ function resolveHeadingIdsImpl(
   // case-preserved `Getting-Started` heading (or an explicit `{#MyId}`)
   // without lowercasing the emitted id. Folded per code point to stay
   // portable, mirroring slugify's optional lowercase.
-  const foldId = (s: string): string =>
-    Array.from(s.normalize('NFC'), (c) => c.toLowerCase()).join('')
+  const foldId = foldIdentifier
   const foldedTargets = new Map<string, string>()
   // Implicit-reference index: normalized visible heading text -> heading id.
   // First-occurrence wins (matches `</#id>` ambiguous-ref behavior). Built

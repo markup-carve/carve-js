@@ -14,7 +14,7 @@ import type {
 } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { utf8ByteLength } from './abbr-budget.js'
-import { inlineText, promoteBlockImages, slugify } from './heading-ids.js'
+import { foldIdentifier, inlineText, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
 import { mergeRun } from './coalesce-text-runs.js'
@@ -587,7 +587,8 @@ function headingId(h: Heading): string {
 }
 
 function selectSection(doc: Document, section: string): BlockNode[] | null {
-  const start = doc.children.findIndex((b) => b.type === 'heading' && headingId(b) === section)
+  const wanted = foldIdentifier(section)
+  const start = doc.children.findIndex((b) => b.type === 'heading' && foldIdentifier(headingId(b)) === wanted)
   if (start < 0) return null
   const level = (doc.children[start] as Heading).level
   let end = start + 1

@@ -126,6 +126,21 @@ describe('expandIncludes', () => {
     expect(result.html).not.toContain('skip')
   })
 
+  it('#section matches a heading id case-insensitively, as a crossref does', () => {
+    const child = '{#Plan}\n# Plan\n\nplan text\n\n# Other\n\nskip'
+    for (const name of ['plan', 'PLAN', 'Plan']) {
+      const result = expand(`{{ child #${name} }}`, { child })
+      expect(result.warnings).toEqual([])
+      expect(result.html).toContain('<section id="Plan">')
+      expect(result.html).toContain('<p>plan text</p>')
+      expect(result.html).not.toContain('skip')
+    }
+    // An auto slug folds the same way.
+    const slug = expand('{{ child #getting-started }}', { child: '# Getting Started\n\nyes' })
+    expect(slug.warnings).toEqual([])
+    expect(slug.html).toContain('<p>yes</p>')
+  })
+
   it('@lines includes an inclusive physical line range', () => {
     const result = expand('{{ child @lines:2-3 }}', { child: 'skip\nOne\nTwo\nskip' })
     expect(result.warnings).toEqual([])
