@@ -5026,6 +5026,28 @@ function descriptionLeadCommentFenceClosed(lead: string, bodyLines: string[]): b
   return bodyLines.some((line, index) => index > 0 && commentFenceRun(line.replace(/^[ \t]+/, '')) === run)
 }
 
+/**
+ * Does a nested marker line leave the ITEM'S OWN PARAGRAPH open, for the lines
+ * the description body takes below that item's content column?
+ *
+ * `markerLineState`'s `leavesParagraphOpen` answers one question short of this
+ * one: a code or raw FENCE leaves the flag set, which is the accident
+ * markup-carve/carve-js#2531 named, and a fence is a BLOCK - the oracle reads a
+ * line below a fenced item as the body's own, where it folds the same line into
+ * an item ending in prose, a `:::` run, a quote with an open paragraph or a
+ * nested item. Measured over the lead kinds rather than assumed
+ * (markup-carve/carve-js#2535).
+ *
+ * The one spelling both call sites ask in - the body's lead and every later line
+ * the body takes AT its own column.
+ */
+function nestedItemHoldsOpenParagraph(content: string, memo?: Map<number, number>): boolean {
+  if (!markerLineState(content, memo).leavesParagraphOpen) return false
+  const bottom = markerLineBottomBlock(content, memo)
+
+  return !RE_FENCE.test(bottom) && !RE_RAW_FENCE.test(bottom)
+}
+
 function markerLineState(content: string, memo?: Map<number, number>): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
@@ -10124,6 +10146,19 @@ class ParseSession {
        * leaves the container where it found it.
        */
       let nestedListStillOpen = false
+      /**
+       * The CONTENT COLUMN of the nested item this body currently has open, in
+       * the body's own coordinates, or -1 for none.
+       *
+       * A line the body takes BELOW that column reaches the body but not the
+       * item, so it is the item's LAZY CONTINUATION and opens nothing
+       * (markup-carve/carve-js#2535). Carried beside `nestedListStillOpen` and
+       * advanced by the same lines, for the same reason: only a line AT the
+       * body's column replaces the container standing there.
+       */
+      let nestedItemColumn = -1
+      /** Whether that nested item still holds an open paragraph to fold into. */
+      let nestedItemParagraphOpen = false
       // The next entry ends the body, and so does a line below its column after a
       // blank. A second blank ends it regardless of the following indentation.
       const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
@@ -10263,6 +10298,11 @@ class ParseSession {
         nestedListStillOpen =
           !firstIsColonContainer &&
           leadLeavesListCollecting(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
+        nestedItemColumn = markerContentColumn(first)
+        nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(
+          first,
+          parseSession.markerPrefixMemo(lexer, firstLineIndex),
+        )
         lazyState.inTable = firstState.endsOnTableRow
         lazyState.quoteInner = firstState.quote
         // A FOOTNOTE DEFINITION ON THE MARKER LINE OPENS A BODY RUN, exactly as
@@ -10339,7 +10379,30 @@ class ParseSession {
         if (!isBlankLine(ln) && indentColumns(ln, contentCol) >= contentCol) {
           const lineIndex = lexer.pos
           const dedented = sliceColumns(ln, contentCol, true)
-          bodyBaseEligible.add(bodyLines.length)
+          // A LINE BELOW THE OPEN ITEM'S CONTENT COLUMN OPENS NOTHING
+          // (markup-carve/carve-js#2535). It reaches the body but not the item,
+          // which makes it the item's lazy continuation, and a lazy
+          // continuation has no structure to read: the oracle folds it into the
+          // item's open paragraph whatever it is spelled as. The authored-base
+          // pass asked the line's SPELLING instead - whether it looks like an
+          // opener - so a heading, a break, a table, a quote, a fence or a `:::`
+          // run written one column short of the item became a block of the
+          // body's own, where prose at the identical column folded. One rule
+          // with two answers, decided by the spelling rather than by the column.
+          // A DEFINITION REGISTERS WHEREVER IT STANDS. A reference and a footnote
+          // definition render nothing and are recognized from a leading run, so
+          // the oracle still takes one here and the interruption veto in front
+          // of the fold gate already keeps it. The comment line, the `%%%` run,
+          // a following term and a list marker need no exemption: they fold or
+          // interrupt on the column alone.
+          const localLine = dedented.replace(/^[ \t]+/, '')
+          const lazyUnderNestedItem =
+            nestedItemColumn > 0 &&
+            nestedItemParagraphOpen &&
+            indentColumns(ln) - contentCol < nestedItemColumn &&
+            !isLinkDefLine(localLine) &&
+            !RE_FOOTNOTE_DEF.test(localLine)
+          if (!lazyUnderNestedItem) bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(dedented)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -10391,6 +10454,7 @@ class ParseSession {
           if (
             !bodyHoldsQuote &&
             !insideOpenQuoteParagraph(lazyState) &&
+            !lazyUnderNestedItem &&
             flush !== dedented &&
             lineOpensItemBlock(flush)
           ) {
@@ -10437,7 +10501,11 @@ class ParseSession {
             true,
             bodyReadsFlush ? contentCol + residual : contentCol,
           )
-          if (!wasVerbatim && flush === dedented) nestedListStillOpen = leadLeavesListCollecting(flush)
+          if (!wasVerbatim && flush === dedented) {
+            nestedListStillOpen = leadLeavesListCollecting(flush)
+            nestedItemColumn = markerContentColumn(flush)
+            nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
+          }
           // The base belongs to the block that established it and dies with it.
           if (!insideOpenFence(lazyState)) authoredBase = null
           lexer.consume()
