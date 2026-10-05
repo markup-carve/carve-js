@@ -39,7 +39,8 @@ const QUOTE_AWARE_OPTIONS = String.raw`(?:${DQUOTED_RUN}|${SQUOTED_RUN}|(?!${DQU
 
 const OPEN = String.raw`\{\{\s+`
 const PATH = String.raw`(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))`
-const SECTION = String.raw`((?:\s+#[A-Za-z_][\w-]*)?)`
+// `explicit_identifier`: an id may open on a digit (`#2024-plan`).
+const SECTION = String.raw`((?:\s+#\w[\w-]*)?)`
 const CLOSE = String.raw`\s+\}\}`
 const body = (options: string): string => `${OPEN}${PATH}${SECTION}(${options})${CLOSE}`
 
