@@ -60,7 +60,7 @@ describe('lint reports the figure group shapes that do less', () => {
     // The heading index has to descend into the group like the resolver does,
     // or every reference to a heading inside one is a false positive.
     const src =
-      'See </#inner-heading>.\n\n::: figure\n## Inner heading\n\n![x](x.png)\n^ (a) x\n:::\n^ Figure #: G\n'
+      'See </#Inner-heading>.\n\n::: figure\n## Inner heading\n\n![x](x.png)\n^ (a) x\n:::\n^ Figure #: G\n'
     expect(rules(src)).not.toContain('broken-crossref')
   })
 

@@ -32,36 +32,33 @@ import { isUnresolvedReference } from './unresolved-reference.js'
 import { isAtContentColumn } from './paragraph-indent.js'
 
 /**
- * Implicit heading references match a heading's visible TEXT, which is a
- * fuzzier lookup than an explicit `[label]: url` reference (kept
- * case-sensitive in normalizeRefLabel). `[getting started][]` should still
- * resolve `# Getting Started`, so heading-text matching folds case here.
- */
-/**
  * The key an implicit heading reference and a heading's text are compared on:
- * trimmed, internal whitespace collapsed (both in `normalizeRefLabel`),
- * NFC-normalized, then case-folded - PART 9R R1.
+ * trimmed, internal whitespace collapsed (both in `normalizeRefLabel`), then
+ * NFC-normalized and compared exactly - PART 9R R1, CARVE-P9R-010 (no name
+ * lookup folds case).
  *
  * NFC is here because heading IDS are NFC-normalized (§25), and without it a
  * document publishes `id="Café"` and then declines `[Café][]` against the very
- * heading that produced it. It is also a WEAKER fold than the case fold beside
- * it: case folding relates codepoints Unicode calls distinct, NFC relates
- * sequences Unicode DEFINES as the same (carve#725).
+ * heading that produced it. NFC relates sequences Unicode DEFINES as the same
+ * (carve#725); NFKC is out, so `[file][]` must not reach `# ﬁle`.
  *
- * NFC and NOT NFKC: `[file][]` must not reach `# ﬁle`. Compatibility folding
- * changes which text the author is quoting, not how it is spelled.
- *
- * Exported because `lint.ts` carried a second copy of this predicate. Two
- * copies of a matching rule drift, and this fix would have landed in one of
- * them.
+ * Exported because `lint.ts` carried a second copy of this predicate.
  */
 export function normalizeHeadingRefLabel(label: string): string {
-  return normalizeRefLabel(label).normalize('NFC').toLowerCase()
+  return normalizeRefLabel(label).normalize('NFC')
 }
 
-/** The key a `</#id>` cross-reference compares ids on (R4): NFC, then case folded per code point. */
-export function foldIdentifier(id: string): string {
-  return Array.from(id.normalize('NFC'), (c) => c.toLowerCase()).join('')
+/** The key a `</#id>` cross-reference compares ids on (R4): NFC, then exact. */
+export function crossrefKey(id: string): string {
+  return id.normalize('NFC')
+}
+
+/**
+ * A case-insensitive key, ONLY for naming the target a case-only miss meant
+ * (lint, `fmt --migrate`). No lookup resolves through it (CARVE-P9R-010).
+ */
+export function caseOnlyKey(name: string): string {
+  return Array.from(name, (c) => c.toLowerCase()).join('')
 }
 
 /**
@@ -399,9 +396,9 @@ export function headingIdSlugOpts(opts: {
  * the jgm/djot#393 run-replacement over the raw code points, keeping non-ASCII
  * verbatim (e.g. a German heading keeps its umlaut). Zero-dependency and
  * byte-identical across implementations, matching djot's "no Unicode tables"
- * identifier model. Cross-reference resolution is case-insensitive (see
- * resolveHeadingIds), so `</#getting-started>` still resolves to the
- * case-preserved `Getting-Started` id. Three opt-in, orthogonal transforms:
+ * identifier model. Cross-references compare ids in exact case
+ * (CARVE-P9R-010), so `</#Getting-Started>` names the case-preserved id.
+ * Three opt-in, orthogonal transforms:
  * `lowercase` (GitHub/SSG-style anchors, folded per code point so no
  * context mapping such as Greek final-sigma applies); `asciiFold`
  * (transliterate the slug to ASCII for share-safe URL fragments, best-effort -
@@ -547,13 +544,10 @@ function resolveHeadingIdsImpl(
   const ingested = ingestedCaptionTargets !== undefined
   const used = documentIds ?? new DocumentIdRegistry()
   const targets = new Map<string, InlineNode[]>()
-  // Case-insensitive `</#id>` index: case-folded id -> actual (verbatim) id,
-  // first occurrence wins. Lets `</#getting-started>` resolve to a
-  // case-preserved `Getting-Started` heading (or an explicit `{#MyId}`)
-  // without lowercasing the emitted id. Folded per code point to stay
-  // portable, mirroring slugify's optional lowercase.
-  const foldId = foldIdentifier
-  const foldedTargets = new Map<string, string>()
+  // `</#id>` index: NFC id -> actual (verbatim) id, first occurrence wins.
+  // Case is compared exactly (CARVE-P9R-010).
+  const targetKey = crossrefKey
+  const keyedTargets = new Map<string, string>()
   // Implicit-reference index: normalized visible heading text -> heading id.
   // First-occurrence wins (matches `</#id>` ambiguous-ref behavior). Built
   // from the parsed AST's inlineText so it agrees with the heading slug
@@ -582,8 +576,8 @@ function resolveHeadingIdsImpl(
       heading.attrs = { ...heading.attrs, id }
     }
     if (!targets.has(id)) targets.set(id, heading.children)
-    const fk = foldId(id)
-    if (!foldedTargets.has(fk)) foldedTargets.set(fk, id)
+    const fk = targetKey(id)
+    if (!keyedTargets.has(fk)) keyedTargets.set(fk, id)
     if (inBlockquote) return
     const plain = inlineText(heading.children)
     const key = normalizeHeadingRefLabel(plain)
@@ -827,12 +821,11 @@ function resolveHeadingIdsImpl(
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]!
       if (n.type === 'heading_ref') {
-        // Exact match first, then case-insensitive (case-folded) fallback so a
-        // lowercase `</#getting-started>` resolves to a case-preserved
-        // `Getting-Started` id. The emitted href uses the ACTUAL id.
+        // Exact match first, then the NFC spelling of the same id. Case is
+        // never folded: `</#plan>` does not reach `{#Plan}` (CARVE-P9R-010).
         const tgtId = targets.has(n.target)
           ? n.target
-          : foldedTargets.get(foldId(n.target))
+          : keyedTargets.get(targetKey(n.target))
         const tgt = tgtId !== undefined ? targets.get(tgtId) : undefined
         if (tgt && tgtId !== undefined) {
           let children = crossrefCloneCache.get(tgtId)
@@ -861,11 +854,7 @@ function resolveHeadingIdsImpl(
           }
           // The node STAYS a `heading_ref` (PART 12 §3a, carve#614): the
           // authored construct survives and the resolution is published
-          // beside it. Replacing it with a `link` published a later stage -
-          // and, because ids resolve case-insensitively, discarded which
-          // spelling the author wrote: `</#intro>` and `</#Intro>` both
-          // produced `href: "#Intro"`, so a document that had been through
-          // the wire format came back respelled.
+          // beside it. Replacing it with a `link` published a later stage.
           n.href = `#${tgtId}`
           // The display text is NOT part of the serialized node (§3a: the
           // heading is in the same document, and copying its inline content
@@ -1005,9 +994,9 @@ function resolveHeadingIdsImpl(
   const numberBlocks = (blocks: BlockNode[]): void => {
     numberCaptionsIn(blocks, counters, (labelNodes, next, attrs, suffix) => {
       const id = attrs?.id
-      if (id === undefined || foldedTargets.has(foldId(id))) return
+      if (id === undefined || keyedTargets.has(targetKey(id))) return
       targets.set(id, crossrefAutoText(labelNodes, next, suffix))
-      foldedTargets.set(foldId(id), id)
+      keyedTargets.set(targetKey(id), id)
     })
   }
 
@@ -1020,8 +1009,8 @@ function resolveHeadingIdsImpl(
     for (const [id, autoNodes] of ingestedCaptionTargets) {
       if (targets.has(id)) continue
       targets.set(id, autoNodes)
-      const fk = foldId(id)
-      if (!foldedTargets.has(fk)) foldedTargets.set(fk, id)
+      const fk = targetKey(id)
+      if (!keyedTargets.has(fk)) keyedTargets.set(fk, id)
     }
   } else {
     for (const block of doc.children) walkBlock(block, resolveRefs)

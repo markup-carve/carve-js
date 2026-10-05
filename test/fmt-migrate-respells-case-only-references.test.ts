@@ -1,0 +1,97 @@
+import { describe, it, expect } from 'vitest'
+import { run, type CliIO } from '../src/cli.js'
+import { migrateCaseOnlyReferences, carveToHtml } from '../src/index.js'
+
+/*
+ * CARVE-P9R-010: no name lookup folds case. `carve fmt --migrate` respells a
+ * reference that misses its target only by case, but only when exactly one
+ * target matches it case-insensitively.
+ */
+function makeIO(stdin: string, files: Record<string, string> = {}) {
+  let out = ''
+  const io: CliIO = {
+    readStdin: async () => stdin,
+    write: (s) => {
+      out += s
+    },
+    writeErr: () => {},
+    readFile: (p) => {
+      if (!(p in files)) throw new Error(`ENOENT: ${p}`)
+      return files[p]!
+    },
+    writeFile: (p, c) => {
+      files[p] = c
+    },
+  }
+  return {
+    io,
+    files,
+    get out() {
+      return out
+    },
+  }
+}
+
+describe('migrateCaseOnlyReferences', () => {
+  it('respells a crossref to the one id it matches case-insensitively', () => {
+    expect(migrateCaseOnlyReferences('# Getting Started\n\nSee </#getting-started>.\n')).toBe(
+      '# Getting Started\n\nSee </#Getting-Started>.\n',
+    )
+  })
+
+  it('respells a collapsed heading reference to the heading text', () => {
+    const migrated = migrateCaseOnlyReferences('See [plan][].\n\n# Plan\n')
+    expect(migrated).toBe('See [Plan][].\n\n# Plan\n')
+    expect(carveToHtml(migrated)).toContain('<a href="#Plan">Plan</a>')
+  })
+
+  it('respells an explicit label to the definition label', () => {
+    expect(migrateCaseOnlyReferences('[x][Label]\n\n[label]: /u\n')).toBe('[x][label]\n\n[label]: /u\n')
+  })
+
+  it('does not rewrite when several ids match', () => {
+    const source = '{#Tip}\n# A\n\n{#TIP}\n# B\n\nSee </#tip>.\n'
+    expect(migrateCaseOnlyReferences(source)).toBe(source)
+  })
+
+  it('does not rewrite when several headings match a collapsed reference', () => {
+    const source = '# Plan\n\n# PLAN\n\nSee [plan][].\n'
+    expect(migrateCaseOnlyReferences(source)).toBe(source)
+  })
+
+  it('leaves a collapsed label carrying markup for the author', () => {
+    const source = '# *bold* heading\n\nSee [*Bold* heading][].\n'
+    expect(migrateCaseOnlyReferences(source)).toBe(source)
+  })
+
+  it('leaves exact and unrelated references alone', () => {
+    const source = '# Plan\n\nSee </#Plan>, </#nope> and [Plan][].\n'
+    expect(migrateCaseOnlyReferences(source)).toBe(source)
+  })
+
+  it('respells every reference in one pass, astral characters included', () => {
+    expect(migrateCaseOnlyReferences('# 𝒜 Plan\n\n𝒜 </#𝒜-plan> and </#𝒜-plan>\n')).toBe(
+      '# 𝒜 Plan\n\n𝒜 </#𝒜-Plan> and </#𝒜-Plan>\n',
+    )
+  })
+})
+
+describe('carve fmt --migrate', () => {
+  it('migrates and formats stdin', async () => {
+    const t = makeIO('# Plan\n\nSee </#plan>.\n')
+    expect(await run(['fmt', '--migrate'], t.io)).toBe(0)
+    expect(t.out).toBe('# Plan\n\nSee </#Plan>.\n')
+  })
+
+  it('leaves case-only misses alone without the flag', async () => {
+    const t = makeIO('# Plan\n\nSee </#plan>.\n')
+    expect(await run(['fmt'], t.io)).toBe(0)
+    expect(t.out).toBe('# Plan\n\nSee </#plan>.\n')
+  })
+
+  it('rewrites files in place with --write', async () => {
+    const t = makeIO('', { 'a.crv': 'See [plan][].\n\n# Plan\n' })
+    expect(await run(['fmt', '--migrate', '-w', 'a.crv'], t.io)).toBe(0)
+    expect(t.files['a.crv']).toBe('See [Plan][].\n\n# Plan\n')
+  })
+})

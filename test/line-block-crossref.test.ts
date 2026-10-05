@@ -3,7 +3,7 @@ import { carveToAstJson, carveToHtml } from '../src/index.js'
 
 describe('cross-references inside a line block', () => {
   it('resolves against a heading like the same reference in a paragraph', () => {
-    const source = '# H\n::: |\n</#h>\n'
+    const source = '# H\n::: |\n</#H>\n'
 
     expect(carveToHtml(source)).toContain('<p><a href="#H">H</a></p>')
 
@@ -11,7 +11,7 @@ describe('cross-references inside a line block', () => {
     const lineBlock = ast.children[1] as unknown as Record<string, unknown>
     const paragraph = (lineBlock.children as Array<Record<string, unknown>>)[0]!
     const reference = (paragraph.children as Array<Record<string, unknown>>)[0]!
-    expect(reference).toMatchObject({ type: 'heading_ref', target: 'h', href: '#H' })
+    expect(reference).toMatchObject({ type: 'heading_ref', target: 'H', href: '#H' })
   })
 
   it('keeps an unresolved reference literal', () => {

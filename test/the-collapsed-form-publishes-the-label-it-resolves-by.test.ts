@@ -94,13 +94,11 @@ describe('a collapsed reference that reaches a heading by its rendered text', ()
   })
 
   it('derives the label, it does not NORMALIZE it', () => {
-    // Case folding, whitespace collapse, trimming and NFC belong to MATCHING.
-    // A fix that published `headingRefKeyFromLabel`'s output would fold the
-    // case of every collapsed reference in every document to make this one
-    // right - and `[Getting Started][]` under `# getting started` has always
-    // published `Getting Started`.
-    const link = linkOf('# *bold* heading\n\n[*Bold*  Heading][]\n')
-    expect(link.ref).toBe('Bold  Heading')
+    // Whitespace collapse, trimming and NFC belong to MATCHING. A fix that
+    // published `headingRefKeyFromLabel`'s output would collapse the label of
+    // every collapsed reference in every document.
+    const link = linkOf('# *bold* heading\n\n[*bold*  heading][]\n')
+    expect(link.ref).toBe('bold  heading')
     expect(link.href).toBe('#bold-heading')
   })
 

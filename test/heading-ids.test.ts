@@ -132,15 +132,20 @@ describe('resolveHeadingIds', () => {
       .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
     expect(ids).toEqual(['Intro', 'Intro-2'])
   })
-  it('resolves </#id> case-insensitively to a link with cloned target text', () => {
-    // The auto id is case-preserving (`Getting-Started`); a lowercase
-    // `</#getting-started>` still resolves (case-insensitive lookup) and
-    // emits the target's ACTUAL case-preserved id.
-    const html = carveToHtml('# Getting Started\n\nSee </#getting-started>.')
+  it('resolves </#id> by its exact case to a link with cloned target text', () => {
+    const html = carveToHtml('# Getting Started\n\nSee </#Getting-Started>.')
     // The id lives on the <section>, not the <h1> (PART 9 §13).
     expect(html).toContain('<section id="Getting-Started">')
     expect(html).toContain('<h1>Getting Started</h1>')
     expect(html).toContain('<a href="#Getting-Started">Getting Started</a>')
+  })
+  it('does not resolve a </#id> that differs from the id only in case (CARVE-P9R-010)', () => {
+    const html = carveToHtml('# Getting Started\n\nSee </#getting-started>.')
+    expect(html).toContain('<p>See &lt;/#getting-started&gt;.</p>')
+  })
+  it('keeps ids that differ only in case as two targets', () => {
+    const html = carveToHtml('{#Tip}\n# Upper\n\n{#tip}\n# Lower\n\n</#Tip> and </#tip>')
+    expect(html).toContain('<a href="#Tip">Upper</a> and <a href="#tip">Lower</a>')
   })
   it('renders an unresolved </#id> as literal text', () => {
     const html = carveToHtml('See </#nope>.')
@@ -148,7 +153,7 @@ describe('resolveHeadingIds', () => {
     expect(html).not.toContain('<a href="#nope"')
   })
   it('ambiguous bare ref resolves to the first occurrence', () => {
-    const html = carveToHtml('# Setup\n\n# Setup\n\nGo </#setup>.')
+    const html = carveToHtml('# Setup\n\n# Setup\n\nGo </#Setup>.')
     expect(html).toContain('<a href="#Setup">Setup</a>')
   })
   perfIt('bounds repeated crossrefs to a large target', () => {
@@ -196,14 +201,14 @@ describe('resolveHeadingIds', () => {
   describe('crossref cycles (no stack overflow)', () => {
     it('resolves a self-referencing crossref to a one-level link', () => {
       // `# A </#a>`: the heading title cross-references its OWN id.
-      const html = carveToHtml('# A </#a>')
+      const html = carveToHtml('# A </#A>')
       expect(html).toBe(
         ['<section id="A">', '  <h1>A <a href="#A">A </a></h1>', '</section>'].join('\n'),
       )
     })
 
     it('resolves a mutual A<->B crossref cycle without recursion', () => {
-      const html = carveToHtml('# A </#b>\n\n# B </#a>')
+      const html = carveToHtml('# A </#B>\n\n# B </#A>')
       expect(html).toBe(
         [
           '<section id="A">',
@@ -217,7 +222,7 @@ describe('resolveHeadingIds', () => {
     })
 
     it('breaks a heading + paragraph self-reference cycle', () => {
-      const html = carveToHtml('# T </#t>\n\nsee </#t>')
+      const html = carveToHtml('# T </#T>\n\nsee </#T>')
       expect(html).toBe(
         [
           '<section id="T">',
@@ -229,7 +234,7 @@ describe('resolveHeadingIds', () => {
     })
 
     it('does not throw on a longer (3-node) crossref cycle', () => {
-      const src = '# A </#b>\n\n# B </#c>\n\n# C </#a>'
+      const src = '# A </#B>\n\n# B </#C>\n\n# C </#A>'
       expect(() => carveToHtml(src)).not.toThrow()
       const html = carveToHtml(src)
       // Each link href points at the next node; the back-edge to a node already
@@ -246,15 +251,15 @@ describe('resolveHeadingIds', () => {
       // O(n^2) expansion around the ring.
       const parts: string[] = []
       const n = 5000
-      for (let i = 0; i < n; i++) parts.push(`# H${i} </#h${(i + 1) % n}>`)
+      for (let i = 0; i < n; i++) parts.push(`# H${i} </#H${(i + 1) % n}>`)
       expect(() => carveToHtml(parts.join('\n\n'))).not.toThrow()
     })
 
     it('resolves a NON-cyclic crossref chain to one-level links', () => {
       // A->B->C is a one-way chain. Crossref resolution is strictly one level
       // (matching carve-php / carve-rs): A's link to B shows B's own text, and
-      // B's own `</#c>` is NOT recursively expanded into A's link text.
-      const html = carveToHtml('# A </#b>\n\n# B </#c>\n\n# C')
+      // B's own `</#C>` is NOT recursively expanded into A's link text.
+      const html = carveToHtml('# A </#B>\n\n# B </#C>\n\n# C')
       expect(html).toContain('<h1>A <a href="#B">B </a></h1>')
       expect(html).toContain('<h1>B <a href="#C">C</a></h1>')
       expect(html).toContain('<h1>C</h1>')

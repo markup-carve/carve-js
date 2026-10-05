@@ -929,6 +929,8 @@ const IMPLEMENTED = new Set([
   'quoted-values-and-titles-retain-a-non-punctuation-backslash',
   'a-marker-line-opaque-quote-keeps-overindented-markers-literal',
   'a-denied-destination-takes-one-render-loss-row-per-sink',
+  'an-unreferenced-footnote-definition-takes-its-links-out-of-the-render',
+  'every-name-lookup-compares-case-exactly',
 ])
 
 /**

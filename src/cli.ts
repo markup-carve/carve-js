@@ -72,6 +72,7 @@ import {
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
 import { LIB_VERSION, SPEC_VERSION } from './version.js'
+import { migrateCaseOnlyReferences } from './case-migrate.js'
 
 /** Injectable I/O so `run` is testable without real fs / stdin / exit. */
 export interface CliIO {
@@ -92,7 +93,8 @@ const HELP = `carve - Carve markup tooling
 Usage:
   carve [options] [file]           Render (default; the 'render' word is optional)
   carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI / Carve
-  carve fmt [-w|--check] [--stamp] [files...] Format Carve source canonically
+  carve fmt [-w|--check] [--stamp] [--migrate] [files...]
+                                   Format Carve source canonically
   carve flatten [--include-root DIR] [file]
                                    Write the document as ONE self-contained
                                    file, every include expanded in place (the
@@ -163,6 +165,9 @@ fmt - format Carve source canonically.
                    version and engine) at the end of the document; replaces an
                    existing one. Deterministic (no timestamp); renders nothing.
         --stamp-block  Like --stamp but writes the multi-line %%% block form.
+        --migrate  Respell a </#id> or reference label that misses its target
+                   only by case, when exactly one target matches it
+                   case-insensitively; lint reports the rest.
 
 fix - rewrite Djot/Markdown delimiter collisions to their Carve equivalents,
 constructs that otherwise silently mis-render under Carve (e.g. **bold**
@@ -519,6 +524,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
     stdout?: boolean
     stamp?: boolean
     'stamp-block'?: boolean
+    migrate?: boolean
     help?: boolean
   }
   let positionals: string[]
@@ -531,6 +537,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
         stdout: { type: 'boolean' },
         stamp: { type: 'boolean' },
         'stamp-block': { type: 'boolean' },
+        migrate: { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -557,7 +564,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
   // form. Format, then stamp, so the marker lands on canonical output.
   const stampForm: StampForm | null = values['stamp-block'] ? 'block' : values.stamp ? 'line' : null
   const format = (src: string): string => {
-    const out = carveToCarve(src)
+    const out = carveToCarve(values.migrate ? migrateCaseOnlyReferences(src) : src)
     return stampForm ? stampCarve(out, `carve-js ${LIB_VERSION}`, stampForm) : out
   }
 
