@@ -29,6 +29,28 @@ describe('glossary', () => {
     expect(out).not.toContain('href="#gloss-ftp"')
   })
 
+  it('leaves a case-only miss unresolved, like an undefined term', () => {
+    const out = h(`Use :term[http] and :term[FTP].\n\n${GLOSS}`)
+    expect(out).toContain('<span class="term">http</span>')
+    expect(out).toContain('<span class="term">FTP</span>')
+    expect(out).not.toContain('<a href="#gloss-http"')
+  })
+
+  it('reaches each of two entries that differ only in case by its exact spelling', () => {
+    const out = h('Use :term[HTTP], :term[http] and :term[Http].\n\n::: glossary\n:: HTTP\n:  Upper.\n\n:: http\n:  Lower.\n:::')
+    expect(out).toContain('<a href="#gloss-http" class="term">HTTP</a>')
+    expect(out).toContain('<a href="#gloss-http" class="term">http</a>')
+    expect(out).toContain('<span class="term">Http</span>')
+    expect(out).toContain('<dt id="gloss-http">HTTP</dt>')
+    expect(out).toContain('<dt>http</dt>')
+  })
+
+  it('still matches across whitespace runs and NFC', () => {
+    const out = h('Use :term[Hyper  Text] and :term[Cafe\u0301].\n\n::: glossary\n:: Hyper Text\n:  One.\n\n:: Caf\u00e9\n:  Two.\n:::')
+    expect(out).toContain('<a href="#gloss-hyper-text" class="term">Hyper  Text</a>')
+    expect(out).toMatch(/<a href="#gloss-caf[^"]*" class="term">Cafe\u0301<\/a>/)
+  })
+
   it('renders entries in source order', () => {
     const out = h(GLOSS)
     expect(out.indexOf('gloss-http')).toBeLessThan(out.indexOf('gloss-html'))

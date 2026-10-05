@@ -847,6 +847,10 @@ the core definition-list and `:name[…]` inline forms, so there is no new synta
 to learn. A `:term[…]` naming no declared term stays a plain
 `<span class="term">` rather than becoming a dead link.
 
+The bracket text must match a declared term exactly, after whitespace
+collapsing and NFC: `:term[widget]` does not reach `:: Widget` and stays a
+`<span>`. The emitted ids are still lowercased slugs (`gloss-widget`).
+
 ## headingLevelShift
 
 `headingLevelShift()` shifts every heading down a fixed number of levels, for
