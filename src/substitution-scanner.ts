@@ -9,9 +9,14 @@ export class SubstitutionScanner {
   private comments: Int32Array | undefined
   private kinds: Int32Array | undefined
 
-  constructor(private readonly text: string) {}
+  private readonly lastArrow: number
+
+  constructor(private readonly text: string) {
+    this.lastArrow = text.lastIndexOf('~>')
+  }
 
   findArrow(from: number, to: number): number {
+    if (this.lastArrow < from) return -1
     if (this.first === undefined) {
       const arrow = this.scan(from, to)
       this.first = { from, to, arrow }
