@@ -206,9 +206,6 @@ function key(node: Node): string {
  * clean remove/add pair. That is the trade a line diff already makes, and the
  * content is still fully described.
  */
-function similar(a: Node, b: Node): boolean {
-  return a.type === b.type
-}
 
 function line(node: Node): number | undefined {
   const pos = node['pos']
@@ -227,6 +224,24 @@ function change(kind: ChangeKind, node: Node, path: string, detail?: string): Ch
 
 /** Longest common subsequence over two key lists, as index pairs. */
 function lcs(a: string[], b: string[]): [number, number][] {
+  if (a.length * b.length > 1_000_000) {
+    const indexes = new Map<string, { values: number[]; cursor: number }>()
+    b.forEach((key, index) => {
+      const bucket = indexes.get(key) ?? { values: [], cursor: 0 }
+      bucket.values.push(index)
+      indexes.set(key, bucket)
+    })
+    const pairs: [number, number][] = []
+    let after = -1
+    a.forEach((key, index) => {
+      const bucket = indexes.get(key)
+      if (!bucket) return
+      while (bucket.cursor < bucket.values.length && bucket.values[bucket.cursor]! <= after) bucket.cursor++
+      const next = bucket.values[bucket.cursor++]
+      if (next !== undefined) { pairs.push([index, next]); after = next }
+    })
+    return pairs
+  }
   const table: number[][] = Array.from({ length: a.length + 1 }, () =>
     new Array<number>(b.length + 1).fill(0),
   )
@@ -292,10 +307,29 @@ function diffLevel(
   const additions = after.map((n, j) => [n, j] as const).filter(([, j]) => !matchedAfter.has(j))
   const takenAdditions = new Set<number>()
 
+  const byKey = new Map<string, Array<readonly [Node, number]>>()
+  const byType = new Map<string, Array<readonly [Node, number]>>()
+  for (const entry of additions) {
+    const [node, j] = entry
+    const exact = byKey.get(afterKeys[j]!) ?? []
+    exact.push(entry)
+    byKey.set(afterKeys[j]!, exact)
+    const kinds = byType.get(node.type) ?? []
+    kinds.push(entry)
+    byType.set(node.type, kinds)
+  }
+  const cursors = new Map<Array<readonly [Node, number]>, number>()
+  const take = (bucket: Array<readonly [Node, number]> | undefined): readonly [Node, number] | undefined => {
+    if (!bucket) return undefined
+    let cursor = cursors.get(bucket) ?? 0
+    while (cursor < bucket.length && takenAdditions.has(bucket[cursor]![1])) cursor++
+    cursors.set(bucket, cursor + 1)
+    return bucket[cursor]
+  }
   for (const [node, i] of leftovers) {
     const nodeKey = beforeKeys[i]!
     // Same content, different place.
-    const moved = additions.find(([, j]) => !takenAdditions.has(j) && afterKeys[j] === nodeKey)
+    const moved = take(byKey.get(nodeKey))
     if (moved) {
       takenAdditions.add(moved[1])
       out.push(change('moved', node, `${path}/${field}[${i}]`, `now at index ${moved[1]}`))
@@ -303,7 +337,7 @@ function diffLevel(
     }
     // The same node, edited: recurse so the report names what changed inside
     // rather than declaring the whole subtree gone and a new one arrived.
-    const edited = additions.find(([other, j]) => !takenAdditions.has(j) && similar(node, other))
+    const edited = take(byType.get(node.type))
     if (edited) {
       takenAdditions.add(edited[1])
       diffNode(node, edited[0], `${path}/${field}[${i}]`, out)

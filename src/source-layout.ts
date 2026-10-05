@@ -20,7 +20,14 @@ type Positioned = { pos?: { startOffset?: number; endOffset?: number } }
 /** Build the optional PART 12 §13 sidecar without changing the AST payload. */
 export function toSourceLayout(source: string, ast: AstJsonDocument): SourceLayout {
   const points = [...source]
-  const byteAt = (offset: number): number => new TextEncoder().encode(points.slice(0, offset).join('')).length
+  const offsets = [0]
+  let bytes = 0
+  for (const point of points) {
+    const code = point.codePointAt(0)!
+    bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4
+    offsets.push(bytes)
+  }
+  const byteAt = (offset: number): number => offsets[Math.min(Math.max(offset, 0), points.length)]!
   const nodes: SourceLayoutNode[] = []
   const escape = (key: string) => key.replace(/~/g, '~0').replace(/\//g, '~1')
   const walk = (value: unknown, path: string): void => {

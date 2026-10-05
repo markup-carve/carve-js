@@ -86,7 +86,7 @@ import { ownValue, setOwn } from './own-property.js'
 import { codeContent, verbatimContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
-import { linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
+import { completeDestinationOpeners, linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
 
 export interface ParseOptions {
@@ -6957,7 +6957,7 @@ function sliceColumns(line: string, cols: number, keepResidual = false, onLitera
 const RE_FOOTNOTE_REF = /^\[\^([^\]\r\n]+)\]/
 // extension_name = identifier = (letter|'_'){letter|digit|'_'|'-'}
 // (grammar.ebnf:968-969,1122) -- a lone `_` is a valid extension name.
-const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\]/
 // Raw inline passthrough tag, follows a verbatim span: `` `…`{=html} ``.
 const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
 // Symbol shortcode `:name:` (after extension, which needs `[`).
@@ -7041,12 +7041,15 @@ const ATTR_INERT_PREV = new Set([
  * full match, destination, the two title spellings, attribute payload -- so
  * the call sites read the same either way.
  */
-function execLinkTail(tail: string): [string, string, string | undefined, string | undefined, string | undefined] | null {
+function execLinkTail(tail: string, canReadAttrs?: (offset: number) => boolean): [string, string, string | undefined, string | undefined, string | undefined] | null {
   const scanned = scanDestination(tail)
   if (scanned === null || scanned.dest === '') return null
   const rest = RE_LINK_REST.exec(tail.slice(scanned.end))
   if (rest === null) return null
-  return [tail.slice(0, scanned.end + rest[0].length), scanned.dest, rest[1], rest[2], rest[3]]
+  const end = scanned.end + rest[0].length
+  const attrs = tail[end] === '{' && (canReadAttrs === undefined || canReadAttrs(end))
+    ? RE_INLINE_ATTR.exec(tail.slice(end)) : null
+  return [tail.slice(0, end + (attrs?.[0].length ?? 0)), scanned.dest, rest[1], rest[2], attrs?.[1]]
 }
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
@@ -7330,7 +7333,7 @@ function isAsciiAlphanumeric(c: string): boolean {
   return /^[A-Za-z0-9]$/.test(c)
 }
 
-function spanAttrProvablyInvalid(text: string, brace: number): boolean {
+function spanAttrProvablyInvalid(text: string, brace: number, quoteEnd: (start: number) => number, valueEnd: (start: number) => number): boolean {
   const n = text.length
   let i = brace + 1
   while (i < n) {
@@ -7346,8 +7349,8 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
       i++
       continue
     }
-    // Quotes and escapes are subtle — defer to RE_SPAN_TAIL rather than skip.
-    if (c === '"' || c === "'" || c === '\\') return false
+    // Quotes and escapes cannot begin an attribute token.
+    if (c === '"' || c === "'" || c === '\\') return true
     if (c === '#' || c === '.') {
       // `#id` / `.class`: an explicit CSS identifier (letter, digit or `_`,
       // then `[\w-]`) MUST
@@ -7379,7 +7382,16 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
         if (v === undefined || v === '}' || isCarveWhitespace(v)) {
           return true
         }
-        return false
+        if (v === '"' || v === "'") {
+          const end = quoteEnd(i + 1)
+          if (end < 0) return true
+          i = end + 1
+          continue
+        }
+        const end = valueEnd(i + 1)
+        if (end === i + 1) return true
+        i = end
+        continue
       }
       continue
     }
@@ -7764,11 +7776,13 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
   // and scanning it again is what makes a nest of them quadratic. Brackets come
   // in ascending order, so the outermost of a nest is reached first.
   let covered = -1
+  const destinationOpeners = completeDestinationOpeners(text)
   for (let open = text.indexOf('['); open !== -1; open = text.indexOf('[', open + 1)) {
     const close = brackets(open)
     if (close === undefined) continue
     if (close + 1 <= covered) continue
     if (text[close + 1] !== '(' || text[open + 1] === '^' || text[open - 1] === '^') continue
+    if (!destinationOpeners.has(close + 1)) continue
     const scanned = scanDestination(text, close + 1)
     if (scanned === null || scanned.dest === '') continue
     RE_LINK_REST_STICKY.lastIndex = scanned.end
@@ -13549,8 +13563,41 @@ class ParseSession {
     // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
     // fail. See suffixHasChar/suffixHasPair. Built only when the delimiter is
     // present at all, mirroring the bracketClose guard above.
-    const rparenSuf = text.includes(')') ? suffixHasChar(text, ')') : null
+    const destinationOpeners = text.includes('](') ? completeDestinationOpeners(text) : new Set<number>()
     const rbraceSuf = text.includes('}') ? suffixHasChar(text, '}') : null
+    const rbracketSuf = text.includes(']') ? suffixHasChar(text, ']') : null
+    const criticCmtSuf = text.includes('#}') ? suffixHasPair(text, '#', '}') : null
+    let valueStops: Int32Array | undefined
+    const valueEnd = (start: number): number => {
+      if (!valueStops) {
+        valueStops = new Int32Array(text.length + 1)
+        valueStops[text.length] = text.length
+        for (let at = text.length - 1; at >= 0; at--) {
+          valueStops[at] = /[}|"'\\ \t\n\r]/.test(text[at]!) ? at : valueStops[at + 1]!
+        }
+      }
+      return valueStops[start]!
+    }
+    let quoteStops: { double: Int32Array; single: Int32Array } | undefined
+    const quoteEnd = (start: number): number => {
+      if (!quoteStops) {
+        const double = new Int32Array(text.length + 2).fill(-1)
+        const single = new Int32Array(text.length + 2).fill(-1)
+        for (let at = text.length - 1; at >= 0; at--) {
+          if (text[at] === '\\') {
+            if (at + 1 < text.length && !/[\n\r\u2028\u2029]/.test(text[at + 1]!)) {
+              double[at] = double[at + 2]!
+              single[at] = single[at + 2]!
+            }
+          } else {
+            double[at] = text[at] === '"' ? at : double[at + 1]!
+            single[at] = text[at] === "'" ? at : single[at + 1]!
+          }
+        }
+        quoteStops = { double, single }
+      }
+      return (text[start] === '"' ? quoteStops.double : quoteStops.single)[start + 1]!
+    }
     const insSuf = text.includes('+}') ? suffixHasPair(text, '+', '}') : null
     const delSuf = text.includes('-}') ? suffixHasPair(text, '-', '}') : null
 
@@ -13885,7 +13932,7 @@ class ParseSession {
           const alt = rest.slice(2, close)
           const tail = rest.slice(close + 1)
           // A link/image tail needs a literal `)`; skip when none lies ahead.
-          const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
+          const ml = destinationOpeners.has(i + close + 1) ? execLinkTail(tail, offset => !spanAttrProvablyInvalid(text, i + close + 1 + offset, quoteEnd, valueEnd)) : null
           if (ml) {
             flush()
             const img: Image = { type: 'image', src: ml[1]!, alt }
@@ -13973,7 +14020,7 @@ class ParseSession {
           // refs like `[^a][^a]` are two notes, not one unresolved `[text][ref]`.
           // Inside footnote content a `[^x]` is literal, not a reference
           // (no notes inside notes, design §3.1).
-          const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
+          const mfn = inFootnote || !rbracketSuf?.[i] ? null : RE_FOOTNOTE_REF.exec(rest)
           if (mfn) {
             flush()
             out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
@@ -13981,7 +14028,7 @@ class ParseSession {
             continue
           }
           // Inline link [text](url "title"){attrs}
-          const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
+          const ml = destinationOpeners.has(i + close + 1) ? execLinkTail(tail, offset => !spanAttrProvablyInvalid(text, i + close + 1 + offset, quoteEnd, valueEnd)) : null
           if (ml) {
             flush()
             const link: Link = {
@@ -14038,7 +14085,7 @@ class ParseSession {
         // footnote ref (the `{.c}` then attaches via the inline-attr pass)
         // rather than becoming a <span> of `^x`. Footnote labels hold no
         // nested brackets, so its own regex stays authoritative.
-        const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
+        const mfn = inFootnote || !rbracketSuf?.[i] ? null : RE_FOOTNOTE_REF.exec(rest)
         if (mfn) {
           flush()
           out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
@@ -14057,7 +14104,7 @@ class ParseSession {
           // otherwise scan to a far `}` at every `[` -> O(n^2) on `[x]{[x]{…}`)
           // when no `}` lies ahead or the payload is provably invalid.
           const ms =
-            rbraceSuf && rbraceSuf[i + close + 1] && !spanAttrProvablyInvalid(text, i + close + 1)
+            rbraceSuf && rbraceSuf[i + close + 1] && !spanAttrProvablyInvalid(text, i + close + 1, quoteEnd, valueEnd)
               ? RE_SPAN_TAIL.exec(rest.slice(close + 1))
               : null
           if (ms && isValidInlineAttrPayload(ms[1]!)) {
@@ -14086,8 +14133,12 @@ class ParseSession {
 
       // Inline extension :type[content]{attrs}
       if (c === ':') {
-        const m = RE_EXTENSION.exec(rest)
+        const m = rbracketSuf?.[i] ? RE_EXTENSION.exec(rest) : null
         if (m) {
+          const attrsStart = i + m[0].length
+          const attrs = text[attrsStart] === '{' && rbraceSuf?.[attrsStart] && !spanAttrProvablyInvalid(text, attrsStart, quoteEnd, valueEnd)
+            ? RE_INLINE_ATTR.exec(text.slice(attrsStart)) : null
+          if (attrs) { m[0] += attrs[0]; m[3] = attrs[1]! }
           flush()
           const ext: Extension = {
             type: 'inline_extension',
@@ -14155,7 +14206,8 @@ class ParseSession {
           // (djot + carve-php), so it never produces a duplicate attribute.
           // An invalid payload (`{2=v}`) is literal (§14), not an
           // attribute block -- leave it for normal text processing.
-          const am = /^\{([^}\n]+)\}/.exec(text.slice(i + consumed))
+          const am = text[i + consumed] === '{' && !spanAttrProvablyInvalid(text, i + consumed, quoteEnd, valueEnd)
+            ? /^\{([^}\n]+)\}/.exec(text.slice(i + consumed)) : null
           if (am && isValidInlineAttrPayload(am[1]!)) {
             const attrs = parseAttrs(am[1]!)
             if (!isEmptyAttrs(attrs)) {
@@ -14238,7 +14290,7 @@ class ParseSession {
           i += 4
           continue
         }
-        const cmt = hasBrace ? RE_CRITIC_CMT.exec(rest) : null
+        const cmt = criticCmtSuf?.[i] ? RE_CRITIC_CMT.exec(rest) : null
         if (cmt) {
           flush()
           out.push(this.withPos({ type: 'critic_comment', text: cmt[1]! } as CriticComment, source, text, i, i + cmt[0].length))
@@ -14261,7 +14313,7 @@ class ParseSession {
         // a non-empty `buf` means unflushed text (e.g. a space) sits between the
         // preceding node and the `{`, so the block is NOT attached -- it stays
         // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
-        const attr = !buf && hasBrace ? RE_INLINE_ATTR.exec(rest) : null
+        const attr = !buf && hasBrace && !spanAttrProvablyInvalid(text, i, quoteEnd, valueEnd) ? RE_INLINE_ATTR.exec(rest) : null
         // A digit-leading key or otherwise invalid payload (`{2=v}`) makes the
         // whole block literal (§14), same strict rule as block/span attrs — so
         // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.

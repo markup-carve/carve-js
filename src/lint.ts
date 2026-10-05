@@ -2419,18 +2419,6 @@ function collectPlatformAutolinks(
   }
 }
 
-/** Whether `ch` occurs unescaped in `line` before `end`. */
-function hasUnescapedBefore(line: string, ch: string, end: number): boolean {
-  for (let i = 0; i < end; i++) {
-    if (line[i] === '\\') {
-      i++
-      continue
-    }
-    if (line[i] === ch) return true
-  }
-
-  return false
-}
 
 /**
  * The caption lines of a figure wrapping a code or raw block.
@@ -2487,26 +2475,22 @@ function maskInlineDestinations(line: string): string {
   // length-preserving like the destination walk below, so a token after the URL
   // still indexes the real source.
   line = line.replace(/\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+/g, (m) => ' '.repeat(m.length))
+  const closes = new Map<number, number>()
+  const stack: number[] = []
+  let firstBracket = -1
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\\') { i++; continue }
+    if (line[i] === '[' && firstBracket === -1) firstBracket = i
+    if (line[i] === '(') stack.push(i)
+    else if (line[i] === ')' && stack.length) closes.set(stack.pop()!, i)
+  }
   let out: string[] | null = null
   for (let i = 0; i + 1 < line.length; i++) {
     if (line[i] !== ']' || line[i + 1] !== '(') continue
-    // A LABEL HAS TO OPEN SOMEWHERE. A bare `](#123)` in prose is visible text,
-    // not a destination, and masking it lost the finding. An escaped `\]` does
-    // not close a label either.
-    if (line[i - 1] === '\\' || !hasUnescapedBefore(line, '[', i)) continue
-    let depth = 1
-    let j = i + 2
-    for (; j < line.length; j++) {
-      const c = line[j]!
-      if (c === '\\') {
-        j++
-        continue
-      }
-      if (c === '(') depth++
-      else if (c === ')' && --depth === 0) break
-    }
-    if (depth !== 0 || j >= line.length) continue
-    out ??= [...line]
+    if (line[i - 1] === '\\' || firstBracket === -1 || firstBracket >= i) continue
+    const j = closes.get(i + 1)
+    if (j === undefined) continue
+    out ??= line.split('')
     for (let k = i + 2; k < j; k++) out[k] = ' '
     i = j
   }

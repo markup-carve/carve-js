@@ -39,6 +39,12 @@ function codepointToUtf16(source: string): number[] {
 
 function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
   const offsets = codepointToUtf16(source)
+  const lineStarts = new Int32Array(source.length + 1)
+  let lineStart = 0
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\n' || source[i] === '\r') lineStart = i + 1
+    lineStarts[i + 1] = lineStart
+  }
   const result: EditorMappedNode[] = []
   const hasAttrs = new Set<string>()
   const escape = (key: string): string => key.replace(/~/g, '~0').replace(/\//g, '~1')
@@ -101,9 +107,10 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
       for (let index = 0; index < authored.length; index++) if (authored[index] === '|') token('table-marker', node.start + index, node.start + index + 1)
     }
     if (hasAttrs.has(node.path)) {
-      const before = source.slice(0, node.start).replace(/\r?\n$/, '')
-      const lineStart = Math.max(before.lastIndexOf('\n'), before.lastIndexOf('\r')) + 1
-      const line = before.slice(lineStart)
+      let end = node.start
+      if (source[end - 1] === '\n') { end--; if (source[end - 1] === '\r') end-- }
+      const lineStart = lineStarts[end]!
+      const line = source.slice(lineStart, end)
       if (/^\{[^\r\n]+\}$/.test(line)) token('attribute', lineStart, lineStart + line.length)
     }
     node.tokens = Object.freeze(tokens.sort((a, b) => a.start - b.start || a.end - b.end))

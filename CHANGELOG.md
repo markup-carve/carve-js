@@ -9,6 +9,12 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+
+- Bound failed inline destination and attribute scans, including extension attributes and unterminated footnotes.
+- Index UTF-8 source-layout offsets and editor attribute lines once per document.
+- Index AST merge candidates and bound large AST diff matching. Preserve platform-lint offsets after astral characters.
+
 ## [0.1.10] - 2026-10-05
 
 ### Breaking
