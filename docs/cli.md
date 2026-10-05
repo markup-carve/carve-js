@@ -60,7 +60,10 @@ case-sensitive (spec rule `CARVE-P9R-010`). A `</#id>` or a reference label that
 misses its target only by case is respelled to that target, but only when exactly
 one target matches it case-insensitively. With several candidates, such as
 `{#Tip}` and `{#tip}`, nothing is rewritten and `carve lint` names both. The same
-rewrite is available as `migrateCaseOnlyReferences(src)`.
+rewrite is available as `migrateCaseOnlyReferences(src)`. A caller that renders
+with `lowercaseHeadingIds` or `asciiHeadingIds` passes the same options
+(`migrateCaseOnlyReferences(src, { lowercaseHeadingIds: true })`), so a reference
+that already resolves against those ids is left alone.
 
 ```carve
 # Getting Started

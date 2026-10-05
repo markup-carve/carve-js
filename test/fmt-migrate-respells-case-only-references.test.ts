@@ -49,6 +49,21 @@ describe('migrateCaseOnlyReferences', () => {
     expect(migrateCaseOnlyReferences('[x][Label]\n\n[label]: /u\n')).toBe('[x][label]\n\n[label]: /u\n')
   })
 
+  it('judges a crossref against the ids the heading-id options produce', () => {
+    const source = '# Plan\n\nSee </#plan>.\n'
+    expect(carveToHtml(source, { lowercaseHeadingIds: true })).toContain('<a href="#plan">Plan</a>')
+    expect(migrateCaseOnlyReferences(source, { lowercaseHeadingIds: true })).toBe(source)
+    expect(migrateCaseOnlyReferences('# Plan\n\nSee </#Plan>.\n', { lowercaseHeadingIds: true })).toBe(source)
+    expect(migrateCaseOnlyReferences(source)).toBe('# Plan\n\nSee </#Plan>.\n')
+  })
+
+  it('judges a crossref against ASCII-folded ids', () => {
+    const source = '# Café\n\nSee </#Cafe>.\n'
+    expect(carveToHtml(source, { asciiHeadingIds: 'fold' })).toContain('href="#Cafe"')
+    expect(migrateCaseOnlyReferences(source, { asciiHeadingIds: 'fold' })).toBe(source)
+    expect(migrateCaseOnlyReferences('# Café\n\nSee </#cafe>.\n', { asciiHeadingIds: 'fold' })).toBe(source)
+  })
+
   it('does not rewrite when several ids match', () => {
     const source = '{#Tip}\n# A\n\n{#TIP}\n# B\n\nSee </#tip>.\n'
     expect(migrateCaseOnlyReferences(source)).toBe(source)
