@@ -187,26 +187,6 @@ function key(node: Node): string {
   return parts.join('|')
 }
 
-/**
- * Are these two the same node, edited - or two different nodes?
- *
- * Same type is the whole rule, applied to the leftovers IN ORDER after the LCS
- * has already matched everything identical. It is the same call a line diff
- * makes when it shows a modified line instead of a deletion and an insertion.
- *
- * Counting shared children instead was tried and is worse: a paragraph with one
- * text child shares nothing with the same paragraph after its wording changed,
- * so the single most ordinary edit - retyping a sentence - reported as a
- * paragraph removed and a paragraph added. Turning a soft break into a hard one
- * has the same problem from the other direction, taking a paragraph from one
- * child to three.
- *
- * The cost is that two unrelated same-type siblings, one deleted and one added
- * in the same place, pair up and report their inner differences rather than a
- * clean remove/add pair. That is the trade a line diff already makes, and the
- * content is still fully described.
- */
-
 function line(node: Node): number | undefined {
   const pos = node['pos']
   if (typeof pos !== 'object' || pos === null) return undefined
@@ -222,7 +202,7 @@ function change(kind: ChangeKind, node: Node, path: string, detail?: string): Ch
   return out
 }
 
-/** Longest common subsequence over two key lists, as index pairs. */
+/** Exact LCS below the cell budget; monotone exact matches above it. */
 function lcs(a: string[], b: string[]): [number, number][] {
   if (a.length * b.length > 1_000_000) {
     const indexes = new Map<string, { values: number[]; cursor: number }>()
@@ -308,6 +288,7 @@ function diffLevel(
   const takenAdditions = new Set<number>()
 
   const byKey = new Map<string, Array<readonly [Node, number]>>()
+  // Pair remaining same-type siblings in their original occurrence order.
   const byType = new Map<string, Array<readonly [Node, number]>>()
   for (const entry of additions) {
     const [node, j] = entry

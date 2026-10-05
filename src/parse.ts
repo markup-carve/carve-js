@@ -7296,22 +7296,9 @@ function suffixHasPair(s: string, a: string, b: string): Uint8Array {
   return suf
 }
 
-// A `[text]{…}` span only forms when the `{…}` content is a valid attribute
-// payload (see isValidAttrPayload). RE_SPAN_TAIL scans `[^}"'\n]*` forward to
-// the first unquoted `}`; on a run like `[x]{[x]{…}` — or `[x]{a[x]{…}`,
-// `[x]{.a [x]{…}` — where one far `}` exists but the content can NEVER validate,
-// that scan runs to the far `}` at every `[`, so N brackets do O(n) work each:
-// O(n^2). This walks the SAME attribute-token grammar and bails at the first
-// character that cannot continue a valid token, rejecting a doomed payload in
-// O(1) per opener instead of O(n). It is a pure SKIP filter: it returns true
-// ONLY when the payload is provably invalid (so the elided RE_SPAN_TAIL would
-// have failed too); on reaching a `}` (a candidate close) or any construct whose
-// validity is subtle — a quote, an escape, a `key=<value>`, a newline, or rare
-// whitespace — it returns false and the unchanged RE_SPAN_TAIL + isValidAttrPayload
-// path runs, so every accepted span (and its output) is byte-identical. Because
-// a nested `{`/`[` (or any other invalid boundary char) ends the walk, each
-// character is visited by O(1) walks, keeping the total O(n). `brace` is the
-// index of the opening `{`.
+// Reject invalid attribute tokens before running a full tail match. Cached
+// quoted and unquoted value ends avoid rescanning values at later candidates.
+// The attribute parser remains authoritative for candidates reaching `}`.
 // Whitespace RE_SPAN_TAIL content may contain: PART 7's four characters except
 // `\n` (which its class `[^}"'\n]` excludes). Matches isValidAttrPayload's
 // separator run on those chars, and it has to: this is the FAST PATH for the

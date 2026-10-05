@@ -17,6 +17,13 @@ describe('remaining scan costs', () => {
     expect(carveToHtml('[x]{k="a" .b}')).toContain('k="a"')
   })
 
+  it('keeps platform lint columns after astral text', () => {
+    const diagnostics = lintCarve('😀😀 [x](u#12) #34', { platforms: ['github'] })
+    const findings = diagnostics.filter(diagnostic => diagnostic.rule === 'platform-issue-reference')
+    expect(findings).toHaveLength(1)
+    expect(findings[0]!.column).toBe(16)
+  })
+
   it('maps scalar offsets to UTF-8 bytes', () => {
     const source = '# 😀é\n\ntext\n'
     const { layout } = parseWithSourceLayout(source)
@@ -37,7 +44,7 @@ describe('remaining scan costs', () => {
     if (result.ok) expect(result.ast.children).toHaveLength(4)
   })
 
-  for (const unit of ['[x](', '*[x](', '[x]{k="', '[x]{k=', '[x]{k=a ', ':foo[x]{k="', '^[', '[^', '{~', '{=', '{#']) {
+  for (const unit of ['[x](', '*[x](', '[x]{k="', '[x]{k=', '[x]{k=a ', ':foo[x]{k="', '^[', '[^', '{~', '{=', '{#', '[x](a){', ':foo[', '<a:x>{']) {
     perfIt(`failed tail ${unit} scales with source bytes`, () => {
       expectBuiltInputScansLinearly(input => void carveToHtml(input), n => unit.repeat(n) + (unit.includes('{') ? '"}' : ')'), { smallRepeats: 2000, label: unit })
     })
