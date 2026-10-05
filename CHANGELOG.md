@@ -9,42 +9,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Improvements
-
-- Skip cycle-set and schema lookup work for text-only arrays during document ID collection. IDs added after resolution still participate in collision checks.
-
-- Extract colon-group extent scanning from list-body rebasing while preserving folded-line ownership, opaque payload tracking, and closer caches.
-- Extract quote and code-fence extent scans from list-body rebasing while preserving scan order, callbacks, and closer caches.
-- Add a separate table-preservation assessment and checked output API. Diagnose merged cells, caption associations, header ordering, and other declared fields without changing the render-loss schema.
-
-### Fixes
-
-- Reserve table head, footer, document, and trailer ids before assigning heading ids in constructed trees (#2490).
-- Keep footnote labels and attribute names that match position-field names when positions are disabled (#2489).
-
-- Keep reference definitions inside code samples literal when a mixed backtick/tilde run appears in the payload.
-
-- Preserve multiple table bodies, intermediate body headers, empty bodies, and per-body row-header counts with positional source attributes. Keep authored conflicts and report partition loss.
-
-- Preserve source-spellable table heads, single bodies, and footers during canonical conversion and HTML import. Diagnose conflicting column attributes and keep fractional widths exact through percentage conversion. Keep decimal percentages precise in HTML output (#2460).
-- Report explicit table row groups dropped by canonical source conversion as a `field-unspellable` diagnostic for `rowGroups` (#2457).
-- Share schema child slots across AST conversion, diffs, sidecars, and text coalescing. Diffs report edits inside substitution arms, citation fields, short captions, and extension fallbacks at their child paths. AST depth checks cover singleton children (#2442).
-- Keep literal verse definitions consistent through lazy list continuations and attached opaque spans (#2442).
-- A colon closer inside a closed code or comment span stays inside verse, matching the executable spec (#2442).
-
-### Performance
-
-- Skip ordinary inline and block position construction for `positions: false`; copy the remaining position-bearing records without deleting AST fields (#2489).
-- Collect document ids through explicit schema child slots and reuse that visitor during heading resolution (#2490).
-- Stop definition ownership scanning after the last candidate, strip container prefixes by offset, and dispatch block opener checks by first character (#2491).
-
-- Reuse failed colon states at every stack depth and skip plain lines through the attachment event index.
-- Share attachment closer indices across indentation columns and borrowed bodies. Reuse failed colon tails, including tails containing balanced containers.
-- Cache attachment fence boundaries and failed code lookahead across repeated `+` blocks. Reject mixed runs as possible code closers.
-- Fast HTML eligibility uses one native ASCII/control scan and avoids repeated heading and paragraph checks (#2467).
-- Fast HTML list lookahead skips blank lines by index instead of copying the remaining lines at each list boundary (#2461).
-
-## [0.1.10] - 2026-10-01
+## [0.1.10] - 2026-10-05
 
 ### Breaking
 
@@ -68,10 +33,47 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Markdown import keeps the source indentation after an empty list marker, so a heading, fence, nested list or indented code below it keeps its block boundary, and tight siblings keep their spacing (#2425).
 - Djot import pairs emphasis by Djot's own delimiter ownership and converts orphan attributes, empty definition fences, image alt text and reference links in their source context, while code, destinations and fenced metadata stay opaque and a paragraph boundary stops delimiter matching (#2427; markup-carve/carve#2522).
 - Djot import keeps a code fence opaque when ordinary prose such as `Mr. Smith` precedes an indented fence, recognizes Djot's numeric, single-letter and Roman list markers, and tracks each enclosing quote separately so a quote inside a list keeps the item's ownership (#2428; markup-carve/carve#2522).
+- Reserve table head, footer, document, and trailer ids before assigning heading ids in constructed trees (#2490).
+- Keep footnote labels and attribute names that match position-field names when positions are disabled (#2489).
+
+- Keep reference definitions inside code samples literal when a mixed backtick/tilde run appears in the payload (#2484).
+
+- Preserve multiple table bodies, intermediate body headers, empty bodies, and per-body row-header counts with positional source attributes. Keep authored conflicts and report partition loss (#2453, #2462, #2463, #2468, #2469, #2470).
+
+- Preserve source-spellable table heads, single bodies, and footers during canonical conversion and HTML import. Diagnose conflicting column attributes and keep fractional widths exact through percentage conversion. Keep decimal percentages precise in HTML output (#2460).
+- Report explicit table row groups dropped by canonical source conversion as a `field-unspellable` diagnostic for `rowGroups` (#2457, #2459).
+- Share schema child slots across AST conversion, diffs, sidecars, and text coalescing. Diffs report edits inside substitution arms, citation fields, short captions, and extension fallbacks at their child paths. AST depth checks cover singleton children (#2442).
+- Keep literal verse definitions consistent through lazy list continuations and attached opaque spans (#2442).
+- A colon closer inside a closed code or comment span stays inside verse, matching the executable spec (#2442).
+- A list marker payload keeps Unicode separator characters during parsing (#2488).
+- A citation group matches its items without treating an escaped character as an item marker, and a citation bracket map stays inside the parse context that built it (#2450, #2452).
+- A container whose opener metadata is invalid is recovered instead of dropped, a migrated fence closer is preserved including on a marker line, and an authored Djot fence is classified with its nested structure intact (#2447).
+- A header flag dropped on a table span placeholder is reported as a conversion diagnostic instead of being lost silently (#2464).
 
 ### Improvements
 
 - `carveToHtml` renders a document whose reference definitions sit in one adjacent run through the HTML fast path instead of the full AST pipeline, and reference-definition parsing reuses indexed line starts and successful lexical matches rather than rescanning the preceding lines. A definition line with an escaped title or an unsupported layout still takes the full parser. See the [measurements](reports/reference-definitions.md) (#2429).
+- Skip cycle-set and schema lookup work for text-only arrays during document ID collection. IDs added after resolution still participate in collision checks (#2494).
+
+- Extract colon-group extent scanning from list-body rebasing while preserving folded-line ownership, opaque payload tracking, and closer caches (#2481).
+- Extract quote and code-fence extent scans from list-body rebasing while preserving scan order, callbacks, and closer caches (#2480).
+- Add a separate table-preservation assessment and checked output API. Diagnose merged cells, caption associations, header ordering, and other declared fields without changing the render-loss schema (#2475).
+- Skip ordinary inline and block position construction for `positions: false`; copy the remaining position-bearing records without deleting AST fields (#2489).
+- Collect document ids through explicit schema child slots and reuse that visitor during heading resolution (#2490, #2492).
+- Stop definition ownership scanning after the last candidate, strip container prefixes by offset, and dispatch block opener checks by first character (#2491).
+
+- Reuse failed colon states at every stack depth and skip plain lines through the attachment event index (#2487).
+- Share attachment closer indices across indentation columns and borrowed bodies. Reuse failed colon tails, including tails containing balanced containers (#2485).
+- Cache attachment fence boundaries and failed code lookahead across repeated `+` blocks. Reject mixed runs as possible code closers (#2484).
+- Fast HTML eligibility uses one native ASCII/control scan and avoids repeated heading and paragraph checks (#2467).
+- Fast HTML list lookahead skips blank lines by index instead of copying the remaining lines at each list boundary (#2461).
+- `lintCarve` reports a fragment link whose target names no element in the document, under the new `broken-fragment-link` rule. The rule reads ids off the rendered HTML, so heading slugs, footnote ids, ids on spans and list items and ids inside raw HTML count exactly as a browser sees them, and a case-only near miss is named in the message. `#`, `#top`, text directives and links into other files are not reported, and the rule stays silent when an extension may generate ids. `broken-crossref` now says when a target id exists on an element a cross-reference cannot reach and suggests a plain link instead of reporting no match (#2497).
+- `carve --version` and `carve -V` print `carve-js <version>` and exit 0. Both spellings used to fail as an unknown render option with exit 2, so a package manager or a bug report had no way to ask which engine answered (#2458).
+- The fast HTML renderer accepts a list that holds a blank line before a nested bullet, renders plain Unicode and trimmed paragraphs through borrowed strings, and collects the HTML id namespace only when core rendering needs it. Rendered HTML is unchanged (#2456, #2472, #2473).
+- Attribute parsing, table span resolution, consecutive attribute folds, combined-span closers and missing comment closer scans are bounded, and failed cross-reference scans are memoized (#2454, #2476, #2493, #2496).
+- Nested lexer views defer unused local offsets and share colon fence boundaries and source geometry, and nested colon lines are borrowed through a shared bounded fence lookahead (#2477, #2478, #2483).
+- Verse ownership discovery avoids repeated inline callbacks, verse whitespace expansion avoids identity position maps, and gap restoration allocates less (#2443, #2444, #2445).
+- Heading id assignment and HTML rendering no longer repeat parser work, and only the affected image branches are copied (#2474).
 
 ## [0.1.9] - 2026-09-30
 
