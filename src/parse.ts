@@ -10395,10 +10395,38 @@ class ParseSession {
           if (indentColumns(ln, contentCol) < contentCol) {
             lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
           }
-          bodyLines.push(ln)
+          // CLAMPED TO ONE COLUMN, as the list collector clamps it
+          // (markup-carve/carve-js#540, #1623). A block-shaped line below the
+          // content column opens nothing (§24 C3) and folds here for that
+          // reason, but the body's own reparse reads columns from 0, so a fence
+          // line left flush left opened a code block there instead of staying
+          // the paragraph's inline verbatim run - one rule with two answers,
+          // decided by whether a list or a description body sat above it
+          // (markup-carve/carve-js#2515).
+          //
+          // THE CODE FENCE IS THE ONLY KIND THAT NEEDS IT here. This body's
+          // lines are already dedented by its content margin, so the column is
+          // not a clamp on indentation the author wrote but one added past the
+          // body's own column 0 - and a list marker moved off that column opens
+          // a second list where the fold continues the first. Every other kind
+          // either ends the body above or reads the same at both columns.
+          //
+          // The clamp is not applied where the nested lead's own fence still
+          // owns the line: that line is the fence's verbatim content and keeps
+          // the column the author wrote.
+          const folded =
+            !nestedFenceOwnsLine &&
+            atDocumentColumn &&
+            opensCodeFence(below)
+              ? ' ' + below
+              : ln
+          bodyLines.push(folded)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-          track(ln, undefined, false)
+          // The CLAMPED line is what this body holds, so it is what the trailing
+          // state is read off: a clamped fence line opens no span here, and the
+          // paragraph it folded into stays open for the line below it.
+          track(folded, undefined, false)
           lexer.consume()
           continue
         }
