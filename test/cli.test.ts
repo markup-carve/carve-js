@@ -484,7 +484,7 @@ describe('carve lint', () => {
   })
 
   it('exits 0 on a clean document', async () => {
-    const t = makeIO({ stdin: '# Intro\n\nSee </#intro>.' })
+    const t = makeIO({ stdin: '# Intro\n\nSee </#Intro>.' })
     expect(await run(['lint'], t.io)).toBe(0)
     expect(t.out).toBe('')
   })

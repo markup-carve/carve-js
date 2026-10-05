@@ -70,7 +70,7 @@ describe('labeled display equations', () => {
     expect([target.number, caption.number]).toEqual([1, 2])
   })
 
-  it('resolves equation ids with NFC normalization and case folding', () => {
+  it('resolves equation ids with NFC normalization and exact case', () => {
     const doc = equation('$$`x`{#eq}\n\nSee </#eq>.\n')
     const first = doc.children[0]
     const second = doc.children[1]
@@ -79,7 +79,7 @@ describe('labeled display equations', () => {
     math.attrs!.id = 'Éq'
     const ref = second.children.find((node) => node.type === 'heading_ref')
     if (!ref || ref.type !== 'heading_ref') throw new Error('missing reference')
-    ref.target = 'e\u0301Q'
+    ref.target = 'E\u0301q'
     resolve(doc)
     expect(renderHtml(doc)).toContain('<a href="#Éq">Equation 1</a>')
   })

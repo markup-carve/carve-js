@@ -49,7 +49,7 @@ describe('an explicit reference does not reach the heading index', () => {
   })
 
   it('CONTROL the collapsed form still reaches the index', () => {
-    expect(href('# Getting Started\n\n[getting started][]\n')).toBe('#Getting-Started')
+    expect(href('# Getting Started\n\n[Getting Started][]\n')).toBe('#Getting-Started')
     expect(href('# *bold* heading\n\n[*bold* heading][]\n')).toBe('#bold-heading')
   })
 
@@ -74,6 +74,6 @@ describe('an explicit reference does not reach the heading index', () => {
       'unresolved-reference-link',
     ])
     // CONTROL: the collapsed form still resolves, so lint still says nothing.
-    expect(lintCarve('# Getting Started\n\n[getting started][]\n')).toEqual([])
+    expect(lintCarve('# Getting Started\n\n[Getting Started][]\n')).toEqual([])
   })
 })

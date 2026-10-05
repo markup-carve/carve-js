@@ -50,7 +50,7 @@ describe('a figure group degrades deterministically', () => {
     // a `</#...>` to a heading inside one degrades to plain text while the
     // heading loses its anchor stamp (carve-php / carve-rs parity).
     const src =
-      'See </#inner-heading>.\n\n::: figure\n## Inner heading\n\n![x](x.png)\n^ (a) x\n:::\n^ Figure #: G\n'
+      'See </#Inner-heading>.\n\n::: figure\n## Inner heading\n\n![x](x.png)\n^ (a) x\n:::\n^ Figure #: G\n'
     expect(carveToMarkdown(src)).toBe(
       'See [Inner heading](#inner-heading).\n\n## Inner heading\n\n![x](x.png)\n\n*(a) x*\n\n**Figure 1: G**\n',
     )

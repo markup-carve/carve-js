@@ -76,7 +76,7 @@ describe('sections: false', () => {
   })
 
   it('resolves crossrefs and implicit heading references against the slug', () => {
-    expect(flat('# Target\n\nSee </#target> and [Target][].\n')).toBe(
+    expect(flat('# Target\n\nSee </#Target> and [Target][].\n')).toBe(
       '<h1 id="Target">Target</h1>\n' +
         '<p>See <a href="#Target">Target</a> and <a href="#Target">Target</a>.</p>',
     )

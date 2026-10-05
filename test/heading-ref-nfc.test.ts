@@ -11,9 +11,8 @@ import { carveToHtml, lintCarve } from '../src/index.js'
  * not the other. Both spellings render identically, so the miss had no visible
  * cause; that is what made it survive.
  *
- * NFC is also a WEAKER fold than the case fold R1 already admits: case folding
- * relates codepoints Unicode calls distinct, NFC relates sequences Unicode
- * DEFINES as the same.
+ * NFC relates sequences Unicode DEFINES as the same, which is why R1 keeps it
+ * while comparing case exactly (CARVE-P9R-010).
  *
  * The NFKC cases are the other half of the claim and are not decoration: a fix
  * that reached for `normalize('NFKC')`, or for the ASCII transliteration map
@@ -55,9 +54,9 @@ describe('a heading reference folds NFC', () => {
     }
   })
 
-  it('still folds case and collapses whitespace', () => {
-    const html = carveToHtml('# Getting  Started\n\nsee [getting started][]\n')
-    expect(html).toContain('<a href="#Getting-Started">')
+  it('collapses whitespace but compares case exactly', () => {
+    expect(carveToHtml('# Getting  Started\n\nsee [Getting Started][]\n')).toContain('<a href="#Getting-Started">')
+    expect(carveToHtml('# Getting  Started\n\nsee [getting started][]\n')).toContain('[getting started][]')
   })
 })
 

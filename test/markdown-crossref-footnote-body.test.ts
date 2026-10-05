@@ -8,7 +8,7 @@ import { carveToMarkdown } from '../src/index.js'
  */
 describe('cross-references inside footnote bodies', () => {
   it('links a heading referenced only from a footnote', () => {
-    const out = carveToMarkdown('# H\n\nBody[^n]\n\n[^n]: see </#h>\n')
+    const out = carveToMarkdown('# H\n\nBody[^n]\n\n[^n]: see </#H>\n')
 
     expect(out).toContain('# H\n')
     expect(out).toContain('[H](#h)')
@@ -22,14 +22,14 @@ describe('cross-references inside footnote bodies', () => {
   })
 
   it('still sees references in ordinary body text', () => {
-    const out = carveToMarkdown('# H\n\nSee </#h>.\n')
+    const out = carveToMarkdown('# H\n\nSee </#H>.\n')
 
     expect(out).toContain('# H\n')
     expect(out).toContain('[H](#h)')
   })
 
   it('links every heading a footnote body references', () => {
-    const out = carveToMarkdown('# One\n\n# Two\n\nBody[^n]\n\n[^n]: </#one> and </#two>\n')
+    const out = carveToMarkdown('# One\n\n# Two\n\nBody[^n]\n\n[^n]: </#One> and </#Two>\n')
 
     expect(out).toContain('[^n]: [One](#one) and [Two](#two)')
     expect(out).not.toContain('{#')

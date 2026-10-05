@@ -223,10 +223,25 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
     expect(r.html).toContain('<a href="#tip-2">it</a>')
   })
 
-  it('a crossref follows a renamed heading case-insensitively', () => {
-    const r = expand('{#tip}\n# Parent\n\n{{ child }}', { child: '{#tip}\n# Child\n\nSee </#TIP>.' })
+  it('a crossref follows a renamed heading by its exact id', () => {
+    const r = expand('{#tip}\n# Parent\n\n{{ child }}', { child: '{#tip}\n# Child\n\nSee </#tip>.' })
     expect(r.html).toContain('<section id="tip-2">')
     expect(r.html).toContain('href="#tip-2"')
+  })
+
+  it('a crossref differing only in case does not follow the rename', () => {
+    const r = expand('{#tip}\n# Parent\n\n{{ child }}', { child: '{#tip}\n# Child\n\nSee </#TIP>.' })
+    expect(r.html).toContain('<section id="tip-2">')
+    expect(r.html).toContain('See &lt;/#TIP&gt;.')
+  })
+
+  it('a crossref in the child follows the FIRST renamed copy (I5)', () => {
+    const r = expand('{#dup}\n# Parent\n\n{{ a.crv }}\n', {
+      'a.crv': '{#dup}\n# One\n\n{#dup}\n# Two\n\n</#dup> [x](#dup)\n',
+    })
+    expect(r.html).toContain('<section id="dup-2">\n  <h1>One</h1>')
+    expect(r.html).toContain('<section id="dup-3">\n  <h1>Two</h1>')
+    expect(r.html).toContain('<p><a href="#dup-2">One</a> <a href="#dup-2">x</a></p>')
   })
 
   it('a crossref to a footnote heading follows that heading, not a body block', () => {

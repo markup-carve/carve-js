@@ -92,10 +92,11 @@ describe('a collapsed reference reaches a heading by its rendered text', () => {
 
   it("applies R1's four normalizations to the stripped plain text", () => {
     // The strip produces a string that still has to be trimmed, whitespace-
-    // collapsed, NFC'd and case-folded. A retry that skipped them passes every
-    // case above, because those labels need no normalizing.
-    // Case and a collapsed run:
-    expect(href('# *bold*  heading\n\n[*BOLD*   heading][]\n')).toBe('#bold-heading')
+    // collapsed and NFC'd, then compared with exact case. A retry that skipped
+    // them passes every case above, because those labels need no normalizing.
+    // A collapsed run, and a case-only miss that stays unresolved:
+    expect(href('# *bold*  heading\n\n[*bold*   heading][]\n')).toBe('#bold-heading')
+    expect(href('# *bold*  heading\n\n[*BOLD*   heading][]\n')).toBe(null)
     // NFC: the heading writes the composed form, the label the decomposed one.
     // The id keeps the accent (§25 NFC, case-preserving), so the composed
     // form is what the reference must reach.

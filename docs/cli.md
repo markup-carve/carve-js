@@ -25,6 +25,7 @@ carve fmt  file.crv        # print canonically formatted Carve to stdout
 carve fmt -w   file.crv    # format in place
 carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate)
 carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
+carve fmt --migrate -w file.crv # also respell case-only reference misses
 carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
 carve lint file.crv        # validate: collisions + silent-failure problems
 carve diff a.crv b.crv     # semantic changes, ignoring source reflow
@@ -53,6 +54,27 @@ It is deterministic (no timestamp) and replace-in-place, so re-stamping is
 idempotent; it renders nothing and a plain `carve fmt` preserves it. Use
 `--stamp-block` for the multi-line `%%%` block form. The same logic is available
 as `stampCarve(formatted, 'carve-js 0.1.0')`.
+
+`carve fmt --migrate` rewrites references that broke when name lookups became
+case-sensitive (spec rule `CARVE-P9R-010`). A `</#id>` or a reference label that
+misses its target only by case is respelled to that target, but only when exactly
+one target matches it case-insensitively. With several candidates, such as
+`{#Tip}` and `{#tip}`, nothing is rewritten and `carve lint` names both. The same
+rewrite is available as `migrateCaseOnlyReferences(src)`.
+
+```carve
+# Getting Started
+
+See </#getting-started> and [getting started][].
+```
+
+becomes
+
+```carve
+# Getting Started
+
+See </#Getting-Started> and [Getting Started][].
+```
 
 The marker is machine-readable, so flagging documents that predate a breaking
 spec change does not have to be done by eye:

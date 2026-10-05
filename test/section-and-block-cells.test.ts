@@ -65,7 +65,7 @@ describe('interchange sections and block-content cells', () => {
         { type: 'table', rows: [{ type: 'table_row', cells: [{
           type: 'table_cell', header: false, blocks: [
             { type: 'heading', level: 2, children: [{ type: 'text', value: 'Cell heading' }] },
-            { type: 'paragraph', children: [{ type: 'heading_ref', target: 'cell-heading' }] },
+            { type: 'paragraph', children: [{ type: 'heading_ref', target: 'Cell-heading' }] },
           ],
         }] }] },
       ],

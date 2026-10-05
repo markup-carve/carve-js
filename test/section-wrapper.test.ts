@@ -87,7 +87,7 @@ describe('heading <section> wrapping', () => {
   })
 
   it('keeps the fragment target resolvable via crossref', () => {
-    const html = h('# Getting Started\n\nSee </#getting-started>.')
+    const html = h('# Getting Started\n\nSee </#Getting-Started>.')
     expect(html).toContain('<section id="Getting-Started">')
     expect(html).toContain('<h1>Getting Started</h1>')
     expect(html).toContain('<a href="#Getting-Started">Getting Started</a>')

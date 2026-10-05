@@ -232,6 +232,7 @@ export {
   type LintPlatform,
   KNOWN_LINT_PLATFORMS,
 } from './lint.js'
+export { migrateCaseOnlyReferences } from './case-migrate.js'
 export { inspectColonFences, type ColonFenceSite, type ColonFenceMismatch } from './colon-fences.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'

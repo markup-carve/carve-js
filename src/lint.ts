@@ -47,6 +47,8 @@ import {
   headingIdSlugOpts,
   normalizeHeadingRefLabel,
   headingRefKeyFromLabel,
+  crossrefKey,
+  caseOnlyKey,
   isCollapsedRef,
   figureGroupPanels,
   resolveHeadingIds,
@@ -396,6 +398,36 @@ function recoveredContainerHint(line: string): string {
   return prefix + 'Use a complete straight-double-quoted title or bracketed label.'
 }
 
+/** Spellings grouped by their case-only key, distinct and in first-seen order. */
+function groupByCaseOnlyKey(names: Iterable<string>): Map<string, string[]> {
+  const grouped = new Map<string, string[]>()
+  for (const name of names) {
+    const key = caseOnlyKey(name)
+    const bucket = grouped.get(key)
+    if (!bucket) grouped.set(key, [name])
+    else if (!bucket.includes(name)) bucket.push(name)
+  }
+  return grouped
+}
+
+function caseOnlyPhrase(noun: string, variants: string[]): string {
+  const quoted = variants.map((v) => `"${v}"`)
+  return variants.length === 1
+    ? `the ${noun} ${quoted[0]} differs only in case`
+    : `the ${noun}s ${quoted.join(', ')} differ only in case`
+}
+
+/** Every link reference definition's label, whitespace-normalized as R1 keys it. */
+function collectDefinitionLabels(doc: Document): string[] {
+  const labels: string[] = []
+  walkDocument(doc, (node) => {
+    if (node.type === 'link_reference_definition' && typeof node.label === 'string') {
+      labels.push(normalizeRefLabel(node.label))
+    }
+  })
+  return labels
+}
+
 export function lintCarve(
   source: string,
   opts: {
@@ -443,10 +475,7 @@ export function lintCarve(
   const utf16At = codepointToUtf16Map(source)
   const toUtf16 = (offset: number): number => (utf16At ? (utf16At[offset] ?? source.length) : offset)
   const slugOpts = headingIdSlugOpts(opts)
-  // Cross-references resolve case-insensitively, so the broken-crossref check
-  // folds case the same way resolveHeadingIds does.
-  const foldId = (s: string): string =>
-    Array.from(s, (c) => c.toLowerCase()).join('')
+  const foldId = caseOnlyKey
   const out: LintWarning[] = []
 
   for (const mismatch of inspectColonFences(source).mismatches) {
@@ -608,15 +637,18 @@ export function lintCarve(
   const explicitHeadings = new Set<string>()
   const nextSuffix = new Map<string, number>()
   const explicitIdKinds = new Map<string, { id: string; kind: string }>()
+  const explicitIdKindsByFold = new Map<string, { id: string; kind: string }>()
   walkDocument(doc, (node) => {
     const id = (node as { attrs?: Attrs }).attrs?.id
     if (id === undefined) return
     allocated.add(id)
-    if (!explicitIdKinds.has(foldId(id)) && typeof node.type === 'string') {
-      explicitIdKinds.set(foldId(id), { id, kind: node.type.replace(/_/g, ' ') })
-    }
+    if (typeof node.type !== 'string') return
+    const kind = { id, kind: node.type.replace(/_/g, ' ') }
+    if (!explicitIdKinds.has(crossrefKey(id))) explicitIdKinds.set(crossrefKey(id), kind)
+    if (!explicitIdKindsByFold.has(foldId(crossrefKey(id)))) explicitIdKindsByFold.set(foldId(crossrefKey(id)), kind)
   })
   const headingRefs = new Map<string, string>()
+  const headingTexts: string[] = []
   // Mirror resolveHeadingIds: a heading inside a list/blockquote/div/etc. also
   // gets an id and is a valid crossref target, so the lint index must walk the
   // same containers in document order. A blockquote ancestor suppresses the
@@ -661,6 +693,7 @@ export function lintCarve(
           if (!inBlockquote) {
             const key = normalizeHeadingRefLabel(inlineText(heading.children))
             if (key && !headingRefs.has(key)) headingRefs.set(key, id)
+            if (key) headingTexts.push(key)
           }
           break
         }
@@ -802,10 +835,24 @@ export function lintCarve(
 
   // `used` now holds every valid id. A crossref to anything else degrades to
   // literal text in resolveHeadingIds.
-  const usedFolded = new Set([...used].map(foldId))
+  // Matching is exact after NFC (CARVE-P9R-010); a case-only miss names the
+  // ids it differs from, which is what `fmt --migrate` rewrites to.
+  const usedKeys = new Set([...used].map(crossrefKey))
+  const usedByFold = groupByCaseOnlyKey([...used].map(crossrefKey))
   for (const { target, node } of collectCrossrefs(doc)) {
-    if (used.has(target) || usedFolded.has(foldId(target))) continue
-    const elsewhere = explicitIdKinds.get(foldId(target))
+    if (used.has(target) || usedKeys.has(crossrefKey(target))) continue
+    const caseVariants = usedByFold.get(foldId(crossrefKey(target))) ?? []
+    if (caseVariants.length > 0) {
+      out.push({
+        ...locate(node, toUtf16),
+        rule: 'broken-crossref',
+        message: `Cross-reference </#${target}> matches no id; ${caseOnlyPhrase('id', caseVariants)}, and cross-references are case-sensitive, so it renders as the literal text "</#${target}>".`,
+        data: { target, caseVariants },
+      })
+      continue
+    }
+    const elsewhere =
+      explicitIdKinds.get(crossrefKey(target)) ?? explicitIdKindsByFold.get(foldId(crossrefKey(target)))
     out.push({
       ...locate(node, toUtf16),
       rule: 'broken-crossref',
@@ -849,6 +896,10 @@ export function lintCarve(
   // Reference links that survived parse() have no explicit link definition.
   // resolve() may still turn them into implicit heading links; anything else
   // renders as its literal source text.
+  // Case-only near misses for an unresolved reference: definition labels for
+  // every reference, plus heading text for the collapsed form.
+  const defLabelsByFold = groupByCaseOnlyKey(collectDefinitionLabels(doc))
+  const headingTextByFold = groupByCaseOnlyKey(headingTexts)
   for (const { ref, rawRef, collapsed, node } of collectUnresolvedRefLinks(doc)) {
     // BOTH keys, in resolveHeadingIds' order: the label as written, then its
     // rendered plain text (PART 9R R1). Checking only the first reported a
@@ -864,6 +915,24 @@ export function lintCarve(
       (headingRefs.has(normalizeHeadingRefLabel(ref)) ||
         headingRefs.has(headingRefKeyFromLabel(ref)))
     ) {
+      continue
+    }
+    const caseVariants = [...new Set([
+      ...(defLabelsByFold.get(foldId(normalizeRefLabel(ref))) ?? []),
+      ...(collapsed
+        ? [
+            ...(headingTextByFold.get(foldId(normalizeHeadingRefLabel(ref))) ?? []),
+            ...(headingTextByFold.get(foldId(headingRefKeyFromLabel(ref))) ?? []),
+          ]
+        : []),
+    ])]
+    if (caseVariants.length > 0) {
+      out.push({
+        ...locate(node, toUtf16),
+        rule: 'unresolved-reference-link',
+        message: `Reference link ${rawRef} matches no link definition or heading; ${caseOnlyPhrase(collapsed ? 'label or heading text' : 'label', caseVariants)}, and reference labels are case-sensitive, so it renders as literal text.`,
+        data: { label: ref, caseVariants },
+      })
       continue
     }
     out.push({

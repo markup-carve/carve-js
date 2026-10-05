@@ -15,7 +15,23 @@ describe('lintCarve — broken cross-references', () => {
   })
 
   it('does not flag a crossref that targets a real heading', () => {
-    expect(lintCarve('# Intro\n\nSee </#intro>.')).toEqual([])
+    expect(lintCarve('# Intro\n\nSee </#Intro>.')).toEqual([])
+  })
+
+  it('names the id a crossref misses only by case', () => {
+    const w = lintCarve('# Intro\n\nSee </#intro>.')
+    expect(w.map((x) => x.rule)).toEqual(['broken-crossref'])
+    expect(w[0]!.message).toBe(
+      'Cross-reference </#intro> matches no id; the id "Intro" differs only in case, and cross-references are case-sensitive, so it renders as the literal text "</#intro>".',
+    )
+    expect(w[0]!.data).toEqual({ target: 'intro', caseVariants: ['Intro'] })
+  })
+
+  it('names every id a crossref matches case-insensitively', () => {
+    const w = lintCarve('{#Tip}\n# A\n\n{#TIP}\n# B\n\nSee </#tip>.')
+    expect(w.map((x) => x.rule)).toEqual(['broken-crossref'])
+    expect(w[0]!.message).toContain('the ids "Tip", "TIP" differ only in case')
+    expect(w[0]!.data).toEqual({ target: 'tip', caseVariants: ['Tip', 'TIP'] })
   })
 
   it('does not flag a crossref that targets a numbered caption id', () => {
@@ -29,8 +45,8 @@ describe('lintCarve — broken cross-references', () => {
   })
 
   it('treats the auto-suffixed id of a duplicate heading as valid', () => {
-    // Two "Title" headings -> ids `title` and `title-2`; both resolvable.
-    const w = lintCarve('# Title\n\n## Title\n\n</#title> and </#title-2>')
+    // Two "Title" headings -> ids `Title` and `Title-2`; both resolvable.
+    const w = lintCarve('# Title\n\n## Title\n\n</#Title> and </#Title-2>')
     expect(w.map((x) => x.rule)).toEqual(['duplicate-heading-id'])
   })
 
@@ -191,7 +207,28 @@ describe('lintCarve — unresolved reference links', () => {
   })
 
   it('does not flag an implicit heading reference', () => {
-    expect(lintCarve('# Getting Started\n\nSee [getting started][].')).toEqual([])
+    expect(lintCarve('# Getting Started\n\nSee [Getting Started][].')).toEqual([])
+  })
+
+  it('names the heading text a collapsed reference misses only by case', () => {
+    const w = lintCarve('# Getting Started\n\nSee [getting started][].')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w[0]!.message).toBe(
+      'Reference link [getting started][] matches no link definition or heading; the label or heading text "Getting Started" differs only in case, and reference labels are case-sensitive, so it renders as literal text.',
+    )
+    expect(w[0]!.data).toEqual({ label: 'getting started', caseVariants: ['Getting Started'] })
+  })
+
+  it('names the definition label an explicit reference misses only by case', () => {
+    const w = lintCarve('[x][Label] and [y][label]\n\n[label]: /u')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w[0]!.message).toContain('the label "label" differs only in case')
+    expect(w[0]!.data).toEqual({ label: 'Label', caseVariants: ['label'] })
+  })
+
+  it('does not offer heading text to an explicit reference', () => {
+    const w = lintCarve('# Plan\n\nSee [x][plan].')
+    expect(w[0]!.message).toBe('Reference link [x][plan] has no matching link definition or heading; it renders as literal text.')
   })
 
   it('finds unresolved reference links inside footnote definitions', () => {

@@ -816,8 +816,8 @@ export interface CrossRef extends BaseNode {
   /**
    * The resolved destination (`#` + the heading's id), present only where the
    * crossref resolved. PART 12 §3a: the resolution is published BESIDE the
-   * authored construct, not in place of it - ids resolve case-insensitively,
-   * so `href` alone cannot say which spelling the author wrote.
+   * authored construct, not in place of it, so the spelling the author wrote
+   * survives the wire format.
    */
   href?: string
   /**

@@ -135,15 +135,14 @@ describe('inline literal: non-HTML renderers never drop it', () => {
 describe('inline literal: contributes to heading text', () => {
   it('feeds the auto heading id, so a crossref resolves', () => {
     // It renders as visible prose, so it must slug like a code span does.
-    // Ids are case-preserving; the crossref folds case-insensitively.
-    expect(h('# !`Cat`\n\nSee </#cat>')).toBe(
+    expect(h('# !`Cat`\n\nSee </#Cat>')).toBe(
       '<section id="Cat">\n  <h1>Cat</h1>\n  <p>See <a href="#Cat">Cat</a></p>\n</section>',
     )
   })
 
   it('slugs exactly like the equivalent code span does', () => {
-    const lit = h('# !`Cat`\n\nSee </#cat>')
-    const code = h('# `Cat`\n\nSee </#cat>')
+    const lit = h('# !`Cat`\n\nSee </#Cat>')
+    const code = h('# `Cat`\n\nSee </#Cat>')
     expect(lit.replace(/<\/?code>/g, '')).toBe(code.replace(/<\/?code>/g, ''))
   })
 

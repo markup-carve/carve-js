@@ -85,7 +85,7 @@ describe('cross-reference label expansion (DoS guard)', () => {
   })
 
   it('CONTROL: an ordinary document renders every label in full', () => {
-    const ordinary = '# The Long Heading Here\n\nsee </#the-long-heading-here> and </#the-long-heading-here>\n'
+    const ordinary = '# The Long Heading Here\n\nsee </#The-Long-Heading-Here> and </#The-Long-Heading-Here>\n'
     expect(carveToHtml(ordinary).split('The Long Heading Here').length - 1).toBe(3)
     expect(carveToPlainText(ordinary).split('The Long Heading Here').length - 1).toBe(3)
     expect(carveToMarkdown(ordinary).split('The Long Heading Here').length - 1).toBe(3)

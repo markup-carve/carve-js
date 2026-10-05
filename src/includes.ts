@@ -14,7 +14,7 @@ import type {
 } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { utf8ByteLength } from './abbr-budget.js'
-import { foldIdentifier, inlineText, promoteBlockImages, slugify } from './heading-ids.js'
+import { crossrefKey, inlineText, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
 import { mergeRun } from './coalesce-text-runs.js'
@@ -969,7 +969,7 @@ interface PendingRename {
  * chosen by {@link assignRenamedIds} once the whole document is assembled.
  *
  * References in this child that resolve to a renamed occurrence when the
- * child is read alone follow it: `</#id>` (folded, headings first),
+ * child is read alone follow it: `</#id>` (NFC, exact case, headings first),
  * `#id` link and image destinations and reference definitions (exact, first
  * occurrence). Runs before nested expansion, so grandchild content is not in
  * reach.
@@ -1007,15 +1007,15 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
 
   // What each reference reaches in the child read alone.
   const exact = new Map<string, PendingRename | undefined>()
-  const folded = new Map<string, PendingRename | undefined>()
+  const byTarget = new Map<string, PendingRename | undefined>()
   for (const [heading, id] of asRead) {
-    const key = foldIdentifier(id)
-    if (!folded.has(key)) folded.set(key, heading.attrs ? renamed.get(heading.attrs) : undefined)
+    const key = crossrefKey(id)
+    if (!byTarget.has(key)) byTarget.set(key, heading.attrs ? renamed.get(heading.attrs) : undefined)
   }
   for (const o of occurrences) {
     if (!exact.has(o.id)) exact.set(o.id, renamed.get(o.attrs))
-    const key = foldIdentifier(o.id)
-    if (!folded.has(key)) folded.set(key, renamed.get(o.attrs))
+    const key = crossrefKey(o.id)
+    if (!byTarget.has(key)) byTarget.set(key, renamed.get(o.attrs))
   }
   const follow = (node: Record<string, unknown>, key: string, target: PendingRename | undefined, prefix: string): void => {
     if (target) target.refs.push({ node, key, prefix })
@@ -1025,7 +1025,7 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
   walkNodes(child, (node) => {
     switch (node['type']) {
       case 'heading_ref':
-        follow(node, 'target', folded.get(foldIdentifier(node['target'] as string)), '')
+        follow(node, 'target', byTarget.get(crossrefKey(node['target'] as string)), '')
         break
       case 'link':
       case 'link_reference_definition':

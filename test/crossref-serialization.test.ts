@@ -15,10 +15,8 @@ import type { CrossRef, Paragraph } from '../src/ast.js'
  * survives into the tree and the resolution is published beside it.
  *
  * This engine used to replace a resolved crossref with a `link` and flatten an
- * unresolved one to text. Both are shapes §3a rules out, and the first one
- * loses information no other field carries: ids resolve case-insensitively, so
- * `</#intro>` and `</#Intro>` both produce `href: "#Intro"` and only `target`
- * says which the author wrote. carve-js#605.
+ * unresolved one to text. Both are shapes §3a rules out: `target` is the
+ * spelling the author wrote, which the round trip needs back. carve-js#605.
  */
 describe('a crossref serializes as a heading_ref', () => {
   const inlines = (source: string) => {
@@ -30,14 +28,15 @@ describe('a crossref serializes as a heading_ref', () => {
   }
 
   it('publishes the authored target and the resolved destination', () => {
-    const [, ref] = inlines('# Intro\n\nSee </#intro>.\n')
-    expect(ref).toMatchObject({ type: 'heading_ref', target: 'intro', href: '#Intro' })
+    const [, ref] = inlines('# Intro\n\nSee </#Intro>.\n')
+    expect(ref).toMatchObject({ type: 'heading_ref', target: 'Intro', href: '#Intro' })
   })
 
-  it('keeps the spelling the author used, not the id it resolved to', () => {
+  it('keeps the spelling the author used, which resolves only in the exact case', () => {
     const [, lower] = inlines('# Intro\n\nSee </#intro>.\n')
     const [, upper] = inlines('# Intro\n\nSee </#Intro>.\n')
-    expect(lower).toMatchObject({ target: 'intro', href: '#Intro' })
+    expect(lower).toMatchObject({ target: 'intro' })
+    expect(lower!['href']).toBeUndefined()
     expect(upper).toMatchObject({ target: 'Intro', href: '#Intro' })
   })
 
@@ -53,7 +52,7 @@ describe('a crossref serializes as a heading_ref', () => {
   it('keeps the display text off the wire', () => {
     // §3a: the heading is in the same document, so a consumer reads the text
     // from there rather than from a copy in every reference.
-    const [, ref] = inlines('# Intro\n\nSee </#intro>.\n')
+    const [, ref] = inlines('# Intro\n\nSee </#Intro>.\n')
     expect(ref!['resolvedText']).toBeUndefined()
     expect(ref!['children']).toBeUndefined()
   })
@@ -71,7 +70,7 @@ describe('a crossref serializes as a heading_ref', () => {
   })
 
   it('renders exactly as it did before the tree changed', () => {
-    const source = '# Intro\n\nSee </#intro> and </#Nope>.\n'
+    const source = '# Intro\n\nSee </#Intro> and </#Nope>.\n'
     expect(carveToHtml(source)).toContain(
       '<p>See <a href="#Intro">Intro</a> and &lt;/#Nope&gt;.</p>',
     )

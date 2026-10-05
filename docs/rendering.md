@@ -46,7 +46,8 @@ hand back a document that looks complete and is not.
 
 Every heading gets an automatic id derived from its text. Ids are
 **case-preserving** and keep non-ASCII verbatim by default (`# Über uns` ->
-`Über-uns`); cross-references (`</#uber-uns>`) resolve case-insensitively. Two
+`Über-uns`); a cross-reference names the id in its exact case (`</#Über-uns>`),
+and `</#über-uns>` stays literal text. Two
 orthogonal options on every converter (and on `resolve` / `lintCarve`) adjust
 the slug:
 
