@@ -23,9 +23,10 @@ import { parseContainerLabelInlines } from './parse.js'
  * never corpus-pinned. See docs/extensions.md §7.
  */
 export function glossary(): CarveExtension {
-  // Defined term keys (across every `::: glossary` block); a render-time set
-  // gives the id to the first occurrence of a duplicated slug only.
-  const defined = new Set<string>()
+  // Defined term key -> slug of the first entry with that key (across every
+  // `::: glossary` block); a render-time set gives the id to the first
+  // occurrence of a duplicated slug only.
+  const defined = new Map<string, string>()
   const containers = new WeakSet<BlockNode>()
   const idSeen = new Set<string>()
 
@@ -43,7 +44,10 @@ export function glossary(): CarveExtension {
         if (lists.length === 0) return
         for (const dl of lists)
           for (const item of dl.items)
-            for (const term of item.terms) defined.add(termKey(term))
+            for (const term of item.terms) {
+              const key = termKey(term)
+              if (!defined.has(key)) defined.set(key, termSlug(term))
+            }
         containers.add(b)
       })
       return doc
@@ -67,10 +71,11 @@ export function glossary(): CarveExtension {
   }
 }
 
-const termSlug = (term: InlineNode[]): string => slugify(inlineText(term), { lowercase: true })
+// Case-preserving, like a heading id, so `:: HTTP` and `:: http` keep two ids.
+const termSlug = (term: InlineNode[]): string => slugify(inlineText(term))
 
 // A reference reaches an entry by its exact text after whitespace collapse and
-// NFC (CARVE-P9R-010); only the emitted id keeps the lowercased slug.
+// NFC (CARVE-P9R-010).
 const termKey = (term: InlineNode[]): string => normalizeHeadingRefLabel(inlineText(term))
 
 function isGlossary(b: BlockNode): boolean {
@@ -83,11 +88,11 @@ function defListsOf(b: BlockNode): DefinitionList[] {
   ) as DefinitionList[]
 }
 
-function renderTerm(node: Extension, ctx: ExtensionRenderContext, defined: Set<string>): string {
+function renderTerm(node: Extension, ctx: ExtensionRenderContext, defined: Map<string, string>): string {
   const word = ctx.renderInlines(node.content)
   // Carry the author's inline `{…}` onto the output, `term` stays leading.
-  if (defined.has(termKey(node.content))) {
-    const slug = termSlug(node.content)
+  const slug = defined.get(termKey(node.content))
+  if (slug !== undefined) {
     // The structural glossary target wins; drop any author `href` so the <a>
     // never has two (like core links).
     const attrs = ctx.renderAttrs(stripHref(withBaseClass(node.attrs, 'term')))

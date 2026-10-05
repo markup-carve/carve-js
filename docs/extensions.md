@@ -836,10 +836,10 @@ carveToHtml(':::: glossary\n:: Widget\n:  A small thing.\n::::\n\nA :term[Widget
   extensions: [glossary()],
 })
 // <dl class="glossary">
-//   <dt id="gloss-widget">Widget</dt>
+//   <dt id="gloss-Widget">Widget</dt>
 //   <dd>A small thing.</dd>
 // </dl>
-// <p>A <a href="#gloss-widget" class="term">Widget</a> here.</p>
+// <p>A <a href="#gloss-Widget" class="term">Widget</a> here.</p>
 ```
 
 Note the definition-list spelling: `:: term` then `:  definition`. It reuses
@@ -849,7 +849,8 @@ to learn. A `:term[…]` naming no declared term stays a plain
 
 The bracket text must match a declared term exactly, after whitespace
 collapsing and NFC: `:term[widget]` does not reach `:: Widget` and stays a
-`<span>`. The emitted ids are still lowercased slugs (`gloss-widget`).
+`<span>`. Ids keep the term's case like a heading id (`gloss-Widget`), so
+`:: HTTP` and `:: http` are two entries with two ids.
 
 ## headingLevelShift
 

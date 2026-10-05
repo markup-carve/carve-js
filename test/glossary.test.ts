@@ -13,52 +13,52 @@ describe('glossary', () => {
   it('renders the ::: glossary block as a <dl> with gloss- ids', () => {
     const out = h(GLOSS)
     expect(out).toContain('<dl class="glossary">')
-    expect(out).toContain('<dt id="gloss-http">HTTP</dt>')
+    expect(out).toContain('<dt id="gloss-HTTP">HTTP</dt>')
     expect(out).toContain('<dd>HyperText Transfer Protocol.</dd>')
-    expect(out).toContain('<dt id="gloss-html">HTML</dt>')
+    expect(out).toContain('<dt id="gloss-HTML">HTML</dt>')
   })
 
   it('links :term[word] to a defined entry by slug', () => {
     const out = h(`Use :term[HTTP].\n\n${GLOSS}`)
-    expect(out).toContain('<a href="#gloss-http" class="term">HTTP</a>')
+    expect(out).toContain('<a href="#gloss-HTTP" class="term">HTTP</a>')
   })
 
   it('degrades :term for an undefined term to a plain span', () => {
     const out = h(`Use :term[FTP].\n\n${GLOSS}`)
     expect(out).toContain('<span class="term">FTP</span>')
-    expect(out).not.toContain('href="#gloss-ftp"')
+    expect(out).not.toContain('href="#gloss-FTP"')
   })
 
   it('leaves a case-only miss unresolved, like an undefined term', () => {
     const out = h(`Use :term[http] and :term[FTP].\n\n${GLOSS}`)
     expect(out).toContain('<span class="term">http</span>')
     expect(out).toContain('<span class="term">FTP</span>')
-    expect(out).not.toContain('<a href="#gloss-http"')
+    expect(out).not.toContain('<a href=')
   })
 
   it('reaches each of two entries that differ only in case by its exact spelling', () => {
     const out = h('Use :term[HTTP], :term[http] and :term[Http].\n\n::: glossary\n:: HTTP\n:  Upper.\n\n:: http\n:  Lower.\n:::')
-    expect(out).toContain('<a href="#gloss-http" class="term">HTTP</a>')
+    expect(out).toContain('<a href="#gloss-HTTP" class="term">HTTP</a>')
     expect(out).toContain('<a href="#gloss-http" class="term">http</a>')
     expect(out).toContain('<span class="term">Http</span>')
-    expect(out).toContain('<dt id="gloss-http">HTTP</dt>')
-    expect(out).toContain('<dt>http</dt>')
+    expect(out).toContain('<dt id="gloss-HTTP">HTTP</dt>')
+    expect(out).toContain('<dt id="gloss-http">http</dt>')
   })
 
   it('still matches across whitespace runs and NFC', () => {
     const out = h('Use :term[Hyper  Text] and :term[Cafe\u0301].\n\n::: glossary\n:: Hyper Text\n:  One.\n\n:: Caf\u00e9\n:  Two.\n:::')
-    expect(out).toContain('<a href="#gloss-hyper-text" class="term">Hyper  Text</a>')
-    expect(out).toMatch(/<a href="#gloss-caf[^"]*" class="term">Cafe\u0301<\/a>/)
+    expect(out).toContain('<a href="#gloss-Hyper-Text" class="term">Hyper  Text</a>')
+    expect(out).toContain('<a href="#gloss-Caf\u00e9" class="term">Cafe\u0301</a>')
   })
 
   it('renders entries in source order', () => {
     const out = h(GLOSS)
-    expect(out.indexOf('gloss-http')).toBeLessThan(out.indexOf('gloss-html'))
+    expect(out.indexOf('gloss-HTTP')).toBeLessThan(out.indexOf('gloss-HTML'))
   })
 
   it('gives the id to the first of a duplicated slug only', () => {
     const out = h('::: glossary\n:: HTTP\n:  One.\n\n:: HTTP\n:  Two.\n:::')
-    expect(out.match(/id="gloss-http"/g)?.length).toBe(1)
+    expect(out.match(/id="gloss-HTTP"/g)?.length).toBe(1)
     expect(out).toContain('<dt>HTTP</dt>') // the duplicate, id-less
   })
 
@@ -75,25 +75,25 @@ describe('glossary', () => {
   it('preserves intro prose and a second definition list', () => {
     const out = h('::: glossary\nProtocols below.\n\n:: HTTP\n:  One.\n\n:: FTP\n:  Two.\n:::')
     expect(out).toContain('Protocols below.')
-    expect(out).toContain('<dt id="gloss-http">HTTP</dt>')
-    expect(out).toContain('<dt id="gloss-ftp">FTP</dt>')
+    expect(out).toContain('<dt id="gloss-HTTP">HTTP</dt>')
+    expect(out).toContain('<dt id="gloss-FTP">FTP</dt>')
   })
 
   it('keeps a trailing note after the terms in source order', () => {
     const out = h('::: glossary\n:: HTTP\n:  One.\n\nSee the RFCs.\n:::')
-    expect(out.indexOf('gloss-http')).toBeLessThan(out.indexOf('See the RFCs.'))
+    expect(out.indexOf('gloss-HTTP')).toBeLessThan(out.indexOf('See the RFCs.'))
   })
 
   it('carries inline attributes on :term', () => {
     const out = h(`Use :term[HTTP]{.abbr #use}.\n\n${GLOSS_HTTP}`)
-    expect(out).toContain('href="#gloss-http"')
+    expect(out).toContain('href="#gloss-HTTP"')
     expect(out).toContain('id="use"')
     expect(out).toContain('class="term abbr"')
   })
 
   it('drops an author href so the glossary link has only one', () => {
     const out = h(`:term[HTTP]{href="#other"}.\n\n${GLOSS_HTTP}`)
-    expect(out).toContain('<a href="#gloss-http" class="term">HTTP</a>')
+    expect(out).toContain('<a href="#gloss-HTTP" class="term">HTTP</a>')
     expect(out).not.toContain('#other')
   })
 
@@ -107,12 +107,12 @@ describe('glossary', () => {
     const ext = glossary()
     carveToHtml(GLOSS_HTTP, { extensions: [ext] })
     const out = carveToHtml(GLOSS_HTTP, { extensions: [ext] }).trim()
-    expect(out).toContain('<dt id="gloss-http">HTTP</dt>')
+    expect(out).toContain('<dt id="gloss-HTTP">HTTP</dt>')
   })
 
   it('finds a ::: glossary nested inside a blockquote', () => {
     const out = h('Use :term[HTTP].\n\n> ::: glossary\n> :: HTTP\n> :  HyperText Transfer Protocol.\n> :::')
-    expect(out).toContain('<dt id="gloss-http">HTTP</dt>')
-    expect(out).toContain('<a href="#gloss-http" class="term">HTTP</a>')
+    expect(out).toContain('<dt id="gloss-HTTP">HTTP</dt>')
+    expect(out).toContain('<a href="#gloss-HTTP" class="term">HTTP</a>')
   })
 })
