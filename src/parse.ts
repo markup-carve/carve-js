@@ -102,7 +102,7 @@ export interface ParseOptions {
   /**
    * Lowercase auto-generated heading ids (GitHub/SSG-style anchors), folded per
    * code point so it stays portable. Default false: ids are case-preserving.
-   * Cross-references resolve case-insensitively either way.
+   * Cross-references compare ids exactly either way.
    */
   lowercaseHeadingIds?: boolean
   /**
@@ -1678,8 +1678,7 @@ function appendLinkReferenceDefinitions(
  * whitespace-collapsed but case-SENSITIVE. Djot does "no case normalization
  * on reference definitions" (links_and_images spec), and Carve keeps a
  * case-mismatched reference unresolved -> literal (corpus 36). Implicit
- * heading references match heading TEXT and are fuzzier (case-insensitive);
- * they wrap this in heading-ids.ts rather than fold case here.
+ * heading references match heading TEXT exactly too, adding NFC (heading-ids.ts).
  */
 /**
  * Strip leading block-container prefixes (blockquote `>`, bullet/task and
