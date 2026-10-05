@@ -8,6 +8,7 @@
  *   - references that degrade to literal text at resolve() time: broken
  *     `</#id>` cross-references, unresolved `[text][ref]` links, missing
  *     footnotes, and duplicate heading ids;
+ *   - `[text](#id)` links whose fragment matches no id in the rendered HTML;
  *   - footnote definitions that are duplicate or never referenced;
  *   - a trailing `{…}` on a heading, which is literal text under
  *     heading-strict, not an attribute block;
@@ -48,15 +49,19 @@ import {
   headingRefKeyFromLabel,
   isCollapsedRef,
   figureGroupPanels,
+  resolveHeadingIds,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
+import { numberFootnotes } from './footnote-numbering.js'
+import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
-import { renderedAttrValue, escapeAttrValue } from './render-html.js'
+import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
 import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
 import { inspectColonFences } from './colon-fences.js'
+import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 
 export interface LintWarning {
   /** 1-based line number. */
@@ -196,6 +201,40 @@ function collectCrossrefs(doc: Document): Array<{ target: string; node: Position
     }
   })
   return found
+}
+
+/** Every link whose destination is a fragment of this document. */
+function collectFragmentLinks(doc: Document): Array<{ href: string; node: Positioned }> {
+  const found: Array<{ href: string; node: Positioned }> = []
+  walkDocument(doc, (node) => {
+    if (node.type === 'link' && typeof node.href === 'string' && node.href.startsWith('#')) {
+      found.push({ href: node.href, node: node as Positioned })
+    }
+  })
+  return found
+}
+
+/**
+ * The ids the rendered HTML carries. Read off the output rather than the tree
+ * so generated ids (footnotes, heading slugs, placement markers) and ids inside
+ * raw HTML count exactly as a browser sees them.
+ */
+function renderedIds(source: string, opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean }): Set<string> {
+  const resolved = resolveHeadingIds(parse(source, { positions: true }), headingIdSlugOpts(opts))
+  numberFootnotes(resolved)
+  const ids = new Set<string>()
+  // Iterative: raw HTML nesting is not bounded by the renderer's depth cap.
+  const pending: Html.ParentNode[] = [parseFragment(renderHtml(adoptBlockFootnoteDefs(resolved)))]
+  for (let node = pending.pop(); node; node = pending.pop()) {
+    for (const child of node.childNodes) {
+      if (!('tagName' in child)) continue
+      for (const attr of child.attrs) {
+        if (attr.name === 'id' || (attr.name === 'name' && child.tagName === 'a')) ids.add(attr.value)
+      }
+      pending.push(child)
+    }
+  }
+  return ids
 }
 
 function collectUnresolvedRefLinks(
@@ -541,9 +580,14 @@ export function lintCarve(
   const allocated = new Set<string>()
   const explicitHeadings = new Set<string>()
   const nextSuffix = new Map<string, number>()
+  const explicitIdKinds = new Map<string, { id: string; kind: string }>()
   walkDocument(doc, (node) => {
     const id = (node as { attrs?: Attrs }).attrs?.id
-    if (id !== undefined) allocated.add(id)
+    if (id === undefined) return
+    allocated.add(id)
+    if (!explicitIdKinds.has(foldId(id)) && typeof node.type === 'string') {
+      explicitIdKinds.set(foldId(id), { id, kind: node.type.replace(/_/g, ' ') })
+    }
   })
   const headingRefs = new Map<string, string>()
   // Mirror resolveHeadingIds: a heading inside a list/blockquote/div/etc. also
@@ -734,11 +778,48 @@ export function lintCarve(
   const usedFolded = new Set([...used].map(foldId))
   for (const { target, node } of collectCrossrefs(doc)) {
     if (used.has(target) || usedFolded.has(foldId(target))) continue
+    const elsewhere = explicitIdKinds.get(foldId(target))
     out.push({
       ...locate(node, toUtf16),
       rule: 'broken-crossref',
-      message: `Cross-reference </#${target}> has no matching heading id; it renders as the literal text "</#${target}>".`,
+      message: elsewhere
+        ? `Cross-reference </#${target}> names the id "${elsewhere.id}", which is on a ${elsewhere.kind}; a cross-reference reaches only headings and numbered captions, so it renders as the literal text "</#${target}>". Link to it with [text](#${elsewhere.id}).`
+        : `Cross-reference </#${target}> has no matching heading id; it renders as the literal text "</#${target}>".`,
+      ...(elsewhere ? { data: { id: elsewhere.id, kind: elsewhere.kind } } : {}),
     })
+  }
+
+  const fragmentLinks = collectFragmentLinks(doc)
+  const idGeneratingExtensions = (opts.extensions ?? []).filter((ext) => ext.name !== 'semantic-span' && ext.name !== 'citations')
+  if (fragmentLinks.length > 0 && idGeneratingExtensions.length === 0) {
+    const ids = renderedIds(source, opts)
+    const citations = opts.extensions?.some((ext) => ext.name === 'citations') ?? false
+    const idsByFold = new Map<string, string>()
+    for (const id of ids) if (!idsByFold.has(foldId(id))) idsByFold.set(foldId(id), id)
+    for (const { href, node } of fragmentLinks) {
+      // A browser strips a `:~:` text directive before it looks the id up.
+      const fragment = href.slice(1).split(':~:')[0]!
+      if (fragment === '') continue
+      let decoded = fragment
+      try {
+        decoded = decodeURIComponent(fragment)
+      } catch {
+        // A malformed escape is matched as written.
+      }
+      if (ids.has(fragment) || ids.has(decoded)) continue
+      // HTML scrolls `#top` to the start of the page without any element.
+      if (decoded.toLowerCase() === 'top') continue
+      if (citations && /^(?:ref|cite)-/.test(decoded)) continue
+      const caseOnly = idsByFold.get(foldId(decoded))
+      out.push({
+        ...locate(node, toUtf16),
+        rule: 'broken-fragment-link',
+        message: caseOnly
+          ? `Link to "${href}" matches no id; the id "${caseOnly}" differs only in case, and fragment links are case-sensitive, so the link goes nowhere.`
+          : `Link to "${href}" matches no id in this document, so the link goes nowhere.`,
+        data: caseOnly ? { fragment: decoded, caseVariant: caseOnly } : { fragment: decoded },
+      })
+    }
   }
 
   // Reference links that survived parse() have no explicit link definition.

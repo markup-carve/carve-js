@@ -263,7 +263,8 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | Rule | Catches |
 | ---- | ------- |
 | `duplicate-heading-id` | two headings producing the same id (slug collision or repeated explicit `{#id}`); ambiguous references resolve to the first |
-| `broken-crossref` | a `</#id>` cross-reference with no matching heading or numbered caption id; it renders as literal text |
+| `broken-crossref` | a `</#id>` cross-reference with no matching heading or numbered caption id; it renders as literal text. When the id does exist, on an element a cross-reference cannot reach (a paragraph, a span, an uncaptioned table), the message names that element and suggests `[text](#id)` |
+| `broken-fragment-link` | a `[text](#id)` link, inline or through a reference definition, whose fragment matches no id in the rendered HTML; the link goes nowhere. Ids are read off the rendered output, so heading slugs, footnote ids and ids in raw HTML count. Fragments match case-sensitively, and a case-only near miss is named. A `:~:` text directive is ignored, and `#`, `#top` and links into other files are skipped. With extensions that generate ids (anything but `citations` and `semantic-span`), the rule stays silent; with `citations`, `#ref-…` and `#cite-…` are skipped |
 | `unresolved-reference-link` | a `[text][label]` or `[text][]` reference link with no matching link definition or implicit heading target; it renders as literal text |
 | `unresolved-footnote` | a `[^label]` footnote reference with no matching `[^label]: ...` definition; it renders as literal text |
 | `duplicate-footnote-definition` | a repeated `[^label]: ...` definition; the parser keeps the first definition and ignores the later one |
