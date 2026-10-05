@@ -931,6 +931,11 @@ const IMPLEMENTED = new Set([
   'a-denied-destination-takes-one-render-loss-row-per-sink',
   'an-unreferenced-footnote-definition-takes-its-links-out-of-the-render',
   'every-name-lookup-compares-case-exactly',
+  // ARRIVED WITH THIS PIN BUMP (spec 14c9be77). All three rows are byte-exact
+  // on this build before the entry was added: markup-carve/carve#2741 says an
+  // info string decides nothing below a closed nested fence, which is what this
+  // parser already did. The pin, not the parser, is what was holding them back.
+  'an-info-string-does-not-change-how-a-flush-left-fence-folds-into-a-description-body',
 ])
 
 /**
