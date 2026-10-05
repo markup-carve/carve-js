@@ -13,7 +13,7 @@ import type {
   CarveExtension,
   ExtensionRenderContext,
 } from './extension.js'
-import { inlineText, slugify } from './heading-ids.js'
+import { inlineText, normalizeHeadingRefLabel, slugify } from './heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
 
 /**
@@ -23,7 +23,7 @@ import { parseContainerLabelInlines } from './parse.js'
  * never corpus-pinned. See docs/extensions.md §7.
  */
 export function glossary(): CarveExtension {
-  // Defined term slugs (across every `::: glossary` block); a render-time set
+  // Defined term keys (across every `::: glossary` block); a render-time set
   // gives the id to the first occurrence of a duplicated slug only.
   const defined = new Set<string>()
   const containers = new WeakSet<BlockNode>()
@@ -43,7 +43,7 @@ export function glossary(): CarveExtension {
         if (lists.length === 0) return
         for (const dl of lists)
           for (const item of dl.items)
-            for (const term of item.terms) defined.add(termSlug(term))
+            for (const term of item.terms) defined.add(termKey(term))
         containers.add(b)
       })
       return doc
@@ -69,6 +69,10 @@ export function glossary(): CarveExtension {
 
 const termSlug = (term: InlineNode[]): string => slugify(inlineText(term), { lowercase: true })
 
+// A reference reaches an entry by its exact text after whitespace collapse and
+// NFC (CARVE-P9R-010); only the emitted id keeps the lowercased slug.
+const termKey = (term: InlineNode[]): string => normalizeHeadingRefLabel(inlineText(term))
+
 function isGlossary(b: BlockNode): boolean {
   return b.type === 'directive' && (b as Directive).kind === 'glossary'
 }
@@ -81,9 +85,9 @@ function defListsOf(b: BlockNode): DefinitionList[] {
 
 function renderTerm(node: Extension, ctx: ExtensionRenderContext, defined: Set<string>): string {
   const word = ctx.renderInlines(node.content)
-  const slug = termSlug(node.content)
   // Carry the author's inline `{…}` onto the output, `term` stays leading.
-  if (defined.has(slug)) {
+  if (defined.has(termKey(node.content))) {
+    const slug = termSlug(node.content)
     // The structural glossary target wins; drop any author `href` so the <a>
     // never has two (like core links).
     const attrs = ctx.renderAttrs(stripHref(withBaseClass(node.attrs, 'term')))
