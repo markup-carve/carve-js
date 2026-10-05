@@ -54,6 +54,9 @@ import {
 } from './heading-ids.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
+import { applyTransforms } from './extension-transforms.js'
+import { parseDocument } from './parse-document.js'
+import type { CarveExtension } from './extension.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import { hasOwnKey, ownValue } from './own-property.js'
@@ -219,22 +222,46 @@ function collectFragmentLinks(doc: Document): Array<{ href: string; node: Positi
  * so generated ids (footnotes, heading slugs, placement markers) and ids inside
  * raw HTML count exactly as a browser sees them.
  */
-function renderedIds(source: string, opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean }): Set<string> {
-  const resolved = resolveHeadingIds(parse(source, { positions: true }), headingIdSlugOpts(opts))
+function renderedIds(
+  source: string,
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean },
+  extensions: CarveExtension[],
+): { ids: Set<string>; linked: Set<string> } {
+  // The public parse and the caller's extensions, as `carveToHtml` renders:
+  // citations drops an unused definition and every id inside it.
+  const resolved = resolveHeadingIds(parseDocument(source, { positions: true, extensions }), headingIdSlugOpts(opts))
   numberFootnotes(resolved)
+  const transformed = applyTransforms(resolved, extensions, { extensions }, true)
   const ids = new Set<string>()
+  // Fragments of the links that render: an extension can drop a link with
+  // its surroundings, such as one inside an unused citation definition.
+  const linked = new Set<string>()
   // Iterative: raw HTML nesting is not bounded by the renderer's depth cap.
-  const pending: Html.ParentNode[] = [parseFragment(renderHtml(adoptBlockFootnoteDefs(resolved)))]
+  const pending: Html.ParentNode[] = [parseFragment(renderHtml(adoptBlockFootnoteDefs(transformed), { extensions }))]
   for (let node = pending.pop(); node; node = pending.pop()) {
     for (const child of node.childNodes) {
       if (!('tagName' in child)) continue
       for (const attr of child.attrs) {
         if (attr.name === 'id' || (attr.name === 'name' && child.tagName === 'a')) ids.add(attr.value)
+        if (attr.name === 'href' && child.tagName === 'a' && attr.value.startsWith('#')) {
+          const fragment = attr.value.slice(1).split(':~:')[0]!
+          linked.add(fragment)
+          linked.add(decodeFragment(fragment))
+        }
       }
       pending.push(child)
     }
   }
-  return ids
+  return { ids, linked }
+}
+
+/** `decodeURIComponent`, or the fragment as written when an escape is malformed. */
+function decodeFragment(fragment: string): string {
+  try {
+    return decodeURIComponent(fragment)
+  } catch {
+    return fragment
+  }
 }
 
 function collectUnresolvedRefLinks(
@@ -792,7 +819,8 @@ export function lintCarve(
   const fragmentLinks = collectFragmentLinks(doc)
   const idGeneratingExtensions = (opts.extensions ?? []).filter((ext) => ext.name !== 'semantic-span' && ext.name !== 'citations')
   if (fragmentLinks.length > 0 && idGeneratingExtensions.length === 0) {
-    const ids = renderedIds(source, opts)
+    const renderable = (opts.extensions ?? []).filter((ext): ext is CarveExtension => typeof ext.name === 'string')
+    const { ids, linked } = renderedIds(source, opts, renderable)
     const citations = opts.extensions?.some((ext) => ext.name === 'citations') ?? false
     const idsByFold = new Map<string, string>()
     for (const id of ids) if (!idsByFold.has(foldId(id))) idsByFold.set(foldId(id), id)
@@ -800,12 +828,8 @@ export function lintCarve(
       // A browser strips a `:~:` text directive before it looks the id up.
       const fragment = href.slice(1).split(':~:')[0]!
       if (fragment === '') continue
-      let decoded = fragment
-      try {
-        decoded = decodeURIComponent(fragment)
-      } catch {
-        // A malformed escape is matched as written.
-      }
+      const decoded = decodeFragment(fragment)
+      if (!linked.has(fragment) && !linked.has(decoded)) continue
       if (ids.has(fragment) || ids.has(decoded)) continue
       // HTML scrolls `#top` to the start of the page without any element.
       if (decoded.toLowerCase() === 'top') continue

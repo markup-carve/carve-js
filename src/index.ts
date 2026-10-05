@@ -3,8 +3,9 @@
  */
 
 import type { Document } from './ast.js'
-import type { BeforeRenderContext, CarveExtension } from './extension.js'
-import { parse as parseImpl, type ParseOptions } from './parse.js'
+import type { CarveExtension } from './extension.js'
+import { applyTransforms } from './extension-transforms.js'
+import type { ParseOptions } from './parse.js'
 import {
   resolveHeadingIds,
   resolveHeadingIdsWithRegistry,
@@ -12,7 +13,7 @@ import {
   promoteBlockImages,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
-import { promoteCitationDefinitions } from './citations.js'
+import { parseDocument } from './parse-document.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { Profile } from './profile.js'
 import { applyProfile as applyProfileImpl } from './profile-filter.js'
@@ -416,22 +417,7 @@ function byteLength(s: string): number {
  * `renderHtml(resolve(parse(src)))`.
  */
 export function parse(source: string, opts: ParseOptions = {}): Document {
-  const doc = parseImpl(source, opts)
-  promoteBlockImages(doc.children, true)
-  if (doc.footnoteDefs) {
-    for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
-  }
-  // A `[@key]: entry` line is a `citation_definition`, not a paragraph holding
-  // its own unrecognized source (PART 12 §18). Here rather than in the
-  // citations extension's `afterParse` hook because THIS is the stage that
-  // matters: `parse` is what `toAstJson` serializes and what §3a makes
-  // pre-resolve, and `parse` does not call that hook - so a fix living there
-  // would look right through the extension and leave the published tree
-  // carrying the paragraph (carve#1276). Representation, not resolution, the
-  // same standing as `promoteBlockImages` above: no rendered output moves on
-  // any target.
-  doc.children = promoteCitationDefinitions(doc.children)
-  return doc
+  return parseDocument(source, opts)
 }
 
 /** Parse once and return canonical AST JSON plus the opt-in source-layout sidecar. */
@@ -631,45 +617,6 @@ export function carveToHtmlWithReport(
     (onRenderLoss) => carveToHtml(source, { ...opts, onRenderLoss }),
     opts,
   )
-}
-
-/**
- * Run the renderer-agnostic extension transforms (`afterParse`,
- * `beforeRender`) over a resolved document. Renderer-specific output (block
- * renderers, inline renderers) is consulted by the HTML renderer only, but the
- * transform hooks mutate the AST itself, so they apply to every renderer -
- * matching carve-php, where a `beforeRender` extension (heading level shift,
- * default attributes, …) affects Markdown/PlainText/ANSI output too.
- */
-function applyTransforms(
-  doc: Document,
-  exts: CarveExtension[] | undefined,
-  opts: Readonly<RenderOptions>,
-  // Whether the FINAL render target is HTML. Not derivable from the options -
-  // one options object is reused across `carveToHtml` and `carveToMarkdown` -
-  // so each entry point states it, and it is what lets a hook emitting HTML
-  // skip its transform on a non-HTML target (spec §2.2, carve#1007).
-  targetIsHtml: boolean,
-): Document {
-  if (!exts) return doc
-  let out = doc
-  for (const ext of exts) if (ext.afterParse) out = ext.afterParse(out)
-  const options = Object.freeze({ ...opts })
-  // The EFFECTIVE mode, which is the caller's only on the HTML path. Static
-  // rendering is an HTML-only concern (spec §2.5): the Markdown, plain-text and
-  // ANSI renderers reach the same end by flattening and never consult the mode,
-  // so reporting the caller's `mode: "static"` to a hook on those targets would
-  // invite it to degrade output that is not degraded, and one options object
-  // reused across formats would stop producing the same non-HTML bytes.
-  const mode = targetIsHtml ? (opts.mode ?? 'interactive') : 'interactive'
-  const ctx: BeforeRenderContext = Object.freeze({
-    options,
-    mode,
-    isStatic: mode === 'static',
-    targetIsHtml,
-  })
-  for (const ext of exts) if (ext.beforeRender) out = ext.beforeRender(out, ctx)
-  return out
 }
 
 /** A render target {@link renderDocument} can drive. */
