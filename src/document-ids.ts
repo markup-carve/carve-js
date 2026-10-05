@@ -152,13 +152,19 @@ export function visitDocumentIds(doc: Document, visit: (id: string) => void): vo
     const value = stack.pop()
     if (!value || typeof value !== 'object') continue
     if (Array.isArray(value)) {
+      if (value.length === 0) continue
+      if (value.length === 1) {
+        const only = value[0] as { type?: unknown; attrs?: unknown } | null | undefined
+        if (only?.type === 'text' && only.attrs === undefined) continue
+      }
       if (seen.has(value)) continue
       seen.add(value)
       for (const child of value) {
         if (child && typeof child === 'object') {
           const node = child as { type?: string; attrs?: unknown }
-          if (node.attrs === undefined && node.type !== 'heading_ref' && typeof node.type === 'string' &&
-              (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[node.type] === NO_CHILDREN) continue
+          if (node.attrs === undefined && (node.type === 'text' ||
+              (node.type !== 'heading_ref' && typeof node.type === 'string' &&
+               (DOCUMENT_ID_CHILD_FIELDS as Readonly<Record<string, readonly string[]>>)[node.type] === NO_CHILDREN))) continue
           stack.push(child)
         }
       }

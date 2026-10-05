@@ -53,6 +53,8 @@ it('collects deeply nested ids without consuming the call stack', () => {
 })
 
 it('covers every schema node kind and all its owned child slots', () => {
+  // Text-only array skipping requires text to remain a leaf.
+  expect(DOCUMENT_ID_CHILD_FIELDS.text).toEqual([])
   expect(Object.keys(DOCUMENT_ID_CHILD_FIELDS).sort()).toEqual(Object.keys(WIRE_FIELDS).sort())
   for (const [type, fields] of Object.entries(DOCUMENT_ID_CHILD_FIELDS)) {
     expect([...fields].sort(), type).toEqual([...ownedChildFields({ type })].sort())
@@ -116,4 +118,23 @@ it('terminates malformed singleton edges on ordinary nodes and records', () => {
 it('does not coerce host-supplied type values', () => {
   const node = { type: Object.create(null), base: [{ type: 'text', attrs: { id: 'nested' } }] }
   expect(collectDocumentIds({ type: 'document', children: [node] } as unknown as Document).uniqueId('nested')).toBe('nested-2')
+})
+
+it('observes IDs added to a single text child after resolution', () => {
+  const doc = resolve(parse('plain text\n'))
+  const paragraph = doc.children[0]!
+  if (paragraph.type !== 'paragraph') throw new Error('Expected a paragraph')
+  expect(paragraph.children).toHaveLength(1)
+  expect(collectDocumentIds(doc).uniqueId('added')).toBe('added')
+  paragraph.children[0]!.attrs = { id: 'added' }
+  expect(collectDocumentIds(doc).uniqueId('added')).toBe('added-2')
+  delete paragraph.children[0]!.attrs
+  expect(collectDocumentIds(doc).uniqueId('added')).toBe('added')
+})
+
+it('terminates a single-element array that refers to itself', () => {
+  const children: unknown[] = []
+  children.push(children)
+  const doc = { type: 'document', children } as unknown as Document
+  expect(collectDocumentIds(doc).uniqueId('free')).toBe('free')
 })
