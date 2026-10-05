@@ -13,7 +13,7 @@ import { parseAttrs, isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrV
 export { parseAttrs } from './attribute-parser.js'
 import type { LinkDef } from './inline-resolution.js'
 export type { LinkDef } from './inline-resolution.js'
-import { mergeAttrs } from './attribute-merge.js'
+import { accumulateAttrs, mergeAttrs } from './attribute-merge.js'
 export { mergeAttrs } from './attribute-merge.js'
 import { applyAbbreviations, applyLinkDefs } from './inline-resolution.js'
 import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
@@ -6987,8 +6987,14 @@ export function buildBracketMap(s: string, outsideOnly = false): BracketClose {
   const lastRunStart = s.includes('`') ? lastBacktickRunStarts(s) : new Map<number, number>()
   const closedRunEnd = (j: number, openLen: number): number | undefined =>
     (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
+  let lastDelimitedCommentClose: number | undefined
+  let lastEditorialCommentClose: number | undefined
   const opaqueEnd = (j: number): number | undefined => {
     if (s[j] !== '{' || (s[j + 1] !== '%' && s[j + 1] !== '#')) return undefined
+    const last = s[j + 1] === '%'
+      ? (lastDelimitedCommentClose ??= s.lastIndexOf('%}'))
+      : (lastEditorialCommentClose ??= s.lastIndexOf('#}'))
+    if (last < j + 2) return undefined
     const close = s.indexOf(`${s[j + 1]}}`, j + 2)
     return close === -1 ? undefined : close + 2
   }
@@ -8814,7 +8820,7 @@ class ParseSession {
       const attrLineIndex = lexer.pos
       const ba = tryCollectBlockAttributes(lexer)
       if (ba) {
-        pending = pending ? mergeAttrs(pending, ba) : ba
+        pending = pending ? accumulateAttrs(pending, ba) : ba
         if (pendingAt === null) pendingAt = attrLineIndex
         continue
       }
@@ -12916,6 +12922,18 @@ class ParseSession {
     return null
   }
 
+  private commentCloserPositions: Map<string, number> | undefined
+
+  private delimitedCommentClose(text: string, from: number): number {
+    const positions = (this.commentCloserPositions ??= new Map())
+    let last = positions.get(text)
+    if (last === undefined) {
+      last = text.lastIndexOf('%}')
+      positions.set(text, last)
+    }
+    return last < from ? -1 : text.indexOf('%}', from)
+  }
+
   private pairEndText: string | undefined
 
   private pairEndTable: Array<Int32Array | undefined> = []
@@ -13419,7 +13437,7 @@ class ParseSession {
       // stays literal. Unlike `%%`, surrounding whitespace is ordinary visible
       // text and scanning resumes after the closer.
       if (c === '{' && text[i + 1] === '%') {
-        const close = text.indexOf('%}', i + 2)
+        const close = this.delimitedCommentClose(text, i + 2)
         if (close !== -1) {
           flush()
           const content = text.slice(i + 2, close).replace(/^ /, '').replace(/ $/, '')
@@ -13917,7 +13935,7 @@ class ParseSession {
           // are stable inert spans that do not take attributes). Matches
           // carve-rs / carve-php, which keep the `{...}` literal in these cases.
           if (!ATTR_INERT_PREV.has(prev.type) && !isEmptyAttrs(parsed)) {
-            ;(prev as { attrs?: Attrs }).attrs = mergeAttrs(
+            ;(prev as { attrs?: Attrs }).attrs = accumulateAttrs(
               (prev as { attrs?: Attrs }).attrs,
               parsed,
             )
@@ -14414,7 +14432,7 @@ class ParseSession {
       // Comment contents are transparent to the surrounding emphasis structure.
       // Only a closed form is a comment; an unterminated opener remains literal.
       if (ch === '{' && text[j + 1] === '%') {
-        const close = text.indexOf('%}', j + 2)
+        const close = this.delimitedCommentClose(text, j + 2)
         if (close !== -1) {
           j = close + 1
           continue
