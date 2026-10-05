@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { perfIt } from './helpers/scaling.js'
 import { lintCarve, formatLintWarnings } from '../src/lint.js'
+import { citations } from '../src/citations.js'
+import { semanticSpan } from '../src/semantic-span.js'
 
 const rules = (src: string) => lintCarve(src).map((w) => w.rule)
 
@@ -128,6 +130,18 @@ describe('lintCarve — broken fragment links', () => {
   it('leaves citation ids alone when citations render', () => {
     expect(lintCarve('[x](#ref-smith) [y](#nope)', { extensions: [{ name: 'citations' }] }).map((w) => w.rule))
       .toEqual(['broken-fragment-link'])
+  })
+
+  it('reads ids off the render with the extensions the caller passes', () => {
+    // An unused citation definition, and the span id inside it, does not render.
+    const unused = '[@a]: [Entry]{#entry}\n\n[x](#entry)'
+    expect(rules(unused)).toEqual([])
+    expect(lintCarve(unused, { extensions: [citations()] }).map((w) => w.rule)).toEqual(['broken-fragment-link'])
+    const used = 'See [@a].\n\n[@a]: [Entry]{#entry}\n\n[x](#entry) [y](#ref-a)'
+    expect(lintCarve(used, { extensions: [citations()] })).toEqual([])
+    // A link the extension drops with its definition does not render either.
+    expect(lintCarve('[@a]: [Entry]{#entry} [self](#entry) [x](#nope)\n\nBody.', { extensions: [citations()] })).toEqual([])
+    expect(lintCarve('[Book]{cite #bk} :dfn[term]{#t}\n\n[x](#bk) [y](#t)', { extensions: [semanticSpan()] })).toEqual([])
   })
 
   it('stays silent when an extension it cannot model may generate ids', () => {
