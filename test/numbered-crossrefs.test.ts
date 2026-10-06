@@ -185,6 +185,30 @@ describe('equation captions (caption on standalone display math)', () => {
   })
 })
 
-it('keeps case-distinct caption and equation targets separate', () => {
-  expect(h("{#Fig}\n![upper](upper.png)\n^ Figure #: upper\n\n{#fig}\n![lower](lower.png)\n^ Figure #: lower\n\n{#Eq}\n$$`x`\n^ Equation #: upper\n\n{#eq}\n$$`y`\n^ Equation #: lower\n\n</#Fig>, </#fig>, </#FIG>, </#Eq>, </#eq>, </#EQ>.\n")).toContain("<a href=\"#Fig\">Figure 1</a>, <a href=\"#fig\">Figure 2</a>, &lt;/#FIG&gt;, <a href=\"#Eq\">Equation 1</a>, <a href=\"#eq\">Equation 2</a>, &lt;/#EQ&gt;.")
+describe('case-distinct numbered targets', () => {
+  it('keeps caption and equation targets separate', () => {
+    const out = h(`{#Fig}
+![upper](upper.png)
+^ Figure #: upper
+
+{#fig}
+![lower](lower.png)
+^ Figure #: lower
+
+{#Eq}
+$$\`x\`
+^ Equation #: upper
+
+{#eq}
+$$\`y\`
+^ Equation #: lower
+
+</#Fig>, </#fig>, </#FIG>, </#Eq>, </#eq>, </#EQ>.
+`)
+    expect(out).toContain('<figure id="Fig">')
+    expect(out).toContain('<figure id="fig">')
+    expect(out).toContain('<figcaption>Figure 2: lower</figcaption>')
+    expect(out).toContain('<a href="#Fig">Figure 1</a>, <a href="#fig">Figure 2</a>, &lt;/#FIG&gt;')
+    expect(out).toContain('<a href="#Eq">Equation 1</a>, <a href="#eq">Equation 2</a>, &lt;/#EQ&gt;')
+  })
 })
