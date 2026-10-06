@@ -5,6 +5,7 @@
  * over each block's text content. No backtracking.
  */
 
+import { AppendOnlyCloser } from './append-only-closer.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { SubstitutionScanner } from './substitution-scanner.js'
 import { ScopedFenceClosers } from './scoped-fence-closers.js'
@@ -5036,44 +5037,20 @@ function leadLeavesListCollecting(content: string, memo?: Map<number, number>): 
 }
 
 /**
- * Does the description body's own nested lead open a fence that none of the
- * entries collected so far has closed?
- *
- * The fence sits on the lead's BOTTOM block (`: - ```$`), where neither the
- * body's trailing state nor the nested-column tracker can see it: `RE_FENCE` is
- * anchored at column 0 and the marker run stands in front of it. So the lead is
- * read structurally, the same walk `markerLineState` uses.
+ * Track the first closer of the description body's nested lead, reading only
+ * lines appended since the previous query. A closed comment ends the body;
+ * an open code fence keeps flush-left fence lines as content.
  */
-function descriptionLeadFenceStaysOpen(lead: string, bodyLines: string[]): boolean {
+function descriptionLeadFenceScans(lead: string): { code: AppendOnlyCloser; comment: AppendOnlyCloser } {
   const bottom = markerLineBottomBlock(lead)
-  if (bottom === lead) return false
-  const fence = RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom)
-  if (!fence) return false
-  const close = fenceCloseRe(RE_FENCE.test(bottom) ? fence[2]! : fence[1]!)
-  return !bodyLines.some((line, index) => index > 0 && close.test(line.replace(/^[ \t]+/, '')))
-}
-
-/**
- * Has a COMMENT FENCE on the description body's nested lead closed inside the
- * body?
- *
- * A closed `%%%` run is a finished invisible BLOCK, and a description body ends
- * at one of those, where the `%%` LINE form is only a line and the body folds on
- * past it (markup-carve/carve-js#2531, and markup-carve/carve-php#2906 for the
- * same arm one column out). An UNCLOSED run is still collecting, so the line
- * below it belongs to the body.
- *
- * Read off the lead structurally for the reason `descriptionLeadFenceStaysOpen`
- * is: the run stands behind the item's marker, where the column-0 classifiers
- * cannot see it.
- */
-function descriptionLeadCommentFenceClosed(lead: string, bodyLines: string[]): boolean {
-  const bottom = markerLineBottomBlock(lead)
-  if (bottom === lead) return false
-  const run = commentFenceRun(bottom)
-  if (run === undefined) return false
-
-  return bodyLines.some((line, index) => index > 0 && commentFenceRun(line.replace(/^[ \t]+/, '')) === run)
+  const nested = bottom !== lead
+  const fence = nested ? RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom) : null
+  const close = fence ? fenceCloseRe(RE_FENCE.test(bottom) ? fence[2]! : fence[1]!) : undefined
+  const run = nested ? commentFenceRun(bottom) : undefined
+  return {
+    code: new AppendOnlyCloser(close ? line => close.test(line.replace(/^[ \t]+/, '')) : undefined),
+    comment: new AppendOnlyCloser(run === undefined ? undefined : line => commentFenceRun(line.replace(/^[ \t]+/, '')) === run),
+  }
 }
 
 /**
@@ -10439,6 +10416,7 @@ class ParseSession {
           lazyState.lazyFoldable = false
         }
       }
+      const leadFenceScans = descriptionLeadFenceScans(first)
       // A definition continues like a list item (PART 9 \u00a717):
       //  - form A: a deeper-indented line (>= the content column) folds in, and a
       //    blank line is tolerated when a later line still continues the body, so
@@ -10698,7 +10676,7 @@ class ParseSession {
         const nestedFenceOwnsLine =
           atDocumentColumn &&
           opensCodeFence(ln) &&
-          descriptionLeadFenceStaysOpen(first, bodyLines)
+          !leadFenceScans.code.closedIn(bodyLines) && leadFenceScans.code.active
         // ...OR A CONTAINER THIS BODY OPENED IS STILL COLLECTING
         // (markup-carve/carve-js#2531). `lazyFoldable` is the paragraph's
         // question, and §17 asks the container's: a nested list takes the line
@@ -10711,7 +10689,7 @@ class ParseSession {
         // Asked here rather than at the seed because the closer is one of the
         // body's own lines.
         const leadHoldsOpenContainer =
-          nestedListStillOpen && !descriptionLeadCommentFenceClosed(first, bodyLines)
+          nestedListStillOpen && !leadFenceScans.comment.closedIn(bodyLines)
         if (
           (lazyState.lazyFoldable || leadHoldsOpenContainer) &&
           (!startsInterruptingBlock(lexer, below, true, false, atDocumentColumn) ||
@@ -13226,6 +13204,7 @@ class ParseSession {
    */
   private parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     const lines: string[] = []
+    let holdsLiteralColonFence = false
     const startLineIndex = lexer.pos
     while (!lexer.eof()) {
       const ln = lexer.peek()!
@@ -13255,13 +13234,15 @@ class ParseSession {
           this.isLinkDefLine(stripLazyFrame(ln))) ||
           (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
             startsInterruptingBlock(lexer))) &&
-        !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
+        !(RE_ADMONITION_CLOSE.test(ln) && holdsLiteralColonFence)
       )
         break
       lexer.consume()
       // The frame did its work in the interruption test above; a paragraph is
       // where a framed line becomes text, so it comes off here.
-      lines.push(stripLazyFrame(ln))
+      const received = stripLazyFrame(ln)
+      lines.push(received)
+      holdsLiteralColonFence ||= isLiteralColonFenceLine(received)
     }
     // Every paragraph line has its leading whitespace stripped (djot /
     // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
