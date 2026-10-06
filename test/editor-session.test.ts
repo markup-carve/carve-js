@@ -42,6 +42,21 @@ describe('editor session', () => {
     expect(update.ast).toEqual(fresh('1 2'))
   })
 
+  it('keeps batch order and untouched identities with repeated insertion points', () => {
+    const session = createEditorSession('one\n\ntwo\n\nthree\n\nfour')
+    const old = new Map(session.snapshot().identity.nodes.map(node => [node.path, node.id]))
+    const update = session.update([
+      { from: 0, to: 0, insert: 'A' },
+      { from: 0, to: 0, insert: 'B' },
+      { from: 0, to: 3, insert: 'ONE' },
+      { from: 17, to: 21, insert: '4' },
+    ])
+    expect(update.source).toBe('ABONE\n\ntwo\n\nthree\n\n4')
+    expect(update.ast).toEqual(fresh(update.source))
+    const ids = new Map(update.identity.nodes.map(node => [node.path, node.id]))
+    for (const path of ['/children/1', '/children/1/children/0', '/children/2']) expect(ids.get(path)).toBe(old.get(path))
+  })
+
   it('rejects overlap and split surrogate pairs without changing the session', () => {
     const session = createEditorSession('a😀b')
     expect(() => session.update([{ from: 2, to: 2, insert: 'x' }])).toThrow(EditorChangeError)
