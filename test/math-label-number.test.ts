@@ -50,6 +50,15 @@ describe('labeled display equations', () => {
     expect(renderAnsi(doc)).toContain('Equation 1')
   })
 
+  it('keeps case-distinct directly numbered equations separate', () => {
+    const doc = equation('$$`x`{#Eq}\n\n$$`y`{#eq}\n\n</#Eq>, </#eq>, </#EQ>.\n')
+    const second = doc.children[1]
+    if (second?.type !== 'paragraph' || second.children[0]?.type !== 'math') throw new Error('missing equation')
+    second.children[0].label = 'Equation'
+    resolve(doc)
+    expect(renderHtml(doc)).toContain('<a href="#Eq">Equation 1</a>, <a href="#eq">Equation 2</a>, &lt;/#EQ&gt;.')
+  })
+
   it('shares a caption bucket in document order', () => {
     const doc = equation('![x](x.jpg)\n^ Equation #: first\n\n$$`x`{#eq}\n')
     resolve(doc)

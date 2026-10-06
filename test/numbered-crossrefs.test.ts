@@ -184,3 +184,31 @@ describe('equation captions (caption on standalone display math)', () => {
     expect(out).toContain('<span class="math display" role="math">\\[E = mc^2\\]</span>')
   })
 })
+
+describe('case-distinct numbered targets', () => {
+  it('keeps caption and equation targets separate', () => {
+    const out = h(`{#Fig}
+![upper](upper.png)
+^ Figure #: upper
+
+{#fig}
+![lower](lower.png)
+^ Figure #: lower
+
+{#Eq}
+$$\`x\`
+^ Equation #: upper
+
+{#eq}
+$$\`y\`
+^ Equation #: lower
+
+</#Fig>, </#fig>, </#FIG>, </#Eq>, </#eq>, </#EQ>.
+`)
+    expect(out).toContain('<figure id="Fig">')
+    expect(out).toContain('<figure id="fig">')
+    expect(out).toContain('<figcaption>Figure 2: lower</figcaption>')
+    expect(out).toContain('<a href="#Fig">Figure 1</a>, <a href="#fig">Figure 2</a>, &lt;/#FIG&gt;')
+    expect(out).toContain('<a href="#Eq">Equation 1</a>, <a href="#eq">Equation 2</a>, &lt;/#EQ&gt;')
+  })
+})
