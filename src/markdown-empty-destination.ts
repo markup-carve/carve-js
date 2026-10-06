@@ -97,6 +97,22 @@ function htmlBlockCloser(rest: string): RegExp | null {
   return null
 }
 
+function hasNestedReferenceHead(source: string): boolean {
+  const opener = /^ {0,3}\[/.exec(source)
+  if (!opener) return false
+  let nested = false
+  for (let at = opener[0].length; at < source.length; at++) {
+    const ch = source[at]!
+    if (ch === '\\') {
+      const next = source[++at]
+      if (next === undefined || /[\r\n\u2028\u2029]/.test(next)) return false
+    } else if (ch === '\n') return false
+    else if (ch === '[') nested = true
+    else if (ch === ']') return nested && source[at + 1] === ':'
+  }
+  return false
+}
+
 /**
  * Remove reference definitions from the body. Empty destinations are recorded
  * for inline fallback; other definitions are returned for the document end.
@@ -252,7 +268,7 @@ export function extractReferenceDefinitions(
         canStart = true
         continue
       }
-      if (parsed === null && (/^ {0,3}\[(?:[^[\]\\\n]|\\.)+\]:[ \t]*</.test(content) || /^ {0,3}\[(?:[^\]\\\n]|\\.)*\[(?:[^\]\\\n]|\\.)*\]:/.test(content))) {
+      if (parsed === null && (/^ {0,3}\[(?:[^[\]\\\n]|\\.)+\]:[ \t]*</.test(content) || hasNestedReferenceHead(content))) {
         keep(line.replace(/^( *)\[/, '$1\\['))
         canStart = false
         continue
@@ -325,7 +341,6 @@ export function extractReferenceDefinitions(
           if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
               !opensBlock(nextLine) && !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
             lines[i + 1] = prefix + nextLine.trimStart()
-            referenceChunk = undefined
           } else {
             let continuation = i + 2
             if (nextLine?.trim() === '') {

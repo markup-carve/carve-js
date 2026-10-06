@@ -70,3 +70,21 @@ it('allocates complex reference labels after reserved labels', () => {
   const result = extract('[carve-import-reference-1] [carve-import-reference-3]\n\n[x\\]y]: /x\n[z\\]w]: /z')
   expect([...result.references.inline.keys()]).toEqual(['carve-import-reference-2', 'carve-import-reference-4'])
 })
+
+
+perfIt('list continuation merges reuse future reference chunks', () => {
+  expectBuiltInputScansLinearly(source => { extractReferenceDefinitions(source.split('\n'), value => value,
+    line => /^ {0,3}(?:[-*+]|0{0,8}1[.)])[ \t]+\S/.test(line)) },
+    n => Array.from({ length: n }, (_, i) => `2. [a${i}]: /a\n[b\\]c${i}]: /b\n[q${i}]: /u "x`).join('\n'),
+    { smallRepeats: 4_000, label: 'merged list reference chunks' })
+})
+
+perfIt('unclosed nested label heads scan once', () => {
+  expectBuiltInputScansLinearly(source => { extract(source) }, n => '['.repeat(n),
+    { smallRepeats: 25_000, label: 'nested label head' })
+})
+
+it('escapes a malformed nested reference head', () => {
+  expect(extract('[a[b]: /url').lines).toEqual(['\\[a[b]: /url'])
+  expect(extract('[a\\[b]: /url').lines).toEqual([])
+})
