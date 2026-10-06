@@ -17,6 +17,28 @@ export interface EmptyDestinationReferences {
   sourceLabels: Map<string, string>
 }
 
+function trimReferenceWhitespace(value: string): string {
+  let start = 0
+  let end = value.length
+  while (start < end && (value[start] === ' ' || value[start] === '\t')) start++
+  while (end > start && (value[end - 1] === ' ' || value[end - 1] === '\t')) end--
+  return value.slice(start, end)
+}
+
+function rewriteParenthesizedTitle(value: string): string {
+  const title = /[ \t]+\(((?:[^()\\]|\\.)*)\)\s*$/y
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] !== ' ' && value[i] !== '\t') continue
+    const start = i
+    while (value[i + 1] === ' ' || value[i + 1] === '\t') i++
+    if (value[i + 1] !== '(') continue
+    title.lastIndex = start
+    const match = title.exec(value)
+    if (match) return `${value.slice(0, start)} "${match[1]!.replace(/"/g, '\\"')}"`
+  }
+  return value
+}
+
 const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), sourceLabels: new Map() }
 
 let references = NO_REFERENCES
@@ -286,7 +308,7 @@ export function extractReferenceDefinitions(
       const continued: string[] = []
       let destination = definition[2]!
       const following = lines[i + 1]
-      if (destination.replace(/^[ \t]+|[ \t]+$/g, '') === '' && following !== undefined && following.startsWith(quotePrefix) &&
+      if (trimReferenceWhitespace(destination) === '' && following !== undefined && following.startsWith(quotePrefix) &&
           !opensBlock(following.slice(quotePrefix.length)) && lineTitle.test(following.slice(quotePrefix.length))) {
         continued.push(following)
         i++
@@ -294,7 +316,7 @@ export function extractReferenceDefinitions(
       }
       const emptied = new RegExp(String.raw`^[ \t]*<>(?:[ \t]+${TITLE})?[ \t]*$`).exec(destination)
       if (!emptied) {
-        const target = destination.replace(/^[ \t]+|[ \t]+$/g, '')
+        const target = trimReferenceWhitespace(destination)
         if (target === '') {
           keep(line, ...continued)
           canStart = false
@@ -329,12 +351,9 @@ export function extractReferenceDefinitions(
         const title = !new RegExp(String.raw`[ \t]${TITLE}[ \t]*$`).test(target) && nextTitle
           ? ` ${nextTitle[1]}` : ''
         if (title) i++
-        const writtenTarget = `${target}${title}`.replace(/^<([^<>]+)>/, (_match, url: string) =>
+        const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(/^<([^<>]+)>/, (_match, url: string) =>
           url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
-        ).replace(
-          /[ \t]+\(((?:[^()\\]|\\.)*)\)\s*$/,
-          (_match, body: string) => ` "${body.replace(/"/g, '\\"')}"`,
-        )
+        ))
         if (!authoredRepeated || empty.has(key)) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
         if (opensItem) {
           const nextLine = lines[i + 1]

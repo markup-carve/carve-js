@@ -88,3 +88,18 @@ it('escapes a malformed nested reference head', () => {
   expect(extract('[a[b]: /url').lines).toEqual(['\\[a[b]: /url'])
   expect(extract('[a\\[b]: /url').lines).toEqual([])
 })
+
+for (const shape of ['separator', 'quoted title', 'angle destination']) {
+  perfIt(`long whitespace in ${shape} scans once`, () => {
+    expectBuiltInputScansLinearly(source => { extract(source) }, n => {
+      if (shape === 'separator') return '[a]: /u' + ' '.repeat(n) + '"t"'
+      if (shape === 'quoted title') return '[a]: /u "a' + ' '.repeat(n) + 'b"'
+      return '[a]: <a' + '\t'.repeat(n) + 'b>'
+    }, { smallRepeats: 20_000, label: shape })
+  })
+}
+
+it('rewrites parenthesized titles while preserving escaped parentheses and quotes', () => {
+  expect(extract('[a]: /u (a\\(b\\) "c")').definitions).toEqual(['[a]: /u "a\\(b\\) \\"c\\""'])
+  expect(extract('[a]: /u "a   b"').definitions).toEqual(['[a]: /u "a   b"'])
+})
