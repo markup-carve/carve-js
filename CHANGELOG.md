@@ -17,14 +17,15 @@ With the new engine, lint existing documents before deploying their output.
 `fmt --migrate` repairs unambiguous case-only reference misses. Review changes
 to collapsed link text and image alt text; include selectors, glossary
 references and external fragment links need manual review. See the
-[migration guide](docs/cli.md#exact-case-reference-migration).
+[migration guide](https://github.com/markup-carve/carve-js/blob/main/docs/cli.md#exact-case-reference-migration).
 
 ### Breaking
 
 - Heading cross-references, numbered caption and equation references, collapsed
-  references that fall back to heading text, and include fragment selectors now
-  compare case exactly. Link-definition labels and footnote labels already did.
-  A case-only mismatch is unresolved; `{#Tip}` and `{#tip}` remain separate
+  references that fall back to heading text now compare case exactly.
+  Link-definition labels, footnote labels and include fragment selectors already
+  did in the previous published engine.
+  A case-only mismatch is unresolved; `{#Tip}` and `{#tip}` identify separate
   targets. Default heading slug derivation, whitespace normalization and NFC are unchanged (#2520; markup-carve/carve#2732).
 - An include renames a colliding explicit id on any element, not only a heading id or a footnote label, and an include fragment selects any block carrying that id. The first occurrence in expanded order keeps the name, each later copy takes its own least free `-N` suffix with a warning, and a reference written in the same inclusion follows the rename (#2512; markup-carve/carve#2727, markup-carve/carve#2729).
 - A glossary reference matches its term exactly, under the same comparison as every other name lookup, and a glossary id keeps its case, so two terms differing only in case take two ids and a reference links to the entry it matched (#2524, #2525; markup-carve/carve#2739).

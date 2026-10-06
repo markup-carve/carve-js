@@ -55,45 +55,6 @@ idempotent; it renders nothing and a plain `carve fmt` preserves it. Use
 `--stamp-block` for the multi-line `%%%` block form. The same logic is available
 as `stampCarve(formatted, 'carve-js 0.1.0')`.
 
-## Exact-case reference migration
-
-Exact-case lookup changes heading cross-references, numbered caption and equation
-references, collapsed references that fall back to heading text, and include
-fragment selection. Link-definition labels and footnote labels were already
-case-sensitive. Whitespace normalization, NFC and default heading slug derivation
-are unchanged. Case-distinct ids identify separate targets.
-
-With the new engine, run `carve lint` before deploying the rendered output.
-`carve fmt --migrate`
-repairs unambiguous case-only cross-reference and link or image label misses,
-including label mistakes that were already unresolved before this release.
-Review the result: changing a collapsed label also changes its visible text or
-image alternative text. Ambiguous matches and labels carrying inline markup
-need manual review. Include selectors, glossary references and external
-fragment links are outside this repair. Glossary ids now preserve case, so
-update links to those ids separately. Ordinary `fmt` does not apply this repair.
-
-The library rewrite is available as `migrateCaseOnlyReferences(src)`. A caller that renders
-with `lowercaseHeadingIds` or `asciiHeadingIds` passes the same options
-(`migrateCaseOnlyReferences(src, { lowercaseHeadingIds: true })`), so a reference
-that already resolves against those ids is left alone.
-
-```carve
-# Getting Started
-
-See </#getting-started> and [getting started][].
-```
-
-becomes
-
-```carve
-# Getting Started
-
-See </#Getting-Started> and [Getting Started][].
-```
-
-## Provenance stamps
-
 The marker is machine-readable, so flagging documents that predate a breaking
 spec change does not have to be done by eye:
 
@@ -168,3 +129,40 @@ present the author's declaration wins.
 ---
 
 [Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
+
+## Exact-case reference migration
+
+Exact-case lookup changes heading cross-references, numbered caption and equation
+references, and collapsed references that fall back to heading text.
+Link-definition labels, footnote labels and include fragment selectors were
+already case-sensitive in the previous published engine. Whitespace normalization, NFC and default heading slug derivation
+are unchanged. Case-distinct ids identify separate targets.
+
+With the new engine, run `carve lint` before deploying the rendered output.
+`carve fmt --migrate`
+repairs unambiguous case-only cross-reference and link or image label misses,
+including label mistakes that were already unresolved before this release.
+Review the result: changing a collapsed label also changes its visible text or
+image alternative text. Ambiguous matches and labels carrying inline markup
+need manual review. Include selectors, glossary references and external
+fragment links are outside this repair. Glossary ids now preserve case, so
+update links to those ids separately. Ordinary `fmt` does not apply this repair.
+
+The library rewrite is available as `migrateCaseOnlyReferences(src)`. A caller that renders
+with `lowercaseHeadingIds` or `asciiHeadingIds` passes the same options
+(`migrateCaseOnlyReferences(src, { lowercaseHeadingIds: true })`), so a reference
+that already resolves against those ids is left alone.
+
+```carve
+# Getting Started
+
+See </#getting-started> and [getting started][].
+```
+
+becomes
+
+```carve
+# Getting Started
+
+See </#Getting-Started> and [Getting Started][].
+```
