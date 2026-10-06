@@ -113,6 +113,7 @@ export function extractReferenceDefinitions(
   const labels = new Map<string, string>()
   const definitions: string[] = []
   const inline = new Map<string, string>()
+  let nextSerial = 1
   const sourceLabels = new Map<string, string>()
   const reservedReferences = new Set<number>()
   for (const line of lines) {
@@ -239,9 +240,8 @@ export function extractReferenceDefinitions(
       if (parsed?.complex && !parsed.target.startsWith('<>')) {
         const key = normalizeReferenceLabel(parsed.label)
         if (!authoredDefinitions.has(key)) {
-          let serial = inline.size + 1
-          while (reservedReferences.has(serial) || inline.has(`carve-import-reference-${serial}`)) serial++
-          const canonical = `carve-import-reference-${serial}`
+          while (reservedReferences.has(nextSerial)) nextSerial++
+          const canonical = `carve-import-reference-${nextSerial++}`
           inline.set(canonical, parsed.target)
           sourceLabels.set(normalizeReferenceLabel(parsed.label), canonical)
           defined.add(key)
@@ -357,7 +357,9 @@ export function extractReferenceDefinitions(
           i++
         } else if (lines[i + 1]?.startsWith('    ') && lines[i + 1]!.trim() !== '') {
           lines[i + 1] = lines[i + 1]!.replace(/^ {4}/, '')
-          referenceChunk = undefined
+          if (referenceChunk && i + 1 >= referenceChunk.start && i + 1 <= referenceChunk.through) {
+            referenceChunk.offsets[i + 1 - referenceChunk.start]! += 4
+          }
         }
         canStart = true
         continue

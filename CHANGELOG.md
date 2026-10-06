@@ -12,7 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Fixes
 
 - Default attributes index existing classes and attribute slots, and copy key-value attributes once per node.
-- Markdown reference definitions in lists update only their continuation lines and no longer copy or search the whole line array for each definition.
+- Markdown reference definitions in lists update only their continuation lines and no longer copy or search the whole line array for each definition. Complex definitions reuse cached source offsets and an advancing generated-label cursor.
 
 ## [0.1.10] - 2026-10-06
 

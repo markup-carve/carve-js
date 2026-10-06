@@ -46,3 +46,27 @@ it('keeps distinct blank lines while chained definitions move ahead', () => {
   expect(result.lines).toEqual(['- text', '', ' ', '\t', '', '   '])
   expect(result.definitions).toEqual(['[a]: /a', '[b]: /b', '[c]: /c'])
 })
+
+
+for (const kind of ['dedented complex definitions', 'reserved reference labels']) {
+  perfIt(`${kind} scale`, () => {
+    expectBuiltInputScansLinearly(source => { extract(source) }, n => {
+      if (kind === 'dedented complex definitions') {
+        return Array.from({ length: n }, (_, i) => `[a${i}]: /url\n    [x\\]y${i}]: /url`).join('\n')
+      }
+      const reserved = Array.from({ length: n }, (_, i) => `[carve-import-reference-${i + 1}]`).join(' ')
+      return reserved + '\n\n' + Array.from({ length: n }, (_, i) => `[x\\]y${i}]: /url`).join('\n')
+    }, { smallRepeats: 4_000, label: kind })
+  })
+}
+
+it('keeps cached reference offsets when the next line is dedented', () => {
+  const result = extract('[a]: /a\n    [x\\]y]: /x\n[b]: /b\n    [z\\]w]: /z')
+  expect(result.definitions).toEqual(['[a]: /a', '[b]: /b'])
+  expect([...result.references.inline]).toEqual([['carve-import-reference-1', '/x'], ['carve-import-reference-2', '/z']])
+})
+
+it('allocates complex reference labels after reserved labels', () => {
+  const result = extract('[carve-import-reference-1] [carve-import-reference-3]\n\n[x\\]y]: /x\n[z\\]w]: /z')
+  expect([...result.references.inline.keys()]).toEqual(['carve-import-reference-2', 'carve-import-reference-4'])
+})
