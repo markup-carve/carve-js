@@ -126,9 +126,6 @@ no frontmatter key falls back to the trailing `%% carve-version:` provenance
 marker, so anything `carve fmt --stamp` has touched is covered too; when both are
 present the author's declaration wins.
 
----
-
-[Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
 
 ## Exact-case reference migration
 
@@ -166,3 +163,7 @@ becomes
 
 See </#Getting-Started> and [Getting Started][].
 ```
+
+---
+
+[Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)

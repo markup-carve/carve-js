@@ -21,7 +21,7 @@ references and external fragment links need manual review. See the
 
 ### Breaking
 
-- Heading cross-references, numbered caption and equation references, collapsed
+- Heading cross-references, numbered caption and equation references, and collapsed
   references that fall back to heading text now compare case exactly.
   Link-definition labels, footnote labels and include fragment selectors already
   did in the previous published engine.
