@@ -33,3 +33,4 @@
 2204: Spec corpus pin bump. Its one engine change, a term-folded footnote reference's label, ships under the definition-term entry.
 2286: Spec corpus pin bump. Carries no engine change of its own.
 2374: Spec corpus pin bump listing nineteen new corpus categories. Carries no engine change of its own.
+2521: Describes exact-case reference matching in a parse.ts comment. Comment text only; no parsed or rendered document changes.

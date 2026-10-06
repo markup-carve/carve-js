@@ -9,22 +9,28 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Fixes
-
-- Speed up editor batches with many edits and empty-include linting across many inline spans.
-- Avoid repeated scans of malformed links, attributes, references, and footnotes.
-- Speed up source-layout export, editor attribute mapping, and AST merges on large documents. Recognize editor attribute lines after bare CR endings.
-- Bound large AST diff matching while preserving single-move detection. Matching choices can differ for large edits with repeated content.
-- Preserve platform-lint offsets after astral characters.
-
-## [0.1.10] - 2026-10-05
+## [0.1.10] - 2026-10-06
 
 ### Breaking
 
+- Every name lookup compares case exactly: `</#id>` cross-references, collapsed and labeled references, footnote labels, caption and equation ids, and an include's `#name`. A case-only mismatch no longer resolves, so `{#Tip}` and `{#tip}` are two ids. Slug derivation, whitespace collapsing and NFC are unchanged (#2520; markup-carve/carve#2732).
+- An include renames a colliding explicit id on any element, not only a heading id or a footnote label, and an include fragment selects any block carrying that id. The first occurrence in expanded order keeps the name, each later copy takes its own least free `-N` suffix with a warning, and a reference written in the same inclusion follows the rename (#2512; markup-carve/carve#2727, markup-carve/carve#2729).
+- A glossary reference matches its term exactly, under the same comparison as every other name lookup, and a glossary id keeps its case, so two terms differing only in case take two ids and a reference links to the entry it matched (#2524, #2525; markup-carve/carve#2739).
 - A destination the URL scheme denylist blanks takes one render-loss row under the new code `destination-denied`, on every target that emits a destination, carrying the normative message `Blanked a denied destination scheme` for a link or an autolink and `Blanked a denied image source` for an image. `RenderLossCode` has a third member, `carve render --strict-losses` fails on a document that holds such a destination, and `--allow-loss` will not waive the code (#2432, #2433, #2435; markup-carve/carve#2679, markup-carve/carve#2681, markup-carve/carve#2686).
 
 ### Fixes
 
+- A description body folds a flush-left line below it whatever block kind its nested lead carries (#2534).
+- A flush-left line below a description item's content column is the item's lazy continuation and no longer opens a block of the body's own (#2539; markup-carve/carve#2535).
+- A description body ends when the quote holding its nested list ends (#2541; markup-carve/carve#2540).
+- An over-indented block below a quote that has stopped collecting is no longer read as quoted prose; the quote releases the lines under it (#2538; markup-carve/carve#2536).
+- A flush-left fence line below a closed nested fence in a description body is read as the body's content, and a terminated fence at that column ends the body, for a bare run and a language-tagged one alike (#2514, #2516; markup-carve/carve#2741).
+- A repeated heading is selected by its deduplicated slug, so a cross-reference to the second heading of the same text reaches it (#2511; markup-carve/carve#2506).
+- The fold is recorded for every declared node type outside the vocabulary, not only the types the vocabulary names (#2508; markup-carve/carve#2499).
+- The bbcode importer escapes the smart punctuation a post's own text forms, so an authored quote or dash is not re-read as a Carve construct (#2513; markup-carve/carve#2509).
+- `fmt --migrate` rewrites a case-only reference against the rendered heading ids rather than the authored text, and treats a reference image's label like a link's, so `![a][Label]` migrates with `[a][Label]` (#2526, #2528; markup-carve/carve#2522, markup-carve/carve#2523).
+- `lintCarve` reports a reference image with no matching definition under `unresolved-reference-link`, the rule that already covered reference links. `![alt][label]` and `![alt][]` take the same case-only hint under no new rule id (#2533; markup-carve/carve#2740).
+- `lintCarve`'s `broken-fragment-link` rule reads ids off the caller's own render, carrying the extensions passed to the linter, so a link absent from that render is not checked (#2503; markup-carve/carve#2730, markup-carve/carve#2731).
 - Canonical Carve output keeps the parentheses and backslashes inside a denied URL scheme, so formatting `[x](javascript:alert(1))` no longer rewrites the destination to `javascript:alert%281%29` (#2438; markup-carve/carve#2685).
 - The Carve writer leaves a backslash single inside a quoted attribute value, a quoted title and bibliography metadata when the character after it is not ASCII punctuation, so a title of `t\zu` no longer reads back one character short (#2414).
 - The Carve writer preserves bare emphasis inside a link label when the text around the label carries the same emphasis kind (#2424; markup-carve/carve#2522).
@@ -60,6 +66,15 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Improvements
 
+- Speed up editor batches with many edits and empty-include linting across many inline spans (#2544).
+- Avoid repeated scans of malformed links, attributes, references and footnotes (#2543).
+- Speed up source-layout export, editor attribute mapping and AST merges on large documents, and recognize editor attribute lines after bare CR endings (#2543).
+- Bound large AST diff matching while preserving single-move detection. Matching choices can differ for large edits with repeated content (#2543).
+- Preserve platform-lint offsets after astral characters (#2543).
+- Index list-table spans and imported table groups (#2529).
+- Retain delimiter tables across inline frames and index repeated inline scans (#2518).
+- Lighten the line-ownership probe and the codepoint position walk (#2501).
+- Stop rescanning a deep line's indent in the list-marker tests, which bounds the nesting-cap cost at a constant per level (#2502).
 - `carveToHtml` renders a document whose reference definitions sit in one adjacent run through the HTML fast path instead of the full AST pipeline, and reference-definition parsing reuses indexed line starts and successful lexical matches rather than rescanning the preceding lines. A definition line with an escaped title or an unsupported layout still takes the full parser. See the [measurements](reports/reference-definitions.md) (#2429).
 - Skip cycle-set and schema lookup work for text-only arrays during document ID collection. IDs added after resolution still participate in collision checks (#2494).
 
