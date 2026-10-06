@@ -2243,12 +2243,15 @@ function collectEmptyIncludePathWarnings(
       runOff += len
     }
     const re = new RegExp(BRACE_PAIR.source, 'g')
+    let spanIndex = 0
     for (let m = re.exec(full); m; m = re.exec(full)) {
       if (!isEmptyIncludePath(m[1]!)) continue
       const at = m.index
       // "{{" is always text, so the match start lands in a run node whose
       // reassembled text equals its source - the offset maps back exactly.
-      const covering = spans.find((s) => at >= s.runStart && at < s.runStart + s.len) ?? spans[0]
+      while (spanIndex < spans.length && at >= spans[spanIndex]!.runStart + spans[spanIndex]!.len) spanIndex++
+      const span = spans[spanIndex]
+      const covering = span && at >= span.runStart ? span : spans[0]
       const startOffset = covering?.offset === undefined ? at : covering.offset + (at - covering.runStart)
       const { line, column } = lineColFor(startOffset)
       out.push({

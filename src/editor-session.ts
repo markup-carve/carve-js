@@ -263,14 +263,18 @@ export function createEditorSession(
         bucket.push(node)
         candidates.set(key, bucket)
       }
+      const deltas = [0]
+      for (const change of changes) deltas.push(deltas.at(-1)! + change.insert.length - (change.to - change.from))
       for (const old of previous.nodes) {
         if (old.path === '') continue
-        let delta = 0, touched = false
-        for (const change of changes) {
-          if (change.to <= old.start) delta += change.insert.length - (change.to - change.from)
-          else if (change.from < old.end) { touched = true; break }
+        let low = 0, high = changes.length
+        while (low < high) {
+          const mid = (low + high) >> 1
+          if (changes[mid]!.to <= old.start) low = mid + 1
+          else high = mid
         }
-        if (touched) continue
+        if (low < changes.length && changes[low]!.from < old.end) continue
+        const delta = deltas[low]!
         const start = old.start + delta, end = old.end + delta
         const matches = candidates.get(`${old.type ?? ''}:${start}:${end}`) ?? []
         if (matches.length !== 1 || previous.source.slice(old.start, old.end) !== source.slice(start, end)) continue
@@ -288,11 +292,14 @@ export function createEditorSession(
     snapshot: () => current,
     update(changes) {
       validateChanges(current.source, changes)
-      let source = current.source
-      for (let index = changes.length - 1; index >= 0; index--) {
-        const change = changes[index]!
-        source = source.slice(0, change.from) + change.insert + source.slice(change.to)
+      const parts: string[] = []
+      let cursor = 0
+      for (const change of changes) {
+        parts.push(current.source.slice(cursor, change.from), change.insert)
+        cursor = change.to
       }
+      parts.push(current.source.slice(cursor))
+      const source = parts.join('')
       const next = build(source, current.revision + 1, current, changes)
       const nextSignatures = nodeSignatures(next.ast)
       const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(signatures, nextSignatures)) })

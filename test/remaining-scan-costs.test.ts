@@ -98,6 +98,38 @@ describe('remaining scan costs', () => {
     expectBuiltInputScansLinearly(input => void lintCarve(input), n => '{widths="60,50"}\n| a | b |\n\n'.repeat(n), { smallRepeats: 500, label: 'table warning positions' })
   })
 
+  it('bounds edit-boundary lookups across many mapped nodes', () => {
+    const session = createEditorSession('a\n\n'.repeat(1000))
+    let boundaryReads = 0
+    const changes = Array.from({ length: 500 }, (_, i) => ({
+      from: i * 6,
+      get to() { boundaryReads++; return i * 6 + 1 },
+      insert: 'bb',
+    }))
+    const update = session.update(changes)
+    expect(update.source).toBe('bb\n\na\n\n'.repeat(500))
+    expect(boundaryReads).toBeLessThan(50_000)
+  })
+
+  perfIt('batched editor updates index edits once', () => {
+    expectBuiltInputScansLinearly(input => {
+      const session = createEditorSession(input)
+      const changes = Array.from({ length: input.length / 6 }, (_, i) => ({ from: i * 6, to: i * 6 + 1, insert: 'bb' }))
+      session.update(changes)
+    }, n => 'a\n\n'.repeat(n), { smallRepeats: 4000, label: 'batched editor updates' })
+  })
+
+  it('maps empty includes across mention and tag spans', () => {
+    const source = '@user {{ }} @next {{ #x }}'
+    const warnings = lintCarve(source).filter(warning => warning.rule === 'empty-include-path')
+    expect(warnings.map(warning => source.slice(warning.start, warning.end))).toEqual(['{{ }}', '{{ #x }}'])
+    expect(warnings.map(warning => warning.column)).toEqual([7, 19])
+  })
+
+  perfIt('empty include warnings advance through inline spans', () => {
+    expectBuiltInputScansLinearly(input => void lintCarve(input), n => '@user {{ }} '.repeat(n), { smallRepeats: 1000, label: 'empty include inline spans' })
+  })
+
   perfIt('source layout scales with positioned paragraphs', () => {
     expectBuiltInputScansLinearly(input => void parseWithSourceLayout(input), n => paragraphs(n, 'a'), { smallRepeats: 1000, label: 'source layout' })
   })
