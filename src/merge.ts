@@ -163,9 +163,13 @@ function matchSide(base: unknown[], side: unknown[], nodePosition: boolean): Sid
     queue.push(index)
     exact.set(key, queue)
   })
+  const exactCursors = new Map<string, number>()
   for (let i = 0; i < base.length; i++) {
-    const queue = exact.get(semanticKey(base[i], nodePosition))
-    const j = queue?.shift()
+    const key = semanticKey(base[i], nodePosition)
+    const cursor = exactCursors.get(key) ?? 0
+    const queue = exact.get(key)
+    const j = queue?.[cursor]
+    exactCursors.set(key, cursor + 1)
     if (j !== undefined) take(i, j)
   }
 
@@ -256,24 +260,20 @@ function matchSide(base: unknown[], side: unknown[], nodePosition: boolean): Sid
   }
 }
 
-function additionAnchor(sideIndex: number, match: SideMatch, sideLength: number): string {
-  let before = -1
-  let after = -1
-  for (let i = sideIndex - 1; i >= 0; i--) {
-    const baseIndex = match.sideToBase.get(i)
-    if (baseIndex !== undefined) {
-      before = baseIndex
-      break
-    }
+function additionAnchors(match: SideMatch, length: number): string[] {
+  const before: number[] = []
+  let at = -1
+  for (let i = 0; i < length; i++) {
+    before[i] = at
+    at = match.sideToBase.get(i) ?? at
   }
-  for (let i = sideIndex + 1; i < sideLength; i++) {
-    const baseIndex = match.sideToBase.get(i)
-    if (baseIndex !== undefined) {
-      after = baseIndex
-      break
-    }
+  const anchors: string[] = []
+  at = -1
+  for (let i = length - 1; i >= 0; i--) {
+    anchors[i] = `${before[i]}:${at}`
+    at = match.sideToBase.get(i) ?? at
   }
-  return `${before}:${after}`
+  return anchors
 }
 
 function topoSort(
@@ -288,16 +288,43 @@ function topoSort(
   for (const tos of edges.values()) {
     for (const to of tos) incoming.set(to, (incoming.get(to) ?? 0) + 1)
   }
-  const ready = [...tokens].filter((token) => incoming.get(token) === 0)
+  const ready: string[] = []
+  const push = (token: string): void => {
+    let i = ready.length
+    ready.push(token)
+    while (i > 0) {
+      const parent = (i - 1) >> 1
+      if (compareTokens(ready[parent]!, token) <= 0) break
+      ready[i] = ready[parent]!
+      i = parent
+    }
+    ready[i] = token
+  }
+  const pop = (): string => {
+    const first = ready[0]!
+    const last = ready.pop()!
+    if (ready.length > 0) {
+      let i = 0
+      while (i * 2 + 1 < ready.length) {
+        let child = i * 2 + 1
+        if (child + 1 < ready.length && compareTokens(ready[child + 1]!, ready[child]!) < 0) child++
+        if (compareTokens(last, ready[child]!) <= 0) break
+        ready[i] = ready[child]!
+        i = child
+      }
+      ready[i] = last
+    }
+    return first
+  }
+  for (const token of tokens) if (incoming.get(token) === 0) push(token)
   const out: string[] = []
   while (ready.length > 0) {
-    ready.sort(compareTokens)
-    const token = ready.shift()!
+    const token = pop()
     out.push(token)
     for (const to of edges.get(token) ?? []) {
       const count = (incoming.get(to) ?? 1) - 1
       incoming.set(to, count)
-      if (count === 0) ready.push(to)
+      if (count === 0) push(to)
     }
   }
   return out.length === tokens.size ? out : null
@@ -352,24 +379,35 @@ function mergeSequence(
   const oursAdditionTokens = new Map<number, string>()
   const theirsAdditionTokens = new Map<number, string>()
   const usedTheirs = new Set<number>()
+  const oursAnchors = additionAnchors(om, ours.length)
+  const theirsAnchors = additionAnchors(tm, theirs.length)
+  const additions = new Map<string, { indexes: number[]; cursor: number }>()
+  const identities = new Map<string, Set<string>>()
+  for (const ti of tm.additions) {
+    const key = semanticKey(theirs[ti], nodePosition)
+    const anchor = theirsAnchors[ti]!
+    const bucketKey = anchor + '\0' + key
+    const bucket = additions.get(bucketKey) ?? { indexes: [], cursor: 0 }
+    bucket.indexes.push(ti)
+    additions.set(bucketKey, bucket)
+    const hint = identityHint(theirs[ti])
+    if (hint !== undefined) {
+      const hintKey = anchor + '\0' + hint
+      const keys = identities.get(hintKey) ?? new Set<string>()
+      keys.add(key)
+      identities.set(hintKey, keys)
+    }
+  }
   for (const oi of om.additions) {
-    const anchor = additionAnchor(oi, om, ours.length)
-    const identityCollision = tm.additions.find((ti) => {
-      const hint = identityHint(ours[oi])
-      return hint !== undefined &&
-        identityHint(theirs[ti]) === hint &&
-        additionAnchor(ti, tm, theirs.length) === anchor &&
-        !equal(ours[oi], theirs[ti], nodePosition)
-    })
-    if (identityCollision !== undefined) {
+    const anchor = oursAnchors[oi]!
+    const key = semanticKey(ours[oi], nodePosition)
+    const hint = identityHint(ours[oi])
+    const keys = hint === undefined ? undefined : identities.get(anchor + '\0' + hint)
+    if (keys && (keys.size > 1 || !keys.has(key))) {
       return conflict('concurrent-sequence-edit', path, base, ours, theirs, conflicts, options)
     }
-    const same = tm.additions.find(
-      (ti) =>
-        !usedTheirs.has(ti) &&
-        additionAnchor(ti, tm, theirs.length) === anchor &&
-        equal(ours[oi], theirs[ti], nodePosition),
-    )
+    const bucket = additions.get(anchor + '\0' + key)
+    const same = bucket?.indexes[bucket.cursor++]
     const token = `o${oi}`
     oursAdditionTokens.set(oi, token)
     values.set(token, ours[oi])

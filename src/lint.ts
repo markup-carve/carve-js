@@ -1997,15 +1997,21 @@ function collectSilentFailures(
 
   for (const table of tables) {
     const kv = table.attrs?.keyValues ?? {}
-    const widest = Math.max(0, ...table.rows.map((row) => row.cells.length))
+    const widest = table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0)
     const lineNo = table.pos?.startLine ?? 1
     const tableStart = lineStart[lineNo - 1] ?? source.length
     const addTableWarning = (rule: string, key: string, message: string): void => {
       const found = source.lastIndexOf(key, tableStart)
       const start = found >= 0 ? found : (lineStart[lineNo - 1] ?? 0)
-      const before = source.slice(0, start)
-      const warningLine = before.split('\n').length
-      const warningColumn = start - before.lastIndexOf('\n')
+      let low = 0
+      let high = lineStart.length
+      while (low + 1 < high) {
+        const mid = (low + high) >> 1
+        if (lineStart[mid]! <= start) low = mid
+        else high = mid
+      }
+      const warningLine = low + 1
+      const warningColumn = start - lineStart[low]! + 1
       out.push({ line: warningLine, column: warningColumn, rule, message, start, end: start + key.length })
     }
     for (const key of ['aligns', 'valigns', 'widths'] as const) {
@@ -2419,18 +2425,6 @@ function collectPlatformAutolinks(
   }
 }
 
-/** Whether `ch` occurs unescaped in `line` before `end`. */
-function hasUnescapedBefore(line: string, ch: string, end: number): boolean {
-  for (let i = 0; i < end; i++) {
-    if (line[i] === '\\') {
-      i++
-      continue
-    }
-    if (line[i] === ch) return true
-  }
-
-  return false
-}
 
 /**
  * The caption lines of a figure wrapping a code or raw block.
@@ -2487,26 +2481,22 @@ function maskInlineDestinations(line: string): string {
   // length-preserving like the destination walk below, so a token after the URL
   // still indexes the real source.
   line = line.replace(/\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+/g, (m) => ' '.repeat(m.length))
+  const closes = new Map<number, number>()
+  const stack: number[] = []
+  let firstBracket = -1
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\\') { i++; continue }
+    if (line[i] === '[' && firstBracket === -1) firstBracket = i
+    if (line[i] === '(') stack.push(i)
+    else if (line[i] === ')' && stack.length) closes.set(stack.pop()!, i)
+  }
   let out: string[] | null = null
   for (let i = 0; i + 1 < line.length; i++) {
     if (line[i] !== ']' || line[i + 1] !== '(') continue
-    // A LABEL HAS TO OPEN SOMEWHERE. A bare `](#123)` in prose is visible text,
-    // not a destination, and masking it lost the finding. An escaped `\]` does
-    // not close a label either.
-    if (line[i - 1] === '\\' || !hasUnescapedBefore(line, '[', i)) continue
-    let depth = 1
-    let j = i + 2
-    for (; j < line.length; j++) {
-      const c = line[j]!
-      if (c === '\\') {
-        j++
-        continue
-      }
-      if (c === '(') depth++
-      else if (c === ')' && --depth === 0) break
-    }
-    if (depth !== 0 || j >= line.length) continue
-    out ??= [...line]
+    if (line[i - 1] === '\\' || firstBracket === -1 || firstBracket >= i) continue
+    const j = closes.get(i + 1)
+    if (j === undefined) continue
+    out ??= line.split('')
     for (let k = i + 2; k < j; k++) out[k] = ' '
     i = j
   }

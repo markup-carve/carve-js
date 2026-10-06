@@ -187,29 +187,6 @@ function key(node: Node): string {
   return parts.join('|')
 }
 
-/**
- * Are these two the same node, edited - or two different nodes?
- *
- * Same type is the whole rule, applied to the leftovers IN ORDER after the LCS
- * has already matched everything identical. It is the same call a line diff
- * makes when it shows a modified line instead of a deletion and an insertion.
- *
- * Counting shared children instead was tried and is worse: a paragraph with one
- * text child shares nothing with the same paragraph after its wording changed,
- * so the single most ordinary edit - retyping a sentence - reported as a
- * paragraph removed and a paragraph added. Turning a soft break into a hard one
- * has the same problem from the other direction, taking a paragraph from one
- * child to three.
- *
- * The cost is that two unrelated same-type siblings, one deleted and one added
- * in the same place, pair up and report their inner differences rather than a
- * clean remove/add pair. That is the trade a line diff already makes, and the
- * content is still fully described.
- */
-function similar(a: Node, b: Node): boolean {
-  return a.type === b.type
-}
-
 function line(node: Node): number | undefined {
   const pos = node['pos']
   if (typeof pos !== 'object' || pos === null) return undefined
@@ -225,30 +202,75 @@ function change(kind: ChangeKind, node: Node, path: string, detail?: string): Ch
   return out
 }
 
-/** Longest common subsequence over two key lists, as index pairs. */
+/** Exact LCS below the cell budget; occurrence-based LIS above it. */
 function lcs(a: string[], b: string[]): [number, number][] {
-  const table: number[][] = Array.from({ length: a.length + 1 }, () =>
-    new Array<number>(b.length + 1).fill(0),
-  )
-  for (let i = a.length - 1; i >= 0; i--) {
-    for (let j = b.length - 1; j >= 0; j--) {
-      table[i]![j] = a[i] === b[j] ? table[i + 1]![j + 1]! + 1 : Math.max(table[i + 1]![j]!, table[i]![j + 1]!)
+  let start = 0
+  const exceedsBudget = a.length * b.length > 1_000_000
+  while (exceedsBudget && start < a.length && start < b.length && a[start] === b[start]) start++
+  let suffix = 0
+  while (exceedsBudget && suffix < a.length - start && suffix < b.length - start && a[a.length - suffix - 1] === b[b.length - suffix - 1]) suffix++
+  const aEnd = a.length - suffix
+  const bEnd = b.length - suffix
+  const pairs: [number, number][] = Array.from({ length: start }, (_, i) => [i, i])
+  if ((aEnd - start) * (bEnd - start) > 1_000_000) {
+    const indexes = new Map<string, { values: number[]; cursor: number }>()
+    for (let j = start; j < bEnd; j++) {
+      const bucket = indexes.get(b[j]!) ?? { values: [], cursor: 0 }
+      bucket.values.push(j)
+      indexes.set(b[j]!, bucket)
     }
-  }
-  const pairs: [number, number][] = []
-  let i = 0
-  let j = 0
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      pairs.push([i, j])
-      i++
-      j++
-    } else if (table[i + 1]![j]! >= table[i]![j + 1]!) {
-      i++
+    const candidates: [number, number][] = []
+    for (let i = start; i < aEnd; i++) {
+      const bucket = indexes.get(a[i]!)
+      const j = bucket?.values[bucket.cursor++]
+      if (j !== undefined) candidates.push([i, j])
+    }
+    const tails: number[] = []
+    const previous: number[] = []
+    for (let i = 0; i < candidates.length; i++) {
+      let low = 0
+      let high = tails.length
+      while (low < high) {
+        const mid = (low + high) >> 1
+        if (candidates[tails[mid]!]![1] < candidates[i]![1]) low = mid + 1
+        else high = mid
+      }
+      previous[i] = low === 0 ? -1 : tails[low - 1]!
+      tails[low] = i
+    }
+    const core: [number, number][] = []
+    for (let i = tails.at(-1) ?? -1; i !== -1; i = previous[i]!) core.push(candidates[i]!)
+    for (const bucket of indexes.values()) bucket.cursor = 0
+    const greedy: [number, number][] = []
+    let after = start - 1
+    for (let i = start; i < aEnd; i++) {
+      const bucket = indexes.get(a[i]!)
+      if (!bucket) continue
+      while (bucket.cursor < bucket.values.length && bucket.values[bucket.cursor]! <= after) bucket.cursor++
+      const j = bucket.values[bucket.cursor++]
+      if (j !== undefined) { greedy.push([i, j]); after = j }
+    }
+    if (greedy.length > core.length) {
+      for (const pair of greedy) pairs.push(pair)
     } else {
-      j++
+      for (let i = core.length - 1; i >= 0; i--) pairs.push(core[i]!)
+    }
+  } else if (aEnd > start && bEnd > start) {
+    const table: number[][] = Array.from({ length: aEnd - start + 1 }, () => new Array<number>(bEnd - start + 1).fill(0))
+    for (let i = aEnd - start - 1; i >= 0; i--) {
+      for (let j = bEnd - start - 1; j >= 0; j--) {
+        table[i]![j] = a[start + i] === b[start + j] ? table[i + 1]![j + 1]! + 1 : Math.max(table[i + 1]![j]!, table[i]![j + 1]!)
+      }
+    }
+    let i = 0
+    let j = 0
+    while (i < aEnd - start && j < bEnd - start) {
+      if (a[start + i] === b[start + j]) { pairs.push([start + i, start + j]); i++; j++ }
+      else if (table[i + 1]![j]! >= table[i]![j + 1]!) i++
+      else j++
     }
   }
+  for (let i = 0; i < suffix; i++) pairs.push([aEnd + i, bEnd + i])
   return pairs
 }
 
@@ -292,10 +314,30 @@ function diffLevel(
   const additions = after.map((n, j) => [n, j] as const).filter(([, j]) => !matchedAfter.has(j))
   const takenAdditions = new Set<number>()
 
+  const byKey = new Map<string, Array<readonly [Node, number]>>()
+  // Pair remaining same-type siblings in their original occurrence order.
+  const byType = new Map<string, Array<readonly [Node, number]>>()
+  for (const entry of additions) {
+    const [node, j] = entry
+    const exact = byKey.get(afterKeys[j]!) ?? []
+    exact.push(entry)
+    byKey.set(afterKeys[j]!, exact)
+    const kinds = byType.get(node.type) ?? []
+    kinds.push(entry)
+    byType.set(node.type, kinds)
+  }
+  const cursors = new Map<Array<readonly [Node, number]>, number>()
+  const take = (bucket: Array<readonly [Node, number]> | undefined): readonly [Node, number] | undefined => {
+    if (!bucket) return undefined
+    let cursor = cursors.get(bucket) ?? 0
+    while (cursor < bucket.length && takenAdditions.has(bucket[cursor]![1])) cursor++
+    cursors.set(bucket, cursor + 1)
+    return bucket[cursor]
+  }
   for (const [node, i] of leftovers) {
     const nodeKey = beforeKeys[i]!
     // Same content, different place.
-    const moved = additions.find(([, j]) => !takenAdditions.has(j) && afterKeys[j] === nodeKey)
+    const moved = take(byKey.get(nodeKey))
     if (moved) {
       takenAdditions.add(moved[1])
       out.push(change('moved', node, `${path}/${field}[${i}]`, `now at index ${moved[1]}`))
@@ -303,7 +345,7 @@ function diffLevel(
     }
     // The same node, edited: recurse so the report names what changed inside
     // rather than declaring the whole subtree gone and a new one arrived.
-    const edited = additions.find(([other, j]) => !takenAdditions.has(j) && similar(node, other))
+    const edited = take(byType.get(node.type))
     if (edited) {
       takenAdditions.add(edited[1])
       diffNode(node, edited[0], `${path}/${field}[${i}]`, out)

@@ -9,6 +9,13 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+
+- Avoid repeated scans of malformed links, attributes, references, and footnotes.
+- Speed up source-layout export, editor attribute mapping, and AST merges on large documents. Recognize editor attribute lines after bare CR endings.
+- Bound large AST diff matching while preserving single-move detection. Matching choices can differ for large edits with repeated content.
+- Preserve platform-lint offsets after astral characters.
+
 ## [0.1.10] - 2026-10-05
 
 ### Breaking
