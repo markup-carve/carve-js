@@ -101,11 +101,13 @@ describe('a quoted list on a description lead dies with its quote', () => {
     )
   })
 
-  it('leaves the OPPOSITE nesting order where it was [PRE-EXISTING divergence]', () => {
-    // `- > ` puts the list outside, so it outlives the quote and this fix must
-    // not reach it. The oracle ends the body here and carve-js does not, which
-    // was already true before this change and is unmoved by it. Pinned so the
-    // asymmetry stays visible rather than silent.
+  it('ends the item in the opposite nesting order too', () => {
+    // `- > ` puts the list outside, so it outlives the quote: the over-indented
+    // table has to end the ITEM and leave the list standing, which puts the
+    // follower in the body beside the `<ul>`. This was pinned as a divergence
+    // and attributed to the nesting order; the order was incidental. It is the
+    // over-indented leaf block that leaves no open paragraph, and carve-js#2542
+    // fixed that at the item host, which reaches this shape as well.
     expect(html(':: t\n: - > | a |\n      | - |\n      | b |\nx\n')).toBe(
       [
         '<dl>',
@@ -126,9 +128,9 @@ describe('a quoted list on a description lead dies with its quote', () => {
         '            <tr><td>b</td></tr>',
         '          </tbody>',
         '        </table>',
-        '        x',
         '      </li>',
         '    </ul>',
+        '    <p>x</p>',
         '  </dd>',
         '</dl>',
       ].join('\n'),

@@ -4455,6 +4455,27 @@ interface ItemLazyState {
   // open - otherwise `{.k` / `#x}` reads as two lines of prose and the container
   // keeps a paragraph nothing opened (markup-carve/carve#1281).
   attrRun: string | null
+  /**
+   * The leading run a container INSIDE the item currently owns, or -1.
+   *
+   * The same distinction `rebaseOverindentedBlocks` carries as `ownedColumn`. A
+   * run the column owns is a NESTING LEVEL; any other run is an AUTHORED
+   * over-indent. Without it the tracker held only the paragraph answer
+   * `markerLineState` gave it, so the arm below could not tell the two apart and
+   * reading a nested item's own column flush erased a level.
+   *
+   * In the CHARACTER unit `ItemLineFacts.whitespace` reports, which the lexer
+   * has already measured for the line, so none of this re-scans a leading run.
+   */
+  ownedColumn: number
+  /**
+   * Is `ownedColumn` an AUTHORED base rather than a nested marker's column?
+   *
+   * The two own different lines. A nested marker owns everything at or past its
+   * content column; an authored base owns only what is PAST it, because a line
+   * AT the base is more of the same block.
+   */
+  ownedAuthored: boolean
 }
 
 /**
@@ -4489,6 +4510,8 @@ function verbatimOnlyLazyState(): ItemLazyState {
     quoteInner: null,
     inDefList: false,
     attrRun: null,
+    ownedColumn: -1,
+    ownedAuthored: false,
   }
 }
 
@@ -5381,6 +5404,53 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
+  // AN OVER-INDENTED LEAF BLOCK LEAVES NO OPEN PARAGRAPH. The three arms below
+  // are column-0 strict (§24 C3), and a block the author wrote PAST the item's
+  // content column still carries that run, so it read as prose and left a
+  // paragraph the block does not have - `- p` / `    # H` / `x` kept `x` inside
+  // the item where the heading had already ended it (carve-js#2542).
+  //
+  // Only when the run is AUTHORED, which `ownedColumn` decides, in the two
+  // senses `rebaseOverindentedBlocks` already holds it: a NESTED MARKER owns
+  // every line at or past its content column, because they are the deeper
+  // item's; an AUTHORED BASE owns only the lines PAST it, because a line AT the
+  // base is more of the same block. Reading either flush erases a level.
+  //
+  // Every step here is O(1) off the run the lexer already measured, so the
+  // ladder stays linear (carve#752's counted bound). A caller that cannot
+  // report the run leaves the whole arm shut rather than measuring one.
+  const run = facts?.whitespace
+  let readFlush = false
+  if (run !== undefined) {
+    if (state.ownedColumn >= 0) {
+      if (run < state.ownedColumn) state.ownedColumn = -1
+      else if (state.ownedAuthored && run === state.ownedColumn) readFlush = true
+    }
+    if (state.ownedColumn < 0 && atContentColumn && run > 0) {
+      state.ownedColumn = run
+      state.ownedAuthored = true
+      readFlush = true
+    }
+  }
+  // An open quote's own paragraph takes the line as lazy text, so its run is
+  // not authored either. A quote that ended on a block holds no such paragraph
+  // and the run below it is the ITEM's - the shape this ticket was found on
+  // (`: - > | a |` with an over-indented table under it). An open colon-fence
+  // container and an open description entry hold the run for the same reason:
+  // each is the innermost container and reads its body flush.
+  if (
+    readFlush && state.divDepth === 0 && state.inDefList === false &&
+    (wasQuote === null || !blockQuoteParagraphOpen(wasQuote))
+  ) {
+    const overIndented = content.slice(run!)
+    if (RE_HEADING.test(overIndented) || isTableRow(overIndented) || RE_HR.test(overIndented)) {
+      state.inTable = isTableRow(overIndented)
+      state.lazyFoldable = false
+      state.inDefList = false
+
+      return
+    }
+  }
   // A heading is a block and leaves no paragraph open. At the item's content
   // column a following dedented line therefore reaches no container (PART 1
   // S4, carve#1377), just as it does after a table row or thematic break.
@@ -5533,8 +5603,23 @@ function trackItemLazyState(
   // 75-list-nesting-and-looseness-4 pins the folding answer for.
   const nestedAttr = extractItemAttr(content, facts?.terminatorFree)
   const nestedMarker = nestedAttr ? (nestedAttr.markerLine ?? nestedAttr.stripped) : content
-  if (taskMatch(nestedMarker, facts?.terminatorFree) || orderedMatch(nestedMarker, facts?.terminatorFree) || unorderedMatch(nestedMarker, facts?.terminatorFree)) {
+  const nestedTask = taskMatch(nestedMarker, facts?.terminatorFree)
+  const nestedBullet = nestedTask ? null
+    : (orderedMatch(nestedMarker, facts?.terminatorFree) ?? unorderedMatch(nestedMarker, facts?.terminatorFree))
+  if (nestedTask || nestedBullet) {
     state.absorbingFence = false
+    // `markerContentColumn`'s arithmetic off the match already in hand, since
+    // calling it would run the three matchers a second time per nesting level
+    // and measure the leading run again - both of which `container-tail-work`
+    // and `nested-container-rescan` count.
+    const nestedWidth = nestedTask
+      ? 2
+      : nestedBullet!.length === 0
+        ? -1
+        : nestedMarker.length - leadingWhitespace(nestedMarker) -
+          nestedBullet![nestedBullet!.length - 1]!.length
+    state.ownedColumn = run !== undefined && nestedWidth > 0 ? run + nestedWidth : -1
+    state.ownedAuthored = false
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
     const nested = markerLineState(content, facts?.prefixMemo)
@@ -10164,6 +10249,8 @@ class ParseSession {
         lazyFoldable: false,
         inDefList: false,
         attrRun: null,
+        ownedColumn: -1,
+        ownedAuthored: false,
       }
       let defFenceMemo: QuotedFenceCloserMemo | undefined
       /**
@@ -11705,6 +11792,18 @@ class ParseSession {
             ? 'description'
             : false,
         attrRun: leadState.wrappedAttributeRun,
+        // A container may open on the marker line itself, which never reaches
+        // `trackItemLazyState`, so the first line collected below it has to be
+        // read in that container's coordinate system. Off the memoized prefix
+        // walk `markerLineState` already made, never a second marker match.
+        // A QUOTE OWNS BY ITS MARKER, NOT BY INDENT, so a run that starts with
+        // one seeds nothing: a bare indented line below it is not the quote's
+        // content, and whether it is the quote's lazy text is the question
+        // `quoteInner` answers.
+        ownedColumn: noFollower || RE_BLOCKQUOTE.test(content)
+          ? -1
+          : walkContainerPrefix(content, this.markerPrefixMemo(lexer, itemStartLineIndex)) || -1,
+        ownedAuthored: false,
       }
       // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
       // The lead line never went through `trackItemLazyState`, so `- ``` ` left
