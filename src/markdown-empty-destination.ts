@@ -102,10 +102,11 @@ function htmlBlockCloser(rest: string): RegExp | null {
  * for inline fallback; other definitions are returned for the document end.
  */
 export function extractReferenceDefinitions(
-  lines: readonly string[],
+  inputLines: readonly string[],
   decodeEntity: (entity: string) => string,
   interruptsParagraph: (line: string) => boolean,
 ): { lines: string[]; references: EmptyDestinationReferences; definitions: string[] } {
+  const lines = [...inputLines]
   const empty = new Map<string, string>()
   const defined = new Set<string>()
   const authoredDefinitions = new Set<string>()
@@ -118,6 +119,11 @@ export function extractReferenceDefinitions(
     for (const match of line.matchAll(/\[carve-import-reference-(\d+)\]/gi)) reservedReferences.add(Number(match[1]))
   }
   const kept: string[] = []
+  let precedingNonblank: string | undefined
+  const keep = (...entries: string[]): void => {
+    for (const entry of entries) if (entry.trim() !== '') precedingNonblank = entry
+    kept.push(...entries)
+  }
   let referenceChunk: { lines: readonly string[]; start: number; through: number; text: string; offsets: number[] } | undefined
   const referenceSource = (index: number): string => {
     if (!referenceChunk || referenceChunk.lines !== lines || index > referenceChunk.through) {
@@ -133,6 +139,21 @@ export function extractReferenceDefinitions(
     }
     return referenceChunk.text.slice(referenceChunk.offsets[index - referenceChunk.start])
   }
+  let deferredBlanks: { start: number; end: number; values: string[] } | undefined
+  const flushBlanks = (): void => {
+    if (!deferredBlanks) return
+    for (let at = deferredBlanks.start; at < deferredBlanks.end; at++) {
+      lines[at] = deferredBlanks.values[at - deferredBlanks.start]!
+    }
+    deferredBlanks = undefined
+    referenceChunk = undefined
+  }
+  const nextNonblankFrom = (start: number): number => {
+    let at = start
+    if (deferredBlanks && at >= deferredBlanks.start && at < deferredBlanks.end) at = deferredBlanks.end
+    while (at < lines.length && lines[at]!.trim() === '') at++
+    return at
+  }
   let fence: string | null = null
   let htmlCloser: RegExp | null = null
   let blockDepth = 0
@@ -146,6 +167,7 @@ export function extractReferenceDefinitions(
     /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$))/.test(text) ||
     /^[ \t]*(?:=+|[-*_]{3,})[ \t]*$/.test(text)
   for (let i = 0; i < lines.length; i++) {
+    if (deferredBlanks && i >= deferredBlanks.start) flushBlanks()
     const line = lines[i]!
     let prefix = /^((?: {0,3}>[ \t]?)*)/.exec(line)![1]!
     let content = line.slice(prefix.length)
@@ -166,7 +188,7 @@ export function extractReferenceDefinitions(
         htmlCloser = null
         canStart = true
       }
-      kept.push(line)
+      keep(line)
       continue
     }
     const marker = /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])[ \t]+(?=\S)/.exec(content)
@@ -185,7 +207,7 @@ export function extractReferenceDefinitions(
         fence = null
         canStart = true
       }
-      kept.push(line)
+      keep(line)
       depth = lineDepth
       continue
     }
@@ -194,7 +216,7 @@ export function extractReferenceDefinitions(
       fence = open[1]!
       blockDepth = lineDepth
       blockList = listIndent
-      kept.push(line)
+      keep(line)
       depth = lineDepth
       continue
     }
@@ -205,7 +227,7 @@ export function extractReferenceDefinitions(
         blockDepth = lineDepth
         blockList = listIndent
       }
-      kept.push(line)
+      keep(line)
       depth = lineDepth
       canStart = true
       continue
@@ -231,7 +253,7 @@ export function extractReferenceDefinitions(
         continue
       }
       if (parsed === null && (/^ {0,3}\[(?:[^[\]\\\n]|\\.)+\]:[ \t]*</.test(content) || /^ {0,3}\[(?:[^\]\\\n]|\\.)*\[(?:[^\]\\\n]|\\.)*\]:/.test(content))) {
-        kept.push(line.replace(/^( *)\[/, '$1\\['))
+        keep(line.replace(/^( *)\[/, '$1\\['))
         canStart = false
         continue
       }
@@ -258,7 +280,7 @@ export function extractReferenceDefinitions(
       if (!emptied) {
         const target = destination.replace(/^[ \t]+|[ \t]+$/g, '')
         if (target === '') {
-          kept.push(line, ...continued)
+          keep(line, ...continued)
           canStart = false
           continue
         }
@@ -268,7 +290,7 @@ export function extractReferenceDefinitions(
         authoredDefinitions.add(authoredKey)
         defined.add(key)
         if (definition[1]!.startsWith('^')) {
-          kept.push(line, ...continued)
+          keep(line, ...continued)
           canStart = true
           continue
         }
@@ -276,18 +298,12 @@ export function extractReferenceDefinitions(
           labels.set(key, definition[1]!)
           sourceLabels.set(normalizeReferenceLabel(definition[1]!), definition[1]!)
         }
-        let preceding: string | undefined
-        for (let at = kept.length - 1; at >= 0; at--) {
-          if (kept[at]!.trim() !== '') { preceding = kept[at]; break }
-        }
-        let nextNonblank: string | undefined
-        for (let at = i + 1; at < lines.length; at++) {
-          if (lines[at]!.trim() !== '') { nextNonblank = lines[at]; break }
-        }
+        const preceding = precedingNonblank
+        const nextNonblank = lines[nextNonblankFrom(i + 1)]
         const isItem = (entry: string | undefined) => entry !== undefined &&
           /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)/.test(entry.slice(quotePrefix.length))
         if (!opensItem && kept.at(-1)?.trim() === '' && isItem(preceding) && isItem(nextNonblank)) {
-          kept.push(line, ...continued)
+          keep(line, ...continued)
           canStart = true
           continue
         }
@@ -308,27 +324,40 @@ export function extractReferenceDefinitions(
           const nextLine = lines[i + 1]
           if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
               !opensBlock(nextLine) && !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
-            lines = [...lines.slice(0, i + 1), prefix + nextLine.trimStart(), ...lines.slice(i + 2)]
+            lines[i + 1] = prefix + nextLine.trimStart()
+            referenceChunk = undefined
           } else {
-            const continuation = lines.findIndex((candidate, at) => at > i + 1 && candidate.trim() !== '')
-            if (nextLine?.trim() === '' && continuation > i + 1 &&
+            let continuation = i + 2
+            if (nextLine?.trim() === '') {
+              continuation = nextNonblankFrom(continuation)
+            }
+            if (nextLine?.trim() === '' && continuation < lines.length &&
                 leadingSpaces(lines[continuation]!) >= prefix.length && leadingSpaces(lines[continuation]!) < prefix.length + 4 &&
                 !opensBlock(lines[continuation]!.trimStart())) {
-              lines = [...lines.slice(0, i + 1), prefix + lines[continuation]!.trimStart(),
-                ...lines.slice(i + 1, continuation), ...lines.slice(continuation + 1)]
-            } else kept.push(prefix.trimEnd() + ' \x00REFITEM\x00')
+              const moved = prefix + lines[continuation]!.trimStart()
+              // Keep a blank run in place while chained definitions move ahead of it.
+              const values = deferredBlanks?.values ?? lines.slice(i + 1, continuation)
+              if (deferredBlanks) {
+                for (let at = deferredBlanks.end; at < continuation; at++) values.push(lines[at]!)
+              }
+              deferredBlanks = { start: i + 2, end: continuation + 1, values }
+              lines[i + 1] = moved
+              lines[continuation] = ''
+              referenceChunk = undefined
+            } else keep(prefix.trimEnd() + ' \x00REFITEM\x00')
           }
         } else if (quotePrefix !== '') {
           const nextLine = lines[i + 1]
           if (nextLine !== undefined && nextLine.trim() !== '' && !opensBlock(nextLine) &&
               !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
-            kept.push(quotePrefix + nextLine.trimStart())
+            keep(quotePrefix + nextLine.trimStart())
             i++
-          } else kept.push(quotePrefix)
+          } else keep(quotePrefix)
         } else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && lines[i + 1]?.trim() === '') {
           i++
         } else if (lines[i + 1]?.startsWith('    ') && lines[i + 1]!.trim() !== '') {
-          lines = [...lines.slice(0, i + 1), lines[i + 1]!.replace(/^ {4}/, ''), ...lines.slice(i + 2)]
+          lines[i + 1] = lines[i + 1]!.replace(/^ {4}/, '')
+          referenceChunk = undefined
         }
         canStart = true
         continue
@@ -347,12 +376,12 @@ export function extractReferenceDefinitions(
       canStart = true
       // Keep the item as an empty comment line; the output pass restores the
       // marker after inline conversion.
-      if (opensItem) kept.push(prefix.trimEnd() + ' \x00REFITEM\x00')
-      else if (quotePrefix !== '') kept.push(quotePrefix)
+      if (opensItem) keep(prefix.trimEnd() + ' \x00REFITEM\x00')
+      else if (quotePrefix !== '') keep(quotePrefix)
       else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && i + 1 < lines.length && lines[i + 1]!.trim() === '') i++
       continue
     }
-    kept.push(line)
+    keep(line)
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }

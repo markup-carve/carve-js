@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+
+- Markdown reference definitions in lists update only their continuation lines and no longer copy or search the whole line array for each definition.
+
 ## [0.1.10] - 2026-10-06
 
 ### Breaking

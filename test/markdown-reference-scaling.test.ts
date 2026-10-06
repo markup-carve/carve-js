@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest'
+import { extractReferenceDefinitions } from '../src/markdown-empty-destination.js'
+import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
+
+const extract = (source: string) => extractReferenceDefinitions(source.split('\n'), value => value, () => false)
+
+describe('Markdown reference extraction', () => {
+  it('moves continuation text without changing the caller lines', () => {
+    const lines = ['- [a]: /a', '', '  text', '- [b]: /b', '  other']
+    const before = [...lines]
+    const result = extractReferenceDefinitions(lines, value => value, () => false)
+    expect(lines).toEqual(before)
+    expect(result.lines).toEqual(['- text', '', '- other'])
+    expect(result.definitions).toEqual(['[a]: /a', '[b]: /b'])
+  })
+
+  perfIt('definitions after a retained blank prefix scale', () => {
+    expectBuiltInputScansLinearly(source => { extract(source) },
+      n => '\n'.repeat(n) + Array.from({ length: n }, (_, i) => `[r${i}]: /url`).join('\n'),
+      { smallRepeats: 4_000, label: 'retained blank prefix' })
+  })
+
+  perfIt('chained definitions cross a blank run once', () => {
+    expectBuiltInputScansLinearly(source => { extract(source) },
+      n => '- [a]: /a\n' + '\n'.repeat(n) + Array.from({ length: n }, (_, i) => `  [r${i}]: /url`).join('\n'),
+      { smallRepeats: 4_000, label: 'chained blank rotations' })
+  })
+
+  perfIt('definitions with two blanks scale', () => {
+    expectBuiltInputScansLinearly(source => { extract(source) },
+      n => Array.from({ length: n }, (_, i) => `[r${i}]: /url\n\n\n`).join(''),
+      { smallRepeats: 4_000, label: 'definitions with two blanks' })
+  })
+
+  for (const continuation of ['- next', '  text', '\n  text']) {
+    perfIt(`list reference definitions with ${JSON.stringify(continuation)} scale`, () => {
+      expectBuiltInputScansLinearly(source => { extract(source) },
+        n => Array.from({ length: n }, (_, i) => `- [r${i}]: /url\n${continuation}\n`).join(''),
+        { smallRepeats: 4_000, label: `list references ${continuation}` })
+    })
+  }
+})
+
+it('keeps distinct blank lines while chained definitions move ahead', () => {
+  const result = extractReferenceDefinitions(['- [a]: /a', '', ' ', '\t', '  [b]: /b', '', '   ', '  [c]: /c', '  text'], value => value, () => false)
+  expect(result.lines).toEqual(['- text', '', ' ', '\t', '', '   '])
+  expect(result.definitions).toEqual(['[a]: /a', '[b]: /b', '[c]: /c'])
+})
