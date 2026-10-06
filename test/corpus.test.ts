@@ -936,6 +936,10 @@ const IMPLEMENTED = new Set([
   // info string decides nothing below a closed nested fence, which is what this
   // parser already did. The pin, not the parser, is what was holding them back.
   'an-info-string-does-not-change-how-a-flush-left-fence-folds-into-a-description-body',
+  // ARRIVED WITH THIS PIN BUMP (spec 5fbf8aed). Byte-exact on this build
+  // before the entry was added: markup-carve/carve#2752 pins a description
+  // body whose own block is a fence, which this parser already did.
+  'a-description-body-whose-own-block-is-a-fence-keeps-no-line-below-its-column',
 ])
 
 /**
