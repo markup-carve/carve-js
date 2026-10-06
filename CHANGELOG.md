@@ -91,6 +91,7 @@ references and external fragment links need manual review. See the
 
 ### Improvements
 
+- Track description-body closers and literal colon lines incrementally instead of repeatedly scanning growing bodies (#2555).
 - Speed up editor batches with many edits and empty-include linting across many inline spans (#2544).
 - Avoid repeated scans of malformed links, attributes, references and footnotes (#2543).
 - Speed up source-layout export, editor attribute mapping and AST merges on large documents, and recognize editor attribute lines after bare CR endings (#2543).
