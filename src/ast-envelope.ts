@@ -270,12 +270,12 @@ export function fromAstEnvelope(
 
   const extensions = ownValue(record, 'extensions')
   if (extensions !== undefined) {
-    const implemented = options.extensions ?? []
+    const implemented = new Set(options.extensions ?? [])
     for (const extension of readEnvelopeExtensions(extensions)) {
       // Absent means true. An extension a reader may ignore without misreading
       // the document has to say so.
       if (extension.required === false) continue
-      if (!implemented.includes(extension.id)) throw new AstEnvelopeExtensionError(extension.id)
+      if (!implemented.has(extension.id)) throw new AstEnvelopeExtensionError(extension.id)
     }
   }
 

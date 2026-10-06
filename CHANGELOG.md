@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+
+- AST merges and patches intern subtree comparisons once and build paths only for conflicts or operations. Provenance ancestry, line-block boundaries and envelope extension checks use indexes instead of repeated scans.
+
 ## [0.1.10] - 2026-10-06
 
 ### Breaking

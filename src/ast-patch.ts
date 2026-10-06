@@ -3,6 +3,7 @@
 import type { AstJsonDocument } from './ast-json.js'
 import { fromAstJson, MAX_AST_JSON_DEPTH } from './ast-json.js'
 import { NODE_POSITION_KIND } from './wire-fields.js'
+import { AstStructuralIndex, astPointer, type AstPath } from './ast-structural-index.js'
 
 export type AstPatchOperation =
   | { op: 'add' | 'replace'; path: string; value: unknown }
@@ -20,10 +21,6 @@ export class AstPatchError extends Error {
     super(message)
     this.name = 'AstPatchError'
   }
-}
-
-function pointer(path: string, key: string): string {
-  return `${path}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`
 }
 
 function decode(path: string): string[] {
@@ -73,21 +70,19 @@ function assertBounded(value: unknown): void {
   }
 }
 
-function equal(a: unknown, b: unknown, nodePosition: boolean): boolean {
-  return JSON.stringify(clean(a, nodePosition)) === JSON.stringify(clean(b, nodePosition))
-}
-
-function build(before: unknown, after: unknown, path: string, out: AstPatchOperation[], nodePosition = true): void {
-  if (equal(before, after, nodePosition)) return
+function build(before: unknown, after: unknown, path: AstPath, out: AstPatchOperation[], structuralIndex: AstStructuralIndex, nodePosition = true): void {
+  if (structuralIndex.key(before, nodePosition) === structuralIndex.key(after, nodePosition)) return
   if (Array.isArray(before) && Array.isArray(after)) {
     if (before.length !== after.length) {
       // One sequence replacement is stable under serialization and avoids the
       // index-shift hazards of a remove/add script. The three-way merge owns
       // move reconciliation; a patch owns faithful replay.
-      out.push({ op: 'replace', path, value: clean(after, nodePosition) })
+      out.push({ op: 'replace', path: astPointer(path), value: clean(after, nodePosition) })
     } else {
       for (let index = 0; index < before.length; index++) {
-        build(before[index], after[index], pointer(path, String(index)), out, nodePosition)
+        path.push(index)
+        build(before[index], after[index], path, out, structuralIndex, nodePosition)
+        path.pop()
       }
     }
     return
@@ -108,22 +103,23 @@ function build(before: unknown, after: unknown, path: string, out: AstPatchOpera
       keys.delete('srcByteLength')
     }
     for (const key of keys) {
-      const childPath = pointer(path, key)
-      if (!Object.hasOwn(b, key)) out.push({ op: 'remove', path: childPath })
+      path.push(key)
+      if (!Object.hasOwn(b, key)) out.push({ op: 'remove', path: astPointer(path) })
       else if (!Object.hasOwn(a, key)) {
-        out.push({ op: 'add', path: childPath, value: clean(b[key], childIsNode(a.type ?? b.type, key)) })
+        out.push({ op: 'add', path: astPointer(path), value: clean(b[key], childIsNode(a.type ?? b.type, key)) })
       }
-      else build(a[key], b[key], childPath, out, childIsNode(a.type ?? b.type, key))
+      else build(a[key], b[key], path, out, structuralIndex, childIsNode(a.type ?? b.type, key))
+      path.pop()
     }
     return
   }
-  out.push({ op: 'replace', path, value: clean(after, nodePosition) })
+  out.push({ op: 'replace', path: astPointer(path), value: clean(after, nodePosition) })
 }
 
 /** Produce position-independent operations that replay one semantic AST into another. */
 export function createAstPatch(before: AstJsonDocument, after: AstJsonDocument): AstPatchOperation[] {
   const out: AstPatchOperation[] = []
-  build(before, after, '', out)
+  build(before, after, [], out, new AstStructuralIndex())
   return out
 }
 
