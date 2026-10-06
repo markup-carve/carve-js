@@ -842,7 +842,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
         if (!Array.isArray(line) || line.length === 0 || line.at(-1) !== '/children/-') {
           throw new AstJsonSchemaError('a stanza must end at /children/-', at)
         }
-        const boundaries = lineBlockBoundaryPointers(stanzas[index] as Record<string, unknown>)
+        const boundaries = new Map(lineBlockBoundaryPointers(stanzas[index] as Record<string, unknown>).map((pointer, offset) => [pointer, offset]))
         let previous = -1
         line.forEach((pointer, pointerIndex) => {
           if (typeof pointer !== 'string' || !/^(?:\/(?:[^~/]|~[01])*)+$/.test(pointer)) {
@@ -852,7 +852,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
             if (pointerIndex !== line.length - 1) throw new AstJsonSchemaError('stanza end must occur once', at)
             return
           }
-          const offset = boundaries.indexOf(pointer)
+          const offset = boundaries.get(pointer) ?? -1
           if (offset <= previous) throw new AstJsonSchemaError('line boundaries must name hard breaks in order', `${at}[${pointerIndex}]`)
           previous = offset
         })

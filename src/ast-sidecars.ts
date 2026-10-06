@@ -156,24 +156,27 @@ export function toAnnotationRanges(ast: AstJsonDocument, ranges: readonly Annota
 export function readProvenance(input: unknown, ast: AstJsonDocument): ProvenanceSidecar {
   root(input, ['version', 'sources', 'nodes'], 'provenance sidecar')
   if (!Array.isArray(input.sources) || !Array.isArray(input.nodes)) throw new AstSidecarError('invalid provenance arrays')
-  const sources = new Set<string>(), paths = new Set<string>()
+  const sources = new Map<string, RecordValue>(), paths = new Set<string>()
   const canonical = collectNodes(ast)
   for (const source of input.sources) {
     if (!record(source) || !nonempty(source.id)) throw new AstSidecarError('invalid provenance source')
     fields(source, ['id', 'uri', 'format', 'parent'], 'provenance source')
     if (sources.has(source.id)) throw new AstSidecarError('duplicate provenance source id')
     for (const field of ['uri', 'format', 'parent']) if (source[field] !== undefined && !nonempty(source[field])) throw new AstSidecarError(`invalid source ${field}`)
-    sources.add(source.id)
+    sources.set(source.id, source)
   }
+  const completed = new Set<string>()
   for (const source of input.sources as RecordValue[]) {
     if (source.parent !== undefined && (!sources.has(source.parent as string) || source.parent === source.id)) throw new AstSidecarError('invalid provenance parent')
     const visited = new Set<string>()
     let cursor: RecordValue | undefined = source
-    while (cursor?.parent !== undefined) {
+    while (cursor?.parent !== undefined && !completed.has(cursor.id as string)) {
       if (visited.has(cursor.id as string)) throw new AstSidecarError('provenance source cycle')
       visited.add(cursor.id as string)
-      cursor = (input.sources as RecordValue[]).find((item) => item.id === cursor?.parent)
+      cursor = sources.get(cursor.parent as string)
     }
+    for (const id of visited) completed.add(id)
+    if (cursor !== undefined) completed.add(cursor.id as string)
   }
   for (const entry of input.nodes) {
     if (!record(entry) || !nonempty(entry.source) || !sources.has(entry.source) || !['authored', 'generated'].includes(entry.origin as string)) throw new AstSidecarError('invalid node provenance')
