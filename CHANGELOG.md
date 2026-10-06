@@ -9,20 +9,38 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Fixes
-
-- AST merges and patches intern subtree comparisons once and build paths only for conflicts or operations. Provenance ancestry, line-block boundaries and envelope extension checks use indexes instead of repeated scans.
-
 ## [0.1.10] - 2026-10-06
+
+### Compatibility and migration
+
+Exact-case lookup changes heading cross-references, numbered caption and equation
+references, collapsed references that fall back to heading text, and include
+fragment selection. Link-definition labels and footnote labels were already
+case-sensitive. Whitespace normalization, NFC and core heading slug derivation
+are unchanged. Case-distinct ids remain separate targets.
+
+Run `carve lint` before upgrading existing documents. `carve fmt --migrate`
+repairs unambiguous case-only cross-reference and link or image label misses.
+Review the result: changing a collapsed label also changes its visible text or
+image alternative text. Ambiguous matches and labels carrying inline markup
+need manual review. Include selectors, glossary references and external
+fragment links are outside this repair. Glossary ids now preserve case, so
+update links to those ids separately. Ordinary `fmt` does not apply this repair.
 
 ### Breaking
 
-- Every name lookup compares case exactly: `</#id>` cross-references, collapsed and labeled references, footnote labels, caption and equation ids, and an include's `#name`. A case-only mismatch no longer resolves, so `{#Tip}` and `{#tip}` are two ids. Slug derivation, whitespace collapsing and NFC are unchanged (#2520; markup-carve/carve#2732).
+- Heading cross-references, numbered caption and equation references, collapsed
+  references that fall back to heading text, and include fragment selectors now
+  compare case exactly. Link-definition labels and footnote labels already did.
+  A case-only mismatch is unresolved; `{#Tip}` and `{#tip}` remain separate
+  targets. Slug derivation, whitespace normalization and NFC are unchanged (#2520; markup-carve/carve#2732).
 - An include renames a colliding explicit id on any element, not only a heading id or a footnote label, and an include fragment selects any block carrying that id. The first occurrence in expanded order keeps the name, each later copy takes its own least free `-N` suffix with a warning, and a reference written in the same inclusion follows the rename (#2512; markup-carve/carve#2727, markup-carve/carve#2729).
 - A glossary reference matches its term exactly, under the same comparison as every other name lookup, and a glossary id keeps its case, so two terms differing only in case take two ids and a reference links to the entry it matched (#2524, #2525; markup-carve/carve#2739).
 - A destination the URL scheme denylist blanks takes one render-loss row under the new code `destination-denied`, on every target that emits a destination, carrying the normative message `Blanked a denied destination scheme` for a link or an autolink and `Blanked a denied image source` for an image. `RenderLossCode` has a third member, `carve render --strict-losses` fails on a document that holds such a destination, and `--allow-loss` will not waive the code (#2432, #2433, #2435; markup-carve/carve#2679, markup-carve/carve#2681, markup-carve/carve#2686).
 
 ### Fixes
+
+- AST merges and patches intern subtree comparisons once and build paths only for conflicts or operations. Provenance ancestry, line-block boundaries and envelope extension checks use indexes instead of repeated scans (#2551).
 
 - A list item ends on a block the author wrote past its content column. An
   over-indented heading, table row or thematic break classified as prose and

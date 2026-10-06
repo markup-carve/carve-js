@@ -50,6 +50,11 @@ describe('labeled display equations', () => {
     expect(renderAnsi(doc)).toContain('Equation 1')
   })
 
+  it('rejects a case-only miss against a directly numbered equation', () => {
+    const doc = resolve(equation('$$`x`{#Eq}\n\n</#Eq> and </#eq>.\n'))
+    expect(renderHtml(doc)).toContain('<a href="#Eq">Equation 1</a> and &lt;/#eq&gt;.')
+  })
+
   it('shares a caption bucket in document order', () => {
     const doc = equation('![x](x.jpg)\n^ Equation #: first\n\n$$`x`{#eq}\n')
     resolve(doc)
