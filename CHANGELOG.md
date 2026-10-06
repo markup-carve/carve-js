@@ -9,11 +9,6 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Fixes
-
-- Default attributes index existing classes and attribute slots, and copy key-value attributes once per node.
-- Markdown reference definitions in lists update only their continuation lines and no longer copy or search the whole line array for each definition. Complex definitions reuse cached source offsets and an advancing generated-label cursor. Malformed nested labels and whitespace in destinations and titles are scanned once.
-
 ## [0.1.10] - 2026-10-06
 
 ### Breaking
@@ -25,6 +20,12 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 
+- A list item ends on a block the author wrote past its content column. An
+  over-indented heading, table row or thematic break classified as prose and
+  left an open paragraph, so the flush-left line below folded into the item as
+  text; that line is now the document's own paragraph, and a nested marker's
+  own content column is no longer read as an authored over-indent
+  (#2542, #2548).
 - A description body folds a flush-left line below it whatever block kind its nested lead carries (#2534).
 - A flush-left line below a description item's content column is the item's lazy continuation and no longer opens a block of the body's own (#2539; markup-carve/carve#2535).
 - A description body ends when the quote holding its nested list ends (#2541; markup-carve/carve#2540).
@@ -102,6 +103,12 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Nested lexer views defer unused local offsets and share colon fence boundaries and source geometry, and nested colon lines are borrowed through a shared bounded fence lookahead (#2477, #2478, #2483).
 - Verse ownership discovery avoids repeated inline callbacks, verse whitespace expansion avoids identity position maps, and gap restoration allocates less (#2443, #2444, #2445).
 - Heading id assignment and HTML rendering no longer repeat parser work, and only the affected image branches are copied (#2474).
+- Default attribute merging indexes existing classes and attribute slots and
+  copies key-value attributes once per node. Markdown reference definitions in
+  lists update only their continuation lines instead of copying or searching
+  the whole line array for each definition, complex definitions reuse cached
+  source offsets and an advancing generated-label cursor, and malformed nested
+  labels and whitespace in destinations and titles are scanned once (#2547).
 
 ## [0.1.9] - 2026-09-30
 
