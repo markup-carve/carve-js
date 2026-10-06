@@ -37,49 +37,47 @@ const TYPE_MAP: Record<string, string[]> = {
   strike: ['strike'],
 }
 
-/** Ensure `attrs.order` records a slot once, at first appearance. */
-function pushOrder(attrs: Attrs, slot: string): void {
-  if (!attrs.order) attrs.order = []
-  if (!attrs.order.includes(slot)) attrs.order.push(slot)
-}
-
-function mergeClasses(attrs: Attrs, classes: string): void {
-  const existing = attrs.classes ?? []
-  let changed = false
-  for (const cls of classes.split(' ')) {
-    const c = cls.trim()
-    if (c !== '' && !existing.includes(c)) {
-      existing.push(c)
-      changed = true
-    }
-  }
-  if (changed) {
-    attrs.classes = existing
-    pushOrder(attrs, '.class')
-  }
-}
-
 function applyDefaults(node: AnyNode, defaults: Record<string, string>): void {
   const n = node as { attrs?: Attrs }
   if (!n.attrs) n.attrs = {}
   const attrs = n.attrs
+  const order = new Set(attrs.order ?? [])
+  const pushOrder = (slot: string): void => {
+    if (order.has(slot)) return
+    order.add(slot)
+    if (!attrs.order) attrs.order = []
+    attrs.order.push(slot)
+  }
+  let copiedValues = false
   for (const [name, value] of Object.entries(defaults)) {
     if (name === 'class') {
-      mergeClasses(attrs, value)
-      continue
-    }
-    if (name === 'id') {
+      const existing = attrs.classes ?? []
+      const seen = new Set(existing)
+      let changed = false
+      for (const cls of value.split(' ')) {
+        const c = cls.trim()
+        if (c !== '' && !seen.has(c)) {
+          seen.add(c)
+          existing.push(c)
+          changed = true
+        }
+      }
+      if (changed) {
+        attrs.classes = existing
+        pushOrder('.class')
+      }
+    } else if (name === 'id') {
       if (attrs.id === undefined) {
         attrs.id = value
-        pushOrder(attrs, '#id')
+        pushOrder('#id')
       }
-      continue
-    }
-    // Only set a key-value if the node does not already have it (case-sensitive
-    // key, matching carve-php's hasAttribute check).
-    if (!attrs.keyValues || attrs.keyValues[name] === undefined) {
-      attrs.keyValues = { ...(attrs.keyValues ?? {}), [name]: value }
-      pushOrder(attrs, name)
+    } else if (!attrs.keyValues || attrs.keyValues[name] === undefined) {
+      if (!copiedValues) {
+        attrs.keyValues = { ...(attrs.keyValues ?? {}) }
+        copiedValues = true
+      }
+      Object.defineProperty(attrs.keyValues!, name, { value, writable: true, enumerable: true, configurable: true })
+      pushOrder(name)
     }
   }
 }
