@@ -30,7 +30,14 @@ export function codeCallouts(): CarveExtension {
 }
 
 // A `<n>` that is the last non-whitespace content on its line.
-const MARKER_RE = /^(.*?)(\s*)<(\d+)>[ \t]*$/
+function markerParts(line: string): [string, string, string, string] | null {
+  const marker = /<(\d+)>[ \t]*$/.exec(line)
+  if (!marker) return null
+  const before = line.slice(0, marker.index)
+  const prefix = before.trimEnd()
+  if (/[\n\r\u2028\u2029]/.test(prefix)) return null
+  return [line, prefix, before.slice(prefix.length), marker[1]!]
+}
 // A callout-list line: `<n> text` (marker, one space, prose) at the start.
 const ITEM_RE = /^<(\d+)> /
 
@@ -69,7 +76,7 @@ function descend(b: BlockNode, calloutLists: WeakSet<BlockNode>): void {
 }
 
 function hasMarkers(content: string): boolean {
-  return content.split('\n').some((l) => MARKER_RE.test(l))
+  return content.split('\n').some((l) => markerParts(l) !== null)
 }
 
 /** Every soft-break line of the paragraph is a `<n> text` item (≥1). */
@@ -82,12 +89,12 @@ function isCalloutCandidate(p: Paragraph): boolean {
 
 function renderCode(node: CodeBlock, ctx: BlockExtensionRenderContext): string {
   const lines = codeLines(node.content)
-  if (!lines.some((l) => MARKER_RE.test(l))) return undefined as unknown as string
+  if (!lines.some((l) => markerParts(l) !== null)) return undefined as unknown as string
   const pad = ctx.indent(ctx.level)
   const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
   const body = lines
     .map((line) => {
-      const m = MARKER_RE.exec(line)
+      const m = markerParts(line)
       if (!m) return ctx.escapeHtml(line)
       const [, prefix, ws, n] = m
       return `${ctx.escapeHtml(prefix!)}${ws}<b class="callout" data-callout="${n}">${n}</b>`

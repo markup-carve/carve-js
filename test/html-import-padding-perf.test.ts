@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { htmlToCarve } from '../src/html-import.js'
 import { LinkPolicy } from '../src/profile.js'
 import { renderMarkdown } from '../src/render-markdown.js'
+import { parse, carveToHtml, markdownToCarve, djotToCarve, lintCarve } from '../src/index.js'
+import { codeCallouts } from '../src/code-callouts.js'
+import { normalizeHtml } from '../src/portability.js'
 import type { Document } from '../src/ast.js'
 import { trimEndSpaceTab, trimMatchingEdges } from '../src/trim-non-nbsp.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
@@ -106,3 +109,62 @@ describe('public whitespace paths', () => {
     }, ' ', { prefix: 'x', suffix: 'x', smallRepeats: 16000, minSampleMs: 250, label: type })
   }, 30000)
 })
+
+describe('parser and migration whitespace scans', () => {
+  it('preserves an internal space run in parsed paragraph text', () => {
+    const source = `x${' '.repeat(128)}x\n`
+    expect(carveToHtml(source)).toBe(`<p>${source.trimEnd()}</p>`)
+  })
+
+  it.each([['<x/>', '<x>'], ['<x/ >', '<x />'], ['<x a="b" />', '<x a="b">'], ['</x />', '</x>'], ['<!x />', '<!x>']])('normalizes tag endings in %s', (source, expected) => {
+    expect(normalizeHtml(source).html).toBe(expected)
+  })
+
+  perfIt.each([
+    ['parse', (source: string) => parse(source)],
+    ['HTML', (source: string) => carveToHtml(source)],
+    ['Markdown import', (source: string) => markdownToCarve(source)],
+    ['Djot import', (source: string) => djotToCarve(source)],
+  ])('scans internal spaces through %s in linear time', (label, run) => {
+    expectScansLinearly((source) => void run(source), ' ', {
+      prefix: 'x', suffix: 'x\n', smallRepeats: 4000, minSampleMs: 250, label,
+    })
+  }, 30000)
+})
+
+describe('whitespace in optional features', () => {
+  perfIt('scans code without callout markers in linear time', () => {
+    expectScansLinearly((source) => void carveToHtml(source, { extensions: [codeCallouts()] }), ' ', {
+      prefix: '```\nx', suffix: 'x\n```\n', smallRepeats: 4000,
+      minSampleMs: 250, label: 'code callout spaces',
+    })
+  }, 30000)
+
+  perfIt('scans invalid container titles in linear time', () => {
+    expectScansLinearly((source) => void lintCarve(source), ' ', {
+      prefix: '::: note x', suffix: 'x\nbody\n:::\n', smallRepeats: 4000,
+      minSampleMs: 250, label: 'container title spaces',
+    })
+  }, 30000)
+
+  perfIt('rejects padded invalid Djot fence info in linear time', () => {
+    expectScansLinearly((source) => void djotToCarve(source), ' ', {
+      prefix: '```', suffix: '?\n', smallRepeats: 4000,
+      minSampleMs: 250, label: 'Djot invalid fence info',
+    })
+  }, 30000)
+})
+
+perfIt.each(['\r', '\u2028', '\u2029'])('rejects invalid container title line endings %j in linear time', (ending) => {
+  expectScansLinearly((source) => void lintCarve(source), ' ', {
+    prefix: '::: note', suffix: `x${ending}\nbody\n:::\n`, smallRepeats: 4000,
+    minSampleMs: 250, label: 'container title line ending',
+  })
+}, 30000)
+
+perfIt('scans invalid fence attributes in linear time', () => {
+  expectScansLinearly((source) => void lintCarve(source), ' ', {
+    prefix: '```x', suffix: 'x\n', smallRepeats: 4000,
+    minSampleMs: 250, label: 'invalid fence attributes',
+  })
+}, 30000)

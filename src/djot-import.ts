@@ -1,3 +1,4 @@
+import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
@@ -16,7 +17,7 @@ const fencedLines = (lines: readonly string[]): boolean[] => {
       if (close?.[1]?.[0] === fence.ch && close[1].length >= fence.len) fence = null
       return true
     }
-    const open = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)\s*$/.exec(line)
+    const open = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)$/.exec(line.trimEnd())
     if (!open) return false
     fence = { ch: open[2]![0]!, len: open[2]!.length }
     return true
@@ -330,7 +331,7 @@ function foldHeadingContinuations(source: string): string {
       continue
     }
     const marker = new RegExp(`^${heading[1]} +`)
-    while (i + 1 < lines.length && (line.match(/\\+$/)?.[0].length ?? 0) % 2 === 0) {
+    while (i + 1 < lines.length && (line.length - trimEndMatchingEdges(line, (code) => code === 92).length) % 2 === 0) {
       const next = lines[i + 1]!.replace(/^[ \t]+/, '')
       let part: string
       if (marker.test(next)) {

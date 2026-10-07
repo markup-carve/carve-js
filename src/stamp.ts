@@ -15,6 +15,9 @@
  * review the `[behavior]` changelog entries between a document's stamped version
  * and the target, which needs the marker read back - `readStamp` / `needsReview`.
  */
+
+import { trimEndMatchingEdges } from './trim-non-nbsp.js'
+
 import { SPEC_VERSION } from './version.js'
 
 export type StampForm = 'line' | 'block'
@@ -33,7 +36,7 @@ export function buildMarker(generatedBy: string, form: StampForm): string {
  * by its `carve-version:` first field, so unrelated trailing comments are kept.
  */
 export function stripTrailingMarker(formatted: string): string {
-  const lines = formatted.replace(/\n+$/, '').split('\n')
+  const lines = trimEndMatchingEdges(formatted, (code) => code === 10).split('\n')
   if (lines.length === 0) return ''
 
   const last = lines[lines.length - 1]!
@@ -86,7 +89,7 @@ export interface Stamp {
  * yet.
  */
 export function readStamp(source: string): Stamp | null {
-  const lines = source.replace(/\n+$/, '').split('\n')
+  const lines = trimEndMatchingEdges(source, (code) => code === 10).split('\n')
   if (lines.length === 0) return null
 
   const last = (lines[lines.length - 1] ?? '').trim()

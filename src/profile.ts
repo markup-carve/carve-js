@@ -14,7 +14,7 @@
  * block/inline node to its canonical name before the allow/deny check.
  */
 
-import { trimMatchingEdges } from './trim-non-nbsp.js'
+import { trimMatchingEdges, trimEndMatchingEdges } from './trim-non-nbsp.js'
 
 import type { AnyNode, Attrs, Document } from './ast.js'
 import { ownValue } from './own-property.js'
@@ -602,10 +602,9 @@ function specialUrlHost(afterScheme: string): string | null {
  * every comparison agree on case, full stops and trailing dots.
  */
 function normalizeHost(host: string): string {
-  return host
+  return trimEndMatchingEdges(host
     .replace(/[\u3002\uFF0E\uFF61]/g, '.')
-    .toLowerCase()
-    .replace(/\.+$/, '')
+    .toLowerCase(), (code) => code === 46)
 }
 
 /** Decode `%XX` escapes as UTF-8 bytes; malformed escapes stay literal. */

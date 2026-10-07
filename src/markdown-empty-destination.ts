@@ -1,3 +1,4 @@
+import { trimMatchingEdges } from './trim-non-nbsp.js'
 import { readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
 /*
  * CommonMark links an empty destination; Carve reads `[t]()` as literal text
@@ -498,7 +499,7 @@ function unwrapEmptyDestination(
   if (image) {
     const titleAttr = title === '' ? '' : ` title="${escapeHtml(title)}"`
     const html = `<p><img src="" alt="${escapeHtml(plainAltText(label, placeholders, decodeEntity))}"${titleAttr}></p>`
-    const text = htmlToCarve(html).value.replace(/^\n+|\n+$/g, '')
+    const text = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
     return protect(lineStart ? escapeLineInitialBlockSyntax(text) : text)
   }
   if (title === '') return lineStart ? escapeLineInitialBlockSyntax(label) : label

@@ -1,3 +1,4 @@
+import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { isValidAttrPayload } from './attribute-parser.js'
@@ -1122,7 +1123,7 @@ function convertInline(
 
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
-    const inner = paren.slice(1, -1).replace(/^[ \t\n]+|[ \t\n]+$/g, '')
+    const inner = trimMatchingEdges(paren.slice(1, -1), (code) => code === 32 || code === 9 || code === 10)
     // Non-ASCII spaces and a BOM belong to the URL, not the title separator.
     const pointyEnd = inner.startsWith('<') ? inner.indexOf('>') : -1
     if (inner.startsWith('<') && pointyEnd < 0) return undefined
@@ -1386,7 +1387,7 @@ function convertInline(
   // another line of the same paragraph follows - which is exactly CommonMark's
   // condition, a hard break being impossible at a paragraph's end. Code spans
   // are already protected, so a multi-line span keeps its own spacing.
-  line = line.replace(/ {2,}\n/g, '\\\n')
+  line = line.replace(/ +\n| +/g, (run) => run.endsWith('\n') && run.length > 2 ? '\\\n' : run)
 
   // Carve-only inline syntax in what is, in Markdown, plain text. Runs after
   // the protection block (so code, destinations and URLs are placeholders) and
@@ -2152,7 +2153,7 @@ function spaceMarkerPadding(line: string): string {
  * indented code (CommonMark 5.2).
  */
 function itemContentColumn(prefix: string): number {
-  const marker = columnWidth(prefix.replace(/[ \t]+$/, ''))
+  const marker = columnWidth(trimEndSpaceTab(prefix))
   const content = columnWidth(prefix)
   return content - marker > 4 ? marker + 1 : content
 }
@@ -2442,7 +2443,10 @@ function paragraphLine(part: PrefixedInlineLine, text: string): { lead: string; 
  */
 function headingLine(line: string, last = false): string {
   if (last) return line.trim()
-  return line.trim().replace(/(?<!\\)((?:\\\\)*)\\$/, '$1').trimEnd()
+  const trimmed = line.trim()
+  let backslashes = 0
+  while (trimmed[trimmed.length - backslashes - 1] === '\\') backslashes++
+  return (backslashes % 2 === 1 ? trimmed.slice(0, -1) : trimmed).trimEnd()
 }
 
 /** The indent and item markers a line opens with (`- - `, `  1. `). */
@@ -3267,7 +3271,7 @@ function closeFence(out: string[], openerAt: number, pad: string, info: string):
 function fenceInfo(rest: string): string {
   const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
   rest = rest.replace(escapesAndEntities, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
-  const firstInfoWord = rest.replace(/^[ \t]+|[ \t]+$/g, '').split(/[ \t]/, 1)[0] ?? ''
+  const firstInfoWord = trimMatchingEdges(rest, (code) => code === 32 || code === 9).split(/[ \t]/, 1)[0] ?? ''
   return /^[A-Za-z0-9_+#/.-]+$/.test(firstInfoWord) ? firstInfoWord : ''
 }
 
@@ -5034,7 +5038,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const dedent = relIndent >= 1 && relIndent <= 3 && (isHeading || isBlockquote || ((leftEmptyItem || reachesMovedItem || listCols.length > 0) && !isList))
     let body = dedent ? containerPad + line.slice(indent) : line
     // Strip an ATX heading's optional closing `#` run (Carve keeps it as text).
-    if (isHeading) body = body.replace(/^([ \t]*#{1,6})[ \t]+/, '$1 ').replace(/[ \t]+#+[ \t]*$/, '')
+    if (isHeading) body = body.replace(/^([ \t]*#{1,6})[ \t]+/, '$1 ').replace(/[ \t]+#+[ \t]*$|[ \t]+/g, (run) => run.includes('#') ? '' : run)
     if (isHeading && /^[ \t]*(#{1,6})(?:[ \t]+#*)?[ \t]*$/.test(line)) {
       const level = /^#+/.exec(trimmed)![0].length
       if (out.length && out.at(-1)!.trim() !== '') out.push('')

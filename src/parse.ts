@@ -82,7 +82,7 @@ import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js
 import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
-import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
+import { isCarveWhitespace, trimNonNbsp, trimEndSpaceTab, trimEndNonNbsp } from './trim-non-nbsp.js'
 import { ownValue, setOwn } from './own-property.js'
 import { codeContent, verbatimContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
@@ -350,10 +350,8 @@ function extractItemAttr(line: string, terminatorFree = false): ItemAttributeMar
  * The NBSP exception is gone because it is no longer an exception: U+00A0 is
  * simply not one of the four, so nothing has to remember it.
  */
-const TRIM_STRUCTURAL_RE = /^[ \t\n\r]+|[ \t\n\r]+$/g
-
 function trimStructural(text: string): string {
-  return text.replace(TRIM_STRUCTURAL_RE, '')
+  return trimNonNbsp(text)
 }
 
 const trimCellPadding = (text: string): string => {
@@ -580,7 +578,6 @@ const RE_CAPTION = /^\^ +(.*[^ \t\n\r].*)$/
 // arguing from that claim that stripping breaks `to_html(fmt(x)) ==
 // to_html(x)`. It has been corrected: the executable spec does not render it
 // that way, and the PARSER is the half that moves.
-const RE_TRAILING_WS = /[ \t]+$/
 
 /**
  * `text` with EVERY line's trailing space-and-tab run removed.
@@ -721,7 +718,7 @@ const stripTrailingComment = (text: string): string => {
   const last = nodes[nodes.length - 1]
   if (last?.type !== 'comment' || last.block) return text
   const start = last.pos?.startOffset
-  return start === undefined ? text : text.slice(0, start).replace(/[ \t]+$/, '')
+  return start === undefined ? text : trimEndSpaceTab(text.slice(0, start))
 }
 // A bare uniform fence closer, shared by native and prepass lookahead.
 const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_TRAILING_WS)
@@ -3126,7 +3123,7 @@ function quotedFenceHasCloser(
 // SAME length (more `%` nest). Not rendered.
 function commentLineContent(line: string): string {
   // ONE separator character, and it is `whitespace` (markup-carve/carve#977).
-  return line.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '').replace(/[ \t]+$/, '')
+  return trimEndSpaceTab(line.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, ''))
 }
 
 function parseCommentBlock(lexer: Lexer): Comment {
@@ -5894,7 +5891,7 @@ const isGfmDelimiterRow = (row: RawCell[]): boolean =>
 // payload must be valid attribute syntax (same gate as cell / inline / block
 // attributes); otherwise the `{` is ordinary content and there is no row attr.
 export function rowAttrsFromLine(line: string): { attrs?: Attrs; body: string } {
-  const stripped = line.replace(/[ \t]+$/, '')
+  const stripped = trimEndSpaceTab(line)
   const lastPipe = stripped.lastIndexOf('|')
   if (lastPipe < 0 || stripped[lastPipe + 1] !== '{') return { body: line }
   const after = stripped.slice(lastPipe + 1)
@@ -5971,7 +5968,7 @@ export function splitTableRowSpans(
   // Skip the leading row marker: `|` (standard) or `+` (continuation)
   if (line[0] === '|' || line[0] === '+') i = 1
   let cellStart = i
-  const bodyEnd = line.replace(/[ \t]+$/, '').length
+  const bodyEnd = trimEndSpaceTab(line).length
   const scanEnd = bodyEnd > i && line[bodyEnd - 1] === '|' ? bodyEnd - 1 : line.length
   for (; i < scanEnd; i++) {
     const ch = line[i]!
@@ -9349,7 +9346,7 @@ class ParseSession {
     let text = line.replace(/^#{1,6} +/, '')
     // NO TRAILING WHITESPACE (PART 2; carve#926). A heading is one line by
     // construction, so the single-line form is the whole rule here.
-    text = text.replace(RE_TRAILING_WS, '')
+    text = trimEndSpaceTab(text)
 
     const node: Heading = { type: 'heading', level, children: [] }
     // djot-strict: a heading takes its attributes on the PRECEDING block-
@@ -9580,7 +9577,7 @@ class ParseSession {
       sub.inFootnoteBody = true
       sub.hostBody = 'footnote'
       sub.hostBodyRoot = 'footnote'
-      lexer.footnoteDefs.set(label, bodyLines.length === 1 && bodyLines[0]?.replace(/[ \t]+$/, '') === '{empty}' ? [] : this.parseBlocks(sub, 0))
+      lexer.footnoteDefs.set(label, bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : this.parseBlocks(sub, 0))
       // The definition runs from its `[^label]:` marker to the last line it
       // consumed. The body blocks cannot supply that: the marker is not part of
       // any of them, so a span derived from the body would start inside the
@@ -9773,7 +9770,7 @@ class ParseSession {
         const comment: Comment = {
           type: 'comment',
           block: false,
-          content: ln.slice(2).replace(/^[ \t]/, '').replace(/[ \t]+$/, ''),
+          content: trimEndSpaceTab(ln.slice(2).replace(/^[ \t]/, '')),
         }
         if (lexer.hasDocumentOffsets) {
           comment.pos = {
@@ -10757,7 +10754,7 @@ class ParseSession {
       sub.sublistsCarryAuthoredBase = true
       sub.hostBody = 'description'
       sub.hostBodyRoot = 'description'
-      return bodyLines.length === 1 && bodyLines[0]?.replace(/[ \t]+$/, '') === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)
+      return bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : parseSession.parseBlocks(sub, 0)
     }
     /**
      * The span covering document lines `first`..`last` inclusive, marker and all.
@@ -13547,7 +13544,7 @@ class ParseSession {
    * stanza's own end leaves nothing there to keep.
    */
   private trimUnclosedRun(content: string): string {
-    return this.inLineBlock ? content : content.replace(/[ \t\n\r]+$/, '')
+    return this.inLineBlock ? content : trimEndNonNbsp(content)
   }
 
   private scanInline(
@@ -13884,7 +13881,7 @@ class ParseSession {
         // whitespace (CARVE-P9-041, markup-carve/carve#2552). Flush the trimmed
         // buffer with a source span that ends where the run begins, and start the
         // comment node there too, keeping inline source spans contiguous.
-        const trimmed = buf.replace(/[ \t]+$/, '')
+        const trimmed = trimEndSpaceTab(buf)
         const commentStart = i - (buf.length - trimmed.length)
         if (trimmed) {
           const node = { type: 'text', value: trimmed } as Text
@@ -13897,7 +13894,7 @@ class ParseSession {
           commentLineEnd = nl === -1 ? text.length : nl
         }
         const end = Math.min(commentLineEnd, commentRun?.close ?? text.length)
-        const content = text.slice(i + 2, end).replace(/^[ \t]/, '').replace(/[ \t]+$/, '')
+        const content = trimEndSpaceTab(text.slice(i + 2, end).replace(/^[ \t]/, ''))
         out.push(
           this.withPos({ type: 'comment', block: false, content } as Comment, source, text, i, end),
         )

@@ -20,7 +20,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
-import { trimNonNbsp, trimEndSpaceTab, trimMatchingEdges } from './trim-non-nbsp.js'
+import { trimNonNbsp, trimEndSpaceTab, trimMatchingEdges, trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { codeSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -273,7 +273,7 @@ function withMarker(marker: string, content: string): string {
   // and an unreachable branch reads as a rule that is wider than it is. The
   // sibling helper in the canonical writer does take the full terminal, because
   // that one sweeps AUTHOR lines, where a tab is reachable.
-  return marker.replace(/ +$/, '')
+  return trimEndMatchingEdges(marker, (code) => code === 32)
 }
 
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {

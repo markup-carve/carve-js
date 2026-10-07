@@ -1,3 +1,4 @@
+import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { djotToCarve } from './djot-import.js'
 import { bbcodeToCarve } from './bbcode-migrate.js'
 import {
@@ -60,8 +61,8 @@ function assessed(
   sourceFormat: Exclude<SourceFormat, 'html'>,
   known: readonly MigrationDiagnostic[] = [],
 ): MigrationResult {
-  const literal = source.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
-  const written = value.replace(/\n+$/, '')
+  const literal = trimEndMatchingEdges(source.replace(/\r\n?/g, '\n'), (code) => code === 10)
+  const written = trimEndMatchingEdges(value, (code) => code === 10)
   if (known.length === 0 && (literal === '' || /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+)*$/u.test(literal)) && written === literal) {
     return { value, report: { schemaVersion: 2, sourceFormat, diagnostics: [{
       code: 'literal-text-verified',

@@ -1,3 +1,4 @@
+import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import type { Admonition, Attrs, BlockNode, CodeBlock, Div } from './ast.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
 import { applySingleSelection, resolveTabsMode, type TabsMode } from './tabs.js'
@@ -257,7 +258,7 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
   }
 
   const renderCodeBlock = (item: GroupItem, ctx: BlockExtensionRenderContext): string => {
-    const content = item.block.content.replace(/\n+$/, '')
+    const content = trimEndMatchingEdges(item.block.content, (code) => code === 10)
     if (highlighter) return highlighter(content, item.language)
     const langAttr = item.language ? ` class="language-${item.language}"` : ''
     const escaped = ctx.escapeHtml(item.block.content)
