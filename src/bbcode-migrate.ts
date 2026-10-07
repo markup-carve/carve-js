@@ -17,6 +17,8 @@
  * which is what keeps `literal *stars*` from becoming Carve bold.
  */
 
+import { trimEndSpaceTab, trimEndMatchingEdges } from './trim-non-nbsp.js'
+
 import {
   escapeAttributeBlockOpener,
   escapeLiteralBackslashes,
@@ -865,7 +867,7 @@ function containerPrefixAt(text: string, index: number): string | null {
  * is trailing whitespace the Carve writer never emits.
  */
 function prefixLines(prefix: string, body: string, from: number): string {
-  const blank = prefix.replace(/[ \t]+$/, '')
+  const blank = trimEndSpaceTab(prefix)
 
   return body
     .split('\n')
@@ -881,13 +883,8 @@ function prefixLines(prefix: string, body: string, from: number): string {
  * trailing spaces into the middle of a list.
  */
 function trimItemBody(body: string): string {
-  return body
-    .split('\n')
-    .map((line) => line.replace(/[ \t]+$/, ''))
-    .join('\n')
-    .replace(/^\n+/, '')
-    .replace(/\n+$/, '')
-    .trimStart()
+  const lines = body.split('\n').map((line) => trimEndSpaceTab(line)).join('\n')
+  return trimEndMatchingEdges(lines, (code) => code === 10).trimStart()
 }
 
 /** One open `[list]`, with the items it has collected so far. */
@@ -923,7 +920,7 @@ function isListSpelling(value: string | undefined): boolean {
 /** How much of the container prefix stands at `at`, so the scan can step over it. */
 function consumedPrefix(text: string, at: number, prefix: string): number {
   if (text.startsWith(prefix, at)) return prefix.length
-  const blank = prefix.replace(/[ \t]+$/, '')
+  const blank = trimEndSpaceTab(prefix)
 
   return blank !== '' && text.startsWith(blank, at) ? blank.length : 0
 }
@@ -982,7 +979,7 @@ function convertLists(text: string): string {
 
     const lead = trimItemBody(frame.lead)
     const list = renderList(frame)
-    const block = `${lead === '' ? '' : `${lead}\n`}${list}`.replace(/\n+$/, '')
+    const block = trimEndMatchingEdges(`${lead === '' ? '' : `${lead}\n`}${list}`, (code) => code === 10)
 
     if (frames.length > 0) {
       // A nested list joins its item's content directly, with no blank line, so
@@ -997,7 +994,7 @@ function convertLists(text: string): string {
     if (prefix === null) {
       out += `\n\n${block}\n\n`
     } else {
-      out = out.replace(/\n+$/, '\n')
+      out = `${trimEndMatchingEdges(out, (code) => code === 10)}${out.endsWith('\n') ? '\n' : ''}`
       out += prefixLines(prefix, `\n${block}`, 0)
     }
     prefix = null

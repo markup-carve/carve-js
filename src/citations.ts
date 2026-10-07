@@ -1,3 +1,4 @@
+import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { setOwn } from './own-property.js'
 import type {
   BlockNode,
@@ -87,7 +88,7 @@ export function parseLocator(loc: string): ParsedLocator {
   if (label === undefined) return s === '' ? {} : { suffixText: s }
   let i = 0
   while (i < rest.length && VALUE_CHAR.test(rest[i]!)) i++
-  const value = rest.slice(0, i).replace(/[ ,&\-.]+$/, '')
+  const value = trimEndMatchingEdges(rest.slice(0, i), (code) => code === 32 || code === 44 || code === 38 || code === 45 || code === 46)
   const suffixText = rest.slice(i).replace(/^[ \t]+/, '')
   const out: ParsedLocator = { label }
   if (value !== '') out.value = value

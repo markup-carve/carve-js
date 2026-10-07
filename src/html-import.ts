@@ -41,7 +41,7 @@ import {
 import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
-import { trimNonNbsp } from './trim-non-nbsp.js'
+import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -287,19 +287,21 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
       out.push(node)
       continue
     }
-    const children = [...node.children]
+    let children = [...node.children]
     const lead = textEdge(children[0], 'start')
-    while (textEdge(children[0], 'start')) {
-      const value = (children[0] as { value: string }).value.replace(/^[ \t]+/, '')
-      if (value === '') children.shift()
+    let leadingCount = 0
+    while (textEdge(children[leadingCount], 'start')) {
+      const value = (children[leadingCount] as { value: string }).value.replace(/^[ \t]+/, '')
+      if (value === '') leadingCount++
       else {
-        children[0] = { ...(children[0] as object), value } as InlineNode
+        children[leadingCount] = { ...(children[leadingCount] as object), value } as InlineNode
         break
       }
     }
+    if (leadingCount > 0) children = children.slice(leadingCount)
     const trail = textEdge(children.at(-1), 'end')
     while (textEdge(children.at(-1), 'end')) {
-      const value = (children.at(-1) as { value: string }).value.replace(/[ \t]+$/, '')
+      const value = trimEndSpaceTab((children.at(-1) as { value: string }).value)
       if (value === '') children.pop()
       else {
         children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
@@ -366,19 +368,22 @@ function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
 }
 
 function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: boolean): InlineNode[] {
-  const out = [...nodes]
-  while (leading && out[0]?.type === 'text') {
-    const first = out[0]
+  let out = [...nodes]
+  let leadingCount = 0
+  while (leading) {
+    const first = out[leadingCount]
+    if (first?.type !== 'text') break
     const value = first.value.replace(/^[ \t]+/, '')
-    if (value === '') out.shift()
+    if (value === '') leadingCount++
     else {
-      out[0] = { ...first, value }
+      out[leadingCount] = { ...first, value }
       break
     }
   }
+  if (leadingCount > 0) out = out.slice(leadingCount)
   while (trailing && out.at(-1)?.type === 'text') {
     const last = out.at(-1) as { type: 'text'; value: string }
-    const value = last.value.replace(/[ \t]+$/, '')
+    const value = trimEndSpaceTab(last.value)
     if (value === '') out.pop()
     else {
       out[out.length - 1] = { ...last, value }
@@ -640,7 +645,7 @@ const ROUND_TRIP_MARKER_ATTRIBUTES = new Set(['data-djot-src', 'data-carve-src']
  * whitespace here.
  */
 function destinationIsEmpty(value: string | undefined): boolean {
-  return value === undefined || value.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, '') === ''
+  return value === undefined || /^[ \t\n\f\r]*$/.test(value)
 }
 
 /**

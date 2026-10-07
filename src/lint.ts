@@ -26,6 +26,8 @@
  * position and skip verbatim regions (code/raw blocks) the parser already
  * accounts for.
  */
+
+import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import {
   parse,
   isTableRow,
@@ -386,12 +388,36 @@ function declaredVersion(source: string, doc: Document): { version: string; offs
   return { version: stamp.version, offset: at >= 0 ? at : 0 }
 }
 
+function trailingFenceAttributes(value: string): [string, string, string] | null {
+  if (!value.endsWith('}')) return null
+  const start = value.lastIndexOf('{')
+  if (start < 0) return null
+  const attributes = value.slice(start)
+  if (/[{}\n]/.test(attributes.slice(1, -1))) return null
+  const prefix = trimEndSpaceTab(value.slice(0, start))
+  if (/[\r\n\u2028\u2029]/.test(prefix)) return null
+  return [value, prefix, attributes]
+}
+
+function trailingContainerLabel(value: string): [string, string, string] | null {
+  if (!value.endsWith(']') || value.includes('\n')) return null
+  const lastClose = value.lastIndexOf(']', value.length - 2)
+  for (let i = lastClose + 1; i < value.length - 1; i++) {
+    if (value[i] !== '[' || (value[i - 1] !== ' ' && value[i - 1] !== '\t')) continue
+    const title = trimEndSpaceTab(value.slice(0, i))
+    if (/[\r\u2028\u2029]/.test(title)) return null
+    return [value, title, value.slice(i)]
+  }
+  return null
+}
+
 function recoveredContainerHint(line: string): string {
   const prefix = 'Invalid container metadata was dropped; the container and its children are preserved. '
-  const match = /^(:{3,}) +([a-zA-Z0-9_][\w-]*)[ \t]+(.+?)[ \t]*$/.exec(line)
+  const match = /[\r\n\u2028\u2029]/.test(line) ? null : /^(:{3,}) +([a-zA-Z0-9_][\w-]*)[ \t]+(.+)$/.exec(line)
   if (!match) return prefix + 'Use a straight-double-quoted title or a bracketed label; put attributes on their own line above the opener.'
+  match[3] = trimEndSpaceTab(match[3]!) || match[3]![0]!
   const [, fence, kind, tail] = match
-  const labeled = /^(.*?)[ \t]+(\[[^\]\n]*\])$/.exec(tail!)
+  const labeled = trailingContainerLabel(tail!)
   const title = labeled ? labeled[1]! : tail!
   const label = labeled ? ` ${labeled[2]}` : ''
   if (title.startsWith('{')) return prefix + 'Put attributes on their own line above the opener.'
@@ -1779,14 +1805,15 @@ function collectSilentFailures(
       // already rewritten straight quotes to typographic ones in the AST text,
       // which would make an unterminated straight quote look like a curly one.
       const lineText = lines[loc.line - 1] ?? ''
-      const fm = /^(:{3,})[ \t]+([a-zA-Z_][\w-]*)[ \t]+(.+?)[ \t]*$/.exec(lineText)
+      const fm = /[\r\n\u2028\u2029]/.test(lineText) ? null : /^(:{3,})[ \t]+([a-zA-Z_][\w-]*)[ \t]+(.+)$/.exec(lineText)
       if (fm) {
+        fm[3] = trimEndSpaceTab(fm[3]!) || fm[3]![0]!
         const fence = fm[1]!
         const type = fm[2]!
         const trailing = fm[3]!
         // A trailing [label] is valid on its own - split it off so the
         // suggested fix quotes only the title part and keeps the label.
-        const lm = /^(.*?)[ \t]+(\[[^\]\n]*\])$/.exec(trailing)
+        const lm = trailingContainerLabel(trailing)
         const titlePart = lm ? lm[1]! : trailing
         const label = lm ? ` ${lm[2]!}` : ''
         let message: string | undefined
@@ -1861,7 +1888,7 @@ function collectSilentFailures(
         `The fence does not open: the ${fence[0] === '`' ? 'backtick run becomes an inline code span' : 'line stays plain text'}, ` +
         `the block renders as a paragraph, and its closing fence can open a new block that swallows what follows.`
       const respaced = `${fence}${info.replace(/[ \t]+/g, ' ')}`
-      const attr = /^(.*?)[ \t]*(\{[^{}\n]*\})$/.exec(info)
+      const attr = trailingFenceAttributes(info)
       const opener = attr ? `${fence}${attr[1]!}` : undefined
       let message: string
       let data: Record<string, string> | undefined
@@ -2179,7 +2206,7 @@ const BRACE_PAIR = /\{\{([^{}]*)\}\}/g
  */
 function isEmptyIncludePath(inner: string): boolean {
   const lead = /^[ \t]*/.exec(inner)![0]
-  const body = inner.slice(lead.length).replace(/[ \t]+$/, '')
+  const body = trimEndSpaceTab(inner.slice(lead.length))
   if (body === '') return true
   return lead.length > 0 && (body[0] === '#' || body[0] === '@')
 }

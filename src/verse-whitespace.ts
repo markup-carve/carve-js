@@ -1,3 +1,5 @@
+import { trimEndMatchingEdges } from './trim-non-nbsp.js'
+
 /** Whether UTF-16 index `i` opens a surrogate pair: one codepoint, two units. */
 function isAstralAt(line: string, i: number): boolean {
   const high = line.charCodeAt(i)
@@ -56,7 +58,7 @@ export function expandLineBlockWhitespace(line: string, sourceOffsets?: Array<nu
 
 /** Trim after expansion so alignment checks can use the untrimmed length. */
 export function dropTrailingSpaces(line: string): string {
-  return line.replace(/ +$/, '')
+  return trimEndMatchingEdges(line, (code) => code === 32)
 }
 
 export interface VerseSourceLine {

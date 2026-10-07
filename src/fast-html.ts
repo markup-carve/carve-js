@@ -1,3 +1,4 @@
+import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { slugify, headingIdSlugOpts } from './heading-ids.js'
 import { escapeAttrValue, escapeHtml, sanitizeUrl, type RenderOptions } from './render-html.js'
 import { MAX_NESTING_DEPTH, type ParseOptions } from './parse.js'
@@ -148,7 +149,7 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
   let lines = source.split('\n')
   if (lines.at(-1) === '') lines.pop()
   if (lines.some((line) => line.charCodeAt(line.length - 1) === 32)) {
-    const trimmed = lines.map((line) => line.replace(/ +$/, ''))
+    const trimmed = lines.map((line) => trimEndMatchingEdges(line, (code) => code === 32))
     if (trimmed.some((line) => line !== '' &&
       (blockish(line) || inlineComplex(line) || /[*\/`\[]/.test(line)))) return undefined
     lines = trimmed

@@ -1,3 +1,4 @@
+import { trimMatchingEdges, trimEndNonNbsp } from './trim-non-nbsp.js'
 import { visitDocumentIds } from './document-ids.js'
 import { resolveReferenceDestination } from './reference-state.js'
 import { forEachChildBlockList, withClonedChildBlockLists } from './block-children.js'
@@ -351,7 +352,7 @@ function sanitizeIdSource(s: string): string {
  * single '-' and trim. Non-ASCII characters and letter case are preserved.
  */
 function slugRun(s: string): string {
-  return s.replace(/[^0-9A-Za-z\u{80}-\u{10FFFF}]+/gu, '-').replace(/^-+|-+$/gu, '')
+  return trimMatchingEdges(s.replace(/[^0-9A-Za-z\u{80}-\u{10FFFF}]+/gu, '-'), (code) => code === 45)
 }
 
 /**
@@ -362,7 +363,7 @@ function slugRun(s: string): string {
  * surviving verbatim, so the slug is guaranteed to match `[0-9A-Za-z-]`.
  */
 function slugRunAscii(s: string): string {
-  return s.replace(/[^0-9A-Za-z]+/gu, '-').replace(/^-+|-+$/gu, '')
+  return trimMatchingEdges(s.replace(/[^0-9A-Za-z]+/gu, '-'), (code) => code === 45)
 }
 
 /**
@@ -1070,7 +1071,7 @@ export function crossrefAutoText(
   const autoNodes = deriveDisplayNodes(labelNodes, false)
   const last = autoNodes[autoNodes.length - 1]
   if (last && last.type === 'text') {
-    last.value = last.value.replace(RE_TRAILING_LABEL_WS, '')
+    last.value = trimLabelWhitespace(last.value)
   }
   autoNodes.push({ type: 'text', value: ` ${n}${suffix ?? ''}` } as Text)
   return autoNodes
@@ -1129,7 +1130,9 @@ const RE_HAS_CONTENT = /[^ \t\n\r]/
  * with no "Figure 1" beside it. Carve's whitespace is four characters and a
  * form feed is not one of them (carve#977, PART 7).
  */
-const RE_TRAILING_LABEL_WS = /[ \t\n\r]+$/
+function trimLabelWhitespace(value: string): string {
+  return trimEndNonNbsp(value)
+}
 
 // Whether a `[Image, soft-break, "^ …", …]` paragraph's caption carries any
 // content on its FIRST line: text after the `^ ` marker on the marker node, or
@@ -1467,7 +1470,7 @@ export function numberCaptionsIn(
     const idx = caption.findIndex((n) => n.type === 'caption_number')
     if (idx === -1) return undefined
     const labelNodes = caption.slice(0, idx)
-    const label = inlineText(labelNodes).replace(RE_TRAILING_LABEL_WS, '')
+    const label = trimLabelWhitespace(inlineText(labelNodes))
     const next = (counters.get(label) ?? 0) + 1
     counters.set(label, next)
     ;(caption[idx] as CaptionNumber).n = next

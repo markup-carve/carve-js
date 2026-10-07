@@ -20,6 +20,8 @@
  * whereas a missed real mis-render is not — so the bias is intentional.
  */
 
+import { trimEndSpaceTab } from './trim-non-nbsp.js'
+
 import { parse } from './parse.js'
 
 export interface MigrationWarning {
@@ -243,7 +245,7 @@ const RULES: Rule[] = [
     id: 'djot-plus-bullet',
     category: 'carve-breakage',
     family: 'plus-bullet',
-    pattern: /(?<=^[ \t]*)(\+)(?=[ \t]+\S)/gmd,
+    pattern: /^[ \t]*(\+)(?=[ \t]+\S)/gmd,
     message: () =>
       'Djot/Markdown `+` bullet is not a Carve bullet (`+` is the list-continuation marker) — this line renders as a paragraph.',
     suggestion: () => '-',
@@ -386,7 +388,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
       if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) { fence = null; previousBlock = true }
       return blanks(line)
     }
-    const open = content.match(/^([ \t]*)(?:(:[ \t]+|[-*+][ \t]+|[0-9]+[.)][ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)[ \t]*$/)
+    const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(:[ \t]+|[-*+][ \t]+|[0-9]+[.)][ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/)
     if (open && !(open[2]?.startsWith(':') && !previousBlock)) {
       const container = open[2] ? open[1]!.length + open[2].length : nested ? open[1]!.length : null
       fence = { ch: open[3]![0]!, len: open[3]!.length, indent: open[2] ? container! : Math.max(3, open[1]!.length), container, depth }
@@ -673,8 +675,9 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
     rule.pattern.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = rule.pattern.exec(masked))) {
-      const start = m.index
-      const end = m.index + m[0].length
+      const markerSpan = rule.id === 'djot-plus-bullet' ? m.indices?.[1] : undefined
+      const start = markerSpan?.[0] ?? m.index
+      const end = markerSpan?.[1] ?? m.index + m[0].length
       // A backslash-escaped opening delimiter is a literal in both
       // Djot and Carve (e.g. `\_x_`). Only an ODD run of backslashes
       // escapes; `\\_x_` is an escaped backslash + a live `_x_`.

@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Performance
+
+- Replaced repeated whitespace searches in parsing, HTML import, writers, URL checks, lint, migrations and code callouts with linear scans. Leading HTML text nodes are removed in one slice; Djot bullet detection keeps its diagnostic and edit spans while avoiding repeated lookbehind scans.
+
 ## [0.1.10] - 2026-10-06
 
 ### Compatibility and migration

@@ -1,3 +1,4 @@
+import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader } from './table-source-metadata.js'
 import type {
   Attrs,
@@ -1484,9 +1485,7 @@ function guardLeadingBom(text: string): string {
  * the alternative spelling is still available.
  */
 function dropTrailingWs(line: string): string {
-  const run = /[ \t]+$/.exec(line)
-
-  return run === null ? line : line.slice(0, run.index)
+  return trimEndSpaceTab(line)
 }
 
 /**
@@ -2167,7 +2166,7 @@ function trimTrailingLayout(list: InlineNode[]): void {
   const last = list.at(-1)
   if (last === undefined || last === null || typeof last !== 'object') return
   if (last.type === 'text') {
-    const trimmed = last.value.replace(/[ \t]+$/, '')
+    const trimmed = trimEndSpaceTab(last.value)
     if (trimmed !== '') last.value = trimmed
     else if (list.length > 1) {
       list.pop()
@@ -4528,7 +4527,12 @@ class CarveRenderSession {
       // normalization under its own sentinel keeps it out of that rewrite;
       // `restoreVerbatim` puts the character back. carve-rs already emits it as
       // itself.
-      .replace(/[ \t]+(?=\n|$)/g, (run) => run.replace(/ /g, sp).replace(/\t/g, tab))
+      .replace(/[ \t]+/g, (run, offset: number, source: string) => {
+        const end = offset + run.length
+        return end === source.length || source[end] === '\n'
+          ? run.replace(/ /g, sp).replace(/\t/g, tab)
+          : run
+      })
       .split('\n')
       .map((line) => (line === '' ? blank : line))
       .join('\n')

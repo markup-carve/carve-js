@@ -155,11 +155,13 @@ function tokenize(html: string): Token[] {
  * spellings of a boolean attribute are the same attribute.
  */
 function normalizeTag(raw: string): string {
-  if (raw.startsWith('</') || raw.startsWith('<!')) return raw.replace(/\s*\/?>$/, '>')
-  const m = /^<([a-zA-Z][-\w]*)([\s\S]*?)\s*\/?>$/.exec(raw)
+  if (!raw.endsWith('>')) return raw
+  const body = raw.slice(0, raw.endsWith('/>') ? -2 : -1).trimEnd()
+  if (raw.startsWith('</') || raw.startsWith('<!')) return `${body}>`
+  const m = /^<([a-zA-Z][-\w]*)/.exec(body)
   if (!m) return raw
   const name = m[1]!.toLowerCase()
-  const attrText = m[2] ?? ''
+  const attrText = body.slice(m[0].length)
   const attrs = attrText.match(/[^\s=]+(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/g) ?? []
   const kept = attrs
     .map((a) => a.replace(/=(?:""|'')$/, ''))
