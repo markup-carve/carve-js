@@ -738,7 +738,7 @@ function rollbackReservations(state: State, snap: Reservations): void {
   state.renames.length = snap.renames
   if (snap.footnoteDefs === undefined) delete snap.target.footnoteDefs
   else snap.target.footnoteDefs = snap.footnoteDefs
-  const dropped = new Set(['include-heading-id-rename', 'include-footnote-rename'])
+  const dropped = new Set(['include-id-rename', 'include-footnote-rename'])
   if (state.warnings.length > snap.warnings) {
     state.warnings.splice(
       snap.warnings,
@@ -997,7 +997,7 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
       base: o.id,
       attrs: o.attrs,
       refs: [],
-      warning: warn(state, 'include-heading-id-rename', '', o.node as { pos?: Position }),
+      warning: warn(state, 'include-id-rename', '', o.node as { pos?: Position }),
     }
     renamed.set(o.attrs, pending)
     state.renames.push(pending)

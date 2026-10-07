@@ -221,7 +221,7 @@ describe('expandIncludes', () => {
       a: '{#dup}\n# A',
       b: '{#dup}\n# B',
     })
-    expect(result.warnings.map((w) => w.rule)).toEqual(['include-heading-id-rename'])
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-id-rename'])
     expect(result.html).toContain('<section id="dup">')
     expect(result.html).toContain('<section id="dup-2">')
   })
@@ -230,7 +230,7 @@ describe('expandIncludes', () => {
     const result = expand('{{ a }}\n\n{#dup}\n# Parent', {
       a: '{#dup}\n# Child\n\nSee </#dup>.',
     })
-    expect(result.warnings.map((w) => w.rule)).toEqual(['include-heading-id-rename'])
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-id-rename'])
     expect(result.html).toContain('<section id="dup-2">')
     expect(result.html).toContain('href="#dup-2"')
   })
