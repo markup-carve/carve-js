@@ -58,6 +58,7 @@ const FIRST_PAIR_BODY = body(String.raw`.*?`)
 export const DIRECTIVE_SCAN_RE = new RegExp(`(?:${QUOTE_AWARE_BODY})|(?:${FIRST_PAIR_BODY})`, 'g')
 const DIRECTIVE_FULL_RE = new RegExp(`^(?:${QUOTE_AWARE_BODY})$`)
 const OPTION_RE = /^@([A-Za-z_][\w-]*):([^#@}\s]+)$/
+const SECTION_TOKEN_RE = /^#\w[\w-]*$/
 /** Loose directive shape: one whole-paragraph token, valid options or not. */
 export const DIRECTIVE_SHAPE_RE = /^\{\{[^{}]*\}\}$/
 
@@ -70,7 +71,11 @@ function unescapeQuotedPath(path: string): string {
  * well-formed directive per spec I1 -- a bad shape, or an unrecognized or
  * malformed option -- in which case it stays ordinary text.
  */
-export function parseDirective(raw: string, onInvalidOption?: (part: string) => void): Directive | null {
+export function parseDirective(
+  raw: string,
+  onInvalidOption?: (part: string) => void,
+  onSecondSection?: (part: string) => void,
+): Directive | null {
   const m = DIRECTIVE_FULL_RE.exec(raw)
   if (!m) return null
   const path = m[1] !== undefined ? unescapeQuotedPath(m[1]) : m[2] ?? m[3]!
@@ -83,6 +88,11 @@ export function parseDirective(raw: string, onInvalidOption?: (part: string) => 
   if (rest) {
     // An option needs no whitespace before its `@` either (carve#2773).
     for (const part of rest.split(/\s+|(?=@)/).filter(Boolean)) {
+      // `include_section` is one slot: a second name is malformed, not ignored.
+      if (section !== undefined && SECTION_TOKEN_RE.test(part)) {
+        onSecondSection?.(part)
+        return null
+      }
       const opt = OPTION_RE.exec(part)
       const invalid = (): null => {
         // Spec I1: an unrecognized (or malformed) option makes the directive

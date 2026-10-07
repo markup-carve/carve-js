@@ -252,10 +252,14 @@ up with a warning about it.
 For a token a host already holds, `isDirectiveShape` and `parseDirective` answer
 without a document. The scan regexes stay internal: matching source text with a
 pattern is exactly what disagrees with the engine about a fenced token.
+`parseDirective(raw, onInvalidOption, onSecondSection)` takes two optional
+callbacks for the malformed cases `expandIncludes` warns about: an unknown or
+malformed `@option` (`include-unknown-option`) and a second `#section` name
+(`include-selection-conflict`). In both cases it returns `null`.
 
 Supported directive options are `#section`, `@lines:N-M`, and
-`@shift:N` / `@shift:auto`. `#section` selects the heading subtree by explicit
-id or auto slug, `@lines` selects an inclusive physical line range before
+`@shift:N` / `@shift:auto`. A directive names at most one `#section`, which
+selects the heading subtree by explicit id or auto slug, `@lines` selects an inclusive physical line range before
 parsing, and `@shift` shifts included heading levels with clamping to
 `h1`...`h6`.
 

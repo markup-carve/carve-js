@@ -1193,6 +1193,7 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
     const anchor = runAnchor(run, m.index)
     const d = parseDirective(raw, (part) =>
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
+      (part) => warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, anchor),
     )
     if (!d) continue
     let blockInInline = false
@@ -1359,6 +1360,7 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
     const text = block.children.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: source } as Text)
     const d = parseDirective(source, (part) =>
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, text),
+      (part) => warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, text),
     )
     if (d) {
       const site = siteOf(block.children as RunNode[], 0, source.length, state)
