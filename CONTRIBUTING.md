@@ -167,6 +167,8 @@ and semver sorts it below the release it leads up to.
 `test/the-lib-version-constant-tracks-the-package-version.test.ts` checks the
 shape: a plain version must have its own `CHANGELOG.md` section, and a `-dev`
 version must be newer than the last one.
+`release.yml` refuses a tag that is not a plain `X.Y.Z`, and a `prepublishOnly`
+script refuses `npm publish` of any other version, including one run by hand.
 
 ## Pull requests
 

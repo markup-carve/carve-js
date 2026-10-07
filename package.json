@@ -59,6 +59,7 @@
     "build:browser": "node scripts/build-browser.mjs",
     "drift": "node scripts/published-drift.mjs",
     "prepare": "npm run build",
+    "prepublishOnly": "node scripts/refuse-prerelease-publish.mjs",
     "test": "vitest run",
     "test:browser": "node test/browser-bundle.mjs --selfcheck && node test/browser-bundle.mjs",
     "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
