@@ -20,7 +20,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
-import { trimNonNbsp } from './trim-non-nbsp.js'
+import { trimNonNbsp, trimEndSpaceTab, trimMatchingEdges } from './trim-non-nbsp.js'
 import { codeSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -284,7 +284,10 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // A folded heading's line join takes PART 7's four characters. The class
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
       // newline that the HTML target kept.
-      const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r]*\n[ \t\r]*/g, ' '))
+      const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r\n]+/g, (run) => {
+        const count = run.split('\n').length - 1
+        return count === 0 ? run : ' '.repeat(count)
+      }))
       const line = escapeTrailingAtxRun(text)
       return `${withMarker(`${'#'.repeat(node.level)} `, line)}\n\n`
     }
@@ -609,7 +612,8 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): st
 
 function renderCellBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
   return renderCellContent(blocks, nodes => renderInlines(nodes, ctx), 'renderMarkdown', 0,
-    part => part.replace(/\\*[ \t\r]*(?:\n[ \t\r]*)+/g, ' '))
+    part => part.replace(/\\*[ \t\r]*(?:\n[ \t\r]*)+|\\+|[ \t\r]+/g,
+      (run) => run.includes('\n') ? ' ' : run))
 }
 
 const ALIGNMENTS = new Set(['left', 'right', 'center'])
@@ -1310,9 +1314,7 @@ function gfmHeadingSlugs(blocks: BlockNode[], typography: SmartTypographyMode): 
 
 /** G1-G4: the text a GFM reader slugs, lowercased, stripped and hyphenated. */
 function gfmSlugBase(text: string): string {
-  return text
-    .normalize('NFC')
-    .replace(/^[ \t\n]+|[ \t\n]+$/g, '')
+  return trimMatchingEdges(text.normalize('NFC'), (code) => code === 32 || code === 9 || code === 10)
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
     .replace(/ /g, '-')
@@ -1539,11 +1541,12 @@ function trimParagraphLines(text: string): string {
   return text
     .split('\n')
     .map((line) => {
-      const trimmed = line.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '')
-      const run = /\\+$/.exec(trimmed)?.[0] ?? ''
-      if (run.length % 2 === 0) return trimmed
+      const trimmed = trimMatchingEdges(line, (code) => code === 32 || code === 9)
+      let backslashes = 0
+      while (trimmed[trimmed.length - backslashes - 1] === '\\') backslashes++
+      if (backslashes % 2 === 0) return trimmed
 
-      return `${trimmed.slice(0, -1).replace(/[ \t]+$/, '')}\\`
+      return `${trimEndSpaceTab(trimmed.slice(0, -1))}\\`
     })
     .filter((line, i, lines) => line !== '' || i === 0 || i === lines.length - 1)
     .join('\n')

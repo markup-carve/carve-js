@@ -78,3 +78,30 @@ export function trimStartNonNbsp(text: string): string {
 
   return text.slice(start)
 }
+
+/** Trailing spaces and tabs removed, with other characters preserved. */
+export function trimEndSpaceTab(text: string): string {
+  let end = text.length
+  while (end > 0) {
+    const code = text.charCodeAt(end - 1)
+    if (code !== 0x20 && code !== 0x09) break
+    end--
+  }
+  return end === text.length ? text : text.slice(0, end)
+}
+
+/** Trim only code units matched by the supplied code-unit predicate. */
+export function trimMatchingEdges(text: string, whitespace: (code: number) => boolean): string {
+  let start = 0
+  let end = text.length
+  while (start < end && whitespace(text.charCodeAt(start))) start++
+  while (end > start && whitespace(text.charCodeAt(end - 1))) end--
+  return start === 0 && end === text.length ? text : text.slice(start, end)
+}
+
+/** Trim matching code units from the trailing edge. */
+export function trimEndMatchingEdges(text: string, whitespace: (code: number) => boolean): string {
+  let end = text.length
+  while (end > 0 && whitespace(text.charCodeAt(end - 1))) end--
+  return end === text.length ? text : text.slice(0, end)
+}

@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Performance
+
+- Replaced repeated whitespace searches in HTML import, Markdown and Carve writers, URL policy checks, lint and BBCode migration with linear scans. Leading HTML text nodes are removed in one slice.
+
 ## [0.1.10] - 2026-10-06
 
 ### Compatibility and migration

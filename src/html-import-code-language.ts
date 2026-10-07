@@ -1,3 +1,4 @@
+import { trimMatchingEdges } from './trim-non-nbsp.js'
 import { domAttrs, domChildren, domParent, domTag, domValue, type P5Node } from './html-import-dom.js'
 
 const HTML_SPACE = /[\t\n\f\r ]+/
@@ -16,7 +17,7 @@ export function codeLanguage(pre: P5Node, code: P5Node | undefined, wrappers: We
     const tokens = classes(node)
     const language = prefixed(tokens, 'language-') ?? prefixed(tokens, 'lang-')
     if (language !== undefined) return language
-    const data = attr(node, 'data-lang').replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '')
+    const data = trimMatchingEdges(attr(node, 'data-lang'), (code) => code === 32 || code === 9 || code === 10 || code === 12 || code === 13)
     if (valid(data)) return data
     if (node === pre) {
       for (const match of attr(node, 'class').matchAll(/(?=(?:^|[\t\n\f\r ;])brush:[\t\n\f\r ]*([^\t\n\f\r ;]+))/g)) {

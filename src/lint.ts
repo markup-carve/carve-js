@@ -26,6 +26,8 @@
  * position and skip verbatim regions (code/raw blocks) the parser already
  * accounts for.
  */
+
+import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import {
   parse,
   isTableRow,
@@ -2179,7 +2181,7 @@ const BRACE_PAIR = /\{\{([^{}]*)\}\}/g
  */
 function isEmptyIncludePath(inner: string): boolean {
   const lead = /^[ \t]*/.exec(inner)![0]
-  const body = inner.slice(lead.length).replace(/[ \t]+$/, '')
+  const body = trimEndSpaceTab(inner.slice(lead.length))
   if (body === '') return true
   return lead.length > 0 && (body[0] === '#' || body[0] === '@')
 }
