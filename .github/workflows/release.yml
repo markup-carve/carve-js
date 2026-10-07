@@ -50,6 +50,11 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VER="$(node -p "require('./package.json').version")"
+          # The trigger already filters on X.Y.Z; this holds if that filter widens.
+          if ! [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag $TAG is not a plain X.Y.Z version. A -dev or other prerelease version never publishes."
+            exit 1
+          fi
           if [ "$TAG" != "$VER" ]; then
             echo "::error::Release tag $TAG does not match package.json version $VER."
             exit 1
