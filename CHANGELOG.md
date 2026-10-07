@@ -9,6 +9,14 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Breaking
+
+- The include rename warning reports `include-id-rename`, replacing `include-heading-id-rename`. The pass covers explicit ids on any element, so the old id named only part of what it reported (markup-carve/carve#2772).
+
+### Fixed
+
+- An include rename no longer rewrites a `</#id>` cross-reference that resolves to nothing when the included file is read on its own. `</#id>` reaches headings, so one naming a renamed paragraph, span or other element is authored literal text and stays as written; link and image destinations still follow the rename (#2564).
+
 ### Performance
 
 - Replaced repeated whitespace searches in parsing, HTML import, writers, URL checks, lint, migrations and code callouts with linear scans. Leading HTML text nodes are removed in one slice; Djot bullet detection keeps its diagnostic and edit spans while avoiding repeated lookbehind scans.
