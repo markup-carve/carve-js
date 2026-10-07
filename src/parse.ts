@@ -11583,11 +11583,12 @@ class ParseSession {
       // is read: isParentAuthoredBlock() walks an indentation run per line and a
       // fence below the child column is rare (markup-carve/carve#752).
       const parentBlockCandidates: string[] = []
+      let parentBlockCandidateIndex = 0
       const parentAuthoredBlock = (): boolean => {
         const markerColumn = firstBodyMarkerColumn ?? -1
         if (markerColumn < 0) return false
-        while (!hasParentAuthoredBlock && parentBlockCandidates.length) {
-          const line = parentBlockCandidates.shift()!
+        while (!hasParentAuthoredBlock && parentBlockCandidateIndex < parentBlockCandidates.length) {
+          const line = parentBlockCandidates[parentBlockCandidateIndex++]!
           if (isParentAuthoredBlock(line, markerColumn)) hasParentAuthoredBlock = true
         }
         return hasParentAuthoredBlock

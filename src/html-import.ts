@@ -741,8 +741,12 @@ function launderableScheme(value: string): string | undefined {
  */
 function slotOrderFromElement(node: P5Node, held: Attrs): string[] {
   const order: string[] = []
+  const seen = new Set<string>()
   const push = (slot: string) => {
-    if (!order.includes(slot)) order.push(slot)
+    if (!seen.has(slot)) {
+      seen.add(slot)
+      order.push(slot)
+    }
   }
   const keyValues = held.keyValues ?? {}
   for (const attr of domAttrs(node) ?? []) {
@@ -845,6 +849,7 @@ class Importer {
    */
   private readonly cellAlignment = new Map<P5Node, { align?: string; valign?: string }>()
 
+  private readonly indexBackrefEntries = new WeakMap<P5Node, { term: string; ordinals: Map<P5Node, number> }>()
   private readonly codeLanguageWrappers = new WeakMap<P5Node, P5Node | null>()
   private readonly documentOrder = new Map<P5Node, number>()
 
@@ -1339,8 +1344,9 @@ class Importer {
    * nothing writes back.
    */
   private precedingLabelText(node: P5Node, labelClass: string): string | undefined {
-    const siblings = domChildren(domParent(node)) ?? []
-    const at = siblings.findIndex(child => child === node)
+    const parent = domParent(node)
+    const siblings = domChildren(parent) ?? []
+    const at = parent ? indexIn(parent, node) : -1
     for (let i = at - 1; i >= 0; i--) {
       const previous = siblings[i]!
       if (previous.nodeName === '#text' && (domValue(previous) ?? '').trim() === '') continue
@@ -1360,18 +1366,25 @@ class Importer {
   private indexBackrefNames(node: P5Node): string[] | undefined {
     const parent = domParent(node)
     if (!parent) return undefined
-    const isBackref = (child: P5Node): boolean =>
-      domTag(child) === 'a' && (this.attr(child, 'class') ?? '').split(/\s+/).includes('index-backref')
-    const backrefs = (domChildren(parent) ?? []).filter(isBackref)
-    const ordinal = backrefs.findIndex(child => child === node) + 1
-    if (ordinal === 0) return undefined
-    const term = (domChildren(parent) ?? [])
-      .filter((child) => !isBackref(child))
-      .map((child) => this.text(child))
-      .join('')
-      .trim()
-    if (term === '') return undefined
+    let entry = this.indexBackrefEntries.get(parent)
+    if (!entry) {
+      const ordinals = new Map<P5Node, number>()
+      const terms: string[] = []
+      for (const child of domChildren(parent) ?? []) {
+        const isBackref = domTag(child) === 'a'
+          && (this.attr(child, 'class') ?? '').split(/\s+/).includes('index-backref')
+        if (isBackref) ordinals.set(child, ordinals.size + 1)
+        else terms.push(this.text(child))
+      }
+      entry = { term: terms.join('').trim(), ordinals }
+      this.indexBackrefEntries.set(parent, entry)
+    }
+    const ordinal = entry.ordinals.get(node)
+    const term = entry.term
+    if (ordinal === undefined || term === '') return undefined
     const label = this.labels.indexBackref
+    const heldName = this.attr(node, 'aria-label')
+    if (heldName === undefined || heldName.length < label.length + term.length + 1) return undefined
     return [`${label} ${term}`, `${label} ${term} ${ordinal}`]
   }
 
@@ -4303,6 +4316,7 @@ class Importer {
       base = []
     }
 
+    let whitespaceEnd = 0
     for (let index = 0; index < input.length; index++) {
       const item = input[index]!
       if (item.node.nodeName === '#comment') continue
@@ -4334,12 +4348,13 @@ class Importer {
         item.node.nodeName === '#text' &&
         /^[\t\n\f\r ]*$/.test(domValue(item.node) ?? '')
       ) {
-        let lookahead = index + 1
+        let lookahead = Math.max(index + 1, whitespaceEnd)
         while (
           lookahead < input.length &&
           input[lookahead]!.node.nodeName === '#text' &&
           /^[\t\n\f\r ]*$/.test(domValue(input[lookahead]!.node) ?? '')
         ) lookahead++
+        whitespaceEnd = lookahead
         if (lookahead === input.length || domTag(input[lookahead]!.node) === 'rt' || domTag(input[lookahead]!.node) === 'rp') continue
       }
       hasAssociatedBase = false
@@ -4624,7 +4639,18 @@ class Importer {
 
   private text(node: P5Node): string {
     if (node.nodeName === '#text') return domValue(node) ?? ''
-    return (domChildren(node) ?? []).map((child) => this.text(child)).join('')
+    const pieces: string[] = []
+    const pending = [node]
+    while (pending.length > 0) {
+      const current = pending.pop()!
+      if (current.nodeName === '#text') {
+        pieces.push(domValue(current) ?? '')
+      } else {
+        const children = domChildren(current) ?? []
+        for (let i = children.length - 1; i >= 0; i--) pending.push(children[i]!)
+      }
+    }
+    return pieces.join('')
   }
 
   /**

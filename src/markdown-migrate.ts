@@ -4242,7 +4242,7 @@ function dropTrailingEmptyQuoteLines(source: string): string {
     const marker = above.indexOf('>')
     if (marker < 0 || marker > line.indexOf('>')) continue
     trailing.add(at)
-    candidates.unshift(at)
+    candidates.push(at)
   }
   if (candidates.length === 0) return source
   const was = reading(source)
@@ -4251,7 +4251,7 @@ function dropTrailingEmptyQuoteLines(source: string): string {
   if (reading(all) === was) return all
   if (candidates.length > TRAILING_QUOTE_LINE_PARSE_BUDGET) return source
   const drop = new Set<number>()
-  for (const at of [...candidates].reverse()) {
+  for (const at of candidates) {
     drop.add(at)
     if (reading(without(drop)) !== was) drop.delete(at)
   }

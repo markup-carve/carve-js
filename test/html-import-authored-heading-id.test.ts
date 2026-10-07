@@ -84,3 +84,10 @@ describe('authored HTML heading ids', () => {
     )
   })
 })
+
+it('keeps every heading attribute in element order on the writing exit', () => {
+  const attrs = Array.from({ length: 32 }, (_, i) => `data-k${31-i}="${i}"`).join(' ')
+  const source = htmlToCarve(`<h1 ${attrs} id="Target" class="kept">Target</h1>`).value
+  const order = Array.from({ length: 32 }, (_, i) => `data-k${31-i}=${i}`).join(' ')
+  expect(source).toBe(`{${order} #Target .kept}\n# Target\n`)
+})
