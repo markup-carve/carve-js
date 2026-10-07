@@ -39,8 +39,9 @@ const QUOTE_AWARE_OPTIONS = String.raw`(?:${DQUOTED_RUN}|${SQUOTED_RUN}|(?!${DQU
 
 const OPEN = String.raw`\{\{\s+`
 const PATH = String.raw`(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))`
-// `explicit_identifier`: an id may open on a digit (`#2024-plan`).
-const SECTION = String.raw`((?:\s+#\w[\w-]*)?)`
+// `explicit_identifier`: an id may open on a digit (`#2024-plan`). The path
+// stops at `#`, so the name needs no whitespace in front of it (carve#2773).
+const SECTION = String.raw`((?:\s*#\w[\w-]*)?)`
 const CLOSE = String.raw`\s+\}\}`
 const body = (options: string): string => `${OPEN}${PATH}${SECTION}(${options})${CLOSE}`
 
@@ -80,7 +81,8 @@ export function parseDirective(raw: string, onInvalidOption?: (part: string) => 
   let shift: number | 'auto' = 0
   const rest = m[5]?.trim()
   if (rest) {
-    for (const part of rest.split(/\s+/)) {
+    // An option needs no whitespace before its `@` either (carve#2773).
+    for (const part of rest.split(/\s+|(?=@)/).filter(Boolean)) {
       const opt = OPTION_RE.exec(part)
       const invalid = (): null => {
         // Spec I1: an unrecognized (or malformed) option makes the directive
