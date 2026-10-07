@@ -14,7 +14,7 @@ import type {
 } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { utf8ByteLength } from './abbr-budget.js'
-import { crossrefKey, inlineText, promoteBlockImages, slugify } from './heading-ids.js'
+import { crossrefKey, inlineText, numberCaptionsIn, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
 import { mergeRun } from './coalesce-text-runs.js'
@@ -1012,9 +1012,11 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
     const key = crossrefKey(id)
     if (!byTarget.has(key)) byTarget.set(key, heading.attrs ? renamed.get(heading.attrs) : undefined)
   }
-  // `byTarget` stays heading-only: `</#id>` reaches no other element, so a
-  // reference naming a renamed paragraph resolves to nothing when the child is
-  // read alone and is authored literal text, not a reference (carve-js#2564).
+  // `</#id>` reaches a heading, else a numbered caption, never any other id.
+  for (const attrs of numberedCaptionAttrs(child)) {
+    const key = crossrefKey(attrs.id)
+    if (!byTarget.has(key)) byTarget.set(key, renamed.get(attrs))
+  }
   for (const o of occurrences) {
     if (!exact.has(o.id)) exact.set(o.id, renamed.get(o.attrs))
   }
@@ -1037,6 +1039,31 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
         break
     }
   })
+}
+
+/**
+ * The attrs of every element a `</#id>` reaches through its numbered caption,
+ * in resolution order. Numbering writes into the tree, so the numbers it draws
+ * here are put back: the child is numbered for real once it is assembled.
+ */
+function numberedCaptionAttrs(child: Document): { id: string }[] {
+  const drawn: [Record<string, unknown>, string, unknown][] = []
+  walkNodes(child, (node) => {
+    if (node['type'] === 'caption_number') drawn.push([node, 'n', node['n']])
+    else if (node['type'] === 'math') drawn.push([node, 'number', node['number']])
+  })
+  const found: { id: string }[] = []
+  const counters = new Map<string, number>()
+  const collect = (_label: unknown, _n: number, attrs: { id?: string } | undefined): void => {
+    if (typeof attrs?.id === 'string') found.push(attrs as { id: string })
+  }
+  numberCaptionsIn(child.children, counters, collect)
+  for (const body of Object.values(child.footnoteDefs ?? {})) numberCaptionsIn(body, counters, collect)
+  for (const [node, key, value] of drawn) {
+    if (value === undefined) delete node[key]
+    else node[key] = value
+  }
+  return found
 }
 
 /**
