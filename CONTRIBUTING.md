@@ -155,6 +155,19 @@ CI also asserts that the spec submodule pin is reachable from spec `main`, which
 is the check that catches a pin naming a commit that no longer exists. Reachable
 is all it means: a commit five hundred behind is reachable too.
 
+## Versions on main
+
+Between releases `main` reads the next version with a `-dev` suffix, for
+example `0.1.11-dev`. The release cut drops the suffix in `package.json`,
+`package-lock.json` and `src/version.ts`, and the tag goes on that commit. Once
+the release is published, the next pull request moves `main` to the following
+`-dev` version. A build from any other commit then names itself as unreleased,
+and semver sorts it below the release it leads up to.
+
+`test/the-lib-version-constant-tracks-the-package-version.test.ts` checks the
+shape: a plain version must have its own `CHANGELOG.md` section, and a `-dev`
+version must be newer than the last one.
+
 ## Pull requests
 
 - One logical change per PR, with a test that fails without it.
