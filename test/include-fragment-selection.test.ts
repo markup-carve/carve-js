@@ -118,7 +118,7 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
     const r = expand('{#tip}\nKeep the dough cold.\n\n{{ child }}', {
       child: '{#tip}\nRest it overnight.\n\n[The tip above](#tip) is this file\'s.',
     })
-    expect(r.rules).toEqual(['include-heading-id-rename'])
+    expect(r.rules).toEqual(['include-id-rename'])
     expect(r.warnings[0]!.file).toBe('child')
     expect(r.html).toContain('<p id="tip">Keep the dough cold.</p>')
     expect(r.html).toContain('<p id="tip-2">Rest it overnight.</p>')
@@ -127,13 +127,13 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
 
   it('a heading and a paragraph share one namespace', () => {
     const r = expand('{#tip}\n# Tip\n\n{{ child }}', { child: '{#tip}\npara' })
-    expect(r.rules).toEqual(['include-heading-id-rename'])
+    expect(r.rules).toEqual(['include-id-rename'])
     expect(r.html).toContain('<p id="tip-2">para</p>')
   })
 
   it('an inline span collides with a block', () => {
     const r = expand('{#tip}\npara\n\n{{ child }}', { child: 'a [b]{#tip} c' })
-    expect(r.rules).toEqual(['include-heading-id-rename'])
+    expect(r.rules).toEqual(['include-id-rename'])
     expect(r.html).toContain('<span id="tip-2">b</span>')
   })
 
@@ -151,7 +151,7 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
 
   it('two inclusions of the same file collide', () => {
     const r = expand('{{ child }}\n\n{{ child }}', { child: '{#x}\none' })
-    expect(r.rules).toEqual(['include-heading-id-rename'])
+    expect(r.rules).toEqual(['include-id-rename'])
     expect(r.html).toBe('<p id="x">one</p>\n<p id="x-2">one</p>')
   })
 
@@ -163,7 +163,7 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
 
   it('every colliding occurrence gets its own suffix and warning; references follow the first', () => {
     const r = expand('{#d}\nparent\n\n{{ child }}', { child: '{#d}\none\n\n{#d}\ntwo\n\n[back](#d)' })
-    expect(r.rules).toEqual(['include-heading-id-rename', 'include-heading-id-rename'])
+    expect(r.rules).toEqual(['include-id-rename', 'include-id-rename'])
     expect(r.warnings.map((w) => w.message)).toEqual([
       'Id "d" was renamed to "d-2".',
       'Id "d" was renamed to "d-3".',
@@ -181,7 +181,7 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
 
   it('the suffix skips an id a later inclusion holds, which then keeps it', () => {
     const r = expand('{#x}\np\n\n{{ a }}\n\n{{ b }}', { a: '{#x}\n[self](#x)', b: '{#x-2}\nb' })
-    expect(r.rules).toEqual(['include-heading-id-rename'])
+    expect(r.rules).toEqual(['include-id-rename'])
     expect(r.html).toContain('<p id="x-3"><a href="#x-3">self</a></p>')
     expect(r.html).toContain('<p id="x-2">b</p>')
   })
@@ -194,7 +194,7 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
 
   it('a rejected inclusion reserves nothing for the suffix', () => {
     const r = expand('{#x}\np\n\n{{ a }}\n\n{{ b #missing }}', { a: '{#x}\na', b: '{#x-2}\nb' })
-    expect(r.rules).toEqual(['include-heading-id-rename', 'include-section'])
+    expect(r.rules).toEqual(['include-id-rename', 'include-section'])
     expect(r.html).toContain('<p id="x-2">a</p>')
   })
 
@@ -264,7 +264,7 @@ describe('explicit id collisions across inclusions (PART 9 section 19 I5)', () =
 
   it('a selected block is renamed on collision like any other', () => {
     const r = expand('{#dough}\nparent\n\n{{ c #dough }}', { c: '{#dough}\nchild' })
-    expect(r.rules).toEqual(['include-heading-id-rename'])
+    expect(r.rules).toEqual(['include-id-rename'])
     expect(r.html).toContain('<p id="dough-2">child</p>')
   })
 })

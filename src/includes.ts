@@ -738,7 +738,7 @@ function rollbackReservations(state: State, snap: Reservations): void {
   state.renames.length = snap.renames
   if (snap.footnoteDefs === undefined) delete snap.target.footnoteDefs
   else snap.target.footnoteDefs = snap.footnoteDefs
-  const dropped = new Set(['include-heading-id-rename', 'include-footnote-rename'])
+  const dropped = new Set(['include-id-rename', 'include-footnote-rename'])
   if (state.warnings.length > snap.warnings) {
     state.warnings.splice(
       snap.warnings,
@@ -997,7 +997,7 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
       base: o.id,
       attrs: o.attrs,
       refs: [],
-      warning: warn(state, 'include-heading-id-rename', '', o.node as { pos?: Position }),
+      warning: warn(state, 'include-id-rename', '', o.node as { pos?: Position }),
     }
     renamed.set(o.attrs, pending)
     state.renames.push(pending)
@@ -1012,10 +1012,11 @@ function renameChildIds(child: Document, asRead: Map<Heading, string>, state: St
     const key = crossrefKey(id)
     if (!byTarget.has(key)) byTarget.set(key, heading.attrs ? renamed.get(heading.attrs) : undefined)
   }
+  // `byTarget` stays heading-only: `</#id>` reaches no other element, so a
+  // reference naming a renamed paragraph resolves to nothing when the child is
+  // read alone and is authored literal text, not a reference (carve-js#2564).
   for (const o of occurrences) {
     if (!exact.has(o.id)) exact.set(o.id, renamed.get(o.attrs))
-    const key = crossrefKey(o.id)
-    if (!byTarget.has(key)) byTarget.set(key, renamed.get(o.attrs))
   }
   const follow = (node: Record<string, unknown>, key: string, target: PendingRename | undefined, prefix: string): void => {
     if (target) target.refs.push({ node, key, prefix })
