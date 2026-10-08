@@ -332,7 +332,7 @@ export function extractReferenceDefinitions(
     if (definition?.[1]?.startsWith('^')) {
       const label = definition[1].slice(1)
       const key = label
-      if (label.includes('|') && !footnotes.has(key)) {
+      if ((label.includes('|') || decodeLinkTitle(label, decodeEntity) !== label) && !footnotes.has(key)) {
         while (reservedFootnotes.has(nextFootnote)) nextFootnote++
         footnotes.set(key, `carve-import-footnote-${nextFootnote++}`)
       }

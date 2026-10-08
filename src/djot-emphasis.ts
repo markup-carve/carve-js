@@ -5,7 +5,7 @@ type Pair = { start: number; openEnd: number; close: number; end: number; kind: 
 type Opener = { start: number; end: number; kind: string; forced: boolean }
 
 export function djotEmphasis(source: string, convert: (plain: string) => string): string {
-  const mask = maskDjotEmphasisSource(source).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/\[\^[^\]\n]*\]|(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
+  const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
   for (let i = 0; i < source.length; i++) {
     if (mask[i] !== '{' || !/[.#A-Za-z]/.test(source[i + 1] ?? '')) continue
     const attrs = readAttributes(source, i)
@@ -188,4 +188,11 @@ function maskDjotEmphasisSource(source: string): string {
     offset += line.length + 1
   }
   return masked.join('').replace(/!\[[^\[\]\n]*\](?=[([])/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
+}
+
+function maskFootnotes(source: string): string {
+  return source.split('\n').map(line => {
+    const end = line.lastIndexOf(']') + 1
+    return line.slice(0, end).replace(/\[\^[^\]\n]*\]/g, value => ' '.repeat(value.length)) + line.slice(end)
+  }).join('\n')
 }

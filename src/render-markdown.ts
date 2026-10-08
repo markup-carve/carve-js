@@ -1,3 +1,4 @@
+import { backtickRunEnds } from './backtick-run-index.js'
 import { renderCellContent } from './render-cell-content.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type {
@@ -771,9 +772,33 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
  * span included, and reads `\|` back as `|` there (PART 11 section 8h).
  */
 function escapeCellPipes(cell: string): string {
-  return cell.replace(/(\\*)\|/g, (match, backslashes: string) =>
-    backslashes.length % 2 === 0 ? `${backslashes}\\|` : match,
-  )
+  if (!cell.includes('|')) return cell
+  const ends = backtickRunEnds(cell)
+  const out: string[] = []
+  for (let i = 0; i < cell.length;) {
+    if (cell[i] === '\\') {
+      const begin = i
+      while (cell[i] === '\\') i++
+      out.push(cell.slice(begin, i))
+      if (cell[i] === '|') { out.push((i - begin) % 2 === 0 ? '\\|' : '|'); i++; continue }
+      if ((i - begin) % 2 !== 0 && cell[i] !== undefined) out.push(cell[i++]!)
+      continue
+    }
+    const end = cell[i] === '`' ? ends?.[i] : undefined
+    if (end !== undefined && end >= 0) {
+      out.push(cell.slice(i, end).replaceAll('|', '\\|'))
+      i = end
+      continue
+    }
+    if (cell.startsWith('[^', i)) {
+      let close = i + 2
+      while (close < cell.length && !'[\]\n'.includes(cell[close]!)) close++
+      if (cell[close] === ']') { out.push(cell.slice(i, close + 1).replaceAll('|', '\\|')); i = close + 1; continue }
+    }
+    out.push(cell[i] === '|' ? '\\|' : cell[i]!)
+    i++
+  }
+  return out.join('')
 }
 
 function renderFigure(node: Figure, ctx: MarkdownContext): string {
@@ -1006,7 +1031,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // UNRESOLVED branch escaped its BRACKETS, because they are Markdown
       // metacharacters, and skipped the HTML - the escape decision was being
       // made for one and not the other (carve-js#894).
-      if (!ctx.definedFootnotes.has(id)) return `\\[^${escapeMdHtml(id)}\\]`
+      if (!ctx.definedFootnotes.has(id)) return `\\[^${escapeMdHtml(id).replaceAll('\\', '\\\\')}\\]`
       return `[^${escapeMdHtml(id)}]`
     }
     case 'non_breaking_space':
@@ -1199,11 +1224,11 @@ function markdownFenceInfo(
 }
 
 function escapeMarkdownLabel(text: string): string {
-  return stripControls(text).replace(/[\\[\]]/g, '\\$&')
+  return neutralizeCharRefs(stripControls(text).replace(/[\\[\]]/g, '\\$&'))
 }
 
 function escapeMdTitle(title: string): string {
-  return stripControls(title).replace(/[\\"]/g, '\\$&')
+  return neutralizeCharRefs(stripControls(title).replace(/[\\"]/g, '\\$&'))
 }
 
 /** Stand a carrier on each empty line of a payload region; see PAYLOAD_BLANK. */
@@ -1353,8 +1378,13 @@ function deniedProbeInput(url: string): string {
 
 function markdownDestination(url: string): string {
   const probed = sanitizeMdUrl(stripDestinationControls(url))
-  const encoded = (probed === '' ? probed : stripControls(url)).replace(/[ ()<>]/g, (ch) => {
+  const pipeDestination = url.includes('|')
+  const encoded = (probed === '' ? probed : stripControls(url)).replace(/[ ()<>\\|]/g, (ch) => {
     switch (ch) {
+      case '\\':
+        return pipeDestination ? '%5C' : ch
+      case '|':
+        return '%7C'
       case ' ':
         return '%20'
       case '(':

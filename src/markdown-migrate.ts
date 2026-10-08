@@ -776,7 +776,7 @@ function protectCodeSpans(s: string, repl: (span: string, offset: number) => str
     while (s[idx + n] === '`') n++
     return n
   }
-  const autolink = /<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*>/y
+  const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
   let out = ''
   let i = 0
   const opaqueEnd = opaqueHtmlScanner(s)
@@ -1088,6 +1088,16 @@ function convertInline(
     ] }] }).replace(/\n$/, '')
     return table ? escapeTablePipes(written) : written
   }
+  const protectReferenceAutolinks = (value: string): string => value.replace(/<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/g, match => {
+    const body = match.slice(1, -1)
+    return protect(writeLiteralAutolink(body, /^[A-Za-z][A-Za-z0-9+.-]{1,31}:/.test(body) ? '' : 'mailto:'))
+  })
+  const writeLiteralReference = (value: string): string => value.split(/(\x00P\d+\x00|<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>)/).map(part => {
+    if (part.startsWith('<') && part.endsWith('>')) return protectReferenceAutolinks(part)
+    const token = /^\x00P(\d+)\x00$/.exec(part)
+    if (token && /^(?:!?)`/.test(protectedSpans[Number(token[1])] ?? '')) return part
+    return referenceLiteralText(part, decodeHtmlEntitiesRaw, protectedSpans).replace(/\r\n?|\n/g, ' ').replace(/[!-\/:-@\[-`{-~]/g, '\\$&')
+  }).join('')
   let escaped = ''
   const opaqueEnd = opaqueHtmlScanner(line)
   for (let i = 0; i < line.length;) {
@@ -1236,6 +1246,7 @@ function convertInline(
 
   const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\[\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
   protectDestinations(multilineTitle)
+  protectDestinations(/(?<=\])()(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g)
 
   // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
@@ -1288,6 +1299,8 @@ function convertInline(
       return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
     })
 
+  line = line.replace(/\[\^(?=[^[\]\n]*\[(?!\^))/g, () => protect('\\[') + '^')
+
   const footnoteSource = line
   let footnoteCursor = 0
   const footnoteOpaque = opaqueHtmlScanner(line)
@@ -1310,11 +1323,11 @@ function convertInline(
   if (table) {
     line = line.replace(/(?<!\\)\[([^[\]\n^]+)\]\[([^[\]\n]+)\]/g, (match, label: string, reference: string) =>
       label.includes('|') && referenceDestinationLabel(reference, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
-        ? protect(match.replace(/[\[\]]/g, '\\$&')) : match,
+        ? protect(writeLiteralReference(match)) : match,
     )
     line = line.replace(/(?<!\\)(!?)\[([^[\]\n^][^[\]\n]*)\]\[\]/g, (match, _image: string, label: string) =>
       label.includes('|') && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
-        ? match.replace(/[\[\]]/g, '\\$&') : match,
+        ? protect(writeLiteralReference(match)) : match,
     )
   }
 
@@ -1330,11 +1343,14 @@ function convertInline(
     if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel, table) !== undefined) return referenceTail(sourceLabel, match)
     const literal = referenceLiteralText(reference, decodeHtmlEntitiesRaw, protectedSpans)
     if (canonical === undefined && sourceLabel === undefined && !reference.startsWith('^') && /\\[!*]/.test(referenceSourceText(reference, protectedSpans)) && literal !== reference && /[!*]/.test(literal)) {
-      return protect(`\\[${literal}]`)
+      return protect(`\\[${writeLiteralReference(reference)}\\]`)
     }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
-    return canonical === undefined || /[\[\]]/.test(canonical)
-      ? protect(table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match) : referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`)
+    if (canonical === undefined || /[\[\]]/.test(canonical)) {
+      if (!referenceSourceText(reference, protectedSpans).includes('|')) return protect(match)
+      return protect(`\\[${writeLiteralReference(reference)}\\]`)
+    }
+    return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`)
   })
 
   // Reference-link definition `[label]: dest "title"` (optional space after
@@ -1381,7 +1397,7 @@ function convertInline(
     return protect(writeLiteralAutolink(body))
   })
   line = line.replace(/<[^>\s@]+@[^>\s]+>/g, match =>
-    /[\\\x00]/.test(match) ? match : table && match.includes('|')
+    /[\\\x00]/.test(match) ? match : (table && match.includes('|')) || match.includes('`')
       ? protect(writeLiteralAutolink(match.slice(1, -1), 'mailto:')) : protect(match),
   )
 
