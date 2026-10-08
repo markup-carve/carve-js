@@ -1,0 +1,5236 @@
+{
+  "started_at": "2026-10-08T01:16:23Z",
+  "cpu": 13,
+  "method": "one warmup, three timed calls per size and process, two rounds reversing producer and size order; GC before each JavaScript/PHP call; report serialization, hashing and file I/O excluded",
+  "adapter": "word",
+  "fixture_generator_sha256": "fd8eb0a136bd08e0669e16704336646c6930f2b61018fef73c1d4a865168c480",
+  "fixtures": {
+    "long-inverse-class-1024": {
+      "bytes": 53358,
+      "sha256": "e5dfc1e5ad7a6477f72cdf6e5ac3428d27aaeecf1197144b6a48583367602f8c"
+    },
+    "long-inverse-class-4096": {
+      "bytes": 213102,
+      "sha256": "e0d8b48d5638e29bdbf1e34cf6cbc8ceef8f346b5077e1ef0c4e78b15e14b927"
+    },
+    "long-inverse-ref-class-1024": {
+      "bytes": 53339,
+      "sha256": "a87c7d7232e97dc9f41d078a718a07d083936bbc8db76b4403230d699e9d8b42"
+    },
+    "long-inverse-ref-class-4096": {
+      "bytes": 213083,
+      "sha256": "4fe52c4f4989dd1a16e2434e9123df3ffc70964eaf2c5d336458e20619701743"
+    },
+    "backs-1024": {
+      "bytes": 101256,
+      "sha256": "fc1764dc8915d95a617cad0cc9ec60f6af7f374ecc2f3d79e05bd9a00869b096"
+    },
+    "backs-4096": {
+      "bytes": 411528,
+      "sha256": "43b435391cd98e221cc2538466785ba1c29ca72397e0d46e93d4e23d729a4ec6"
+    },
+    "backparents-1024": {
+      "bytes": 115592,
+      "sha256": "7448e6c3a70bd68655eb49f4d7bd1b192763441a2be9da330f1925d0703e3b18"
+    },
+    "backparents-4096": {
+      "bytes": 468872,
+      "sha256": "31953e962ae7f12b515bf8cadcb535f29b923f74966e603df47995f9ef77098b"
+    },
+    "wrapper-2048": {
+      "bytes": 132992,
+      "sha256": "ef4b805a37141f68a09e21ec97d79371b1ccb059b54ce8e8997cd972bed1d61b"
+    },
+    "wrapper-8192": {
+      "bytes": 538496,
+      "sha256": "e42cbc4e19c92951943b8c531d8b84f51453d4a11a9d5bf31ebfb1507498c6e6"
+    },
+    "containers-layout-1024": {
+      "bytes": 92032,
+      "sha256": "a11663682bd7fad93d1d25f860aea2f040b0bd17a78dfc97a9ad18a2a562519e"
+    },
+    "containers-layout-4096": {
+      "bytes": 374656,
+      "sha256": "68f096516119ed9e97b15f257cc811d13c3cf72dbd79f89f37e3d0e90430db5b"
+    },
+    "duplicate-identities-1024": {
+      "bytes": 91183,
+      "sha256": "3b01b58e63786875ccd50e985da1ef2e59d34941722f488743edc406613762cf"
+    },
+    "duplicate-identities-4096": {
+      "bytes": 364591,
+      "sha256": "77c72addb62cc34aa09cf3a3a35c726eaa0c6d438fb13bd36e96e04f78048eb2"
+    },
+    "aliases-1024": {
+      "bytes": 105338,
+      "sha256": "219b4cfc94f3f6afab82d42d293a774628b7e15900306e5c0f7139e29a3adc62"
+    },
+    "aliases-4096": {
+      "bytes": 427898,
+      "sha256": "310a55f42e57487e57caa23611d345137ccb99cad775f1c39656bd0a9624522f"
+    },
+    "separators-128": {
+      "bytes": 2535,
+      "sha256": "11460c84827776e469b7ae73c82103631bcdf6e801c0c39a36ba957ab00468c0"
+    },
+    "separators-512": {
+      "bytes": 9831,
+      "sha256": "c1179fd8ebb74f7ba5d8d7cbd6faca46b78185907ffdbad0cc7ed3d73c01b6ae"
+    },
+    "deep-shared-wrapper-512": {
+      "bytes": 41290,
+      "sha256": "fecb1e0a8d8a702543e6f3b7557b95c9f0f715740d58ce9aa3ca638a7b19cda6"
+    },
+    "deep-shared-wrapper-2048": {
+      "bytes": 167802,
+      "sha256": "7012f07e4abd43aad05150809c15a8bcd009b3a4117791f545f10826f6e0287b"
+    },
+    "nested-backlink-blocks-512": {
+      "bytes": 60519,
+      "sha256": "30b320fd6d0d4c3577100b29f7e6fc0f710d89f5ffdf9ab7c7c88a565225dd4b"
+    },
+    "nested-backlink-blocks-2048": {
+      "bytes": 247495,
+      "sha256": "2c16a5fa4a2fd57318ef84b84317e5faaf74fe5df3d4a9df228dd7e5b707f845"
+    },
+    "deep-alias-targets-512": {
+      "bytes": 59210,
+      "sha256": "7ee1dca61b6c12420710e12a22aa673c72f5007c9b2fa11cfbb9ee3773c25aae"
+    },
+    "deep-alias-targets-2048": {
+      "bytes": 239482,
+      "sha256": "fc3561012f150ec9a696c9ef357725cceb6b88b14ccfb20933e7b4514ae92945"
+    },
+    "sections-2048": {
+      "bytes": 30769,
+      "sha256": "738ab468e539c1545e67948414b7e4a37bf62136199be3be25cb7e933a83f686"
+    },
+    "sections-8192": {
+      "bytes": 122929,
+      "sha256": "e607cd83e23a8fe400c069c87d8534702789e9369d00f3606bd30502ffbbf6a2"
+    },
+    "empty-code-4096": {
+      "bytes": 57351,
+      "sha256": "5c487d3bb7f4c780c4faa144e8fcb0c6da82c805c1d2789194c11fedae8018e2"
+    },
+    "empty-code-16384": {
+      "bytes": 229383,
+      "sha256": "0fd5965c28ef99eecfc8f2226b1b16345d948734de950454c12c8987bc65fa33"
+    },
+    "nested-code-spans-128": {
+      "bytes": 4376,
+      "sha256": "4fb723e907c4656941b682787b49018aca2383af5af3c2d89517fa92b3222424"
+    },
+    "nested-code-spans-512": {
+      "bytes": 17432,
+      "sha256": "18c58250ebcced1eb1856a6f0420cc8bd7f36f61bd181d499bae9b27c87c7054"
+    },
+    "normal-256": {
+      "bytes": 27279,
+      "sha256": "ab1e5553134f36def6c412902f1f8ffb5bb39016c378bfba35a00b0864225b0f"
+    },
+    "normal-1024": {
+      "bytes": 111135,
+      "sha256": "46a2756040754206efce09058c748ad5eda6e2e6776c3dcd139bf7576faeaa51"
+    },
+    "ordinary-256": {
+      "bytes": 18688,
+      "sha256": "fedd6a44eb7a7182f2d221c4681994c9c252047aeebc07a6d5be33aaa9c09c44"
+    },
+    "ordinary-1024": {
+      "bytes": 74752,
+      "sha256": "17eaea28d72cc91500494905e60ce11ac75fe977daf4fcdf63b53bb56d08ea04"
+    }
+  },
+  "probes": {
+    "js": "5fecba86478dcf799600eb4e6c5d51e150d016a649bfd4330437535a643f98ed",
+    "php": "b5f3cde0bfaa03f023c73083899b10b2c88014f77ec8ff32e31131ba550686f0",
+    "rs": "bb1318c9d449bb7b02201eddff404d0f3a84d138b35d84c834c6c77ab959d9a8"
+  },
+  "revisions": {
+    "js": {
+      "before": {
+        "base": "e9d16a778f008463e9b3da5ef6edb35ac1ec57f1",
+        "files": {
+          "src/html-import.ts": "530a90df99e6de67fe6fe011acdb891ab2ab88442e050ff20f59c3bb15b8a461",
+          "src/render-carve.ts": "bd4405c0773e0806733ceaa489384cc28075f3a5a1f67a17db0cfe594cfedbb9",
+          "dist/html-import.js": "2bfc77fbd01351ee33ea8de7c830f31ad86ca9f55c091ffa073e5bfdf73fb0fc",
+          "dist/render-carve.js": "9a453bf2071618c8533b5e2d41d12174d7672dd98547648f025ef5e0548cd14b"
+        }
+      },
+      "after": {
+        "base": "e9d16a778f008463e9b3da5ef6edb35ac1ec57f1",
+        "files": {
+          "src/html-import.ts": "18c2e2120d7ebea7685f1f6e9e4d298a36bde606ccd9b67b888a7f9255269303",
+          "src/render-carve.ts": "92e66f24b26aff6513e12af2175aaf8fbd32ef8f1f182b6bc4bcb7b671e06472",
+          "dist/html-import.js": "99659f2e0f5b154b83d6676224eb8d3912e30eb5ec052c61954f0bc161a5de9c",
+          "dist/render-carve.js": "8f1a69d990432e9313f30c7542fd805965e0aa0872dd9fbee1c8d1b0f752b7b9"
+        }
+      }
+    }
+  },
+  "points": [
+    {
+      "n": 1024,
+      "bytes": 53358,
+      "api": "carve",
+      "samples": [
+        287.38659400000006,
+        293.78218100000004,
+        263.562899
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-class",
+      "round": 0,
+      "load_start": [
+        9.38232421875,
+        8.0048828125,
+        10.435546875
+      ],
+      "load_end": [
+        11.59423828125,
+        8.486328125,
+        10.57861328125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213102,
+      "api": "carve",
+      "samples": [
+        1604.5752359999997,
+        1034.6344070000005,
+        971.1821989999999
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-class",
+      "round": 0,
+      "load_start": [
+        9.38232421875,
+        8.0048828125,
+        10.435546875
+      ],
+      "load_end": [
+        11.59423828125,
+        8.486328125,
+        10.57861328125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 53358,
+      "api": "carve",
+      "samples": [
+        165.11006300000003,
+        184.88827699999996,
+        166.78316600000005
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-class",
+      "round": 0,
+      "load_start": [
+        11.59423828125,
+        8.486328125,
+        10.57861328125
+      ],
+      "load_end": [
+        12.748046875,
+        8.77734375,
+        10.66162109375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213102,
+      "api": "carve",
+      "samples": [
+        459.9001870000002,
+        391.91587700000014,
+        340.99486400000023
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-class",
+      "round": 0,
+      "load_start": [
+        11.59423828125,
+        8.486328125,
+        10.57861328125
+      ],
+      "load_end": [
+        12.748046875,
+        8.77734375,
+        10.66162109375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 53339,
+      "api": "carve",
+      "samples": [
+        192.51245399999993,
+        217.8320980000001,
+        224.00455
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-ref-class",
+      "round": 0,
+      "load_start": [
+        12.8798828125,
+        8.93408203125,
+        10.6923828125
+      ],
+      "load_end": [
+        12.40869140625,
+        8.90185546875,
+        10.67236328125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213083,
+      "api": "carve",
+      "samples": [
+        906.3670879999997,
+        913.9284339999999,
+        886.0198350000001
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-ref-class",
+      "round": 0,
+      "load_start": [
+        12.8798828125,
+        8.93408203125,
+        10.6923828125
+      ],
+      "load_end": [
+        12.40869140625,
+        8.90185546875,
+        10.67236328125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 53339,
+      "api": "carve",
+      "samples": [
+        148.04902500000003,
+        196.32214399999998,
+        141.04412000000002
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-ref-class",
+      "round": 0,
+      "load_start": [
+        12.40869140625,
+        8.90185546875,
+        10.67236328125
+      ],
+      "load_end": [
+        12.40869140625,
+        8.90185546875,
+        10.67236328125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213083,
+      "api": "carve",
+      "samples": [
+        370.441282,
+        322.64995999999996,
+        322.4934619999999
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-ref-class",
+      "round": 0,
+      "load_start": [
+        12.40869140625,
+        8.90185546875,
+        10.67236328125
+      ],
+      "load_end": [
+        12.40869140625,
+        8.90185546875,
+        10.67236328125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 101256,
+      "api": "carve",
+      "samples": [
+        390.342102,
+        351.92811700000004,
+        356.680108
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backs",
+      "round": 0,
+      "load_start": [
+        11.22509765625,
+        8.859375,
+        10.61962890625
+      ],
+      "load_end": [
+        10.86376953125,
+        8.86328125,
+        10.6025390625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 411528,
+      "api": "carve",
+      "samples": [
+        3039.1723279999997,
+        2692.5104409999994,
+        2320.315477
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backs",
+      "round": 0,
+      "load_start": [
+        11.22509765625,
+        8.859375,
+        10.61962890625
+      ],
+      "load_end": [
+        10.86376953125,
+        8.86328125,
+        10.6025390625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 101256,
+      "api": "carve",
+      "samples": [
+        234.59265700000003,
+        217.806014,
+        199.354604
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backs",
+      "round": 0,
+      "load_start": [
+        10.86376953125,
+        8.86328125,
+        10.6025390625
+      ],
+      "load_end": [
+        10.86376953125,
+        8.86328125,
+        10.6025390625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 411528,
+      "api": "carve",
+      "samples": [
+        469.81459300000006,
+        410.0812719999999,
+        414.475872
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backs",
+      "round": 0,
+      "load_start": [
+        10.86376953125,
+        8.86328125,
+        10.6025390625
+      ],
+      "load_end": [
+        10.86376953125,
+        8.86328125,
+        10.6025390625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 115592,
+      "api": "carve",
+      "samples": [
+        477.786472,
+        467.47980600000005,
+        459.31905199999983
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backparents",
+      "round": 0,
+      "load_start": [
+        8.82080078125,
+        8.53662109375,
+        10.447265625
+      ],
+      "load_end": [
+        8.84716796875,
+        8.53857421875,
+        10.40625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 468872,
+      "api": "carve",
+      "samples": [
+        3384.708225999999,
+        3332.0424759999987,
+        3814.3344020000004
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backparents",
+      "round": 0,
+      "load_start": [
+        8.82080078125,
+        8.53662109375,
+        10.447265625
+      ],
+      "load_end": [
+        8.84716796875,
+        8.53857421875,
+        10.40625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 115592,
+      "api": "carve",
+      "samples": [
+        226.05711899999994,
+        234.369502,
+        250.3239339999999
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backparents",
+      "round": 0,
+      "load_start": [
+        8.84716796875,
+        8.53857421875,
+        10.40625
+      ],
+      "load_end": [
+        8.84716796875,
+        8.53857421875,
+        10.40625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 468872,
+      "api": "carve",
+      "samples": [
+        541.3255140000001,
+        493.20707300000004,
+        465.654528
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backparents",
+      "round": 0,
+      "load_start": [
+        8.84716796875,
+        8.53857421875,
+        10.40625
+      ],
+      "load_end": [
+        8.84716796875,
+        8.53857421875,
+        10.40625
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 132992,
+      "api": "ast",
+      "samples": [
+        489.10754799999995,
+        466.826188,
+        472.4921680000002
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "wrapper",
+      "round": 0,
+      "load_start": [
+        8.3994140625,
+        8.4423828125,
+        10.29345703125
+      ],
+      "load_end": [
+        8.31787109375,
+        8.42822265625,
+        10.2490234375
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 538496,
+      "api": "ast",
+      "samples": [
+        4714.486197,
+        5161.798118000001,
+        5281.673373999998
+      ],
+      "hashes": [
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "wrapper",
+      "round": 0,
+      "load_start": [
+        8.3994140625,
+        8.4423828125,
+        10.29345703125
+      ],
+      "load_end": [
+        8.31787109375,
+        8.42822265625,
+        10.2490234375
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 132992,
+      "api": "ast",
+      "samples": [
+        260.934246,
+        259.7151970000001,
+        203.90054099999998
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "wrapper",
+      "round": 0,
+      "load_start": [
+        8.31787109375,
+        8.42822265625,
+        10.2490234375
+      ],
+      "load_end": [
+        8.2919921875,
+        8.4208984375,
+        10.23681640625
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 538496,
+      "api": "ast",
+      "samples": [
+        477.3198400000001,
+        452.36249899999984,
+        467.9217800000001
+      ],
+      "hashes": [
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "wrapper",
+      "round": 0,
+      "load_start": [
+        8.31787109375,
+        8.42822265625,
+        10.2490234375
+      ],
+      "load_end": [
+        8.2919921875,
+        8.4208984375,
+        10.23681640625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 92032,
+      "api": "ast",
+      "samples": [
+        186.192254,
+        229.22046999999998,
+        204.12517300000002
+      ],
+      "hashes": [
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "containers-layout",
+      "round": 0,
+      "load_start": [
+        6.517578125,
+        7.92919921875,
+        9.90966796875
+      ],
+      "load_end": [
+        6.63671875,
+        7.9306640625,
+        9.89892578125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 374656,
+      "api": "ast",
+      "samples": [
+        388.0030039999999,
+        458.08237899999995,
+        483.6080360000001
+      ],
+      "hashes": [
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "containers-layout",
+      "round": 0,
+      "load_start": [
+        6.517578125,
+        7.92919921875,
+        9.90966796875
+      ],
+      "load_end": [
+        6.63671875,
+        7.9306640625,
+        9.89892578125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 92032,
+      "api": "ast",
+      "samples": [
+        186.06307900000002,
+        206.34844399999997,
+        159.65970300000004
+      ],
+      "hashes": [
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "containers-layout",
+      "round": 0,
+      "load_start": [
+        6.63671875,
+        7.9306640625,
+        9.89892578125
+      ],
+      "load_end": [
+        6.63671875,
+        7.9306640625,
+        9.89892578125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 374656,
+      "api": "ast",
+      "samples": [
+        476.58980399999996,
+        459.4689390000001,
+        475.5470100000002
+      ],
+      "hashes": [
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "containers-layout",
+      "round": 0,
+      "load_start": [
+        6.63671875,
+        7.9306640625,
+        9.89892578125
+      ],
+      "load_end": [
+        6.63671875,
+        7.9306640625,
+        9.89892578125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 91183,
+      "api": "carve",
+      "samples": [
+        322.950976,
+        310.54444,
+        322.12848099999997
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "duplicate-identities",
+      "round": 0,
+      "load_start": [
+        6.1806640625,
+        7.75390625,
+        9.798828125
+      ],
+      "load_end": [
+        6.2138671875,
+        7.7119140625,
+        9.76318359375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 364591,
+      "api": "carve",
+      "samples": [
+        2358.7532140000003,
+        2367.588001,
+        2488.6794659999996
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "duplicate-identities",
+      "round": 0,
+      "load_start": [
+        6.1806640625,
+        7.75390625,
+        9.798828125
+      ],
+      "load_end": [
+        6.2138671875,
+        7.7119140625,
+        9.76318359375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 91183,
+      "api": "carve",
+      "samples": [
+        237.26375500000006,
+        232.03299299999992,
+        195.146881
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "duplicate-identities",
+      "round": 0,
+      "load_start": [
+        6.2138671875,
+        7.7119140625,
+        9.76318359375
+      ],
+      "load_end": [
+        6.43701171875,
+        7.7333984375,
+        9.7587890625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 364591,
+      "api": "carve",
+      "samples": [
+        487.90929099999994,
+        418.9959520000002,
+        424.4016880000004
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "duplicate-identities",
+      "round": 0,
+      "load_start": [
+        6.2138671875,
+        7.7119140625,
+        9.76318359375
+      ],
+      "load_end": [
+        6.43701171875,
+        7.7333984375,
+        9.7587890625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 105338,
+      "api": "carve",
+      "samples": [
+        217.269249,
+        211.61130400000002,
+        202.5331309999999
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "aliases",
+      "round": 0,
+      "load_start": [
+        5.2900390625,
+        7.353515625,
+        9.578125
+      ],
+      "load_end": [
+        5.2900390625,
+        7.353515625,
+        9.578125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 427898,
+      "api": "carve",
+      "samples": [
+        429.57882100000006,
+        400.58584700000006,
+        395.7887190000001
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "aliases",
+      "round": 0,
+      "load_start": [
+        5.2900390625,
+        7.353515625,
+        9.578125
+      ],
+      "load_end": [
+        5.2900390625,
+        7.353515625,
+        9.578125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 105338,
+      "api": "carve",
+      "samples": [
+        198.89728299999996,
+        202.49599999999992,
+        193.084202
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "aliases",
+      "round": 0,
+      "load_start": [
+        5.2900390625,
+        7.353515625,
+        9.578125
+      ],
+      "load_end": [
+        5.42724609375,
+        7.34716796875,
+        9.56396484375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 427898,
+      "api": "carve",
+      "samples": [
+        373.17261899999994,
+        336.51073799999995,
+        371.91977499999985
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "aliases",
+      "round": 0,
+      "load_start": [
+        5.2900390625,
+        7.353515625,
+        9.578125
+      ],
+      "load_end": [
+        5.42724609375,
+        7.34716796875,
+        9.56396484375
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 2535,
+      "api": "ast",
+      "samples": [
+        13.09218100000001,
+        11.776085999999992,
+        10.519785999999982
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "separators",
+      "round": 0,
+      "load_start": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ],
+      "load_end": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 9831,
+      "api": "ast",
+      "samples": [
+        193.188063,
+        182.09836199999995,
+        188.92031199999997
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "separators",
+      "round": 0,
+      "load_start": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ],
+      "load_end": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 2535,
+      "api": "ast",
+      "samples": [
+        8.577710999999994,
+        6.2523960000000045,
+        8.49581599999999
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "separators",
+      "round": 0,
+      "load_start": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ],
+      "load_end": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 9831,
+      "api": "ast",
+      "samples": [
+        20.085588,
+        34.39734800000002,
+        20.694646000000034
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "separators",
+      "round": 0,
+      "load_start": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ],
+      "load_end": [
+        5.71337890625,
+        7.375,
+        9.560546875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 41290,
+      "api": "ast",
+      "samples": [
+        92.61198499999998,
+        94.67321700000002,
+        85.10872899999993
+      ],
+      "hashes": [
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-shared-wrapper",
+      "round": 0,
+      "load_start": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ],
+      "load_end": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 167802,
+      "api": "ast",
+      "samples": [
+        241.2798479999999,
+        309.6230069999999,
+        279.25668900000005
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-shared-wrapper",
+      "round": 0,
+      "load_start": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ],
+      "load_end": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 41290,
+      "api": "ast",
+      "samples": [
+        97.326124,
+        88.380834,
+        101.96722499999998
+      ],
+      "hashes": [
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-shared-wrapper",
+      "round": 0,
+      "load_start": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ],
+      "load_end": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 167802,
+      "api": "ast",
+      "samples": [
+        281.25079300000004,
+        239.66740099999993,
+        230.83127799999988
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-shared-wrapper",
+      "round": 0,
+      "load_start": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ],
+      "load_end": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 60519,
+      "api": "ast",
+      "samples": [
+        173.35324400000002,
+        220.54084899999992,
+        146.24562500000002
+      ],
+      "hashes": [
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-backlink-blocks",
+      "round": 0,
+      "load_start": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ],
+      "load_end": [
+        6.0166015625,
+        7.357421875,
+        9.51953125
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 247495,
+      "api": "ast",
+      "samples": [
+        1240.2746550000002,
+        1376.6279600000003,
+        1436.3516909999998
+      ],
+      "hashes": [
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-backlink-blocks",
+      "round": 0,
+      "load_start": [
+        5.576171875,
+        7.31884765625,
+        9.5302734375
+      ],
+      "load_end": [
+        6.0166015625,
+        7.357421875,
+        9.51953125
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 60519,
+      "api": "ast",
+      "samples": [
+        146.38474100000002,
+        143.47936200000004,
+        118.85518000000002
+      ],
+      "hashes": [
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-backlink-blocks",
+      "round": 0,
+      "load_start": [
+        6.0166015625,
+        7.357421875,
+        9.51953125
+      ],
+      "load_end": [
+        6.0166015625,
+        7.357421875,
+        9.51953125
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 247495,
+      "api": "ast",
+      "samples": [
+        286.08067500000004,
+        369.4625179999998,
+        306.086581
+      ],
+      "hashes": [
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-backlink-blocks",
+      "round": 0,
+      "load_start": [
+        6.0166015625,
+        7.357421875,
+        9.51953125
+      ],
+      "load_end": [
+        6.0166015625,
+        7.357421875,
+        9.51953125
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 59210,
+      "api": "ast",
+      "samples": [
+        107.022446,
+        80.401072,
+        71.431576
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-alias-targets",
+      "round": 0,
+      "load_start": [
+        6.01513671875,
+        7.33447265625,
+        9.50048828125
+      ],
+      "load_end": [
+        6.01513671875,
+        7.33447265625,
+        9.50048828125
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 239482,
+      "api": "ast",
+      "samples": [
+        259.31891599999994,
+        214.07640099999992,
+        229.54969400000004
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-alias-targets",
+      "round": 0,
+      "load_start": [
+        6.01513671875,
+        7.33447265625,
+        9.50048828125
+      ],
+      "load_end": [
+        6.01513671875,
+        7.33447265625,
+        9.50048828125
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 59210,
+      "api": "ast",
+      "samples": [
+        89.700898,
+        93.78783500000003,
+        52.40083499999997
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-alias-targets",
+      "round": 0,
+      "load_start": [
+        6.01513671875,
+        7.33447265625,
+        9.50048828125
+      ],
+      "load_end": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 239482,
+      "api": "ast",
+      "samples": [
+        242.35533899999996,
+        248.64250299999992,
+        284.456226
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-alias-targets",
+      "round": 0,
+      "load_start": [
+        6.01513671875,
+        7.33447265625,
+        9.50048828125
+      ],
+      "load_end": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 30769,
+      "api": "ast",
+      "samples": [
+        81.82928000000001,
+        69.11118100000004,
+        70.767381
+      ],
+      "hashes": [
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "sections",
+      "round": 0,
+      "load_start": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ],
+      "load_end": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 122929,
+      "api": "ast",
+      "samples": [
+        357.362039,
+        323.3796090000001,
+        304.0148919999999
+      ],
+      "hashes": [
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "sections",
+      "round": 0,
+      "load_start": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ],
+      "load_end": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 30769,
+      "api": "ast",
+      "samples": [
+        54.572708000000006,
+        53.90142099999997,
+        27.319312000000025
+      ],
+      "hashes": [
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "sections",
+      "round": 0,
+      "load_start": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ],
+      "load_end": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 122929,
+      "api": "ast",
+      "samples": [
+        117.02588100000003,
+        117.641482,
+        126.59396600000002
+      ],
+      "hashes": [
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "sections",
+      "round": 0,
+      "load_start": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ],
+      "load_end": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 57351,
+      "api": "carve",
+      "samples": [
+        195.917081,
+        171.76308200000005,
+        164.03879399999994
+      ],
+      "hashes": [
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "empty-code",
+      "round": 0,
+      "load_start": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ],
+      "load_end": [
+        7.05029296875,
+        7.51953125,
+        9.53759765625
+      ]
+    },
+    {
+      "n": 16384,
+      "bytes": 229383,
+      "api": "carve",
+      "samples": [
+        402.22316899999987,
+        430.85922600000004,
+        396.65891299999976
+      ],
+      "hashes": [
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "empty-code",
+      "round": 0,
+      "load_start": [
+        7.05517578125,
+        7.5283203125,
+        9.5517578125
+      ],
+      "load_end": [
+        7.05029296875,
+        7.51953125,
+        9.53759765625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 57351,
+      "api": "carve",
+      "samples": [
+        193.91561299999995,
+        161.467763,
+        145.77636500000006
+      ],
+      "hashes": [
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "empty-code",
+      "round": 0,
+      "load_start": [
+        7.05029296875,
+        7.51953125,
+        9.53759765625
+      ],
+      "load_end": [
+        7.05029296875,
+        7.51953125,
+        9.53759765625
+      ]
+    },
+    {
+      "n": 16384,
+      "bytes": 229383,
+      "api": "carve",
+      "samples": [
+        282.78573099999994,
+        294.31619,
+        316.9852740000001
+      ],
+      "hashes": [
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "empty-code",
+      "round": 0,
+      "load_start": [
+        7.05029296875,
+        7.51953125,
+        9.53759765625
+      ],
+      "load_end": [
+        7.05029296875,
+        7.51953125,
+        9.53759765625
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 4376,
+      "api": "carve",
+      "samples": [
+        120.20864899999998,
+        120.483251,
+        146.21810799999992
+      ],
+      "hashes": [
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-code-spans",
+      "round": 0,
+      "load_start": [
+        6.64794921875,
+        7.41943359375,
+        9.4833984375
+      ],
+      "load_end": [
+        7.07666015625,
+        7.49560546875,
+        9.4970703125
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 17432,
+      "api": "carve",
+      "samples": [
+        776.932368,
+        770.9393150000001,
+        709.3937489999998
+      ],
+      "hashes": [
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-code-spans",
+      "round": 0,
+      "load_start": [
+        6.64794921875,
+        7.41943359375,
+        9.4833984375
+      ],
+      "load_end": [
+        7.07666015625,
+        7.49560546875,
+        9.4970703125
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 4376,
+      "api": "carve",
+      "samples": [
+        39.921672,
+        34.399744999999996,
+        40.16156799999999
+      ],
+      "hashes": [
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-code-spans",
+      "round": 0,
+      "load_start": [
+        7.07666015625,
+        7.49560546875,
+        9.4970703125
+      ],
+      "load_end": [
+        7.07666015625,
+        7.49560546875,
+        9.4970703125
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 17432,
+      "api": "carve",
+      "samples": [
+        122.56337000000002,
+        117.71847000000002,
+        92.75659400000006
+      ],
+      "hashes": [
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-code-spans",
+      "round": 0,
+      "load_start": [
+        7.07666015625,
+        7.49560546875,
+        9.4970703125
+      ],
+      "load_end": [
+        7.07666015625,
+        7.49560546875,
+        9.4970703125
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 27279,
+      "api": "carve",
+      "samples": [
+        111.11552999999998,
+        180.96450999999996,
+        165.017646
+      ],
+      "hashes": [
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "normal",
+      "round": 0,
+      "load_start": [
+        7.1103515625,
+        7.451171875,
+        9.4169921875
+      ],
+      "load_end": [
+        7.26171875,
+        7.47705078125,
+        9.41455078125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 111135,
+      "api": "carve",
+      "samples": [
+        492.64353099999994,
+        402.5817330000002,
+        413.86755700000003
+      ],
+      "hashes": [
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "normal",
+      "round": 0,
+      "load_start": [
+        7.1103515625,
+        7.451171875,
+        9.4169921875
+      ],
+      "load_end": [
+        7.26171875,
+        7.47705078125,
+        9.41455078125
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 27279,
+      "api": "carve",
+      "samples": [
+        100.82032099999998,
+        185.118182,
+        178.55324100000007
+      ],
+      "hashes": [
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "normal",
+      "round": 0,
+      "load_start": [
+        7.26171875,
+        7.47705078125,
+        9.41455078125
+      ],
+      "load_end": [
+        7.26171875,
+        7.47705078125,
+        9.41455078125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 111135,
+      "api": "carve",
+      "samples": [
+        628.1272920000001,
+        448.4255350000001,
+        412.12260700000024
+      ],
+      "hashes": [
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "normal",
+      "round": 0,
+      "load_start": [
+        7.26171875,
+        7.47705078125,
+        9.41455078125
+      ],
+      "load_end": [
+        7.26171875,
+        7.47705078125,
+        9.41455078125
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 18688,
+      "api": "carve",
+      "samples": [
+        209.96653599999996,
+        187.21909200000005,
+        173.87732499999993
+      ],
+      "hashes": [
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "ordinary",
+      "round": 0,
+      "load_start": [
+        7.4013671875,
+        7.50244140625,
+        9.412109375
+      ],
+      "load_end": [
+        7.68994140625,
+        7.560546875,
+        9.4208984375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 74752,
+      "api": "carve",
+      "samples": [
+        402.2462879999998,
+        470.4454380000002,
+        475.9951080000001
+      ],
+      "hashes": [
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "ordinary",
+      "round": 0,
+      "load_start": [
+        7.4013671875,
+        7.50244140625,
+        9.412109375
+      ],
+      "load_end": [
+        7.68994140625,
+        7.560546875,
+        9.4208984375
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 18688,
+      "api": "carve",
+      "samples": [
+        181.858452,
+        178.81015200000002,
+        155.40231099999994
+      ],
+      "hashes": [
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "ordinary",
+      "round": 0,
+      "load_start": [
+        7.68994140625,
+        7.560546875,
+        9.4208984375
+      ],
+      "load_end": [
+        7.68994140625,
+        7.560546875,
+        9.4208984375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 74752,
+      "api": "carve",
+      "samples": [
+        399.311475,
+        356.760348,
+        459.9182589999998
+      ],
+      "hashes": [
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "ordinary",
+      "round": 0,
+      "load_start": [
+        7.68994140625,
+        7.560546875,
+        9.4208984375
+      ],
+      "load_end": [
+        7.68994140625,
+        7.560546875,
+        9.4208984375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213102,
+      "api": "carve",
+      "samples": [
+        425.21565699999996,
+        460.1570449999999,
+        373.3577479999999
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-class",
+      "round": 1,
+      "load_start": [
+        6.87255859375,
+        7.306640625,
+        9.2236328125
+      ],
+      "load_end": [
+        6.87255859375,
+        7.306640625,
+        9.2236328125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 53358,
+      "api": "carve",
+      "samples": [
+        106.75705399999993,
+        128.593206,
+        153.57782700000007
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-class",
+      "round": 1,
+      "load_start": [
+        6.87255859375,
+        7.306640625,
+        9.2236328125
+      ],
+      "load_end": [
+        6.87255859375,
+        7.306640625,
+        9.2236328125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213102,
+      "api": "carve",
+      "samples": [
+        878.9828660000001,
+        853.1982609999998,
+        864.0997960000004
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-class",
+      "round": 1,
+      "load_start": [
+        6.87255859375,
+        7.306640625,
+        9.2236328125
+      ],
+      "load_end": [
+        6.64208984375,
+        7.25146484375,
+        9.1953125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 53358,
+      "api": "carve",
+      "samples": [
+        119.93374799999992,
+        219.1779760000004,
+        229.34543400000075
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-class",
+      "round": 1,
+      "load_start": [
+        6.87255859375,
+        7.306640625,
+        9.2236328125
+      ],
+      "load_end": [
+        6.64208984375,
+        7.25146484375,
+        9.1953125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213083,
+      "api": "carve",
+      "samples": [
+        615.445306,
+        527.052447,
+        452.75816299999997
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-ref-class",
+      "round": 1,
+      "load_start": [
+        6.6904296875,
+        7.2431640625,
+        9.1708984375
+      ],
+      "load_end": [
+        8.31689453125,
+        7.5712890625,
+        9.26708984375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 53339,
+      "api": "carve",
+      "samples": [
+        152.34299999999985,
+        182.6191319999998,
+        130.48981600000025
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "long-inverse-ref-class",
+      "round": 1,
+      "load_start": [
+        6.6904296875,
+        7.2431640625,
+        9.1708984375
+      ],
+      "load_end": [
+        8.31689453125,
+        7.5712890625,
+        9.26708984375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 213083,
+      "api": "carve",
+      "samples": [
+        1009.948361,
+        979.5905439999997,
+        957.2527879999998
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-ref-class",
+      "round": 1,
+      "load_start": [
+        8.31689453125,
+        7.5712890625,
+        9.26708984375
+      ],
+      "load_end": [
+        8.29150390625,
+        7.57861328125,
+        9.26025390625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 53339,
+      "api": "carve",
+      "samples": [
+        145.3463270000002,
+        206.78218299999935,
+        160.09643500000038
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "long-inverse-ref-class",
+      "round": 1,
+      "load_start": [
+        8.31689453125,
+        7.5712890625,
+        9.26708984375
+      ],
+      "load_end": [
+        8.29150390625,
+        7.57861328125,
+        9.26025390625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 411528,
+      "api": "carve",
+      "samples": [
+        514.364142,
+        456.64587099999994,
+        456.00909799999977
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backs",
+      "round": 1,
+      "load_start": [
+        9.078125,
+        7.806640625,
+        9.30908203125
+      ],
+      "load_end": [
+        9.47265625,
+        7.90966796875,
+        9.33447265625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 101256,
+      "api": "carve",
+      "samples": [
+        123.16264500000034,
+        183.380044,
+        188.47599100000025
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backs",
+      "round": 1,
+      "load_start": [
+        9.078125,
+        7.806640625,
+        9.30908203125
+      ],
+      "load_end": [
+        9.47265625,
+        7.90966796875,
+        9.33447265625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 411528,
+      "api": "carve",
+      "samples": [
+        2763.1784270000003,
+        2543.522438,
+        2625.4198269999997
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backs",
+      "round": 1,
+      "load_start": [
+        9.47265625,
+        7.90966796875,
+        9.33447265625
+      ],
+      "load_end": [
+        8.6181640625,
+        7.7802734375,
+        9.27685546875
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 101256,
+      "api": "carve",
+      "samples": [
+        290.1715490000006,
+        364.6995200000001,
+        298.18258400000013
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backs",
+      "round": 1,
+      "load_start": [
+        9.47265625,
+        7.90966796875,
+        9.33447265625
+      ],
+      "load_end": [
+        8.6181640625,
+        7.7802734375,
+        9.27685546875
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 468872,
+      "api": "carve",
+      "samples": [
+        544.913963,
+        542.1817940000001,
+        412.03217800000016
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backparents",
+      "round": 1,
+      "load_start": [
+        7.34814453125,
+        7.55908203125,
+        9.15478515625
+      ],
+      "load_end": [
+        7.34814453125,
+        7.55908203125,
+        9.15478515625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 115592,
+      "api": "carve",
+      "samples": [
+        166.08738200000016,
+        199.90950399999974,
+        246.34584899999982
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "backparents",
+      "round": 1,
+      "load_start": [
+        7.34814453125,
+        7.55908203125,
+        9.15478515625
+      ],
+      "load_end": [
+        7.34814453125,
+        7.55908203125,
+        9.15478515625
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 468872,
+      "api": "carve",
+      "samples": [
+        3603.219294999999,
+        3801.6740520000003,
+        3693.295092999999
+      ],
+      "hashes": [
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047",
+        "cf551f7347fd3c1c9fa84fae71a64f2db67efba0dd328a4100632827b6ccd047"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backparents",
+      "round": 1,
+      "load_start": [
+        7.34814453125,
+        7.55908203125,
+        9.15478515625
+      ],
+      "load_end": [
+        6.81005859375,
+        7.42431640625,
+        9.07568359375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 115592,
+      "api": "carve",
+      "samples": [
+        358.8891160000021,
+        412.2392680000012,
+        427.922341999998
+      ],
+      "hashes": [
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e",
+        "e597496b2ca7163a95b2140f5982b1d8c68bb961c6d671f78327293791fd027e"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "backparents",
+      "round": 1,
+      "load_start": [
+        7.34814453125,
+        7.55908203125,
+        9.15478515625
+      ],
+      "load_end": [
+        6.81005859375,
+        7.42431640625,
+        9.07568359375
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 538496,
+      "api": "ast",
+      "samples": [
+        416.787063,
+        413.26961000000006,
+        368.51324999999997
+      ],
+      "hashes": [
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "wrapper",
+      "round": 1,
+      "load_start": [
+        7.22509765625,
+        7.44384765625,
+        9.02001953125
+      ],
+      "load_end": [
+        7.046875,
+        7.40283203125,
+        8.998046875
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 132992,
+      "api": "ast",
+      "samples": [
+        165.17870100000005,
+        153.36908700000004,
+        149.23656299999993
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "wrapper",
+      "round": 1,
+      "load_start": [
+        7.22509765625,
+        7.44384765625,
+        9.02001953125
+      ],
+      "load_end": [
+        7.046875,
+        7.40283203125,
+        8.998046875
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 538496,
+      "api": "ast",
+      "samples": [
+        4592.5403750000005,
+        4776.168228,
+        4705.820342999999
+      ],
+      "hashes": [
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74",
+        "8855025703be742acc607abb01014d2ab99452c4f1f5a90b7ef6788557057a74"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "wrapper",
+      "round": 1,
+      "load_start": [
+        7.046875,
+        7.40283203125,
+        8.998046875
+      ],
+      "load_end": [
+        6.4365234375,
+        7.2451171875,
+        8.912109375
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 132992,
+      "api": "ast",
+      "samples": [
+        398.4689099999996,
+        374.1735460000018,
+        453.4185690000013
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "wrapper",
+      "round": 1,
+      "load_start": [
+        7.046875,
+        7.40283203125,
+        8.998046875
+      ],
+      "load_end": [
+        6.4365234375,
+        7.2451171875,
+        8.912109375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 374656,
+      "api": "ast",
+      "samples": [
+        498.90603399999986,
+        474.410719,
+        373.5069960000001
+      ],
+      "hashes": [
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "containers-layout",
+      "round": 1,
+      "load_start": [
+        6.02587890625,
+        6.93408203125,
+        8.66357421875
+      ],
+      "load_end": [
+        6.26416015625,
+        6.96875,
+        8.66552734375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 92032,
+      "api": "ast",
+      "samples": [
+        180.33777899999995,
+        149.03220299999975,
+        167.64159700000027
+      ],
+      "hashes": [
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "containers-layout",
+      "round": 1,
+      "load_start": [
+        6.02587890625,
+        6.93408203125,
+        8.66357421875
+      ],
+      "load_end": [
+        6.26416015625,
+        6.96875,
+        8.66552734375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 374656,
+      "api": "ast",
+      "samples": [
+        470.855363,
+        433.73051399999986,
+        471.8013040000001
+      ],
+      "hashes": [
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db",
+        "a2f352d38268f55bbb0495a9aa54a4d3112483995b71066e20d44b9cba3b33db"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "containers-layout",
+      "round": 1,
+      "load_start": [
+        6.26416015625,
+        6.96875,
+        8.66552734375
+      ],
+      "load_end": [
+        6.26416015625,
+        6.96875,
+        8.66552734375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 92032,
+      "api": "ast",
+      "samples": [
+        184.10861499999965,
+        194.67119599999978,
+        174.76993400000038
+      ],
+      "hashes": [
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0",
+        "66e7c906ded71db50e11813d22c32238efd1d12d962a748894181db66e3d8ec0"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "containers-layout",
+      "round": 1,
+      "load_start": [
+        6.26416015625,
+        6.96875,
+        8.66552734375
+      ],
+      "load_end": [
+        6.26416015625,
+        6.96875,
+        8.66552734375
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 364591,
+      "api": "carve",
+      "samples": [
+        428.01463,
+        435.8881449999999,
+        365.9585860000002
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "duplicate-identities",
+      "round": 1,
+      "load_start": [
+        5.8486328125,
+        6.82470703125,
+        8.5810546875
+      ],
+      "load_end": [
+        5.86083984375,
+        6.810546875,
+        8.56689453125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 91183,
+      "api": "carve",
+      "samples": [
+        128.49055299999986,
+        162.2081989999997,
+        166.89751300000034
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "duplicate-identities",
+      "round": 1,
+      "load_start": [
+        5.8486328125,
+        6.82470703125,
+        8.5810546875
+      ],
+      "load_end": [
+        5.86083984375,
+        6.810546875,
+        8.56689453125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 364591,
+      "api": "carve",
+      "samples": [
+        2383.052711,
+        2231.979915,
+        2258.5714129999997
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "duplicate-identities",
+      "round": 1,
+      "load_start": [
+        5.86083984375,
+        6.810546875,
+        8.56689453125
+      ],
+      "load_end": [
+        5.9560546875,
+        6.80029296875,
+        8.5439453125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 91183,
+      "api": "carve",
+      "samples": [
+        248.67609300000004,
+        303.5865610000001,
+        284.6345139999994
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "duplicate-identities",
+      "round": 1,
+      "load_start": [
+        5.86083984375,
+        6.810546875,
+        8.56689453125
+      ],
+      "load_end": [
+        5.9560546875,
+        6.80029296875,
+        8.5439453125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 427898,
+      "api": "carve",
+      "samples": [
+        443.271874,
+        430.0102959999999,
+        350.282369
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "aliases",
+      "round": 1,
+      "load_start": [
+        6.1484375,
+        6.794921875,
+        8.505859375
+      ],
+      "load_end": [
+        6.296875,
+        6.81494140625,
+        8.5029296875
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 105338,
+      "api": "carve",
+      "samples": [
+        126.44990199999984,
+        161.1291580000002,
+        167.25142900000037
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "aliases",
+      "round": 1,
+      "load_start": [
+        6.1484375,
+        6.794921875,
+        8.505859375
+      ],
+      "load_end": [
+        6.296875,
+        6.81494140625,
+        8.5029296875
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 427898,
+      "api": "carve",
+      "samples": [
+        477.89749900000015,
+        477.88140899999985,
+        404.0143150000001
+      ],
+      "hashes": [
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2",
+        "7577e5076eaeb71d02966e4479e549a8f7e8823cf3824339b3f29cd9c59f58b2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "aliases",
+      "round": 1,
+      "load_start": [
+        6.296875,
+        6.81494140625,
+        8.5029296875
+      ],
+      "load_end": [
+        6.296875,
+        6.81494140625,
+        8.5029296875
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 105338,
+      "api": "carve",
+      "samples": [
+        119.17131100000006,
+        181.04034100000035,
+        182.18996900000002
+      ],
+      "hashes": [
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d",
+        "d6a8bd1ee2dd84f664c5aad88afbf9dcb27c9da995dcb3521573b302ef30242d"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "aliases",
+      "round": 1,
+      "load_start": [
+        6.296875,
+        6.81494140625,
+        8.5029296875
+      ],
+      "load_end": [
+        6.296875,
+        6.81494140625,
+        8.5029296875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 9831,
+      "api": "ast",
+      "samples": [
+        21.87111200000001,
+        12.837159999999983,
+        14.399372999999997
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "separators",
+      "round": 1,
+      "load_start": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ],
+      "load_end": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 2535,
+      "api": "ast",
+      "samples": [
+        8.504143999999997,
+        5.350301999999999,
+        7.441050999999959
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "separators",
+      "round": 1,
+      "load_start": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ],
+      "load_end": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 9831,
+      "api": "ast",
+      "samples": [
+        192.804039,
+        200.54049200000009,
+        206.65856499999995
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "separators",
+      "round": 1,
+      "load_start": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ],
+      "load_end": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 2535,
+      "api": "ast",
+      "samples": [
+        13.484490999999935,
+        16.61180300000001,
+        16.44956400000001
+      ],
+      "hashes": [
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6",
+        "508d5cba2d6dacd0b6b7a91442aa8b249c87adb90f169cd9c810ac8380ab1be6"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "separators",
+      "round": 1,
+      "load_start": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ],
+      "load_end": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 167802,
+      "api": "ast",
+      "samples": [
+        322.669282,
+        262.168855,
+        267.149324
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-shared-wrapper",
+      "round": 1,
+      "load_start": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ],
+      "load_end": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 41290,
+      "api": "ast",
+      "samples": [
+        67.57508099999995,
+        87.5407560000001,
+        85.80931099999998
+      ],
+      "hashes": [
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-shared-wrapper",
+      "round": 1,
+      "load_start": [
+        6.02978515625,
+        6.73876953125,
+        8.45947265625
+      ],
+      "load_end": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 167802,
+      "api": "ast",
+      "samples": [
+        318.0146940000001,
+        294.68999599999995,
+        260.15177700000004
+      ],
+      "hashes": [
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba",
+        "b462c34d065cf02cdd0422695965b5107fd0855934981a371854a9435402ddba"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-shared-wrapper",
+      "round": 1,
+      "load_start": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ],
+      "load_end": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 41290,
+      "api": "ast",
+      "samples": [
+        79.33783500000004,
+        71.0151370000001,
+        80.49998699999992
+      ],
+      "hashes": [
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805",
+        "017ad7e939fdfc1bdd782447b1954e1f5bbe609c2e17807926d7977f11026805"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-shared-wrapper",
+      "round": 1,
+      "load_start": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ],
+      "load_end": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 247495,
+      "api": "ast",
+      "samples": [
+        331.552468,
+        342.7491460000001,
+        272.006979
+      ],
+      "hashes": [
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-backlink-blocks",
+      "round": 1,
+      "load_start": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ],
+      "load_end": [
+        6.09912109375,
+        6.73046875,
+        8.43798828125
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 60519,
+      "api": "ast",
+      "samples": [
+        102.9640280000001,
+        97.45136699999989,
+        82.37446499999987
+      ],
+      "hashes": [
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-backlink-blocks",
+      "round": 1,
+      "load_start": [
+        6.10791015625,
+        6.7431640625,
+        8.451171875
+      ],
+      "load_end": [
+        6.09912109375,
+        6.73046875,
+        8.43798828125
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 247495,
+      "api": "ast",
+      "samples": [
+        1430.302419,
+        1346.614446,
+        1290.2223290000002
+      ],
+      "hashes": [
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516",
+        "87e176a465ab774c2469e9ab4555b8afaa27c70a0345323f853811ee48fa5516"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-backlink-blocks",
+      "round": 1,
+      "load_start": [
+        6.09912109375,
+        6.73046875,
+        8.43798828125
+      ],
+      "load_end": [
+        5.8505859375,
+        6.66845703125,
+        8.40869140625
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 60519,
+      "api": "ast",
+      "samples": [
+        186.31126500000028,
+        178.06639300000006,
+        153.52673200000027
+      ],
+      "hashes": [
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60",
+        "14cabc5972201f0b3d117a817caee087af9af0fc74112c9beda74f09ecd1dd60"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-backlink-blocks",
+      "round": 1,
+      "load_start": [
+        6.09912109375,
+        6.73046875,
+        8.43798828125
+      ],
+      "load_end": [
+        5.8505859375,
+        6.66845703125,
+        8.40869140625
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 239482,
+      "api": "ast",
+      "samples": [
+        196.70354200000008,
+        217.68291699999997,
+        195.04509600000006
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-alias-targets",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 59210,
+      "api": "ast",
+      "samples": [
+        98.70668599999999,
+        34.26849600000014,
+        57.29429499999992
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "deep-alias-targets",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 239482,
+      "api": "ast",
+      "samples": [
+        224.643033,
+        242.822761,
+        182.316683
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-alias-targets",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 59210,
+      "api": "ast",
+      "samples": [
+        78.01838599999996,
+        76.82534499999997,
+        80.1992150000001
+      ],
+      "hashes": [
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7",
+        "060dd343c36406a1fef34def5c98d5bb09f42f984b007e7300608328be4cf9a7"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "deep-alias-targets",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 122929,
+      "api": "ast",
+      "samples": [
+        129.06616299999996,
+        162.927012,
+        104.04477599999996
+      ],
+      "hashes": [
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "sections",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 30769,
+      "api": "ast",
+      "samples": [
+        51.10540800000001,
+        50.69615799999997,
+        50.083361999999966
+      ],
+      "hashes": [
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "sections",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ]
+    },
+    {
+      "n": 8192,
+      "bytes": 122929,
+      "api": "ast",
+      "samples": [
+        347.30855600000007,
+        342.74335700000006,
+        340.62628800000016
+      ],
+      "hashes": [
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b",
+        "e3db5d5f1dec0bcd38d4c4887c463c25c7df44573e567ec0cf3e08d3d8c5485b"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "sections",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ]
+    },
+    {
+      "n": 2048,
+      "bytes": 30769,
+      "api": "ast",
+      "samples": [
+        62.98240099999998,
+        66.53333799999996,
+        77.27285699999993
+      ],
+      "hashes": [
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f",
+        "1182993be1a83707f910d26552b2c8356de8a1f633d28bfdb23dcb595ef72d5f"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "sections",
+      "round": 1,
+      "load_start": [
+        5.7822265625,
+        6.640625,
+        8.39013671875
+      ],
+      "load_end": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ]
+    },
+    {
+      "n": 16384,
+      "bytes": 229383,
+      "api": "carve",
+      "samples": [
+        352.13690500000007,
+        356.06143299999997,
+        324.87241800000015
+      ],
+      "hashes": [
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "empty-code",
+      "round": 1,
+      "load_start": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ],
+      "load_end": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 57351,
+      "api": "carve",
+      "samples": [
+        149.55018599999994,
+        158.85358199999996,
+        139.1964019999998
+      ],
+      "hashes": [
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "empty-code",
+      "round": 1,
+      "load_start": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ],
+      "load_end": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ]
+    },
+    {
+      "n": 16384,
+      "bytes": 229383,
+      "api": "carve",
+      "samples": [
+        503.11830499999996,
+        532.545216,
+        444.91857600000003
+      ],
+      "hashes": [
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e",
+        "68d43f5aae8706596788cd67a0ec3ce1986a1cdef3f4f84c711eeb8c4b4e846e"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "empty-code",
+      "round": 1,
+      "load_start": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ],
+      "load_end": [
+        6.197265625,
+        6.7021484375,
+        8.39111328125
+      ]
+    },
+    {
+      "n": 4096,
+      "bytes": 57351,
+      "api": "carve",
+      "samples": [
+        149.5035270000003,
+        167.63799800000015,
+        131.0456509999999
+      ],
+      "hashes": [
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70",
+        "bc5e8d26fa80291e598a76f96a8c293655381bd1bc800fec490debd37ab9af70"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "empty-code",
+      "round": 1,
+      "load_start": [
+        6.0400390625,
+        6.68017578125,
+        8.3935546875
+      ],
+      "load_end": [
+        6.197265625,
+        6.7021484375,
+        8.39111328125
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 17432,
+      "api": "carve",
+      "samples": [
+        153.10606399999995,
+        168.75460399999997,
+        88.94532100000004
+      ],
+      "hashes": [
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-code-spans",
+      "round": 1,
+      "load_start": [
+        6.08642578125,
+        6.662109375,
+        8.359375
+      ],
+      "load_end": [
+        6.08642578125,
+        6.662109375,
+        8.359375
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 4376,
+      "api": "carve",
+      "samples": [
+        38.879179999999906,
+        32.187085000000025,
+        35.67477300000007
+      ],
+      "hashes": [
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "nested-code-spans",
+      "round": 1,
+      "load_start": [
+        6.08642578125,
+        6.662109375,
+        8.359375
+      ],
+      "load_end": [
+        6.08642578125,
+        6.662109375,
+        8.359375
+      ]
+    },
+    {
+      "n": 512,
+      "bytes": 17432,
+      "api": "carve",
+      "samples": [
+        792.283715,
+        843.2163439999999,
+        817.937437
+      ],
+      "hashes": [
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2",
+        "729e425125563c3c9857a4a65b7e138d0487bcb6dcc2e21f688953298a75dcf2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-code-spans",
+      "round": 1,
+      "load_start": [
+        6.08642578125,
+        6.662109375,
+        8.359375
+      ],
+      "load_end": [
+        6.23974609375,
+        6.6845703125,
+        8.357421875
+      ]
+    },
+    {
+      "n": 128,
+      "bytes": 4376,
+      "api": "carve",
+      "samples": [
+        138.71991700000035,
+        134.94968100000006,
+        162.06349199999977
+      ],
+      "hashes": [
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970",
+        "a60863c27a23dc71b797048bd0507e2957753cb0956d485f6c808c8e21b50970"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "nested-code-spans",
+      "round": 1,
+      "load_start": [
+        6.08642578125,
+        6.662109375,
+        8.359375
+      ],
+      "load_end": [
+        6.23974609375,
+        6.6845703125,
+        8.357421875
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 111135,
+      "api": "carve",
+      "samples": [
+        413.63595799999996,
+        475.44732699999986,
+        354.484649
+      ],
+      "hashes": [
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "normal",
+      "round": 1,
+      "load_start": [
+        7.15966796875,
+        6.8369140625,
+        8.3447265625
+      ],
+      "load_end": [
+        7.15966796875,
+        6.8369140625,
+        8.3447265625
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 27279,
+      "api": "carve",
+      "samples": [
+        105.88423899999998,
+        119.36167899999964,
+        137.17601300000024
+      ],
+      "hashes": [
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "normal",
+      "round": 1,
+      "load_start": [
+        7.15966796875,
+        6.8369140625,
+        8.3447265625
+      ],
+      "load_end": [
+        7.15966796875,
+        6.8369140625,
+        8.3447265625
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 111135,
+      "api": "carve",
+      "samples": [
+        489.549987,
+        497.06663300000014,
+        358.829352
+      ],
+      "hashes": [
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2",
+        "51c6a2a2225c539a0ea66ffe78b991e5c0e4b63f869db5e355279b464af6e2c2"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "normal",
+      "round": 1,
+      "load_start": [
+        7.15966796875,
+        6.8369140625,
+        8.3447265625
+      ],
+      "load_end": [
+        7.06640625,
+        6.82275390625,
+        8.33203125
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 27279,
+      "api": "carve",
+      "samples": [
+        115.16131099999984,
+        117.53719000000001,
+        164.43492600000036
+      ],
+      "hashes": [
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514",
+        "8ad9d34abc3efa60d0873ae7fa50fc77e2d41db229f0bac013ce422cf9e0e514"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "normal",
+      "round": 1,
+      "load_start": [
+        7.15966796875,
+        6.8369140625,
+        8.3447265625
+      ],
+      "load_end": [
+        7.06640625,
+        6.82275390625,
+        8.33203125
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 74752,
+      "api": "carve",
+      "samples": [
+        329.219788,
+        403.42982000000006,
+        387.13438700000006
+      ],
+      "hashes": [
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "ordinary",
+      "round": 1,
+      "load_start": [
+        6.82080078125,
+        6.77587890625,
+        8.30859375
+      ],
+      "load_end": [
+        6.82080078125,
+        6.77587890625,
+        8.30859375
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 18688,
+      "api": "carve",
+      "samples": [
+        130.75261,
+        138.4863660000001,
+        138.6905529999999
+      ],
+      "hashes": [
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7"
+      ],
+      "engine": "js",
+      "variant": "after",
+      "shape": "ordinary",
+      "round": 1,
+      "load_start": [
+        6.82080078125,
+        6.77587890625,
+        8.30859375
+      ],
+      "load_end": [
+        6.82080078125,
+        6.77587890625,
+        8.30859375
+      ]
+    },
+    {
+      "n": 1024,
+      "bytes": 74752,
+      "api": "carve",
+      "samples": [
+        363.5340309999999,
+        479.6784260000002,
+        431.28028199999994
+      ],
+      "hashes": [
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3",
+        "9a4288625e24d38a402095fda0f277abeaafb907090fa5cd1f3557328b2d4ef3"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "ordinary",
+      "round": 1,
+      "load_start": [
+        6.82080078125,
+        6.77587890625,
+        8.30859375
+      ],
+      "load_end": [
+        6.5146484375,
+        6.712890625,
+        8.27978515625
+      ]
+    },
+    {
+      "n": 256,
+      "bytes": 18688,
+      "api": "carve",
+      "samples": [
+        134.7242369999999,
+        155.1223369999998,
+        138.86560099999997
+      ],
+      "hashes": [
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7",
+        "c4873267b404e54459f69e2008c392dd1efb6733a9dab377176db5d4786ceab7"
+      ],
+      "engine": "js",
+      "variant": "before",
+      "shape": "ordinary",
+      "round": 1,
+      "load_start": [
+        6.82080078125,
+        6.77587890625,
+        8.30859375
+      ],
+      "load_end": [
+        6.5146484375,
+        6.712890625,
+        8.27978515625
+      ]
+    }
+  ],
+  "runtimes": {
+    "node": "v22.22.2",
+    "php": "PHP 8.5.11 (cli) (built: Sep 24 2026 13:49:29) (NTS)",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+  },
+  "php_options": [
+    "pcov.enabled=0",
+    "xdebug.mode=off",
+    "default CLI opcache/JIT settings"
+  ],
+  "cpu_model": "AMD Ryzen 9 PRO 7940HS w/ Radeon 780M Graphics",
+  "finished_at": "2026-10-08T01:53:07Z",
+  "php_after_refresh": {
+    "reason": "Added hasClass/getElementClassList to the subclass backlink-cleanup fallback gate; reran every PHP candidate size with the same warmup and sample counts in both size orders. Base-class eligibility is unchanged. Original before samples retained.",
+    "started_at": "2026-10-08T01:42:25Z",
+    "previous_source_sha256": "758bb8a4a2ef3920f38fa13b2721c6f2951379f9fe6c7031eb7758a3f5736767",
+    "finished_at": "2026-10-08T01:44:12Z"
+  },
+  "php_control_repeat": {
+    "reason": "PHP after-refresh ordinary samples ran at higher host load than the original before samples; repeated both revisions together, retaining all samples from both size/revision orders.",
+    "started_at": "2026-10-08T01:52:39Z",
+    "superseded_points": [
+      {
+        "n": 256,
+        "bytes": 27279,
+        "api": "carve",
+        "samples": [
+          99.654723,
+          105.824743,
+          105.293393
+        ],
+        "hashes": [
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "normal",
+        "round": 0,
+        "load_start": [
+          7.26171875,
+          7.47705078125,
+          9.41455078125
+        ],
+        "load_end": [
+          7.4013671875,
+          7.50244140625,
+          9.412109375
+        ]
+      },
+      {
+        "n": 1024,
+        "bytes": 111135,
+        "api": "carve",
+        "samples": [
+          636.12955,
+          581.51014,
+          725.655602
+        ],
+        "hashes": [
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "normal",
+        "round": 0,
+        "load_start": [
+          7.26171875,
+          7.47705078125,
+          9.41455078125
+        ],
+        "load_end": [
+          7.4013671875,
+          7.50244140625,
+          9.412109375
+        ]
+      },
+      {
+        "n": 256,
+        "bytes": 18688,
+        "api": "carve",
+        "samples": [
+          99.213254,
+          99.111029,
+          102.908897
+        ],
+        "hashes": [
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "ordinary",
+        "round": 0,
+        "load_start": [
+          7.68994140625,
+          7.560546875,
+          9.4208984375
+        ],
+        "load_end": [
+          7.63427734375,
+          7.55078125,
+          9.40771484375
+        ]
+      },
+      {
+        "n": 1024,
+        "bytes": 74752,
+        "api": "carve",
+        "samples": [
+          505.054094,
+          463.923852,
+          521.683437
+        ],
+        "hashes": [
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "ordinary",
+        "round": 0,
+        "load_start": [
+          7.68994140625,
+          7.560546875,
+          9.4208984375
+        ],
+        "load_end": [
+          7.63427734375,
+          7.55078125,
+          9.40771484375
+        ]
+      },
+      {
+        "n": 1024,
+        "bytes": 111135,
+        "api": "carve",
+        "samples": [
+          447.614201,
+          432.341156,
+          402.083348
+        ],
+        "hashes": [
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "normal",
+        "round": 1,
+        "load_start": [
+          7.06640625,
+          6.82275390625,
+          8.33203125
+        ],
+        "load_end": [
+          6.82080078125,
+          6.77587890625,
+          8.30859375
+        ]
+      },
+      {
+        "n": 256,
+        "bytes": 27279,
+        "api": "carve",
+        "samples": [
+          97.362655,
+          88.671076,
+          88.20845
+        ],
+        "hashes": [
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "normal",
+        "round": 1,
+        "load_start": [
+          7.06640625,
+          6.82275390625,
+          8.33203125
+        ],
+        "load_end": [
+          6.82080078125,
+          6.77587890625,
+          8.30859375
+        ]
+      },
+      {
+        "n": 1024,
+        "bytes": 74752,
+        "api": "carve",
+        "samples": [
+          473.258039,
+          448.663449,
+          490.248825
+        ],
+        "hashes": [
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "ordinary",
+        "round": 1,
+        "load_start": [
+          6.5146484375,
+          6.712890625,
+          8.27978515625
+        ],
+        "load_end": [
+          6.7138671875,
+          6.7509765625,
+          8.28369140625
+        ]
+      },
+      {
+        "n": 256,
+        "bytes": 18688,
+        "api": "carve",
+        "samples": [
+          102.299772,
+          93.035777,
+          95.739638
+        ],
+        "hashes": [
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a"
+        ],
+        "engine": "php",
+        "variant": "before",
+        "shape": "ordinary",
+        "round": 1,
+        "load_start": [
+          6.5146484375,
+          6.712890625,
+          8.27978515625
+        ],
+        "load_end": [
+          6.7138671875,
+          6.7509765625,
+          8.28369140625
+        ]
+      },
+      {
+        "n": 256,
+        "bytes": 27279,
+        "api": "carve",
+        "samples": [
+          173.876104,
+          144.129697,
+          171.107764
+        ],
+        "hashes": [
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "normal",
+        "round": 0,
+        "load_start": [
+          13.318359375,
+          7.4765625,
+          7.421875
+        ],
+        "load_end": [
+          17.056640625,
+          8.3486328125,
+          7.70458984375
+        ],
+        "phase": "subclass_guard_refresh"
+      },
+      {
+        "n": 1024,
+        "bytes": 111135,
+        "api": "carve",
+        "samples": [
+          825.503675,
+          979.953745,
+          852.742743
+        ],
+        "hashes": [
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "normal",
+        "round": 0,
+        "load_start": [
+          13.318359375,
+          7.4765625,
+          7.421875
+        ],
+        "load_end": [
+          17.056640625,
+          8.3486328125,
+          7.70458984375
+        ],
+        "phase": "subclass_guard_refresh"
+      },
+      {
+        "n": 256,
+        "bytes": 18688,
+        "api": "carve",
+        "samples": [
+          129.895066,
+          119.477312,
+          126.282622
+        ],
+        "hashes": [
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "ordinary",
+        "round": 0,
+        "load_start": [
+          17.056640625,
+          8.3486328125,
+          7.70458984375
+        ],
+        "load_end": [
+          17.056640625,
+          8.3486328125,
+          7.70458984375
+        ],
+        "phase": "subclass_guard_refresh"
+      },
+      {
+        "n": 1024,
+        "bytes": 74752,
+        "api": "carve",
+        "samples": [
+          772.414511,
+          689.398406,
+          776.279208
+        ],
+        "hashes": [
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "ordinary",
+        "round": 0,
+        "load_start": [
+          17.056640625,
+          8.3486328125,
+          7.70458984375
+        ],
+        "load_end": [
+          17.056640625,
+          8.3486328125,
+          7.70458984375
+        ],
+        "phase": "subclass_guard_refresh"
+      },
+      {
+        "n": 1024,
+        "bytes": 111135,
+        "api": "carve",
+        "samples": [
+          571.129246,
+          739.369684,
+          617.331532
+        ],
+        "hashes": [
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364",
+          "a393eca8e480fee073c92388b8142fd5928ade520d4aacfee0ec30521c01c364"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "normal",
+        "round": 1,
+        "load_start": [
+          17.19580078125,
+          9.82861328125,
+          8.24951171875
+        ],
+        "load_end": [
+          17.19580078125,
+          9.82861328125,
+          8.24951171875
+        ],
+        "phase": "subclass_guard_refresh"
+      },
+      {
+        "n": 256,
+        "bytes": 27279,
+        "api": "carve",
+        "samples": [
+          119.331762,
+          116.449475,
+          137.324412
+        ],
+        "hashes": [
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8",
+          "b448948d79592e59886e3b16c700dc0372f7b2296c3f1ba334f436c3b86ce7a8"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "normal",
+        "round": 1,
+        "load_start": [
+          17.19580078125,
+          9.82861328125,
+          8.24951171875
+        ],
+        "load_end": [
+          17.19580078125,
+          9.82861328125,
+          8.24951171875
+        ],
+        "phase": "subclass_guard_refresh"
+      },
+      {
+        "n": 1024,
+        "bytes": 74752,
+        "api": "carve",
+        "samples": [
+          670.372514,
+          679.382517,
+          571.506333
+        ],
+        "hashes": [
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82",
+          "9cb89b627177e8e396fa1b1d64da4eb7010c6be488673c609c56c2e70eb2fb82"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "ordinary",
+        "round": 1,
+        "load_start": [
+          17.19580078125,
+          9.82861328125,
+          8.24951171875
+        ],
+        "load_end": [
+          16.69921875,
+          9.84814453125,
+          8.2646484375
+        ],
+        "phase": "subclass_guard_refresh"
+      },
+      {
+        "n": 256,
+        "bytes": 18688,
+        "api": "carve",
+        "samples": [
+          100.313946,
+          101.668831,
+          105.619698
+        ],
+        "hashes": [
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a",
+          "fe0f3795c9639824e47b9e3dde2654f88e36304341297a6fe618c939be60c00a"
+        ],
+        "engine": "php",
+        "variant": "after",
+        "shape": "ordinary",
+        "round": 1,
+        "load_start": [
+          17.19580078125,
+          9.82861328125,
+          8.24951171875
+        ],
+        "load_end": [
+          16.69921875,
+          9.84814453125,
+          8.2646484375
+        ],
+        "phase": "subclass_guard_refresh"
+      }
+    ],
+    "finished_at": "2026-10-08T01:53:07Z"
+  },
+  "summary": [
+    {
+      "shape": "long-inverse-class",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 53358,
+      "before_ms": 246.45416650000038,
+      "after_ms": 159.34394500000005,
+      "speedup": 1.5466804621913954,
+      "before_range_ms": [
+        119.93374799999992,
+        293.78218100000004
+      ],
+      "after_range_ms": [
+        106.75705399999993,
+        184.88827699999996
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "long-inverse-class",
+      "api": "carve",
+      "n": 4096,
+      "bytes": 213102,
+      "before_ms": 925.0825325,
+      "after_ms": 408.56576700000005,
+      "speedup": 2.264219391880671,
+      "before_range_ms": [
+        853.1982609999998,
+        1604.5752359999997
+      ],
+      "after_range_ms": [
+        340.99486400000023,
+        460.1570449999999
+      ],
+      "after_per_byte_growth": 0.6420050244770354
+    },
+    {
+      "shape": "long-inverse-ref-class",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 53339,
+      "before_ms": 199.64731849999964,
+      "after_ms": 150.19601249999994,
+      "speedup": 1.329245132256755,
+      "before_range_ms": [
+        145.3463270000002,
+        224.00455
+      ],
+      "after_range_ms": [
+        130.48981600000025,
+        196.32214399999998
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "long-inverse-ref-class",
+      "api": "carve",
+      "n": 4096,
+      "bytes": 213083,
+      "before_ms": 935.5906109999999,
+      "after_ms": 411.5997225,
+      "speedup": 2.2730593823468865,
+      "before_range_ms": [
+        886.0198350000001,
+        1009.948361
+      ],
+      "after_range_ms": [
+        322.4934619999999,
+        615.445306
+      ],
+      "after_per_byte_growth": 0.6859820268495103
+    },
+    {
+      "shape": "backs",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 101256,
+      "before_ms": 354.30411250000003,
+      "after_ms": 193.91529750000012,
+      "speedup": 1.8271075932005818,
+      "before_range_ms": [
+        290.1715490000006,
+        390.342102
+      ],
+      "after_range_ms": [
+        123.16264500000034,
+        234.59265700000003
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "backs",
+      "api": "carve",
+      "n": 4096,
+      "bytes": 411528,
+      "before_ms": 2658.9651339999996,
+      "after_ms": 456.32748449999985,
+      "speedup": 5.826879213539899,
+      "before_range_ms": [
+        2320.315477,
+        3039.1723279999997
+      ],
+      "after_range_ms": [
+        410.0812719999999,
+        514.364142
+      ],
+      "after_per_byte_growth": 0.5790098256999258
+    },
+    {
+      "shape": "backparents",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 115592,
+      "before_ms": 443.6206969999989,
+      "after_ms": 230.21331049999998,
+      "speedup": 1.9269984695346232,
+      "before_range_ms": [
+        358.8891160000021,
+        477.786472
+      ],
+      "after_range_ms": [
+        166.08738200000016,
+        250.3239339999999
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "backparents",
+      "api": "carve",
+      "n": 4096,
+      "bytes": 468872,
+      "before_ms": 3648.257193999999,
+      "after_ms": 517.2662935000001,
+      "speedup": 7.052957518872237,
+      "before_range_ms": [
+        3332.0424759999987,
+        3814.3344020000004
+      ],
+      "after_range_ms": [
+        412.03217800000016,
+        544.913963
+      ],
+      "after_per_byte_growth": 0.5539329878553517
+    },
+    {
+      "shape": "wrapper",
+      "api": "ast",
+      "n": 2048,
+      "bytes": 132992,
+      "before_ms": 460.12237850000065,
+      "after_ms": 184.539621,
+      "speedup": 2.4933527879088935,
+      "before_range_ms": [
+        374.1735460000018,
+        489.10754799999995
+      ],
+      "after_range_ms": [
+        149.23656299999993,
+        260.934246
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "wrapper",
+      "api": "ast",
+      "n": 8192,
+      "bytes": 538496,
+      "before_ms": 4745.3272125,
+      "after_ms": 434.5747809999999,
+      "speedup": 10.919472136833456,
+      "before_range_ms": [
+        4592.5403750000005,
+        5281.673373999998
+      ],
+      "after_range_ms": [
+        368.51324999999997,
+        477.3198400000001
+      ],
+      "after_per_byte_growth": 0.5815913400086963
+    },
+    {
+      "shape": "containers-layout",
+      "api": "ast",
+      "n": 1024,
+      "bytes": 92032,
+      "before_ms": 190.4317249999999,
+      "after_ms": 173.98968800000011,
+      "speedup": 1.0945000660039104,
+      "before_range_ms": [
+        174.76993400000038,
+        229.22046999999998
+      ],
+      "after_range_ms": [
+        149.03220299999975,
+        206.34844399999997
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "containers-layout",
+      "api": "ast",
+      "n": 4096,
+      "bytes": 374656,
+      "before_ms": 464.468871,
+      "after_ms": 474.9788645000001,
+      "speedup": 0.977872713323647,
+      "before_range_ms": [
+        388.0030039999999,
+        483.6080360000001
+      ],
+      "after_range_ms": [
+        373.5069960000001,
+        498.90603399999986
+      ],
+      "after_per_byte_growth": 0.6705898003480396
+    },
+    {
+      "shape": "duplicate-identities",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 91183,
+      "before_ms": 307.06550050000004,
+      "after_ms": 181.02219700000018,
+      "speedup": 1.696286453202199,
+      "before_range_ms": [
+        248.67609300000004,
+        322.950976
+      ],
+      "after_range_ms": [
+        128.49055299999986,
+        237.26375500000006
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "duplicate-identities",
+      "api": "carve",
+      "n": 4096,
+      "bytes": 364591,
+      "before_ms": 2363.1706075,
+      "after_ms": 426.2081590000002,
+      "speedup": 5.544639532581072,
+      "before_range_ms": [
+        2231.979915,
+        2488.6794659999996
+      ],
+      "after_range_ms": [
+        365.9585860000002,
+        487.90929099999994
+      ],
+      "after_per_byte_growth": 0.5888407548371267
+    },
+    {
+      "shape": "aliases",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 105338,
+      "before_ms": 192.36154999999997,
+      "after_ms": 180.1678155000002,
+      "speedup": 1.0676798709367699,
+      "before_range_ms": [
+        119.17131100000006,
+        217.269249
+      ],
+      "after_range_ms": [
+        126.44990199999984,
+        202.49599999999992
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "aliases",
+      "api": "carve",
+      "n": 4096,
+      "bytes": 427898,
+      "before_ms": 416.7965680000001,
+      "after_ms": 372.5461969999999,
+      "speedup": 1.1187782115515736,
+      "before_range_ms": [
+        395.7887190000001,
+        477.89749900000015
+      ],
+      "after_range_ms": [
+        336.51073799999995,
+        443.271874
+      ],
+      "after_per_byte_growth": 0.5090351042792638
+    },
+    {
+      "shape": "separators",
+      "api": "ast",
+      "n": 128,
+      "bytes": 2535,
+      "before_ms": 13.288335999999973,
+      "after_ms": 7.968433499999975,
+      "speedup": 1.6676221242230376,
+      "before_range_ms": [
+        10.519785999999982,
+        16.61180300000001
+      ],
+      "after_range_ms": [
+        5.350301999999999,
+        8.577710999999994
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "separators",
+      "api": "ast",
+      "n": 512,
+      "bytes": 9831,
+      "before_ms": 192.996051,
+      "after_ms": 20.390117000000018,
+      "speedup": 9.465176241999975,
+      "before_range_ms": [
+        182.09836199999995,
+        206.65856499999995
+      ],
+      "after_range_ms": [
+        12.837159999999983,
+        34.39734800000002
+      ],
+      "after_per_byte_growth": 0.6598223660155295
+    },
+    {
+      "shape": "deep-shared-wrapper",
+      "api": "ast",
+      "n": 512,
+      "bytes": 41290,
+      "before_ms": 82.80435799999992,
+      "after_ms": 87.96079500000005,
+      "speedup": 0.941378008236509,
+      "before_range_ms": [
+        71.0151370000001,
+        94.67321700000002
+      ],
+      "after_range_ms": [
+        67.57508099999995,
+        101.96722499999998
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "deep-shared-wrapper",
+      "api": "ast",
+      "n": 2048,
+      "bytes": 167802,
+      "before_ms": 286.9733425,
+      "after_ms": 264.6590895,
+      "speedup": 1.0843131934072494,
+      "before_range_ms": [
+        241.2798479999999,
+        318.0146940000001
+      ],
+      "after_range_ms": [
+        230.83127799999988,
+        322.669282
+      ],
+      "after_per_byte_growth": 0.7403642132597251
+    },
+    {
+      "shape": "nested-backlink-blocks",
+      "api": "ast",
+      "n": 512,
+      "bytes": 60519,
+      "before_ms": 175.70981850000004,
+      "after_ms": 110.90960400000006,
+      "speedup": 1.5842615261704474,
+      "before_range_ms": [
+        146.24562500000002,
+        220.54084899999992
+      ],
+      "after_range_ms": [
+        82.37446499999987,
+        146.38474100000002
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "nested-backlink-blocks",
+      "api": "ast",
+      "n": 2048,
+      "bytes": 247495,
+      "before_ms": 1361.6212030000002,
+      "after_ms": 318.8195245,
+      "speedup": 4.270821258940809,
+      "before_range_ms": [
+        1240.2746550000002,
+        1436.3516909999998
+      ],
+      "after_range_ms": [
+        272.006979,
+        369.4625179999998
+      ],
+      "after_per_byte_growth": 0.7029121799255146
+    },
+    {
+      "shape": "deep-alias-targets",
+      "api": "ast",
+      "n": 512,
+      "bytes": 59210,
+      "before_ms": 79.10880050000003,
+      "after_ms": 73.49759649999996,
+      "speedup": 1.0763454081114077,
+      "before_range_ms": [
+        71.431576,
+        107.022446
+      ],
+      "after_range_ms": [
+        34.26849600000014,
+        98.70668599999999
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "deep-alias-targets",
+      "api": "ast",
+      "n": 2048,
+      "bytes": 239482,
+      "before_ms": 227.09636350000002,
+      "after_ms": 230.01912799999997,
+      "speedup": 0.9872933850092678,
+      "before_range_ms": [
+        182.316683,
+        259.31891599999994
+      ],
+      "after_range_ms": [
+        195.04509600000006,
+        284.456226
+      ],
+      "after_per_byte_growth": 0.7737719823604616
+    },
+    {
+      "shape": "sections",
+      "api": "ast",
+      "n": 2048,
+      "bytes": 30769,
+      "before_ms": 69.93928100000002,
+      "after_ms": 50.90078299999999,
+      "speedup": 1.3740315350355226,
+      "before_range_ms": [
+        62.98240099999998,
+        81.82928000000001
+      ],
+      "after_range_ms": [
+        27.319312000000025,
+        54.572708000000006
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "sections",
+      "api": "ast",
+      "n": 8192,
+      "bytes": 122929,
+      "before_ms": 341.6848225000001,
+      "after_ms": 122.11772400000001,
+      "speedup": 2.797995338498121,
+      "before_range_ms": [
+        304.0148919999999,
+        357.362039
+      ],
+      "after_range_ms": [
+        104.04477599999996,
+        162.927012
+      ],
+      "after_per_byte_growth": 0.6005003590330232
+    },
+    {
+      "shape": "empty-code",
+      "api": "carve",
+      "n": 4096,
+      "bytes": 57351,
+      "before_ms": 165.83839600000005,
+      "after_ms": 154.20188399999995,
+      "speedup": 1.0754628393515613,
+      "before_range_ms": [
+        131.0456509999999,
+        195.917081
+      ],
+      "after_range_ms": [
+        139.1964019999998,
+        193.91561299999995
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "empty-code",
+      "api": "carve",
+      "n": 16384,
+      "bytes": 229383,
+      "before_ms": 437.88890100000003,
+      "after_ms": 320.92884600000014,
+      "speedup": 1.364442325636256,
+      "before_range_ms": [
+        396.65891299999976,
+        532.545216
+      ],
+      "after_range_ms": [
+        282.78573099999994,
+        356.06143299999997
+      ],
+      "after_per_byte_growth": 0.5203539326029796
+    },
+    {
+      "shape": "nested-code-spans",
+      "api": "carve",
+      "n": 128,
+      "bytes": 4376,
+      "before_ms": 136.8347990000002,
+      "after_ms": 37.27697649999999,
+      "speedup": 3.6707590541845647,
+      "before_range_ms": [
+        120.20864899999998,
+        162.06349199999977
+      ],
+      "after_range_ms": [
+        32.187085000000025,
+        40.16156799999999
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "nested-code-spans",
+      "api": "carve",
+      "n": 512,
+      "bytes": 17432,
+      "before_ms": 784.6080415,
+      "after_ms": 120.14092000000002,
+      "speedup": 6.530731090622578,
+      "before_range_ms": [
+        709.3937489999998,
+        843.2163439999999
+      ],
+      "after_range_ms": [
+        88.94532100000004,
+        168.75460399999997
+      ],
+      "after_per_byte_growth": 0.8090593281401055
+    },
+    {
+      "shape": "normal",
+      "api": "carve",
+      "n": 256,
+      "bytes": 27279,
+      "before_ms": 140.98605800000018,
+      "after_ms": 128.26884599999994,
+      "speedup": 1.0991449786645797,
+      "before_range_ms": [
+        111.11552999999998,
+        180.96450999999996
+      ],
+      "after_range_ms": [
+        100.82032099999998,
+        185.118182
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "normal",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 111135,
+      "before_ms": 451.708772,
+      "after_ms": 431.0307465,
+      "speedup": 1.0479734349994914,
+      "before_range_ms": [
+        358.829352,
+        497.06663300000014
+      ],
+      "after_range_ms": [
+        354.484649,
+        628.1272920000001
+      ],
+      "after_per_byte_growth": 0.8248303925241807
+    },
+    {
+      "shape": "ordinary",
+      "api": "carve",
+      "n": 256,
+      "bytes": 18688,
+      "before_ms": 164.49983099999986,
+      "after_ms": 147.04643199999992,
+      "speedup": 1.1186931145666965,
+      "before_range_ms": [
+        134.7242369999999,
+        209.96653599999996
+      ],
+      "after_range_ms": [
+        130.75261,
+        181.858452
+      ],
+      "after_per_byte_growth": 1.0
+    },
+    {
+      "shape": "ordinary",
+      "api": "carve",
+      "n": 1024,
+      "bytes": 74752,
+      "before_ms": 450.86286000000007,
+      "after_ms": 393.222931,
+      "speedup": 1.146583335955044,
+      "before_range_ms": [
+        363.5340309999999,
+        479.6784260000002
+      ],
+      "after_range_ms": [
+        329.219788,
+        459.9182589999998
+      ],
+      "after_per_byte_growth": 0.6685353150901346
+    }
+  ],
+  "semantic_cases": 173,
+  "semantic_changes": [
+    "nested-text-spans-2",
+    "nested-text-spans-8",
+    "nested-text-spans-16",
+    "nested-text-spans-64"
+  ]
+}

@@ -136,6 +136,19 @@ export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): strin
   return new CarveRenderSession().renderCarve(ast, opts)
 }
 
+/** Collect span refusals for the HTML importer's next repair pass. */
+export function renderCarveForHtmlImport(ast: Document): string {
+  const session = new CarveRenderSession(true)
+  try {
+    const value = session.renderCarve(ast)
+    session.throwRefusedSpans()
+    return value
+  } catch (error) {
+    session.throwRefusedSpans(error)
+    throw error
+  }
+}
+
 function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
   if (opts.onRenderLoss === undefined) return
   const stack: unknown[] = [ast]
@@ -2311,6 +2324,20 @@ function lastBoundary(node: InlineNode | undefined): string {
 /** State owned by one synchronous source-render operation. */
 class CarveRenderSession {
   private refusedTableRows: TableRow[] = []
+  private refusedSpans: SourceUnspellableError[] = []
+  private rowsBeforeFirstSpan = 0
+  private spansBeforeFirstRow: number | undefined
+
+  constructor(private readonly collectRefusedSpans = false) {}
+
+  throwRefusedSpans(error?: unknown): void {
+    if (this.rowsBeforeFirstSpan > 0 && error instanceof SourceUnspellableError && error.nodeType === 'table_row') return
+    const first = this.refusedSpans[0]
+    if (first !== undefined) {
+      throw new SourceUnspellableError(first.nodeType, first.reason, first.node,
+        [...new Set(this.refusedSpans.slice(0, this.spansBeforeFirstRow).map(error => error.node!))])
+    }
+  }
 
   renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
     this.destinationParensByUnit = new WeakMap()
@@ -2783,9 +2810,10 @@ class CarveRenderSession {
         'table_row',
         'a table row whose every cell is blank has no Carve source spelling',
         this.refusedTableRows[0],
-        this.refusedTableRows,
+        this.rowsBeforeFirstSpan > 0 ? this.refusedTableRows.slice(0, this.rowsBeforeFirstSpan) : this.refusedTableRows,
       )
     }
+    if (this.collectRefusedSpans) this.throwRefusedSpans()
     return rendered
   }
 
@@ -3635,6 +3663,7 @@ class CarveRenderSession {
       // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
       // so no source spells one and the writer refuses the tree (carve-js#1822).
       if (cells.every((cell) => cell === ' ' || cell === '= ')) {
+        if (this.collectRefusedSpans && this.refusedTableRows.length === 0 && this.refusedSpans.length > 0 && this.spansBeforeFirstRow === undefined) this.spansBeforeFirstRow = this.refusedSpans.length
         this.refusedTableRows.push(row)
         return
       }
@@ -4143,7 +4172,11 @@ class CarveRenderSession {
     }
     if (EMPHASIS_KINDS.has(node.type)) {
       if (renderSession.openEmphasisKinds.has(node.type) && !renderSession.labelKinds.has(node.type)) {
-        throw new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
+        const refusal = new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
+        if (!renderSession.collectRefusedSpans) throw refusal
+        if (renderSession.refusedSpans.length === 0) renderSession.rowsBeforeFirstSpan = renderSession.refusedTableRows.length
+        renderSession.refusedSpans.push(refusal)
+        return renderSession.renderInlines((node as { children?: InlineNode[] }).children ?? [], ctx)
       }
       const labelKinds = renderSession.labelKinds
       renderSession.labelKinds = new Set(labelKinds)
