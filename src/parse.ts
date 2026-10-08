@@ -5972,6 +5972,11 @@ export function splitTableRowSpans(
   const scanEnd = bodyEnd > i && line[bodyEnd - 1] === '|' ? bodyEnd - 1 : line.length
   for (; i < scanEnd; i++) {
     const ch = line[i]!
+    if (openRun === 0 && ch === '\\' && /[!-/:-@\[-`{-~]/.test(line[i + 1] ?? '')) {
+      buf += line.slice(i, i + 2)
+      i++
+      continue
+    }
     if (ch === '`') {
       // The MAXIMAL run, as the opener is: a run cannot cross `scanEnd`, whose
       // character is the row's closing `|`.
@@ -7164,23 +7169,7 @@ function verbatimSpanEnd(text: string, i: number): { end: number; closed: boolea
   return { end: text.length, closed: false, openLen }
 }
 
-/**
- * Does a RAW bracketed run re-read as itself when written between `[` and `]`?
- *
- * The writer needs this because a raw run - an image's alt text - resolves no
- * escapes: whatever sits between the brackets IS the value, backslashes and
- * all. So the writer cannot neutralize a `]` by escaping it; it can only ask
- * whether the reader's own scan of the run would close where the writer puts
- * the `]`, and emit the run verbatim when it does.
- *
- * It is the READER's scan, not a second spelling of it: the same
- * `buildBracketMap` that the inline pass consults, run over the run wrapped in
- * the brackets it will be written between. Balanced, escape-aware and
- * literal-span-aware therefore hold here by construction rather than by a
- * comment promising they do - which is the failure markup-carve/carve#1206
- * found four times upstream, where one production was written flat in four
- * places and all four agreed with each other and with nothing else.
- */
+/** Check the written bracket boundary; scalar escape decoding is separate. */
 export function rawBracketRunCloses(text: string): boolean {
   return buildBracketMap(`[${text}]`)(0) === text.length + 1
 }
@@ -11173,7 +11162,7 @@ class ParseSession {
     const m = RE_BARE_IMAGE.exec(line)!
     // `isBlockImageLine` has already read the run as a destination, so the
     // escapes are resolved here as they are on the inline tail.
-    const img: Image = { type: 'image', src: linkDestinationValue(m[2]!)!, alt: m[1]! }
+    const img: Image = { type: 'image', src: linkDestinationValue(m[2]!)!, alt: unescapeAttrValue(m[1]!) }
     const title = m[3] ?? m[4]
     if (title !== undefined) img.title = title
     if (m[5]) img.attrs = parseAttrs(m[5])
@@ -14005,7 +13994,7 @@ class ParseSession {
 
       // Image ![alt](src) — the alt text allows nested balanced [...], so the
       // close `]` is found by balance, not a [^\]]* regex that would mis-split
-      // a nested bracket (e.g. `![a [b] c](/u)`). Alt is raw text, not inline.
+      // a nested bracket (e.g. `![a [b] c](/u)`). Alt is scalar text with punctuation escapes.
       if (c === '!' && text[i + 1] === '[') {
         const closeAbs = bracketClose(i + 1)
         const close = closeAbs === undefined ? -1 : closeAbs - i
@@ -14016,7 +14005,7 @@ class ParseSession {
           const ml = destinationOpeners.has(i + close + 1) ? execLinkTail(tail, offset => !spanAttrProvablyInvalid(text, i + close + 1 + offset, quoteEnd, valueEnd)) : null
           if (ml) {
             flush()
-            const img: Image = { type: 'image', src: ml[1]!, alt }
+            const img: Image = { type: 'image', src: ml[1]!, alt: unescapeAttrValue(alt) }
             const title = ml[2] ?? ml[3]
             if (title !== undefined) img.title = unescapeAttrValue(title)
             let len = close + 1 + ml[0].length
@@ -14058,7 +14047,7 @@ class ParseSession {
             const img = referenceImage(
               mref[1]! !== '' ? mref[1]! : alt,
               this.rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
-              alt, attrs,
+              unescapeAttrValue(alt), attrs,
             )
             out.push(this.withPos(img, source, text, i, i + len))
             i += len

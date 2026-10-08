@@ -11,10 +11,19 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Breaking
 
+- Image alt text resolves ASCII punctuation escapes, including `\|` in
+  tables. Literal backslashes before punctuation must be doubled. Native
+  writers preserve the decoded value when formatting.
+
 - The include rename warning reports `include-id-rename`, replacing `include-heading-id-rename`. The pass covers explicit ids on any element, so the old id named only part of what it reported (markup-carve/carve#2772).
 
 ### Fixed
 
+- Markdown table import preserves image alt pipes and backslashes, and keeps
+  pipe-bearing URL and email autolinks in one cell. Pipe reference definitions
+  are inlined only in table cells.
+- Case-only image reference migration preserves authored alt escapes and uses
+  the balanced closing bracket before changing the label.
 - An include rename no longer rewrites a `</#id>` cross-reference that resolves to nothing when the included file is read on its own. `</#id>` reaches headings, so one naming a renamed paragraph, span or other element is authored literal text and stays as written; link and image destinations still follow the rename (#2564).
 
 ### Performance
