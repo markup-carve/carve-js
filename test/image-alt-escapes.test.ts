@@ -76,3 +76,15 @@ it('keeps an unmatched escaped definition label in one cell', () => {
   expect(html).toContain('[t][a|b]')
   expect(html.match(/<th\b/g)).toHaveLength(2)
 })
+for (const prefix of ['', '!']) {
+  it(`keeps the resolved tail of a ${prefix || 'link'} reference chain`, () => {
+    const html = carveToHtml(markdownToCarve(`| ${prefix}[t][q\\|r][s] | c |\n|---|---|\n\n[s]: /s\n`))
+    expect(html).toContain(`${prefix}[t]<a href="/s">q|r</a>`)
+    expect(html.match(/<th\b/g)).toHaveLength(2)
+  })
+}
+it('keeps an unresolved image alt pipe literal during import', () => {
+  const html = carveToHtml(markdownToCarve('| ![a\\|b][missing] | c |\n|---|---|\n'))
+  expect(html).toContain('![a|b][missing]')
+  expect(html.match(/<th\b/g)).toHaveLength(2)
+})

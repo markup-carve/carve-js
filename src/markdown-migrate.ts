@@ -1244,22 +1244,12 @@ function convertInline(
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
   protectDestinations(/(?<=\])()(\((?:[^()\n]|\([^()\n]*\))*\))/g)
 
-  line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
-    (match, label: string, reference: string | undefined, offset: number, source: string) => {
-      if (source[offset + match.length] === '(') return match
-      const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
-      if (canonical === undefined) return table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
-      if (/[\[\]]/.test(canonical)) return match
-      const target = referenceInlineTarget(canonical, table)
-      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
-    })
-
   // In a plain three-label chain, an unknown full-reference label can begin
   // the next link. Protect the resolved tail before the ordinary reference pass.
   let chainCursor = 0
   const chainAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
   const chainSubject = line
-  line = line.replace(/(?<![!\\\]])\[([\w .-]+)\]\[([\w .-]+)\]\[([\w .-]+)\](?!\[)/gu,
+  line = line.replace(/(?<![\\\]])\[([\w .|-]+)\]\[([\w .|-]+)\]\[([\w .|-]+)\](?!\[)/gu,
     (match, first: string, second: string, third: string, offset: number) => {
       while (chainCursor < offset) {
         if (chainSubject[chainCursor] === '<') {
@@ -1277,10 +1267,21 @@ function convertInline(
       const middle = referenceDestinationLabel(second, decodeHtmlEntitiesRaw, protectedSpans, table)
       const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (middle !== undefined) {
+        if (chainSubject[offset - 1] === '!') return match
         return `[${first}]${protect(`[${middle}]`)}[${third}]${last !== undefined ? protect(`[${last}]`) : ''}`
       }
       if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${protect(`[${last}]`)}`
       return match
+    })
+
+  line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
+    (match, label: string, reference: string | undefined, offset: number, source: string) => {
+      if (source[offset + match.length] === '(') return match
+      const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
+      if (canonical === undefined) return table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
+      if (/[\[\]]/.test(canonical)) return match
+      const target = referenceInlineTarget(canonical, table)
+      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
     })
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
