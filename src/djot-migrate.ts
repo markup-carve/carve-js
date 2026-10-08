@@ -21,6 +21,7 @@
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
+import { backtickRunEnds } from './backtick-run-index.js'
 
 import { parse } from './parse.js'
 
@@ -348,16 +349,16 @@ export function isDjotEscaped(source: string, at: number): boolean {
   return (at - start) % 2 !== 0
 }
 
-export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true, inlineForms = true): string {
+export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true, inlineForms = true, onFenceLine?: (line: number, replacement: string) => void, rowBoundaries: readonly boolean[] = []): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
   const previousLines = new Map<number, string>()
   let sourceOffset = 0, previousLine = ''
   for (const line of lines) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
-  let fence: { ch: string; len: number; indent: number; container: number | null; depth: number } | null = null
-  let previousBlock = true
-  const ancestors: { indent: number; marker: boolean }[][] = []
-  const staged = lines.map(line => {
+  let fence: { ch: string; len: number; container: number | null; depth: number; target: string; dedent: number; normalize: boolean } | null = null
+  let previousBlock = true, normalizeBoundary = true
+  const ancestors: { indent: number; column: number; ownerIndent: number }[][] = []
+  const staged = lines.map((line, index) => {
     let content = line, depth = 0
     const views = [line]
     while (true) {
@@ -367,34 +368,46 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
       depth++
       views.push(content)
     }
-    let nested = false
+    const canNormalize = normalizeBoundary || rowBoundaries[index - 1] === true
+    if (fence && content.trim() !== '' && depth < fence.depth) fence = null
+    if (fence && fence.container !== null && content.trim() !== '' && /^[ \t]*/.exec(content)![0].length < fence.container && depth === fence.depth) fence = null
+    let nested = false, ownerColumn = 0, ownerIndent = 0
     ancestors.length = Math.min(ancestors.length, depth + 1)
-    if (content.trim() !== '') {
+    if (!fence && content.trim() !== '') {
       ancestors.length = depth + 1
       for (let level = 0; level <= depth; level++) {
         const view = views[level]!
         const stack = ancestors[level] ?? (ancestors[level] = [])
         const indent = /^[ \t]*/.exec(view)![0].length
         while (stack.length && stack[stack.length - 1]!.indent >= indent) stack.pop()
-        if (level === depth) nested = stack[stack.length - 1]?.marker ?? false
+        if (level === depth) { ownerColumn = stack.at(-1)?.column ?? 0; ownerIndent = stack.at(-1)?.ownerIndent ?? 0; nested = ownerColumn > 0 }
         const marker = !/^(?:([*-])[ \t]*){3,}$/.test(view.trim()) && /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+\S/.test(view)
-        stack.push({ indent, marker })
+        const prefix = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/.exec(view)?.[0] ?? ''
+        const footnote = /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)*)\[\^[^\]\n]+\]:/.exec(view)
+        const column = footnote ? footnote[1]!.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length + 2 : marker ? prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length : stack.at(-1)?.column ?? 0
+        const owningIndent = footnote ? footnote[1]!.length : marker ? indent : stack.at(-1)?.ownerIndent ?? 0
+        if (footnote && marker) stack.push({ indent, column: prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length, ownerIndent: indent })
+        stack.push({ indent: footnote ? footnote[1]!.length : indent, column, ownerIndent: owningIndent })
       }
     }
-    if (fence && content.trim() !== '' && depth < fence.depth) fence = null
-    if (fence && fence.container !== null && content.trim() !== '' && /^[ \t]*/.exec(content)![0].length < fence.container && depth === fence.depth) fence = null
+
     if (fence) {
-      const close = content.match(new RegExp(`^[ \t]{0,${fence.indent}}([\x60~]{3,})[ \t]*$`))
-      if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) { fence = null; previousBlock = true }
+      const close = /^[ \t]*([`~]{3,})[ \t]*$/.exec(content)
+      if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) { if (fence.normalize) onFenceLine?.(index, line.slice(0, line.length - content.length) + fence.target + content.trimStart()); normalizeBoundary = fence.normalize; fence = null; previousBlock = true }
+      else if (fence.normalize && depth === fence.depth) onFenceLine?.(index, line.slice(0, line.length - content.length) + fence.target + content.slice(Math.min(fence.dedent, /^[ \t]*/.exec(content)![0].length)))
       return blanks(line)
     }
-    const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(:[ \t]+|[-*+][ \t]+|[0-9]+[.)][ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/)
+    const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/)
     if (open && !(open[2]?.startsWith(':') && !previousBlock)) {
-      const container = open[2] ? open[1]!.length + open[2].length : nested ? open[1]!.length : null
-      fence = { ch: open[3]![0]!, len: open[3]!.length, indent: open[2] ? container! : Math.max(3, open[1]!.length), container, depth }
+      const container = open[2] ? open[1]!.length + 1 : nested ? ownerIndent + 1 : null
+      const targetColumn = open[2]?.startsWith('[^') ? open[1]!.length + 2 : open[2] ? open[1]!.length + open[2].replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length : nested ? ownerColumn : 0
+      fence = { ch: open[3]![0]!, len: open[3]!.length, container, depth, target: ' '.repeat(targetColumn), dedent: open[1]!.length + (open[2]?.length ?? 0), normalize: canNormalize || !!open[2] }
+      const nativeMarker = (open[2] ?? '').replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2')
+      if (fence.normalize && (!open[2] || nativeMarker !== open[2])) onFenceLine?.(index, line.slice(0, line.length - content.length) + (open[2] ? open[1]! + nativeMarker : fence.target) + content.slice(fence.dedent))
       const start = line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
     }
+    normalizeBoundary = content.trim() === '' || /^[ \t]*\[\^[^\]\n]+\]:[ \t]*$/.test(content) || /^[ \t]*(?:#{1,6} |:{3,}|\{[.#A-Za-z])/.test(content)
     previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} |\{[.#A-Za-z])/.test(content)
     return line
   })
@@ -411,9 +424,13 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
   }
   const paragraphEnds = Array.from(s.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), match => match.index!)
   let paragraphIndex = 0
+  const autolinks = new Map(Array.from(s.matchAll(/<[^<>\s]+>/g), match => [match.index!, /[^:]@|[A-Za-z]:/.test(match[0]) ? match.index! + match[0].length : -1]))
+  let codeEnds: Int32Array | undefined
   let i = 0
   while (i < s.length) {
     if (s[i] === '\\' && /[!-\/:-@\[-`{-~]/.test(s[i + 1] ?? '')) { i += 2; continue }
+    const autolinkEnd = autolinks.get(i)
+    if (autolinkEnd !== undefined && autolinkEnd > i) { i = autolinkEnd; continue }
     if (s[i] !== '`') {
       i++
       continue
@@ -421,19 +438,25 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     const len = runLen(i)
     while ((paragraphEnds[paragraphIndex] ?? s.length) <= i) paragraphIndex++
     const paragraphEnd = paragraphEnds[paragraphIndex] ?? s.length
-    let j = i + len
     let closed = -1
-    while (j < paragraphEnd) {
-      if (s[j] === '`') {
-        const candidate = runLen(j)
-        if (candidate === len) { closed = j; break }
-        j += candidate
-        continue
+    if (codeEnds) {
+      const end = codeEnds[i] ?? -1
+      if (end >= 0 && end - len < paragraphEnd) closed = end - len
+    } else {
+      let j = i + len
+      while (j < paragraphEnd) {
+        if (s[j] === '`') {
+          const candidate = runLen(j)
+          if (candidate === len) { closed = j; break }
+          j += candidate
+          continue
+        }
+        j++
       }
-      j++
     }
     if (closed === -1) {
       if (!unclosedCode) {
+        codeEnds ??= backtickRunEnds(s)
         i += len
         continue
       }

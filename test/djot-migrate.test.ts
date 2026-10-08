@@ -68,6 +68,16 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w).toEqual([])
   })
 
+  it('keeps unmatched varied backticks literal while detecting later emphasis', () => {
+    const prefix = 'x' + Array.from({ length: 128 }, (_, i) => '`'.repeat(i + 1) + 'x').join('') + ' '
+    const source = prefix + '_later_'
+    const warnings = djotMigrationWarnings(source)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]!.rule).toBe('djot-emphasis-underscore')
+    expect(warnings[0]!.column).toBe(prefix.length + 1)
+    expect(applyMigrationFixes(source).output).toBe(prefix + '/later/')
+  })
+
   it('does not warn inside inline code spans', () => {
     expect(djotMigrationWarnings('`_not emphasis_` and `H~2~O`')).toEqual([])
   })
