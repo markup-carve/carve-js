@@ -97,6 +97,7 @@ interface CarveContext {
   lineBlockDepth: number
   /** Depth of INLINE-NOTE nesting. A note's content recognizes no note, so
    *  a bracket run opening with a caret needs no escape inside one. */
+  tableCellDepth: number
   inlineNoteDepth: number
   /** Number of colon-fence containers enclosing the block currently rendering. */
   colonFenceDepth: number
@@ -1112,7 +1113,7 @@ function escapeNoteReferenceLabel(label: string, ctx: CarveContext): string {
   return /^\^[^\]\r\n]/.test(label) ? `\\${label}` : label
 }
 
-function renderImage(node: Image, attrs: string = renderAttrs(node.attrs)): string {
+function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTable = false): string {
   // An unresolved reference image round-trips via its verbatim source, exactly
   // like an unresolved reference link (renderLink); `![alt]()` would change the
   // rendered text and break the carveToHtml(fmt(x)) == carveToHtml(x) invariant.
@@ -1123,8 +1124,8 @@ function renderImage(node: Image, attrs: string = renderAttrs(node.attrs)): stri
   if (node.ref !== undefined && node.rawRef !== undefined) {
     return node.rawRef
   }
-  const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
-  return `![${escapeImageAlt(node.alt)}](${escapeDestination(node.src)}${title})${attrs}`
+  const title = node.title === undefined ? '' : ` "${inTable ? escapeQuoted(node.title).replaceAll('`', '\\`') : escapeQuoted(node.title)}"`
+  return `![${escapeImageAlt(node.alt, inTable)}](${escapeDestination(node.src)}${title})${attrs}`
 }
 
 // Superscript and subscript have no bare delimiter form -- always emit the
@@ -1833,8 +1834,11 @@ function escapePlainLine(text: string): string {
 /**
  * An image's ALT TEXT, written between `![` and `]`.
  */
-function escapeImageAlt(text: string): string {
-  return rawBracketRunCloses(text) ? text : text.replace(/[\\[\]]/g, '\\$&')
+function escapeImageAlt(text: string, inTable = false): string {
+  if (rawBracketRunCloses(text) && !/\\[!-/:-@\[-`{-~]/.test(text)) {
+    return inTable ? text.replaceAll('|', '\\|') : text
+  }
+  return text.replace(inTable ? /[\\[\]`|]/g : /[\\[\]`]/g, '\\$&')
 }
 
 /**
@@ -2789,6 +2793,7 @@ class CarveRenderSession {
         listDepth: 0,
         lineBlockDepth: 0,
         inlineNoteDepth: 0,
+      tableCellDepth: 0,
         colonFenceDepth: 0,
         afterCaptionHost: false,
         paragraphStartsAfterCaptionHost: false,
@@ -3707,10 +3712,15 @@ class CarveRenderSession {
     // attributed header cell round-tripped into `<td class="x">=h</td>` and
     // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
     const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
-    const content = cell.blocks === undefined
-      ? this.renderInlines(cell.children ?? [], ctx)
-      : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
-    return padCell(prefix, escapeSpanMarkerPayload(content, cell.attrs))
+    ctx.tableCellDepth++
+    try {
+      const content = cell.blocks === undefined
+        ? this.renderInlines(cell.children ?? [], ctx)
+        : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
+      return padCell(prefix, escapeSpanMarkerPayload(content, cell.attrs))
+    } finally {
+      ctx.tableCellDepth--
+    }
   }
 
   /**
@@ -4254,7 +4264,7 @@ class CarveRenderSession {
       case 'link':
         return renderSession.renderLink(node, ctx)
       case 'image':
-        return renderImage(node, renderSession.inlineAttrs(node.attrs, node))
+        return renderImage(node, renderSession.inlineAttrs(node.attrs, node), ctx.tableCellDepth > 0)
       case 'span':
         return `[${escapeNoteReferenceLabel(renderSession.renderInlines(node.children, ctx), ctx)}]${renderSession.inlineAttrs(node.attrs, node) || '{}'}`
       case 'ruby': {

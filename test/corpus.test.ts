@@ -959,7 +959,9 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['316-an-image-s-alt-text-closes-where-a-link-s-text-closes-4', { reason: 'Image alt text resolves ASCII punctuation escapes; the spec update is pending.', html: '<p>a <img src="/i.png" alt="t]z"> b</p>' }],
+])
 
 
 
