@@ -241,7 +241,12 @@ export function extractReferenceDefinitions(
       canStart = true
     }
     if (htmlCloser !== null) {
-      if (htmlCloser.test(content)) {
+      let htmlStart = 0
+      for (let level = 0; level < blockDepth; level++) {
+        htmlStart = quotePrefix.indexOf('>', htmlStart) + 1
+        if (line[htmlStart] === ' ' || line[htmlStart] === '\t') htmlStart++
+      }
+      if (htmlCloser.test(line.slice(htmlStart))) {
         htmlCloser = null
         canStart = true
       }

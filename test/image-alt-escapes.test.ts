@@ -176,3 +176,10 @@ it('ends quoted HTML at a quoted blank line before footnotes', () => {
   expect(html).toContain('N')
   expect(html).not.toContain('[^a|b]')
 })
+
+it('keeps a deeper quote marker inside an open HTML block', () => {
+  const written = markdownToCarve('| T[^a\\|b] |\n|---|\n\n> <div>\n>>\n> [^a|b]: N\n')
+  expect(carveToHtml(written)).not.toContain('role="doc-noteref"')
+  expect(written).not.toContain('carve-import-footnote-')
+  expect(written).toContain('[^a|b]: N')
+})
