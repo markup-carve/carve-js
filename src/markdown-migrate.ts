@@ -654,7 +654,7 @@ function rawInlineHtml(content: string): string {
 }
 
 function rawBlockHtml(lines: readonly string[]): string[] {
-  const content = lines.join('\n')
+  const content = lines.join('\n').replaceAll(' \x00FNEMPTY\x00', '')
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(content) + 1))
   return [`${fence}=html`, content, fence]
 }
@@ -1850,6 +1850,7 @@ function startsTableHeader(lines: readonly string[], index: number): boolean {
 function continuesGfmTableBody(line: string): boolean {
   const trimmed = line.trim()
   if (trimmed === '') return false
+  if (/^\[\^((?:[^[\]\\]|\\.)+)\]:/.test(trimmed)) return false
   if (/^#{1,6}([ \t]|$)/.test(trimmed)) return false
   if (trimmed.startsWith('>')) return false
   if (isMarkdownFenceLine(trimmed)) return false
@@ -4331,6 +4332,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const removed = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw, (line) =>
     interruptingHtmlBlock(line) || isMarkdownFenceLine(line) || RE_MD_THEMATIC.test(line) ||
     /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|(?:[-*+]|0{0,8}1[.)])[ \t]+\S|=+[ \t]*$)/.test(line),
+    (line, atBlockStart) => {
+      const block = htmlBlockAt([line], 0)
+      return block !== null && (atBlockStart || block.interrupts)
+    },
   )
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
@@ -5298,15 +5303,25 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
   ).replace(/\x00REFITEM\x00/g, '%%')
   if (terminalHtmlBlock && !body.endsWith('\n')) body += '\n'
-  const output = frontmatter.length === 0
+  let output = frontmatter.length === 0
     ? body
     : body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
-  if (/(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
+  if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
     const doc = parse(output)
+    const undefinedNames = new Map<string, string>()
+    for (const [label, renamed] of removed.references.footnotes) {
+      if (Object.hasOwn(doc.footnoteDefs ?? {}, renamed)) continue
+      const value = `[^${referenceLiteralText(label, decodeHtmlEntitiesRaw, [])}]`
+      const literal = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'text', value }] }] }).replace(/\n$/, '')
+      undefinedNames.set(renamed, escapeTablePipes(literal))
+    }
+    if (undefinedNames.size > 0) {
+      output = output.replace(/\[\^(carve-import-footnote-\d+)\]/g, (match, label: string) => undefinedNames.get(label) ?? match)
+    }
     if (Object.keys(doc.footnoteDefs ?? {}).length > 0) {
-      const ordered = renderCarve(doc)
+      const ordered = renderCarve(undefinedNames.size > 0 ? parse(output) : doc)
       return markdown.endsWith('\n') ? ordered : ordered.replace(/\n$/, '')
     }
   }

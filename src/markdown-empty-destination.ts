@@ -152,6 +152,7 @@ export function extractReferenceDefinitions(
   inputLines: readonly string[],
   decodeEntity: (entity: string) => string,
   interruptsParagraph: (line: string) => boolean,
+  opensOpaqueHtml: (line: string, atBlockStart: boolean) => boolean = () => false,
 ): { lines: string[]; references: EmptyDestinationReferences; definitions: string[] } {
   const lines = [...inputLines]
   const empty = new Map<string, string>()
@@ -169,7 +170,10 @@ export function extractReferenceDefinitions(
   const reservedReferences = new Set<number>()
   for (const line of lines) {
     for (const match of line.matchAll(/\[carve-import-reference-(\d+)\]/gi)) reservedReferences.add(Number(match[1]))
-    for (const match of line.matchAll(/\[\^carve-import-footnote-(\d+)\]/gi)) reservedFootnotes.add(Number(match[1]))
+    for (const match of line.matchAll(/\[\^((?:[^[\]\\\n]|\\.)+)\]/g)) {
+      const reserved = /^carve-import-footnote-(\d+)$/i.exec(decodeLinkTitle(match[1]!, decodeEntity))
+      if (reserved) reservedFootnotes.add(Number(reserved[1]))
+    }
   }
   const kept: string[] = []
   let precedingNonblank: string | undefined
@@ -283,6 +287,14 @@ export function extractReferenceDefinitions(
       keep(line)
       depth = lineDepth
       canStart = true
+      continue
+    }
+    if (leadingSpaces(content) <= 3 && opensOpaqueHtml(content, canStart)) {
+      htmlCloser = /^[ \t]*$/
+      blockDepth = lineDepth
+      blockList = listIndent
+      keep(line)
+      depth = lineDepth
       continue
     }
     if (canStart && !opensItem && lineDepth === 0 && listIndent === 0 && /^ {0,3}\[(?!\^)/.test(content)) {

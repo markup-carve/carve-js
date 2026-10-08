@@ -23,6 +23,26 @@ it('keeps authored footnote text in an image scalar', () => {
   expect(html).not.toContain('alt="x [^carve-import-footnote-')
 })
 
+for (const tag of ['x-y', 'div']) {
+  it(`keeps footnote-looking content opaque inside ${tag} blocks`, () => {
+    const md = `<${tag}>\n[^a|b]: Note.\n[^empty]:\n\nRef[^a|b]\n`
+    const written = markdownToCarve(md)
+    expect(written).not.toContain('FNEMPTY')
+    expect(written).not.toContain('carve-import-footnote-')
+    const html = carveToHtml(written)
+    expect(html).toContain('[^empty]:')
+    expect(html).not.toContain('role="doc-noteref"')
+    expect(html).toContain('Ref[^a|b]')
+  })
+}
+
+it('ends a table at a footnote definition', () => {
+  const html = carveToHtml(markdownToCarve('| [^a\\|b] |\n|---|\n| b |\n[^a|b]:\n'))
+  expect(html).toContain('role="doc-noteref"')
+  expect(html).not.toContain('{empty}')
+  expect(html.match(/<td\b/g)).toHaveLength(1)
+})
+
 it('keeps a reference definition inside a footnote continuation', () => {
   const html = carveToHtml(markdownToCarve('See [r] and[^a].\n\n[^a]: Two words\n[r]: /u\n'))
   expect(html).not.toContain('href="/u"')
