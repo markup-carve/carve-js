@@ -4,12 +4,24 @@ on:
   push:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
-  # Dispatch is aimed at the TAG, not a branch: every gate below reads the
-  # version from GITHUB_REF_NAME, so a run dispatched at refs/tags/X.Y.Z behaves
-  # exactly like the tag push, and the publish still waits on the release
-  # environment. Without it a version whose tag already exists has no way to run
-  # at all, because recreating a tag under the same name fires no push event.
+  # A release is STARTED here. The `tag` job below creates the tag after the
+  # gates and after the approval, so starting a release no longer means pushing
+  # a tag by hand. Dispatched at an existing tag with no version it re-runs that
+  # one instead, which a tag push cannot do: recreating a tag under the same
+  # name fires no push event.
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without a leading v (e.g. 0.1.9). Leave empty when dispatching at an existing tag.'
+        required: false
+        type: string
+
+# The tag this run releases: the one that was pushed, or the one a dispatch will
+# create. Every gate below reads this, so a dispatch and a tag push measure the
+# same version.
+env:
+  RELEASE_TAG: ${{ inputs.version != '' && inputs.version || github.ref_name }}
+
 
 # Every job declares timeout-minutes so a hung step fails in minutes
 # rather than inheriting the 360-minute GitHub default.
@@ -123,9 +135,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [npm-credential]
-    # A required reviewer approves before this runs (markup-carve/carve#2032).
-    environment: release
+    needs: [npm-credential, tag]
     permissions:
       # `write`, not `read`, and the gate below is the whole reason: a DRAFT
       # release is invisible to a caller without push access, so under
@@ -136,7 +146,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ env.RELEASE_TAG }}
           submodules: recursive # spec corpus submodule; npm test needs it
           # The completeness gate below walks every merge back to the previous
           # tag, so it needs the tags and the history behind them.
@@ -153,14 +163,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: tools/run-release-notes-gate.sh "$GITHUB_REF_NAME"
+        run: tools/run-release-notes-gate.sh "$RELEASE_TAG"
 
       # Guard: package.json version AND the CHANGELOG must match the release
       # tag, so a mistyped tag, a forgotten version bump, or an un-cut changelog
       # cannot publish the wrong version. (carve-rs has the equivalent guard.)
       - name: Verify version and changelog match the tag
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${RELEASE_TAG}"
           VER="$(node -p "require('./package.json').version")"
           # The trigger already filters on X.Y.Z; this holds if that filter widens.
           if ! [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -183,7 +193,7 @@ jobs:
       - name: The changelog section accounts for every merge in this release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/changelog-completeness.mjs "${GITHUB_REF_NAME}"
+        run: node scripts/changelog-completeness.mjs "${RELEASE_TAG}"
 
       - uses: actions/setup-node@v4
         with:
@@ -226,7 +236,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tools/run-release-notes-gate.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/release.json"
+          tools/run-release-notes-gate.sh "$RELEASE_TAG" "$RUNNER_TEMP/release.json"
           release="$(cat "$RUNNER_TEMP/release.json")"
           id="$(printf '%s' "$release" | jq -r 'select(.draft) | .id // empty')"
           if [ -z "$id" ]; then
@@ -239,7 +249,42 @@ jobs:
           # than a git ref - so the field has nothing to fall back to.
           # `-F` (not `-f`) for draft, so it is sent as a boolean.
           gh api "repos/$GITHUB_REPOSITORY/releases/$id" -X PATCH \
-            -f tag_name="$GITHUB_REF_NAME" -F draft=false --jq '"published \(.tag_name)"'
+            -f tag_name="$RELEASE_TAG" -F draft=false --jq '"published \(.tag_name)"'
           # Read it back: exit status does not tell you whether the tag survived.
           gh api "repos/$GITHUB_REPOSITORY/releases/$id" \
             --jq '"draft=\(.draft) tag=\(.tag_name)"'
+
+  # THE TAG IS CREATED HERE, after a human approves, so a release can be started
+  # without a tag existing - which is the whole point: creating the tag by hand
+  # was the maintainer's step.
+  # It needs every gate job, so whoever approves is looking at a green
+  # gate rather than at nothing.
+  #
+  # A tag push still works unchanged: the step finds the tag already on the
+  # remote and creates nothing. The publish runs in THIS run rather than on the
+  # new tag, because a ref created with github.token triggers no workflow.
+  tag:
+    name: Create the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [npm-credential]
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the tag unless it already exists
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "$RELEASE_TAG is already on the remote; creating nothing."
+            exit 0
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "::error::this run is on tag $RELEASE_TAG, which is not on the remote."
+            exit 1
+          fi
+          # Re-checked under the approval: a tag can appear while a run waits.
+          git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$RELEASE_TAG"
+          echo "tagged $RELEASE_TAG at $GITHUB_SHA"
