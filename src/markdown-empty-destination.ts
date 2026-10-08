@@ -55,12 +55,14 @@ export function referenceDestinationLabel(
   label: string,
   decodeEntity: (entity: string) => string,
   placeholders: readonly string[] = [],
+  table = false,
 ): string | undefined {
   if (label.startsWith('^')) return undefined
   const authored = references.sourceLabels.get(normalizeReferenceLabel(referenceSourceText(label, placeholders)))
-  if (authored !== undefined && references.inline.has(authored)) return authored
+  if (authored !== undefined && (references.inline.has(authored) || table && references.tableInline.has(authored))) return authored
   const key = normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders))
-  return references.empty.has(key) ? undefined : references.labels.get(key)
+  const found = references.empty.has(key) ? undefined : references.labels.get(key)
+  return table && found !== undefined && references.tableInline.has(found) && authored === undefined ? undefined : found
 }
 
 export function referenceInlineTarget(label: string, table = false): string | undefined {
