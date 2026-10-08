@@ -21,6 +21,7 @@
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
+import { backtickRunEnds } from './backtick-run-index.js'
 
 import { parse } from './parse.js'
 
@@ -424,6 +425,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
   const paragraphEnds = Array.from(s.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), match => match.index!)
   let paragraphIndex = 0
   const autolinks = new Map(Array.from(s.matchAll(/<[^<>\s]+>/g), match => [match.index!, /[^:]@|[A-Za-z]:/.test(match[0]) ? match.index! + match[0].length : -1]))
+  let codeEnds: Int32Array | undefined
   let i = 0
   while (i < s.length) {
     if (s[i] === '\\' && /[!-\/:-@\[-`{-~]/.test(s[i + 1] ?? '')) { i += 2; continue }
@@ -436,19 +438,25 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     const len = runLen(i)
     while ((paragraphEnds[paragraphIndex] ?? s.length) <= i) paragraphIndex++
     const paragraphEnd = paragraphEnds[paragraphIndex] ?? s.length
-    let j = i + len
     let closed = -1
-    while (j < paragraphEnd) {
-      if (s[j] === '`') {
-        const candidate = runLen(j)
-        if (candidate === len) { closed = j; break }
-        j += candidate
-        continue
+    if (codeEnds) {
+      const end = codeEnds[i] ?? -1
+      if (end >= 0 && end - len < paragraphEnd) closed = end - len
+    } else {
+      let j = i + len
+      while (j < paragraphEnd) {
+        if (s[j] === '`') {
+          const candidate = runLen(j)
+          if (candidate === len) { closed = j; break }
+          j += candidate
+          continue
+        }
+        j++
       }
-      j++
     }
     if (closed === -1) {
       if (!unclosedCode) {
+        codeEnds ??= backtickRunEnds(s)
         i += len
         continue
       }
