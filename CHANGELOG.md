@@ -15,6 +15,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
   tables. Literal backslashes before punctuation must be doubled. Native
   writers preserve the decoded value when formatting.
 
+- A quoted include path resolves ASCII punctuation escapes, as a quoted
+  attribute value does: `"a\.crv"` names `a.crv`. A backslash before anything
+  else stays path text (markup-carve/carve#2778).
+
 - The include rename warning reports `include-id-rename`, replacing `include-heading-id-rename`. The pass covers explicit ids on any element, so the old id named only part of what it reported (markup-carve/carve#2772).
 
 ### Fixed
