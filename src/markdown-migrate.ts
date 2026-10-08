@@ -17,6 +17,7 @@ import {
 import {
   escapeLineInitialBlockSyntax,
   extractReferenceDefinitions,
+  importedFootnoteLabel,
   plainAltText,
   referenceDestinationLabel,
   referenceInlineTarget,
@@ -1114,6 +1115,7 @@ function convertInline(
   }
   line = escaped
 
+
   // <code>...</code> without attributes has a Carve-native equivalent. Protect
   // it before delimiter rewrites so its body stays verbatim. Attributed code
   // is handled by convertInlineHtml as raw HTML so attributes are not lost.
@@ -1244,12 +1246,14 @@ function convertInline(
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
   protectDestinations(/(?<=\])()(\((?:[^()\n]|\([^()\n]*\))*\))/g)
 
+
+
   // In a plain three-label chain, an unknown full-reference label can begin
   // the next link. Protect the resolved tail before the ordinary reference pass.
   let chainCursor = 0
   const chainAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
   const chainSubject = line
-  line = line.replace(/(?<![\\\]])\[([\w .|-]+)\]\[([\w .|-]+)\]\[([\w .|-]+)\](?!\[)/gu,
+  line = line.replace(/(?<![\\\]])\[([^[\]\n^]+)\]\[([^[\]\n^]+)\]\[([^[\]\n^]+)\]/gu,
     (match, first: string, second: string, third: string, offset: number) => {
       while (chainCursor < offset) {
         if (chainSubject[chainCursor] === '<') {
@@ -1267,10 +1271,10 @@ function convertInline(
       const middle = referenceDestinationLabel(second, decodeHtmlEntitiesRaw, protectedSpans, table)
       const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (middle !== undefined) {
-        if (chainSubject[offset - 1] === '!') return match
-        return `[${first}]${protect(`[${middle}]`)}[${third}]${last !== undefined ? protect(`[${last}]`) : ''}`
+        if (chainSubject[offset - 1] === '!' || chainSubject[offset + match.length] === '[') return match
+        return `[${first}]${referenceTail(middle, `[${middle}]`)}[${third}]${last !== undefined ? referenceTail(last, `[${last}]`) : ''}`
       }
-      if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${protect(`[${last}]`)}`
+      if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${referenceTail(last, `[${last}]`)}`
       return match
     })
 
@@ -1283,6 +1287,36 @@ function convertInline(
       const target = referenceInlineTarget(canonical, table)
       return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
     })
+
+  const footnoteSource = line
+  let footnoteCursor = 0
+  const footnoteOpaque = opaqueHtmlScanner(line)
+  const footnoteAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+  line = line.replace(/\[\^([^[\]\n]+)\]/g, (match, label: string, offset: number) => {
+    while (footnoteCursor < offset) {
+      if (footnoteSource[footnoteCursor] === '<') {
+        footnoteAutolink.lastIndex = footnoteCursor
+        const auto = footnoteAutolink.exec(footnoteSource)
+        const end = auto ? footnoteCursor + auto[0].length : footnoteOpaque(footnoteCursor) ?? scanHtmlTag(footnoteSource, footnoteCursor)?.end
+        if (end !== undefined) { footnoteCursor = end; continue }
+      }
+      footnoteCursor++
+    }
+    if (footnoteCursor > offset) return match
+    const renamed = importedFootnoteLabel(referenceSourceText(label, protectedSpans))
+    return renamed === undefined ? match : `[^${renamed}]`
+  })
+
+  if (table) {
+    line = line.replace(/(?<!\\)\[([^[\]\n^]+)\]\[([^[\]\n]+)\]/g, (match, label: string, reference: string) =>
+      label.includes('|') && referenceDestinationLabel(reference, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
+        ? protect(match.replace(/[\[\]]/g, '\\$&')) : match,
+    )
+    line = line.replace(/(?<!\\)(!?)\[([^[\]\n^][^[\]\n]*)\]\[\]/g, (match, _image: string, label: string) =>
+      label.includes('|') && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
+        ? match.replace(/[\[\]]/g, '\\$&') : match,
+    )
+  }
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
@@ -1378,7 +1412,8 @@ function convertInline(
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
     const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table)
-    if (destinationLabel === undefined || /[\[\]]/.test(destinationLabel)) return match
+    if (destinationLabel === undefined) return table && label.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
+    if (/[\[\]]/.test(destinationLabel)) return match
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
@@ -1537,7 +1572,7 @@ function convertInline(
       })
     if (line === prev) break
   }
-  return line
+  return line.replaceAll('\x00FNEMPTY\x00', '{empty}')
 }
 
 /** Escape list markers accepted by Carve but read as text by Markdown. */

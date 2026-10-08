@@ -4,6 +4,67 @@ import { carveToHtml, parse, renderCarve, markdownToCarve, migrateCaseOnlyRefere
 
 const cases = JSON.parse(readFileSync(new URL('./fixtures/image-alt-escapes.json', import.meta.url), 'utf8')) as { name: string; source: string; html: string; table: string }[]
 
+const footnotes = JSON.parse(readFileSync(new URL('./fixtures/markdown-table-footnotes.json', import.meta.url), 'utf8')) as { name: string; md: string; refs: number; html: string }[]
+for (const c of footnotes) {
+  it(`imports ${c.name} without changing footnote identity`, () => {
+    const html = carveToHtml(markdownToCarve(c.md))
+    expect(html.match(/role="doc-noteref"/g) ?? []).toHaveLength(c.refs)
+    expect(html).toContain(c.html)
+  })
+}
+
+it('leaves an unresolved reference pair literal in an image description', () => {
+  expect(carveToHtml(markdownToCarve('![s [a][b]][r]\n\n[a]: /a\n[r]: /r\n'))).toContain('alt="s [a][b]"')
+})
+
+it('keeps authored footnote text in an image scalar', () => {
+  const html = carveToHtml(markdownToCarve('![x [^a|b]][i]\n\n[i]: /i\n[^a|b]: Note.\n'))
+  expect(html).toContain('alt="x [^a|b]"')
+  expect(html).not.toContain('alt="x [^carve-import-footnote-')
+})
+
+it('keeps a reference definition inside a footnote continuation', () => {
+  const html = carveToHtml(markdownToCarve('See [r] and[^a].\n\n[^a]: Two words\n[r]: /u\n'))
+  expect(html).not.toContain('href="/u"')
+  expect(html).toContain('[r]: /u')
+})
+
+it('flattens resolved reference chains inside image descriptions', () => {
+  const written = markdownToCarve('![s [a][b][c]][r]\n\n[b]: /b\n[r]: /image\n')
+  expect(carveToHtml(written)).toContain('alt="s a[c]"')
+})
+
+it('renames table footnotes consistently without label collisions or code edits', () => {
+  const md = '| Note[^a\\|b] | c |\n|---|---|\n\nText[^a|b].\n\n`[^a|b]`\n\n[^a|b]: Note.\n\n[^carve-import-footnote-1]: Existing.\n'
+  const written = markdownToCarve(md)
+  expect(written.match(/\[\^carve-import-footnote-2\]/g)).toHaveLength(3)
+  expect(written).toContain('`[^a|b]`')
+  expect(written).toContain('[^carve-import-footnote-1]: Existing.')
+  const html = carveToHtml(written)
+  expect(html.match(/role="doc-noteref"/g)).toHaveLength(2)
+  expect(html).toContain('<code>[^a|b]</code>')
+  expect(html).toContain('Note.<a href="#fnref1"')
+})
+
+for (const [body, definitions, expected] of [
+  ['![p\\|q]', '[c]: /c', '![p|q]'],
+  ['![p\\|q][]', '[c]: /c', '![p|q][]'],
+  ['![p\\|q][c]', '[c]: /c', 'alt="p|q"'],
+  ['[p\\|q][missing]', '[c]: /c', '[p|q][missing]'],
+  ['[t][q\\|r][s]', '[q|r]: /q', '<a href="/q">t</a>[s]'],
+  ['[t][q\\|r][s]', '[q|r]: /q\n[s]: /s', '<a href="/q">t</a><a href="/s">s</a>'],
+  ['[t][q\\|r][s][z]', '[s]: /s\n[z]: /z', '[t]<a href="/s">q|r</a><a href="/z">z</a>'],
+  ['[a\\|b][]', '', '[a|b][]'],
+  ['[a\\|b][]', '[a\\|b]: /u', '[a|b][]'],
+  ['[a\\|b]', '[a\\|b]: /u', '[a|b]'],
+]) {
+  it(`resolves authored table labels in ${body} with ${definitions}`, () => {
+    const html = carveToHtml(markdownToCarve(`| ${body} | c |\n|---|---|\n\n${definitions}\n`))
+    expect(html).toContain(expected)
+    expect(html.match(/<th\b/g)).toHaveLength(2)
+  })
+}
+
 describe('image alt escapes', () => {
   for (const c of cases) {
     it(c.name, () => {

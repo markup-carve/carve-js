@@ -17,6 +17,7 @@ export interface EmptyDestinationReferences {
   inline: Map<string, string>
   tableInline: Map<string, string>
   sourceLabels: Map<string, string>
+  footnotes: Map<string, string>
 }
 
 function trimReferenceWhitespace(value: string): string {
@@ -41,7 +42,7 @@ function rewriteParenthesizedTitle(value: string): string {
   return value
 }
 
-const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), tableInline: new Map(), sourceLabels: new Map() }
+const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), tableInline: new Map(), sourceLabels: new Map(), footnotes: new Map() }
 
 let references = NO_REFERENCES
 
@@ -67,6 +68,10 @@ export function referenceDestinationLabel(
 
 export function referenceInlineTarget(label: string, table = false): string | undefined {
   return references.inline.get(label) ?? (table ? references.tableInline.get(label) : undefined)
+}
+
+export function importedFootnoteLabel(label: string): string | undefined {
+  return references.footnotes.get(label)
 }
 
 export function referenceSourceText(label: string, placeholders: readonly string[]): string {
@@ -158,9 +163,13 @@ export function extractReferenceDefinitions(
   const tableInline = new Map<string, string>()
   let nextSerial = 1
   const sourceLabels = new Map<string, string>()
+  const footnotes = new Map<string, string>()
+  const reservedFootnotes = new Set<number>()
+  let nextFootnote = 1
   const reservedReferences = new Set<number>()
   for (const line of lines) {
     for (const match of line.matchAll(/\[carve-import-reference-(\d+)\]/gi)) reservedReferences.add(Number(match[1]))
+    for (const match of line.matchAll(/\[\^carve-import-footnote-(\d+)\]/gi)) reservedFootnotes.add(Number(match[1]))
   }
   const kept: string[] = []
   let precedingNonblank: string | undefined
@@ -303,6 +312,20 @@ export function extractReferenceDefinitions(
     }
     // A deeper quote opens a block; a shallower line is lazy continuation.
     const definition = /^ {0,3}\[((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
+    if (definition?.[1]?.startsWith('^')) {
+      const label = definition[1].slice(1)
+      const key = label
+      if (label.includes('|') && !footnotes.has(key)) {
+        while (reservedFootnotes.has(nextFootnote)) nextFootnote++
+        footnotes.set(key, `carve-import-footnote-${nextFootnote++}`)
+      }
+      const next = lines[nextNonblankFrom(i + 1)]
+      const empty = definition[2]!.trim() === '' && (next === undefined || !/^ {4}/.test(next.slice(quotePrefix.length)))
+      keep(line + (empty ? ' \x00FNEMPTY\x00' : ''))
+      depth = lineDepth
+      canStart = false
+      continue
+    }
     if (
       (canStart || opensItem || lineDepth > depth) &&
       definition &&
@@ -427,7 +450,7 @@ export function extractReferenceDefinitions(
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }
-  return { lines: kept, references: { empty, defined, labels, inline, tableInline, sourceLabels }, definitions }
+  return { lines: kept, references: { empty, defined, labels, inline, tableInline, sourceLabels, footnotes }, definitions }
 }
 
 /** A line-initial block opener in text, escaped so the text stays a paragraph. */
@@ -462,17 +485,32 @@ function quoteAttributeValue(value: string): string {
 export function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string): string {
   let previous: string
   const nestedLink = new RegExp(String.raw`!?\[${LABEL}\]\([^()\n]*\)`, 'g')
-  const referenceLink = new RegExp(String.raw`!?\[${LABEL}\](?:\[([^[\]\n]*)\])?(?![[(:])`, 'g')
+  const referenceLink = new RegExp(String.raw`!?\[${LABEL}\]`, 'g')
+  const referenceTail = /\[([^[\]\n]*)\]/y
+  const defined = (label: string): boolean => references.defined.has(normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders)))
   do {
     previous = label
     label = label.replace(/\x00P(\d+)\x00/g, (token, index: string) => {
       const span = placeholders[Number(index)] ?? token
-      return span.startsWith('(') || span.startsWith('![') ? span : token
+      return span.startsWith('(') || span.startsWith('![') || span.startsWith('[') ? span : token
     })
     label = label.replace(nestedLink, '$1')
-    label = label.replace(referenceLink, (match, text: string, reference: string | undefined) =>
-      references.defined.has(normalizeReferenceLabel(decodeLinkTitle(reference ? reference : text, decodeEntity, placeholders))) ? text : match,
-    )
+    let written = '', cursor = 0
+    referenceLink.lastIndex = 0
+    for (let match; (match = referenceLink.exec(label)) !== null;) {
+      const end = referenceLink.lastIndex
+      written += label.slice(cursor, match.index)
+      referenceTail.lastIndex = end
+      const tail = referenceTail.exec(label)
+      if (tail && defined(tail[1] || match[1]!)) {
+        written += match[1]!
+        referenceLink.lastIndex = referenceTail.lastIndex
+      } else {
+        written += !tail && label[end] !== '(' && label[end] !== ':' && defined(match[1]!) ? match[1]! : match[0]
+      }
+      cursor = referenceLink.lastIndex
+    }
+    label = written + label.slice(cursor)
   } while (label !== previous)
   return markdownEmphasis(label, undefined, undefined, placeholders, true).replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
     const span = placeholders[Number(index)] ?? ''
