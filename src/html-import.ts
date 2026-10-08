@@ -25,7 +25,7 @@ import { DocumentIdRegistry } from './document-ids.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { ownedChildFields } from './owned-child-fields.js'
-import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
+import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve, renderCarveForHtmlImport } from './render-carve.js'
 import { mergeAttrs, parse } from './parse.js'
 import {
   DANGEROUS_URL_SCHEMES,
@@ -120,7 +120,7 @@ const BLOCK = new Set([
   'figure', 'footer', 'form', 'header', 'hgroup', 'main', 'nav', 'ol', 'p', 'pre',
   'section', 'table', 'ul', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
   // Synthetic, never present in real HTML input: the marker
-  // `markFootnotePlacement` leaves where a non-final endnotes section sat. It
+  // `pruneFootnoteContainers` leaves where a non-final endnotes section sat. It
   // belongs here because it stands where a `<section>` stood, and a name
   // `blocks()` does not recognize is buffered as INLINE - which put the
   // placement inside the paragraph after it rather than between the two.
@@ -461,6 +461,8 @@ interface FootnoteCandidate {
   block: P5Node
   fragment: string
   mutual: boolean
+  marked?: boolean
+  backlink?: boolean
 }
 
 /** One recognized note: its block and every reference bound to it. */
@@ -469,6 +471,27 @@ interface FootnoteDefinitionGroup {
   refs: P5Node[]
   fragments: string[]
 }
+
+type FootnoteAnchorIndex = Map<P5Node, Map<string, P5Node[]> | null>
+type FootnoteAnchorRange = {
+  nodes: P5Node[]
+  positions: number[]
+  tree?: Array<FootnoteCandidate | null>
+  size?: number
+}
+type FootnoteTargetIndex = {
+  root: P5Node
+  elements: P5Node[]
+  order: Map<P5Node, number>
+  used: Set<string>
+  counts?: Map<P5Node, number>
+  ends?: Map<P5Node, number>
+  nearestBlocks?: Map<P5Node, P5Node | null>
+  inverseFirst?: Map<P5Node, Map<string, FootnoteCandidate | null>>
+  anchorRanges?: Map<string, FootnoteAnchorRange>
+  anchorRanks?: Map<P5Node, number>
+}
+
 
 /**
  * The elements PART 9 §9 and §10 spell as an attribute on a span, so the
@@ -858,6 +881,7 @@ class Importer {
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
   /** The element each empty code span came from, for `dropUnspellableEmptyCodeSpans`. */
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
+  private hasEmptyCodeSpans = false
   /** The element each inline node came from, for `unwrapUnspellable`. */
   private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** Fallback images of formulas that imported as math, dropped where they stand. */
@@ -916,6 +940,7 @@ class Importer {
    * renderer would write at that position. Built on first use, off `root`.
    */
   private admonitionTitleIds: Map<P5Node, string> | undefined
+  private detachedFootnoteBlocks = new Set<P5Node>()
   private root: P5Node | undefined
   private readonly maxDepth: number
   private readonly maxNodes: number
@@ -1427,6 +1452,7 @@ class Importer {
       const stack: P5Node[] = this.root ? [this.root] : []
       while (stack.length > 0) {
         const current = stack.pop()!
+        if (this.detachedFootnoteBlocks.has(current)) continue
         if (this.isCountedAdmonitionTitle(current)) {
           titles.push(current)
         } else {
@@ -2186,7 +2212,7 @@ class Importer {
       const content = this.text(source)
       return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
     }
-    // The synthetic element `markFootnotePlacement` leaves where an endnotes
+    // The synthetic element `pruneFootnoteContainers` leaves where an endnotes
     // section sat that was NOT last; never present in real HTML input. It reads
     // back as the `::: footnotes` placement directive, which is what puts the
     // rebuilt section back in that slot instead of at document end.
@@ -3346,7 +3372,7 @@ class Importer {
     // empty `attrs` slot with no diagnostic at all (carve#1210).
     const sectionAttrs = new Map<P5Node, { attrs: Attrs; path: string }>()
     for (const section of sectionNodes) {
-      const sectionPath = this.childPath(path, section, (domChildren(node) ?? []).findIndex(child => child === section))
+      const sectionPath = this.childPath(path, section, indexIn(node, section))
       const sectionOwn = this.attrs(section, sectionPath)
       if (sectionOwn) sectionAttrs.set(section, { attrs: sectionOwn, path: sectionPath })
     }
@@ -4036,7 +4062,10 @@ class Importer {
       this.report.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
     }
     const code: InlineNode = { type: 'code', value: this.cellDepth > 0 ? value.replace(/\r\n?|\n/g, ' ') : value, ...(attrs ? { attrs } : {}) }
-    if (code.value === '') this.emptyCodeSpans.set(code, { node, path })
+    if (code.value === '') {
+      this.emptyCodeSpans.set(code, { node, path })
+      this.hasEmptyCodeSpans = true
+    }
     return [code]
   }
 
@@ -4862,35 +4891,42 @@ class Importer {
     return dropped.size > 0
   }
 
-  unwrapUnspellable(document: Document, target: object): boolean {
-    const origin = this.inlineOrigins.get(target)
-    if (origin === undefined) return false
+  unwrapUnspellable(document: Document, target: object, targets: readonly object[] = [target]): boolean {
+    const wanted = new Set(targets.filter(node => this.inlineOrigins.has(node)))
+    const removed = new Set<object>()
     const stack: unknown[] = [document]
     while (stack.length > 0) {
       const node = stack.pop()
       if (node === null || typeof node !== 'object') continue
       if (Array.isArray(node)) {
-        const index = node.indexOf(target)
-        if (index !== -1) {
-          node.splice(index, 1, ...((target as { children?: InlineNode[] }).children ?? []))
-          const tag = (origin.node as { tagName?: string }).tagName ?? 'element'
-          this.report.add(
-            'structure-unspellable',
-            `Unwrapped <${tag}> inside a span of the same kind: two braced spans of one kind cannot nest in Carve`,
-            'warning',
-            origin.path,
-            origin.node,
-          )
-          const attrs = (target as InlineNode).attrs
-          if (attrs !== undefined && this.attrNames(attrs).length > 0) {
-            this.report.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: the element was unwrapped`, 'warning', origin.path, origin.node)
-          }
-          return true
+        const kept: unknown[] = []
+        const append = (item: unknown): void => {
+          if (item !== null && typeof item === 'object' && wanted.has(item)) {
+            removed.add(item)
+            for (const child of (item as { children?: InlineNode[] }).children ?? []) append(child)
+          } else kept.push(item)
         }
+        for (const item of node) append(item)
+        node.length = 0
+        for (const item of kept) node.push(item)
       }
       for (const value of Object.values(node)) stack.push(value)
     }
-    return false
+    for (const node of targets) {
+      if (!removed.has(node)) continue
+      const origin = this.inlineOrigins.get(node)!
+      const tag = domTag(origin.node) ?? 'element'
+      this.report.add(
+        'structure-unspellable',
+        `Unwrapped <${tag}> inside a span of the same kind: two braced spans of one kind cannot nest in Carve`,
+        'warning', origin.path, origin.node,
+      )
+      const attrs = (node as InlineNode).attrs
+      if (attrs !== undefined && this.attrNames(attrs).length > 0) {
+        this.report.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: the element was unwrapped`, 'warning', origin.path, origin.node)
+      }
+    }
+    return removed.size > 0
   }
 
   /**
@@ -4927,6 +4963,7 @@ class Importer {
    * (carve-js#1789).
    */
   dropUnspellableEmptyCodeSpans(document: Document): void {
+    if (!this.hasEmptyCodeSpans) return
     // Whitespace behind a kept span is trimmed rather than read into its run.
     const blank = (item: object) => (item as InlineNode).type === 'text' && /^[ \t\r\n]*$/.test((item as { value: string }).value)
     const dropped = new Set(emptyCodeSpansWhoseRunDoesNotEnd(document, blank))
@@ -4937,7 +4974,9 @@ class Importer {
       const node = stack.pop()
       if (node === null || typeof node !== 'object') continue
       if (Array.isArray(node)) {
-        for (let i = node.length - 1; i >= 0; i--) if (dropped.has(node[i])) node.splice(i, 1)
+        let write = 0
+        for (const item of node) if (!dropped.has(item)) node[write++] = item
+        node.length = write
       }
       const origin = this.emptyCodeSpans.get(node)
       if (origin !== undefined) {
@@ -5112,15 +5151,19 @@ class Importer {
     elements.forEach((element, index) => order.set(element, index))
 
     const targets = this.footnoteFragmentTargets(elements)
+    const anchorIndex: FootnoteAnchorIndex = new Map()
+    const targetsIndex: FootnoteTargetIndex = { root, elements, order, used: new Set() }
     const candidates = this.resolveFootnotePairDirection(
-      this.footnotePairCandidates(elements, targets, heuristic),
+      this.footnotePairCandidates(elements, targets, heuristic, anchorIndex, targetsIndex),
       order,
+      anchorIndex,
+      targetsIndex,
     )
     if (candidates.length === 0) return undefined
 
     const definitions = this.attachRemainingFootnoteReferences(
       elements,
-      this.groupFootnoteDefinitions(candidates, order),
+      this.groupFootnoteDefinitions(candidates, order, targetsIndex),
       heuristic,
     )
 
@@ -5169,15 +5212,17 @@ class Importer {
     definitions.forEach((definition, index) => {
       const block = definition.block
       defs[String(index + 1)] = this.blocks(domChildren(block) ?? [], `footnote[${String(index + 1)}]`, 1)
+      this.detachedFootnoteBlocks.add(block)
       const parent = domParent(block)
-      if (parent) containers.add(parent)
-      this.detachP5Node(block)
+      if (parent !== undefined) containers.add(parent)
     })
+    this.detachP5Nodes(definitions.map(definition => definition.block))
+    this.detachedFootnoteBlocks.clear()
 
     // Keyed by identity, because every note in one list names the SAME
     // container: pruning it once per note walked that list's children once
     // per note, which is quadratic on a document that is mostly notes.
-    for (const container of containers) this.pruneEmptyFootnoteContainer(container)
+    this.pruneFootnoteContainers(containers)
 
     return defs
   }
@@ -5236,9 +5281,11 @@ class Importer {
     elements: P5Node[],
     targets: Map<string, P5Node>,
     heuristic: boolean,
+    anchorIndex: FootnoteAnchorIndex,
+    targetsIndex: FootnoteTargetIndex,
   ): FootnoteCandidate[] {
     const anchors: Array<{ anchor: P5Node; fragment: string }> = []
-    const used = new Set<string>()
+    const used = targetsIndex.used
     for (const element of elements) {
       if (domTag(element) !== 'a') continue
       const href = this.attr(element, 'href') ?? ''
@@ -5249,14 +5296,15 @@ class Importer {
       used.add(fragment)
     }
 
+    if (anchors.length === 0 || (!heuristic && !anchors.some(({ anchor }) => this.attr(anchor, 'role') === 'doc-noteref'))) return []
     const candidates: FootnoteCandidate[] = []
     for (const { anchor, fragment } of anchors) {
       if (!heuristic && this.attr(anchor, 'role') !== 'doc-noteref') continue
-      const block = this.resolveFootnoteDefinitionBlock(targets.get(fragment)!, used)
-      if (block === null || this.p5Contains(block, anchor)) continue
+      const block = this.resolveFootnoteDefinitionBlock(targets.get(fragment)!, targetsIndex)
+      if (block === null || this.p5Contains(block, anchor, targetsIndex)) continue
 
       const identity = this.footnoteAnchorIdentity(anchor)
-      const mutual = identity !== '' && this.footnoteBlockLinksTo(block, identity)
+      const mutual = identity !== '' && this.footnoteHasAnchor(block, `#${identity}`, anchorIndex, targetsIndex)
       // A role-carrying anchor is marked, so outside the heuristic the role
       // is both the filter above and the confirmation here: the candidate
       // stands with or without a spelled back-link.
@@ -5281,14 +5329,29 @@ class Importer {
    * is refused - taking it would move every block in the document into one
    * note - which here is the climb running off the fragment root.
    */
-  private resolveFootnoteDefinitionBlock(target: P5Node, used: Set<string>): P5Node | null {
+  private resolveFootnoteDefinitionBlock(target: P5Node, index: FootnoteTargetIndex): P5Node | null {
     let block = target
+    let depth = 0
     while (true) {
       const tag = domTag(block)
       if (tag !== undefined && FOOTNOTE_DEFINITION_BLOCKS.has(tag)) break
       const parent = domParent(block)
       if (parent === undefined || domTag(parent) === undefined) return null
       block = parent
+      if (++depth === 8) {
+        if (index.nearestBlocks === undefined) {
+          index.nearestBlocks = new Map()
+          for (const element of index.elements) {
+            const tag = domTag(element)
+            index.nearestBlocks.set(element, tag !== undefined && FOOTNOTE_DEFINITION_BLOCKS.has(tag)
+              ? element : index.nearestBlocks.get(domParent(element)!) ?? null)
+          }
+        }
+        const nearest = index.nearestBlocks.get(block)
+        if (nearest === undefined || nearest === null) return null
+        block = nearest
+        break
+      }
     }
 
     const parent = domParent(block)
@@ -5298,25 +5361,24 @@ class Importer {
       parentTag !== undefined &&
       FOOTNOTE_WRAPPER_BLOCKS.has(parentTag) &&
       (this.attr(parent, 'id') ?? '') !== '' &&
-      this.countFootnoteTargets(parent, used) === 1
+      (index.counts ??= this.footnoteTargetCounts(index.elements, index.used)).get(parent) === 1
     ) {
       block = parent
     }
     return block
   }
 
-  /** How many referenced fragment targets this element holds, itself included. */
-  private countFootnoteTargets(node: P5Node, used: Set<string>): number {
-    let count = 0
-    const stack: P5Node[] = [node]
-    while (stack.length > 0) {
-      const current = stack.pop()!
-      if (this.isFootnoteFragmentTarget(current, used)) count++
-      for (const child of domChildren(current) ?? []) {
-        if (domTag(child) !== undefined) stack.push(child)
+  /** Count targets once, from children to parents, before adapter mutations. */
+  private footnoteTargetCounts(elements: P5Node[], used: Set<string>): Map<P5Node, number> {
+    const counts = new Map(elements.map(node => [node, Number(this.isFootnoteFragmentTarget(node, used))]))
+    for (let i = elements.length - 1; i >= 0; i--) {
+      const node = elements[i]!
+      const parent = domParent(node)
+      if (parent !== undefined && counts.has(parent)) {
+        counts.set(parent, counts.get(parent)! + counts.get(node)!)
       }
     }
-    return count
+    return counts
   }
 
   private isFootnoteFragmentTarget(node: P5Node, used: Set<string>): boolean {
@@ -5338,12 +5400,14 @@ class Importer {
   private resolveFootnotePairDirection(
     candidates: FootnoteCandidate[],
     order: Map<P5Node, number>,
+    anchorIndex: FootnoteAnchorIndex,
+    targetsIndex: FootnoteTargetIndex,
   ): FootnoteCandidate[] {
     const byReference = new Map<P5Node, FootnoteCandidate>()
     for (const candidate of candidates) byReference.set(candidate.ref, candidate)
 
     return candidates.filter((candidate) => {
-      const inverse = this.inverseFootnoteCandidate(byReference, candidate)
+      const inverse = this.inverseFootnoteCandidate(byReference, candidate, anchorIndex, targetsIndex)
       return !(inverse !== null && this.footnoteReferenceSideWins(inverse, candidate, order))
     })
   }
@@ -5359,17 +5423,40 @@ class Importer {
   private inverseFootnoteCandidate(
     byReference: Map<P5Node, FootnoteCandidate>,
     candidate: FootnoteCandidate,
+    anchorIndex: FootnoteAnchorIndex,
+    targetsIndex: FootnoteTargetIndex,
   ): FootnoteCandidate | null {
     const identity = this.footnoteAnchorIdentity(candidate.ref)
     if (identity === '') return null
 
-    for (const anchor of this.footnoteAnchorsUnder(candidate.block)) {
-      if (this.attr(anchor, 'href') !== `#${identity}`) continue
-      const inverse = byReference.get(anchor)
-      if (inverse === undefined) continue
-      if (this.p5Contains(inverse.block, candidate.ref)) return inverse
+    const href = `#${identity}`
+    const small = this.footnoteAnchorIndex(candidate.block, anchorIndex)
+    if (small === null) {
+      const inverse = this.firstFootnoteInverseInRange(candidate.block, href, byReference, targetsIndex)
+      return inverse !== null && this.p5Contains(inverse.block, candidate.ref, targetsIndex) ? inverse : null
     }
-    return null
+    const anchors = small.get(href) ?? []
+    let inverse: FootnoteCandidate | null | undefined
+    let cached: Map<string, FootnoteCandidate | null> | undefined
+    if (anchors.length >= 8) {
+      targetsIndex.inverseFirst ??= new Map()
+      cached = targetsIndex.inverseFirst.get(candidate.block)
+      if (cached === undefined) targetsIndex.inverseFirst.set(candidate.block, cached = new Map())
+      inverse = cached.get(href)
+    }
+    if (inverse === undefined) {
+      inverse = null
+      for (const anchor of anchors) {
+        const found = byReference.get(anchor)
+        if (found !== undefined) {
+          inverse = found
+          break
+        }
+      }
+      cached?.set(href, inverse)
+    }
+    // Equal hrefs resolve to the same block through the first fragment target.
+    return inverse !== null && this.p5Contains(inverse.block, candidate.ref, targetsIndex) ? inverse : null
   }
 
   private footnoteReferenceSideWins(
@@ -5377,12 +5464,12 @@ class Importer {
     second: FootnoteCandidate,
     order: Map<P5Node, number>,
   ): boolean {
-    const firstMarked = this.isFootnoteReferenceMarked(first.ref)
-    const secondMarked = this.isFootnoteReferenceMarked(second.ref)
+    const firstMarked = first.marked ??= this.isFootnoteReferenceMarked(first.ref)
+    const secondMarked = second.marked ??= this.isFootnoteReferenceMarked(second.ref)
     if (firstMarked !== secondMarked) return firstMarked
 
-    const firstBack = this.isFootnoteBacklinkMarked(first.ref)
-    const secondBack = this.isFootnoteBacklinkMarked(second.ref)
+    const firstBack = first.backlink ??= this.isFootnoteBacklinkMarked(first.ref)
+    const secondBack = second.backlink ??= this.isFootnoteBacklinkMarked(second.ref)
     if (firstBack !== secondBack) return secondBack
 
     return (order.get(first.ref) ?? 0) < (order.get(second.ref) ?? 0)
@@ -5391,15 +5478,15 @@ class Importer {
   /**
    * One entry per definition block, carrying every reference bound to it. A
    * block that contains another definition block is a container, not a note:
-   * keeping both would move a subtree into two places at once. The containers
-   * are found by climbing from each block, one walk per note rather than one
-   * per PAIR of notes.
+   * keeping both would move a subtree into two places at once. The next group in document order reveals whether a block contains a note.
    */
   private groupFootnoteDefinitions(
     candidates: FootnoteCandidate[],
     order: Map<P5Node, number>,
+    targetsIndex: FootnoteTargetIndex,
   ): FootnoteDefinitionGroup[] {
     const groups = new Map<P5Node, FootnoteDefinitionGroup>()
+    const fragments = new Map<P5Node, Set<string>>()
     for (const candidate of candidates) {
       let group = groups.get(candidate.block)
       if (group === undefined) {
@@ -5407,20 +5494,26 @@ class Importer {
         groups.set(candidate.block, group)
       }
       group.refs.push(candidate.ref)
-      if (!group.fragments.includes(candidate.fragment)) group.fragments.push(candidate.fragment)
-    }
-
-    for (const group of [...groups.values()]) {
-      let ancestor = domParent(group.block)
-      while (ancestor !== undefined) {
-        if (groups.has(ancestor)) groups.delete(ancestor)
-        ancestor = domParent(ancestor)
+      if (group.fragments.length < 8) {
+        if (!group.fragments.includes(candidate.fragment)) group.fragments.push(candidate.fragment)
+      } else {
+        let seen = fragments.get(candidate.block)
+        if (seen === undefined) fragments.set(candidate.block, seen = new Set(group.fragments))
+        if (!seen.has(candidate.fragment)) {
+          seen.add(candidate.fragment)
+          group.fragments.push(candidate.fragment)
+        }
       }
     }
 
-    return [...groups.values()].sort(
+    const ordered = [...groups.values()].sort(
       (first, second) => (order.get(first.block) ?? 0) - (order.get(second.block) ?? 0),
     )
+    // A containing group precedes its first contained group in preorder.
+    return ordered.filter((group, index) => {
+      const next = ordered[index + 1]
+      return next === undefined || !this.p5Contains(group.block, next.block, targetsIndex)
+    })
   }
 
   /**
@@ -5439,6 +5532,7 @@ class Importer {
     heuristic: boolean,
   ): FootnoteDefinitionGroup[] {
     const byFragment = new Map<string, FootnoteDefinitionGroup>()
+    const references = new Map<FootnoteDefinitionGroup, Set<P5Node>>()
     for (const definition of definitions) {
       for (const fragment of definition.fragments) byFragment.set(fragment, definition)
     }
@@ -5466,7 +5560,16 @@ class Importer {
       if (!href.startsWith('#')) continue
       const definition = byFragment.get(href.slice(1))
       if (definition === undefined || inside.has(element)) continue
-      if (!definition.refs.includes(element)) definition.refs.push(element)
+      if (definition.refs.length < 8) {
+        if (!definition.refs.includes(element)) definition.refs.push(element)
+      } else {
+        let seen = references.get(definition)
+        if (seen === undefined) references.set(definition, seen = new Set(definition.refs))
+        if (!seen.has(element)) {
+          seen.add(element)
+          definition.refs.push(element)
+        }
+      }
     }
 
     return definitions
@@ -5477,11 +5580,100 @@ class Importer {
     return id !== undefined && id !== '' ? id : this.attr(anchor, 'name') ?? ''
   }
 
-  private footnoteBlockLinksTo(block: P5Node, fragment: string): boolean {
-    for (const anchor of this.footnoteAnchorsUnder(block)) {
-      if (this.attr(anchor, 'href') === `#${fragment}`) return true
+  private footnoteAnchorIndex(block: P5Node, index: FootnoteAnchorIndex): Map<string, P5Node[]> | null {
+    const held = index.get(block)
+    if (held !== undefined) return held
+    const anchors = new Map<string, P5Node[]>()
+    const stack: P5Node[] = [block]
+    let visited = 0
+    while (stack.length > 0) {
+      const current = stack.pop()!
+      if (++visited > 64) {
+        index.set(block, null)
+        return null
+      }
+      const children = domChildren(current) ?? []
+      for (let i = children.length - 1; i >= 0; i--) {
+        const child = children[i]!
+        if (domTag(child) === 'a') {
+          const href = this.attr(child, 'href')
+          if (href !== undefined) {
+            const list = anchors.get(href)
+            if (list === undefined) anchors.set(href, [child])
+            else list.push(child)
+          }
+        }
+        if (domTag(child) !== undefined) stack.push(child)
+      }
     }
-    return false
+    index.set(block, anchors)
+    return anchors
+  }
+
+  private footnoteHasAnchor(block: P5Node, href: string, anchors: FootnoteAnchorIndex, index: FootnoteTargetIndex): boolean {
+    const small = this.footnoteAnchorIndex(block, anchors)
+    if (small !== null) return small.has(href)
+    const range = this.footnoteAnchorRange(href, index)
+    if (range === undefined) return false
+    const start = this.footnoteRangeBound(range.positions, index.order.get(block)!)
+    return start < range.positions.length && range.positions[start]! <= this.footnoteSubtreeEnds(index).get(block)!
+  }
+
+  private footnoteAnchorRange(href: string, index: FootnoteTargetIndex): FootnoteAnchorRange | undefined {
+    if (index.anchorRanges === undefined) {
+      index.anchorRanges = new Map()
+      index.anchorRanks = new Map(this.footnoteAnchorsUnder(index.root).map((node, rank) => [node, rank]))
+      for (const node of index.elements) {
+        if (domTag(node) !== 'a') continue
+        const key = this.attr(node, 'href')
+        if (key === undefined) continue
+        let range = index.anchorRanges.get(key)
+        if (range === undefined) index.anchorRanges.set(key, range = { nodes: [], positions: [] })
+        range.nodes.push(node)
+        range.positions.push(index.order.get(node)!)
+      }
+    }
+    return index.anchorRanges.get(href)
+  }
+
+  private footnoteRangeBound(positions: number[], at: number): number {
+    let lo = 0
+    let hi = positions.length
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (positions[mid]! <= at) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
+  private firstFootnoteInverseInRange(block: P5Node, href: string, candidates: Map<P5Node, FootnoteCandidate>, index: FootnoteTargetIndex): FootnoteCandidate | null {
+    const range = this.footnoteAnchorRange(href, index)
+    if (range === undefined) return null
+    const earlier = (a: FootnoteCandidate | null, b: FootnoteCandidate | null): FootnoteCandidate | null => {
+      if (a === null) return b
+      if (b === null) return a
+      return index.anchorRanks!.get(a.ref)! < index.anchorRanks!.get(b.ref)! ? a : b
+    }
+    if (range.tree === undefined) {
+      let size = 1
+      while (size < range.nodes.length) size *= 2
+      const tree: Array<FootnoteCandidate | null> = Array(size * 2).fill(null)
+      range.nodes.forEach((node, i) => { tree[size + i] = candidates.get(node) ?? null })
+      for (let i = size - 1; i > 0; i--) tree[i] = earlier(tree[i * 2]!, tree[i * 2 + 1]!)
+      range.tree = tree
+      range.size = size
+    }
+    let lo = this.footnoteRangeBound(range.positions, index.order.get(block)!) + range.size!
+    let hi = this.footnoteRangeBound(range.positions, this.footnoteSubtreeEnds(index).get(block)!) + range.size!
+    let first: FootnoteCandidate | null = null
+    while (lo < hi) {
+      if (lo % 2 === 1) first = earlier(first, range.tree[lo++]!)
+      if (hi % 2 === 1) first = earlier(first, range.tree[--hi]!)
+      lo = Math.floor(lo / 2)
+      hi = Math.floor(hi / 2)
+    }
+    return first
   }
 
   private footnoteAnchorsUnder(node: P5Node): P5Node[] {
@@ -5514,26 +5706,72 @@ class Importer {
     return (this.attr(anchor, 'class') ?? '').split(/\s+/).includes('footnote-back')
   }
 
-  private p5Contains(ancestor: P5Node, node: P5Node): boolean {
+  private p5Contains(ancestor: P5Node, node: P5Node, index: FootnoteTargetIndex): boolean {
     let current = domParent(node)
-    while (current !== undefined) {
+    for (let depth = 0; current !== undefined && depth < 8; depth++) {
       if (current === ancestor) return true
       current = domParent(current)
     }
-    return false
+    if (current === undefined) return false
+    const ends = this.footnoteSubtreeEnds(index)
+    const start = index.order.get(ancestor)
+    const at = index.order.get(node)
+    return start !== undefined && at !== undefined && start < at && at <= ends.get(ancestor)!
   }
 
-  private detachP5Node(node: P5Node): void {
-    const siblings = domChildren(domParent(node))
-    if (siblings === undefined) return
-    const index = siblings.findIndex(child => child === node)
-    if (index !== -1) siblings.splice(index, 1)
+  private footnoteSubtreeEnds(index: FootnoteTargetIndex): Map<P5Node, number> {
+    if (index.ends === undefined) {
+      index.ends = new Map(index.order)
+      for (let i = index.elements.length - 1; i >= 0; i--) {
+        const element = index.elements[i]!
+        const parent = domParent(element)
+        if (parent !== undefined && index.ends.has(parent)) {
+          index.ends.set(parent, Math.max(index.ends.get(parent)!, index.ends.get(element)!))
+        }
+      }
+    }
+    return index.ends
+  }
+
+  private detachP5Nodes(nodes: Iterable<P5Node>): void {
+    const iterator = nodes[Symbol.iterator]()
+    const first = iterator.next()
+    if (first.done) return
+    const second = iterator.next()
+    if (second.done) {
+      const parent = domParent(first.value)
+      const children = domChildren(parent)
+      if (parent === undefined || children === undefined) return
+      const at = children.length < 8 ? children.findIndex(child => child === first.value) : indexIn(parent, first.value)
+      if (at !== -1) children.splice(at, 1)
+      return
+    }
+    const groups = new Map<P5Node, Set<P5Node>>()
+    const add = (node: P5Node): void => {
+      const parent = domParent(node)
+      if (parent === undefined) return
+      let removed = groups.get(parent)
+      if (removed === undefined) groups.set(parent, removed = new Set())
+      removed.add(node)
+    }
+    add(first.value)
+    add(second.value)
+    for (let next = iterator.next(); !next.done; next = iterator.next()) add(next.value)
+    for (const [parent, removed] of groups) {
+      const children = domChildren(parent)
+      if (children === undefined) continue
+      let write = 0
+      for (const child of children) if (!removed.has(child)) children[write++] = child
+      children.length = write
+      siblingIndex.delete(parent)
+    }
   }
 
   private replaceP5Node(node: P5Node, replacement: P5Node): void {
-    const siblings = domChildren(domParent(node))
+    const parent = domParent(node)
+    const siblings = domChildren(parent)
     if (siblings === undefined) return
-    const index = siblings.findIndex(child => child === node)
+    const index = parent === undefined ? -1 : indexIn(parent, node)
     if (index !== -1) siblings[index] = domChild(replacement)
   }
 
@@ -5551,28 +5789,21 @@ class Importer {
   private removeFootnoteSeparator(first: P5Node): void {
     let node = first
     while (true) {
-      let previous = this.p5PreviousSibling(node)
-      while (previous !== undefined && this.isFootnoteChromeNode(previous)) {
-        previous = this.p5PreviousSibling(previous)
-      }
-
-      if (previous !== undefined && (domTag(previous) === 'hr' || domTag(previous) === 'br')) {
-        this.detachP5Node(previous)
-        continue
-      }
-      if (previous !== undefined) return
-
       const parent = domParent(node)
-      if (parent === undefined || domTag(parent) === undefined) return
+      if (parent === undefined) return
+      const siblings = domChildren(parent) ?? []
+      const removed: P5Node[] = []
+      let stopped = false
+      for (let i = indexIn(parent, node) - 1; i >= 0; i--) {
+        const previous = siblings[i]!
+        if (this.isFootnoteChromeNode(previous)) continue
+        if (domTag(previous) === 'hr' || domTag(previous) === 'br') removed.push(previous)
+        else { stopped = true; break }
+      }
+      this.detachP5Nodes(removed)
+      if (stopped || domTag(parent) === undefined) return
       node = parent
     }
-  }
-
-  private p5PreviousSibling(node: P5Node): P5Node | undefined {
-    const siblings = domChildren(domParent(node))
-    if (siblings === undefined) return undefined
-    const index = siblings.findIndex(child => child === node)
-    return index > 0 ? siblings[index - 1] : undefined
   }
 
   /**
@@ -5604,24 +5835,31 @@ class Importer {
    * anchor and its back-link and its visible marker in one element.
    */
   private stripFootnoteBacklinks(block: P5Node, identities: string[], fragments: string[]): void {
+    const references = identities.length < 8 ? undefined : new Set(identities)
+    const targets = fragments.length < 8 ? undefined : new Set(fragments)
+    const parents = new Set<P5Node>()
+    const anchors: P5Node[] = []
     for (const anchor of this.footnoteAnchorsUnder(block)) {
       const href = this.attr(anchor, 'href') ?? ''
-      const pointsBack = href.startsWith('#') && identities.includes(href.slice(1))
-      const isMarker = href.startsWith('#') && fragments.includes(this.footnoteAnchorIdentity(anchor))
+      const pointsBack = href.startsWith('#') && (references?.has(href.slice(1)) ?? identities.includes(href.slice(1)))
+      const isMarker = href.startsWith('#') && (targets?.has(this.footnoteAnchorIdentity(anchor)) ?? fragments.includes(this.footnoteAnchorIdentity(anchor)))
       if (!this.isFootnoteBacklinkMarked(anchor) && !pointsBack && !isMarker) continue
-
+      anchors.push(anchor)
       const parent = domParent(anchor)
-      this.detachP5Node(anchor)
+      if (parent !== undefined && (domTag(parent) === 'sup' || domTag(parent) === 'span')) parents.add(parent)
+    }
+    this.detachP5Nodes(anchors)
+    if (parents.size === 0) return
+    const empty = new Set<P5Node>()
+    for (const parent of parents) {
       if (
-        parent !== undefined &&
         (domTag(parent) === 'sup' || domTag(parent) === 'span') &&
         !(domChildren(parent) ?? []).some(
-          (child) => domTag(child) !== undefined || (child.nodeName === '#text' && (domValue(child) ?? '').trim() !== ''),
+          (child) => !empty.has(child) && (domTag(child) !== undefined || (child.nodeName === '#text' && (domValue(child) ?? '').trim() !== '')),
         )
-      ) {
-        this.detachP5Node(parent)
-      }
+      ) empty.add(parent)
     }
+    this.detachP5Nodes(empty)
   }
 
   /**
@@ -5649,59 +5887,99 @@ class Importer {
    * separator written AFTER the notes survives the explicit search and is
    * swept up here instead.
    */
-  private pruneEmptyFootnoteContainer(node: P5Node | undefined): void {
-    // WHERE the container sat, so the placement below can put a marker back
-    // there. Recorded at every level the walk detaches, so it names the
-    // outermost thing that actually left rather than the note list inside it.
-    let removedFrom: { parent: P5Node; index: number } | undefined
-    outer: while (node !== undefined && domTag(node) !== undefined) {
-      if (domTag(node) === 'body' || domTag(node) === 'html') break
-      for (const child of domChildren(node) ?? []) {
-        if (this.isFootnoteChromeNode(child)) continue
-        if (domTag(child) === 'hr' || domTag(child) === 'br') continue
-        break outer
-      }
-      const parent = domParent(node)
-      const index = domChildren(parent)?.findIndex(child => child === node) ?? -1
-      this.detachP5Node(node)
-      if (parent !== undefined && index !== -1) removedFrom = { parent, index }
-      node = parent
+  private pruneFootnoteContainers(containers: Iterable<P5Node>): void {
+    type View = {
+      children: P5Node[]
+      positions: Map<P5Node, number>
+      following: number[]
+      content: number
     }
-    this.markFootnotePlacement(removedFrom)
+    const views = new Map<P5Node, View>()
+    const removed = new Set<P5Node>()
+    const changed = new Set<P5Node>()
+    let placement: { parent: P5Node; index: number; marker: P5Node } | undefined
+    const packaging = (node: P5Node): boolean =>
+      this.isFootnoteChromeNode(node) || domTag(node) === 'hr' || domTag(node) === 'br'
+    const view = (node: P5Node): View => {
+      let result = views.get(node)
+      if (result !== undefined) return result
+      const children = domChildren(node) ?? []
+      const positions = new Map(children.map((child, index) => [child, index]))
+      const following = new Array<number>(children.length + 1)
+      following[children.length] = children.length
+      let content = 0
+      for (let i = children.length - 1; i >= 0; i--) {
+        const child = children[i]!
+        if (!removed.has(child) && !packaging(child)) content++
+        following[i] = this.isFootnoteChromeNode(child) ? following[i + 1]! : i
+      }
+      result = { children, positions, following, content }
+      views.set(node, result)
+      return result
+    }
+    const contentFrom = (parent: P5Node, from: number): boolean => {
+      const siblings = view(parent)
+      const traversed: number[] = []
+      let index = siblings.following[from] ?? siblings.children.length
+      while (index < siblings.children.length && removed.has(siblings.children[index]!)) {
+        traversed.push(index)
+        index = siblings.following[index + 1]!
+      }
+      for (const at of traversed) siblings.following[at] = index
+      siblings.following[from] = index
+      return index < siblings.children.length
+    }
+    const contentFollows = (parent: P5Node, from: number): boolean => {
+      let node = parent
+      while (true) {
+        if (contentFrom(node, from)) return true
+        const up = domParent(node)
+        if (up === undefined) return false
+        const at = view(up).positions.get(node)
+        if (at === undefined || removed.has(node)) return false
+        node = up
+        from = at + 1
+      }
+    }
+    for (const container of containers) {
+      let node: P5Node | undefined = container
+      let slot: { parent: P5Node; index: number } | undefined
+      while (node !== undefined && !removed.has(node) && domTag(node) !== undefined) {
+        if (domTag(node) === 'body' || domTag(node) === 'html' || view(node).content !== 0) break
+        const parent = domParent(node)
+        if (parent === undefined) break
+        const siblings = view(parent)
+        const index = siblings.positions.get(node)
+        if (index === undefined) break
+        removed.add(node)
+        if (!packaging(node)) siblings.content--
+        changed.add(parent)
+        slot = { parent, index }
+        node = parent
+      }
+      if (slot !== undefined && !this.footnotePlacementMarked && contentFollows(slot.parent, slot.index)) {
+        const marker = defaultTreeAdapter.createElement('carve-footnote-placement', p5html.NS.HTML, [])
+        marker.parentNode = domContainer(slot.parent)
+        placement = { ...slot, marker }
+        view(slot.parent).content++
+        changed.add(slot.parent)
+        this.footnotePlacementMarked = true
+      }
+    }
+    for (const parent of changed) {
+      const children = view(parent).children
+      const kept: P5Node[] = []
+      for (let i = 0; i <= children.length; i++) {
+        if (placement?.parent === parent && placement.index === i) kept.push(placement.marker)
+        const child = children[i]
+        if (child !== undefined && !removed.has(child)) kept.push(child)
+      }
+      children.length = 0
+      for (const child of kept) children.push(child)
+      siblingIndex.delete(parent)
+    }
   }
 
-  /**
-   * An endnotes section that is not last: POSITION IS MEANING.
-   */
-  private markFootnotePlacement(removedFrom: { parent: P5Node; index: number } | undefined): void {
-    if (removedFrom === undefined) return
-    if (this.footnotePlacementMarked) return
-    if (!this.contentFollows(removedFrom.parent, removedFrom.index)) return
-    const siblings = domChildren(removedFrom.parent)
-    if (siblings === undefined) return
-    const marker = defaultTreeAdapter.createElement('carve-footnote-placement', p5html.NS.HTML, [])
-    marker.parentNode = domContainer(removedFrom.parent)
-    siblings.splice(Math.min(removedFrom.index, siblings.length), 0, marker)
-    this.footnotePlacementMarked = true
-  }
-
-  /** Is there content after INDEX in PARENT, or after PARENT in any ancestor? */
-  private contentFollows(parent: P5Node, index: number): boolean {
-    let node: P5Node | undefined = parent
-    let from = index
-    while (node !== undefined) {
-      const siblings = domChildren(node) ?? []
-      for (let i = from; i < siblings.length; i++) {
-        if (!this.isFootnoteChromeNode(siblings[i]!)) return true
-      }
-      const up: P5Node | undefined = domParent(node)
-      if (up === undefined) return false
-      from = (domChildren(up)?.findIndex(child => child === node) ?? -1) + 1
-      if (from === 0) return false
-      node = up
-    }
-    return false
-  }
 }
 
 /**
@@ -5887,13 +6165,13 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
   importer.reportSerializationLosses(value)
   for (;;) {
     try {
-      const carve = renderCarve(value)
+      const carve = renderCarveForHtmlImport(value)
       return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
     } catch (error) {
       if (!(error instanceof SourceUnspellableError) || error.node === undefined) throw error
       const dropped = error.nodeType === 'table_row'
         ? importer.dropUnspellableRow(value, error.node, error.nodes)
-        : importer.unwrapUnspellable(value, error.node)
+        : importer.unwrapUnspellable(value, error.node, error.nodes)
       if (!dropped) throw error
     }
   }
