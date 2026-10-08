@@ -191,3 +191,16 @@ it('retains unfinished footnote markers beside a valid multiline link title', ()
   expect(carveToHtml(written)).toContain('title="one\ntwo"')
   expect(carveToHtml(written)).toContain('href="/u"')
 })
+
+for (const destination of ['/u', '/u "t"', '</u>', '</u> "t"']) {
+  it(`keeps an unbalanced image label literal before ${destination}`, () => {
+    const html = carveToHtml(markdownToCarve(`![a [[b] c](${destination})\n`))
+    expect(html).not.toContain('<img')
+    expect(html).toContain('![a ')
+    expect(html).toContain('href="/u"')
+  })
+}
+it('retains a long run of unfinished image labels', () => {
+  const source = '![a'.repeat(16384) + '\n'
+  expect(markdownToCarve(source)).toBe(source)
+})
