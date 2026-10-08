@@ -1156,7 +1156,7 @@ function convertInline(
   const activationOpaque = opaqueHtmlScanner(activationSource)
   const activationAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
   line = escapeInactiveMarkdownLinkBrackets(activationSource, protect,
-    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) !== undefined,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     offset => {
       const opaque = activationOpaque(offset)
       if (opaque !== undefined) return opaque
@@ -1244,21 +1244,12 @@ function convertInline(
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
   protectDestinations(/(?<=\])()(\((?:[^()\n]|\([^()\n]*\))*\))/g)
 
-  line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
-    (match, label: string, reference: string | undefined, offset: number, source: string) => {
-      if (source[offset + match.length] === '(') return match
-      const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans)
-      if (canonical === undefined || /[\[\]]/.test(canonical)) return match
-      const target = referenceInlineTarget(canonical, table)
-      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
-    })
-
   // In a plain three-label chain, an unknown full-reference label can begin
   // the next link. Protect the resolved tail before the ordinary reference pass.
   let chainCursor = 0
   const chainAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
   const chainSubject = line
-  line = line.replace(/(?<![!\\\]])\[([\w .-]+)\]\[([\w .-]+)\]\[([\w .-]+)\](?!\[)/gu,
+  line = line.replace(/(?<![\\\]])\[([\w .|-]+)\]\[([\w .|-]+)\]\[([\w .|-]+)\](?!\[)/gu,
     (match, first: string, second: string, third: string, offset: number) => {
       while (chainCursor < offset) {
         if (chainSubject[chainCursor] === '<') {
@@ -1273,13 +1264,24 @@ function convertInline(
       if (chainCursor > offset) return match
       const tail = /^\x00P(\d+)\x00/.exec(chainSubject.slice(offset + match.length))
       if (tail && protectedSpans[Number(tail[1])]?.startsWith('(')) return match
-      const middle = referenceDestinationLabel(second, decodeHtmlEntitiesRaw, protectedSpans)
-      const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans)
+      const middle = referenceDestinationLabel(second, decodeHtmlEntitiesRaw, protectedSpans, table)
+      const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (middle !== undefined) {
+        if (chainSubject[offset - 1] === '!') return match
         return `[${first}]${protect(`[${middle}]`)}[${third}]${last !== undefined ? protect(`[${last}]`) : ''}`
       }
       if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${protect(`[${last}]`)}`
       return match
+    })
+
+  line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
+    (match, label: string, reference: string | undefined, offset: number, source: string) => {
+      if (source[offset + match.length] === '(') return match
+      const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
+      if (canonical === undefined) return table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
+      if (/[\[\]]/.test(canonical)) return match
+      const target = referenceInlineTarget(canonical, table)
+      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
     })
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
@@ -1289,7 +1291,7 @@ function convertInline(
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
     const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label))
-      ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) : undefined
+      ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) : undefined
     const sourceLabel = referenceSourceLabel(reference, protectedSpans)
     if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel, table) !== undefined) return referenceTail(sourceLabel, match)
     const literal = referenceLiteralText(reference, decodeHtmlEntitiesRaw, protectedSpans)
@@ -1298,7 +1300,7 @@ function convertInline(
     }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
     return canonical === undefined || /[\[\]]/.test(canonical)
-      ? protect(match) : referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`)
+      ? protect(table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match) : referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`)
   })
 
   // Reference-link definition `[label]: dest "title"` (optional space after
@@ -1311,7 +1313,7 @@ function convertInline(
   // link somewhere the Markdown source did not.
   // Destination boundaries use ASCII whitespace; a BOM remains URL data.
   line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:[ \t]*)((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
-    referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) === undefined
+    referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
       ? match
       : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
   )
@@ -1369,13 +1371,13 @@ function convertInline(
       const protectedTail = protectedSpans[Number(following[1])] ?? ''
       if (protectedTail.startsWith('(')) return match
       const reference = /^\[([^\]]*)\]$/.exec(protectedTail)
-      if (reference && (reference[1] !== '' || referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) !== undefined)) return match
+      if (reference && (reference[1] !== '' || referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)) return match
     }
     const before = source.slice(source.lastIndexOf('\n', offset - 1) + 1, offset)
     if (source[offset + match.length] === ':' && /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*$/.test(before)) return match
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
-    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans)
+    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table)
     if (destinationLabel === undefined || /[\[\]]/.test(destinationLabel)) return match
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
@@ -1464,7 +1466,7 @@ function convertInline(
     message: 'Unwrapped nested emphasis of the same kind; its text is preserved',
   })
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
-    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) !== undefined,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis)
   line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
 
@@ -1529,7 +1531,7 @@ function convertInline(
       // "undefined" written into it.
       .replace(/\x00P(\d+)\x00/g, (m, i) => {
         const span = protectedSpans[Number(i)] ?? m
-        return table && (span.startsWith('![') || span.startsWith('('))
+        return table && !/^!?`/.test(span)
           ? escapeTablePipes(span)
           : span
       })

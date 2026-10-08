@@ -1124,7 +1124,7 @@ function renderImage(node: Image, attrs: string = renderAttrs(node.attrs), inTab
   if (node.ref !== undefined && node.rawRef !== undefined) {
     return node.rawRef
   }
-  const title = node.title === undefined ? '' : ` "${inTable ? escapeQuoted(node.title).replaceAll('`', '\\`') : escapeQuoted(node.title)}"`
+  const title = node.title === undefined ? '' : ` "${inTable ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
   return `![${escapeImageAlt(node.alt, inTable)}](${escapeDestination(node.src)}${title})${attrs}`
 }
 
@@ -1882,16 +1882,14 @@ function escapeQuoted(text: string): string {
  * A FLAT raw bracketed run: a colon-fence or code-fence `[label]`, and a
  * footnote's `[^id]` in both its definition and its references.
  *
- * Same rule as an alt text and the same reason - the value is raw, so an
- * escape the writer emits reaches the reader as two characters of content
- * rather than as a neutralized bracket - but a narrower close. These readers
+ * These values resolve no escapes, so added backslashes remain content. The readers
  * scan `[^\]]*` and stop at the first `]`, with no balance and no escape, so a
  * run is representable exactly when it holds neither a `]` nor a line break.
  *
  * One function for one rule. It was written twice, and both spellings escaped,
  * so `::: [a\b]` and `[^n\m]` grew a backslash on every format pass.
  *
- * WRITTEN AS AUTHORED WITH NO FALLBACK, unlike an alt text. A value holding a
+ * Written as authored, with no fallback. A value holding a
  * `]` has no spelling here either, but the escape is not a spelling of it: the
  * label regexes require the run to be the whole of what follows, so `[a\]b]`
  * fails to match exactly as `[a]b]` does, and `::: [a\]b]` and `::: [a]b]`

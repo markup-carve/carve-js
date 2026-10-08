@@ -57,9 +57,34 @@ it('keeps a pipe-bearing email autolink in one table cell', () => {
   expect(html.match(/<th\b/g)).toHaveLength(2)
 })
 it('keeps an escaped backtick beside a code cell', () => {
-  const source = '| ![a\\`b](/i "c\\`d") | `x` |\n|---|---|\n'
+  const source = '| ![a\\`b](/i "c\\`d\\|e") | `x` |\n|---|---|\n'
   const expected = carveToHtml(source)
-  expect(expected).toContain('alt="a`b" title="c`d"')
+  expect(expected).toContain('alt="a`b" title="c`d|e"')
   expect(expected).toContain('<code>x</code>')
   expect(carveToHtml(renderCarve(parse(source)))).toBe(expected)
+})
+
+for (const [label, body] of [['link', '[t]'], ['image', '![t]']]) {
+  it(`keeps an unresolved ${label} pipe reference in one cell`, () => {
+    const html = carveToHtml(markdownToCarve(`| ${body}[q\\|r] | c |\n|---|---|\n`))
+    expect(html).toContain(`${body}[q|r]`)
+    expect(html.match(/<th\b/g)).toHaveLength(2)
+  })
+}
+it('keeps an unmatched escaped definition label in one cell', () => {
+  const html = carveToHtml(markdownToCarve('| [t][a\\|b] | c |\n|---|---|\n\n[a\\|b]: /u\n'))
+  expect(html).toContain('[t][a|b]')
+  expect(html.match(/<th\b/g)).toHaveLength(2)
+})
+for (const prefix of ['', '!']) {
+  it(`keeps the resolved tail of a ${prefix || 'link'} reference chain`, () => {
+    const html = carveToHtml(markdownToCarve(`| ${prefix}[t][q\\|r][s] | c |\n|---|---|\n\n[s]: /s\n`))
+    expect(html).toContain(`${prefix}[t]<a href="/s">q|r</a>`)
+    expect(html.match(/<th\b/g)).toHaveLength(2)
+  })
+}
+it('keeps an unresolved image alt pipe literal during import', () => {
+  const html = carveToHtml(markdownToCarve('| ![a\\|b][missing] | c |\n|---|---|\n'))
+  expect(html).toContain('![a|b][missing]')
+  expect(html.match(/<th\b/g)).toHaveLength(2)
 })
