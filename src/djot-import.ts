@@ -140,17 +140,15 @@ function convertDjotBlockMarkers(source: string): string {
   const lines = source.split('\n')
   const masked = maskDjotCodeAndDestinations(source).split('\n')
   const containers: { width: number; invalid: boolean }[] = []
-  const isNestedAt = (line: number, quote: string, columns: number): boolean => {
-    for (let j = line - 1; j >= 0; j--) {
-      if (!(masked[j] ?? '').startsWith(quote)) break
-      const candidate = (masked[j] ?? '').slice(quote.length)
-      if (candidate.trim() === '') continue
-      const [candidateColumns] = leadingIndent(candidate)
-      if (candidateColumns >= columns) continue
-      if (/^(?:([*-])[ \t]*){3,}$/.test(candidate.trim())) return false
-      return /^(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+\S/.test(candidate.trimStart())
-    }
-    return false
+  const nested: boolean[] = []
+  const ancestors: { columns: number; marker: boolean }[] = []
+  for (const line of masked) {
+    if (line.trim() === '') { nested.push(false); continue }
+    const [columns] = leadingIndent(line)
+    while (ancestors.length && ancestors.at(-1)!.columns >= columns) ancestors.pop()
+    nested.push(ancestors.at(-1)?.marker ?? false)
+    const marker = !/^(?:([*-])[ \t]*){3,}$/.test(line.trim()) && /^(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+\S/.test(line.trimStart())
+    ancestors.push({ columns, marker })
   }
   for (let i = 0; i < lines.length; i++) {
     if ((masked[i] ?? '').trim() === '') continue
@@ -176,17 +174,14 @@ function convertDjotBlockMarkers(source: string): string {
     const enclosed = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)
     if (enclosed) {
       const authored = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(lines[i]!)
-      const [columns] = leadingIndent(enclosed[2]!)
-      if (authored) lines[i] = `${authored[1]}${isNestedAt(i, enclosed[1]!, columns) ? authored[2] : ''}${authored[3]}.${authored[4]}`
+      if (authored) lines[i] = `${authored[1]}${enclosed[1] === '' && nested[i] ? authored[2] : ''}${authored[3]}.${authored[4]}`
       continue
     }
     const rule = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)([*-])(?:[ \t]*\3){2,}[ \t]*$/.exec(masked[i]!)
     if (!rule) continue
     const quote = rule[1]!
     const indent = rule[2]!
-    const [columns] = leadingIndent(indent)
-    const nested = isNestedAt(i, quote, columns)
-    lines[i] = `${quote}${nested ? indent : ''}***`
+    lines[i] = `${quote}${quote === '' && nested[i] ? indent : ''}***`
   }
   return lines.join('\n')
 }
@@ -362,7 +357,7 @@ export function djotToCarve(djot: string): string {
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
-  const headingFolded = foldHeadingContinuations(normalizeDjotTablePipes(body))
+  const headingFolded = foldHeadingContinuations(normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotFences(body))))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
   const collapsedChars = collapsedMask.split('')
   for (let at = 0; at < headingFolded.length; at++) {
@@ -397,6 +392,111 @@ export function djotToCarve(djot: string): string {
   return frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`
 }
 
+
+function normalizeDjotFences(source: string): string {
+  if (!source.includes('```') && !source.includes('~~~')) return source.includes('\\|') ? closeDjotTableCode(source) : source
+  const lines = source.split('\n')
+  const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
+  maskDjotCodeAndDestinations(source, false, true, false, (line, replacement) => { lines[line] = replacement }, rows)
+  const normalized = lines.join('\n')
+  return source.includes('\\|') || source.split('\n').some(line => /^[ \t]+`{3,}/.test(quoted(line)[1])) ? closeDjotTableCode(normalized) : normalized
+}
+
+function normalizeDjotAutolinks(source: string): string {
+  if (!source.includes('<')) return source
+  const codeMask = maskDjotCodeAndDestinations(source, false, true, false)
+  const mask = maskDjotCodeAndDestinations(source).split('')
+  const rows = djotTableRows(source, codeMask)
+  let definitionIndent = -1, definitionOffset = 0, definitionLine = 0, previousContent = ''
+  for (const line of source.split('\n')) {
+    const at = djotContentStart(line), content = line.slice(at)
+    const boundary = previousContent === '' || rows[definitionLine - 1] || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previousContent)
+    const definition = codeMask[definitionOffset + at] === '[' && /^\[(?!\^)[^\]\n]*\]:/.test(content) && boundary
+    const continuation = definitionIndent >= 0 && at > definitionIndent && /^\S+$/.test(content)
+    if (definition || continuation) {
+      for (let i = 0; i < line.length; i++) mask[definitionOffset + i] = ' '
+      if (definition) definitionIndent = at
+    } else definitionIndent = -1
+    previousContent = content.trim()
+    definitionOffset += line.length + 1
+    definitionLine++
+  }
+
+  const angleEnds = new Map(Array.from(source.matchAll(/<[^<>\s]+>/g), match => [match.index!, /[^:]@|[A-Za-z]:/.test(match[0]) ? match.index! + match[0].length : -1]))
+  const bracketEnds = new Map<number, number>(), nestedBrackets = new Set<number>(), stack: number[] = []
+  const imageAutolinks = new Set<number>()
+  const parenEnds = new Map<number, number>(), parens: number[] = []
+  let quote = ''
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\\') { i++; continue }
+    if (quote) { if (source[i] === quote || source[i] === '\n') quote = ''; continue }
+    if (parens.length && /[ \t]/.test(source[i - 1] ?? '') && /["']/.test(source[i]!)) { quote = source[i]!; continue }
+    if (source[i] === '(') parens.push(i)
+    if (source[i] === ')' && parens.length) parenEnds.set(parens.pop()!, i)
+  }
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\\') { i++; continue }
+    const angleEnd = angleEnds.get(i)
+    if (angleEnd !== undefined && angleEnd > i) { i = angleEnd - 1; continue }
+    if (source[i] === '[') { if (stack.length) nestedBrackets.add(stack.at(-1)!); stack.push(i) }
+    if (source[i] === ']' && stack.length) bracketEnds.set(stack.pop()!, i)
+  }
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\\') { i++; continue }
+    let end: number | undefined
+    if (source[i] === '{' && mask[i] === '{') end = readAttributes(source, i)?.end
+    if (source[i] === '!' && mask[i] === '!' && source[i + 1] === '[') {
+      const close = bracketEnds.get(i + 1)
+      if (close !== undefined && /[([]/.test(source[close + 1] ?? '')) {
+        const angles: number[] = []
+        let plain = true
+        for (let at = i + 2; at < close; at++) {
+          const angleEnd = angleEnds.get(at)
+          if (angleEnd !== undefined && angleEnd > at && angleEnd <= close) { angles.push(at); at = angleEnd - 1 }
+          else if ('`{_*~^\\['.includes(source[at]!)) { plain = false; break }
+        }
+        if (plain) for (const at of angles) imageAutolinks.add(at)
+        end = close + 1
+      }
+    }
+    if (source[i] === ']' && source[i + 1] === '[') {
+      const close = bracketEnds.get(i + 1)
+      if (close !== undefined) end = close + 1
+    }
+    if (source[i] === ']' && source[i + 1] === '(') {
+      const close = parenEnds.get(i + 1)
+      if (close !== undefined) end = close + 1
+    }
+    if (source[i] === '[' && source[i + 1] === '^') {
+      const close = bracketEnds.get(i)
+      if (close !== undefined && !nestedBrackets.has(i)) end = close + 1
+    }
+    if (end !== undefined) {
+      for (let at = i; at < end; at++) if (mask[at] !== '\n') mask[at] = ' '
+      i = end - 1
+    }
+  }
+  const parts: string[] = []
+  let copied = 0, line = 0, offset = 0
+  for (const match of source.matchAll(/<([^<>\s]+)>/g)) {
+    const at = match.index!, end = at + match[0].length
+    while (offset < at) { if (source[offset] === '\n') line++; offset++ }
+    const image = imageAutolinks.has(at) && codeMask[at] === '<'
+    if ((!image && mask[at] !== '<') || isDjotEscaped(source, at)) continue
+    const body = match[1]!
+    if (!/[^:]@|[A-Za-z]:/.test(body) || (!image && !/[\[\]`|\\]/.test(body) && !(/[^:]@/.test(body) && body.includes(':')))) continue
+    if (rows[line] && /[|`]/.test(body)) continue
+    const label = body.replace(/[!-\/:-@\[-`{-~]/g, value => '\\' + value)
+    const destination = /[^:]@/.test(body) ? 'mailto:' + body : body
+    const authority = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\\]*/.exec(destination)?.[0].length ?? 0
+    const encode = (text: string, brackets: boolean) => text.replace(brackets ? /[`|\\()[\]]/g : /[`|\\()]/g, value => value === '\\' ? '\\\\' : '%' + value.charCodeAt(0).toString(16).toUpperCase())
+    const target = encode(destination.slice(0, authority), false) + encode(destination.slice(authority), true)
+    parts.push(source.slice(copied, at), image ? label : '[' + label + '](' + target + ')')
+    copied = end
+  }
+  parts.push(source.slice(copied))
+  return parts.join('')
+}
 
 function djotContentStart(line: string): number {
     let at = 0
@@ -561,8 +661,8 @@ function closeDjotTableCode(source: string): string {
     else if (source[at] === '[') bracketStack.push(at)
     else if (source[at] === ']' && bracketStack.length) labels.set(bracketStack.pop()!, at)
   }
-  const block = /^(?:[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|>|\||\^ |\[[^\]]+\]:)/
-  const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+)/
+  const block = /^(?:[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|>|\||\^ |\[[^\]]+\]:)/
+  const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)/
   const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
   let paragraph = 0, offset = 0, cursor = 0, consumed = 0, itemColumn = 0, itemQuote = 0, previousQuote = 0
   let itemKind = '', previousBlock = true
@@ -584,13 +684,14 @@ function closeDjotTableCode(source: string): string {
       }
       const opening = /^(`{3,}|~{3,})[ \t]*=?[a-zA-Z0-9_+#.-]*$/.exec(line.slice(at))
       if (opening && (previousBlock || item)) {
-        fenced = { width: opening[1]!.length, ch: opening[1]![0]!, depth, column: at, item: item ? indent + item[0].length : itemColumn }
+        if (!item && (depth < itemQuote || (depth === itemQuote && indent < itemColumn))) { itemColumn = indent; itemQuote = depth; itemKind = '' }
+        fenced = { width: opening[1]!.length, ch: opening[1]![0]!, depth, column: at, item: item ? indent + (item[0].startsWith('[^') ? 2 : item[0].length) : Math.min(itemColumn, indent) }
         offset = lineEnd + 1
         continue
       }
     }
     if (offset >= consumed) {
-      if (item) { itemColumn = indent + (item[0].startsWith('[^') ? 1 : item[0].length); itemQuote = depth; itemKind = item[0].replace(/^[0-9]+/, '1').replace(/^[A-Za-z]+/, 'a').trim() }
+      if (item) { itemColumn = indent + (item[0].startsWith('[^') ? 2 : item[0].length); itemQuote = depth; itemKind = item[0].replace(/^[0-9]+/, '1').replace(/^[A-Za-z]+/, 'a').trim() }
       else if (trimmed && (depth < itemQuote || (depth === itemQuote && indent < itemColumn && (block.test(trimmed) || (trimmed.startsWith('{') && readAttributes(trimmed, 0)))))) itemColumn = 0
       const div = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(at))
       if (div) {
@@ -678,7 +779,7 @@ function closeDjotTableCode(source: string): string {
 
 function normalizeDjotTablePipes(source: string): string {
   if (!source.includes('\\|')) return source
-  source = renameDjotPipeFootnotes(closeDjotTableCode(source))
+  source = renameDjotPipeFootnotes(source)
   const mask = maskDjotCodeAndDestinations(source, false, true, false)
   const lines = source.split('\n')
   const offsets: number[] = []
