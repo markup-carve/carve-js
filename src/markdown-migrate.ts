@@ -1234,7 +1234,7 @@ function convertInline(
   protectDestinations(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^\]]*\])*\])(${pointyDestination})`, 'g'))
   protectDestinations(new RegExp(String.raw`(?<=\])()(${pointyDestination})`, 'g'))
 
-  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
+  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\[\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
   protectDestinations(multilineTitle)
 
   // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the

@@ -183,3 +183,11 @@ it('keeps a deeper quote marker inside an open HTML block', () => {
   expect(written).not.toContain('carve-import-footnote-')
   expect(written).toContain('[^a|b]: N')
 })
+
+it('retains unfinished footnote markers beside a valid multiline link title', () => {
+  const source = '[^a'.repeat(16384) + '\n\n[t](/u "one\ntwo")\n'
+  const written = markdownToCarve(source)
+  expect(written).toContain('[^a'.repeat(16384))
+  expect(carveToHtml(written)).toContain('title="one\ntwo"')
+  expect(carveToHtml(written)).toContain('href="/u"')
+})
