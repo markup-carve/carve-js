@@ -50,6 +50,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - An include rename no longer rewrites a `</#id>` cross-reference that resolves to nothing when the included file is read on its own. `</#id>` reaches headings, so one naming a renamed paragraph, span or other element is authored literal text and stays as written; link and image destinations still follow the rename, including one that names a numbered caption (#2564, #2570).
 - HTML import of consecutive nested text spans succeeds, carrying both repair
   diagnostics, instead of throwing (#2576).
+- Djot import keeps autolink labels opaque while aliasing footnotes and
+  converting delimiters, keeps a fence's code and owner after indentation is
+  mapped to Carve, leaves reference-definition values literal, and preserves
+  IPv6 authority brackets and raw backslashes in URLs (#2592).
 
 ### Performance
 
@@ -57,6 +61,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - Parser candidate queues drain with a cursor, Markdown quote collection keeps its traversal order, and HTML import indexes backlink siblings, ruby whitespace and heading attribute order (#2565).
 - Footnote lookup uses lazy subtree indexes and membership sets, and HTML import compacts sibling cleanup and batches nested-span refusals, empty-code removals and table-section positions (#2576).
 - Markdown import bounds footnote masking at the last closing bracket on each line and drops quadratic scans of unfinished link and image labels (#2586).
+- Djot import tracks indentation on a stack instead of rescanning preceding lines for each repeated thematic break or parenthesized list marker, and the advisory migration scan reuses a closer index for later backtick runs (#2592).
 
 ## [0.1.10] - 2026-10-06
 
