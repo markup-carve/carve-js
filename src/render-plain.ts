@@ -9,7 +9,7 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -507,6 +507,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // targets of one engine disagree about whether the document says it.
       // carve-php kept it (carve#352, corpus 33-editorial-markup).
     case 'critic_comment':
+      editorialCommentFlattened(ctx.options, node, 'plain')
       return stripControls(node.text)
     case 'heading_ref':
       // Resolved: the target heading's text, which is what a reader of plain

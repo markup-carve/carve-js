@@ -1059,14 +1059,10 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // Emit BOTH sides like the HTML renderer; dropping the old half loses content.
       return `<del>${renderInlines(node.old, ctx)}</del><ins>${renderInlines(node.new, ctx)}</ins>`
     case 'critic_comment':
-      // Visible content: the HTML target renders it as
-      // `<span class="critic-comment"> note </span>`, so dropping it here made two
-      // targets of one engine disagree about whether the document says it. Markdown
-      // has no critic syntax, so the text is what degrades gracefully -- and it is
-      // escaped like any other text, since it lands in a Markdown document.
-      // carve-php kept it (carve#352, corpus 33-editorial-markup); the plain and
-      // ANSI targets were fixed in carve-js#429.
-      return escapeText(node.text)
+      // Visible content, so never dropped. The span carries the HTML target's
+      // class (markup-carve/carve#2791); the content stays one escaped text run,
+      // never inline-parsed (CARVE-P3-016).
+      return `<span class="critic-comment">${escapeText(node.text)}</span>`
     case 'heading_ref': {
       // UNRESOLVED: the authored marker, kept readable rather than escaped into
       // noise - a reader can still act on `</#nope>`. The TARGET inside it is

@@ -66,9 +66,10 @@ carveToHtmlWithReport('`x`{=latex}', { strictLosses: true })
 // throws RenderLossError before a value is returned
 ```
 
-The other two codes are `ruby-flattened` and `destination-denied`, the latter
-one row per destination the scheme denylist blanked. See
-[untrusted input](security.md) for that one.
+The other codes are `ruby-flattened`, `editorial-comment-flattened` (one row
+per editorial comment the plain and ANSI targets flatten into the surrounding
+text) and `destination-denied`, one row per destination the scheme denylist
+blanked. See [untrusted input](security.md) for that one.
 
 Reports are bounded to 100 entries by default while `totalLosses` retains the
 complete count. Set `maxRenderLosses` to change the bound. The compatible
