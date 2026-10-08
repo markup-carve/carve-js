@@ -175,6 +175,13 @@ jobs:
           # tag, so it needs the tags and the history behind them.
           fetch-depth: 0
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      # The draft must describe the tagged changelog section before publishing.
+      # Relative changelog links resolve against this tag in the release body.
+      # rehearse-release-notes.yml runs the same script against a draft.
       - name: Verify approval and checked tag before publishing
         working-directory: ${{ github.workspace }}
         if: ${{ inputs.publish }}
@@ -192,13 +199,6 @@ jobs:
           CANDIDATE_TAG: ${{ inputs.tag }}
         run: |
           git tag "$CANDIDATE_TAG" "${{ inputs.source_sha }}"
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
-
-      # The draft must describe the tagged changelog section before publishing.
-      # Relative changelog links resolve against this tag in the release body.
-      # rehearse-release-notes.yml runs the same script against a draft.
       - name: The release notes match this tag's changelog
         shell: bash
         env:
