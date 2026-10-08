@@ -33,8 +33,8 @@ describe('the text targets keep a critic comment', () => {
 })
 
 describe('the Markdown target keeps a critic comment', () => {
-  it('keeps it as text, since Markdown has no critic syntax', () => {
-    expect(carveToMarkdown('b{# note #}\n')).toBe('b note\n')
+  it('keeps it in the critic-comment span the HTML target uses', () => {
+    expect(carveToMarkdown('b{# note #}\n')).toBe('b<span class="critic-comment"> note </span>\n')
   })
 
   it('escapes it like any other text landing in a Markdown document', () => {

@@ -1,7 +1,11 @@
 import type { Position } from './ast.js'
 
 export type RenderTarget = 'html' | 'markdown' | 'plain' | 'ansi' | 'carve'
-export type RenderLossCode = 'raw-format-dropped' | 'ruby-flattened' | 'destination-denied'
+export type RenderLossCode =
+  | 'raw-format-dropped'
+  | 'ruby-flattened'
+  | 'destination-denied'
+  | 'editorial-comment-flattened'
 
 interface RenderLossBase {
   target: RenderTarget
@@ -14,6 +18,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'raw-format-dropped'; format: string })
   | (RenderLossBase & { code: 'ruby-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'destination-denied'; nodeType: 'inline' })
+  | (RenderLossBase & { code: 'editorial-comment-flattened'; nodeType: 'inline' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -58,6 +63,21 @@ export function rubyFlattened(
     target,
     nodeType: 'inline',
     message: `Flattened ruby annotations while rendering ${target}`,
+    ...(node.pos ? { pos: node.pos } : {}),
+  })
+}
+
+/** The message is normative (markup-carve/carve#2791) and carries no target. */
+export function editorialCommentFlattened(
+  opts: RenderLossSinkOptions,
+  node: { type: 'critic_comment'; pos?: Position },
+  target: 'plain' | 'ansi',
+): void {
+  opts.onRenderLoss?.({
+    code: 'editorial-comment-flattened',
+    target,
+    nodeType: 'inline',
+    message: 'Flattened an editorial comment into the surrounding text',
     ...(node.pos ? { pos: node.pos } : {}),
   })
 }

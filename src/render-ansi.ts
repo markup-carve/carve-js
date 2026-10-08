@@ -12,7 +12,7 @@ import { codeLines } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { destinationDenied, rawFormatDropped, rubyFlattened, type RenderLoss, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLoss, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -675,6 +675,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // targets of one engine disagree about whether the document says it.
       // carve-php kept it (carve#352, corpus 33-editorial-markup).
     case 'critic_comment':
+      editorialCommentFlattened(ctx.options, node, 'ansi')
       return stripControls(node.text)
     case 'heading_ref':
       // Already inside a link's text: no second styling run, matching the HTML
