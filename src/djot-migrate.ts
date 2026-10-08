@@ -348,7 +348,7 @@ export function isDjotEscaped(source: string, at: number): boolean {
   return (at - start) % 2 !== 0
 }
 
-export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true): string {
+export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true, inlineForms = true): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
   const previousLines = new Map<number, string>()
@@ -409,10 +409,11 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     while (s[i + n] === '`') n++
     return n
   }
-  const paragraphEnds = Array.from(s.matchAll(/\n[ \t]*\n/g), match => match.index!)
+  const paragraphEnds = Array.from(s.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), match => match.index!)
   let paragraphIndex = 0
   let i = 0
   while (i < s.length) {
+    if (s[i] === '\\' && /[!-\/:-@\[-`{-~]/.test(s[i + 1] ?? '')) { i += 2; continue }
     if (s[i] !== '`') {
       i++
       continue
@@ -423,9 +424,11 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     let j = i + len
     let closed = -1
     while (j < paragraphEnd) {
-      if (s[j] === '`' && runLen(j) === len) {
-        closed = j
-        break
+      if (s[j] === '`') {
+        const candidate = runLen(j)
+        if (candidate === len) { closed = j; break }
+        j += candidate
+        continue
       }
       j++
     }
@@ -442,6 +445,8 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
     for (let k = i; k < closed + len; k++) if (out[k] !== '\n') out[k] = ' '
     i = closed + len
   }
+
+  if (!inlineForms) return out.join('')
 
   // Stage 3: inline link / image destination + title. Carve consumes
   // `[text](dest "title")` (and the image form) as a whole; delimiters
