@@ -118,7 +118,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [npm-credential]
-    needs: [npm-credential]
     # A required reviewer approves before this runs (markup-carve/carve#2032).
     environment: release
     permissions:
