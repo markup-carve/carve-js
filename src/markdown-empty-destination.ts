@@ -15,6 +15,7 @@ export interface EmptyDestinationReferences {
   defined: Set<string>
   labels: Map<string, string>
   inline: Map<string, string>
+  tableInline: Map<string, string>
   sourceLabels: Map<string, string>
 }
 
@@ -40,7 +41,7 @@ function rewriteParenthesizedTitle(value: string): string {
   return value
 }
 
-const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), sourceLabels: new Map() }
+const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), tableInline: new Map(), sourceLabels: new Map() }
 
 let references = NO_REFERENCES
 
@@ -62,8 +63,8 @@ export function referenceDestinationLabel(
   return references.empty.has(key) ? undefined : references.labels.get(key)
 }
 
-export function referenceInlineTarget(label: string): string | undefined {
-  return references.inline.get(label)
+export function referenceInlineTarget(label: string, table = false): string | undefined {
+  return references.inline.get(label) ?? (table ? references.tableInline.get(label) : undefined)
 }
 
 export function referenceSourceText(label: string, placeholders: readonly string[]): string {
@@ -152,6 +153,7 @@ export function extractReferenceDefinitions(
   const labels = new Map<string, string>()
   const definitions: string[] = []
   const inline = new Map<string, string>()
+  const tableInline = new Map<string, string>()
   let nextSerial = 1
   const sourceLabels = new Map<string, string>()
   const reservedReferences = new Set<number>()
@@ -352,6 +354,7 @@ export function extractReferenceDefinitions(
         const title = !new RegExp(String.raw`[ \t]${TITLE}[ \t]*$`).test(target) && nextTitle
           ? ` ${nextTitle[1]}` : ''
         if (title) i++
+        if (!repeated && definition[1]!.includes('|')) tableInline.set(definition[1]!, `${target}${title}`)
         const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(/^<([^<>]+)>/, (_match, url: string) =>
           url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
         ))
@@ -422,7 +425,7 @@ export function extractReferenceDefinitions(
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }
-  return { lines: kept, references: { empty, defined, labels, inline, sourceLabels }, definitions }
+  return { lines: kept, references: { empty, defined, labels, inline, tableInline, sourceLabels }, definitions }
 }
 
 /** A line-initial block opener in text, escaped so the text stays a paragraph. */

@@ -1,7 +1,8 @@
 import { codepointToUtf16Map, lintCarve } from './lint.js'
-import { parse } from './parse.js'
+import { parse, buildBracketMap } from './parse.js'
 import { caseOnlyKey, normalizeHeadingRefLabel, type AsciiHeadingIdMode } from './heading-ids.js'
 import { normalizeRefLabel } from './label-key.js'
+import { unescapeAttrValue } from './attribute-parser.js'
 
 interface Edit {
   start: number
@@ -103,18 +104,20 @@ function imageEdits(source: string): Edit[] {
 }
 
 function imageReferenceEdit(written: string, label: string, alt: string, wanted: string): string | undefined {
-  // Only a plain alt proves the bracket found is the reference's own. Use-site
-  // attributes after the bracket are carried over unchanged.
-  const collapsed = `![${label}][]`
-  const explicit = `![${alt}][${label}]`
+  const close = buildBracketMap(written)(1)
+  if (close === undefined || !written.startsWith('![')) return undefined
+  const rawAlt = written.slice(2, close)
+  if (unescapeAttrValue(rawAlt) !== alt) return undefined
+  const collapsed = `![${rawAlt}][]`
+  const explicit = `![${rawAlt}][${label}]`
   const head = written.startsWith(collapsed) ? collapsed : written.startsWith(explicit) ? explicit : undefined
   if (head === undefined) return undefined
   const attrs = written.slice(head.length)
   if (attrs !== '' && !attrs.startsWith('{')) return undefined
   if (head === collapsed) {
-    return label === alt && caseOnlyKey(normalizeRefLabel(label)) === caseOnlyKey(wanted) ? `![${wanted}][]${attrs}` : undefined
+    return label === rawAlt && caseOnlyKey(normalizeRefLabel(label)) === caseOnlyKey(wanted) ? `![${wanted}][]${attrs}` : undefined
   }
-  return `![${alt}][${wanted}]${attrs}`
+  return `![${rawAlt}][${wanted}]${attrs}`
 }
 
 function walk(value: unknown, visit: (node: Record<string, unknown>) => void): void {

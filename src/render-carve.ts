@@ -97,8 +97,8 @@ interface CarveContext {
   lineBlockDepth: number
   /** Depth of INLINE-NOTE nesting. A note's content recognizes no note, so
    *  a bracket run opening with a caret needs no escape inside one. */
-  tableCellDepth: number
   inlineNoteDepth: number
+  tableCellDepth: number
   /** Number of colon-fence containers enclosing the block currently rendering. */
   colonFenceDepth: number
   /** Whether the previous sibling block can host a caption. */
@@ -2793,7 +2793,7 @@ class CarveRenderSession {
         listDepth: 0,
         lineBlockDepth: 0,
         inlineNoteDepth: 0,
-      tableCellDepth: 0,
+        tableCellDepth: 0,
         colonFenceDepth: 0,
         afterCaptionHost: false,
         paragraphStartsAfterCaptionHost: false,

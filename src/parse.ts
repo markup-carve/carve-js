@@ -5972,6 +5972,11 @@ export function splitTableRowSpans(
   const scanEnd = bodyEnd > i && line[bodyEnd - 1] === '|' ? bodyEnd - 1 : line.length
   for (; i < scanEnd; i++) {
     const ch = line[i]!
+    if (openRun === 0 && ch === '\\' && /[!-/:-@\[-`{-~]/.test(line[i + 1] ?? '')) {
+      buf += line.slice(i, i + 2)
+      i++
+      continue
+    }
     if (ch === '`') {
       // The MAXIMAL run, as the opener is: a run cannot cross `scanEnd`, whose
       // character is the row's closing `|`.
@@ -13989,7 +13994,7 @@ class ParseSession {
 
       // Image ![alt](src) — the alt text allows nested balanced [...], so the
       // close `]` is found by balance, not a [^\]]* regex that would mis-split
-      // a nested bracket (e.g. `![a [b] c](/u)`). Alt is raw text, not inline.
+      // a nested bracket (e.g. `![a [b] c](/u)`). Alt is scalar text with punctuation escapes.
       if (c === '!' && text[i + 1] === '[') {
         const closeAbs = bracketClose(i + 1)
         const close = closeAbs === undefined ? -1 : closeAbs - i

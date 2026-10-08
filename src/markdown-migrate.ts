@@ -1,7 +1,7 @@
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
-import { isValidAttrPayload } from './attribute-parser.js'
+import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
 /*
@@ -1041,6 +1041,7 @@ function convertInline(
   taskBox = false,
   joinedLines?: Set<number>,
   terminal = true,
+  table = false,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -1074,16 +1075,17 @@ function convertInline(
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
-  const writeLiteralAutolink = (body: string): string => {
+  const writeLiteralAutolink = (body: string, hrefPrefix = ''): string => {
     for (let pass = 0; pass < protectedSpans.length; pass++) {
       const restored = body.replace(/\x00P(\d+)\x00/g, (_token, index: string) => protectedSpans[Number(index)] ?? _token)
       if (restored === body) break
       body = restored
     }
-    const href = body.replace(/[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
-    return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
+    const href = hrefPrefix + body.replace(table ? /[\\[\]`|]/g : /[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
+    const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
       { type: 'link', href, children: [{ type: 'text', value: body }] },
     ] }] }).replace(/\n$/, '')
+    return table ? escapeTablePipes(written) : written
   }
   let escaped = ''
   const opaqueEnd = opaqueHtmlScanner(line)
@@ -1138,7 +1140,16 @@ function convertInline(
     const enc = writeMarkdownDestination(url, protectedSpans).replace(/[<> \t"`]/g, char =>
       '%' + char.charCodeAt(0).toString(16).toUpperCase(),
     )
-    return `(${enc}${decodeEntitiesInTitle(rest).replace(/^[ \t\n]+/, ' ')})`
+    let title = decodeEntitiesInTitle(rest).replace(/^[ \t\n]+/, ' ')
+    if (table) {
+      const quoted = RE_QUOTED_TITLE.exec(title)
+      if (quoted) {
+        const decoded = unescapeAttrValue(quoted[3]!)
+        const escaped = decoded.replace(/\\/g, '\\\\').split(quoted[2]!).join('\\' + quoted[2]).replaceAll('`', '\\`')
+        title = `${quoted[1]}${quoted[2]}${escaped}${quoted[2]}${quoted[4]}`
+      }
+    }
+    return `(${enc}${title})`
   }
 
   const activationSource = line
@@ -1155,13 +1166,13 @@ function convertInline(
     })
 
   const referenceTail = (canonical: string, fallback: string): string => {
-    const target = referenceInlineTarget(canonical)
+    const target = referenceInlineTarget(canonical, table)
     return protect(target === undefined ? fallback : encodeDest(`(${target})`) ?? fallback)
   }
 
   const imageLabel = (label: string): string => {
     const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw)
-    return rawBracketRunCloses(alt) ? `![${alt}]` : label
+    return `![${rawBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : alt.replace(/[\\[\]`]/g, '\\$&')}]`
   }
   const protectDestination = (alt: string, dest: string): string => {
     const encoded = encodeDest(dest)
@@ -1224,7 +1235,7 @@ function convertInline(
   const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
   protectDestinations(multilineTitle)
 
-  // Images `![alt](dest)`: Carve renders the alt as raw text, so protect the
+  // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
   protectDestinations(/(!\[(?:[^[\]]|\[[^\]]*\])*\])(\((?:[^()\n]|\([^()\n]*\))*\))/g)
@@ -1238,7 +1249,7 @@ function convertInline(
       if (source[offset + match.length] === '(') return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans)
       if (canonical === undefined || /[\[\]]/.test(canonical)) return match
-      const target = referenceInlineTarget(canonical)
+      const target = referenceInlineTarget(canonical, table)
       return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
     })
 
@@ -1280,7 +1291,7 @@ function convertInline(
     const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label))
       ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans) : undefined
     const sourceLabel = referenceSourceLabel(reference, protectedSpans)
-    if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel) !== undefined) return referenceTail(sourceLabel, match)
+    if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel, table) !== undefined) return referenceTail(sourceLabel, match)
     const literal = referenceLiteralText(reference, decodeHtmlEntitiesRaw, protectedSpans)
     if (canonical === undefined && sourceLabel === undefined && !reference.startsWith('^') && /\\[!*]/.test(referenceSourceText(reference, protectedSpans)) && literal !== reference && /[!*]/.test(literal)) {
       return protect(`\\[${literal}]`)
@@ -1330,10 +1341,13 @@ function convertInline(
       if (restored === body) break
       body = restored
     }
-    if (!/[\\`]/.test(body) && rawBracketRunCloses(body)) return protect(match)
+    if (!(table && body.includes('|')) && !/[\\`]/.test(body) && rawBracketRunCloses(body)) return protect(match)
     return protect(writeLiteralAutolink(body))
   })
-  line = line.replace(/<[^>\s@]+@[^>\s]+>/g, match => /[\\\x00]/.test(match) ? match : protect(match))
+  line = line.replace(/<[^>\s@]+@[^>\s]+>/g, match =>
+    /[\\\x00]/.test(match) ? match : table && match.includes('|')
+      ? protect(writeLiteralAutolink(match.slice(1, -1), 'mailto:')) : protect(match),
+  )
 
   // Markdown inline HTML is live markup. Protect tags that have no lossless
   // Carve-native equivalent as explicit raw HTML before delimiter rewrites.
@@ -1500,6 +1514,8 @@ function convertInline(
   }
   line = decodeHtmlEntities(line)
 
+  if (table) line = escapeTablePipes(line)
+
   const maxRestorePasses = protectedSpans.length + 1
   for (let pass = 0; pass < maxRestorePasses; pass++) {
     const prev = line
@@ -1511,7 +1527,12 @@ function convertInline(
       // replacement above - kept because it is the post-condition of the whole
       // restore, and the cost of being wrong about that is a document with
       // "undefined" written into it.
-      .replace(/\x00P(\d+)\x00/g, (m, i) => protectedSpans[Number(i)] ?? m)
+      .replace(/\x00P(\d+)\x00/g, (m, i) => {
+        const span = protectedSpans[Number(i)] ?? m
+        return table && (span.startsWith('![') || span.startsWith('('))
+          ? escapeTablePipes(span)
+          : span
+      })
     if (line === prev) break
   }
   return line
@@ -1629,7 +1650,7 @@ function splitTableRow(row: string): string[] {
   let cur = ''
   for (let i = 0; i < row.length; i++) {
     const ch = row[i]!
-    if (ch === '\\' && i + 1 < row.length) {
+    if (ch === '\\' && row[i + 1] === '|') {
       cur += ch + row[++i]!
       continue
     }
@@ -1655,6 +1676,12 @@ function splitTableRow(row: string): string[] {
  * and pads a short row with empty cells, while a Carve row keeps the cells it
  * spells, so the row is fitted here.
  */
+function escapeTablePipes(text: string): string {
+  return text.replace(/(\\*)\||\\+/g, (run, slashes: string | undefined) =>
+    slashes === undefined ? run : slashes + (slashes.length % 2 === 0 ? '\\|' : '|'),
+  )
+}
+
 function writeTableRow(
   cells: readonly string[],
   prefixes: readonly string[],
@@ -1663,7 +1690,7 @@ function writeTableRow(
 ): string {
   let row = ''
   for (let c = 0; c < width; c++) {
-    const cell = convertInline(unescapePipesInCodeSpans(cells[c] ?? ''), dialect)
+    const cell = convertInline((cells[c] ?? '').replace(/\\\|/g, '|'), dialect, false, false, undefined, true, true)
     row += '|' + padCell(prefixes[c] ?? '', escapeSpanMarkerPayload(cell))
   }
   return row + '|'
