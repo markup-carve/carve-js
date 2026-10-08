@@ -17,6 +17,7 @@ import {
 import {
   escapeLineInitialBlockSyntax,
   extractReferenceDefinitions,
+  importedFootnoteLabel,
   plainAltText,
   referenceDestinationLabel,
   referenceInlineTarget,
@@ -653,7 +654,7 @@ function rawInlineHtml(content: string): string {
 }
 
 function rawBlockHtml(lines: readonly string[]): string[] {
-  const content = lines.join('\n')
+  const content = lines.join('\n').replaceAll(' \x00FNEMPTY\x00', '')
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(content) + 1))
   return [`${fence}=html`, content, fence]
 }
@@ -1114,6 +1115,7 @@ function convertInline(
   }
   line = escaped
 
+
   // <code>...</code> without attributes has a Carve-native equivalent. Protect
   // it before delimiter rewrites so its body stays verbatim. Attributed code
   // is handled by convertInlineHtml as raw HTML so attributes are not lost.
@@ -1229,27 +1231,29 @@ function convertInline(
   }
 
   const pointyDestination = String.raw`\([ \t]*<[^<>\n]*>(?:[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'))?[ \t]*\)`
-  protectDestinations(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^\]]*\])*\])(${pointyDestination})`, 'g'))
+  protectDestinations(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^[\]]*\])*\])(${pointyDestination})`, 'g'))
   protectDestinations(new RegExp(String.raw`(?<=\])()(${pointyDestination})`, 'g'))
 
-  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
+  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\[\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
   protectDestinations(multilineTitle)
 
   // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
-  protectDestinations(/(!\[(?:[^[\]]|\[[^\]]*\])*\])(\((?:[^()\n]|\([^()\n]*\))*\))/g)
+  protectDestinations(/(!\[(?:[^[\]]|\[[^[\]]*\])*\])(\((?:[^()\n]|\([^()\n]*\))*\))/g)
 
   // Link destinations `](dest "title")`. (Images already handled above.) The
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
   protectDestinations(/(?<=\])()(\((?:[^()\n]|\([^()\n]*\))*\))/g)
+
+
 
   // In a plain three-label chain, an unknown full-reference label can begin
   // the next link. Protect the resolved tail before the ordinary reference pass.
   let chainCursor = 0
   const chainAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
   const chainSubject = line
-  line = line.replace(/(?<![\\\]])\[([\w .|-]+)\]\[([\w .|-]+)\]\[([\w .|-]+)\](?!\[)/gu,
+  line = line.replace(/(?<![\\\]])\[([^[\]\n^]+)\]\[([^[\]\n^]+)\]\[([^[\]\n^]+)\]/gu,
     (match, first: string, second: string, third: string, offset: number) => {
       while (chainCursor < offset) {
         if (chainSubject[chainCursor] === '<') {
@@ -1267,14 +1271,14 @@ function convertInline(
       const middle = referenceDestinationLabel(second, decodeHtmlEntitiesRaw, protectedSpans, table)
       const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (middle !== undefined) {
-        if (chainSubject[offset - 1] === '!') return match
-        return `[${first}]${protect(`[${middle}]`)}[${third}]${last !== undefined ? protect(`[${last}]`) : ''}`
+        if (chainSubject[offset - 1] === '!' || chainSubject[offset + match.length] === '[') return match
+        return `[${first}]${referenceTail(middle, `[${middle}]`)}[${third}]${last !== undefined ? referenceTail(last, `[${last}]`) : ''}`
       }
-      if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${protect(`[${last}]`)}`
+      if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${referenceTail(last, `[${last}]`)}`
       return match
     })
 
-  line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
+  line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^[\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
     (match, label: string, reference: string | undefined, offset: number, source: string) => {
       if (source[offset + match.length] === '(') return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
@@ -1283,6 +1287,36 @@ function convertInline(
       const target = referenceInlineTarget(canonical, table)
       return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
     })
+
+  const footnoteSource = line
+  let footnoteCursor = 0
+  const footnoteOpaque = opaqueHtmlScanner(line)
+  const footnoteAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+  line = line.replace(/\[\^([^[\]\n]+)\]/g, (match, label: string, offset: number) => {
+    while (footnoteCursor < offset) {
+      if (footnoteSource[footnoteCursor] === '<') {
+        footnoteAutolink.lastIndex = footnoteCursor
+        const auto = footnoteAutolink.exec(footnoteSource)
+        const end = auto ? footnoteCursor + auto[0].length : footnoteOpaque(footnoteCursor) ?? scanHtmlTag(footnoteSource, footnoteCursor)?.end
+        if (end !== undefined) { footnoteCursor = end; continue }
+      }
+      footnoteCursor++
+    }
+    if (footnoteCursor > offset) return match
+    const renamed = importedFootnoteLabel(referenceSourceText(label, protectedSpans))
+    return renamed === undefined ? match : `[^${renamed}]`
+  })
+
+  if (table) {
+    line = line.replace(/(?<!\\)\[([^[\]\n^]+)\]\[([^[\]\n]+)\]/g, (match, label: string, reference: string) =>
+      label.includes('|') && referenceDestinationLabel(reference, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
+        ? protect(match.replace(/[\[\]]/g, '\\$&')) : match,
+    )
+    line = line.replace(/(?<!\\)(!?)\[([^[\]\n^][^[\]\n]*)\]\[\]/g, (match, _image: string, label: string) =>
+      label.includes('|') && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
+        ? match.replace(/[\[\]]/g, '\\$&') : match,
+    )
+  }
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
@@ -1378,7 +1412,8 @@ function convertInline(
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
     const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table)
-    if (destinationLabel === undefined || /[\[\]]/.test(destinationLabel)) return match
+    if (destinationLabel === undefined) return table && label.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
+    if (/[\[\]]/.test(destinationLabel)) return match
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
@@ -1537,7 +1572,7 @@ function convertInline(
       })
     if (line === prev) break
   }
-  return line
+  return line.replaceAll('\x00FNEMPTY\x00', '{empty}')
 }
 
 /** Escape list markers accepted by Carve but read as text by Markdown. */
@@ -1815,6 +1850,7 @@ function startsTableHeader(lines: readonly string[], index: number): boolean {
 function continuesGfmTableBody(line: string): boolean {
   const trimmed = line.trim()
   if (trimmed === '') return false
+  if (/^\[\^((?:[^[\]\\]|\\.)+)\]:/.test(trimmed)) return false
   if (/^#{1,6}([ \t]|$)/.test(trimmed)) return false
   if (trimmed.startsWith('>')) return false
   if (isMarkdownFenceLine(trimmed)) return false
@@ -4296,6 +4332,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const removed = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw, (line) =>
     interruptingHtmlBlock(line) || isMarkdownFenceLine(line) || RE_MD_THEMATIC.test(line) ||
     /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|(?:[-*+]|0{0,8}1[.)])[ \t]+\S|=+[ \t]*$)/.test(line),
+    (line, atBlockStart) => {
+      const block = htmlBlockAt([line], 0)
+      return block !== null && (atBlockStart || block.interrupts)
+    },
   )
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
@@ -5263,15 +5303,25 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
   ).replace(/\x00REFITEM\x00/g, '%%')
   if (terminalHtmlBlock && !body.endsWith('\n')) body += '\n'
-  const output = frontmatter.length === 0
+  let output = frontmatter.length === 0
     ? body
     : body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
-  if (/(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
+  if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
     const doc = parse(output)
+    const undefinedNames = new Map<string, string>()
+    for (const [label, renamed] of removed.references.footnotes) {
+      if (Object.hasOwn(doc.footnoteDefs ?? {}, renamed)) continue
+      const value = `[^${referenceLiteralText(label, decodeHtmlEntitiesRaw, [])}]`
+      const literal = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'text', value }] }] }).replace(/\n$/, '')
+      undefinedNames.set(renamed, escapeTablePipes(literal))
+    }
+    if (undefinedNames.size > 0) {
+      output = output.replace(/\[\^(carve-import-footnote-\d+)\]/g, (match, label: string) => undefinedNames.get(label) ?? match)
+    }
     if (Object.keys(doc.footnoteDefs ?? {}).length > 0) {
-      const ordered = renderCarve(doc)
+      const ordered = renderCarve(undefinedNames.size > 0 ? parse(output) : doc)
       return markdown.endsWith('\n') ? ordered : ordered.replace(/\n$/, '')
     }
   }
