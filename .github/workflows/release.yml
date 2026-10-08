@@ -1,31 +1,43 @@
-name: Release
+name: Release packages and assets
 
 on:
-  push:
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]+'
-  # A release is STARTED here. The `tag` job below creates the tag after the
-  # gates and after the approval, so starting a release no longer means pushing
-  # a tag by hand. Dispatched at an existing tag with no version it re-runs that
-  # one instead, which a tag push cannot do: recreating a tag under the same
-  # name fires no push event.
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      version:
-        description: 'Version to release, without a leading v (e.g. 0.1.9). Leave empty when dispatching at an existing tag.'
-        required: false
+      publish:
+        required: true
+        type: boolean
+      tag:
+        required: true
         type: string
-
-# The tag this run releases: the one that was pushed, or the one a dispatch will
-# create. Every gate below reads this, so a dispatch and a tag push measure the
-# same version.
+      version:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+      source_sha:
+        required: true
+        type: string
+      release_id:
+        required: true
+        type: string
+      release_body:
+        required: true
+        type: string
+      notes_digest:
+        required: true
+        type: string
 env:
-  RELEASE_TAG: ${{ inputs.version != '' && inputs.version || github.ref_name }}
+  RELEASE_TAG: ${{ inputs.version != '' && inputs.version || inputs.tag }}
 
 
 # Every job declares timeout-minutes so a hung step fails in minutes
 # rather than inheriting the 360-minute GitHub default.
 
+  LANE_TAG: ${{ inputs.tag }}
+  LANE_REF: ${{ format('refs/tags/{0}', inputs.tag) }}
+  LANE_REF_TYPE: tag
+  LANE_PUBLISH: ${{ inputs.publish }}
 jobs:
   npm-credential:
     name: The npm credential can publish this package
@@ -34,6 +46,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Expose the candidate tag locally
+        if: ${{ !inputs.publish }}
+        shell: bash
+        env:
+          CANDIDATE_TAG: ${{ inputs.tag }}
+        run: |
+          git tag "$CANDIDATE_TAG" "${{ inputs.source_sha }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -143,10 +165,11 @@ jobs:
       # "no release" for a draft that is sitting right there with notes in
       # it. See markup-carve/carve-wasm#80.
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ inputs.source_sha }}
           submodules: recursive # spec corpus submodule; npm test needs it
           # The completeness gate below walks every merge back to the previous
           # tag, so it needs the tags and the history behind them.
@@ -159,6 +182,23 @@ jobs:
       # The draft must describe the tagged changelog section before publishing.
       # Relative changelog links resolve against this tag in the release body.
       # rehearse-release-notes.yml runs the same script against a draft.
+      - name: Verify approval and checked tag before publishing
+        working-directory: ${{ github.workspace }}
+        if: ${{ inputs.publish }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_SHA: ${{ inputs.source_sha }}
+          RELEASE_NOTES_DIGEST: ${{ inputs.notes_digest }}
+        run: python .github/scripts/release-lane.py permit
+      - name: Expose the candidate tag locally
+        if: ${{ !inputs.publish }}
+        shell: bash
+        env:
+          CANDIDATE_TAG: ${{ inputs.tag }}
+        run: |
+          git tag "$CANDIDATE_TAG" "${{ inputs.source_sha }}"
       - name: The release notes match this tag's changelog
         shell: bash
         env:
@@ -220,7 +260,13 @@ jobs:
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: |
+          if [ "$LANE_PUBLISH" = true ]; then
+            npm publish --access public
+          else
+            npm publish --dry-run --access public
+          fi
+
 
       # A registry publish is not finished until the release page exists. The
       # tag is pushed, CI publishes, the registry answers 200, and "released"
@@ -231,38 +277,7 @@ jobs:
       #
       # Last, deliberately: a draft that stays a draft is recoverable, and one
       # published beside a failed publish is not.
-      - name: Publish the release notes
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tools/run-release-notes-gate.sh "$RELEASE_TAG" "$RUNNER_TEMP/release.json"
-          release="$(cat "$RUNNER_TEMP/release.json")"
-          id="$(printf '%s' "$release" | jq -r 'select(.draft) | .id // empty')"
-          if [ -z "$id" ]; then
-            echo "The release is already published."
-            exit 0
-          fi
-          # `tag_name` goes with every PATCH of a release. Omit it on a DRAFT
-          # and GitHub replaces the tag with a generated `untagged-*`
-          # placeholder, because a draft's tag is a string on the object rather
-          # than a git ref - so the field has nothing to fall back to.
-          # `-F` (not `-f`) for draft, so it is sent as a boolean.
-          gh api "repos/$GITHUB_REPOSITORY/releases/$id" -X PATCH \
-            -f tag_name="$RELEASE_TAG" -F draft=false --jq '"published \(.tag_name)"'
-          # Read it back: exit status does not tell you whether the tag survived.
-          gh api "repos/$GITHUB_REPOSITORY/releases/$id" \
-            --jq '"draft=\(.draft) tag=\(.tag_name)"'
-
-  # THE TAG IS CREATED HERE, after a human approves, so a release can be started
-  # without a tag existing - which is the whole point: creating the tag by hand
-  # was the maintainer's step.
-  # It needs every gate job, so whoever approves is looking at a green
-  # gate rather than at nothing.
-  #
-  # A tag push still works unchanged: the step finds the tag already on the
-  # remote and creates nothing. The publish runs in THIS run rather than on the
-  # new tag, because a ref created with github.token triggers no workflow.
   tag:
     name: Create the tag
     runs-on: ubuntu-latest
@@ -271,20 +286,21 @@ jobs:
     environment: release
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create the tag unless it already exists
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Expose the candidate tag locally
+        if: ${{ !inputs.publish }}
+        shell: bash
+        env:
+          CANDIDATE_TAG: ${{ inputs.tag }}
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "$RELEASE_TAG is already on the remote; creating nothing."
-            exit 0
-          fi
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            echo "::error::this run is on tag $RELEASE_TAG, which is not on the remote."
-            exit 1
-          fi
-          # Re-checked under the approval: a tag can appear while a run waits.
-          git tag "$RELEASE_TAG" "$GITHUB_SHA"
-          git push origin "refs/tags/$RELEASE_TAG"
-          echo "tagged $RELEASE_TAG at $GITHUB_SHA"
+          git tag "$CANDIDATE_TAG" "${{ inputs.source_sha }}"
+permissions:
+  contents: write
+  actions: read
+  id-token: write
