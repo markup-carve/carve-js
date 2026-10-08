@@ -7,6 +7,8 @@
  * imports.
  */
 
+import { unescapeAttrValue } from './attribute-parser.js'
+
 export interface Directive {
   raw: string
   path: string
@@ -62,8 +64,9 @@ const SECTION_TOKEN_RE = /^#\w[\w-]*$/
 /** Loose directive shape: one whole-paragraph token, valid options or not. */
 export const DIRECTIVE_SHAPE_RE = /^\{\{[^{}]*\}\}$/
 
+// A quoted path decodes the escape set a quoted attribute value takes (carve#2778).
 function unescapeQuotedPath(path: string): string {
-  return path.replace(/\\(["\\])/g, '$1')
+  return unescapeAttrValue(path)
 }
 
 /**
