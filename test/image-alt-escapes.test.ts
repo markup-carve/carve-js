@@ -169,3 +169,10 @@ it('keeps an unresolved image alt pipe literal during import', () => {
   expect(html).toContain('![a|b][missing]')
   expect(html.match(/<th\b/g)).toHaveLength(2)
 })
+
+it('ends quoted HTML at a quoted blank line before footnotes', () => {
+  const html = carveToHtml(markdownToCarve('| T[^a\\|b] |\n|---|\n\n> <div>\n>\n> [^a|b]: N\n'))
+  expect(html).toContain('role="doc-noteref"')
+  expect(html).toContain('N')
+  expect(html).not.toContain('[^a|b]')
+})

@@ -171,7 +171,7 @@ export function extractReferenceDefinitions(
   for (const line of lines) {
     for (const match of line.matchAll(/\[carve-import-reference-(\d+)\]/gi)) reservedReferences.add(Number(match[1]))
     for (const match of line.matchAll(/\[\^((?:[^[\]\\\n]|\\.)+)\]/g)) {
-      const reserved = /^carve-import-footnote-(\d+)$/i.exec(decodeLinkTitle(match[1]!, decodeEntity))
+      const reserved = /^carve-import-footnote-(\d+)$/i.exec(decodeLinkTitle(match[1]!, decodeEntity).trim())
       if (reserved) reservedFootnotes.add(Number(reserved[1]))
     }
   }
@@ -241,7 +241,7 @@ export function extractReferenceDefinitions(
       canStart = true
     }
     if (htmlCloser !== null) {
-      if (htmlCloser.test(line)) {
+      if (htmlCloser.test(content)) {
         htmlCloser = null
         canStart = true
       }
