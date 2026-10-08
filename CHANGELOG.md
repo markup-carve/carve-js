@@ -9,30 +9,54 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-10-08
+
 ### Breaking
 
 - Image alt text resolves ASCII punctuation escapes, including `\|` in
   tables. Literal backslashes before punctuation must be doubled. Native
-  writers preserve the decoded value when formatting.
+  writers preserve the decoded value when formatting (#2578;
+  markup-carve/carve#2782).
 
 - A quoted include path resolves ASCII punctuation escapes, as a quoted
   attribute value does: `"a\.crv"` names `a.crv`. A backslash before anything
-  else stays path text (markup-carve/carve#2778).
+  else stays path text (#2582; markup-carve/carve#2778).
 
 - The include rename warning reports `include-id-rename`, replacing `include-heading-id-rename`. The pass covers explicit ids on any element, so the old id named only part of what it reported (markup-carve/carve#2772).
 
 ### Fixed
 
-- Markdown table import preserves image alt pipes and backslashes, and keeps
-  pipe-bearing URL and email autolinks in one cell. Pipe reference definitions
-  are inlined only in table cells.
+- An include slot needs no whitespace before its marker, so
+  `{{ c.crv#Alpha }}`, `{{ "c.crv"#Alpha }}` and
+  `{{ c.crv@shift:2@lines:1-2 }}` resolve instead of staying literal with no
+  diagnostic. The padding inside `{{ ... }}` is unchanged (#2563, #2567;
+  markup-carve/carve#2773).
+- A directive naming two sections warns under `include-selection-conflict` and
+  stays literal, where the second name used to win silently (#2572, #2573).
+- Markdown table import preserves image alt pipes and backslashes, keeps
+  pipe-bearing URL and email autolinks in one cell, keeps an unresolved
+  pipe-bearing reference literal inside its own cell, and keeps an image
+  title's pipes escaped when formatting. Pipe reference definitions are
+  inlined only in table cells (#2578, #2580).
+- An imported table footnote keeps its identity under a collision-free label,
+  and adjacent table references and image-alt flattening are corrected
+  (#2586).
+- An escaped pipe keeps its table cell boundary across Djot import and
+  Markdown export, so a code cell holding a literal backslash before `|`
+  survives the round trip, and two entity-bearing footnote ids no longer
+  merge into one (#2589).
 - Case-only image reference migration preserves authored alt escapes and uses
   the balanced closing bracket before changing the label.
 - An include rename no longer rewrites a `</#id>` cross-reference that resolves to nothing when the included file is read on its own. `</#id>` reaches headings, so one naming a renamed paragraph, span or other element is authored literal text and stays as written; link and image destinations still follow the rename (#2564).
+- HTML import of consecutive nested text spans succeeds, carrying both repair
+  diagnostics, instead of throwing (#2576).
 
 ### Performance
 
-- Replaced repeated whitespace searches in parsing, HTML import, writers, URL checks, lint, migrations and code callouts with linear scans. Leading HTML text nodes are removed in one slice; Djot bullet detection keeps its diagnostic and edit spans while avoiding repeated lookbehind scans.
+- Replaced repeated whitespace searches in parsing, HTML import, writers, URL checks, lint, migrations and code callouts with linear scans. Leading HTML text nodes are removed in one slice; Djot bullet detection keeps its diagnostic and edit spans while avoiding repeated lookbehind scans (#2560).
+- Parser candidate queues drain with a cursor, Markdown quote collection keeps its traversal order, and HTML import indexes backlink siblings, ruby whitespace and heading attribute order (#2565).
+- Footnote lookup uses lazy subtree indexes and membership sets, and HTML import compacts sibling cleanup and batches nested-span refusals, empty-code removals and table-section positions (#2576).
+- Markdown import bounds footnote masking at the last closing bracket on each line and drops quadratic scans of unfinished link and image labels (#2586).
 
 ## [0.1.10] - 2026-10-06
 
