@@ -121,7 +121,10 @@ function collectScope(
     if (!/[[\]]/.test(value)) return
     const text = verbatim ? value : value.replace(UNWRITABLE_CONTROLS, '')
     const structural = verbatim ? new Set<number>() : undefined
-    if (structural !== undefined) buildBracketMap(text, true, structural)
+    if (structural !== undefined) {
+      buildBracketMap(text, true, structural)
+      if (structural.has(-1)) hasEmptyCode = true
+    }
     for (let offset = 0; offset < text.length; offset++) {
       const char = text[offset]!
       if (char !== '[' && char !== ']') continue

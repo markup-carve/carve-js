@@ -7241,6 +7241,7 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
         spans.push([j + openLen, spanEnd])
         j = spanEnd - 1
       } else {
+        structural?.add(-1)
         stack.length = 0
         j += openLen - 1
       }
@@ -7250,6 +7251,7 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     // literal, so a `]` inside cannot close a label (carve#403). An unclosed
     // opener is not a comment and is left alone.
     const commentEnd = opaqueEnd(j)
+    if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || s[j + 1] === '%')) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
       continue
