@@ -394,3 +394,13 @@ it('attaches word attributes across escaped punctuation', () => {
   expect(djotToCarve('foo\\*bar{.c}\n')).toBe('[foo\\*bar]{.c}\n')
   expect(carveToHtml(djotToCarve('foo\\*bar{.c}\n'))).toBe('<p><span class="c">foo*bar</span></p>')
 })
+
+it.each(['<mailto:a@b.c>\n', '<mailto:a--@b.c>\n', '<mailto:a...@b.c>\n', '<https://example.com>\n', '<a@b.c>\n'])(
+  'writes an address autolink with a single scheme: %j',
+  (source) => {
+    const converted = djotToCarve(source)
+    expect(converted).not.toContain('mailto:mailto:')
+    expect(carveToHtml(converted)).toMatch(/^<p><a href="[^"]+">/)
+    expect(carveToHtml(converted)).toContain('href="' + source.slice(1, -2).replace(/^(?![A-Za-z][\w+.-]*:)/, 'mailto:') + '"')
+  },
+)

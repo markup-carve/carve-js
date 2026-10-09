@@ -1180,10 +1180,19 @@ function normalizeDjotAutolinks(source: string): string {
     const image = imageAutolinks.has(at) && codeMask[at] === '<'
     if ((!image && mask[at] !== '<') || isDjotEscaped(source, at)) continue
     const body = match[1]!
-    if (!/[^:]@|[A-Za-z]:/.test(body) || (!image && !/[\[\]{}`|\\]/.test(body) && !(/[^:]@/.test(body) && body.includes(':')))) continue
+    // A body that already carries a scheme is a URL, not a bare address: djot.js
+    // prefixes it with a second `mailto:` (jgm/djot.js#162), which we do not copy.
+    const email = /[^:]@/.test(body) && !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(body)
+    // Such an address keeps its autolink, but only where Carve reads one back: a dash
+    // run or an ellipsis inside it becomes punctuation instead.
+    const written =
+      /[\[\]{}`|\\]/.test(body) ||
+      (email && body.includes(':')) ||
+      (!email && /[^:]@/.test(body) && /--|\.\.\./.test(body))
+    if (!/[^:]@|[A-Za-z]:/.test(body) || (!image && !written)) continue
     if (rows[line] && /[|`]/.test(body)) continue
     const label = body.replace(/[!-\/:-@\[-`{-~]/g, (value) => '\\' + value)
-    const destination = /[^:]@/.test(body) ? 'mailto:' + body : body
+    const destination = email ? 'mailto:' + body : body
     const authority = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\\]*/.exec(destination)?.[0].length ?? 0
     const encode = (text: string, brackets: boolean) =>
       text.replace(brackets ? /[`|\\()[\]]/g : /[`|\\()]/g, (value) =>
