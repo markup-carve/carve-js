@@ -11,7 +11,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
-- HTML import reports markup discarded inside code spans, including nested formatting.
+- HTML import reports markup discarded inside code spans, including nested formatting (#2647).
 
 - Formatting preserves literal backslashes in cross-reference targets. Targets with no source spelling are refused (carve-js#2645).
 

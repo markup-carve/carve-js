@@ -932,7 +932,6 @@ class Importer {
   private quoteDepth = 0
   private cellDepth = 0
   private headingDepth = 0
-  private codeSpanDepth = 0
   private separatorsInserted = 0
   /**
    * The id PART 9 §16a's counter derives for each `<p class="admonition-title">`,
@@ -2875,7 +2874,7 @@ class Importer {
    */
   private reportUnsupportedElement(node: P5Node, tag: string, path: string): boolean {
     if (this.hasContentToUnwrap(node)) {
-      this.report.add('element-unwrapped', this.codeSpanDepth > 0 ? `Unwrapped <${tag}> inside <code>` : `Unwrapped unsupported <${tag}> element`, 'info', path, node)
+      this.report.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
 
       return true
     }
@@ -4057,18 +4056,61 @@ class Importer {
   }
 
   private codeSpan(node: P5Node, path: string, depth: number): InlineNode[] {
-    const before = this.separatorsInserted
-    this.codeSpanDepth++
-    try {
-      this.inlines(domChildren(node) ?? [], path, depth + 1)
-    } finally {
-      this.codeSpanDepth--
-    }
     const attrs = this.attrs(node, path)
-    if (this.separatorsInserted > before) {
+    const runs = ['']
+    type Frame = { node: P5Node, path: string, depth: number } | { boundary: true }
+    const pending: Frame[] = []
+    const pushChildren = (parent: P5Node, parentPath: string, parentDepth: number): void => {
+      const children = domChildren(parent) ?? []
+      for (let i = children.length - 1; i >= 0; i--) {
+        pending.push({ node: children[i]!, path: this.childPath(parentPath, children[i]!, i), depth: parentDepth + 1 })
+      }
+    }
+    pushChildren(node, path, depth)
+    while (pending.length) {
+      const frame = pending.pop()!
+      if ('boundary' in frame) {
+        runs.push('')
+        continue
+      }
+      const child = frame.node
+      this.enter(frame.depth)
+      if (child.nodeName === '#text') {
+        runs[runs.length - 1] += domValue(child) ?? ''
+        continue
+      }
+      if (child.nodeName === '#comment') {
+        this.report.add('element-dropped', 'Dropped a comment inside <code>: a code span holds only text', 'warning', frame.path, child)
+        continue
+      }
+      const tag = domTag(child)
+      if (!tag) {
+        pushChildren(child, frame.path, frame.depth)
+        continue
+      }
+      if (ACTIVE.has(tag)) {
+        this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', frame.path, child)
+        this.budget(child, frame.depth)
+        continue
+      }
+      const rawAttrs = domAttrs(child) ?? []
+      if (!(tag === 'span' && rawAttrs.length === 0)) {
+        const dropped = (domChildren(child)?.length ?? 0) === 0
+        this.report.add(dropped ? 'element-dropped' : 'element-unwrapped', `${dropped ? 'Dropped' : 'Unwrapped'} <${tag}> inside <code>`, dropped ? 'warning' : 'info', frame.path, child)
+      }
+      for (const attr of rawAttrs) {
+        this.report.add('attribute-dropped', `Dropped ${attr.name} on <${tag}> inside <code>: a code span holds only text`, 'info', frame.path, child)
+      }
+      if (isFlattenedBlock(child)) {
+        runs.push('')
+        pending.push({ boundary: true })
+      }
+      pushChildren(child, frame.path, frame.depth)
+    }
+    if (runs.filter(run => /[^ \t\r\n\f]/.test(run)).length > 1) {
       this.report.add('structure-unspellable', "A code span's value cannot hold the block boundary inside <code>", 'warning', path, node)
     }
-    const value = this.text(node)
+    const value = runs.join('')
     if (this.cellDepth > 0 && /[\r\n]/.test(value)) {
       this.report.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
     }
@@ -4118,10 +4160,6 @@ class Importer {
     // renders back as the element itself; the marks do not - a `<q>` becomes
     // text and its `cite` goes with it - so this mapping is the safe/semantic
     // answer and the raw fallback is the round-tripping one.
-    if (this.codeSpanDepth > 0 && (INLINE_HANDLED.has(tag) || SEMANTIC_SPAN_TAGS.has(tag)) && !(tag === 'span' && (domAttrs(node)?.length ?? 0) === 0)) {
-      const dropped = tag === 'img' || tag === 'br' || tag === 'input'
-      this.report.add(dropped ? 'element-dropped' : 'element-unwrapped', `${dropped ? 'Dropped' : 'Unwrapped'} <${tag}> inside <code>`, dropped ? 'warning' : 'info', path, node)
-    }
     if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
     /*
      * MathML -> `math`, as carve#1210's D6 rules it: a three-tier lookup for
