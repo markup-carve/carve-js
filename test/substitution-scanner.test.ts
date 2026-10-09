@@ -64,3 +64,18 @@ it('keeps auxiliary storage linear for dense escapes and comments', () => {
     expect(storage(scanner)).toBeLessThan(source.length * 80)
   }
 })
+
+it('keeps bracket and destination hosts opaque in indexed arrow queries', () => {
+  const text = '{~a [x~>y](u~>z) b~>c~} {~d~>e~}'
+  const hosts = new Map([
+    [text.indexOf('['), text.indexOf(']') + 1],
+    [text.indexOf('('), text.indexOf(')') + 1],
+  ])
+  const first = text.indexOf(' b~>') + 2
+  const second = text.lastIndexOf('~>')
+  const scanner = new SubstitutionScanner(text, hosts)
+  expect(scanner.findArrow(0, text.length)).toBe(first)
+  expect(scanner.findArrow(1, text.length)).toBe(first)
+  expect(scanner.findArrow(first + 2, text.length)).toBe(second)
+  expect(scanner.findArrow(1, first)).toBe(-1)
+})
