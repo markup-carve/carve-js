@@ -312,7 +312,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // that an empty payload line is a newline with another behind it wherever it
       // stands.
       const payload = holdPayloadBlanks(`\n${codeSource(content)}${closerSeparator}`)
-      return `${fence}${info}${payload}${fence}\n\n`
+      const infoSeparator = fence[0] === '~' && info.startsWith('~') ? ' ' : ''
+      return `${fence}${infoSeparator}${info}${payload}${fence}\n\n`
     }
     case 'block_quote': {
       const lines = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx))).split('\n')
