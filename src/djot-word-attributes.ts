@@ -21,6 +21,8 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     }
   }
   const braceStack: Array<{ begin: number; literal: boolean; spaces: number }> = []
+  const readBraceAttributes = nativeAttributeReader(source)
+  let attributeEnd = 0
   let spaces = 0, lastEscaped = -1
   for (let at = 0; at < source.length; at++) {
     if (/\s/u.test(source[at]!)) spaces++
@@ -35,7 +37,8 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
       continue
     }
     if (masked[at] !== source[at]) continue
-    if (source[at] === '}' && '+-=~^*_'.includes(source[at - 1] ?? '\0') && !pairedCloses.has(at + 1)) {
+    if (source[at] === '{' && at >= attributeEnd) attributeEnd = readBraceAttributes(at)?.end ?? at
+    if (at >= attributeEnd && source[at] === '}' && '+-=~^*_'.includes(source[at - 1] ?? '\0') && !pairedCloses.has(at + 1)) {
       literalBraces.set(at, at - 1 === lastEscaped ? at - 2 : at - 1)
       if (at - 1 === lastEscaped) escapedBraceCloses.add(at)
     }
