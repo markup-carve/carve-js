@@ -21,7 +21,8 @@ describe('ordered-list dialects', () => {
     expect(ol('iv. four\nv. five\nvi. six')).toBe('<ol type="i" start="4">')
   })
   it('the ) delimiter works for dialects', () => {
-    expect(ol('a) a\nb) b')).toBe('<ol type="a">')
+    // The delimiter also names itself, trailing `type` (PART 10 §12).
+    expect(ol('a) a\nb) b')).toBe('<ol type="a" data-delim=")">')
   })
 
   // Tie-break: consecutive letters are alpha; consecutive roman is roman.

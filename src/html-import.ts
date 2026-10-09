@@ -1688,6 +1688,14 @@ class Importer {
   }
 
   /**
+   * Whether `data-delim` IS this list's delimiter: the one PART 10 §12 writes.
+   * Any other value is the author's attribute, and kept.
+   */
+  private readsDelim(ol: P5Node): boolean {
+    return this.attr(ol, 'data-delim') === ')'
+  }
+
+  /**
    * Whether `data-task-state` IS this item's state: one PART 10 §11 writes, on
    * an EMPTY box. Anything else is the author's attribute, and kept.
    */
@@ -1738,7 +1746,7 @@ class Importer {
       if (name === 'src' || name === 'alt') return true
       return name === 'title' && destinationIsCarried(this.attr(node, 'src'))
     }
-    if (tag === 'ol') return name === 'start' || name === 'type'
+    if (tag === 'ol') return name === 'start' || name === 'type' || (name === 'data-delim' && this.readsDelim(node))
     if (tag === 'li' && name === 'data-task-state') return this.readsTaskState(node)
     if (tag === 'input') return name === 'type' || name === 'checked'
     if (tag === 'td' || tag === 'th') return name === 'colspan' || name === 'rowspan'
@@ -2582,7 +2590,10 @@ class Importer {
       this.spliceUnsupported(domChildren(li) ?? [], path).some((entry) => !entry.splice && domTag(entry.node) === 'p'),
     )
     const start = this.listStart(node, path, ordered)
-    const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
+    // The delimiter the renderer wrote (PART 10 §12), which is the only place
+    // it survives: `1)` and `1.` rendered the same bytes before that clause.
+    const delim = ordered && this.readsDelim(node) ? (')' as const) : undefined
+    const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(delim !== undefined ? { delim } : {}), ...(attrs ? { attrs } : {}) }
     return [...before, list]
   }
 
