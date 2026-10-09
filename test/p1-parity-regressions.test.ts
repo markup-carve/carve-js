@@ -56,6 +56,6 @@ it('visits inactive delimiter runs only once', () => {
 
 it('preserves dollar replacement sequences in Djot attributes', () => {
   const output = djotToCarve('*word{key="a$&b"}*')
-  expect(output).toBe('{*[word]{key="a$&b"}*}')
+  expect(carveToHtml(output)).toBe('<p><strong><span key="a$&amp;b">word</span></strong></p>')
   expect(output).not.toContain('\x00')
 })

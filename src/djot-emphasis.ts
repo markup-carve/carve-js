@@ -1,43 +1,31 @@
+import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
-import { readAttributes } from './djot-word-attributes.js'
+import { nativeAttributeReader } from './djot-attributes.js'
 
 type Pair = { start: number; openEnd: number; close: number; end: number; kind: string; forced: boolean; children: Pair[]; kinds: Set<string> }
 type Opener = { start: number; end: number; kind: string; forced: boolean }
 
-export const djotStructuralPrefixSteps = { count: 0 }
-
-export function djotStructuralPrefixEnd(line: string): number {
-  let at = 0
-  const spaces = () => {
-    while (line[at] === ' ' || line[at] === '\t') { at++; djotStructuralPrefixSteps.count++ }
-  }
-  do { spaces(); if (line[at] !== '>') break; at++; djotStructuralPrefixSteps.count++ } while (at < line.length)
-  spaces()
-  for (;;) {
-    djotStructuralPrefixSteps.count++
-    const start = at
-    let end = at
-    if ('-*+'.includes(line[end] ?? '\0')) end++
-    else {
-      while (line[end] !== undefined && line[end]! >= '0' && line[end]! <= '9') { end++; djotStructuralPrefixSteps.count++ }
-      if (end === start || line[end] !== '.' && line[end] !== ')') break
-      end++
-    }
-    if (line[end] !== ' ' && line[end] !== '\t') break
-    at = end; spaces()
-    if (line[at] === '[' && ' xX-'.includes(line[at + 1] ?? '\0') && line[at + 2] === ']' && (line[at + 3] === ' ' || line[at + 3] === '\t')) {
-      at += 3; djotStructuralPrefixSteps.count += 3; spaces()
-    }
-  }
-  return at
-}
+export { djotStructuralPrefixSteps, djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 
 export function djotEmphasis(source: string, convert: (plain: string) => string): string {
+  return processDjotEmphasis(source, convert)
+}
+
+export function djotPairedEmphasisOpeners(source: string): Map<number, number> {
+  const paired = new Map<number, number>()
+  processDjotEmphasis(source, plain => plain, paired)
+  return paired
+}
+
+function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
+  const readAttributes = nativeAttributeReader(source)
+  const attributes = new Map<number, { end: number; source: string }>()
   for (let i = 0; i < source.length; i++) {
     if (mask[i] !== '{' || !/[.#A-Za-z]/.test(source[i + 1] ?? '')) continue
-    const attrs = readAttributes(source, i)
+    const attrs = readAttributes(i)
     if (!attrs) continue
+    attributes.set(i, attrs)
     for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
     i = attrs.end - 1
   }
@@ -58,7 +46,7 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
       if (start !== undefined && i > start + 2) validBraces.add(start)
     }
   }
-  const openers = new Map<string, Opener[]>(['_', '*', '{_', '{*'].map(key => [key, []]))
+  const openers = new Map<string, Opener[]>(['_', '*', '~', '^', '{_', '{*', '{~', '{^'].map(key => [key, []]))
   const pairs: Pair[] = []
   const structural = new Set<number>()
   const brackets: number[] = []
@@ -103,7 +91,7 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
       if (start !== undefined) { clear(start); bracketPairs.push([start, i]) }
       continue
     }
-    if (ch !== '_' && ch !== '*') continue
+    if (ch !== '_' && ch !== '*' && !(paired && (ch === '~' || ch === '^'))) continue
     if (ch === '*' && i <= structuralEnd) {
       if (thematicLine) {
         for (let at = i; at < lineEnd; at++) if (source[at] === '*') structural.add(at)
@@ -118,13 +106,17 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
     const canClose = !forcedOpen && (forcedClose || (i > 0 && !/[ \t\r\n]/.test(source[i - 1]!)))
     const stack = openers.get((forcedClose ? '{' : '') + ch)!
     const opener = stack.at(-1)
-    if (canClose && opener && opener.end < i && opener.start > (braces.at(-1) ?? -1)) {
+    if (canClose && opener && opener.end < i && (opener.start > (braces.at(-1) ?? -1) || (paired && opener.forced && opener.start === braces.at(-1)))) {
       clear(opener.start)
       pairs.push({ start: opener.start, openEnd: opener.end, close: i, end: i + (forcedClose ? 2 : 1), kind: ch, forced: opener.forced, children: [], kinds: new Set([ch]) })
       if (forcedClose) i++
     } else if (canOpen) {
       openers.get((forcedOpen ? '{' : '') + ch)!.push({ start: i - (forcedOpen ? 1 : 0), end: i + 1, kind: ch, forced: forcedOpen })
     } else if (forcedClose) i++
+  }
+  if (paired) {
+    for (const pair of pairs) paired.set(pair.openEnd - 1, pair.end)
+    return source
   }
   pairs.sort((a, b) => a.start - b.start || b.end - a.end)
   const roots: Pair[] = []
@@ -167,6 +159,13 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
   const plain = (start: number, end: number): string => {
     let text = ''
     for (let i = start; i < end; i++) {
+      const attrs = attributes.get(i)
+      if (attrs && attrs.end <= end) {
+        text += `${literalPrefix}${literals.length}\0`
+        literals.push(attrs.source)
+        i = attrs.end - 1
+        continue
+      }
       const ch = source[i]!
       if (ch === '\\') { text += source.slice(i, Math.min(end, i + 2)); i++; continue }
       if (mask[i] === ch && ((ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {

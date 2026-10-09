@@ -2,8 +2,8 @@ import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
-import { attributedDjotWords, readAttributes } from './djot-word-attributes.js'
-import { attributedDjotStrong } from './djot-attributed-strong.js'
+import { attributedDjotWords } from './djot-word-attributes.js'
+import { readAttributes } from './djot-attributes.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
 import { escapePlainCarveInlineSyntax, HANDLED_DJOT } from './carve-escape.js'
@@ -392,11 +392,7 @@ export function djotToCarve(djot: string): string {
     spans.push(renderPlainText(parse(convert(`DJOTALT ${label} DJOTEND`)), { smartTypography: false }).replace(/ DJOTEND\n?$/, '').slice(8))
     return `![${prefix}${spans.length - 1}\x00]`
   })
-  const held = attributedDjotStrong(folded, maskDjotCodeAndDestinations(folded), convert, (span) => {
-    spans.push(span)
-    return `${prefix}${spans.length - 1}\x00`
-  })
-  const words = attributedDjotWords(held, maskDjotCodeAndDestinations(held), convert, span => {
+  const words = attributedDjotWords(folded, maskDjotCodeAndDestinations(folded), convert, span => {
     spans.push(span)
     return `${prefix}${spans.length - 1}\x00`
   })
