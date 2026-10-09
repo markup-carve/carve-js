@@ -29,7 +29,7 @@ import {
 } from './markdown-empty-destination.js'
 import { LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { isTableRow, parse, rawBracketRunCloses } from './parse.js'
-import { escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
+import { canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -3971,12 +3971,18 @@ function interruptingHtmlBlock(line: string): boolean {
  */
 function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bodyStart: number } {
   const none = { frontmatter: [], bodyStart: 0 }
-  if (lines.length < 2 || !RE_MD_FRONTMATTER_OPEN.test(lines[0]!)) return none
+  const open = lines.length < 2 ? null : RE_MD_FRONTMATTER_OPEN.exec(lines[0]!)
+  if (!open) return none
   for (let i = 1; i < lines.length; i++) {
     if (!RE_MD_FRONTMATTER_CLOSE.test(lines[i]!)) continue
     const content = lines.slice(1, i)
     if (!content.some((l) => l.trim() !== '')) return none
-    return { frontmatter: lines.slice(0, i + 1), bodyStart: i + 1 }
+    const frontmatter = lines.slice(0, i + 1)
+    // The metadata between the fences is opaque and survives byte-for-byte, but
+    // the opener is a delimiter the canonical writer owns: a bare `---` and a
+    // spaced `--- toml` both read fine and neither is the canonical spelling.
+    frontmatter[0] = canonicalFrontmatterOpener(open[1] || 'yaml')
+    return { frontmatter, bodyStart: i + 1 }
   }
   return none
 }
