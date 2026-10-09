@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- HTML import reports discarded code-span markup, attributes and comments, and removes active subtree text. Pipe-cell line breaks are folded only when writing source (carve-js#2647).
+
 - Formatting preserves literal backslashes in cross-reference targets. Targets with no source spelling are refused (carve-js#2645).
 
 - Link and image titles accept a literal backslash before a wrapped line. Unicode line separators also remain title content in block images and reference definitions (carve-js#2646).
