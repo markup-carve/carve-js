@@ -46,5 +46,5 @@ it.each(['a {"q\n\nlater {#b', 'a {%q\n\nlater {#b'])('resumes after an unfinish
   expect(carveToHtml(djotToCarve(source))).not.toContain('class="tag"')
 })
 it('keeps braces inside an autolink destination', () => {
-  expect(djotToCarve('<https://x.y/{#a>')).toContain('<https://x.y/{#a>')
+  expect(carveToHtml(djotToCarve('<https://x.y/{#a>'))).toBe('<p><a href="https://x.y/{#a">https://x.y/{#a</a></p>')
 })
