@@ -959,7 +959,17 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    '31-ordered-list-start-and-delimiter-2',
+    {
+      reason:
+        'markup-carve/carve#2796: PART 10 §12 carries the authored `)` as `data-delim`, ' +
+        'and the pinned golden predates the clause.',
+      html: '<ol data-delim=")">\n  <li>one</li>\n  <li>two</li>\n</ol>',
+    },
+  ],
+])
 
 
 

@@ -1678,6 +1678,13 @@ const RE_TABLE_DELIMITER = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$/
  */
 const RE_MD_THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 
+/**
+ * A setext underline: a run of `=` or `-` with only spaces or tabs around it
+ * (CommonMark 4.3); a form feed or a no-break space after the run leaves the
+ * line paragraph text. Indentation is measured by the caller.
+ */
+const RE_MD_SETEXT_UNDERLINE = /^[ \t]*(=+|-+)[ \t]*$/
+
 /** A Markdown indented code line: four spaces, or one tab. */
 const RE_MD_INDENTED_CODE = /^(?: {4,}|\t)/
 
@@ -1820,8 +1827,7 @@ function isStandardTableRow(line: string): boolean {
 }
 
 function hasFollowingSetextUnderline(lines: readonly string[], index: number): boolean {
-  const underline = index + 1 < lines.length ? lines[index + 1]!.trim() : ''
-  return /^=+$/.test(underline) || /^-+$/.test(underline)
+  return index + 1 < lines.length && RE_MD_SETEXT_UNDERLINE.test(lines[index + 1]!)
 }
 
 /**
@@ -1833,8 +1839,8 @@ function hasFollowingSetextUnderline(lines: readonly string[], index: number): b
 function setextParagraphEnd(lines: readonly string[], index: number, contentCol: number, held = false): string | null {
   const line = stripColumns(lines[index]!, contentCol)
   const below = lines[index + 1]!
-  const underline = below.trim()
-  if (!/^(?:=+|-+)$/.test(underline) || indentColumns(below) < contentCol) return null
+  const underline = RE_MD_SETEXT_UNDERLINE.exec(below)?.[1]
+  if (underline === undefined || indentColumns(below) < contentCol) return null
   if (indentColumns(stripColumns(below, contentCol)) >= 4) return null
   if (held) return underline[0] === '=' ? '#' : '##'
   // No link-reference test here, though the line is the one being taken INTO the
@@ -1961,9 +1967,9 @@ function isParagraphRunLine(
   // the line after prose stayed INSIDE the paragraph as an inline raw span.
   if (interruptingHtmlBlock(line)) return false
 
-  const ordered = trimmed.match(/^(\d+)[.)]\s/)
+  const ordered = trimmed.match(/^(\d+)[.)][ \t]/)
   const isList =
-    (/^[-*+]\s/.test(trimmed) || ordered !== null) &&
+    (/^[-*+][ \t]/.test(trimmed) || ordered !== null) &&
     !(prevType === 'text' && ordered !== null && Number(ordered[1]) !== 1)
   return !isList
 }
@@ -2365,7 +2371,7 @@ function restorePrefixedInlineRun(
     run.map((part) => part.text).join('\n'),
     dialect,
     opensFence,
-    /^\s*(?:[-*+]|\d{1,9}[.)])\s+$/.test(run[0]?.prefix ?? ''),
+    /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(run[0]?.prefix ?? ''),
     joinedLines,
     terminal,
   ).split('\n')
@@ -2740,7 +2746,7 @@ function lazyQuotePrefix(run: readonly PrefixedInlineLine[]): string {
 function quoteParagraphIsOpen(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed === '' || isMarkdownFenceLine(text)) return false
-  return !/^#{1,6}(?:\s|$)/.test(trimmed) && !RE_MD_THEMATIC.test(text) && !isStandardTableRow(text)
+  return !/^#{1,6}(?:[ \t]|$)/.test(trimmed) && !RE_MD_THEMATIC.test(text) && !isStandardTableRow(text)
 }
 
 /**
@@ -3713,7 +3719,7 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
  * no-break space after the token is content, so the line is not an opener.
  */
 const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)[ \t]*$/
-const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
+const RE_MD_FRONTMATTER_CLOSE = /^---[ \t]*$/
 
 /**
  * A run of lines that CommonMark reads as an HTML block, plus whether the
@@ -4842,7 +4848,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         line.trim() === ''
           ? stripColumns(line, fenceStrip)
           : ' '.repeat(fenceCol) + stripColumns(line, Math.min(indentColumns(line), fenceCol + fenceStrip))
-      if (new RegExp(`^\\s{0,3}(${fenceChar}{${fenceLen},})\\s*$`).test(stripColumns(line, fenceCol))) {
+      // CommonMark 4.5: a closing fence is followed only by spaces or tabs.
+      if (new RegExp(`^[ \\t]{0,3}(${fenceChar}{${fenceLen},})[ \\t]*$`).test(stripColumns(line, fenceCol))) {
         inCode = false
         fenceChar = ''
         fenceLen = 0
@@ -4952,9 +4959,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // An ordered marker other than `1` cannot interrupt a paragraph
     // (CommonMark), so after a paragraph it stays prose; bullets and `1.`
     // always start/continue a list. Mid-list, any number continues.
-    const ordered = trimmed.match(/^(\d+)[.)]\s/)
+    const ordered = trimmed.match(/^(\d+)[.)][ \t]/)
     const isList =
-      (/^[-*+]\s/.test(trimmed) || ordered !== null) &&
+      (/^[-*+][ \t]/.test(trimmed) || ordered !== null) &&
       !orderedContinuesItem &&
       !(
         prevType === 'text' &&
@@ -5111,7 +5118,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // by `foldContainerSetext`, where the marker is already held apart from
     // the content. Letting the guards through instead would write the heading
     // at column 0 and take it out of the container that held it.
-    const underline = i + 1 < lines.length ? lines[i + 1]!.trim() : ''
+    const underline = i + 1 < lines.length ? RE_MD_SETEXT_UNDERLINE.exec(lines[i + 1]!)?.[1] : undefined
     if (
       !isHeading &&
       !isBlockquote &&
@@ -5121,7 +5128,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // thematic breaks, not an h2 titled `***`; guard so the rule falls
       // through to the thematic-break normalization below.
       !RE_MD_THEMATIC.test(held) &&
-      (/^=+$/.test(underline) || /^-+$/.test(underline)) &&
+      underline !== undefined &&
       // Four columns past its container an underline is paragraph text.
       indentColumns(stripColumns(lines[i + 1]!, contentCol)) < 4
     ) {
@@ -5248,7 +5255,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         // as a thematic break and stops the run already; an `=` one matched no
         // opener, so the run swallowed it and every paragraph whose middle line
         // sat four columns in stayed a paragraph.
-        if (/^=+$/.test(next.trim()) && indentColumns(next) >= contentCol && indentColumns(inside(next)) < 4) break
+        if (RE_MD_SETEXT_UNDERLINE.exec(next)?.[1]![0] === '=' && indentColumns(next) >= contentCol && indentColumns(inside(next)) < 4) break
         // The next item of an open list, whatever its number, ends the paragraph.
         if (listCols.length > 0 && RE_LIST_MARKER.test(next) && indentColumns(next) < contentCol && listMarkers.hasListAt(indentColumns(next))) break
         const trimmedNext = next.trimStart()
@@ -5325,7 +5332,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
 
     if (isHeading && i + 1 < lines.length) {
       const next = lines[i + 1]!.trim()
-      if (next !== '' && !/^#{1,6}\s/.test(next)) out.push('')
+      if (next !== '' && !/^#{1,6}[ \t]/.test(next)) out.push('')
     }
 
     if (isHeading) prevType = 'heading'

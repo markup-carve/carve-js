@@ -22,8 +22,9 @@ describe('braced spans respect bracket runs', () => {
   })
 })
 
-it.each([['+', 'ins'], ['-', 'del']])('critic %s closes before an outer bracket', (mark, tag) => {
-  expect(carveToHtml(`{${mark}x[a${mark}}]`)).toBe(`<p><${tag}>x[a</${tag}>]</p>`)
+it.each(['+', '-'])('critic %s cannot close inside a bracket run', (mark) => {
+  const source = `{${mark}x[a${mark}}]`
+  expect(carveToHtml(source)).toBe(`<p>${source}</p>`)
 })
 
 describe('imported bracket spans beside reference links', () => {

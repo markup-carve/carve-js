@@ -13284,7 +13284,18 @@ class ParseSession {
     if (text[open + 1] !== '~') return null
     const end = this.bracedPairEnd(text, open, '~}')
     if (end === -1) return null
-    const arrow = (this.substitutionScans ??= new SubstitutionScanner(text)).findArrow(open + 2, end - 2)
+    if (this.substitutionScans === undefined) {
+      const hosts = new Map<number, number>()
+      const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
+      for (let at = 0; at < text.length; at++) {
+        if (text[at] !== '[') continue
+        const close = brackets?.(at)
+        if (close !== undefined) hosts.set(at, close + 1)
+      }
+      for (const [at, close] of linkDestinations(text, newEmphasisMemo())) hosts.set(at, close + 1)
+      this.substitutionScans = new SubstitutionScanner(text, hosts)
+    }
+    const arrow = this.substitutionScans.findArrow(open + 2, end - 2)
     return arrow === -1 ? null : { end, arrow }
   }
 
@@ -13356,6 +13367,8 @@ class ParseSession {
     }
     const ends = new Int32Array(n + 2).fill(-1)
     const codeEnds = backtickRunEnds(text)
+    const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
+    const destinations = linkDestinations(text, newEmphasisMemo())
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
       const next = text[j + 1]
@@ -13366,6 +13379,8 @@ class ParseSession {
         ends[j] = stop === -1 ? -1 : stop + 2
       }
       const codeEnd = ch === '`' ? codeEnds![j]! : undefined
+      const bracketEnd = ch === '[' ? brackets?.(j) : undefined
+      const destinationEnd = destinations.get(j)
       for (const m of markers) {
         const table = tables[m]!
         const raw = raws[m]!
@@ -13388,7 +13403,9 @@ class ParseSession {
           // An unclosed run ends at the pair's closer instead of running to the
           // end of the block (markup-carve/carve#2056).
           stop = codeEnd !== -1 ? table[codeEnd]! : raw[j]!
-        } else if (isCloser) stop = j
+        } else if (bracketEnd !== undefined) stop = table[bracketEnd + 1]!
+        else if (destinationEnd !== undefined) stop = table[destinationEnd + 1]!
+        else if (isCloser) stop = j
         else if (ch === '{' && nextId !== -1 && nextId !== m && ends[j] !== -1) {
           // A braced pair of another kind is its own scope, so a closer inside
           // it cannot close this one (markup-carve/carve#2091). One of this

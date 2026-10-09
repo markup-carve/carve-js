@@ -22,6 +22,7 @@
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { backtickRunEnds } from './backtick-run-index.js'
+import { readAttributes } from './djot-word-attributes.js'
 
 import { parse } from './parse.js'
 
@@ -148,11 +149,9 @@ const RULES: Rule[] = [
     id: 'djot-subscript-tilde',
     category: 'djot-shift',
     family: '~',
-    // The `{`/`}` guards keep this off the braced form the rule above owns.
-    // Without them both rules match the same subscript and, being strictly
-    // nested, compose instead of colliding - which is how the doubled braces
-    // reached the output.
-    pattern: /(?<!\{)~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~(?!\})/gd,
+    // A forced closer cannot start or terminate a bare span. ruleMatches checks
+    // whether a preceding brace is an unescaped braced opener.
+    pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~(?!\})/gd,
     message: () =>
       'Djot subscript `~x~` renders as *strikethrough* in Carve.',
     // Forced brace form: a Djot `~x~` is often intraword (e.g. H~2~O), where a
@@ -166,11 +165,10 @@ const RULES: Rule[] = [
     // braced `{^x^}`), so the intended markup never renders.
     category: 'carve-breakage',
     family: '^',
-    // Exclude `^[` (a Carve inline footnote, not a superscript opener), the
-    // braced `{^x^}` form, which is valid in both languages, and carets that
-    // belong to footnote references (`[^x] … [^y]` must not pair up as a
-    // superscript span across the paragraph).
-    pattern: /(?<![{[])\^(?![\s[])((?:(?!\n[ \t]*\n)[^^])+?)(?<![\s[])\^(?!\})/gd,
+    // Reference labels are masked before matching. ruleMatches excludes
+    // unescaped braced openers; an escaped brace or unmatched bracket
+    // can precede a real superscript.
+    pattern: /\^(?!\s)((?:(?!\n[ \t]*\n)[^^])+?)(?<!\s)\^(?!\})/gd,
     message: () =>
       'Djot superscript `^x^` is literal text in Carve — Carve superscript is the braced `{^x^}` only.',
     suggestion: (m) => `{^${m[1]}^}`,
@@ -594,6 +592,117 @@ function tableContinuationLines(source: string): Set<number> {
   return lines
 }
 
+export const migrateBracedSteps = { count: 0 }
+export const migrateCandidateChecks = { count: 0 }
+export const migrateBareSteps = { count: 0 }
+
+function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode: boolean): Generator<RegExpExecArray> {
+  const opener = rule.id === 'djot-subscript-tilde-braced' ? '{~' : rule.id === 'djot-highlight-braces' ? '{=' : undefined
+  if (opener === undefined) {
+    const candidate = rule.id === 'djot-subscript-tilde' ? '~' : rule.id === 'djot-superscript-caret' ? '^' : rule.id === 'djot-emphasis-underscore' || rule.id === 'djot-intraword-underscore' ? '_' : undefined
+    if (candidate !== undefined) {
+      let candidateMask = masked
+      if (candidate === '^' && masked.includes('^')) {
+        const chars = masked.split('')
+        for (let at = 0; at < masked.length; at++) {
+          if (masked[at] === '{' && /[.#A-Za-z]/.test(source[at + 1] ?? '') && !isDjotEscaped(source, at)) {
+            const attrs = readAttributes(source, at)
+            if (attrs) {
+              for (let inner = at; inner < attrs.end; inner++) if (chars[inner] === '^') chars[inner] = '\x01'
+              at = attrs.end - 1
+              continue
+            }
+          }
+          if (!masked.startsWith('[^', at) || isDjotEscaped(source, at)) continue
+          let end = at + 2
+          while (end < source.length && source[end] !== '\n' && (source[end] !== ']' || isDjotEscaped(source, end))) end++
+          if (source[end] === ']') {
+            for (let inner = at + 1; inner < end; inner++) if (chars[inner] === '^') chars[inner] = '\x01'
+          }
+          at = end
+        }
+        candidateMask = chars.join('')
+      }
+      const whitespace = candidate === '_' ? /[ \t\n\r\f]/ : /\s/
+      const intraword = rule.id === 'djot-intraword-underscore'
+      const word = intraword ? /[A-Za-z0-9]/ : /[A-Za-z0-9_]/
+      for (let cursor = 0; cursor < masked.length;) {
+        const start = candidateMask.indexOf(candidate, cursor)
+        migrateBareSteps.count += start < 0 ? masked.length - cursor : start - cursor + 1
+        if (start < 0) break
+        cursor = start + 1
+        if (candidate === '^' && !nativeDjotCode && source[start + 1] === '[') continue
+        if (isDjotEscaped(source, start) || (candidate !== '_' && source[start + 1] === '}') || (candidate !== '_' && source[start - 1] === '{' && !isDjotEscaped(source, start - 1))) continue
+        if (whitespace.test(candidateMask[start + 1] ?? '')) continue
+        if (candidate === '_' && word.test(candidateMask[start - 1] ?? '') !== intraword) continue
+        migrateCandidateChecks.count++
+        let end = start + 1
+        for (; end < candidateMask.length; end++) {
+          migrateBareSteps.count++
+          if (candidateMask[end] === '\n') {
+            let next = end + 1
+            while (source[next] === ' ' || source[next] === '\t') { migrateBareSteps.count++; next++ }
+            while (source[next] === '>') {
+              migrateBareSteps.count++
+              next++
+              while (source[next] === ' ' || source[next] === '\t') { migrateBareSteps.count++; next++ }
+            }
+            if (source[next] === '\n') break
+          }
+          if (candidateMask[end] === '\\' && candidateMask[end + 1] !== '\n') { end++; continue }
+          if (candidateMask[end] === candidate) break
+        }
+        cursor = end
+        if (end >= candidateMask.length || candidateMask[end] !== candidate) { cursor++; continue }
+        if (end === start + 1 || whitespace.test(candidateMask[end - 1]!)) continue
+        if (candidate !== '_' && source[end + 1] === '}') continue
+        if (candidate === '_' && word.test(candidateMask[end + 1] ?? '') !== intraword) continue
+        cursor = end + 1
+        yield Object.assign([candidateMask.slice(start, cursor), candidateMask.slice(start + 1, end)], {
+          index: start, input: candidateMask, indices: [[start, cursor], [start + 1, end]],
+        }) as RegExpExecArray
+      }
+      return
+    }
+    rule.pattern.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = rule.pattern.exec(masked))) yield match
+    return
+  }
+  const closer = opener[1]! + '}'
+  for (let cursor = 0; cursor < masked.length;) {
+    const start = masked.indexOf(opener, cursor)
+    migrateBracedSteps.count += start < 0 ? masked.length - cursor : start - cursor + 2
+    if (start < 0) break
+    const from = start + 2
+    if (isDjotEscaped(masked, start)) { cursor = from; continue }
+    let end = from
+    for (; end < masked.length; end++) {
+      migrateBracedSteps.count++
+      if (masked.startsWith(opener, end) && !isDjotEscaped(source, end)) break
+      if (masked[end] === '\n') {
+        let next = end + 1
+        while (source[next] === ' ' || source[next] === '\t') { migrateBracedSteps.count++; next++ }
+        while (source[next] === '>') {
+          migrateBracedSteps.count++
+          next++
+          while (source[next] === ' ' || source[next] === '\t') { migrateBracedSteps.count++; next++ }
+        }
+        if (source[next] === '\n') break
+      }
+      if (masked.startsWith(closer, end) && !isDjotEscaped(masked, end)) break
+    }
+    if (masked.startsWith(closer, end)) {
+      cursor = end + 2
+      if (end === from) continue
+      const match = Object.assign([masked.slice(start, cursor), masked.slice(from, end)], {
+        index: start, input: masked, indices: [[start, cursor], [from, end]],
+      }) as RegExpExecArray
+      yield match
+    } else cursor = masked.startsWith(opener, end) ? end : end + 1
+  }
+}
+
 /** The full scan, carrying the fix edits used by `applyMigrationFixes`. */
 function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   const out: ScanHit[] = []
@@ -663,12 +772,13 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   // Overlap is then a binary search (find the rightmost interval starting
   // before `e`, check it covers past `s`) instead of a linear scan of a
   // single growing array — the latter was O(n^2) on inputs with thousands of
-  // same-family matches (e.g. `**a** ` repeated). Within a single rule, matches
-  // arrive in ascending `start`, so insertion lands at the end (O(1) push);
-  // cross-rule same-family inserts (rare) cost an O(log n) binary insert.
+  // same-family matches (e.g. `**a** ` repeated). Each rule yields disjoint
+  // ranges in ascending order. Merge them once, so interleaved rules do not copy
+  // a growing array for every insertion.
   const takenByFamily = new Map<string, Array<[number, number]>>()
   const sameFamilyOverlap = (s: number, e: number, fam: string): boolean => {
     const list = takenByFamily.get(fam)
+    migrateScanSteps.count++
     if (!list || list.length === 0) return false
     // Rightmost interval with start < e.
     let lo = 0
@@ -686,31 +796,22 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
     if (lo === 0) return false
     return list[lo - 1]![1] > s
   }
-  const recordTaken = (s: number, e: number, fam: string): void => {
-    let list = takenByFamily.get(fam)
-    if (!list) {
-      list = []
-      takenByFamily.set(fam, list)
-    }
-    if (list.length === 0 || s >= list[list.length - 1]![0]) {
-      list.push([s, e])
-      return
-    }
-    let lo = 0
-    let hi = list.length
-    while (lo < hi) {
+  const recordTaken = (added: Array<[number, number]>, fam: string): void => {
+    if (added.length === 0) return
+    const list = takenByFamily.get(fam)
+    if (!list || list.length === 0) { takenByFamily.set(fam, added); return }
+    const merged: Array<[number, number]> = []
+    let old = 0, next = 0
+    while (old < list.length && next < added.length) {
       migrateScanSteps.count++
-      const mid = (lo + hi) >> 1
-      if (list[mid]![0] < s) lo = mid + 1
-      else hi = mid
+      merged.push(list[old]![0] <= added[next]![0] ? list[old++]! : added[next++]!)
     }
-    list.splice(lo, 0, [s, e])
+    takenByFamily.set(fam, [...merged, ...list.slice(old), ...added.slice(next)])
   }
 
   for (const rule of RULES) {
-    rule.pattern.lastIndex = 0
-    let m: RegExpExecArray | null
-    while ((m = rule.pattern.exec(masked))) {
+    const added: Array<[number, number]> = []
+    for (const m of ruleMatches(masked, rule, norm, nativeDjotCode)) {
       const markerSpan = rule.id === 'djot-plus-bullet' ? m.indices?.[1] : undefined
       const start = markerSpan?.[0] ?? m.index
       const end = markerSpan?.[1] ?? m.index + m[0].length
@@ -722,7 +823,7 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
       if (bs % 2 === 1) continue
       if (rule.id === 'djot-plus-bullet' && continuationLines.has(posOf(start).line)) continue
       if (sameFamilyOverlap(start, end, rule.family)) continue
-      recordTaken(start, end, rule.family)
+      added.push([start, end])
       const { line, column } = posOf(start)
       // Build the suggestion from the ORIGINAL captured content, not the
       // code-masked one, so `*a `code` b*` round-trips instead of losing
@@ -737,13 +838,25 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
       // nested fixes compose. A whole-span rule (the `+` bullet) replaces
       // its single match with the suggestion.
       const suggestion = rule.suggestion(origM)
-      const edits: Edit[] =
+      let edits: Edit[] =
         rule.delims && span
           ? [
               { start, end: span[0], text: rule.delims[0] },
               { start: span[1], end, text: rule.delims[1] },
             ]
           : [{ start, end, text: suggestion }]
+      if (rule.id === 'djot-heading-continuation' && span) {
+        edits = []
+        const marker = m[2]! + ' '
+        for (let at = orig.indexOf('\n'); at >= 0; at = orig.indexOf('\n', at + 1)) {
+          let to = at + 1
+          if (orig.startsWith(marker, to)) {
+            to += marker.length
+            while (orig[to] === ' ') to++
+          }
+          edits.push({ start: span[0] + at, end: span[0] + to, text: ' ' })
+        }
+      }
       out.push({
         line,
         column,
@@ -756,6 +869,7 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
         edits,
       })
     }
+    recordTaken(added, rule.family)
   }
 
   out.sort((a, b) => a.line - b.line || a.column - b.column)
@@ -848,16 +962,19 @@ export function applyMigrationFixes(source: string, nativeDjotCode = false): Mig
     else applied.push(h)
   }
 
-  // No two applied hits cross, so their delimiter edits are pairwise
-  // non-overlapping. Splice from the end so each edit leaves earlier
-  // offsets valid.
-  const edits = applied.flatMap((h) => h.edits).sort((a, b) => b.start - a.start)
-  let output = source.replace(/\r\n?/g, '\n')
+  // Copy untouched source ranges once. Heading folds replace their line
+  // prefixes only, so they compose with inline delimiter edits.
+  const edits = applied.flatMap((h) => h.edits).sort((a, b) => a.start - b.start)
+  const normalized = source.replace(/\r\n?/g, '\n')
+  const pieces: string[] = []
+  let cursor = 0
   for (const e of edits) {
-    output = output.slice(0, e.start) + e.text + output.slice(e.end)
+    pieces.push(normalized.slice(cursor, e.start), e.text)
+    cursor = e.end
   }
+  pieces.push(normalized.slice(cursor))
   return {
-    output,
+    output: pieces.join(''),
     applied: applied.map(stripHit),
     skipped: skipped.map(stripHit),
   }
