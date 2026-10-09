@@ -29,7 +29,7 @@ import {
 } from './markdown-empty-destination.js'
 import { FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
-import { canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
+import { BLOCK_SEPARATOR, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
 /**
@@ -5406,9 +5406,16 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const respelled = assemble()
     if (!opensFrontmatter(respelled)) body = renderCarve(parse(respelled))
   }
+  // The boundary under a frontmatter closer is the writer's own block
+  // separator, and a frontmatter-only document still ends on a newline, so the
+  // import is a `carve fmt` fixed point (carve-js#2614). Any blank the body
+  // already carries is that same boundary spelled twice.
+  const separated = body.replace(/^\n+/, '')
   let output = frontmatter.length === 0
     ? body
-    : body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n\n${body.replace(/^\n+/, '')}`
+    : separated === ''
+      ? `${frontmatter.join('\n')}\n`
+      : `${frontmatter.join('\n')}${BLOCK_SEPARATOR}${separated}`
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
   if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
