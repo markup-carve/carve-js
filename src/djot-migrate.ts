@@ -349,14 +349,14 @@ export function isDjotEscaped(source: string, at: number): boolean {
   return (at - start) % 2 !== 0
 }
 
-export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true, inlineForms = true, onFenceLine?: (line: number, replacement: string) => void, rowBoundaries: readonly boolean[] = []): string {
+export function maskDjotFences(src: string, onFenceLine?: (line: number, replacement: string) => void, rowBoundaries: readonly boolean[] = [], strict = false): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
   const previousLines = new Map<number, string>()
   let sourceOffset = 0, previousLine = ''
   for (const line of lines) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
   let fence: { ch: string; len: number; container: number | null; depth: number; target: string; dedent: number; normalize: boolean } | null = null
-  let previousBlock = true, normalizeBoundary = true
+  let previousBlock = true, normalizeBoundary = true, previousDepth = 0
   const ancestors: { indent: number; column: number; ownerIndent: number }[][] = []
   const staged = lines.map((line, index) => {
     let content = line, depth = 0
@@ -368,7 +368,8 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
       depth++
       views.push(content)
     }
-    const canNormalize = normalizeBoundary || rowBoundaries[index - 1] === true
+    let canNormalize = normalizeBoundary || rowBoundaries[index - 1] === true || depth < previousDepth
+    previousDepth = depth
     if (fence && content.trim() !== '' && depth < fence.depth) fence = null
     if (fence && fence.container !== null && content.trim() !== '' && /^[ \t]*/.exec(content)![0].length < fence.container && depth === fence.depth) fence = null
     let nested = false, ownerColumn = 0, ownerIndent = 0
@@ -379,7 +380,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
         const view = views[level]!
         const stack = ancestors[level] ?? (ancestors[level] = [])
         const indent = /^[ \t]*/.exec(view)![0].length
-        while (stack.length && stack[stack.length - 1]!.indent >= indent) stack.pop()
+        while (stack.length && stack[stack.length - 1]!.indent >= indent) { if (level === depth && stack.at(-1)!.column > 0 && indent <= stack.at(-1)!.ownerIndent) canNormalize = true; stack.pop() }
         if (level === depth) { ownerColumn = stack.at(-1)?.column ?? 0; ownerIndent = stack.at(-1)?.ownerIndent ?? 0; nested = ownerColumn > 0 }
         const marker = !/^(?:([*-])[ \t]*){3,}$/.test(view.trim()) && /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+\S/.test(view)
         const prefix = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/.exec(view)?.[0] ?? ''
@@ -398,7 +399,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
       return blanks(line)
     }
     const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/)
-    if (open && !(open[2]?.startsWith(':') && !previousBlock)) {
+    if (open && !(open[2]?.startsWith(':') && !previousBlock) && (!strict || canNormalize || !!open[2])) {
       const container = open[2] ? open[1]!.length + 1 : nested ? ownerIndent + 1 : null
       const targetColumn = open[2]?.startsWith('[^') ? open[1]!.length + 2 : open[2] ? open[1]!.length + open[2].replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length : nested ? ownerColumn : 0
       fence = { ch: open[3]![0]!, len: open[3]!.length, container, depth, target: ' '.repeat(targetColumn), dedent: open[1]!.length + (open[2]?.length ?? 0), normalize: canNormalize || !!open[2] }
@@ -407,11 +408,18 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
       const start = line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
     }
-    normalizeBoundary = content.trim() === '' || /^[ \t]*\[\^[^\]\n]+\]:[ \t]*$/.test(content) || /^[ \t]*(?:#{1,6} |:{3,}|\{[.#A-Za-z])/.test(content)
+    normalizeBoundary = /^(?:[ 	]*[-*]){3,}[ 	]*$/.test(content) || /^[ 	]*\[(?!\^)[^\]]+\]:/.test(content) || content.trim() === '' || /^[ \t]*\[\^[^\]\n]+\]:[ \t]*$/.test(content) || /^[ \t]*(?:#{1,6} |:{3,}|\{[.#A-Za-z])/.test(content)
     previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} |\{[.#A-Za-z])/.test(content)
     return line
   })
-  const s = staged.join('\n')
+  return staged.join('\n')
+}
+
+export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true, inlineForms = true, onFenceLine?: (line: number, replacement: string) => void, rowBoundaries: readonly boolean[] = []): string {
+  const previousLines = new Map<number, string>()
+  let sourceOffset = 0, previousLine = ''
+  for (const line of src.split('\n')) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
+  const s = maskDjotFences(src, onFenceLine, rowBoundaries)
 
   // Stage 2: inline code spans. A run of N backticks closes at the next
   // run of exactly N backticks (Djot allows newlines inside). An

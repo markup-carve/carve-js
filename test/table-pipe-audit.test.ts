@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import { carveToHtml, carveToMarkdown, djotToCarve, markdownToCarve, parse, renderCarve } from '../src/index.js'
+import { carveToHtml, carveToMarkdown, djotToCarve, markdownToCarve, parse, renderCarve, renderCarveWithConversionReport } from '../src/index.js'
 
 const cases = JSON.parse(readFileSync(new URL('./fixtures/table-pipe-audit.json', import.meta.url), 'utf8')) as {
-  mode: string; name: string; source: string; contains: string[]; excludes?: string[]; cells?: number; tables?: number
+  mode: string; name: string; source: string; contains: string[]; excludes?: string[]; cells?: number; tables?: number; finalCodeNewlineLoss?: boolean
 }[]
 
 for (const c of cases) {
@@ -14,6 +14,12 @@ for (const c of cases) {
     for (const fragment of c.excludes ?? []) expect(html).not.toContain(fragment)
     if (c.cells !== undefined) expect(html.match(/<th\b/g) ?? []).toHaveLength(c.cells)
     if (c.tables !== undefined) expect(html.match(/<table\b/g) ?? []).toHaveLength(c.tables)
-    expect(carveToHtml(renderCarve(parse(source)))).toBe(html)
+    const ast = parse(source)
+    if (c.finalCodeNewlineLoss) {
+      expect(renderCarveWithConversionReport(ast).report.diagnostics).toEqual([
+        expect.objectContaining({ code: 'field-unspellable', node: 'code_block', field: 'content' }),
+      ])
+      expect(carveToHtml(renderCarve(ast))).toBe(html.replace('<code>code</code>', '<code>code\n</code>'))
+    } else expect(carveToHtml(renderCarve(ast))).toBe(html)
   })
 }

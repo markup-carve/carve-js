@@ -1,3 +1,4 @@
+import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader } from './table-source-metadata.js'
 import type {
@@ -3945,6 +3946,7 @@ class CarveRenderSession {
   ): string {
     const nodes = flattenRubyForCarve(sourceNodes)
     if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+    if (ctx.inlineDepth >= MAX_NESTING_DEPTH && nodes.length === 1 && nodes[0]!.type === 'text') return nodes[0]!.value
     if (ctx.inlineDepth === 0) {
       collectLoneBrackets(sourceNodes, false, this.loneBrackets, this.leftToSearch, this.pairedClosers, this.crossingOpeners, this.crossingClosers)
     }
