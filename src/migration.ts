@@ -101,8 +101,11 @@ export function migrateMarkdown(
       // a loss: the mapping is carried over whole. The other codes name
       // something the conversion could not spell.
       severity: loss.code === 'frontmatter-synthesized' ? 'info' : 'warning',
-      fidelity: loss.code === 'frontmatter-synthesized' ? 'preserved' : 'dropped',
-      confidence: 'exact',
+      // `normalized`, not `preserved`: a bare `---` block becoming front
+      // matter is an alternate block form resolved, which is what the term
+      // covers in docs/format-bridges.md (markup-carve/carve#2806).
+      fidelity: loss.code === 'frontmatter-synthesized' ? 'normalized' : 'dropped',
+      confidence: loss.confidence ?? 'exact',
       ...(path ? { path } : {}),
     }
   }), supportedDialect)

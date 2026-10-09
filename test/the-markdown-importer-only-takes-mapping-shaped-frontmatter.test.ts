@@ -57,8 +57,24 @@ describe('the Markdown importer only takes mapping-shaped frontmatter (markup-ca
     const diagnostic = report.diagnostics.find((d) => d.code === 'frontmatter-synthesized')
     expect(diagnostic).toBeDefined()
     expect(diagnostic!.severity).toBe('info')
-    expect(diagnostic!.fidelity).toBe('preserved')
-    expect(diagnostic!.confidence).toBe('exact')
+    expect(diagnostic!.fidelity).toBe('normalized')
+    expect(diagnostic!.confidence).toBe('inferred')
+  })
+
+  // One triple across all three engines (markup-carve/carve#2806):
+  // `normalized` because an alternate block form was resolved, `line:1`
+  // because a synthesized block starts there, and a confidence that follows
+  // the opener - a typed one declared its format, so nothing was inferred.
+  it.each([
+    ['a bare opener', '---\ntitle: x\n---\n\n# Heading\n\nText here.\n', 'inferred'],
+    ['a typed opener', '---yaml\ntitle: x\n---\n\n# Heading\n\nText here.\n', 'exact'],
+  ])('carries one triple for %s', (_name, md, confidence) => {
+    const rows = migrateMarkdown(md).report.diagnostics.filter((d) => d.code === 'frontmatter-synthesized')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.severity).toBe('info')
+    expect(rows[0]!.fidelity).toBe('normalized')
+    expect(rows[0]!.confidence).toBe(confidence)
+    expect(rows[0]!.path).toBe('line:1')
   })
 
   it('reports nothing when the block is not a mapping', () => {

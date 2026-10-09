@@ -35,9 +35,11 @@ fidelity the HTML importer spends on that row. The row carries no `path` or
 writes a row, so it has no position it could stand behind, and one drop is one
 diagnostic. The `fidelity-unverified` row stays: it still stands for the
 constructs the Markdown importer has no answer for.
-Markdown also reports `frontmatter-synthesized`, preserved/exact, on every
-leading `---` block it carries over as Carve front matter. A BARE `---` block is
-taken only when its content has the SHAPE of a mapping: skipping blank lines and
+Markdown also reports `frontmatter-synthesized`, info/normalized at `line:1`,
+on every leading `---` block it carries over as Carve front matter. Confidence
+follows the opener: `inferred` for a bare `---` claimed by the shape test,
+`exact` for a typed one that named its format. A BARE `---` block is taken only
+when its content has the SHAPE of a mapping: skipping blank lines and
 `#` comment lines, the first line left has to be, at column 0, a key plus `:`
 and then a space, a tab or the end of the line. A scalar block such as
 CommonMark example 96's `---\nFoo\n---` is a thematic break over setext headings
