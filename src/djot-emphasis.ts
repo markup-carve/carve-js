@@ -1,43 +1,19 @@
+import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
-import { readAttributes } from './djot-word-attributes.js'
+import { nativeAttributeReader } from './djot-word-attributes.js'
 
 type Pair = { start: number; openEnd: number; close: number; end: number; kind: string; forced: boolean; children: Pair[]; kinds: Set<string> }
 type Opener = { start: number; end: number; kind: string; forced: boolean }
 
-export const djotStructuralPrefixSteps = { count: 0 }
-
-export function djotStructuralPrefixEnd(line: string): number {
-  let at = 0
-  const spaces = () => {
-    while (line[at] === ' ' || line[at] === '\t') { at++; djotStructuralPrefixSteps.count++ }
-  }
-  do { spaces(); if (line[at] !== '>') break; at++; djotStructuralPrefixSteps.count++ } while (at < line.length)
-  spaces()
-  for (;;) {
-    djotStructuralPrefixSteps.count++
-    const start = at
-    let end = at
-    if ('-*+'.includes(line[end] ?? '\0')) end++
-    else {
-      while (line[end] !== undefined && line[end]! >= '0' && line[end]! <= '9') { end++; djotStructuralPrefixSteps.count++ }
-      if (end === start || line[end] !== '.' && line[end] !== ')') break
-      end++
-    }
-    if (line[end] !== ' ' && line[end] !== '\t') break
-    at = end; spaces()
-    if (line[at] === '[' && ' xX-'.includes(line[at + 1] ?? '\0') && line[at + 2] === ']' && (line[at + 3] === ' ' || line[at + 3] === '\t')) {
-      at += 3; djotStructuralPrefixSteps.count += 3; spaces()
-    }
-  }
-  return at
-}
+export { djotStructuralPrefixSteps, djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 
 export function djotEmphasis(source: string, convert: (plain: string) => string): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
+  const readAttributes = nativeAttributeReader(source)
   const attributes = new Map<number, { end: number; source: string }>()
   for (let i = 0; i < source.length; i++) {
     if (mask[i] !== '{' || !/[.#A-Za-z]/.test(source[i + 1] ?? '')) continue
-    const attrs = readAttributes(source, i, true)
+    const attrs = readAttributes(i)
     if (!attrs) continue
     attributes.set(i, attrs)
     for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '

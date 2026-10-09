@@ -1,3 +1,5 @@
+import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
+
 const quoteValue = (value: string, carve = false): string => `"${value.replace(carve ? /[!-\/:-@\[-`{-~]/g : /[\\"]/g, char => '\\' + char)}"`
 
 function attributeContext(source: string, start: number): { depth: number; indent: number | undefined; minimum: number } {
@@ -11,7 +13,7 @@ function attributeLine(line: string, depth: number): string | undefined {
   return line
 }
 
-export function readAttributes(source: string, start: number, carve = false): { end: number; source: string } | undefined {
+export function readAttributes(source: string, start: number, carve = false, table = false): { end: number; source: string } | undefined {
   const parts: string[] = []
   let i = start + 1
   let context: ReturnType<typeof attributeContext> | undefined
@@ -34,7 +36,7 @@ export function readAttributes(source: string, start: number, carve = false): { 
       }
     }
     if (source[i] === '}') {
-      if (carve && /^(?:[ \t]*>|[ \t]*(?:[-*+]|[0-9]+[.)])[ \t]+)*[ \t]*\|/.test(source.slice(source.lastIndexOf('\n', start - 1) + 1, start))) {
+      if (carve && table) {
         for (let at = start; at <= i; at++) {
           if (source[at] === '\\') at++
           else if (source[at] === '|') return undefined
@@ -89,8 +91,23 @@ export function readAttributes(source: string, start: number, carve = false): { 
   return undefined
 }
 
+export function nativeAttributeReader(source: string): (start: number) => ReturnType<typeof readAttributes> {
+  let lineEnd = -1, table = false
+  return start => {
+    while (lineEnd < start) {
+      const lineStart = lineEnd + 1
+      const newline = source.indexOf('\n', lineStart)
+      lineEnd = newline < 0 ? source.length : newline
+      const line = source.slice(lineStart, lineEnd)
+      table = line[djotStructuralPrefixEnd(line)] === '|'
+    }
+    return readAttributes(source, start, true, table)
+  }
+}
+
 export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string): string {
   let output = '', cursor = 0
+  const readNative = nativeAttributeReader(source)
   const lastClose = source.lastIndexOf('}')
   const lastDelimiters = Object.fromEntries([..."_*~^"].map(marker => [marker, source.lastIndexOf(marker)]))
   for (let i = 0; i <= lastClose; i++) {
@@ -98,8 +115,13 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     let slashes = 0
     for (let at = i - 1; at >= 0 && source[at] === '\\'; at--) slashes++
     if (slashes % 2) continue
-    const attrs = readAttributes(source, i, true)
+    let attrs = readNative(i)
     if (!attrs) continue
+    while (source[attrs.end] === '{') {
+      const next = readNative(attrs.end)
+      if (!next) break
+      attrs = { end: next.end, source: attrs.source + next.source }
+    }
     let word = i
     if (i > 0 && masked[i - 1] === source[i - 1] && !/[`*_~^\]}>]/.test(source[i - 1]!)) {
       while (word > cursor && masked[word - 1] === source[word - 1] && !/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) word--
@@ -111,7 +133,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
           for (let at = opener - 1; at >= 0 && source[at] === '\\'; at--) escapes++
           if (escapes % 2 === 0) { word = opener + 1; break }
         }
-      } else if (word < i && /[_*~^]/.test(source[word]!) && lastDelimiters[source[word]!]! >= attrs.end) word = i
+      } else if (word < i && /[_*~^]/.test(source[word]!) && lastDelimiters[source[word]!]! >= attrs.end) word++
       if (word > 0 && source[word - 1] === '{' && /[+\-=]/.test(source[word] ?? '')) word++
     }
     if (word < i) {
