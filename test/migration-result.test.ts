@@ -52,6 +52,7 @@ describe('shared migration result', () => {
     expect(result.value).toBe('/emphasis/ and *strong*')
     expect(result.report.diagnostics).toEqual([
       expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
+      expect.objectContaining({ code: 'structure-unspellable', fidelity: 'dropped', confidence: 'exact', path: 'line:1' }),
     ])
   })
 

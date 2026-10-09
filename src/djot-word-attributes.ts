@@ -52,7 +52,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     while (source[attrs.end] === '{') {
       const next = readNative(attrs.end)
       if (!next) break
-      attrs = { end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
+      attrs = { tokens: [...attrs.tokens, ...next.tokens], end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
     }
     if (attrs.source === '{}') { i = attrs.end - 1; continue }
     let word = i
