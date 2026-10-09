@@ -11357,11 +11357,21 @@ class ParseSession {
       // than the marker) — `x.` / blank or indented body / `xi.` is still one
       // roman list.
       let k = 1
+      let blankRun = 0
+      let hardBoundary = false
       for (; lexer.peek(k) !== undefined; k++) {
         const ln = lexer.peek(k)!
-        if (!isBlankLine(ln) && indentColumns(ln, baseIndent + 1) <= baseIndent) break
+        if (isBlankLine(ln)) {
+          blankRun++
+          continue
+        }
+        if (indentColumns(ln, baseIndent + 1) <= baseIndent) {
+          hardBoundary = blankRun >= 3
+          break
+        }
+        blankRun = 0
       }
-      const nextLine = lexer.peek(k)
+      const nextLine = hardBoundary ? undefined : lexer.peek(k)
       const nextStripped =
         nextLine !== undefined
           ? (extractItemAttr(nextLine)?.stripped ?? nextLine)

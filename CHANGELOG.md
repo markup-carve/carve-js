@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Ordered-list formatting and HTML import keep adjacent alphabetic and Roman lists separate. A hard list boundary also ends the dialect lookahead (carve-js#2627).
+
 - Markdown import separates front matter from its body and normalizes thematic-break collisions so formatting the imported source leaves it unchanged (carve-js#2606).
 
 - A profile that denies raw blocks but allows code blocks keeps the escaped payload in a code block, including its format, attributes and line endings (markup-carve/carve#2801).
