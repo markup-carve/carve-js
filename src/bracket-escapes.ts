@@ -1,4 +1,5 @@
 import type { InlineNode } from './ast.js'
+import { buildBracketMap } from './parse.js'
 
 /**
  * PART 11 §5's LONE BRACKETS: a `[` or `]` left unpaired in the content a span,
@@ -108,20 +109,24 @@ function collectScope(
   crossingClosers: CrossingClosers | undefined,
   escaped: WeakMap<object, Set<number>> | undefined,
 ): void {
-  const sites: Array<Site & { chain: readonly object[] }> = []
+  const sites: Array<Site & { chain: readonly object[]; fixed: boolean }> = []
   const owners: object[] = []
   // A run holding an empty code span is left to the escape search whole: the
   // span is written as a bare backtick run, so a pairing read from the tree no
   // longer matches the written bytes, before the span or after it.
   let hasEmptyCode = false
 
-  const addText = (owner: object, value: string, chain: readonly object[]): void => {
+  const addText = (owner: object, value: string, chain: readonly object[], verbatim = false): void => {
     owners.push(owner)
     if (!/[[\]]/.test(value)) return
-    const text = value.replace(UNWRITABLE_CONTROLS, '')
+    const text = verbatim ? value : value.replace(UNWRITABLE_CONTROLS, '')
+    const structural = verbatim ? new Set<number>() : undefined
+    if (structural !== undefined) buildBracketMap(text, true, structural)
     for (let offset = 0; offset < text.length; offset++) {
       const char = text[offset]!
-      if ((char === '[' || char === ']') && !escaped?.get(owner)?.has(offset)) sites.push({ owner, offset, char, chain })
+      if (char !== '[' && char !== ']') continue
+      if (structural !== undefined && !structural.has(offset)) continue
+      if (!escaped?.get(owner)?.has(offset)) sites.push({ owner, offset, char, chain, fixed: verbatim })
     }
   }
 
@@ -177,7 +182,11 @@ function collectScope(
         scopes.push({ content: node.children, bracketed: true })
         break
       case 'link':
-        if (node.rawRef === undefined) scopes.push({ content: node.children, bracketed: true })
+        if (node.ref === undefined || node.rawRef === undefined) scopes.push({ content: node.children, bracketed: true })
+        else addText(node, node.rawRef, chain, true)
+        break
+      case 'image':
+        if (node.ref !== undefined && node.rawRef !== undefined) addText(node, node.rawRef, chain, true)
         break
       case 'inline_extension':
         // Its content ends at the first `]`, so a `[` there pairs with nothing.
@@ -202,7 +211,7 @@ function collectScope(
   }
   if (hasEmptyCode) return
 
-  type Bracket = Site & { chain: readonly object[] }
+  type Bracket = Site & { chain: readonly object[]; fixed: boolean }
   /** The spans a pair reaches across, from whichever side holds them. */
   const crossed = (opener: Bracket, closer: Bracket): number => {
     const shared = sharedDepth(opener.chain, closer.chain)
@@ -218,7 +227,7 @@ function collectScope(
       if (site.char === '[') open.push(site)
       else {
         const opener = open.pop()
-        if (opener !== undefined && crossed(opener, site) > 0) crossingOpeners.add(opener)
+        if (opener !== undefined && !opener.fixed && crossed(opener, site) > 0) crossingOpeners.add(opener)
       }
     }
   }
@@ -247,7 +256,7 @@ function collectScope(
       const opener = open.pop()
       if (opener === undefined) continue
       decided.add(site)
-      if (crossed(opener, site) > 0) {
+      if (!site.fixed && crossed(opener, site) > 0) {
         crossingClosed.push(site)
         open.push(opener)
         continue
