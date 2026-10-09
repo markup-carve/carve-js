@@ -259,7 +259,7 @@ function collectScope(
       const opener = open.pop()
       if (opener === undefined) continue
       decided.add(site)
-      if (!site.fixed && crossed(opener, site) > 0) {
+      if (!site.fixed && !opener.fixed && crossed(opener, site) > 0) {
         crossingClosed.push(site)
         open.push(opener)
         continue
