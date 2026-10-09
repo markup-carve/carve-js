@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- HTML code-block import keeps sibling text, omits active payloads and reports discarded child markup, comments and attributes (carve-js#2661).
+
 - Markdown export uses a safe tilde fence for headers and labels containing backticks (carve-js#2655).
 
 - Formatting keeps enclosing label brackets balanced around verbatim reference source, including code spans and comments (carve-js#2653).
