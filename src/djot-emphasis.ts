@@ -69,6 +69,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
     i = attrs.end - 1
   }
+  const validBraceClosers = new Set<number>()
   const validBraces = new Set<number>(), pendingBraces = new Map<string, number[]>()
   let braceLineStart = 0, lastEscaped = -1
   for (let i = 0; i < source.length; i++) {
@@ -83,7 +84,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       stack.push(i); pendingBraces.set(kind, stack)
     } else if (source[i] === '}' && i - 1 !== lastEscaped && '+-=^~'.includes(source[i - 1] ?? '\0')) {
       const start = pendingBraces.get(source[i - 1]!)?.pop()
-      if (start !== undefined && i > start + 2) validBraces.add(start)
+      if (start !== undefined && i > start + 2) { validBraces.add(start); validBraceClosers.add(i - 1) }
     }
   }
   const openers = new Map<string, Opener[]>(['_', '*', '~', '^', '{_', '{*', '{~', '{^'].map(key => [key, []]))
@@ -140,7 +141,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       }
       if (/[ \t]/.test(source[i + 1] ?? '')) { structural.add(i); continue }
     }
-    const forcedOpen = source[i - 1] === '{' && mask[i - 1] === '{'
+    const forcedOpen = source[i - 1] === '{' && mask[i - 1] === '{' && !isDjotEscaped(source, i - 1)
     const forcedClose = source[i + 1] === '}'
     const canOpen = forcedOpen || (!forcedClose && source[i + 1] !== undefined && !/[ \t\r\n]/.test(source[i + 1]!))
     const canClose = !forcedOpen && (forcedClose || (i > 0 && !/[ \t\r\n]/.test(source[i - 1]!)))
@@ -212,7 +213,12 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       }
       const ch = source[i]!
       if (ch === '\\') { text += source.slice(i, Math.min(end, i + 2)); i++; continue }
-      if (mask[i] === ch && ((ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {
+      if (ch === '=' && (validBraceClosers.has(i) || validBraces.has(i - 1))) {
+        text += `${literalPrefix}${literals.length}\0`
+        literals.push(ch)
+        continue
+      }
+      if (mask[i] === ch && (((ch === '~' || ch === '^') && source[i + 1] === '}' && !validBraceClosers.has(i)) || (ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {
         text += `${literalPrefix}${literals.length}\0`
         literals.push(`\\${ch}`)
       } else text += ch
