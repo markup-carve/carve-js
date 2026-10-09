@@ -77,8 +77,12 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
 const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
   // Only plain, attribute-free tags have Carve-native equivalents here. If an
   // HTML tag carries attributes, migrating it to native Carve would drop data,
-  // so convertInlineHtml protects it as raw HTML instead.
+  // so convertInlineHtml protects it as raw HTML instead. The exclusion is on
+  // the data loss, not on the attributes: where the Carve construct CARRIES
+  // every attribute the tag holds, nothing drops and the tag migrates through
+  // `attributedNative` instead of this table (carve#2838).
   [/<mark>([^<]+)<\/mark>/gi, markerForm('=')],
+  [/<u>([^<]+)<\/u>/gi, markerForm('_')],
   [/<ins>([^<]+)<\/ins>/gi, '{+$1+}'],
   [/<del>([^<]+)<\/del>/gi, '~$1~'],
   [/<s>([^<]+)<\/s>/gi, '~$1~'],
@@ -549,6 +553,7 @@ const RE_LINE_INITIAL_DEFINITION = /^\*?(?=\[[^\]\n]*\]:)/
 
 const NATIVE_INLINE_HTML_TAGS = new Set([
   'mark',
+  'u',
   'ins',
   'del',
   's',
@@ -723,6 +728,37 @@ function opaqueHtmlScanner(s: string): (start: number) => number | undefined {
   }
 }
 
+/**
+ * PART 11 §8c writes two constructs with no Markdown delimiter spelling as an
+ * ATTRIBUTE-BEARING inline tag: an abbreviation as `<abbr title="...">` and an
+ * editorial comment as `<span class="critic-comment">`. HTML_TAG_RULES excludes
+ * attribute-bearing tags because migrating one would drop its attributes - here
+ * the Carve construct carries them, so nothing drops and the exclusion does not
+ * apply (carve#2838).
+ *
+ * The match is on the shape §8c emits and refuses anything wider: one
+ * double-quoted attribute and no other, and a body that cannot break out of the
+ * construct. Anything else falls back to the raw span the importer wrote before.
+ */
+function attributedNative(tag: string, open: string, body: string, protect: (s: string) => string): string | undefined {
+  if (body.includes('<')) return undefined
+  if (tag === 'span') {
+    // CARVE-P3-016 makes a comment's content literal, so the whole construct is
+    // protected: no later inline pass may read markup inside it.
+    if (!/^<span\s+class\s*=\s*"critic-comment"\s*>$/i.test(open)) return undefined
+    const value = decodeHtmlEntitiesRaw(body)
+    return /[#{}\\\n]/.test(value) ? undefined : protect(`{#${value}#}`)
+  }
+  if (tag !== 'abbr') return undefined
+  const title = /^<abbr\s+title\s*=\s*"([^"]*)"\s*>$/i.exec(open)
+  if (!title) return undefined
+  const value = decodeHtmlEntitiesRaw(title[1]!)
+  if (/["\\\n{}]/.test(value) || /[[\]\n]/.test(body)) return undefined
+  // The label stays live so the inline passes still convert markup inside it;
+  // only the attribute block is protected, from the quote escaping below.
+  return `[${body}]${protect(`{abbr="${value}"}`)}`
+}
+
 function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[]): string {
   let out = ''
   let i = 0
@@ -754,6 +790,14 @@ function convertInlineHtml(input: string, protect: (s: string) => string, placeh
         end = tag.end + close.index + close[0].length
         const body = input.slice(tag.end, tag.end + close.index)
         native = input.slice(i, tag.end).toLowerCase() === `<${tag.name}>` && close[0].toLowerCase() === `</${tag.name}>` && NATIVE_INLINE_HTML_TAGS.has(tag.name) && !body.includes('<')
+        if (!native && tag.attrs && close[0].toLowerCase() === `</${tag.name}>`) {
+          const carve = attributedNative(tag.name, input.slice(i, tag.end), body, protect)
+          if (carve !== undefined) {
+            out += carve
+            i = end
+            continue
+          }
+        }
       }
     }
     if (native) {
