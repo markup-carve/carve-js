@@ -594,6 +594,7 @@ function tableContinuationLines(source: string): Set<number> {
 
 export const migrateBracedSteps = { count: 0 }
 export const migrateCandidateChecks = { count: 0 }
+export const migrateBareSteps = { count: 0 }
 
 function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode: boolean): Generator<RegExpExecArray> {
   const opener = rule.id === 'djot-subscript-tilde-braced' ? '{~' : rule.id === 'djot-highlight-braces' ? '{=' : undefined
@@ -622,17 +623,44 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
         }
         candidateMask = chars.join('')
       }
-      const anchored = new RegExp(rule.pattern.source, rule.pattern.flags.replace('g', 'y'))
+      const whitespace = candidate === '_' ? /[ \t\n\r\f]/ : /\s/
+      const intraword = rule.id === 'djot-intraword-underscore'
+      const word = intraword ? /[A-Za-z0-9]/ : /[A-Za-z0-9_]/
       for (let cursor = 0; cursor < masked.length;) {
         const start = candidateMask.indexOf(candidate, cursor)
+        migrateBareSteps.count += start < 0 ? masked.length - cursor : start - cursor + 1
         if (start < 0) break
         cursor = start + 1
         if (candidate === '^' && !nativeDjotCode && source[start + 1] === '[') continue
         if (isDjotEscaped(source, start) || (candidate !== '_' && source[start + 1] === '}') || (candidate !== '_' && source[start - 1] === '{' && !isDjotEscaped(source, start - 1))) continue
-        anchored.lastIndex = start
+        if (whitespace.test(candidateMask[start + 1] ?? '')) continue
+        if (candidate === '_' && word.test(candidateMask[start - 1] ?? '') !== intraword) continue
         migrateCandidateChecks.count++
-        const match = anchored.exec(candidateMask)
-        if (match) { cursor = anchored.lastIndex; yield match }
+        let end = start + 1
+        for (; end < candidateMask.length; end++) {
+          migrateBareSteps.count++
+          if (candidateMask[end] === '\n') {
+            let next = end + 1
+            while (source[next] === ' ' || source[next] === '\t') { migrateBareSteps.count++; next++ }
+            while (source[next] === '>') {
+              migrateBareSteps.count++
+              next++
+              while (source[next] === ' ' || source[next] === '\t') { migrateBareSteps.count++; next++ }
+            }
+            if (source[next] === '\n') break
+          }
+          if (candidateMask[end] === '\\' && candidateMask[end + 1] !== '\n') { end++; continue }
+          if (candidateMask[end] === candidate) break
+        }
+        cursor = end
+        if (end >= candidateMask.length || candidateMask[end] !== candidate) { cursor++; continue }
+        if (end === start + 1 || whitespace.test(candidateMask[end - 1]!)) continue
+        if (candidate !== '_' && source[end + 1] === '}') continue
+        if (candidate === '_' && word.test(candidateMask[end + 1] ?? '') !== intraword) continue
+        cursor = end + 1
+        yield Object.assign([candidateMask.slice(start, cursor), candidateMask.slice(start + 1, end)], {
+          index: start, input: candidateMask, indices: [[start, cursor], [start + 1, end]],
+        }) as RegExpExecArray
       }
       return
     }
@@ -744,12 +772,13 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   // Overlap is then a binary search (find the rightmost interval starting
   // before `e`, check it covers past `s`) instead of a linear scan of a
   // single growing array — the latter was O(n^2) on inputs with thousands of
-  // same-family matches (e.g. `**a** ` repeated). Within a single rule, matches
-  // arrive in ascending `start`, so insertion lands at the end (O(1) push);
-  // cross-rule same-family inserts (rare) cost an O(log n) binary insert.
+  // same-family matches (e.g. `**a** ` repeated). Each rule yields disjoint
+  // ranges in ascending order. Merge them once, so interleaved rules do not copy
+  // a growing array for every insertion.
   const takenByFamily = new Map<string, Array<[number, number]>>()
   const sameFamilyOverlap = (s: number, e: number, fam: string): boolean => {
     const list = takenByFamily.get(fam)
+    migrateScanSteps.count++
     if (!list || list.length === 0) return false
     // Rightmost interval with start < e.
     let lo = 0
@@ -767,28 +796,21 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
     if (lo === 0) return false
     return list[lo - 1]![1] > s
   }
-  const recordTaken = (s: number, e: number, fam: string): void => {
-    let list = takenByFamily.get(fam)
-    if (!list) {
-      list = []
-      takenByFamily.set(fam, list)
-    }
-    if (list.length === 0 || s >= list[list.length - 1]![0]) {
-      list.push([s, e])
-      return
-    }
-    let lo = 0
-    let hi = list.length
-    while (lo < hi) {
+  const recordTaken = (added: Array<[number, number]>, fam: string): void => {
+    if (added.length === 0) return
+    const list = takenByFamily.get(fam)
+    if (!list || list.length === 0) { takenByFamily.set(fam, added); return }
+    const merged: Array<[number, number]> = []
+    let old = 0, next = 0
+    while (old < list.length && next < added.length) {
       migrateScanSteps.count++
-      const mid = (lo + hi) >> 1
-      if (list[mid]![0] < s) lo = mid + 1
-      else hi = mid
+      merged.push(list[old]![0] <= added[next]![0] ? list[old++]! : added[next++]!)
     }
-    list.splice(lo, 0, [s, e])
+    takenByFamily.set(fam, [...merged, ...list.slice(old), ...added.slice(next)])
   }
 
   for (const rule of RULES) {
+    const added: Array<[number, number]> = []
     for (const m of ruleMatches(masked, rule, norm, nativeDjotCode)) {
       const markerSpan = rule.id === 'djot-plus-bullet' ? m.indices?.[1] : undefined
       const start = markerSpan?.[0] ?? m.index
@@ -801,7 +823,7 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
       if (bs % 2 === 1) continue
       if (rule.id === 'djot-plus-bullet' && continuationLines.has(posOf(start).line)) continue
       if (sameFamilyOverlap(start, end, rule.family)) continue
-      recordTaken(start, end, rule.family)
+      added.push([start, end])
       const { line, column } = posOf(start)
       // Build the suggestion from the ORIGINAL captured content, not the
       // code-masked one, so `*a `code` b*` round-trips instead of losing
@@ -816,13 +838,25 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
       // nested fixes compose. A whole-span rule (the `+` bullet) replaces
       // its single match with the suggestion.
       const suggestion = rule.suggestion(origM)
-      const edits: Edit[] =
+      let edits: Edit[] =
         rule.delims && span
           ? [
               { start, end: span[0], text: rule.delims[0] },
               { start: span[1], end, text: rule.delims[1] },
             ]
           : [{ start, end, text: suggestion }]
+      if (rule.id === 'djot-heading-continuation' && span) {
+        edits = []
+        const marker = m[2]! + ' '
+        for (let at = orig.indexOf('\n'); at >= 0; at = orig.indexOf('\n', at + 1)) {
+          let to = at + 1
+          if (orig.startsWith(marker, to)) {
+            to += marker.length
+            while (orig[to] === ' ') to++
+          }
+          edits.push({ start: span[0] + at, end: span[0] + to, text: ' ' })
+        }
+      }
       out.push({
         line,
         column,
@@ -835,6 +869,7 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
         edits,
       })
     }
+    recordTaken(added, rule.family)
   }
 
   out.sort((a, b) => a.line - b.line || a.column - b.column)
@@ -927,16 +962,19 @@ export function applyMigrationFixes(source: string, nativeDjotCode = false): Mig
     else applied.push(h)
   }
 
-  // No two applied hits cross, so their delimiter edits are pairwise
-  // non-overlapping. Splice from the end so each edit leaves earlier
-  // offsets valid.
-  const edits = applied.flatMap((h) => h.edits).sort((a, b) => b.start - a.start)
-  let output = source.replace(/\r\n?/g, '\n')
+  // Copy untouched source ranges once. Heading folds replace their line
+  // prefixes only, so they compose with inline delimiter edits.
+  const edits = applied.flatMap((h) => h.edits).sort((a, b) => a.start - b.start)
+  const normalized = source.replace(/\r\n?/g, '\n')
+  const pieces: string[] = []
+  let cursor = 0
   for (const e of edits) {
-    output = output.slice(0, e.start) + e.text + output.slice(e.end)
+    pieces.push(normalized.slice(cursor, e.start), e.text)
+    cursor = e.end
   }
+  pieces.push(normalized.slice(cursor))
   return {
-    output,
+    output: pieces.join(''),
     applied: applied.map(stripHit),
     skipped: skipped.map(stripHit),
   }
