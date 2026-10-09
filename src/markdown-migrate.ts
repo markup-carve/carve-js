@@ -1757,20 +1757,23 @@ function writeTableRow(
 export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized'
   message: string
+  line?: number
 }
 
 let importLosses: MarkdownImportLoss[] = []
 
-/** Report an ordered task item only when the list path reads it as an item. */
-function reportOrderedTask(line: string): void {
-  // cmark-gfm's task extension reaches one marker on this line. A quote or
-  // another list marker before the ordered marker leaves the pair as text.
-  // More than four columns after the marker start indented code in the item.
+/** Whether an ordered task marker reaches the unspellable-item report. */
+export function orderedTaskMarkerIsUnspellable(line: string): boolean {
   const match = /^([ \t]*\d{1,9}[.)][ \t]+)\[[ xX]\](?=[ \t])/.exec(line)
-  if (match === null || itemContentColumn(match[1]!) < columnWidth(match[1]!)) return
+  return match !== null && itemContentColumn(match[1]!) >= columnWidth(match[1]!)
+}
+
+function reportOrderedTask(line: string, sourceLine?: number): void {
+  if (!orderedTaskMarkerIsUnspellable(line)) return
   importLosses.push({
     code: 'structure-unspellable',
     message: ORDERED_TASK_ITEM_UNSPELLABLE,
+    ...(sourceLine === undefined ? {} : { line: sourceLine }),
   })
 }
 
@@ -4407,6 +4410,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   )
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
+  const sourceLinesUnchanged = lines.length === allLines.length - bodyStart && lines.every((line, index) => line === allLines[index + bodyStart])
   const out: string[] = []
   let terminalHtmlBlock = false
   // Where `out` holds a blank line of the source, as opposed to one the
@@ -5027,7 +5031,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // inline conversion only — no top-level block spacing or dedent.
     if (prevType === 'list' && indent >= 1 && listCols.length > (isList ? 1 : 0)) {
       if (isList) {
-        reportOrderedTask(line)
+        reportOrderedTask(line, sourceLinesUnchanged ? i + bodyStart + 1 : undefined)
         const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
         if (lazyQuote !== null && indentColumns(line) >= lazyQuote.col) out.push('')
         out.push(...writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end)).lines)
@@ -5193,7 +5197,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       continue
     }
     if (isList) {
-      reportOrderedTask(line)
+      reportOrderedTask(line, sourceLinesUnchanged ? i + bodyStart + 1 : undefined)
       const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
       const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
       // A list under a quote an item holds is set apart from it, or Carve reads

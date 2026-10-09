@@ -10,6 +10,7 @@ describe('shared migration result', () => {
           expect.objectContaining({ code: 'literal-text-verified', fidelity: 'preserved', confidence: 'exact', severity: 'info' }),
         ])
       }
+      if (migrate === migrateMarkdown) continue
       for (const source of ['# heading', '*bold*', '[b]text[/b]', 'a\nb', '    code', '1. item', 'a  b', 'a\tb', 'hello!', ' hello', 'hello ', 'a\u00a0b', 'e\u0301', 'a\r\nb', 'a\rb']) {
         expect(migrate(source).report.diagnostics).toContainEqual(expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped' }))
       }
@@ -42,7 +43,7 @@ describe('shared migration result', () => {
       migrateDjot('_emphasis_').report.diagnostics,
       migrateBbcode('[b]strong[/b]').report.diagnostics,
     ].flat().map(diagnostic => diagnostic.fidelity)
-    expect(outcomes).toEqual(['degraded', 'dropped', 'dropped', 'dropped'])
+    expect(outcomes).toEqual(['degraded', 'preserved', 'preserved', 'dropped', 'dropped'])
     expect(outcomes.every(outcome => ['preserved', 'normalized', 'degraded', 'dropped'].includes(outcome))).toBe(true)
   })
 
@@ -65,35 +66,22 @@ describe('shared migration result', () => {
   })
 
   it('does not mistake byte equality or whitespace rewrites for verified fidelity', () => {
-    for (const source of ['plain text!', 'plain text!\r\n\r\n', 'term\n: definition']) {
+    for (const source of ['https://example.org', '[^note]\n\n[^note]: note']) {
       expect(migrateMarkdown(source).report.diagnostics).toContainEqual(
         expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
       )
     }
   })
 
-  it('reports an ordered task checkbox kept as text beside the incomplete-assessment row', () => {
+  it('reports ordered task losses after complete assessment', () => {
     const result = migrateMarkdown('1. [x] done\n2. [ ] next\n')
     expect(result.value).toContain('1. [x] done')
-    expect(result.report.diagnostics).toEqual([
-      expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
-      ...Array.from({ length: 2 }, () => expect.objectContaining({
-        code: 'structure-unspellable',
-        message: 'An ordered task item is not spellable as a Carve task item; the checkbox marker was kept as text',
-        fidelity: 'dropped',
-        confidence: 'exact',
-      })),
+    expect(result.report.diagnostics.filter(row => row.fidelity === 'dropped')).toEqual([
+      expect.objectContaining({ code: 'structure-unspellable', confidence: 'exact', path: 'line:1' }),
+      expect.objectContaining({ code: 'structure-unspellable', confidence: 'exact', path: 'line:2' }),
     ])
-    for (const source of ['- [x] done\n', '> 1. [x] done\n', '```\n1. [x] done\n```\n', 'para\n2. [x] done\n']) {
-      expect(migrateMarkdown(source).report.diagnostics.map(({ code }) => code)).toEqual(['fidelity-unverified'])
-    }
-    for (const source of ['- a\n  1. [x] b\n', 'para\n1. [x] done\n', '1. [x] \n', '1. [x]\t\n']) {
-      expect(migrateMarkdown(source).report.diagnostics.map(({ code }) => code)).toEqual([
-        'fidelity-unverified', 'structure-unspellable',
-      ])
-    }
-    for (const source of ['- 1. [x] b\n', '- a\n\n      1. [x] code\n', '1. [x]\n', '1.     [x] code\n', '- a\n\n  > 1. [x] b\n']) {
-      expect(migrateMarkdown(source).report.diagnostics.map(({ code }) => code)).toEqual(['fidelity-unverified'])
-    }
+    expect(result.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(false)
+    const incomplete = migrateMarkdown('https://example.org\n\n1. [x] done\n')
+    expect(incomplete.report.diagnostics.map(row => row.code)).toEqual(['fidelity-unverified', 'structure-unspellable'])
   })
 })

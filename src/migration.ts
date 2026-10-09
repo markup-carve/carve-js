@@ -8,6 +8,8 @@ import {
   type HtmlImportOptions,
 } from './html-import.js'
 import { markdownToCarveWithLosses, type MarkdownDialect } from './markdown-migrate.js'
+import { assessMarkdown } from './markdown-assessment.js'
+import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 
 export type SourceFormat = 'html' | 'markdown' | 'djot' | 'bbcode'
 export type MigrationFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
@@ -60,10 +62,11 @@ function assessed(
   value: string,
   sourceFormat: Exclude<SourceFormat, 'html'>,
   known: readonly MigrationDiagnostic[] = [],
+  verifyLiteral = true,
 ): MigrationResult {
   const literal = trimEndMatchingEdges(source.replace(/\r\n?/g, '\n'), (code) => code === 10)
   const written = trimEndMatchingEdges(value, (code) => code === 10)
-  if (known.length === 0 && (literal === '' || /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+)*$/u.test(literal)) && written === literal) {
+  if (verifyLiteral && known.length === 0 && (literal === '' || /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+)*$/u.test(literal)) && written === literal) {
     return { value, report: { schemaVersion: 2, sourceFormat, diagnostics: [{
       code: 'literal-text-verified',
       message: 'Verified the complete input as literal text.',
@@ -74,7 +77,7 @@ function assessed(
   }
   const diagnostics: MigrationDiagnostic[] = [{
     code: 'fidelity-unverified',
-    message: `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
+    message: sourceFormat === 'markdown' ? 'Markdown construct assessment is incomplete.' : `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
     severity: 'warning',
     fidelity: 'dropped',
     confidence: 'fallback',
@@ -87,20 +90,30 @@ export function migrateMarkdown(
   options: { dialect?: MarkdownDialect } = {},
 ): MigrationResult {
   const result = markdownToCarveWithLosses(source, options.dialect)
-  // The construct-level losses the Markdown importer DOES know about. They sit
-  // beside `fidelity-unverified` rather than replacing it: the importer still
-  // reports nothing about the constructs it has no answer for, so the
-  // conservative worst case still stands for the rest of the document.
-  return assessed(source, result.value, 'markdown', result.losses.map((loss) => ({
-    code: loss.code,
-    message: loss.message,
-    // `frontmatter-synthesized` records a DECISION between two readings, not a
-    // loss: the mapping is carried over whole. The other codes name something
-    // the conversion could not spell.
-    severity: loss.code === 'frontmatter-synthesized' ? 'info' : 'warning',
-    fidelity: loss.code === 'frontmatter-synthesized' ? 'preserved' : 'dropped',
-    confidence: 'exact',
-  })))
+  const supportedDialect = !Object.values(options.dialect ?? {}).some(Boolean)
+  const assessment = supportedDialect ? assessMarkdown(source, result.value) : { complete: false, diagnostics: [] }
+  const fallback = assessed(source, result.value, 'markdown', result.losses.map(loss => {
+    const path = loss.line === undefined ? undefined : `line:${loss.line}`
+    return {
+      code: loss.code,
+      message: loss.message,
+      // `frontmatter-synthesized` records a DECISION between two readings, not
+      // a loss: the mapping is carried over whole. The other codes name
+      // something the conversion could not spell.
+      severity: loss.code === 'frontmatter-synthesized' ? 'info' : 'warning',
+      fidelity: loss.code === 'frontmatter-synthesized' ? 'preserved' : 'dropped',
+      confidence: 'exact',
+      ...(path ? { path } : {}),
+    }
+  }), supportedDialect)
+  if (fallback.report.diagnostics[0]?.code === 'literal-text-verified') {
+    fallback.report.diagnostics[0].path = 'line:1'
+    return fallback
+  }
+  if (assessment.complete && result.losses.every(loss => loss.message === ORDERED_TASK_ITEM_UNSPELLABLE) && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
+    return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: assessment.diagnostics } }
+  }
+  return fallback
 }
 
 export function migrateDjot(source: string): MigrationResult {
