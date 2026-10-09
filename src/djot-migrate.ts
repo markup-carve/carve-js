@@ -21,8 +21,8 @@
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
-import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-attributes.js'
+import { maskDjotOpaque, type DjotOpaqueOptions } from './djot-opaque.js'
 
 import { parse } from './parse.js'
 
@@ -108,7 +108,7 @@ const RULES: Rule[] = [
     id: 'markdown-strong-double-star',
     category: 'carve-breakage',
     family: '*',
-    pattern: /\*\*(?!\s)((?:(?!\n[ \t]*\n)[^*])+?)(?<!\s)\*\*/gd,
+    pattern: /\*\*(?!\s)((?:(?!\n[ \t]*\n)[^*])+?)(?<!\s)\*\*/dg,
     message: () =>
       'Djot/Markdown `**strong**` is not Carve bold — Carve bold is a single `*`, so this renders with literal asterisks.',
     suggestion: (m) => `*${m[1]}*`,
@@ -118,9 +118,8 @@ const RULES: Rule[] = [
     id: 'markdown-strikethrough-double-tilde',
     category: 'carve-breakage',
     family: '~',
-    pattern: /~~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~~/gd,
-    message: () =>
-      'Markdown `~~strikethrough~~` is not Carve — Carve strikethrough is a single `~`.',
+    pattern: /~~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~~/dg,
+    message: () => 'Markdown `~~strikethrough~~` is not Carve — Carve strikethrough is a single `~`.',
     suggestion: (m) => `~${m[1]}~`,
     delims: ['~', '~'],
   },
@@ -139,9 +138,8 @@ const RULES: Rule[] = [
     id: 'djot-subscript-tilde-braced',
     category: 'djot-shift',
     family: '~',
-    pattern: /\{~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~\}/gd,
-    message: () =>
-      'Djot subscript `{~x~}` renders as *strikethrough* in Carve.',
+    pattern: /\{~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~\}/dg,
+    message: () => 'Djot subscript `{~x~}` renders as *strikethrough* in Carve.',
     suggestion: (m) => `{,${m[1]},}`,
     delims: ['{,', ',}'],
   },
@@ -151,9 +149,8 @@ const RULES: Rule[] = [
     family: '~',
     // A forced closer cannot start or terminate a bare span. ruleMatches checks
     // whether a preceding brace is an unescaped braced opener.
-    pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~(?!\})/gd,
-    message: () =>
-      'Djot subscript `~x~` renders as *strikethrough* in Carve.',
+    pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~(?!\})/dg,
+    message: () => 'Djot subscript `~x~` renders as *strikethrough* in Carve.',
     // Forced brace form: a Djot `~x~` is often intraword (e.g. H~2~O), where a
     // bare `,x,` would be literal in Carve; `{,x,}` renders in every position.
     suggestion: (m) => `{,${m[1]},}`,
@@ -168,9 +165,8 @@ const RULES: Rule[] = [
     // Reference labels are masked before matching. ruleMatches excludes
     // unescaped braced openers; an escaped brace or unmatched bracket
     // can precede a real superscript.
-    pattern: /\^(?!\s)((?:(?!\n[ \t]*\n)[^^])+?)(?<!\s)\^(?!\})/gd,
-    message: () =>
-      'Djot superscript `^x^` is literal text in Carve — Carve superscript is the braced `{^x^}` only.',
+    pattern: /\^(?!\s)((?:(?!\n[ \t]*\n)[^^])+?)(?<!\s)\^(?!\})/dg,
+    message: () => 'Djot superscript `^x^` is literal text in Carve — Carve superscript is the braced `{^x^}` only.',
     suggestion: (m) => `{^${m[1]}^}`,
     delims: ['{^', '^}'],
   },
@@ -179,9 +175,8 @@ const RULES: Rule[] = [
     category: 'djot-shift',
     family: '_',
     pattern:
-      /(?<![A-Za-z0-9_])_(?![ \t\n\r\f])((?:(?!\n[ \t]*\n)(?:\\(?!\n[ \t]*\n)[\s\S]|[^_\\]))+?)(?<![ \t\n\r\f])_(?![A-Za-z0-9_])/gd,
-    message: () =>
-      'Djot emphasis `_x_` renders as *underline* in Carve.',
+      /(?<![A-Za-z0-9_])_(?![ \t\n\r\f])((?:(?!\n[ \t]*\n)(?:\\(?!\n[ \t]*\n)[\s\S]|[^_\\]))+?)(?<![ \t\n\r\f])_(?![A-Za-z0-9_])/dg,
+    message: () => 'Djot emphasis `_x_` renders as *underline* in Carve.',
     suggestion: (m) => `/${m[1]}/`,
     delims: ['/', '/'],
   },
@@ -214,7 +209,7 @@ const RULES: Rule[] = [
     category: 'djot-shift',
     family: '_',
     pattern:
-      /(?<=[A-Za-z0-9])_(?![ \t\n\r\f])((?:(?!\n[ \t]*\n)(?:\\(?!\n[ \t]*\n)[\s\S]|[^_\\]))+?)(?<![ \t\n\r\f])_(?=[A-Za-z0-9])/gd,
+      /(?<=[A-Za-z0-9])_(?![ \t\n\r\f])((?:(?!\n[ \t]*\n)(?:\\(?!\n[ \t]*\n)[\s\S]|[^_\\]))+?)(?<![ \t\n\r\f])_(?=[A-Za-z0-9])/dg,
     message: () =>
       'Djot emphasizes this intraword `_x_`; the migration leaves it literal, so the emphasis is lost. Brace it as `{/x/}` if it was meant.',
     // `{/x/}`, NOT `{_x_}`: Carve's `_` is UNDERLINE, so the braced underscore
@@ -228,7 +223,7 @@ const RULES: Rule[] = [
     id: 'djot-highlight-braces',
     category: 'djot-shift',
     family: '{',
-    pattern: /\{=(?!\s)((?:(?!\n[ \t]*\n)[\s\S])+?)(?<!\s)=\}/gd,
+    pattern: /\{=(?!\s)((?:(?!\n[ \t]*\n)[\s\S])+?)(?<!\s)=\}/dg,
     message: () => 'Djot highlight `{=x=}` is also Carve highlight (`{=x=}`).',
     // Identity: the braced highlight form is valid Carve as-is and renders in
     // every position, so it is kept rather than reduced to a bare `=x=` (which
@@ -244,7 +239,7 @@ const RULES: Rule[] = [
     id: 'djot-plus-bullet',
     category: 'carve-breakage',
     family: 'plus-bullet',
-    pattern: /^[ \t]*(\+)(?=[ \t]+\S)/gmd,
+    pattern: /^[ \t]*(\+)(?=[ \t]+\S)/dgm,
     message: () =>
       'Djot/Markdown `+` bullet is not a Carve bullet (`+` is the list-continuation marker) — this line renders as a paragraph.',
     suggestion: () => '-',
@@ -288,7 +283,7 @@ const RULES: Rule[] = [
     category: 'djot-shift',
     family: 'heading-continuation',
     pattern:
-      /^((#{1,6})[ ]+[^\n]*\S(?:\n(?:\2[ ]+\S[^\n]*|(?![ \t]*$)(?!#)(?![>|])(?![-*+][ \t])(?!\d+[.)][ \t])(?!:[ \t])(?!:{2,})(?!\([0-9a-zA-Z]+\)[ \t])(?![`~]{3,})(?!\^[ \t])(?!%{3,})(?!\{)(?!\[[^\]\n]*\]:)[^\n]*\S))+)/gmd,
+      /^((#{1,6})[ ]+[^\n]*\S(?:\n(?:\2[ ]+\S[^\n]*|(?![ \t]*$)(?![-*][ \t]*[-*][ \t]*[-*][-* \t]*$)(?!#)(?![>|])(?![-*+][ \t])(?!(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t])(?!:[ \t])(?!:{2,})(?!\([0-9a-zA-Z]+\)[ \t])(?![`~]{3,})(?!\^[ \t])(?!%{3,})(?!\{)(?!\[[^\]\n]*\]:)[^\n]*\S))+)/dgm,
     message: () =>
       'Djot folds the line(s) below a heading INTO it (a plain line, or one with the same number of `#`); Carve ends the heading at the newline, so they are separate blocks and the heading id changes.',
     suggestion: (m) => {
@@ -314,7 +309,10 @@ function codepointPrefix(src: string): Uint32Array | undefined {
   let astral = false
   for (let i = 0; i < src.length; i++) {
     const code = src.charCodeAt(i)
-    if (code >= 0xd800 && code <= 0xdbff) { astral = true; break }
+    if (code >= 0xd800 && code <= 0xdbff) {
+      astral = true
+      break
+    }
   }
   if (!astral) return undefined
   const before = new Uint32Array(src.length + 1)
@@ -347,17 +345,38 @@ export function isDjotEscaped(source: string, at: number): boolean {
   return (at - start) % 2 !== 0
 }
 
-export function maskDjotFences(src: string, onFenceLine?: (line: number, replacement: string) => void, rowBoundaries: readonly boolean[] = [], strict = false): string {
+export function maskDjotFences(
+  src: string,
+  onFenceLine?: (line: number, replacement: string) => void,
+  rowBoundaries: readonly boolean[] = [],
+  strict = false,
+): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
   const previousLines = new Map<number, string>()
-  let sourceOffset = 0, previousLine = ''
-  for (const line of lines) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
-  let fence: { ch: string; len: number; container: number | null; depth: number; target: string; dedent: number; normalize: boolean } | null = null
-  let previousBlock = true, normalizeBoundary = true, previousDepth = 0
+  let sourceOffset = 0,
+    previousLine = ''
+  for (const line of lines) {
+    previousLines.set(sourceOffset, previousLine)
+    sourceOffset += line.length + 1
+    previousLine = line
+  }
+  let fence: {
+    ch: string
+    len: number
+    container: number | null
+    depth: number
+    target: string
+    dedent: number
+    normalize: boolean
+  } | null = null
+  let previousBlock = true,
+    normalizeBoundary = true,
+    previousDepth = 0
   const ancestors: { indent: number; column: number; ownerIndent: number }[][] = []
   const staged = lines.map((line, index) => {
-    let content = line, depth = 0
+    let content = line,
+      depth = 0
     const views = [line]
     while (true) {
       const quote = /^[ \t]*>[ ]?/.exec(content)
@@ -369,8 +388,17 @@ export function maskDjotFences(src: string, onFenceLine?: (line: number, replace
     let canNormalize = normalizeBoundary || rowBoundaries[index - 1] === true || depth < previousDepth
     previousDepth = depth
     if (fence && content.trim() !== '' && depth < fence.depth) fence = null
-    if (fence && fence.container !== null && content.trim() !== '' && /^[ \t]*/.exec(content)![0].length < fence.container && depth === fence.depth) fence = null
-    let nested = false, ownerColumn = 0, ownerIndent = 0
+    if (
+      fence &&
+      fence.container !== null &&
+      content.trim() !== '' &&
+      /^[ \t]*/.exec(content)![0].length < fence.container &&
+      depth === fence.depth
+    )
+      fence = null
+    let nested = false,
+      ownerColumn = 0,
+      ownerIndent = 0
     ancestors.length = Math.min(ancestors.length, depth + 1)
     if (!fence && content.trim() !== '') {
       ancestors.length = depth + 1
@@ -378,31 +406,90 @@ export function maskDjotFences(src: string, onFenceLine?: (line: number, replace
         const view = views[level]!
         const stack = ancestors[level] ?? (ancestors[level] = [])
         const indent = /^[ \t]*/.exec(view)![0].length
-        while (stack.length && stack[stack.length - 1]!.indent >= indent) { if (level === depth && stack.at(-1)!.column > 0 && indent <= stack.at(-1)!.ownerIndent) canNormalize = true; stack.pop() }
-        if (level === depth) { ownerColumn = stack.at(-1)?.column ?? 0; ownerIndent = stack.at(-1)?.ownerIndent ?? 0; nested = ownerColumn > 0 }
-        const marker = !/^(?:([*-])[ \t]*){3,}$/.test(view.trim()) && /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+\S/.test(view)
-        const prefix = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/.exec(view)?.[0] ?? ''
-        const footnote = /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)*)\[\^[^\]\n]+\]:/.exec(view)
-        const column = footnote ? footnote[1]!.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length + 2 : marker ? prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length : stack.at(-1)?.column ?? 0
-        const owningIndent = footnote ? footnote[1]!.length : marker ? indent : stack.at(-1)?.ownerIndent ?? 0
-        if (footnote && marker) stack.push({ indent, column: prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length, ownerIndent: indent })
+        while (stack.length && stack[stack.length - 1]!.indent >= indent) {
+          if (level === depth && stack.at(-1)!.column > 0 && indent <= stack.at(-1)!.ownerIndent) canNormalize = true
+          stack.pop()
+        }
+        if (level === depth) {
+          ownerColumn = stack.at(-1)?.column ?? 0
+          ownerIndent = stack.at(-1)?.ownerIndent ?? 0
+          nested = ownerColumn > 0
+        }
+        const marker =
+          !/^(?:([*-])[ \t]*){3,}$/.test(view.trim()) &&
+          /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+\S/.test(
+            view,
+          )
+        const prefix =
+          /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/.exec(
+            view,
+          )?.[0] ?? ''
+        const footnote =
+          /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)*)\[\^[^\]\n]+\]:/.exec(
+            view,
+          )
+        const column = footnote
+          ? footnote[1]!.replace(/\(([0-9A-Za-z]+)\)([ \t]+)/g, '$1.$2').length + 2
+          : marker
+            ? prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length
+            : (stack.at(-1)?.column ?? 0)
+        const owningIndent = footnote ? footnote[1]!.length : marker ? indent : (stack.at(-1)?.ownerIndent ?? 0)
+        if (footnote && marker)
+          stack.push({
+            indent,
+            column: prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length,
+            ownerIndent: indent,
+          })
         stack.push({ indent: footnote ? footnote[1]!.length : indent, column, ownerIndent: owningIndent })
       }
     }
 
     if (fence) {
       const close = /^[ \t]*([`~]{3,})[ \t]*$/.exec(content)
-      if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) { if (fence.normalize) onFenceLine?.(index, line.slice(0, line.length - content.length) + fence.target + content.trimStart()); normalizeBoundary = fence.normalize; fence = null; previousBlock = true }
-      else if (fence.normalize && depth === fence.depth) onFenceLine?.(index, line.slice(0, line.length - content.length) + fence.target + content.slice(Math.min(fence.dedent, /^[ \t]*/.exec(content)![0].length)))
+      if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
+        if (fence.normalize)
+          onFenceLine?.(index, line.slice(0, line.length - content.length) + fence.target + content.trimStart())
+        normalizeBoundary = fence.normalize
+        fence = null
+        previousBlock = true
+      } else if (fence.normalize && depth === fence.depth)
+        onFenceLine?.(
+          index,
+          line.slice(0, line.length - content.length) +
+            fence.target +
+            content.slice(Math.min(fence.dedent, /^[ \t]*/.exec(content)![0].length)),
+        )
       return blanks(line)
     }
-    const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/)
+    const open = trimEndSpaceTab(content).match(
+      /^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/,
+    )
     if (open && !(open[2]?.startsWith(':') && !previousBlock) && (!strict || canNormalize || !!open[2])) {
       const container = open[2] ? open[1]!.length + 1 : nested ? ownerIndent + 1 : null
-      const targetColumn = open[2]?.startsWith('[^') ? open[1]!.length + 2 : open[2] ? open[1]!.length + open[2].replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length : nested ? ownerColumn : 0
-      fence = { ch: open[3]![0]!, len: open[3]!.length, container, depth, target: ' '.repeat(targetColumn), dedent: open[1]!.length + (open[2]?.length ?? 0), normalize: canNormalize || !!open[2] }
+      const targetColumn = open[2]?.startsWith('[^')
+        ? open[1]!.length + 2
+        : open[2]
+          ? open[1]!.length + open[2].replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length
+          : nested
+            ? ownerColumn
+            : 0
+      fence = {
+        ch: open[3]![0]!,
+        len: open[3]!.length,
+        container,
+        depth,
+        target: ' '.repeat(targetColumn),
+        dedent: open[1]!.length + (open[2]?.length ?? 0),
+        normalize: canNormalize || !!open[2],
+      }
       const nativeMarker = (open[2] ?? '').replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2')
-      if (fence.normalize && (!open[2] || nativeMarker !== open[2])) onFenceLine?.(index, line.slice(0, line.length - content.length) + (open[2] ? open[1]! + nativeMarker : fence.target) + content.slice(fence.dedent))
+      if (fence.normalize && (!open[2] || nativeMarker !== open[2]))
+        onFenceLine?.(
+          index,
+          line.slice(0, line.length - content.length) +
+            (open[2] ? open[1]! + nativeMarker : fence.target) +
+            content.slice(fence.dedent),
+        )
       const start = line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
     }
@@ -416,84 +503,48 @@ export function maskDjotFences(src: string, onFenceLine?: (line: number, replace
   return staged.join('\n')
 }
 
-export function maskDjotCodeAndDestinations(src: string, references = true, unclosedCode = true, inlineForms = true, onFenceLine?: (line: number, replacement: string) => void, rowBoundaries: readonly boolean[] = []): string {
+export function maskDjotCodeAndDestinations(
+  src: string,
+  references = true,
+  unclosedCode = true,
+  inlineForms = true,
+  onFenceLine?: (line: number, replacement: string) => void,
+  rowBoundaries: readonly boolean[] = [],
+  opaqueOptions: DjotOpaqueOptions = {},
+): string {
   const previousLines = new Map<number, string>()
-  let sourceOffset = 0, previousLine = ''
-  for (const line of src.split('\n')) { previousLines.set(sourceOffset, previousLine); sourceOffset += line.length + 1; previousLine = line }
+  let sourceOffset = 0,
+    previousLine = ''
+  for (const line of src.split('\n')) {
+    previousLines.set(sourceOffset, previousLine)
+    sourceOffset += line.length + 1
+    previousLine = line
+  }
   const s = maskDjotFences(src, onFenceLine, rowBoundaries)
 
-  // Stage 2: inline code spans. A run of N backticks closes at the next
-  // run of exactly N backticks (Djot allows newlines inside). An
-  // unmatched run is literal and left alone (no over-masking).
-  const out = s.split('')
-  const runLen = (i: number) => {
-    let n = 0
-    while (s[i + n] === '`') n++
-    return n
-  }
-  const paragraphEnds = Array.from(s.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), match => match.index!)
-  let paragraphIndex = 0
-  const autolinks = new Map(Array.from(s.matchAll(/<[^<>\s]+>/g), match => [match.index!, /[^:]@|[A-Za-z]:/.test(match[0]) ? match.index! + match[0].length : -1]))
-  let codeEnds: Int32Array | undefined
-  let i = 0
-  while (i < s.length) {
-    if (s[i] === '\\' && /[!-\/:-@\[-`{-~]/.test(s[i + 1] ?? '')) { i += 2; continue }
-    if (out[i] === '{') { const attrs = readAttributes(src, i); if (attrs) { i = attrs.end; continue } }
-    const autolinkEnd = autolinks.get(i)
-    if (autolinkEnd !== undefined && autolinkEnd > i) { i = autolinkEnd; continue }
-    if (s[i] !== '`') {
-      i++
-      continue
-    }
-    const len = runLen(i)
-    while ((paragraphEnds[paragraphIndex] ?? s.length) <= i) paragraphIndex++
-    const paragraphEnd = paragraphEnds[paragraphIndex] ?? s.length
-    let closed = -1
-    if (codeEnds) {
-      const end = codeEnds[i] ?? -1
-      if (end >= 0 && end - len < paragraphEnd) closed = end - len
-    } else {
-      let j = i + len
-      while (j < paragraphEnd) {
-        if (s[j] === '`') {
-          const candidate = runLen(j)
-          if (candidate === len) { closed = j; break }
-          j += candidate
-          continue
-        }
-        j++
-      }
-    }
-    if (closed === -1) {
-      if (!unclosedCode) {
-        codeEnds ??= backtickRunEnds(s)
-        i += len
-        continue
-      }
-      const end = paragraphEnd
-      for (let k = i; k < end; k++) if (out[k] !== '\n') out[k] = ' '
-      i = end
-      continue
-    }
-    for (let k = i; k < closed + len; k++) if (out[k] !== '\n') out[k] = ' '
-    i = closed + len
-  }
+  // Every rewrite and loss scan shares the same opaque payload mask.
+  let masked = maskDjotOpaque(s, unclosedCode, { ...(!inlineForms ? { autolinks: false, attributeValues: false, comments: false } : {}), ...opaqueOptions })
+  if (!inlineForms) return masked
 
-  if (!inlineForms) return out.join('')
-
-  // Stage 3: inline link / image destination + title. Carve consumes
-  // `[text](dest "title")` (and the image form) as a whole; delimiters
-  // inside the parenthesized part are never inline markup — notably a
-  // `~` in a URL path. The bracket text IS inline-parsed, so it is left
-  // visible. Lookbehind on `]` keys this to a real link/image target.
-  let masked = out.join('')
-  masked = masked.replace(/(?<=\])\([^()\n]*\)/g, (g) => blanks(g))
-  if (references) masked = masked.replace(/^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[(?!\^)[^\]\n]*\]:[^\n]*/gm, (value, at: number) => {
-    const previous = (previousLines.get(at) ?? '')?.replace(/^[ \t]*(?:>[ \t]*)*/, '').trim() ?? ''
-    return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous) ? blanks(value) : value
-  }).replace(/(?<=\])\[[^\]\n]*\]/g, blanks)
-  masked = masked.replace(/^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?:{3,}[ \t]+([A-Za-z_][A-Za-z0-9_.-]*)/gm, (value: string, name: string, at: number) => (previousLines.get(at) ?? '').trim() === '' || /(?:[-*+]|[0-9]+[.)])[ \t]+:{3,}/.test(value) ? value.slice(0, -name.length) + blanks(name) : value)
-  return masked.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)
+  if (references)
+    masked = masked
+      .replace(/^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[(?!\^)[^\]\n]*\]:[^\n]*/gm, (value, at: number) => {
+        const previous = (previousLines.get(at) ?? '')?.replace(/^[ \t]*(?:>[ \t]*)*/, '').trim() ?? ''
+        return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)
+          ? blanks(value)
+          : value
+      })
+      .replace(/(?<=\])\[[^\]\n]*\]/g, blanks)
+  masked = masked.replace(
+    /^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?:{3,}[ \t]+([A-Za-z_][A-Za-z0-9_.-]*)/gm,
+    (value: string, name: string, at: number) =>
+      (previousLines.get(at) ?? '').trim() === '' || /(?:[-*+]|[0-9]+[.)])[ \t]+:{3,}/.test(value)
+        ? value.slice(0, -name.length) + blanks(name)
+        : value,
+  )
+  return masked.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (value: string, label: string, at: number) =>
+    isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`,
+  )
 }
 
 /** A single source splice: replace [start, end) with `text`. */
@@ -601,9 +652,17 @@ export const migrateCandidateChecks = { count: 0 }
 export const migrateBareSteps = { count: 0 }
 
 function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode: boolean): Generator<RegExpExecArray> {
-  const opener = rule.id === 'djot-subscript-tilde-braced' ? '{~' : rule.id === 'djot-highlight-braces' ? '{=' : undefined
+  const opener =
+    rule.id === 'djot-subscript-tilde-braced' ? '{~' : rule.id === 'djot-highlight-braces' ? '{=' : undefined
   if (opener === undefined) {
-    const candidate = rule.id === 'djot-subscript-tilde' ? '~' : rule.id === 'djot-superscript-caret' ? '^' : rule.id === 'djot-emphasis-underscore' || rule.id === 'djot-intraword-underscore' ? '_' : undefined
+    const candidate =
+      rule.id === 'djot-subscript-tilde'
+        ? '~'
+        : rule.id === 'djot-superscript-caret'
+          ? '^'
+          : rule.id === 'djot-emphasis-underscore' || rule.id === 'djot-intraword-underscore'
+            ? '_'
+            : undefined
     if (candidate !== undefined) {
       let candidateMask = masked
       if (candidate === '^' && masked.includes('^')) {
@@ -619,7 +678,8 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
           }
           if (!masked.startsWith('[^', at) || isDjotEscaped(source, at)) continue
           let end = at + 2
-          while (end < source.length && source[end] !== '\n' && (source[end] !== ']' || isDjotEscaped(source, end))) end++
+          while (end < source.length && source[end] !== '\n' && (source[end] !== ']' || isDjotEscaped(source, end)))
+            end++
           if (source[end] === ']') {
             for (let inner = at + 1; inner < end; inner++) if (chars[inner] === '^') chars[inner] = '\x01'
           }
@@ -636,7 +696,12 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
         if (start < 0) break
         cursor = start + 1
         if (candidate === '^' && !nativeDjotCode && source[start + 1] === '[') continue
-        if (isDjotEscaped(source, start) || (candidate !== '_' && source[start + 1] === '}') || (candidate !== '_' && source[start - 1] === '{' && !isDjotEscaped(source, start - 1))) continue
+        if (
+          isDjotEscaped(source, start) ||
+          (candidate !== '_' && source[start + 1] === '}') ||
+          (candidate !== '_' && source[start - 1] === '{' && !isDjotEscaped(source, start - 1))
+        )
+          continue
         if (whitespace.test(candidateMask[start + 1] ?? '')) continue
         if (candidate === '_' && word.test(candidateMask[start - 1] ?? '') !== intraword) continue
         migrateCandidateChecks.count++
@@ -645,11 +710,17 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
           migrateBareSteps.count++
           if (candidateMask[end] === '\n') {
             let next = end + 1
-            while (source[next] === ' ' || source[next] === '\t') { migrateBareSteps.count++; next++ }
+            while (source[next] === ' ' || source[next] === '\t') {
+              migrateBareSteps.count++
+              next++
+            }
             while (source[next] === '>') {
               migrateBareSteps.count++
               next++
-              while (source[next] === ' ' || source[next] === '\t') { migrateBareSteps.count++; next++ }
+              while (source[next] === ' ' || source[next] === '\t') {
+                migrateBareSteps.count++
+                next++
+              }
             }
             if (source[next] === '\n') break
           }
@@ -657,12 +728,20 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
           if (candidateMask[end] === candidate && (candidate === '_' || source[end + 1] !== '}')) break
         }
         cursor = end
-        if (end >= candidateMask.length || candidateMask[end] !== candidate) { cursor++; continue }
+        if (end >= candidateMask.length || candidateMask[end] !== candidate) {
+          cursor++
+          continue
+        }
         if (end === start + 1 || whitespace.test(candidateMask[end - 1]!)) continue
         if (candidate === '_' && word.test(candidateMask[end + 1] ?? '') !== intraword) continue
         cursor = end + 1
         yield Object.assign([candidateMask.slice(start, cursor), candidateMask.slice(start + 1, end)], {
-          index: start, input: candidateMask, indices: [[start, cursor], [start + 1, end]],
+          index: start,
+          input: candidateMask,
+          indices: [
+            [start, cursor],
+            [start + 1, end],
+          ],
         }) as RegExpExecArray
       }
       return
@@ -678,18 +757,27 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
     migrateBracedSteps.count += start < 0 ? masked.length - cursor : start - cursor + 2
     if (start < 0) break
     const from = start + 2
-    if (isDjotEscaped(masked, start)) { cursor = from; continue }
+    if (isDjotEscaped(masked, start)) {
+      cursor = from
+      continue
+    }
     let end = from
     for (; end < masked.length; end++) {
       migrateBracedSteps.count++
       if (masked.startsWith(opener, end) && !isDjotEscaped(source, end)) break
       if (masked[end] === '\n') {
         let next = end + 1
-        while (source[next] === ' ' || source[next] === '\t') { migrateBracedSteps.count++; next++ }
+        while (source[next] === ' ' || source[next] === '\t') {
+          migrateBracedSteps.count++
+          next++
+        }
         while (source[next] === '>') {
           migrateBracedSteps.count++
           next++
-          while (source[next] === ' ' || source[next] === '\t') { migrateBracedSteps.count++; next++ }
+          while (source[next] === ' ' || source[next] === '\t') {
+            migrateBracedSteps.count++
+            next++
+          }
         }
         if (source[next] === '\n') break
       }
@@ -699,7 +787,12 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
       cursor = end + 2
       if (end === from) continue
       const match = Object.assign([masked.slice(start, cursor), masked.slice(from, end)], {
-        index: start, input: masked, indices: [[start, cursor], [from, end]],
+        index: start,
+        input: masked,
+        indices: [
+          [start, cursor],
+          [from, end],
+        ],
       }) as RegExpExecArray
       yield match
     } else cursor = masked.startsWith(opener, end) ? end : end + 1
@@ -744,9 +837,7 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   // costs a parse on a line that turns out not to be a row: the parser is
   // still what decides, and a real Djot bullet holding a pipe comes back with
   // no continuation lines and reports as before.
-  const continuationLines = /^[ \t]*\+[ \t][^\n]*\|/m.test(masked)
-    ? tableContinuationLines(norm)
-    : new Set<number>()
+  const continuationLines = /^[ \t]*\+[ \t][^\n]*\|/m.test(masked) ? tableContinuationLines(norm) : new Set<number>()
 
   // index -> {line, column} (both 1-based), via newline prefix sums.
   const nlAt: number[] = []
@@ -813,9 +904,13 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   const recordTaken = (added: Array<[number, number]>, fam: string): void => {
     if (added.length === 0) return
     const list = takenByFamily.get(fam)
-    if (!list || list.length === 0) { takenByFamily.set(fam, added); return }
+    if (!list || list.length === 0) {
+      takenByFamily.set(fam, added)
+      return
+    }
     const merged: Array<[number, number]> = []
-    let old = 0, next = 0
+    let old = 0,
+      next = 0
     while (old < list.length && next < added.length) {
       migrateScanSteps.count++
       merged.push(list[old]![0] <= added[next]![0] ? list[old++]! : added[next++]!)
@@ -995,14 +1090,6 @@ export function applyMigrationFixes(source: string, nativeDjotCode = false): Mig
 }
 
 /** Format warnings as `file:line:col rule — message (use: suggestion)`. */
-export function formatMigrationWarnings(
-  warnings: MigrationWarning[],
-  file = '<stdin>',
-): string {
-  return warnings
-    .map(
-      (w) =>
-        `${file}:${w.line}:${w.column} ${w.rule} — ${w.message} (use: ${w.suggestion})`,
-    )
-    .join('\n')
+export function formatMigrationWarnings(warnings: MigrationWarning[], file = '<stdin>'): string {
+  return warnings.map((w) => `${file}:${w.line}:${w.column} ${w.rule} — ${w.message} (use: ${w.suggestion})`).join('\n')
 }

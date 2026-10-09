@@ -1,5 +1,5 @@
 import { trimEndMatchingEdges } from './trim-non-nbsp.js'
-import { djotToCarve, stripDjotFootnoteDefinitionAttributes } from './djot-import.js'
+import { djotToCarveWithLosses, stripDjotFootnoteDefinitionAttributes } from './djot-import.js'
 import { bbcodeToCarve } from './bbcode-migrate.js'
 import {
   htmlToCarve,
@@ -124,7 +124,8 @@ export function migrateMarkdown(
 
 export function migrateDjot(source: string): MigrationResult {
   const stripped = stripDjotFootnoteDefinitionAttributes(source)
-  const result = assessed(source, djotToCarve(source), 'djot')
+  const imported = djotToCarveWithLosses(source)
+  const result = assessed(source, imported.value, 'djot', imported.losses.map(loss => ({ code: loss.code, message: loss.message, severity: 'warning', fidelity: 'dropped', confidence: 'exact', path: `line:${loss.line}` })))
   for (const loss of stripped.losses) result.report.diagnostics.push({
     code: 'djot-footnote-definition-attributes-dropped',
     message: 'Carve cannot represent attributes on a footnote definition; they were dropped instead of applying them to later content.',

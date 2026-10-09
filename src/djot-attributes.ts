@@ -13,8 +13,11 @@ function attributeLine(line: string, depth: number): string | undefined {
   return line
 }
 
-export function readAttributes(source: string, start: number, carve = false, table = false): { end: number; source: string } | undefined {
+export type DjotAttributeToken = { key: string; source: string; append: boolean }
+
+export function readAttributes(source: string, start: number, carve = false, table = false): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
   const parts: string[] = []
+  const tokens: DjotAttributeToken[] = []
   let i = start + 1
   let context: ReturnType<typeof attributeContext> | undefined
   while (i < source.length) {
@@ -42,7 +45,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
           else if (source[at] === '|') return undefined
         }
       }
-      return { end: i + 1, source: `{${parts.join(' ')}}` }
+      return { end: i + 1, source: `{${parts.join(' ')}}`, tokens }
     }
     if (source[i] === '%') {
       let end = i + 1
@@ -59,7 +62,9 @@ export function readAttributes(source: string, start: number, carve = false, tab
       const value = source.slice(from, i)
       if (kind === '#' ? /[\]\[~!@#$%^&*(){}`,.<>\\|=+/?\s]/u.test(value) : !/^[A-Za-z0-9_:-]+$/.test(value)) return undefined
       parts.push(/^[A-Za-z0-9_][\w-]*$/.test(value) ? kind + value : `${kind === '#' ? 'id' : 'class'}=${quoteValue(value, carve)}`)
+      tokens.push({ key: kind === '#' ? 'id' : 'class', source: parts.at(-1)!, append: kind === '.' })
     } else {
+      const tokenStart = i
       const key = /^[A-Za-z][A-Za-z0-9_-]*=/.exec(source.slice(i))
       if (!key) return undefined
       i += key[0].length
@@ -85,6 +90,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         if (i === from) return undefined
         parts.push(key[0] + quoteValue(source.slice(from, i), carve))
       }
+      tokens.push({ key: key[0].slice(0, -1), source: source[tokenStart + key[0].length] === '"' || source.slice(tokenStart, i).includes('\n') ? parts.at(-1)! : source.slice(tokenStart, i), append: false })
     }
     if (i < source.length && !/[\s}%]/u.test(source[i]!)) return undefined
   }
