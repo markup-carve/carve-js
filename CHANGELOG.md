@@ -24,6 +24,13 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 - The include rename warning reports `include-id-rename`, replacing `include-heading-id-rename`. The pass covers explicit ids on any element, so the old id named only part of what it reported (#2569; markup-carve/carve#2772).
 
+### Changed
+
+- The Markdown writer wraps an editorial comment in `<span class="critic-comment">`,
+  matching the HTML target. Plain and ANSI output is unchanged, and each flattened
+  comment reports a render loss under the new `editorial-comment-flattened` code,
+  which `--allow-loss` accepts (#2594; markup-carve/carve#2791).
+
 ### Fixed
 
 - An include slot needs no whitespace before its marker, so
