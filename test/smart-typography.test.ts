@@ -99,6 +99,16 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
     expect(h("a 'tis")).toBe('<p>a&nbsp;‘tis</p>')
     expect(h('a "x"')).toBe('<p>a&nbsp;“x”</p>')
   })
+
+  it('treats a soft or hard line break as whitespace for quote flanking (carve#2822)', () => {
+    expect(h('a\n"b"')).toBe('<p>a\n“b”</p>')
+    expect(h("a\n'b'")).toBe('<p>a\n‘b’</p>')
+    expect(h('a\\\n"b"')).toBe('<p>a<br>\n“b”</p>')
+    expect(h('> a\n> "no"')).toBe('<blockquote><p>a\n“no”</p></blockquote>')
+    expect(h('- a\n  "b"')).toBe('<ul>\n  <li>a\n“b”</li>\n</ul>')
+    expect(h('a\n""')).toBe('<p>a\n““</p>')
+    expect(h("a\n'90s")).toBe('<p>a\n’90s</p>')
+  })
 })
 
 describe('= opens a quote; empty link destination is literal', () => {
