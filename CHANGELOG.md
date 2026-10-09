@@ -13,6 +13,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 - Formatting preserves literal backslashes in cross-reference targets. Targets with no source spelling are refused (carve-js#2645).
 
+- Wrapped link and image titles keep a literal backslash before a line break when formatting their source.
+
 - Ordered-list formatting and HTML import keep adjacent alphabetic and Roman lists separate. A hard list boundary also ends the dialect lookahead (follow-up to carve-js#2627).
 
 - Markdown import separates front matter from its body and normalizes thematic-break collisions so formatting the imported source leaves it unchanged (carve-js#2606).
