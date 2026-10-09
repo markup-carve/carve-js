@@ -4394,7 +4394,7 @@ class CarveRenderSession {
     } finally {
       this.labelKinds = outer
     }
-    const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
+    const title = node.title === undefined ? '' : ` "${ctx.tableCellDepth > 0 ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
     return `[${text}](${escapeDestination(node.href)}${title})${this.inlineAttrs(node.attrs, node)}`
   }
 

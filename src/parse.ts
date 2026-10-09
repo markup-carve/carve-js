@@ -634,7 +634,7 @@ export const isTableRow = (line: string): boolean => {
 // still consumed into the cell above, where the same row ending in any other
 // control character became a paragraph between two tables.
 const RE_TABLE_CONT = /^\+.*\|[ \t]*$/
-const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?: "([^"]*)"| '([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/
+const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/
 const RE_FRONTMATTER_OPEN = new RegExp('^--- ?(\\w*)' + TRAILING_WS)
 // Frontmatter close fence: bare `---` only.
 const RE_FRONTMATTER_CLOSE = new RegExp('^---' + TRAILING_WS)
@@ -11164,7 +11164,7 @@ class ParseSession {
     // escapes are resolved here as they are on the inline tail.
     const img: Image = { type: 'image', src: linkDestinationValue(m[2]!)!, alt: unescapeAttrValue(m[1]!) }
     const title = m[3] ?? m[4]
-    if (title !== undefined) img.title = title
+    if (title !== undefined) img.title = unescapeAttrValue(title)
     if (m[5]) img.attrs = parseAttrs(m[5])
     // Optional caption
     let lookahead = 0

@@ -992,7 +992,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       }
       const destination = markdownDestination(node.href)
       destinationDenied(ctx.options, 'autolink', 'markdown', deniedProbeInput(node.href), destination, node.pos)
-      return `[${label}](${destination})`
+      const title = node.attrs?.keyValues?.title
+      return title === undefined ? `[${label}](${destination})` : `[${label}](${destination} "${escapeMdTitle(title)}")`
     }
     case 'mention':
       return `@${stripControls(node.user)}`
@@ -1171,9 +1172,10 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   // report first, which also kept the wrong row under `maxRenderLosses: 1`.
   destinationDenied(ctx.options, 'link', 'markdown', deniedProbeInput(node.href), destination, node.pos)
   const text = withinLink(() => renderInlines(node.children, ctx))
-  return node.title === undefined
+  const title = node.title ?? node.attrs?.keyValues?.title
+  return title === undefined
     ? `[${text}](${destination})`
-    : `[${text}](${destination} "${escapeMdTitle(node.title)}")`
+    : `[${text}](${destination} "${escapeMdTitle(title)}")`
 }
 
 function renderImage(node: Image, ctx: MarkdownContext): string {
@@ -1186,9 +1188,10 @@ function renderImage(node: Image, ctx: MarkdownContext): string {
   const src = markdownDestination(node.src)
   destinationDenied(ctx.options, 'image', 'markdown', deniedProbeInput(node.src), src, node.pos)
   const alt = escapeMarkdownLabel(node.alt)
-  return node.title === undefined
+  const title = node.title ?? node.attrs?.keyValues?.title
+  return title === undefined
     ? `![${alt}](${src})`
-    : `![${alt}](${src} "${escapeMdTitle(node.title)}")`
+    : `![${alt}](${src} "${escapeMdTitle(title)}")`
 }
 
 function markdownFenceInfo(
