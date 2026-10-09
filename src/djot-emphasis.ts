@@ -58,7 +58,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       if (!next) break
       attrs = { end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
     }
-    if (i === attributePrefixEnd && attrs.end !== firstAttributeEnd && /^[ \t]*$/.test(source.slice(attrs.end, attributeLineEnd))) attrs = { ...attrs, source: '{%%}' }
+    if (i === attributePrefixEnd && attrs.end !== firstAttributeEnd) attrs = { ...attrs, source: '{%%}' }
     attributes.set(i, attrs)
     if (attrs.source === '{}' && attrs.end === firstAttributeEnd && i === attributePrefixEnd &&
         /^[ \t]*$/.test(source.slice(attrs.end, attributeLineEnd)) &&
