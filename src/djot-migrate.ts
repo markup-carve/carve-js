@@ -22,7 +22,7 @@
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { backtickRunEnds } from './backtick-run-index.js'
-import { readAttributes } from './djot-word-attributes.js'
+import { readAttributes } from './djot-attributes.js'
 
 import { parse } from './parse.js'
 

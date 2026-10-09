@@ -2,7 +2,8 @@ import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
-import { attributedDjotWords, readAttributes } from './djot-word-attributes.js'
+import { attributedDjotWords } from './djot-word-attributes.js'
+import { readAttributes } from './djot-attributes.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
 import { escapePlainCarveInlineSyntax, HANDLED_DJOT } from './carve-escape.js'
