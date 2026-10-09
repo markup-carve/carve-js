@@ -28,8 +28,9 @@ import {
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
 import { FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
-import { isTableRow, parse, rawBracketRunCloses } from './parse.js'
+import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
 import { canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
+import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -3707,8 +3708,11 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
  * when the parser moved: this pair is a SECOND SPELLING of the production, and
  * the mirror test that guards it carried a space case and a tab case and no
  * run case at all.
+ *
+ * The opener's trailing padding is `[ \t]`, as in the parser: a form feed or a
+ * no-break space after the token is content, so the line is not an opener.
  */
-const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)\s*$/
+const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)[ \t]*$/
 const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
 
 /**
@@ -4421,6 +4425,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // Where `out` holds a blank line of the source, as opposed to one the
   // conversion put in to separate two blocks.
   const sourceBlanks = new Set<number>()
+  // Where `out` holds a thematic break this conversion wrote, so the
+  // frontmatter-collision guard below can respell those lines and nothing else.
+  const breakLines = new Set<number>()
   let inCode = false
   let fenceChar = ''
   let fenceLen = 0
@@ -5136,6 +5143,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // through to here (the setext guard above skips rule lines themselves).
     if (RE_MD_THEMATIC.test(held)) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
+      breakLines.add(out.length)
       out.push(containerPad + '---')
       if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
       prevType = 'blank'
@@ -5152,6 +5160,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (bqRule && RE_MD_THEMATIC.test(bqRule[2]!)) {
       const depth = (bqRule[1]!.match(/>/g) ?? []).length
       if (prevType !== 'blank' && prevType !== 'block_quote' && out.length > 0) out.push('')
+      breakLines.add(out.length)
       out.push(containerPad + '> '.repeat(depth) + '---')
       prevType = 'block_quote'
       continue
@@ -5344,28 +5353,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (finalNewline) out.push('')
   }
 
-  // Frontmatter-collision guard: Carve reads a line-0 `---` as a frontmatter
-  // OPEN fence (frontmatter is recognized only on the first line) and, with a
-  // later closer, swallows everything between as opaque metadata — ignoring any
-  // code fences in that span, since frontmatter is stripped before block
-  // parsing. A document that OPENS with a thematic break (`***\n\n***` ->
-  // `---\n\n---`), or one whose body holds a bare `---` line (e.g. inside a code
-  // block), would otherwise vanish. A leading blank keeps line 0 off `---` so
-  // frontmatter never triggers and every rule stays a rule. The closer test
-  // mirrors Carve's `/^---\s*$/` (trailing whitespace allowed, so `---   ` in a
-  // code fence counts too); the opener is always the exact `---` we emit.
-  // Real frontmatter already occupies line 0, so the body cannot open a
-  // phantom fence and the guard would only inject a stray blank after the
-  // closing `---`.
   const fromSource = out.map((_, idx) => sourceBlanks.has(idx))
-  if (
-    frontmatter.length === 0 &&
-    out[0] === '---' &&
-    out.slice(1).some((l) => /^---\s*$/.test(l))
-  ) {
-    out.unshift('')
-    fromSource.unshift(false)
-  }
 
   if (removed.definitions.length > 0) {
     while (out.length > 0 && out.at(-1)!.trim() === '') out.pop()
@@ -5375,11 +5363,31 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (markdown.endsWith('\n')) out.push('')
   }
-  const written = joinOutput(out, fromSource)
-  let body = dropTrailingEmptyQuoteLines(
-    blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
-  ).replace(/\x00REFITEM\x00/g, '%%')
-  if (terminalHtmlBlock && !body.endsWith('\n')) body += '\n'
+  const assemble = (): string => {
+    const written = joinOutput(out, fromSource)
+    let text = dropTrailingEmptyQuoteLines(
+      blankInsideEmptyFences(separateLooseItems(escapeCarveOnlyMarkersOutsideFences(written.text), written.sourceBlanks)),
+    ).replace(/\x00REFITEM\x00/g, '%%')
+    if (terminalHtmlBlock && !text.endsWith('\n')) text += '\n'
+    return text
+  }
+  let body = assemble()
+  // Frontmatter-collision guard: Carve reads a line-0 `---` as a frontmatter
+  // OPEN fence and, with a later closer, swallows everything between as opaque
+  // metadata, so a document that opens with a break and holds another bare
+  // `---` would vanish. The canonical writer meets the same hazard and answers
+  // it by respelling every break in the document (PART 11 section 1a), which is
+  // what `carve fmt` then writes - so the import takes the same answer, by the
+  // writer's own parser test and its own marker, rather than a leading blank
+  // that moved line 0 off `---` and lost the round trip (carve-js#2606).
+  if (frontmatter.length === 0 && opensFrontmatter(body)) {
+    for (const at of breakLines) {
+      const line = out[at]
+      if (line?.endsWith('---')) out[at] = line.slice(0, -3) + FRONTMATTER_SAFE_BREAK
+    }
+    const respelled = assemble()
+    if (!opensFrontmatter(respelled)) body = respelled
+  }
   let output = frontmatter.length === 0
     ? body
     : body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
