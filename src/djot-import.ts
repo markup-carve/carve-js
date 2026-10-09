@@ -1154,36 +1154,78 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
   const [frontmatter, separator, body] = splitSiteFrontmatter(source)
   const header = frontmatter === '' ? '' : frontmatter + separator
   const headerLines = header.split('\n').length - 1
+  const fenceLines = new Set<number>()
+  maskDjotFences(body, line => { fenceLines.add(line) }, [], true)
   const mask = maskDjotCodeAndDestinations(body)
   const lines = body.split('\n'), losses: DjotFootnoteAttributeLoss[] = []
   const reserved = new Set([...source.matchAll(/\0DJOTNOTEATTR(\d+)\0/g)].map(match => Number(match[1])))
   const comments = new Set<number>()
   let serial = 0
-  let offset = 0, boundary = true, pending: number[] = [], owner = ''
+  let offset = 0, boundary = true, pending: Array<{ line: number; end: number; start: number; wire: string }> = [], quoteDepth = 0
+  let consumedUntil = -1
+  let listColumn: number | undefined, listQuoteDepth = 0
+  let heading = false, table = false, noteColumn: number | undefined
+  const divWidths: number[] = []
   for (let n = 0; n < lines.length; n++) {
-    const line = lines[n]!, prefix = /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|[0-9]+[.)]|[A-Za-z][.)])[ \t]+)?/.exec(line)![0]
+    const line = lines[n]!
+    if (offset < consumedUntil) { offset += line.length + 1; continue }
+    const prefix = /^(?:[ \t]*>[ \t]?|[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*[ \t]*/.exec(line)![0]
     const content = line.slice(prefix.length).trimEnd()
-    const scope = `${(prefix.match(/>/g) ?? []).length}:` + prefix.replace(/^(?:[ \t]*>[ \t]?)*/, '').replace(/[^ \t]/g, ' ')
-    const attrs = content.startsWith('{') && mask[offset + prefix.length] === '{' ? readAttributes(content, 0) : undefined
-    const standalone = attrs?.end === content.length
-    if (standalone && (boundary || pending.length > 0 || /[-*+.)]/.test(prefix))) {
-      if (pending.length && scope !== owner) pending = []
-      pending.push(n); owner = scope
+    const depth = (prefix.match(/>/g) ?? []).length
+    const marker = /[-*+.)]/.test(prefix)
+    const column = prefix.replace(/^(?:[ \t]*>[ \t]?)*/, '').length
+    if (depth < quoteDepth) { boundary = true; heading = false }
+    if (listColumn !== undefined && (depth !== listQuoteDepth || content !== '' && !marker && column < listColumn)) {
+      listColumn = undefined; boundary = true; heading = false
+    }
+    if (noteColumn !== undefined && content !== '' && column < noteColumn) { noteColumn = undefined; boundary = true }
+    const opensItem = marker && (boundary || pending.length > 0 || listColumn !== undefined)
+    const opensQuote = depth > quoteDepth && (boundary || pending.length > 0 || opensItem)
+    if (opensItem || opensQuote) { pending = []; heading = false }
+    if (opensItem) { listColumn = column; listQuoteDepth = depth }
+    if (opensQuote || depth < quoteDepth) quoteDepth = depth
+    const blockAllowed: boolean = boundary || pending.length > 0 || opensItem || opensQuote
+    const attrs = content.startsWith('{') && mask[offset + prefix.length] === '{' ? readAttributes(body, offset + prefix.length) : undefined
+    const trailingEnd = attrs ? body.indexOf('\n', attrs.end) : -1
+    const standalone = attrs !== undefined && /^[ \t]*$/.test(body.slice(attrs.end, trailingEnd < 0 ? body.length : trailingEnd))
+    if (standalone && (boundary || pending.length > 0 || opensItem || opensQuote)) {
+      pending.push({ line: n, end: attrs!.end, start: offset, wire: attrs!.source })
+      consumedUntil = attrs!.end
     } else {
-      if (pending.length && scope === owner && /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.test(content) && mask[offset + prefix.length] === '[') {
-        lines[n] = prefix.trimEnd() + '\n' + line
-        for (const at of pending) {
-          const raw = lines[at]!, start = raw.indexOf('{')
-          const parsed = readAttributes(raw.slice(start).trimEnd(), 0)
-          if (parsed?.source !== '{}') losses.push({ line: headerLines + at + 1 })
-          while (reserved.has(serial)) serial++
-          comments.add(serial)
-          lines[at] = raw.slice(0, start) + `\0DJOTNOTEATTR${serial++}\0`
+      if (pending.length && /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.test(content) && mask[offset + prefix.length] === '[') {
+        const quotePrefix = /^(?:[ \t]*>[ \t]?)*/.exec(prefix)![0]
+        const notePrefix = quotePrefix + ' '.repeat(listColumn ?? 0)
+        lines[n] = prefix.trimEnd() + '\n' + notePrefix + line.slice(prefix.length)
+        for (const group of pending) {
+          if (group.wire !== '{}') losses.push({ line: headerLines + group.line + 1 })
+          let end = group.line, position = group.start
+          while (end < n && position < group.end) {
+            const raw = lines[end]!
+            const lead = end === group.line ? raw.slice(0, raw.indexOf('{')) : /^(?:[ \t]*>[ \t]?)*[ \t]*/.exec(raw)![0]
+            while (reserved.has(serial)) serial++
+            comments.add(serial)
+            lines[end] = lead + `\0DJOTNOTEATTR${serial++}\0`
+            position += raw.length + 1; end++
+          }
         }
       }
       pending = []
     }
-    boundary = content === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|(?:[-*][ \t]*){3,}$)/.test(content)
+    const note = /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.exec(content)
+    if (note && blockAllowed && mask[offset + prefix.length] === '[') { noteColumn = column + 2; heading = false }
+    if (standalone || fenceLines.has(n) || content === '') heading = false
+    else if (blockAllowed && /^#{1,6}(?:[ \t]|$)/.test(content)) heading = true
+    const row: boolean = (blockAllowed || table) && content.startsWith('|') && content.endsWith('|') && mask[offset + prefix.length] === '|' && !isDjotEscaped(body, offset + line.trimEnd().length - 1)
+    table = row
+    const colon = /^(:{3,})(?:[ \t].*)?$/.exec(content)
+    let div = false
+    if (colon && (blockAllowed || divWidths.length > 0 && /^:{3,}$/.test(content))) {
+      div = true
+      if (divWidths.length > 0 && /^:{3,}$/.test(content) && colon[1]!.length >= divWidths.at(-1)!) divWidths.pop()
+      else divWidths.push(colon[1]!.length)
+      heading = false
+    }
+    boundary = content === '' || fenceLines.has(n) || row || div || heading || blockAllowed && /^(?:[-*][ \t]*){3,}$/.test(content)
     offset += line.length + 1
   }
   return { source: header + lines.join('\n'), losses, restore: text => text.replace(/\0DJOTNOTEATTR(\d+)\0/g, (value, index: string) => comments.has(Number(index)) ? '%%' : value) }
