@@ -145,6 +145,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     const top = divs.at(-1)
     if (div && /^:{3,}[ \t]*$/.test(text) && top && (div[1]!.length >= top.width || paragraph)) {
       if (div[1]!.length >= top.width) {
+        dropOrphanAttributeLine(out)
         let closed = divs.pop()!
         out.push(closed.prefix + ':'.repeat(closed.width))
         while (divs.length && divs.at(-1)!.width !== closed.width && div[1]!.length >= divs.at(-1)!.width) {
@@ -310,12 +311,23 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
   }
   const newline = out.at(-1) === ''
   if (divs.length && newline) out.pop()
+  if (divs.length) dropOrphanAttributeLine(out)
   while (divs.length) {
     const div = divs.pop()!
     if (!div.prefix.includes('>')) out.push(div.prefix + ':'.repeat(div.width))
   }
   if (newline && out.at(-1) !== '') out.push('')
   return out.join('\n')
+}
+
+/** Djot attaches an attribute line with no block after it to nothing, so drop it. */
+function dropOrphanAttributeLine(out: string[]): void {
+  const last = out.at(-1)?.trimEnd()
+  if (last === undefined) return
+  const at = last.search(/\S/)
+  if (at < 0 || last[at] !== '{') return
+  const attrs = readAttributes(last, at)
+  if (attrs && attrs.end === last.length) out.pop()
 }
 
 function parentContains(lists: { column: number; content: number }[], indent: number): boolean {

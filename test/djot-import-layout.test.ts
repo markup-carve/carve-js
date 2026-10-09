@@ -404,3 +404,15 @@ it.each(['<mailto:a@b.c>\n', '<mailto:a--@b.c>\n', '<mailto:a...@b.c>\n', '<http
     expect(carveToHtml(converted)).toContain('href="' + source.slice(1, -2).replace(/^(?![A-Za-z][\w+.-]*:)/, 'mailto:') + '"')
   },
 )
+
+it.each(['::: foo\n# b\n{.c}\n', '::: foo\na\n{.c}\n', '::: foo\n# b\n{.c}\n:::\n', '::: foo\n{.c}\n:::\n'])(
+  'drops a trailing orphan attribute line instead of folding it into the block: %j',
+  (source) => {
+    expect(djotToCarve(source)).not.toContain('{.c}')
+    expect(blockHtml(carveToHtml(djotToCarve(source)))).toBe(blockHtml(renderHTML(parse(source))))
+  },
+)
+
+it('keeps an attribute line that a block follows', () => {
+  expect(carveToHtml(djotToCarve('::: foo\n{.c}\n# b\n:::\n'))).toContain('class="c"')
+})
