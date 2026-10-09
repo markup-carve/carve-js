@@ -40,13 +40,14 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     let attrs = readAttributes(i)
     if (!attrs) continue
+    const firstAttributeEnd = attrs.end
     while (source[attrs.end] === '{') {
       const next = readAttributes(attrs.end)
       if (!next) break
       attrs = { end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
     }
     attributes.set(i, attrs)
-    if (attrs.source === '{}' && i === attributePrefixEnd &&
+    if (attrs.source === '{}' && attrs.end === firstAttributeEnd && i === attributePrefixEnd &&
         /^[ \t]*$/.test(source.slice(attrs.end, attributeLineEnd)) &&
         (listAttribute || attributeLineStart === 0 || previousAttributeLine.trim() === '' || /^\{.*\}$/.test(previousAttributeLine.trim()))) {
       emptyBlockAttributes.add(i)
