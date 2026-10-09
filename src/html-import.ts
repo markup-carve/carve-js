@@ -2209,14 +2209,13 @@ class Importer {
     if (tag === 'dl') return this.definitionList(node, path, depth, attrs)
     if (tag === 'pre') {
       const code = domChildren(node)?.find((n) => domTag(n) === 'code')
-      const source = code ?? node
       const lang = codeLanguage(node, code, this.codeLanguageWrappers)
       // Rendered code blocks conventionally carry one newline before </code>.
       // It TERMINATES the last payload line rather than adding one, so it comes
       // off - but a text of one newline is then one BLANK line and not none, and
       // dropping it unconditionally lost a line on every all-blank payload,
       // including this engine's own HTML (carve-js#2342, raised by codex review).
-      const content = this.text(source)
+      const content = this.codeText(node, path, depth, true, code, lang)
       return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
     }
     // The synthetic element `pruneFootnoteContainers` leaves where an endnotes
@@ -4055,8 +4054,8 @@ class Importer {
     return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths, depths))
   }
 
-  private codeSpan(node: P5Node, path: string, depth: number): InlineNode[] {
-    const attrs = this.attrs(node, path)
+  private codeText(node: P5Node, path: string, depth: number, block = false, languageWrapper?: P5Node, lang?: string): string {
+    const context = block ? 'pre' : 'code'
     const runs = ['']
     type Frame = { node: P5Node, path: string, depth: number } | { boundary: true }
     const pending: Frame[] = []
@@ -4080,7 +4079,7 @@ class Importer {
         continue
       }
       if (child.nodeName === '#comment') {
-        this.report.add('element-dropped', 'Dropped a comment inside <code>: a code span holds only text', 'warning', frame.path, child)
+        this.report.add('element-dropped', `Dropped a comment inside <${context}>: code holds only text`, 'warning', frame.path, child)
         continue
       }
       const tag = domTag(child)
@@ -4094,14 +4093,15 @@ class Importer {
         continue
       }
       const rawAttrs = domAttrs(child) ?? []
-      if (!(tag === 'span' && rawAttrs.length === 0)) {
+      if (!(tag === 'span' && rawAttrs.length === 0) && !(block && tag === 'code')) {
         const dropped = (domChildren(child)?.length ?? 0) === 0
-        this.report.add(dropped ? 'element-dropped' : 'element-unwrapped', `${dropped ? 'Dropped' : 'Unwrapped'} <${tag}> inside <code>`, dropped ? 'warning' : 'info', frame.path, child)
+        this.report.add(dropped ? 'element-dropped' : 'element-unwrapped', `${dropped ? 'Dropped' : 'Unwrapped'} <${tag}> inside <${context}>`, dropped ? 'warning' : 'info', frame.path, child)
       }
       for (const attr of rawAttrs) {
+        if (child === languageWrapper && lang && !attr.prefix && ((attr.name === 'class' && attr.value.trim().split(/[ \t\r\n\f]+/).every(token => token === `language-${lang}` || token === `lang-${lang}`)) || (attr.name === 'data-lang' && attr.value.trim() === lang))) continue
         const name = attr.prefix ? `${attr.prefix}:${attr.name}` : attr.name
         const dangerous = isDangerousAttrName(name)
-        this.report.refuseAttribute(child, frame.path, name, ' inside <code>: a code span holds only text', dangerous ? 'warning' : 'info', dangerous || destinationIsDenied(attr.value))
+        this.report.refuseAttribute(child, frame.path, name, ` inside <${context}>: code holds only text`, dangerous ? 'warning' : 'info', dangerous || destinationIsDenied(attr.value))
       }
       if (isFlattenedBlock(child) || ['dialog', 'menu', 'search'].includes(tag)) {
         runs.push('')
@@ -4110,9 +4110,14 @@ class Importer {
       pushChildren(child, frame.path, frame.depth)
     }
     if (runs.filter(run => /[^ \t\r\n\f]/.test(run)).length > 1) {
-      this.report.add('structure-unspellable', "A code span's value cannot hold the block boundary inside <code>", 'warning', path, node)
+      this.report.add('structure-unspellable', `Code text cannot hold the block boundary inside <${context}>`, 'warning', path, node)
     }
-    const value = runs.join('')
+    return runs.join('')
+  }
+
+  private codeSpan(node: P5Node, path: string, depth: number): InlineNode[] {
+    const attrs = this.attrs(node, path)
+    const value = this.codeText(node, path, depth)
     if (this.writing && this.cellDepth > 0 && /[\r\n]/.test(value)) {
       this.report.add('structure-unspellable', 'Flattened a line break in <code> inside a table cell: a table row is one line', 'warning', path, node)
     }
