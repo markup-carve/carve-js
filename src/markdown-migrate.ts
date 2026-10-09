@@ -4410,7 +4410,12 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   )
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
-  const sourceLinesUnchanged = lines.length === allLines.length - bodyStart && lines.every((line, index) => line === allLines[index + bodyStart])
+  // A diagnostic's `path` names the line in the source the importer was given,
+  // never an index into this stripped array (markup-carve/carve#2792).
+  const sourceLine = (index: number): number | undefined => {
+    const at = removed.sourceLines[index]
+    return at === undefined ? undefined : at + bodyStart + 1
+  }
   const out: string[] = []
   let terminalHtmlBlock = false
   // Where `out` holds a blank line of the source, as opposed to one the
@@ -5031,7 +5036,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // inline conversion only — no top-level block spacing or dedent.
     if (prevType === 'list' && indent >= 1 && listCols.length > (isList ? 1 : 0)) {
       if (isList) {
-        reportOrderedTask(line, sourceLinesUnchanged ? i + bodyStart + 1 : undefined)
+        reportOrderedTask(line, sourceLine(i))
         const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
         if (lazyQuote !== null && indentColumns(line) >= lazyQuote.col) out.push('')
         out.push(...writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end)).lines)
@@ -5197,7 +5202,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       continue
     }
     if (isList) {
-      reportOrderedTask(line, sourceLinesUnchanged ? i + bodyStart + 1 : undefined)
+      reportOrderedTask(line, sourceLine(i))
       const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
       const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
       // A list under a quote an item holds is set apart from it, or Carve reads
