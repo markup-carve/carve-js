@@ -73,6 +73,14 @@ describe('Markdown construct assessment', () => {
     }
   })
 
+  it('locates a loss by its source line when the importer stripped lines before it', () => {
+    // `path` counts in the source, never in the reference-definition-stripped
+    // array the importer builds (markup-carve/carve#2792).
+    const diagnostics = rows('[ref]: https://example.org\n\nvisit www.bare.example now\n\n1. [x] done\n')
+    expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'fidelity-unverified' }))
+    expect(diagnostics.filter(row => row.code === 'structure-unspellable').map(row => row.path)).toEqual(['line:5'])
+  })
+
   it('fails closed for opt-in dialects and bounded scanner inputs', () => {
     expect(migrateMarkdown('hello', { dialect: { highlight: true } }).report.diagnostics[0]?.code).toBe('fidelity-unverified')
     expect(assessMarkdown('x ' + '<!--'.repeat(240000), 'wrong').complete).toBe(false)

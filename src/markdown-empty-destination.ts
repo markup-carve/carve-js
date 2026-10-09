@@ -153,7 +153,7 @@ export function extractReferenceDefinitions(
   decodeEntity: (entity: string) => string,
   interruptsParagraph: (line: string) => boolean,
   opensOpaqueHtml: (line: string, atBlockStart: boolean) => boolean = () => false,
-): { lines: string[]; references: EmptyDestinationReferences; definitions: string[] } {
+): { lines: string[]; sourceLines: number[]; references: EmptyDestinationReferences; definitions: string[] } {
   const lines = [...inputLines]
   const empty = new Map<string, string>()
   const defined = new Set<string>()
@@ -176,9 +176,14 @@ export function extractReferenceDefinitions(
     }
   }
   const kept: string[] = []
+  // The source index each kept line came from, so a diagnostic can name the
+  // line the author wrote rather than its offset in this stripped array.
+  const keptSource: number[] = []
+  let sourceIndex = 0
   let precedingNonblank: string | undefined
   const keep = (...entries: string[]): void => {
     for (const entry of entries) if (entry.trim() !== '') precedingNonblank = entry
+    for (const _ of entries) keptSource.push(sourceIndex)
     kept.push(...entries)
   }
   let referenceChunk: { lines: readonly string[]; start: number; through: number; text: string; offsets: number[] } | undefined
@@ -224,6 +229,7 @@ export function extractReferenceDefinitions(
     /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$))/.test(text) ||
     /^[ \t]*(?:=+|[-*_]{3,})[ \t]*$/.test(text)
   for (let i = 0; i < lines.length; i++) {
+    sourceIndex = i
     if (deferredBlanks && i >= deferredBlanks.start) flushBlanks()
     const line = lines[i]!
     let prefix = /^((?: {0,3}>[ \t]?)*)/.exec(line)![1]!
@@ -467,7 +473,7 @@ export function extractReferenceDefinitions(
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }
-  return { lines: kept, references: { empty, defined, labels, inline, tableInline, sourceLabels, footnotes }, definitions }
+  return { lines: kept, sourceLines: keptSource, references: { empty, defined, labels, inline, tableInline, sourceLabels, footnotes }, definitions }
 }
 
 /** A line-initial block opener in text, escaped so the text stays a paragraph. */
