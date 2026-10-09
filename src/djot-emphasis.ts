@@ -103,12 +103,14 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     if (mask[i] !== source[i]) continue
     if (source[i] === '\\' && source[i + 1] !== '\n') { lastEscaped = i + 1; i++; continue }
-    if (source[i] === '{' && '+-=^~'.includes(source[i + 1] ?? '\0')) {
+    if (source[i] === '{' && '+-=^~_*'.includes(source[i + 1] ?? '\0')) {
       const kind = source[i + 1]!, stack = pendingBraces.get(kind) ?? []
       stack.push(i); pendingBraces.set(kind, stack)
-    } else if (source[i] === '}' && i - 1 !== lastEscaped && '+-=^~'.includes(source[i - 1] ?? '\0')) {
+    } else if (source[i] === '}' && i - 1 !== lastEscaped && '+-=^~_*'.includes(source[i - 1] ?? '\0')) {
       const start = pendingBraces.get(source[i - 1]!)?.pop()
-      if (start !== undefined && i > start + 2) { validBraces.add(start); validBraceClosers.add(i - 1) }
+      if (start !== undefined && i > start + 2) { validBraces.add(start); validBraceClosers.add(i - 1)
+        for (const stack of pendingBraces.values()) while (stack.at(-1) !== undefined && stack.at(-1)! > start) stack.pop()
+      }
       else if (source[i - 1] === '-') {
         let first = i - 1
         while (source[first - 1] === '-') first--
@@ -205,7 +207,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     const canClose = !forcedOpen && (forcedClose || (i > 0 && !/[ \t\r\n]/.test(source[i - 1]!)))
     const stack = openers.get((forcedClose ? '{' : '') + ch)!
     const opener = stack.at(-1)
-    if (canClose && opener && opener.end < i && (opener.start > (braces.at(-1) ?? -1) || (paired && opener.forced && opener.start === braces.at(-1)))) {
+    if (canClose && opener && opener.end < i && (opener.start > (braces.at(-1) ?? -1) || (opener.forced && opener.start === braces.at(-1)))) {
       clear(opener.start)
       pairs.push({
         start: opener.start,
@@ -217,7 +219,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
         children: [],
         kinds: new Set([ch]),
       })
-      if (forcedClose) i++
+      if (forcedClose) { if (braces.at(-1) === opener.start) braces.pop(); i++ }
     } else if (canOpen) {
       openers
         .get((forcedOpen ? '{' : '') + ch)!
