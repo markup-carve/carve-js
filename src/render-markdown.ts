@@ -1526,6 +1526,7 @@ function escapeText(text: string): string {
   // the one-tilde form, which pulldown-cmark does.
   text = text.replace(/[\\`*_~[\]#]/g, (ch) => {
     if (ch === '#') return positionalHash()
+    if (ch === '[' && insideLink) return '\\['
 
     return NARROWED_SENTINEL[ch] ?? `\\${ch}`
   })
