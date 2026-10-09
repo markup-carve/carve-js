@@ -1162,6 +1162,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
   const comments = new Set<number>()
   let serial = 0
   let offset = 0, boundary = true, pending: Array<{ line: number; end: number; start: number; wire: string }> = [], quoteDepth = 0
+  const noteParents: number[] = []
   let metadataNote = false
   let consumedUntil = -1
   let dedent: { column: number; delta: number; depth: number } | undefined
@@ -1189,7 +1190,15 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       if (content !== '' && (depth !== dedent.depth || indent < dedent.column)) dedent = undefined
       else if (content !== '') lines[n] = quotes + line.slice(quotes.length + dedent.delta)
     }
-    if (metadataNote && noteColumn !== undefined && content !== '' && column === noteColumn - 1) {
+    while (noteColumn !== undefined && content !== '' && column + 1 < noteColumn) {
+      if (metadataNote && listColumn !== undefined && column >= listColumn && n > 0 && /^[ \t]*$/.test(lines[n - 1]!)) {
+        while (reserved.has(serial)) serial++
+        comments.add(serial)
+        lines[n - 1] = ' '.repeat(listColumn) + `\0DJOTNOTEATTR${serial++}\0`
+      }
+      noteColumn = noteParents.pop(); metadataNote = false; boundary = true
+    }
+    if (noteColumn !== undefined && content !== '' && column === noteColumn - 1) {
       const raw = lines[n]!, quotes = /^(?:[ \t]*>[ \t]?)*/.exec(raw)![0]
       lines[n] = quotes + ' ' + raw.slice(quotes.length)
       column++
@@ -1198,14 +1207,6 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
     if (depth < quoteDepth) { boundary = true; heading = false }
     if (listColumn !== undefined && (depth !== listQuoteDepth || content !== '' && !marker && column < listColumn)) {
       listColumn = undefined; boundary = true; heading = false
-    }
-    if (noteColumn !== undefined && content !== '' && column < noteColumn) {
-      if (metadataNote && listColumn !== undefined && column >= listColumn && n > 0 && /^[ \t]*$/.test(lines[n - 1]!)) {
-        while (reserved.has(serial)) serial++
-        comments.add(serial)
-        lines[n - 1] = ' '.repeat(listColumn) + `\0DJOTNOTEATTR${serial++}\0`
-      }
-      noteColumn = undefined; metadataNote = false; boundary = true
     }
     const opensItem: boolean = marker && (boundary || pending.length > 0 || listColumn !== undefined)
     const opensQuote: boolean = depth > quoteDepth && (boundary || pending.length > 0 || opensItem)
@@ -1231,7 +1232,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       if (pending.length && /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.test(content) && mask[offset + prefix.length] === '[') {
         handledNote = true
         const quotePrefix = /^(?:[ \t]*>[ \t]?)*/.exec(prefix)![0]
-        const targetColumn = Math.min(column, Math.max(listColumn ?? 0, parentNoteColumn ?? 0))
+        const targetColumn = Math.max(listColumn ?? 0, parentNoteColumn ?? 0)
         const notePrefix = quotePrefix + ' '.repeat(targetColumn)
         if (column > targetColumn) dedent = { column, delta: column - targetColumn, depth }
         lines[n] = notePrefix + line.slice(prefix.length)
@@ -1253,7 +1254,10 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
     const reference: boolean = blockAllowed && mask[offset + prefix.length] === '[' && /^\[(?!\^)[^\]\n]*\]:(?:[ \t]+\S*[ \t]*|)$/.test(content)
     if (reference) { referenceColumn = column; heading = false }
     const note = /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.exec(content)
-    if (note && blockAllowed && mask[offset + prefix.length] === '[') { noteColumn = column + 2; metadataNote = handledNote; heading = false }
+    if (note && blockAllowed && mask[offset + prefix.length] === '[') {
+      if (noteColumn !== undefined) noteParents.push(noteColumn)
+      noteColumn = column + 2; metadataNote = handledNote; heading = false
+    }
     if (standalone || fenceLines.has(n) || content === '') heading = false
     else if (blockAllowed && /^#{1,6}(?:[ \t]|$)/.test(content)) heading = true
     const row: boolean = (blockAllowed || table) && content.startsWith('|') && content.endsWith('|') && mask[offset + prefix.length] === '|' && !isDjotEscaped(body, offset + line.replace(/[ \t]+$/, '').length - 1)
