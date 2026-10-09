@@ -18,12 +18,17 @@ describe('cross-reference target spelling', () => {
   for (const source of ["| </#a\\> |\n", "| </#a\\|b> |\n", "[x </#a\\]>](u)\n"]) {
     it(`keeps the crossref spelling in its host ${JSON.stringify(source)}`, () => {
       const once = carveToCarve(source)
+      expect(once).toBe(source)
+      const target = source.slice(source.indexOf("</#") + 3, source.indexOf(">"))
+      const tree = JSON.stringify(parse(source))
+      expect(tree).toContain('"type":"heading_ref"')
+      expect(tree).toContain('"target":' + JSON.stringify(target))
       expect(carveToCarve(once)).toBe(once)
       expect(carveToHtml(once)).toBe(carveToHtml(source))
     })
   }
   for (const target of ['', 'a>b', 'a b', 'a\tb', 'a\nb', 'a\rb', 'a\0b']) {
-    it(`refuses an unspellable ingested target ${JSON.stringify(target)}`, () => {
+    it(`refuses an unspellable hand-built target ${JSON.stringify(target)}`, () => {
       const document: Document = { type: 'document', children: [{ type: 'paragraph', children: [{ type: 'heading_ref', target }] }] }
       expect(() => renderCarve(document)).toThrow(SourceUnspellableError)
     })

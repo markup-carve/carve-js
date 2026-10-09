@@ -2056,7 +2056,7 @@ function escapeAutolinkHref(text: string): string {
 
 function spellCrossrefTarget(text: string): string {
   if (text === '' || /[> \t\r\n\0]/.test(text)) {
-    throw new SourceUnspellableError('heading_ref', 'an empty target or a target with a closer or whitespace has no Carve source spelling')
+    throw new SourceUnspellableError('heading_ref', 'an empty target or a target with a closer, whitespace or NUL has no Carve source spelling')
   }
   return text
 }
