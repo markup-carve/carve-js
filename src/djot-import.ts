@@ -340,7 +340,8 @@ function foldHeadingContinuations(source: string): string {
 
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
-  const normalized = djot.replace(/\r\n?/g, '\n')
+  const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
+  const normalized = strippedDefinitions.source
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
   const convert = (text: string): string => {
     let emptyTerm = '\x00DJOTEMPTYTERM\x00'
@@ -381,7 +382,7 @@ export function djotToCarve(djot: string): string {
     return `${prefix}${spans.length - 1}\x00`
   })
   const converted = convert(words).replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spans[Number(index)]!)
-  return frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`
+  return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
 
 
@@ -1143,4 +1144,47 @@ function normalizeDjotTablePipes(source: string): string {
     }
     return output.join('')
   }).join('\n')
+}
+
+export interface DjotFootnoteAttributeLoss { line: number }
+
+export function stripDjotFootnoteDefinitionAttributes(input: string): { source: string; losses: DjotFootnoteAttributeLoss[]; restore: (text: string) => string } {
+  const source = input.replace(/\r\n?/g, '\n')
+  if (!source.includes('{') || !source.includes('[^')) return { source, losses: [], restore: text => text }
+  const [frontmatter, separator, body] = splitSiteFrontmatter(source)
+  const header = frontmatter === '' ? '' : frontmatter + separator
+  const headerLines = header.split('\n').length - 1
+  const mask = maskDjotCodeAndDestinations(body)
+  const lines = body.split('\n'), losses: DjotFootnoteAttributeLoss[] = []
+  const reserved = new Set([...source.matchAll(/\0DJOTNOTEATTR(\d+)\0/g)].map(match => Number(match[1])))
+  const comments = new Set<number>()
+  let serial = 0
+  let offset = 0, boundary = true, pending: number[] = [], owner = ''
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n]!, prefix = /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|[0-9]+[.)]|[A-Za-z][.)])[ \t]+)?/.exec(line)![0]
+    const content = line.slice(prefix.length).trimEnd()
+    const scope = `${(prefix.match(/>/g) ?? []).length}:` + prefix.replace(/^(?:[ \t]*>[ \t]?)*/, '').replace(/[^ \t]/g, ' ')
+    const attrs = content.startsWith('{') && mask[offset + prefix.length] === '{' ? readAttributes(content, 0) : undefined
+    const standalone = attrs?.end === content.length
+    if (standalone && (boundary || pending.length > 0 || /[-*+.)]/.test(prefix))) {
+      if (pending.length && scope !== owner) pending = []
+      pending.push(n); owner = scope
+    } else {
+      if (pending.length && scope === owner && /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.test(content) && mask[offset + prefix.length] === '[') {
+        lines[n] = prefix.trimEnd() + '\n' + line
+        for (const at of pending) {
+          const raw = lines[at]!, start = raw.indexOf('{')
+          const parsed = readAttributes(raw.slice(start).trimEnd(), 0)
+          if (parsed?.source !== '{}') losses.push({ line: headerLines + at + 1 })
+          while (reserved.has(serial)) serial++
+          comments.add(serial)
+          lines[at] = raw.slice(0, start) + `\0DJOTNOTEATTR${serial++}\0`
+        }
+      }
+      pending = []
+    }
+    boundary = content === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|(?:[-*][ \t]*){3,}$)/.test(content)
+    offset += line.length + 1
+  }
+  return { source: header + lines.join('\n'), losses, restore: text => text.replace(/\0DJOTNOTEATTR(\d+)\0/g, (value, index: string) => comments.has(Number(index)) ? '%%' : value) }
 }
