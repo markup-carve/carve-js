@@ -11,7 +11,7 @@ function escapedWordCharacter(source: string, at: number, cursor: number): boole
   return slashes % 2 === 1
 }
 
-export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string): string {
+export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string, inherited: ReadonlySet<string> = new Set()): string {
   if (!source.includes('{')) return source
   const paired = djotPairedEmphasisOpeners(source)
   const literalBraces = new Map<number, number>()
@@ -28,15 +28,23 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
       escapedBraceCloses.add(at + note[0].length - 1)
     }
   }
-  const braceStack: Array<{ begin: number; literal: boolean; spaces: number }> = []
+  const braceStack: Array<{ begin: number; literal: boolean; space: number }> = []
   const readBraceAttributes = nativeAttributeReader(source)
   let attributeEnd = 0
-  let spaces = 0, lastEscaped = -1
+  let lastEscaped = -1, lastAtomEscape = -1, lastSpace = -1, lastInlineEnd = -1
+  const inheritedMarker = /\0DJOTINVALIDATTR\d+\0/y
   for (let at = 0; at < source.length; at++) {
-    if (/\s/u.test(source[at]!)) spaces++
+    if (/\s/u.test(source[at]!)) lastSpace = at
+    if (pairedCloses.has(at)) lastInlineEnd = at
     if (source[at] === '\\') {
       lastEscaped = at + 1
-      if (source[at + 1] === '{' && masked[at + 1] === '{') braceStack.push({ begin: at, literal: true, spaces })
+      if (/\s/u.test(source[at + 1] ?? '')) lastSpace = at + 1
+      inheritedMarker.lastIndex = at + 2
+      const marker = inherited.size ? inheritedMarker.exec(source)?.[0] : undefined
+      const generated = marker !== undefined && inherited.has(marker)
+      if (generated) literalBraces.set(at + 1 + marker.length, at + 2)
+      if (!generated && /[!-\/:-@\[-`{-~]/.test(source[at + 1] ?? '')) lastAtomEscape = at
+      if (source[at + 1] === '{' && masked[at + 1] === '{') braceStack.push({ begin: at, literal: true, space: lastSpace })
       else if (source[at + 1] === '}' || source[at + 1] === ']') {
         if (source[at + 1] === '}' && braceStack.at(-1)?.literal) braceStack.pop()
         literalBraces.set(at + 1, at); escapedBraceCloses.add(at + 1)
@@ -44,16 +52,22 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
       at++
       continue
     }
-    if (masked[at] !== source[at]) continue
+    if (masked[at] !== source[at]) { lastInlineEnd = at + 1; continue }
     if (source[at] === '{' && at >= attributeEnd) attributeEnd = readBraceAttributes(at)?.end ?? at
     if (at >= attributeEnd && source[at] === '}' && '+-=~^*_'.includes(source[at - 1] ?? '\0') && !pairedCloses.has(at + 1)) {
       literalBraces.set(at, at - 1 === lastEscaped ? at - 2 : at - 1)
       if (at - 1 === lastEscaped) escapedBraceCloses.add(at)
     }
-    if (source[at] === '{') braceStack.push({ begin: at, literal: false, spaces })
+    if (source[at] === '{') braceStack.push({ begin: at, literal: at >= attributeEnd && /[.#% \tA-Za-z]/.test(source[at + 1] ?? ''), space: lastSpace })
     else if (source[at] === '}') {
       const open = braceStack.pop()
-      if (open?.literal && open.spaces === spaces && !escapedBraceCloses.has(at)) literalBraces.set(at, open.begin)
+      if (open?.literal && !escapedBraceCloses.has(at)) {
+        const from = Math.max(lastAtomEscape, lastInlineEnd)
+        if (from >= open.begin && from > lastSpace) {
+          literalBraces.set(at, from)
+          escapedBraceCloses.add(at)
+        } else literalBraces.set(at, lastSpace === open.space ? open.begin : at)
+      }
     }
   }
   let output = '', cursor = 0

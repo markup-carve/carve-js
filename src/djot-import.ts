@@ -290,7 +290,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   }
 }
 
-function escapeInvalidDjotAttributes(source: string): string {
+function escapeInvalidDjotAttributes(source: string): { source: string; inherited: Set<string>; restore: (text: string) => string } {
   const masked = maskDjotCodeAndDestinations(source).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length))
   const escapes: number[] = []
   for (let i = 0; i < source.length; i++) {
@@ -311,13 +311,21 @@ function escapeInvalidDjotAttributes(source: string): string {
     }
 
   }
-  let output = '',
-    cursor = 0
+  const reserved = new Set([...source.matchAll(/\0DJOTINVALIDATTR\d+\0/g)].map(match => match[0]))
+  const inherited = new Set<string>()
+  let serial = 0
+  const marker = (): string => {
+    let value: string
+    do { value = `\0DJOTINVALIDATTR${serial++}\0` } while (reserved.has(value))
+    inherited.add(value)
+    return value
+  }
+  let output = '', cursor = 0
   for (const at of escapes) {
-    output += source.slice(cursor, at) + '\\{' + (source[at + 1] === '#' ? '\\#' : '')
+    output += source.slice(cursor, at) + '\\{' + marker() + (source[at + 1] === '#' ? '\\#' + marker() : '')
     cursor = at + (source[at + 1] === '#' ? 2 : 1)
   }
-  return output + source.slice(cursor)
+  return { source: output + source.slice(cursor), inherited, restore: text => text.replace(/\0DJOTINVALIDATTR\d+\0/g, value => inherited.has(value) ? '' : value) }
 }
 
 /** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
@@ -405,16 +413,18 @@ export function djotToCarve(djot: string): string {
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
+  const invalidAttributes = escapeInvalidDjotAttributes(body)
   const normalizedBody = normalizeDjotFootnotes(
     djotReferenceLayout(
       foldDjotReferences(
         normalizeDjotFences(
-          normalizeDjotAttributeLines(djotCodePadding(djotInlineLayout(normalizeDjotAttributeLines(escapeInvalidDjotAttributes(body))))),
+          normalizeDjotAttributeLines(djotCodePadding(djotInlineLayout(normalizeDjotAttributeLines(invalidAttributes.source)))),
         ),
       ),
       djotContentStart,
     ),
     strippedDefinitions.isBoundary,
+    invalidAttributes.inherited,
   )
   const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody)))
   const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)))
@@ -453,8 +463,8 @@ export function djotToCarve(djot: string): string {
   const words = attributedDjotWords(folded, wordMask, convert, span => {
     spans.push(span)
     return `${prefix}${spans.length - 1}\x00`
-  })
-  const converted = convert(words).replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spans[Number(index)]!)
+  }, invalidAttributes.inherited)
+  const converted = invalidAttributes.restore(convert(words).replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spans[Number(index)]!))
   return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
 
@@ -827,7 +837,7 @@ function normalizeDjotParagraphFences(source: string): string {
   return output.join('')
 }
 
-function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false): string {
+function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false, inherited: ReadonlySet<string> = new Set()): string {
   if (!source.includes('[^')) return source
   const mask = maskDjotCodeAndDestinations(source, false, true, false)
   const rows = djotTableRows(source, mask)
@@ -907,8 +917,10 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
   for (let at = source.length - 1; at >= 0; at--) {
     if (source[at] === '\n') nextBrace = -1
     else if (source[at] === '}') nextBrace = at + 1
-    else if (source[at] === '{' && nextBrace >= 0 && /^\{[A-Za-z][\w-]*=/.test(source.slice(at)))
-      malformedEnds.set(at, nextBrace)
+    else if (source[at] === '{' && nextBrace >= 0) {
+      const malformed = /^\{(\0DJOTINVALIDATTR\d+\0)?[A-Za-z][\w-]*=/.exec(source.slice(at))
+      if (malformed && (!malformed[1] || inherited.has(malformed[1]))) malformedEnds.set(at, nextBrace)
+    }
   }
   const brackets = new Map<number, number>(),
     stack: number[] = []
