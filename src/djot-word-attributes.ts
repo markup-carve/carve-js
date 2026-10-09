@@ -1,12 +1,37 @@
 const quoteValue = (value: string): string => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 
+function attributeContext(source: string, start: number): { depth: number; indent: number | undefined; minimum: number } {
+  let prefix = source.slice(source.lastIndexOf('\n', start - 1) + 1, start), depth = 0
+  while (true) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(prefix); if (!quote) break; prefix = prefix.slice(quote[0].length); depth++ }
+  const marker = /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.exec(prefix)
+  return { depth, indent: /^(?:[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?[ \t]*$/.test(prefix) ? prefix.length : undefined, minimum: marker?.[0].length ?? 0 }
+}
+function attributeLine(line: string, depth: number): string | undefined {
+  for (let n = 0; n < depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(line); if (!quote) return undefined; line = line.slice(quote[0].length) }
+  return line
+}
+
 export function readAttributes(source: string, start: number): { end: number; source: string } | undefined {
   const parts: string[] = []
   let i = start + 1
+  let context: ReturnType<typeof attributeContext> | undefined
   while (i < source.length) {
     while (/[ \t\n\r]/.test(source[i] ?? '') && i < source.length) {
       if (source[i] === '\n' && /^[ \t]*\n/.test(source.slice(i + 1))) return undefined
-      i++
+      if (source[i] === '\n') {
+        context ??= attributeContext(source, start)
+        i++
+        for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
+      } else i++
+    }
+    if (source[i] === '}' && parts.length && source.slice(start, i + 1).includes('\n')) {
+      const context = attributeContext(source, start)
+      for (const raw of source.slice(start, i + 1).split('\n').slice(1)) {
+        const line = attributeLine(raw, context.depth)
+        if (context.indent !== undefined && line === undefined) return undefined
+        const indent = /^[ \t]*/.exec(line ?? raw)![0].length
+        if (context.indent !== undefined && (indent < context.minimum || indent <= context.indent)) return undefined
+      }
     }
     if (source[i] === '}') return parts.length ? { end: i + 1, source: `{${parts.join(' ')}}` } : undefined
     if (source[i] === '%') {
@@ -31,13 +56,18 @@ export function readAttributes(source: string, start: number): { end: number; so
       if (source[i] === '"') {
         i++
         while (i < source.length && source[i] !== '"') {
-          if (source[i] === '\n' || source[i] === '\r') return undefined
+          if (source[i] === '\n' && /^[ \t]*\n/.test(source.slice(i + 1))) return undefined
           if (source[i] === '\\') i++
           i++
         }
         if (source[i] !== '"') return undefined
         i++
-        parts.push(key[0] + source.slice(from, i))
+        let value = source.slice(from, i)
+        if (value.includes('\n')) {
+          const context = attributeContext(source, start)
+          value = value.replace(/\r?\n([^\n]*)/g, (_match, raw: string) => ' ' + (attributeLine(raw, context.depth) ?? raw).replace(/^[ \t]+/, ''))
+        }
+        parts.push(key[0] + value)
       } else {
         while (i < source.length && !/[\s{}%"'=<>]/u.test(source[i]!)) i++
         if (i === from) return undefined
