@@ -654,12 +654,11 @@ function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode
             if (source[next] === '\n') break
           }
           if (candidateMask[end] === '\\' && candidateMask[end + 1] !== '\n') { end++; continue }
-          if (candidateMask[end] === candidate) break
+          if (candidateMask[end] === candidate && (candidate === '_' || source[end + 1] !== '}')) break
         }
         cursor = end
         if (end >= candidateMask.length || candidateMask[end] !== candidate) { cursor++; continue }
         if (end === start + 1 || whitespace.test(candidateMask[end - 1]!)) continue
-        if (candidate !== '_' && source[end + 1] === '}') continue
         if (candidate === '_' && word.test(candidateMask[end + 1] ?? '') !== intraword) continue
         cursor = end + 1
         yield Object.assign([candidateMask.slice(start, cursor), candidateMask.slice(start + 1, end)], {
