@@ -60,7 +60,11 @@ describe('the Markdown importer reads a dash line only up to space and tab paddi
   })
 
   it.each([
-    ['a closer padded with spaces and tabs', '---yaml\na: 1\n--- \t\n\nt\n', '---yaml\na: 1\n--- \t\n\nt\n'],
+    // Still READ as a closer, which is what this table is about. Written bare,
+    // the way every other row here is written canonically: the padding is a
+    // reader's leniency, not a writer's license, and echoing it left the import
+    // failing this engine's own `fmt --check` (carve-js#2638).
+    ['a closer padded with spaces and tabs', '---yaml\na: 1\n--- \t\n\nt\n', '---yaml\na: 1\n---\n\nt\n'],
     ['a setext h2 underline padded with a tab', 'a\n--- \t\n', '## a\n'],
     ['a setext h1 underline padded with spaces', 'a\n===  \n', '# a\n'],
     ['a thematic break padded with a tab', 'a\n\n* * *\t\n', 'a\n\n---\n'],
