@@ -29,7 +29,7 @@ import {
 } from './markdown-empty-destination.js'
 import { FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
-import { BLOCK_SEPARATOR, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
+import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
 /**
@@ -4043,9 +4043,14 @@ function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bo
     if (!isMappingShaped(lines.slice(1, i), opener[1]!)) return none
     const frontmatter = lines.slice(0, i + 1)
     // The metadata between the fences is opaque and survives byte-for-byte, but
-    // the opener is a delimiter the canonical writer owns: a bare `---` and a
+    // both fences are delimiters the canonical writer owns: a bare `---` and a
     // spaced `--- toml` both read fine and neither is the canonical spelling.
     frontmatter[0] = canonicalFrontmatterOpener(opener[1] || 'yaml')
+    // A reader accepts a trailing run of spaces and tabs on the closer, so
+    // `---<TAB>` closes the block, but the writer spells it bare - echoing the
+    // source's run left the import failing this engine's own `fmt --check`
+    // (carve-js#2638).
+    frontmatter[frontmatter.length - 1] = FRONTMATTER_CLOSER
     return { frontmatter, bodyStart: i + 1, typedOpener: opener[1] !== '' }
   }
   return none

@@ -1976,6 +1976,17 @@ export function canonicalFrontmatterOpener(format: string): string {
   return `---${escapeFormat(format)}`
 }
 
+/**
+ * The closer the writer writes under a frontmatter block: a bare `---`.
+ *
+ * `frontmatter_close` names no format slot, so unlike the opener the closer
+ * takes no token. A reader also accepts a trailing run of spaces and tabs on it
+ * (PART 1), but that leniency is not a writer's license either: the Markdown
+ * importer reads this so a source closer spelled `---<TAB>` comes back the one
+ * way this writer spells it (carve-js#2638).
+ */
+export const FRONTMATTER_CLOSER = '---'
+
 function escapeFenceToken(text: string): string {
   // The info token ends at `whitespace` (PART 7), not at `\s`: a language name
   // carrying a vertical tab was truncated on the way out while the same name
@@ -4465,7 +4476,7 @@ class CarveRenderSession {
    * `yaml` on the next pass, under the option's default.
    */
   private renderFrontmatter(frontmatter: { format: string; content: string }): string {
-    return `${canonicalFrontmatterOpener(frontmatter.format)}\n${this.protectVerbatim(frontmatter.content)}\n---`
+    return `${canonicalFrontmatterOpener(frontmatter.format)}\n${this.protectVerbatim(frontmatter.content)}\n${FRONTMATTER_CLOSER}`
   }
 
   private renderBlockComment(content: string): string {
