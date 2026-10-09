@@ -14,6 +14,7 @@ import type {
   Attrs,
   BlockNode,
   BlockQuote,
+  CodeBlock,
   Document,
   Figure,
   FigureGroup,
@@ -44,6 +45,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue, setOwn } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+import { codeContent, verbatimLines } from './verbatim-payload.js'
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
@@ -221,8 +223,9 @@ export interface RenderOptions extends RenderLossSinkOptions {
    * Allow raw HTML passthrough (the `` `…`{=html} `` inline and ` ```=html `
    * block forms) to emit verbatim. On by default, matching the conformance
    * corpus. Set `false` for UNTRUSTED input: raw-HTML content is then escaped
-   * to text instead of emitted, closing the one author-controlled raw-HTML
-   * injection vector. Non-HTML raw formats are unaffected.
+   * instead of emitted (a block as a `language-html` code block, PART 10 §6),
+   * closing the one author-controlled raw-HTML injection vector. Non-HTML raw
+   * formats are unaffected.
    */
   allowRawHtml?: boolean
 }
@@ -1486,9 +1489,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // The opener "header" is resolved to a `title` attribute at parse time
       // (see parseBlocks), so it renders here AND wherever else a code block is
       // emitted (e.g. inside a code-group).
-      const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
-      const escaped = escapeHtml(node.content)
-      return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
+      return renderCodeBlockCore(node, opts, pad)
     }
     case 'block_quote':
       return renderBlockQuote(node, opts, level)
@@ -1587,8 +1588,19 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
         rawFormatDropped(opts, node, 'html')
         return ''
       }
+      // PART 10 §6 (carve#2795): an escaped raw block is written as the fenced
+      // code block of its format. It is present, so it reports no render loss.
       return opts.allowRawHtml === false
-        ? `${pad}${escapeHtml(node.content)}`
+        ? renderCodeBlockCore(
+            {
+              lang: node.format,
+              content: codeContent(verbatimLines(node.content), true),
+              ...(node.attrs ? { attrs: node.attrs } : {}),
+              ...(node.pos ? { pos: node.pos } : {}),
+            },
+            opts,
+            pad,
+          )
         : `${pad}${node.content}`
     case 'comment':
       // Comments are not rendered (§4.13).
@@ -1608,6 +1620,16 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       throw new Error(`renderHtml: unknown block ${(t as { type: string }).type}`)
     }
   }
+}
+
+function renderCodeBlockCore(
+  node: Pick<CodeBlock, 'lang' | 'content' | 'attrs' | 'pos'>,
+  opts: RenderOptions,
+  pad: string,
+): string {
+  const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
+  const escaped = escapeHtml(node.content)
+  return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
 }
 
 function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number): string {

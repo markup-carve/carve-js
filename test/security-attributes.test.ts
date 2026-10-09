@@ -145,7 +145,7 @@ describe('raw HTML opt-out', () => {
       '<p>&lt;img src=x onerror=alert(1)&gt;</p>',
     )
     expect(carveToHtml('```=html\n<img onerror=alert(1)>\n```', { allowRawHtml: false }).trim()).toBe(
-      '&lt;img onerror=alert(1)&gt;',
+      '<pre><code class="language-html">&lt;img onerror=alert(1)&gt;\n</code></pre>',
     )
   })
 })
