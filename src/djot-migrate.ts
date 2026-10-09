@@ -22,6 +22,7 @@
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { backtickRunEnds } from './backtick-run-index.js'
+import { readAttributes } from './djot-word-attributes.js'
 
 import { parse } from './parse.js'
 
@@ -148,11 +149,9 @@ const RULES: Rule[] = [
     id: 'djot-subscript-tilde',
     category: 'djot-shift',
     family: '~',
-    // The `{`/`}` guards keep this off the braced form the rule above owns.
-    // Without them both rules match the same subscript and, being strictly
-    // nested, compose instead of colliding - which is how the doubled braces
-    // reached the output.
-    pattern: /(?<!\{)~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~(?!\})/gd,
+    // A forced closer cannot start or terminate a bare span. ruleMatches checks
+    // whether a preceding brace is an unescaped braced opener.
+    pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~(?!\})/gd,
     message: () =>
       'Djot subscript `~x~` renders as *strikethrough* in Carve.',
     // Forced brace form: a Djot `~x~` is often intraword (e.g. H~2~O), where a
@@ -166,11 +165,10 @@ const RULES: Rule[] = [
     // braced `{^x^}`), so the intended markup never renders.
     category: 'carve-breakage',
     family: '^',
-    // Exclude `^[` (a Carve inline footnote, not a superscript opener), the
-    // braced `{^x^}` form, which is valid in both languages, and carets that
-    // belong to footnote references (`[^x] … [^y]` must not pair up as a
-    // superscript span across the paragraph).
-    pattern: /(?<![{[])\^(?![\s[])((?:(?!\n[ \t]*\n)[^^])+?)(?<![\s[])\^(?!\})/gd,
+    // Reference labels are masked before matching. ruleMatches excludes
+    // unescaped braced openers; an escaped brace or unmatched bracket
+    // can precede a real superscript.
+    pattern: /\^(?!\s)((?:(?!\n[ \t]*\n)[^^])+?)(?<!\s)\^(?!\})/gd,
     message: () =>
       'Djot superscript `^x^` is literal text in Carve — Carve superscript is the braced `{^x^}` only.',
     suggestion: (m) => `{^${m[1]}^}`,
@@ -594,6 +592,89 @@ function tableContinuationLines(source: string): Set<number> {
   return lines
 }
 
+export const migrateBracedSteps = { count: 0 }
+export const migrateCandidateChecks = { count: 0 }
+
+function* ruleMatches(masked: string, rule: Rule, source: string, nativeDjotCode: boolean): Generator<RegExpExecArray> {
+  const opener = rule.id === 'djot-subscript-tilde-braced' ? '{~' : rule.id === 'djot-highlight-braces' ? '{=' : undefined
+  if (opener === undefined) {
+    const candidate = rule.id === 'djot-subscript-tilde' ? '~' : rule.id === 'djot-superscript-caret' ? '^' : rule.id === 'djot-emphasis-underscore' || rule.id === 'djot-intraword-underscore' ? '_' : undefined
+    if (candidate !== undefined) {
+      let candidateMask = masked
+      if (candidate === '^' && masked.includes('^')) {
+        const chars = masked.split('')
+        for (let at = 0; at < masked.length; at++) {
+          if (masked[at] === '{' && /[.#A-Za-z]/.test(source[at + 1] ?? '') && !isDjotEscaped(source, at)) {
+            const attrs = readAttributes(source, at)
+            if (attrs) {
+              for (let inner = at; inner < attrs.end; inner++) if (chars[inner] === '^') chars[inner] = '\x01'
+              at = attrs.end - 1
+              continue
+            }
+          }
+          if (!masked.startsWith('[^', at) || isDjotEscaped(source, at)) continue
+          let end = at + 2
+          while (end < source.length && source[end] !== '\n' && (source[end] !== ']' || isDjotEscaped(source, end))) end++
+          if (source[end] === ']') {
+            for (let inner = at + 1; inner < end; inner++) if (chars[inner] === '^') chars[inner] = '\x01'
+          }
+          at = end
+        }
+        candidateMask = chars.join('')
+      }
+      const anchored = new RegExp(rule.pattern.source, rule.pattern.flags.replace('g', 'y'))
+      for (let cursor = 0; cursor < masked.length;) {
+        const start = candidateMask.indexOf(candidate, cursor)
+        if (start < 0) break
+        cursor = start + 1
+        if (candidate === '^' && !nativeDjotCode && source[start + 1] === '[') continue
+        if (isDjotEscaped(source, start) || (candidate !== '_' && source[start + 1] === '}') || (candidate !== '_' && source[start - 1] === '{' && !isDjotEscaped(source, start - 1))) continue
+        anchored.lastIndex = start
+        migrateCandidateChecks.count++
+        const match = anchored.exec(candidateMask)
+        if (match) { cursor = anchored.lastIndex; yield match }
+      }
+      return
+    }
+    rule.pattern.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = rule.pattern.exec(masked))) yield match
+    return
+  }
+  const closer = opener[1]! + '}'
+  for (let cursor = 0; cursor < masked.length;) {
+    const start = masked.indexOf(opener, cursor)
+    migrateBracedSteps.count += start < 0 ? masked.length - cursor : start - cursor + 2
+    if (start < 0) break
+    const from = start + 2
+    if (isDjotEscaped(masked, start)) { cursor = from; continue }
+    let end = from
+    for (; end < masked.length; end++) {
+      migrateBracedSteps.count++
+      if (masked.startsWith(opener, end) && !isDjotEscaped(source, end)) break
+      if (masked[end] === '\n') {
+        let next = end + 1
+        while (source[next] === ' ' || source[next] === '\t') { migrateBracedSteps.count++; next++ }
+        while (source[next] === '>') {
+          migrateBracedSteps.count++
+          next++
+          while (source[next] === ' ' || source[next] === '\t') { migrateBracedSteps.count++; next++ }
+        }
+        if (source[next] === '\n') break
+      }
+      if (masked.startsWith(closer, end) && !isDjotEscaped(masked, end)) break
+    }
+    if (masked.startsWith(closer, end)) {
+      cursor = end + 2
+      if (end === from) continue
+      const match = Object.assign([masked.slice(start, cursor), masked.slice(from, end)], {
+        index: start, input: masked, indices: [[start, cursor], [from, end]],
+      }) as RegExpExecArray
+      yield match
+    } else cursor = masked.startsWith(opener, end) ? end : end + 1
+  }
+}
+
 /** The full scan, carrying the fix edits used by `applyMigrationFixes`. */
 function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   const out: ScanHit[] = []
@@ -708,9 +789,7 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   }
 
   for (const rule of RULES) {
-    rule.pattern.lastIndex = 0
-    let m: RegExpExecArray | null
-    while ((m = rule.pattern.exec(masked))) {
+    for (const m of ruleMatches(masked, rule, norm, nativeDjotCode)) {
       const markerSpan = rule.id === 'djot-plus-bullet' ? m.indices?.[1] : undefined
       const start = markerSpan?.[0] ?? m.index
       const end = markerSpan?.[1] ?? m.index + m[0].length
