@@ -81,7 +81,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         value = value.replace(/[ \r\n]+/g, ' ').replace(/\\([.,\\/#!$%^&*;:{}=\-_`~+[\]()'"?|])/g, '$1')
         parts.push(key[0] + quoteValue(value, carve))
       } else {
-        while (i < source.length && !/[\s{}%"'=<>]/u.test(source[i]!)) i++
+        while (i < source.length && /[A-Za-z0-9_:-]/.test(source[i]!)) i++
         if (i === from) return undefined
         parts.push(key[0] + quoteValue(source.slice(from, i), carve))
       }

@@ -284,13 +284,14 @@ function escapeInvalidAttributeHashes(source: string): string {
       if (ch === '{') break
       if (ch === '<' || ch === '>') invalid = true
     }
-    if (source[i + 1] === '#' && (source[end] !== '}' || invalid)) escapes.push(i)
+    if (source[i + 1] === '#' && (source[end] !== '}' || invalid) ||
+        /^[A-Za-z][A-Za-z0-9_-]*(?:=|})/.test(source.slice(i + 1)) && !readAttributes(source, i)) escapes.push(i)
     i = Math.max(i, end - (source[end] === '{' ? 1 : 0))
   }
   let output = '', cursor = 0
   for (const at of escapes) {
-    output += source.slice(cursor, at) + '\\{\\#'
-    cursor = at + 2
+    output += source.slice(cursor, at) + '\\{' + (source[at + 1] === '#' ? '\\#' : '')
+    cursor = at + (source[at + 1] === '#' ? 2 : 1)
   }
   return output + source.slice(cursor)
 }
