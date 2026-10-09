@@ -300,7 +300,15 @@ function escapeInvalidDjotAttributes(source: string): string {
     if (slashes % 2) continue
     const attrs = readAttributes(source, i)
     if (attrs) { i = attrs.end - 1; continue }
-    if (/[.#% \tA-Za-z]/.test(source[i + 1] ?? '')) { escapes.push(i); continue }
+    if (/[.#% \tA-Za-z]/.test(source[i + 1] ?? '')) {
+      escapes.push(i)
+      // Every brace inside the same rejected run is literal Djot text too, so a later
+      // pass must not read one as a forced quote and swallow it.
+      for (let inner = i + 1; inner < source.length && source[inner] !== '\n' && source[inner] !== '}'; inner++)
+        if (source[inner] === '{' && masked[inner] === '{' && !readAttributes(source, inner)) escapes.push(inner)
+      i = escapes.at(-1)!
+      continue
+    }
 
   }
   let output = '',

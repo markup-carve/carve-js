@@ -416,3 +416,10 @@ it.each(['::: foo\n# b\n{.c}\n', '::: foo\na\n{.c}\n', '::: foo\n# b\n{.c}\n:::\
 it('keeps an attribute line that a block follows', () => {
   expect(carveToHtml(djotToCarve('::: foo\n{.c}\n# b\n:::\n'))).toContain('class="c"')
 })
+
+it('keeps every literal brace of a rejected attribute block', () => {
+  // Not a djot.js match: its own quote directions differ (markup-carve/carve#2822),
+  // but no brace of the rejected block may go missing.
+  const braces = (html: string): number => html.split('{').length - 1
+  expect(braces(carveToHtml(djotToCarve('[t]{k="{""}\n')))).toBe(braces(renderHTML(parse('[t]{k="{""}\n'))))
+})
