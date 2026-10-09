@@ -1057,10 +1057,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'insert':
       return `<ins>${renderInlines(node.children, ctx)}</ins>`
     case 'delete':
-      return `<del>${renderInlines(node.children, ctx)}</del>`
+      // PART 11 section 8c: the class is what tells a deletion from the bare
+      // `<del>` a `strike` falls back to, which otherwise reads back as a
+      // strike (markup-carve/carve#2845).
+      return `<del class="critic-delete">${renderInlines(node.children, ctx)}</del>`
     case 'substitution':
       // Emit BOTH sides like the HTML renderer; dropping the old half loses content.
-      return `<del>${renderInlines(node.old, ctx)}</del><ins>${renderInlines(node.new, ctx)}</ins>`
+      return `<del class="critic-delete">${renderInlines(node.old, ctx)}</del><ins>${renderInlines(node.new, ctx)}</ins>`
     case 'critic_comment':
       // Visible content, so never dropped. The span carries the HTML target's
       // class (markup-carve/carve#2791); the content stays one escaped text run,

@@ -82,7 +82,7 @@ describe('non-html renderer parity fixes', () => {
   })
 
   it('renders critic deletion as del HTML in Markdown output', () => {
-    expect(carveToMarkdown('{-del-}')).toBe('<del>del</del>\n')
+    expect(carveToMarkdown('{-del-}')).toBe('<del class="critic-delete">del</del>\n')
     expect(carveToMarkdown('{+ins+}')).toBe('<ins>ins</ins>\n')
   })
 

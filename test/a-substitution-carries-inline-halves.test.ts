@@ -36,7 +36,7 @@ describe('a substitution', () => {
   it('renders both halves on every target', () => {
     const document = parse('{~/old/~>*new*~}')
     expect(renderHtml(document)).toBe('<p><del><em>old</em></del><ins><strong>new</strong></strong></ins></p>'.replace('</strong></strong>', '</strong>'))
-    expect(renderMarkdown(document)).toBe('<del>*old*</del><ins>**new**</ins>\n')
+    expect(renderMarkdown(document)).toBe('<del class="critic-delete">*old*</del><ins>**new**</ins>\n')
   })
 
   it('writes both halves back', () => {

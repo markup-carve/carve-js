@@ -759,6 +759,45 @@ function attributedNative(tag: string, open: string, body: string, protect: (s: 
   return `[${body}]${protect(`{abbr="${value}"}`)}`
 }
 
+/**
+ * A body that would close or re-open the braced critic construct it is about to
+ * be written into, so the tag stays a raw span instead.
+ */
+function breaksOutOfACriticBody(body: string): boolean {
+  return /[{}\\\n]|~>/.test(body)
+}
+
+/**
+ * PART 11 section 8c spells a deletion `<del class="critic-delete">`, so it no
+ * longer collides with the bare `<del>` a `strike` falls back to
+ * (markup-carve/carve#2845). The substitution shape is read FIRST: its
+ * `<del>`/`<ins>` pair is ONE construct, and the deletion rule alone would
+ * leave a strike beside an unrelated insertion.
+ *
+ * Only the delimiters are protected - the body stays live markup, as it is in
+ * the Carve construct the tag came from.
+ */
+function criticDeletion(
+  tag: string,
+  open: string,
+  body: string,
+  input: string,
+  end: number,
+  protect: (s: string) => string,
+): { carve: string; end: number } | undefined {
+  if (tag !== 'del' || body.includes('<')) return undefined
+  if (!/^<del\s+class\s*=\s*"critic-delete"\s*>$/i.test(open)) return undefined
+  if (breaksOutOfACriticBody(body)) return undefined
+  const insertion = /^<ins\s*>([^<]*)<\/ins\s*>/i.exec(input.slice(end))
+  if (insertion && !breaksOutOfACriticBody(insertion[1]!)) {
+    return {
+      carve: protect('{~') + body + protect('~>') + insertion[1]! + protect('~}'),
+      end: end + insertion[0].length,
+    }
+  }
+  return { carve: protect('{-') + body + protect('-}'), end }
+}
+
 function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[]): string {
   let out = ''
   let i = 0
@@ -791,6 +830,12 @@ function convertInlineHtml(input: string, protect: (s: string) => string, placeh
         const body = input.slice(tag.end, tag.end + close.index)
         native = input.slice(i, tag.end).toLowerCase() === `<${tag.name}>` && close[0].toLowerCase() === `</${tag.name}>` && NATIVE_INLINE_HTML_TAGS.has(tag.name) && !body.includes('<')
         if (!native && tag.attrs && close[0].toLowerCase() === `</${tag.name}>`) {
+          const deletion = criticDeletion(tag.name, input.slice(i, tag.end), body, input, end, protect)
+          if (deletion !== undefined) {
+            out += deletion.carve
+            i = deletion.end
+            continue
+          }
           const carve = attributedNative(tag.name, input.slice(i, tag.end), body, protect)
           if (carve !== undefined) {
             out += carve

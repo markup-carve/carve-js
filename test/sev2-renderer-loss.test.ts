@@ -21,7 +21,7 @@ describe('Severity-2 renderer content loss', () => {
   })
 
   it('critic-substitute keeps both old and new text', () => {
-    expect(carveToMarkdown('{~old~>new~}').trim()).toBe('<del>old</del><ins>new</ins>')
+    expect(carveToMarkdown('{~old~>new~}').trim()).toBe('<del class="critic-delete">old</del><ins>new</ins>')
     expect(carveToPlainText('{~old~>new~}')).toContain('old')
     expect(carveToPlainText('{~old~>new~}')).toContain('new')
   })

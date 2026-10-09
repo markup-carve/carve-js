@@ -123,7 +123,8 @@ describe('a merged run the rule of 3 allows stays a delimiter run', () => {
   })
 
   it('leaves the inline-HTML kinds alone, which carry no run at all', () => {
-    expect(carveToMarkdown('a {-x-}{-y-}\n')).toBe('a <del>x</del><del>y</del>\n')
+    expect(carveToMarkdown('a {-x-}{-y-}\n'))
+      .toBe('a <del class="critic-delete">x</del><del class="critic-delete">y</del>\n')
   })
 })
 
