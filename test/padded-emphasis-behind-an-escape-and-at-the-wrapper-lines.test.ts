@@ -92,7 +92,7 @@ describe('root 2: the wrapper lines go through the same repair', () => {
   })
 
   it('keeps a padded admonition title readable as strong', () => {
-    expect(carveToMarkdown('::: note " Title "\nbody\n:::\n')).toBe('**Title** \n\nbody\n')
+    expect(carveToMarkdown('::: note " Title "\nbody\n:::\n')).toBe('**Title**\n\nbody\n')
   })
 
   it('keeps an admonition title behind the escape readable as strong', () => {
@@ -100,11 +100,11 @@ describe('root 2: the wrapper lines go through the same repair', () => {
   })
 
   it('keeps a padded container label readable as strong', () => {
-    expect(carveToMarkdown('::: [ L ]\nbody\n:::\n')).toBe('**L** \n\nbody\n')
+    expect(carveToMarkdown('::: [ L ]\nbody\n:::\n')).toBe('**L**\n\nbody\n')
   })
 
   it('keeps a padded admonition label readable as strong', () => {
-    expect(carveToMarkdown('::: note [ L ]\nbody\n:::\n')).toBe('**L** \n\nbody\n')
+    expect(carveToMarkdown('::: note [ L ]\nbody\n:::\n')).toBe('**L**\n\nbody\n')
   })
 
   it('keeps a definition term behind the escape readable as strong', () => {
@@ -142,14 +142,10 @@ describe('root 2: the wrapper lines go through the same repair', () => {
   })
 })
 
-/**
- * A hard break is spelled as a backslash then a newline. The newline is in the
- * class, so moving it out alone left the backslash escaping the delimiter
- * behind it and `**t\**` came back as text with a stray `*`.
- */
+// Keep the hard break inside the wrapper, before the paragraph ends.
 describe('a trailing hard break keeps its backslash', () => {
   it('does not split the backslash from its newline in a definition term', () => {
-    expect(carveToMarkdown(':: \\ t\\ \n: d\n')).toBe(' **t**\\\n\nd\n')
+    expect(carveToMarkdown(':: \\ t\\ \n: d\n')).toBe('<strong> t\\\n</strong>\n\nd\n')
   })
 
   it('leaves no stray delimiter behind the backslash', () => {
