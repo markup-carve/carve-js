@@ -4118,6 +4118,10 @@ class Importer {
     // renders back as the element itself; the marks do not - a `<q>` becomes
     // text and its `cite` goes with it - so this mapping is the safe/semantic
     // answer and the raw fallback is the round-tripping one.
+    if (this.codeSpanDepth > 0 && (INLINE_HANDLED.has(tag) || SEMANTIC_SPAN_TAGS.has(tag)) && !(tag === 'span' && (domAttrs(node)?.length ?? 0) === 0)) {
+      const dropped = tag === 'img' || tag === 'br' || tag === 'input'
+      this.report.add(dropped ? 'element-dropped' : 'element-unwrapped', `${dropped ? 'Dropped' : 'Unwrapped'} <${tag}> inside <code>`, dropped ? 'warning' : 'info', path, node)
+    }
     if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
     /*
      * MathML -> `math`, as carve#1210's D6 rules it: a three-tier lookup for
