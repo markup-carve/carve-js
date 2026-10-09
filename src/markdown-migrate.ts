@@ -3708,8 +3708,11 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
  * when the parser moved: this pair is a SECOND SPELLING of the production, and
  * the mirror test that guards it carried a space case and a tab case and no
  * run case at all.
+ *
+ * The opener's trailing padding is `[ \t]`, as in the parser: a form feed or a
+ * no-break space after the token is content, so the line is not an opener.
  */
-const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)\s*$/
+const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)[ \t]*$/
 const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
 
 /**
