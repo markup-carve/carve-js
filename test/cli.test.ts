@@ -211,7 +211,7 @@ describe('carve render — loss reporting', () => {
 describe('migration literal-text evidence', () => {
   it('passes the loss check only for verified complete literal text', async () => {
     for (const format of ['markdown', 'djot', 'bbcode']) {
-      for (const [source, expected] of [['hello', 0], ['hello!', 1]] as const) {
+      for (const [source, expected] of [['hello', 0], ['https://example.org', 1]] as const) {
         const t = makeIO({ stdin: source })
         expect(await run(['migrate', '--from', format, '--report', 'report.json', '--check-loss'], t.io)).toBe(expected)
         expect(JSON.parse(t.files['report.json']!).diagnostics[0].code).toBe(expected === 0 ? 'literal-text-verified' : 'fidelity-unverified')
@@ -336,18 +336,18 @@ describe('carve migrate — the other importers', () => {
     expect(t.err).toContain('html, markdown, djot or bbcode')
   })
 
-  it('fails closed and reports unverified fidelity for the other formats', async () => {
+  it('passes the loss check for assessed Markdown', async () => {
     const t = makeIO({ stdin: '**bold**\n' })
     const code = await run(
       ['migrate', '--from', 'markdown', '--mode', 'nonsense', '--check-loss', '--report', 'report.json'],
       t.io,
     )
-    expect(code).toBe(1)
+    expect(code).toBe(0)
     expect(t.out).toBe('*bold*\n')
     expect(JSON.parse(t.files['report.json']!)).toMatchObject({
       schemaVersion: 2,
       sourceFormat: 'markdown',
-      diagnostics: [{ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }],
+      diagnostics: [{ code: 'markdown-paragraph', fidelity: 'preserved', confidence: 'exact' }, { code: 'markdown-strong', fidelity: 'preserved', confidence: 'exact' }],
     })
   })
 })

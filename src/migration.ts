@@ -9,6 +9,7 @@ import {
 } from './html-import.js'
 import { markdownToCarveWithLosses, type MarkdownDialect } from './markdown-migrate.js'
 import { assessMarkdown } from './markdown-assessment.js'
+import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 
 export type SourceFormat = 'html' | 'markdown' | 'djot' | 'bbcode'
 export type MigrationFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
@@ -88,23 +89,28 @@ export function migrateMarkdown(
   options: { dialect?: MarkdownDialect } = {},
 ): MigrationResult {
   const result = markdownToCarveWithLosses(source, options.dialect)
-  // The construct-level losses the Markdown importer DOES know about. They sit
-  // beside `fidelity-unverified` rather than replacing it: the importer still
-  // reports nothing about the constructs it has no answer for, so the
-  // conservative worst case still stands for the rest of the document.
-  const fallback = assessed(source, result.value, 'markdown', result.losses.map((loss) => ({
-    code: loss.code,
-    message: loss.message,
-    // `frontmatter-synthesized` records a DECISION between two readings, not a
-    // loss: the mapping is carried over whole. The other codes name something
-    // the conversion could not spell.
-    severity: loss.code === 'frontmatter-synthesized' ? 'info' : 'warning',
-    fidelity: loss.code === 'frontmatter-synthesized' ? 'preserved' : 'dropped',
-    confidence: 'exact',
-  })))
-  if (fallback.report.diagnostics[0]?.code === 'literal-text-verified') return fallback
   const assessment = assessMarkdown(source, result.value)
-  if (assessment.complete && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
+  const taskPaths = assessment.diagnostics.filter(row => row.code === 'structure-unspellable' && row.message === ORDERED_TASK_ITEM_UNSPELLABLE).map(row => row.path)
+  let taskIndex = 0
+  const fallback = assessed(source, result.value, 'markdown', result.losses.map(loss => {
+    const path = loss.message === ORDERED_TASK_ITEM_UNSPELLABLE ? taskPaths[taskIndex++] : undefined
+    return {
+      code: loss.code,
+      message: loss.message,
+      // `frontmatter-synthesized` records a DECISION between two readings, not
+      // a loss: the mapping is carried over whole. The other codes name
+      // something the conversion could not spell.
+      severity: loss.code === 'frontmatter-synthesized' ? 'info' : 'warning',
+      fidelity: loss.code === 'frontmatter-synthesized' ? 'preserved' : 'dropped',
+      confidence: 'exact',
+      ...(path ? { path } : {}),
+    }
+  }))
+  if (fallback.report.diagnostics[0]?.code === 'literal-text-verified') {
+    fallback.report.diagnostics[0].path = 'line:1'
+    return fallback
+  }
+  if (assessment.complete && result.losses.every(loss => loss.message === ORDERED_TASK_ITEM_UNSPELLABLE) && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
     return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: assessment.diagnostics } }
   }
   return fallback

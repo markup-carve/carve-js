@@ -1,4 +1,5 @@
 import { parseFragment } from 'parse5'
+import { domAttrs, domChildren, domData, domTag, domValue, type P5Node } from './html-import-dom.js'
 import { carveToHtml } from './index.js'
 import type { MigrationDiagnostic } from './migration.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
@@ -11,19 +12,22 @@ interface Assessment {
 const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
+type Shape = string | ['comment', string] | [string, [string, string][], Shape[]]
+
 function htmlShape(html: string): string {
-  const visit = (node: any, pre = false): any[] => {
-    if (node.nodeName === '#text') {
-      return [node.value]
-    }
-    if (node.nodeName === '#comment') return [['comment', node.data]]
-    const tag = node.tagName ?? 'root'
-    const children: any[] = (node.childNodes ?? []).flatMap((child: any) => visit(child, pre || tag === 'pre' || tag === 'code'))
-    const layout = (child: any): boolean => typeof child === 'string' && /^[ \t\r\n]*$/.test(child)
-    if (tag === 'section' && (node.childNodes ?? []).some((child: any) => /^h[1-6]$/.test(child.tagName ?? ''))) return children.filter((child: any) => !layout(child))
+  const visit = (node: P5Node): Shape[] => {
+    if (node.nodeName === '#text') return [domValue(node) ?? '']
+    if (node.nodeName === '#comment') return [['comment', domData(node) ?? '']]
+    const tag = domTag(node) ?? 'root'
+    const children = (domChildren(node) ?? []).flatMap(visit)
+    const layout = (child: Shape): boolean => typeof child === 'string' && /^[ \t\r\n]*$/.test(child)
+    if (tag === 'section' && (domChildren(node) ?? []).some(child => /^h[1-6]$/.test(domTag(child) ?? ''))) return children.filter(child => !layout(child))
     const structural = /^(root|ul|ol|li|blockquote|table|thead|tbody|tr)$/.test(tag)
-    const attrs = (node.attrs ?? []).filter((attr: any) => !(attr.name === 'id' && /^h[1-6]$/.test(tag)) && !(attr.name === 'scope' && tag === 'th')).map((attr: any) => [attr.name, attr.value]).sort()
-    return [[tag, attrs, structural ? children.filter((child: any) => !layout(child)) : children]]
+    const attrs: [string, string][] = (domAttrs(node) ?? [])
+      .filter(attr => !(attr.name === 'id' && /^h[1-6]$/.test(tag)) && !(attr.name === 'scope' && tag === 'th'))
+      .map(attr => [attr.name, attr.value])
+    attrs.sort()
+    return [[tag, attrs, structural ? children.filter(child => !layout(child)) : children]]
   }
   return JSON.stringify(visit(parseFragment(html)))
 }
@@ -34,7 +38,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
   const diagnostics: MigrationDiagnostic[] = []
   let complete = true
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
-  const definitions = new Map<string, { destination: string; title?: string }>()
+  const definitions = new Map<string, { destination: string; title: string | undefined }>()
   const labelKey = (label: string): string => label.trim().replace(/[ \t\n]+/g, ' ').toLowerCase()
   for (const line of lines) {
     const definition = /^ {0,3}\[([^\]\n]+)\]:[ \t]+(\S+)(?:[ \t]+"([^"\n]*)")?[ \t]*$/.exec(line)
@@ -56,7 +60,8 @@ export function assessMarkdown(source: string, value: string): Assessment {
       } else if ((match = /^\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/.exec(rest))) {
         emit('escape', line, 'normalized'); result += escape(match[1]!); i += match[0].length
       } else if ((match = /^&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/.exec(rest))) {
-        emit('entity', line, 'normalized'); result += match[0]; i += match[0].length
+        if (domValue(domChildren(parseFragment(match[0]))?.[0]) !== match[0]) emit('entity', line, 'normalized')
+        result += match[0]; i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]*)\]\(([^ ()\n]+)(?:[ \t]+"([^"\n]*)")?\)/.exec(rest))) {
         const image = match[1] === '!'
         const href = match[3]!
@@ -74,7 +79,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
         emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') ? label : `mailto:${label}`
         result += `<a href="${escape(href)}">${escape(label)}</a>`; i += match[0].length
-      } else if ((match = /^(\*\*|__|~~|\*|_)([^\n]+?)\1/.exec(rest)) && !/[*_~]/.test(match[2]!)) {
+      } else if ((match = /^(\*\*|__|~~|\*|_)([^\n]+?)\1/.exec(rest)) && !match[2]!.includes(match[1]![0]!)) {
         const kind = match[1] === '~~' ? 'strikethrough' : match[1]!.length === 2 ? 'strong' : 'emphasis'
         if ((match[1]!.includes('_') && /[\p{L}\p{N}]/u.test(text[i - 1] ?? '')) || /^\s|\s$/.test(match[2]!)) complete = false
         emit(kind, line); const tag = kind === 'strong' ? 'strong' : kind === 'emphasis' ? 'em' : 's'
@@ -163,7 +168,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
           emit('list-item', first + i); const body = match[2]!
           const task = /^\[([ xX])\][ \t]+(.*)$/.exec(body)
           if (task && ordered) {
-            emit('ordered-task', first + i, 'dropped', 'structure-unspellable')
+            if (/^[ \t]*\d{1,9}[.)][ \t]+\[[ xX]\](?=[ \t])/.test(lines[first + i - 1] ?? '')) emit('ordered-task', first + i, 'dropped', 'structure-unspellable')
             html += `<li>${escape(body.slice(0, 3))} ${inline(task[2]!, first + i)}</li>\n`
           } else if (task) {
             emit('bullet-task', first + i)
@@ -182,7 +187,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
       const body: string[] = [line]; i++
       while (i < input.length && input[i]!.trim() !== '' && !/^(?: {0,3}(?:[#>`~]|[-+*][ \t]|\d+[.)][ \t]|\[[^\]]+\]:)| {4})/.test(input[i]!)) body.push(input[i++]!)
       emit('paragraph', n)
-      if (body.some(text => /^ {0,3}\[|\|/.test(text)) || body.some(text => /\t/.test(text))) complete = false
+      if (body.some(text => /\|/.test(text)) || body.some(text => /\t/.test(text))) complete = false
       html += `<p>${inline(body.join('\n').trim(), n)}</p>\n`
     }
     return html
@@ -193,5 +198,5 @@ export function assessMarkdown(source: string, value: string): Assessment {
     try { if (htmlShape(expected) !== htmlShape(carveToHtml(value, { smartTypography: 'source' }))) complete = false }
     catch { complete = false }
   }
-  return { diagnostics: complete ? diagnostics : [], complete }
+  return { diagnostics: complete ? diagnostics : diagnostics.filter(row => row.fidelity === 'dropped'), complete }
 }
