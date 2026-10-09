@@ -1766,6 +1766,8 @@ export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized'
   message: string
   line?: number
+  /** Overrides the code's default, for a reading the importer derived. */
+  confidence?: 'exact' | 'inferred'
 }
 
 let importLosses: MarkdownImportLoss[] = []
@@ -3983,8 +3985,8 @@ function interruptingHtmlBlock(line: string): boolean {
  * thematic break and setext headings - is the meaning-preserving one, and they
  * stay on the thematic-break path guarded at the end of markdownToCarve.
  */
-function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bodyStart: number } {
-  const none = { frontmatter: [], bodyStart: 0 }
+function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bodyStart: number; typedOpener: boolean } {
+  const none = { frontmatter: [], bodyStart: 0, typedOpener: false }
   const opener = lines.length < 2 ? null : RE_MD_FRONTMATTER_OPEN.exec(lines[0]!)
   if (opener === null) return none
   for (let i = 1; i < lines.length; i++) {
@@ -3995,7 +3997,7 @@ function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bo
     // the opener is a delimiter the canonical writer owns: a bare `---` and a
     // spaced `--- toml` both read fine and neither is the canonical spelling.
     frontmatter[0] = canonicalFrontmatterOpener(opener[1] || 'yaml')
-    return { frontmatter, bodyStart: i + 1 }
+    return { frontmatter, bodyStart: i + 1, typedOpener: opener[1] !== '' }
   }
   return none
 }
@@ -4406,9 +4408,18 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     .replace(/\0/g, '\ufffd')
     .replace(/\r\n?/g, '\n')
     .split('\n')
-  const { frontmatter, bodyStart } = splitFrontmatter(allLines)
+  const { frontmatter, bodyStart, typedOpener } = splitFrontmatter(allLines)
   if (frontmatter.length > 0) {
-    importLosses.push({ code: 'frontmatter-synthesized', message: FRONTMATTER_SYNTHESIZED })
+    // A synthesized block starts at line 1, and the confidence follows the
+    // opener: a bare `---` was claimed by the shape test, while a typed one
+    // named its format and is front matter unconditionally under CARVE-P2-030
+    // (markup-carve/carve#2806).
+    importLosses.push({
+      code: 'frontmatter-synthesized',
+      message: FRONTMATTER_SYNTHESIZED,
+      line: 1,
+      confidence: typedOpener ? 'exact' : 'inferred',
+    })
   }
   const removed = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw, (line) =>
     interruptingHtmlBlock(line) || isMarkdownFenceLine(line) || RE_MD_THEMATIC.test(line) ||
