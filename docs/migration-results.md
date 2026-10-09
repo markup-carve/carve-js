@@ -35,6 +35,25 @@ fidelity the HTML importer spends on that row. The row carries no `path` or
 writes a row, so it has no position it could stand behind, and one drop is one
 diagnostic. The `fidelity-unverified` row stays: it still stands for the
 constructs the Markdown importer has no answer for.
+Markdown also reports `frontmatter-synthesized`, preserved/exact, on every
+leading `---` block it carries over as Carve front matter. A BARE `---` block is
+taken only when its content has the SHAPE of a mapping: skipping blank lines and
+`#` comment lines, the first line left has to be, at column 0, a key plus `:`
+and then a space, a tab or the end of the line. A scalar block such as
+CommonMark example 96's `---\nFoo\n---` is a thematic break over setext headings
+instead, and is written as one. The test is a string inspection rather than a
+YAML parse, so the three engines cannot drift apart on an edge case; the cost is
+that malformed content such as `title: [unclosed` still counts as front matter.
+Since the two readings disagree about whether a heading survives, the decision
+is reported rather than left silent.
+
+A TYPED opener - `---yaml`, `---toml`, `---json`, any `frontmatter_format` -
+takes no shape test. The author has said what the block is, and PART 1's "a
+break is a dash run and nothing else" means a typed opener is not a thematic
+break under any reading, so the collision the test resolves cannot arise. A
+typed opener keeps the prior reading, the "at least one non-blank line" check,
+and `---yaml` holding a scalar is front matter whose payload is a scalar.
+
 `Normalized` remains reserved for a future importer that can prove a
 semantics-preserving rewrite from its own applied-operation record.
 

@@ -28,3 +28,15 @@ export const ORDERED_TASK_ITEM_UNSPELLABLE =
  */
 export const LEADING_WHITESPACE_UNSPELLABLE =
   'Dropped whitespace a decoded reference put at the start of a line; Carve spells no leading whitespace on a paragraph'
+
+/**
+ * A leading `---` pair whose content is shaped like a mapping, carried over as
+ * Carve front matter rather than read as a thematic break over setext headings
+ * (markup-carve/carve#2799).
+ *
+ * Reported on every conversion, not only the ambiguous ones: the two readings
+ * differ in whether a heading survives, so a reader checking an import needs to
+ * know which one the importer took.
+ */
+export const FRONTMATTER_SYNTHESIZED =
+  'A leading --- block with mapping-shaped content was carried over as Carve front matter'

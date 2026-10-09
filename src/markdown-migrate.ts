@@ -27,7 +27,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
-import { LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { isTableRow, parse, rawBracketRunCloses } from './parse.js'
 import { canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 
@@ -1754,8 +1754,8 @@ function writeTableRow(
  * vocabulary (docs/migration-results.md). `migrateMarkdown` carries these out
  * as diagnostics; `markdownToCarve` returns the source alone.
  */
-export interface MarkdownImportLoss {
-  code: 'structure-unspellable'
+export type MarkdownImportLoss = {
+  code: 'structure-unspellable' | 'frontmatter-synthesized'
   message: string
 }
 
@@ -3964,27 +3964,70 @@ function interruptingHtmlBlock(line: string): boolean {
  * the closing one as a setext underline, so `description: y` becomes an h2 and
  * the metadata is destroyed.
  *
- * The fence must enclose at least one non-blank line. An empty pair (`---\n---`
- * or `---\n\n---`) carries no metadata, so the CommonMark reading - two
- * thematic breaks - is the meaning-preserving one, and it stays on the
- * thematic-break path guarded at the end of markdownToCarve.
+ * The fence must enclose content shaped like a MAPPING. An empty pair
+ * (`---\n---`), a comment-only one, and a scalar one (CommonMark example 96's
+ * `---\nFoo\n---`) all carry no metadata, so the CommonMark reading - a
+ * thematic break and setext headings - is the meaning-preserving one, and they
+ * stay on the thematic-break path guarded at the end of markdownToCarve.
  */
 function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bodyStart: number } {
   const none = { frontmatter: [], bodyStart: 0 }
-  const open = lines.length < 2 ? null : RE_MD_FRONTMATTER_OPEN.exec(lines[0]!)
-  if (!open) return none
+  const opener = lines.length < 2 ? null : RE_MD_FRONTMATTER_OPEN.exec(lines[0]!)
+  if (opener === null) return none
   for (let i = 1; i < lines.length; i++) {
     if (!RE_MD_FRONTMATTER_CLOSE.test(lines[i]!)) continue
-    const content = lines.slice(1, i)
-    if (!content.some((l) => l.trim() !== '')) return none
+    if (!isMappingShaped(lines.slice(1, i), opener[1]!)) return none
     const frontmatter = lines.slice(0, i + 1)
     // The metadata between the fences is opaque and survives byte-for-byte, but
     // the opener is a delimiter the canonical writer owns: a bare `---` and a
     // spaced `--- toml` both read fine and neither is the canonical spelling.
-    frontmatter[0] = canonicalFrontmatterOpener(open[1] || 'yaml')
+    frontmatter[0] = canonicalFrontmatterOpener(opener[1] || 'yaml')
     return { frontmatter, bodyStart: i + 1 }
   }
   return none
+}
+
+/**
+ * A front matter key: a quoted string, or a run that starts with neither
+ * whitespace nor a character that opens some other YAML or TOML production,
+ * and holds no `:`.
+ */
+const FM_KEY = String.raw`(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s\-\[\{"'#:][^:]*)`
+
+/** `key:` followed by a space, a tab, or the end of the line. */
+const RE_FM_YAML_MAPPING = new RegExp(`^${FM_KEY}:(?:[ \t]|$)`)
+
+/**
+ * Whether the lines between a leading `---` pair have the SHAPE of a mapping,
+ * and so are front matter rather than a thematic break over setext headings
+ * (markup-carve/carve#2799).
+ *
+ * This is a string inspection, deliberately NOT a YAML or TOML parse. A real
+ * parser would disagree with carve-php and carve-rs on edge cases, and the
+ * three engines have to agree byte for byte; a shared regex cannot drift. The
+ * cost is that malformed content such as `title: [unclosed` counts as front
+ * matter here where a parser would reject it. That is the intended trade.
+ *
+ * The test governs the BARE `---` ONLY. A typed opener - `---yaml`, `---toml`,
+ * `---json`, any `frontmatter_format` - says what the block is, so there is
+ * nothing to infer, and PART 1's "a break is a dash run and nothing else"
+ * means it is not a thematic break under any reading. The collision this test
+ * resolves can only happen on a bare `---`, so a typed opener keeps the prior
+ * reading, the "at least one non-blank line" check, and `---yaml` / `Foo` /
+ * `---` is front matter whose payload is a scalar.
+ *
+ * The refinement's TOML spelling - `[` or `key =` - was written for a `---toml`
+ * opener, and the narrowing takes every typed opener off this path, so no
+ * reachable caller is left for it. It is not carried here as a branch that
+ * cannot run: a bare `---` is YAML by convention in every Markdown toolchain
+ * that writes one, and accepting `---` / `[table]` / `---` as front matter
+ * would decide a case the ruling does not name.
+ */
+function isMappingShaped(content: readonly string[], format: string): boolean {
+  if (format !== '') return content.some((line) => line.trim() !== '')
+  const first = content.find((line) => line.trim() !== '' && !line.trimStart().startsWith('#'))
+  if (first === undefined) return false
+  return RE_FM_YAML_MAPPING.test(first)
 }
 
 /**
@@ -4351,6 +4394,9 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     .replace(/\r\n?/g, '\n')
     .split('\n')
   const { frontmatter, bodyStart } = splitFrontmatter(allLines)
+  if (frontmatter.length > 0) {
+    importLosses.push({ code: 'frontmatter-synthesized', message: FRONTMATTER_SYNTHESIZED })
+  }
   const removed = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw, (line) =>
     interruptingHtmlBlock(line) || isMarkdownFenceLine(line) || RE_MD_THEMATIC.test(line) ||
     /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|(?:[-*+]|0{0,8}1[.)])[ \t]+\S|=+[ \t]*$)/.test(line),

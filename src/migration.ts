@@ -94,8 +94,11 @@ export function migrateMarkdown(
   return assessed(source, result.value, 'markdown', result.losses.map((loss) => ({
     code: loss.code,
     message: loss.message,
-    severity: 'warning',
-    fidelity: 'dropped',
+    // `frontmatter-synthesized` records a DECISION between two readings, not a
+    // loss: the mapping is carried over whole. The other codes name something
+    // the conversion could not spell.
+    severity: loss.code === 'frontmatter-synthesized' ? 'info' : 'warning',
+    fidelity: loss.code === 'frontmatter-synthesized' ? 'preserved' : 'dropped',
     confidence: 'exact',
   })))
 }
