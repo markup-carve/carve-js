@@ -19,8 +19,9 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     while (source[attrs.end] === '{') {
       const next = readNative(attrs.end)
       if (!next) break
-      attrs = { end: next.end, source: attrs.source + next.source }
+      attrs = { end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
     }
+    if (attrs.source === '{}') { i = attrs.end - 1; continue }
     let word = i
     if (i > 0 && masked[i - 1] === source[i - 1] && !/[`*_~^\]}>]/.test(source[i - 1]!)) {
       while (word > cursor && masked[word - 1] === source[word - 1] && !/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) word--

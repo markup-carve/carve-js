@@ -42,7 +42,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
           else if (source[at] === '|') return undefined
         }
       }
-      return parts.length ? { end: i + 1, source: `{${parts.join(' ')}}` } : undefined
+      return { end: i + 1, source: `{${parts.join(' ')}}` }
     }
     if (source[i] === '%') {
       let end = i + 1

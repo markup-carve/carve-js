@@ -21,11 +21,36 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
   const readAttributes = nativeAttributeReader(source)
   const attributes = new Map<number, { end: number; source: string }>()
+  const emptyBlockAttributes = new Set<number>()
+  let attributeLineStart = 0, attributeLineEnd = -1, previousAttributeLine = ''
+  let attributePrefixEnd = 0, listAttribute = false
   for (let i = 0; i < source.length; i++) {
-    if (mask[i] !== '{' || !/[.#A-Za-z]/.test(source[i + 1] ?? '')) continue
-    const attrs = readAttributes(i)
+    if (mask[i] !== '{') continue
+    while (attributeLineEnd < i) {
+      if (attributeLineEnd >= 0) {
+        previousAttributeLine = source.slice(attributeLineStart, attributeLineEnd)
+        attributeLineStart = attributeLineEnd + 1
+      }
+      const newline = source.indexOf('\n', attributeLineStart)
+      attributeLineEnd = newline < 0 ? source.length : newline
+      const line = source.slice(attributeLineStart, attributeLineEnd)
+      const prefix = /^[ \t>]*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?/.exec(line)![0]
+      attributePrefixEnd = attributeLineStart + prefix.length
+      listAttribute = /[-*+.)]/.test(prefix)
+    }
+    let attrs = readAttributes(i)
     if (!attrs) continue
+    while (source[attrs.end] === '{') {
+      const next = readAttributes(attrs.end)
+      if (!next) break
+      attrs = { end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
+    }
     attributes.set(i, attrs)
+    if (attrs.source === '{}' && i === attributePrefixEnd &&
+        /^[ \t]*$/.test(source.slice(attrs.end, attributeLineEnd)) &&
+        (listAttribute || attributeLineStart === 0 || previousAttributeLine.trim() === '' || /^\{.*\}$/.test(previousAttributeLine.trim()))) {
+      emptyBlockAttributes.add(i)
+    }
     for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
     i = attrs.end - 1
   }
@@ -156,13 +181,17 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
   let literalPrefix = '\0DJOTLITERAL\0'
   while (source.includes(literalPrefix)) literalPrefix += '\0'
   const literals: string[] = []
+  const bracketCloses = new Set(bracketPairs.map(([, close]) => close))
   const plain = (start: number, end: number): string => {
     let text = ''
     for (let i = start; i < end; i++) {
       const attrs = attributes.get(i)
       if (attrs && attrs.end <= end) {
         text += `${literalPrefix}${literals.length}\0`
-        literals.push(attrs.source)
+        if (attrs.source === '{}') {
+          const span = bracketCloses.has(i - 1) && !literalBrackets.has(i - 1)
+          literals.push(span ? '{}' : emptyBlockAttributes.has(i) ? '%%' : '{%%}')
+        } else literals.push(attrs.source)
         i = attrs.end - 1
         continue
       }

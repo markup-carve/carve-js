@@ -258,7 +258,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   return { source: converted, restore: text => text.replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spaces[Number(index)]!) }
 }
 
-function escapeInvalidAttributeHashes(source: string): string {
+function escapeInvalidDjotAttributes(source: string): string {
   const masked = maskDjotCodeAndDestinations(source).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length))
   const escapes: number[] = []
   for (let i = 0; i < source.length; i++) {
@@ -266,27 +266,10 @@ function escapeInvalidAttributeHashes(source: string): string {
     let slashes = 0
     for (let before = i - 1; before >= 0 && source[before] === '\\'; before--) slashes++
     if (slashes % 2) continue
-    let end = i + 1, quote = '', comment = false, invalid = false
-    for (; end < source.length; end++) {
-      const ch = source[end]!
-      if (ch === '\n' && /^[ \t]*\n/.test(source.slice(end + 1))) break
-      if (quote) {
-        if (ch === '\\' && source[end + 1] !== '\n') end++
-        else if (ch === quote) quote = ''
-        continue
-      }
-      if (masked[end] !== source[end]) { invalid = true; continue }
-      if (ch === '\\') { invalid = true; if (source[end + 1] !== '\n') end++; continue }
-      if (ch === '}') break
-      if (ch === '%') { comment = !comment; continue }
-      if (comment) continue
-      if (ch === '"') { quote = ch; continue }
-      if (ch === '{') break
-      if (ch === '<' || ch === '>') invalid = true
-    }
-    if (source[i + 1] === '#' && (source[end] !== '}' || invalid) ||
-        /^[A-Za-z][A-Za-z0-9_-]*(?:=|})/.test(source.slice(i + 1)) && !readAttributes(source, i)) escapes.push(i)
-    i = Math.max(i, end - (source[end] === '{' ? 1 : 0))
+    const attrs = readAttributes(source, i)
+    if (attrs) { i = attrs.end - 1; continue }
+    if (/[.#% \tA-Za-z]/.test(source[i + 1] ?? '')) { escapes.push(i); continue }
+
   }
   let output = '', cursor = 0
   for (const at of escapes) {
@@ -298,7 +281,6 @@ function escapeInvalidAttributeHashes(source: string): string {
 
 /** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
 function escapePlainDjotText(source: string): string {
-  source = escapeInvalidAttributeHashes(source)
   let masked = maskDjotCodeAndDestinations(source)
   if (source.includes('{')) {
     const chars = masked.split('')
@@ -369,7 +351,7 @@ export function djotToCarve(djot: string): string {
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
-  const normalizedBody = normalizeDjotFootnotes(foldDjotReferences(normalizeDjotFences(normalizeDjotAttributeLines(body))))
+  const normalizedBody = normalizeDjotFootnotes(foldDjotReferences(normalizeDjotFences(normalizeDjotAttributeLines(escapeInvalidDjotAttributes(body)))))
   const headingFolded = foldHeadingContinuations(normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody))))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
   const collapsedChars = collapsedMask.split('')
@@ -467,7 +449,7 @@ function normalizeDjotLinks(source: string): string {
 
 function normalizeDjotAttributeLines(source: string): string {
   if (!source.includes('{')) return source
-  const mask = maskDjotCodeAndDestinations(source)
+  const mask = maskDjotCodeAndDestinations(source).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
   const closes = new Map<number, number>()
   let close: number | undefined
   for (let at = source.length - 1; at >= 0; at--) { if (source[at] === '\n') close = undefined; else if (source[at] === '}') close = at + 1; else if (source[at] === '{' && close !== undefined) closes.set(at, close) }
@@ -759,7 +741,7 @@ function normalizeDjotAutolinks(source: string): string {
     const image = imageAutolinks.has(at) && codeMask[at] === '<'
     if ((!image && mask[at] !== '<') || isDjotEscaped(source, at)) continue
     const body = match[1]!
-    if (!/[^:]@|[A-Za-z]:/.test(body) || (!image && !/[\[\]`|\\]/.test(body) && !(/[^:]@/.test(body) && body.includes(':')))) continue
+    if (!/[^:]@|[A-Za-z]:/.test(body) || (!image && !/[\[\]{}`|\\]/.test(body) && !(/[^:]@/.test(body) && body.includes(':')))) continue
     if (rows[line] && /[|`]/.test(body)) continue
     const label = body.replace(/[!-\/:-@\[-`{-~]/g, value => '\\' + value)
     const destination = /[^:]@/.test(body) ? 'mailto:' + body : body
