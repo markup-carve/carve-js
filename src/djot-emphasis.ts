@@ -4,6 +4,34 @@ import { readAttributes } from './djot-word-attributes.js'
 type Pair = { start: number; openEnd: number; close: number; end: number; kind: string; forced: boolean; children: Pair[]; kinds: Set<string> }
 type Opener = { start: number; end: number; kind: string; forced: boolean }
 
+export const djotStructuralPrefixSteps = { count: 0 }
+
+export function djotStructuralPrefixEnd(line: string): number {
+  let at = 0
+  const spaces = () => {
+    while (line[at] === ' ' || line[at] === '\t') { at++; djotStructuralPrefixSteps.count++ }
+  }
+  do { spaces(); if (line[at] !== '>') break; at++; djotStructuralPrefixSteps.count++ } while (at < line.length)
+  spaces()
+  for (;;) {
+    djotStructuralPrefixSteps.count++
+    const start = at
+    let end = at
+    if ('-*+'.includes(line[end] ?? '\0')) end++
+    else {
+      while (line[end] !== undefined && line[end]! >= '0' && line[end]! <= '9') { end++; djotStructuralPrefixSteps.count++ }
+      if (end === start || line[end] !== '.' && line[end] !== ')') break
+      end++
+    }
+    if (line[end] !== ' ' && line[end] !== '\t') break
+    at = end; spaces()
+    if (line[at] === '[' && ' xX-'.includes(line[at + 1] ?? '\0') && line[at + 2] === ']' && (line[at + 3] === ' ' || line[at + 3] === '\t')) {
+      at += 3; djotStructuralPrefixSteps.count += 3; spaces()
+    }
+  }
+  return at
+}
+
 export function djotEmphasis(source: string, convert: (plain: string) => string): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
   for (let i = 0; i < source.length; i++) {
@@ -35,7 +63,7 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
   const brackets: number[] = []
   const braces: number[] = []
   const bracketPairs: Array<[number, number]> = []
-  let lineStart = 0
+  let lineStart = 0, lineEnd = source.length, structuralEnd = 0, thematicLine = false
   let previousBlank = true, container = false
   let listColumn: number | undefined
   const clear = (from: number): void => {
@@ -44,7 +72,11 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
   for (let i = 0; i < source.length; i++) {
     if (i === lineStart) {
       const end = source.indexOf('\n', i)
-      const line = source.slice(i, end < 0 ? source.length : end).replace(/^(?:[ \t]*>[ ]?)*/, '')
+      lineEnd = end < 0 ? source.length : end
+      const rawLine = source.slice(i, lineEnd)
+      structuralEnd = i + djotStructuralPrefixEnd(rawLine)
+      thematicLine = /^(?:[ \t]*>)*[ \t]*(?:\*[ \t]*){3,}$/.test(rawLine)
+      const line = rawLine.replace(/^(?:[ \t]*>[ ]?)*/, '')
       const indent = /^[ \t]*/.exec(line)![0].length
       if (line.trim() && listColumn !== undefined && indent < listColumn && !/^[ \t]*(?:[-*+] |[0-9]+[.)] )/.test(line)) listColumn = undefined
       const marker = /^[ \t]*(?:[-*+][ \t]|[0-9]+[.)][ \t]|\|)/.test(line)
@@ -71,12 +103,10 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
       continue
     }
     if (ch !== '_' && ch !== '*') continue
-    if (ch === '*' && /^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+(?:\[[ xX-]\][ \t]+)?)*[ \t]*$/.test(source.slice(lineStart, i))) {
-      const end = source.indexOf('\n', i)
-      const line = source.slice(lineStart, end < 0 ? source.length : end)
-      if (/^(?:[ \t]*>)*[ \t]*[ \t]*(?:\*[ \t]*){3,}$/.test(line)) {
-        for (let at = i; at < lineStart + line.length; at++) if (source[at] === '*') structural.add(at)
-        i = lineStart + line.length - 1
+    if (ch === '*' && i <= structuralEnd) {
+      if (thematicLine) {
+        for (let at = i; at < lineEnd; at++) if (source[at] === '*') structural.add(at)
+        i = lineEnd - 1
         continue
       }
       if (/[ \t]/.test(source[i + 1] ?? '')) { structural.add(i); continue }
