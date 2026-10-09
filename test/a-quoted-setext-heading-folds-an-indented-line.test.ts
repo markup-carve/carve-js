@@ -89,8 +89,12 @@ describe('a quoted setext heading folds an indented continuation line', () => {
     // only AT its container's content column, so what this case calls a heading
     // came out inside the paragraph (carve-js#2030, carve-js#2031). Asking only
     // for the rule left that invisible, which is why the heading is asserted now.
+    //
+    // The rule is written one empty quote line below the heading, because `fmt`
+    // sets a heading apart from the block under it (carve-js#2642). The render
+    // asserted below is the same either way.
     const out = markdownToCarve(`> foo\n> ${sp(3)}# bar\n> ---\n`)
-    expect(out).toBe('> foo\n>\n> # bar\n> ---\n')
+    expect(out).toBe('> foo\n>\n> # bar\n>\n> ---\n')
     expect(carveToHtml(out)).toMatch(/<h1[^>]*>bar<\/h1>/)
     expect(carveToHtml(out)).toContain('<hr>')
   })
