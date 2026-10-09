@@ -7206,7 +7206,7 @@ const BRACKET_RESCAN_BUDGET = 8
  * span's opening run up, and from that `[` the run is not there, so it is
  * scanned from itself (carve-js#1815).
  */
-export function buildBracketMap(s: string, outsideOnly = false): BracketClose {
+export function buildBracketMap(s: string, outsideOnly = false, structural?: Set<number>): BracketClose {
   const lastRunStart = s.includes('`') ? lastBacktickRunStarts(s) : new Map<number, number>()
   const closedRunEnd = (j: number, openLen: number): number | undefined =>
     (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
@@ -7241,6 +7241,7 @@ export function buildBracketMap(s: string, outsideOnly = false): BracketClose {
         spans.push([j + openLen, spanEnd])
         j = spanEnd - 1
       } else {
+        structural?.add(-1)
         stack.length = 0
         j += openLen - 1
       }
@@ -7250,13 +7251,16 @@ export function buildBracketMap(s: string, outsideOnly = false): BracketClose {
     // literal, so a `]` inside cannot close a label (carve#403). An unclosed
     // opener is not a comment and is left alone.
     const commentEnd = opaqueEnd(j)
+    if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || s[j + 1] === '%')) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
       continue
     }
     if (ch === '[') {
+      structural?.add(j)
       stack.push(j)
     } else if (ch === ']') {
+      structural?.add(j)
       const open = stack.pop()
       if (open !== undefined) map.set(open, j)
     }
