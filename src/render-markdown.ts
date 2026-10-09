@@ -897,14 +897,14 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return padOutside(renderInlines(node.children, ctx), run.delimiter, run.tag)
     }
     case 'underline':
-      return `<u>${renderInlines(node.children, ctx)}</u>`
+      return `<u${renderHtmlAttrs(node.attrs)}>${renderInlines(node.children, ctx)}</u>`
     case 'subscript':
       // Subscript is NOT strikethrough; mirror super's inline-HTML fallback.
-      return `<sub>${renderInlines(node.children, ctx)}</sub>`
+      return `<sub${renderHtmlAttrs(node.attrs)}>${renderInlines(node.children, ctx)}</sub>`
     case 'superscript':
-      return `<sup>${renderInlines(node.children, ctx)}</sup>`
+      return `<sup${renderHtmlAttrs(node.attrs)}>${renderInlines(node.children, ctx)}</sup>`
     case 'highlight':
-      return `<mark>${renderInlines(node.children, ctx)}</mark>`
+      return `<mark${renderHtmlAttrs(node.attrs)}>${renderInlines(node.children, ctx)}</mark>`
     case 'code':
       return renderCode(stripControls(node.value))
     case 'link':
