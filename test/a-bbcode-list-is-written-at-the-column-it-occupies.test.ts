@@ -56,7 +56,9 @@ describe('a BBCode list is written at the column it occupies', () => {
     const carve = bbcodeToCarve('[list=1]\n[*]a\n[/list]\n[list=1]\n[*]b\n[/list]\n')
 
     expect(carve).toBe('1. a\n\n1) b\n')
-    expect(carveToHtml(carve)).toBe('<ol>\n  <li>a</li>\n</ol>\n<ol>\n  <li>b</li>\n</ol>')
+    expect(carveToHtml(carve)).toBe(
+      '<ol>\n  <li>a</li>\n</ol>\n<ol data-delim=")">\n  <li>b</li>\n</ol>',
+    )
   })
 
   it('keeps three adjacent ordered lists apart', () => {
@@ -65,7 +67,7 @@ describe('a BBCode list is written at the column it occupies', () => {
     )
 
     expect(carve).toBe('1. a\n\n1) b\n\n1. c\n')
-    expect(carveToHtml(carve).match(/<ol>/g)).toHaveLength(3)
+    expect(carveToHtml(carve).match(/<ol[ >]/g)).toHaveLength(3)
   })
 
   it('pairs a nested list with its own closer', () => {

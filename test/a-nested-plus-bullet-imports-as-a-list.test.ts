@@ -19,7 +19,9 @@ describe('a nested plus bullet imports as a list', () => {
     ['+ + a', '<ul><li><ul><li>a</li></ul></li></ul>'],
     ['* + a', '<ul><li><ul><li>a</li></ul></li></ul>'],
     ['1. + a', '<ol><li><ul><li>a</li></ul></li></ol>'],
-    ['1) + a', '<ol><li><ul><li>a</li></ul></li></ol>'],
+    // `data-delim` rides along (PART 10 §12); the whitespace strip above glues
+    // it to the tag name, which is why this row does not read like the others.
+    ['1) + a', '<oldata-delim=")"><li><ul><li>a</li></ul></li></ol>'],
     ['> - + a', '<blockquote><ul><li><ul><li>a</li></ul></li></ul></blockquote>'],
     // Two and three markers deep, and behind a marker of the other kind.
     ['- + + a', '<ul><li><ul><li><ul><li>a</li></ul></li></ul></li></ul>'],

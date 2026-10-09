@@ -111,7 +111,7 @@ describe('a bare-dot ordered item collects no abbreviation definition', () => {
 
   it('the paren delimiter still defines nothing', () => {
     expect(carveToHtml('1) x\n*[A]: d\n\nA here\n')).toBe(
-      '<ol>\n  <li>x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+      '<ol data-delim=")">\n  <li>x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
     )
   })
 

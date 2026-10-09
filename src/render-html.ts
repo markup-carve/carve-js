@@ -1655,16 +1655,17 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const tag = node.ordered ? 'ol' : 'ul'
   // An ordered list emits `type` for alpha/roman dialects and `start` when
-  // it begins at n != 1 (the `)` vs `.` delimiter affects list-splitting,
-  // not the rendered <ol>).
+  // it begins at n != 1. PART 10 §12 adds the authored delimiter, which HTML
+  // has no attribute of its own for, trailing both and only where it is `)`.
   const typeAttr = node.ordered && node.olType ? ` type="${node.olType}"` : ''
   const startAttr = node.ordered && node.start !== undefined && node.start !== 1
     ? ` start="${node.start}"`
     : ''
+  const delimAttr = node.ordered && node.delim === ')' ? ` data-delim="${escapeAttr(node.delim)}"` : ''
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
-  return `${pad}<${tag}${typeAttr}${startAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
+  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(
