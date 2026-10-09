@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Markdown export uses a safe tilde fence for headers and labels containing backticks (carve-js#2655).
+
 - HTML import reports discarded code-span markup, attributes and comments, and removes active subtree text. Pipe-cell line breaks are folded only when writing source (carve-js#2647).
 
 - Formatting preserves literal backslashes in cross-reference targets. Targets with no source spelling are refused (carve-js#2645).

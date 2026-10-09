@@ -296,7 +296,6 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${protectParagraphListMarkers(trimParagraphLines(renderInlines(node.children, ctx)))}\n\n`
     case 'code_block': {
       const content = stripControls(node.content)
-      const fence = safeFence(content, 3)
       // The EFFECTIVE title, not the authored header. An attribute line above the
       // fence overrides a title written in the header, and the HTML target uses
       // the winner - so emitting `node.header` here described the document
@@ -305,6 +304,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // into `attrs`, so that is where the answer already is.
       const effectiveTitle = node.attrs?.keyValues?.['title'] ?? node.header
       const info = markdownFenceInfo(node.lang, effectiveTitle, node.label)
+      const fence = safeFence(content, 3, info.includes('`') ? '~' : '`')
       // The payload is written without its own final break; the break before
       // the closer is the delimiter's. A payload of NO lines writes no line.
       const closerSeparator = content === '' ? '' : '\n'
@@ -312,7 +312,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // that an empty payload line is a newline with another behind it wherever it
       // stands.
       const payload = holdPayloadBlanks(`\n${codeSource(content)}${closerSeparator}`)
-      return `${fence}${info}${payload}${fence}\n\n`
+      const infoSeparator = fence[0] === '~' && info.startsWith('~') ? ' ' : ''
+      return `${fence}${infoSeparator}${info}${payload}${fence}\n\n`
     }
     case 'block_quote': {
       const lines = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx))).split('\n')
@@ -1213,7 +1214,7 @@ function markdownFenceInfo(
   // every consumer ignores what it does not understand, and carve-php was
   // already emitting it (carve#352).
   const grouping =
-    label === undefined || label === '' ? '' : ` [${stripControls(label).replace(/[[\]`]/g, '')}]`
+    label === undefined || label === '' ? '' : ` [${stripControls(label).replace(/[[\]]/g, '')}]`
   // A title needs a LANGUAGE in front of it. In Markdown the info string's first
   // token IS the language, so `` ``` "notes.txt" `` makes a CommonMark reader
   // emit `class="language-&quot;notes.txt&quot;"` -- measured against
@@ -1266,10 +1267,10 @@ function stripPayloadBlanks(text: string): string {
   return out + text.slice(from)
 }
 
-function safeFence(content: string, min: number): string {
+function safeFence(content: string, min: number, marker = '`'): string {
   let longest = 0
-  for (const match of content.matchAll(/`+/g)) longest = Math.max(longest, match[0].length)
-  return '`'.repeat(Math.max(min, longest + 1))
+  for (const match of content.matchAll(marker === '`' ? /`+/g : /~+/g)) longest = Math.max(longest, match[0].length)
+  return marker.repeat(Math.max(min, longest + 1))
 }
 
 function renderCode(content: string): string {
