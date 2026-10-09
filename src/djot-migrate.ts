@@ -438,6 +438,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
   let i = 0
   while (i < s.length) {
     if (s[i] === '\\' && /[!-\/:-@\[-`{-~]/.test(s[i + 1] ?? '')) { i += 2; continue }
+    if (out[i] === '{') { const attrs = readAttributes(src, i); if (attrs) { i = attrs.end; continue } }
     const autolinkEnd = autolinks.get(i)
     if (autolinkEnd !== undefined && autolinkEnd > i) { i = autolinkEnd; continue }
     if (s[i] !== '`') {
