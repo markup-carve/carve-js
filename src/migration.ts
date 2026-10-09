@@ -62,10 +62,11 @@ function assessed(
   value: string,
   sourceFormat: Exclude<SourceFormat, 'html'>,
   known: readonly MigrationDiagnostic[] = [],
+  verifyLiteral = true,
 ): MigrationResult {
   const literal = trimEndMatchingEdges(source.replace(/\r\n?/g, '\n'), (code) => code === 10)
   const written = trimEndMatchingEdges(value, (code) => code === 10)
-  if (known.length === 0 && (literal === '' || /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+)*$/u.test(literal)) && written === literal) {
+  if (verifyLiteral && known.length === 0 && (literal === '' || /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+)*$/u.test(literal)) && written === literal) {
     return { value, report: { schemaVersion: 2, sourceFormat, diagnostics: [{
       code: 'literal-text-verified',
       message: 'Verified the complete input as literal text.',
@@ -76,7 +77,7 @@ function assessed(
   }
   const diagnostics: MigrationDiagnostic[] = [{
     code: 'fidelity-unverified',
-    message: `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
+    message: sourceFormat === 'markdown' ? 'Markdown construct assessment is incomplete.' : `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
     severity: 'warning',
     fidelity: 'dropped',
     confidence: 'fallback',
@@ -89,7 +90,8 @@ export function migrateMarkdown(
   options: { dialect?: MarkdownDialect } = {},
 ): MigrationResult {
   const result = markdownToCarveWithLosses(source, options.dialect)
-  const assessment = assessMarkdown(source, result.value)
+  const supportedDialect = !Object.values(options.dialect ?? {}).some(Boolean)
+  const assessment = supportedDialect ? assessMarkdown(source, result.value) : { complete: false, diagnostics: [] }
   const taskPaths = assessment.diagnostics.filter(row => row.code === 'structure-unspellable' && row.message === ORDERED_TASK_ITEM_UNSPELLABLE).map(row => row.path)
   let taskIndex = 0
   const fallback = assessed(source, result.value, 'markdown', result.losses.map(loss => {
@@ -105,7 +107,7 @@ export function migrateMarkdown(
       confidence: 'exact',
       ...(path ? { path } : {}),
     }
-  }))
+  }), supportedDialect)
   if (fallback.report.diagnostics[0]?.code === 'literal-text-verified') {
     fallback.report.diagnostics[0].path = 'line:1'
     return fallback

@@ -1761,13 +1761,14 @@ export type MarkdownImportLoss = {
 
 let importLosses: MarkdownImportLoss[] = []
 
-/** Report an ordered task item only when the list path reads it as an item. */
-function reportOrderedTask(line: string): void {
-  // cmark-gfm's task extension reaches one marker on this line. A quote or
-  // another list marker before the ordered marker leaves the pair as text.
-  // More than four columns after the marker start indented code in the item.
+/** Whether an ordered task marker reaches the unspellable-item report. */
+export function orderedTaskMarkerIsUnspellable(line: string): boolean {
   const match = /^([ \t]*\d{1,9}[.)][ \t]+)\[[ xX]\](?=[ \t])/.exec(line)
-  if (match === null || itemContentColumn(match[1]!) < columnWidth(match[1]!)) return
+  return match !== null && itemContentColumn(match[1]!) >= columnWidth(match[1]!)
+}
+
+function reportOrderedTask(line: string): void {
+  if (!orderedTaskMarkerIsUnspellable(line)) return
   importLosses.push({
     code: 'structure-unspellable',
     message: ORDERED_TASK_ITEM_UNSPELLABLE,

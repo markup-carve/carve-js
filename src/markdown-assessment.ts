@@ -2,6 +2,7 @@ import { parseFragment } from 'parse5'
 import { domAttrs, domChildren, domData, domTag, domValue, type P5Node } from './html-import-dom.js'
 import { carveToHtml } from './index.js'
 import type { MigrationDiagnostic } from './migration.js'
+import { orderedTaskMarkerIsUnspellable } from './markdown-migrate.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 
 interface Assessment {
@@ -24,7 +25,7 @@ function htmlShape(html: string): string {
     if (tag === 'section' && (domChildren(node) ?? []).some(child => /^h[1-6]$/.test(domTag(child) ?? ''))) return children.filter(child => !layout(child))
     const structural = /^(root|ul|ol|li|blockquote|table|thead|tbody|tr)$/.test(tag)
     const attrs: [string, string][] = (domAttrs(node) ?? [])
-      .filter(attr => !(attr.name === 'id' && /^h[1-6]$/.test(tag)) && !(attr.name === 'scope' && tag === 'th'))
+      .filter(attr => !(attr.name === 'id' && /^h[1-6]$/.test(tag)) && !(attr.name === 'scope' && tag === 'th') && !(attr.name === 'aria-label' && tag === 'input'))
       .map(attr => [attr.name, attr.value])
     attrs.sort()
     return [[tag, attrs, structural ? children.filter(child => !layout(child)) : children]]
@@ -34,7 +35,7 @@ function htmlShape(html: string): string {
 
 /** A bounded grammar proves the constructs it reads; ambiguous syntax remains unassessed. */
 export function assessMarkdown(source: string, value: string): Assessment {
-  if (source.length > 1_000_000) return { diagnostics: [], complete: false }
+  if (new TextEncoder().encode(source).byteLength > 1_000_000) return { diagnostics: [], complete: false }
   const diagnostics: MigrationDiagnostic[] = []
   let complete = true
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
@@ -56,7 +57,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
       if ((match = /^(`{1,64})([\s\S]*?)\1(?!`)/.exec(rest)) && !match[2]!.includes('`')) {
         let body = match[2]!.replace(/\n/g, ' ')
         if (/^ .* $/.test(body) && /[^ ]/.test(body)) body = body.slice(1, -1)
-        emit('code-span', line); result += `<code>${escape(body)}</code>`; i += match[0].length
+        emit('code-span', line); result += `<code>${escape(body)}</code>`; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
       } else if ((match = /^\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/.exec(rest))) {
         emit('escape', line, 'normalized'); result += escape(match[1]!); i += match[0].length
       } else if ((match = /^&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/.exec(rest))) {
@@ -89,11 +90,11 @@ export function assessMarkdown(source: string, value: string): Assessment {
       } else if (rest[0] === '\n') {
         emit('soft-break', line); result += '\n'; line++; i++
       } else if ((match = /^<(?:!--[\s\S]*?--|\/?[A-Za-z][^<>]*|\?[\s\S]*?\?)>/.exec(rest))) {
-        if (/^<\/?(?:section|h[1-6])\b/i.test(match[0])) complete = false
-        emit('raw-html', line, 'degraded', 'raw-preserved'); result += match[0]; i += match[0].length
+        if (/^<\/?(?:section|h[1-6]|input)\b/i.test(match[0])) complete = false
+        emit('raw-html', line, 'degraded', 'raw-preserved'); result += match[0]; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
       } else {
         const char = rest[0]!
-        if ('*_`[\\'.includes(char) || rest.startsWith('~~') || rest.startsWith('https://') || rest.startsWith('http://') || rest.startsWith('www.') || ((i === 0 || !/[\w.+-]/.test(text[i - 1]!)) && /^[\w.+-]+@[\w.-]+\.[A-Za-z]/.test(rest))) { complete = false; return result + escape(rest) }
+        if ('*_`[\\<'.includes(char) || rest.startsWith('~~') || rest.startsWith('https://') || rest.startsWith('http://') || rest.startsWith('www.') || ((i === 0 || !/[\w.+-]/.test(text[i - 1]!)) && /^[\w.+-]+@[\w.-]+\.[A-Za-z]/.test(rest))) { complete = false; return result + escape(rest) }
         result += escape(char); i++
       }
     }
@@ -168,7 +169,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
           emit('list-item', first + i); const body = match[2]!
           const task = /^\[([ xX])\][ \t]+(.*)$/.exec(body)
           if (task && ordered) {
-            if (/^[ \t]*\d{1,9}[.)][ \t]+\[[ xX]\](?=[ \t])/.test(lines[first + i - 1] ?? '')) emit('ordered-task', first + i, 'dropped', 'structure-unspellable')
+            if (orderedTaskMarkerIsUnspellable(lines[first + i - 1] ?? '')) emit('ordered-task', first + i, 'dropped', 'structure-unspellable')
             html += `<li>${escape(body.slice(0, 3))} ${inline(task[2]!, first + i)}</li>\n`
           } else if (task) {
             emit('bullet-task', first + i)
@@ -181,7 +182,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
       if (/^ {0,3}</.test(line) && /^(?: {0,3}<(?:div|table|script|style|pre|!--)(?:[\s>]|$))/i.test(line)) {
         const body: string[] = []
         while (i < input.length && input[i]!.trim() !== '') body.push(input[i++]!)
-        if (body.some(text => /<\/?(?:section|h[1-6])\b/i.test(text))) complete = false
+        if (body.some(text => /<\/?(?:section|h[1-6]|input)\b/i.test(text))) complete = false
         emit('raw-html', n, 'degraded', 'raw-preserved'); html += body.join('\n') + '\n'; continue
       }
       const body: string[] = [line]; i++

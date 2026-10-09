@@ -33,12 +33,41 @@ describe('Markdown construct assessment', () => {
     ])
   })
 
+  it('advances source locations across multiline code spans', () => {
+    const diagnostics = rows('`a\nb` **text**')
+    expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'markdown-code-span', path: 'line:1' }))
+    expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'markdown-strong', path: 'line:2' }))
+  })
+
   it('keeps exact task losses at their source lines', () => {
     const diagnostics = rows('```\ncode\n```\n\n1. [x] done\n2. [ ] next\n')
     expect(diagnostics.filter(row => row.fidelity === 'dropped').map(row => [row.code, row.path])).toEqual([
       ['structure-unspellable', 'line:5'], ['structure-unspellable', 'line:6'],
     ])
     expect(diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(false)
+  })
+
+  it('does not report quoted ordered markers as dropped checkboxes', () => {
+    expect(rows('> 1. [x] done').filter(row => row.code === 'structure-unspellable')).toEqual([])
+    const losses = rows('https://example.org\n\n1. [x] done').filter(row => row.code === 'structure-unspellable')
+    expect(losses).toEqual([expect.objectContaining({ path: 'line:3' })])
+  })
+
+  it('retains the task reach regressions and locates a loss after indented code', () => {
+    for (const source of ['- [x] done\n', '> 1. [x] done\n', '```\n1. [x] done\n```\n', 'para\n2. [x] done\n', '- 1. [x] b\n', '- a\n\n      1. [x] code\n', '1. [x]\n', '1.     [x] code\n', '- a\n\n  > 1. [x] b\n']) {
+      expect(rows(source).filter(row => row.code === 'structure-unspellable'), source).toEqual([])
+    }
+    for (const source of ['- a\n  1. [x] b\n', 'para\n1. [x] done\n', '1. [x] \n', '1. [x]\t\n']) {
+      expect(rows(source).filter(row => row.code === 'structure-unspellable'), source).toHaveLength(1)
+    }
+    const losses = rows('1.     [x] code\n\n1. [x] real\n').filter(row => row.code === 'structure-unspellable')
+    expect(losses).toEqual([expect.objectContaining({ path: 'line:3' })])
+  })
+
+  it('fails closed for opt-in dialects and bounded scanner inputs', () => {
+    expect(migrateMarkdown('hello', { dialect: { highlight: true } }).report.diagnostics[0]?.code).toBe('fidelity-unverified')
+    expect(assessMarkdown('x ' + '<!--'.repeat(240000), 'wrong').complete).toBe(false)
+    expect(assessMarkdown(('**' + 'é'.repeat(100) + '**\n\n').repeat(5000), 'wrong').diagnostics).toEqual([])
   })
 
   it('fails closed for unsupported syntax and altered writer output', () => {
