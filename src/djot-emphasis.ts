@@ -34,10 +34,12 @@ export function djotStructuralPrefixEnd(line: string): number {
 
 export function djotEmphasis(source: string, convert: (plain: string) => string): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
+  const attributes = new Map<number, { end: number; source: string }>()
   for (let i = 0; i < source.length; i++) {
     if (mask[i] !== '{' || !/[.#A-Za-z]/.test(source[i + 1] ?? '')) continue
-    const attrs = readAttributes(source, i)
+    const attrs = readAttributes(source, i, true)
     if (!attrs) continue
+    attributes.set(i, attrs)
     for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
     i = attrs.end - 1
   }
@@ -167,6 +169,13 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
   const plain = (start: number, end: number): string => {
     let text = ''
     for (let i = start; i < end; i++) {
+      const attrs = attributes.get(i)
+      if (attrs && attrs.end <= end) {
+        text += `${literalPrefix}${literals.length}\0`
+        literals.push(attrs.source)
+        i = attrs.end - 1
+        continue
+      }
       const ch = source[i]!
       if (ch === '\\') { text += source.slice(i, Math.min(end, i + 2)); i++; continue }
       if (mask[i] === ch && ((ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {
