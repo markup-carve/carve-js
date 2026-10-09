@@ -372,7 +372,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
         out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
       }
       if (node.caption !== undefined) {
-        out += wrapperLine(trimNonNbsp(renderInlines(node.caption, ctx)), '**', 'strong')
+        out += wrapperLine(renderInlines(node.caption, ctx), '**', 'strong')
       }
       return out
     }
@@ -828,7 +828,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
   // example). The single-newline glue is the standalone figure's shape, not
   // the panel's.
-  return `${target}\n\n${wrapperLine(trimNonNbsp(renderInlines(node.caption, ctx)), '*', 'em')}`
+  return `${target}\n\n${wrapperLine(renderInlines(node.caption, ctx), '*', 'em')}`
 }
 
 function renderFigureTarget(node: Figure, ctx: MarkdownContext): string {
@@ -2330,15 +2330,12 @@ const PAD_SPACE = /^([\p{White_Space}]*)([\s\S]*?)([\p{White_Space}]*)$/u
 function padOutside(inner: string, delimiter: string, tag: string): string {
   const match = PAD_SPACE.exec(inner)
   if (!match) return `${delimiter}${inner}${delimiter}`
-  const [, lead = ''] = match
-  let [, , core = '', trail = ''] = match
-  // A hard break is spelled a backslash then a newline. Moving only the
-  // newline out leaves the backslash escaping the delimiter behind it, so
-  // `**t\**` reads as text with a stray `*`. The backslash belongs to the
-  // break and moves with it.
+  const [, lead = '', core = '', trail = ''] = match
+  // Keep a final hard break inside the HTML wrapper. After a Markdown
+  // closing delimiter it can become a paragraph-final break, which
+  // CommonMark reads as a literal backslash.
   if (trail.startsWith('\n') && /(?:^|[^\\])(?:\\\\)*\\$/.test(core)) {
-    core = core.slice(0, -1)
-    trail = '\\' + trail
+    return lead.includes('\n') ? `${lead}<${tag}>${core}${trail}</${tag}>` : `<${tag}>${inner}</${tag}>`
   }
   if (core !== '') return `${lead}${delimiter}${core}${delimiter}${trail}`
   // Whitespace-only content has no delimiter form; every other inline this
