@@ -93,7 +93,7 @@ export function renderCarveWithConversionReport(
     if (type === 'math' && node.number !== undefined) report('field-unspellable', 'Carve source cannot spell an equation number', 'number')
     for (const [key, child] of Object.entries(node)) {
       if (key === 'pos' || key === 'attrs' || key === 'payload' || key === 'shortCaption') continue
-      stack.push({ value: child, inlineOnly: inlineOnly || key === 'caption' || (type === 'table_cell' && (key === 'children' || key === 'blocks')) })
+      stack.push({ value: child, inlineOnly: type === 'table_cell' && node.span !== undefined ? false : inlineOnly || key === 'caption' || (type === 'table_cell' && (key === 'children' || key === 'blocks')) })
     }
   }
   let output: string | undefined
