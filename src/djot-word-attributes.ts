@@ -7,6 +7,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
   if (!source.includes('{')) return source
   const paired = djotPairedEmphasisOpeners(source)
   const literalBraces = new Map<number, number>()
+  const pairedCloses = new Set(paired.values())
   const escapedBraceCloses = new Set<number>()
   for (const note of source.matchAll(/\[\^[^\]\n]*\]/g)) {
     const at = note.index!
@@ -20,10 +21,11 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     }
   }
   const braceStack: Array<{ begin: number; literal: boolean; spaces: number }> = []
-  let spaces = 0
+  let spaces = 0, lastEscaped = -1
   for (let at = 0; at < source.length; at++) {
     if (/\s/u.test(source[at]!)) spaces++
     if (source[at] === '\\') {
+      lastEscaped = at + 1
       if (source[at + 1] === '{' && masked[at + 1] === '{') braceStack.push({ begin: at, literal: true, spaces })
       else if (source[at + 1] === '}' || source[at + 1] === ']') {
         if (source[at + 1] === '}' && braceStack.at(-1)?.literal) braceStack.pop()
@@ -33,6 +35,10 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
       continue
     }
     if (masked[at] !== source[at]) continue
+    if (source[at] === '}' && '+-=~^*_'.includes(source[at - 1] ?? '\0') && !pairedCloses.has(at + 1)) {
+      literalBraces.set(at, at - 1 === lastEscaped ? at - 2 : at - 1)
+      if (at - 1 === lastEscaped) escapedBraceCloses.add(at)
+    }
     if (source[at] === '{') braceStack.push({ begin: at, literal: false, spaces })
     else if (source[at] === '}') {
       const open = braceStack.pop()
@@ -73,7 +79,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (word < i) {
       let body = convert('x ' + source.slice(word, i)).slice(2).replace(/^\^/, '\\^')
       if (source[i - 1] === ']' && escapedBraceCloses.has(i - 1) && literalBraces.get(i - 1) !== i - 2) body = body.slice(0, -1) + '\\]'
-      output += source.slice(cursor, word) + protect(`${source[word - 1] === ']' ? '{%%}' : ''}[${body}]${attrs.source}`)
+      output += source.slice(cursor, word) + protect(`${source[word - 1] === ']' || source[word - 1] === '^' || source[word - 1] === '!' ? '{%%}' : ''}[${body}]${attrs.source}`)
       cursor = attrs.end
     }
     i = attrs.end - 1

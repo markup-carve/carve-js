@@ -86,6 +86,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       const start = pendingBraces.get(source[i - 1]!)?.pop()
       if (start !== undefined && i > start + 2) {
         validBraces.add(start); validBraceClosers.add(i - 1)
+        if (paired) paired.set(start + 1, i + 1)
         for (const stack of pendingBraces.values()) while (stack.at(-1) !== undefined && stack.at(-1)! > start) stack.pop()
       }
     }
