@@ -5,13 +5,15 @@ import { fromAstJson } from '../src/ast-json.js'
 import { renderMarkdown } from '../src/render-markdown.js'
 
 // PART 11 sections 9a and 11a, rendered against the spec's shared fixture.
-const cases = JSON.parse(
+const specCases = JSON.parse(
   readFileSync(new URL('../spec/tests/fixtures/markdown-writer-targets.json', import.meta.url), 'utf8'),
 ) as { name: string; carve?: string; ast?: unknown; markdown: string }[]
 
+const cases = specCases.concat(JSON.parse(readFileSync(new URL('./fixtures/markdown-link-label-brackets.json', import.meta.url), 'utf8')))
+
 describe('Markdown writer targets fixture', () => {
   it('reads a non-empty fixture', () => {
-    expect(cases.length).toBeGreaterThanOrEqual(3)
+    expect(specCases.length).toBeGreaterThanOrEqual(3)
   })
   for (const c of cases) {
     it(c.name, () => {
