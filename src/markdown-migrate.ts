@@ -27,7 +27,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
-import { FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
+import { FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
@@ -650,6 +650,7 @@ function canonicalFence(body: readonly string[]): string {
 }
 
 function rawInlineHtml(content: string): string {
+  reportRawSpanTrailingWhitespace(content)
   const tickLen = Math.max(1, longestBacktickRun(content) + 1)
   return `${'`'.repeat(tickLen)}${content}${'`'.repeat(tickLen)}{=html}`
 }
@@ -1763,14 +1764,45 @@ function writeTableRow(
  * as diagnostics; `markdownToCarve` returns the source alone.
  */
 export type MarkdownImportLoss = {
-  code: 'structure-unspellable' | 'frontmatter-synthesized'
+  code: 'structure-unspellable' | 'frontmatter-synthesized' | 'raw-span-whitespace-trimmed'
   message: string
   line?: number
   /** Overrides the code's default, for a reading the importer derived. */
   confidence?: 'exact' | 'inferred'
+  /** Overrides the code's default, where the construct survives the text does not. */
+  fidelity?: 'degraded'
 }
 
 let importLosses: MarkdownImportLoss[] = []
+
+/**
+ * The source line the inline run being converted starts on, so a loss found
+ * inside it names a line of the INPUT rather than an index into the folded
+ * array the importer writes from (markup-carve/carve#2792).
+ */
+let inlineRunSourceLine: number | undefined
+
+function reportRawSpanTrailingWhitespace(content: string): void {
+  const run = /[ \t\v\f]+\n/g
+  let match: RegExpExecArray | null
+  while ((match = run.exec(content)) !== null) {
+    const line = inlineRunSourceLine === undefined
+      ? undefined
+      : inlineRunSourceLine + countNewlines(content.slice(0, match.index))
+    importLosses.push({
+      code: 'raw-span-whitespace-trimmed',
+      message: RAW_SPAN_WHITESPACE_TRIMMED,
+      fidelity: 'degraded',
+      ...(line === undefined ? {} : { line }),
+    })
+  }
+}
+
+function countNewlines(s: string): number {
+  let n = 0
+  for (const ch of s) if (ch === '\n') n++
+  return n
+}
 
 /** Whether an ordered task marker reaches the unspellable-item report. */
 export function orderedTaskMarkerIsUnspellable(line: string): boolean {
@@ -4069,6 +4101,7 @@ export function markdownToCarveWithLosses(
   } finally {
     useEmptyDestinationReferences(null)
     importLosses = []
+    inlineRunSourceLine = undefined
   }
 }
 
@@ -4563,6 +4596,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
 
   for (let i = 0; i < lines.length; i++) {
     applyShift()
+    inlineRunSourceLine = sourceLine(i)
     let leftEmptyItem = false
     if (!inCode && emptyMarkerColumn !== null && lines[i]!.trim() !== '') {
       if (prevBlank && indentColumns(lines[i]!) > emptyMarkerColumn) {

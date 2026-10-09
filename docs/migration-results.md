@@ -56,6 +56,25 @@ break under any reading, so the collision the test resolves cannot arise. A
 typed opener keeps the prior reading, the "at least one non-blank line" check,
 and `---yaml` holding a scalar is front matter whose payload is a scalar.
 
+Markdown reports `raw-span-whitespace-trimmed`, warning/degraded/exact, at
+`line:N` for every raw span whose content would end a content line in
+whitespace. CARVE-P2-025 drops a whitespace run at the end of every content
+line and a verbatim run crossing a line break is no exception, so this input:
+
+```markdown
+<a href="foo  
+bar">
+```
+
+reaches the converted source with the two spaces written and reads back without
+them. The loss is `degraded` rather than `dropped` because the span and its text
+survive and the whitespace does not, and it is reported rather than respelled:
+the shape is inline content inside a paragraph, so a raw block would keep the
+bytes at the cost of a different block structure
+(markup-carve/carve#2804). The `line` names the line of the INPUT the importer
+was given. Whitespace a raw span carries anywhere but a line end is not
+reported, because Carve keeps it.
+
 `Normalized` remains reserved for a future importer that can prove a
 semantics-preserving rewrite from its own applied-operation record.
 
