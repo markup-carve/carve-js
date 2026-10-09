@@ -32,6 +32,11 @@ const html = carveToHtml(userInput, {
 })
 ```
 
+With `allowRawHtml: false`, a ```` ```=html ```` block renders as the fenced code
+block it would be with `html` as its language (`<pre><code class="language-html">`
+around the escaped source), and an `{=html}` span renders as escaped text in its
+paragraph. Neither counts as a render loss.
+
 `allowRawHtml: false` is HTML-specific, because HTML is the only target that can
 emit live markup - `--markdown` escapes raw HTML, `--plain` drops it, `--ansi`
 and `--carve` keep it as text. A `Profile` restricts which constructs are allowed

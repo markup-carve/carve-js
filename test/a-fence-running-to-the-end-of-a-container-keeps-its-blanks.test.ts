@@ -23,7 +23,9 @@ describe('a fence running to the end of a container keeps its blank lines', () =
   it('keeps the only blank line in an all-blank raw payload', () => {
     const source = '```=html\n\n```\n\nafter\n'
     expect(carveToHtml(source)).toBe('\n\n<p>after</p>')
-    expect(carveToHtml(source, { allowRawHtml: false })).toBe('\n\n<p>after</p>')
+    expect(carveToHtml(source, { allowRawHtml: false })).toBe(
+      '<pre><code class="language-html">\n</code></pre>\n<p>after</p>',
+    )
     expect(carveToCarve(source)).toBe(source)
   })
 

@@ -22,9 +22,9 @@ describe('an empty raw block owes a line at every host', () => {
     expect(carveToHtml(source)).toBe('<p>a</p>\n\n<p>b</p>')
   })
 
-  it('escaping the payload does not remove the line', () => {
+  it('escaping the payload does not remove the block', () => {
     expect(carveToHtml('a\n\n```=html\n```\n\nb\n', { allowRawHtml: false })).toBe(
-      '<p>a</p>\n\n<p>b</p>',
+      '<p>a</p>\n<pre><code class="language-html"></code></pre>\n<p>b</p>',
     )
   })
 
