@@ -274,10 +274,38 @@ function lcs(a: string[], b: string[]): [number, number][] {
   return pairs
 }
 
+/**
+ * Author-choice fields whose absence spells a value, for REPORTING only.
+ *
+ * A parse records none of these when the author wrote the default
+ * (markup-carve/carve#2828), so a real marker edit pairs an absent field
+ * against a present one. Read literally that prints `delim added (")")` for
+ * what the author experienced as `.` becoming `)`. Filling the default in here
+ * keeps the line readable; `key` is deliberately left alone, because node
+ * identity must stay a question about the bytes in the tree.
+ *
+ * `taskState` is not on the list: its default is a function of `checked`, so
+ * there is no single value to fill in.
+ */
+const DISPLAY_DEFAULTS: Record<string, Record<string, unknown>> = {
+  list: { delim: '.', bulletChar: '-' },
+  thematic_break: { marker: '-' },
+}
+
 /** Describe what differs between two nodes of the same type, in one line. */
 function describe(before: Node, after: Node): string | undefined {
-  const a = new Map(scalars(before))
-  const b = new Map(scalars(after))
+  const defaults = DISPLAY_DEFAULTS[after.type] ?? {}
+  const withDefaults = (node: Node): Map<string, unknown> => {
+    const out = new Map(scalars(node))
+    for (const [name, value] of Object.entries(defaults)) {
+      // Only where the OTHER side spells it: a default filled in on both sides
+      // would report a change on a field neither document mentions.
+      if (!out.has(name) && name in before !== name in after) out.set(name, value)
+    }
+    return out
+  }
+  const a = withDefaults(before)
+  const b = withDefaults(after)
   const parts: string[] = []
   for (const [name, value] of b) {
     if (!a.has(name)) {

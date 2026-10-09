@@ -127,3 +127,39 @@ it('reports short-caption edits at their text child path', () => {
     { kind: 'changed', type: 'text', path: '/children[0]/shortCaption[0]' },
   ])
 })
+
+/*
+ * A MARKER EDIT STILL READS AS A MARKER EDIT (carve#2828).
+ *
+ * A parse records no `delim` for `.` and no `bulletChar` for `-`, so one of the
+ * two sides of a real marker edit carries no field at all. Compared literally
+ * that prints `delim added (")")` for what the author did, which is a tool
+ * whose output got worse because a producer rule changed. `DISPLAY_DEFAULTS`
+ * fills the absent side in for the message only, and both directions are
+ * asserted because filling in one side is the easy half.
+ */
+describe('a default marker reads back in the report', () => {
+  const detail = (before: string, after: string) => diff(before, after).map((c) => c.detail)
+
+  it('names both characters when the default is on the left', () => {
+    expect(detail('1. a\n', '1) a\n')).toEqual(['delim: "." -> ")"'])
+    expect(detail('- a\n', '* a\n')).toEqual(['bulletChar: "-" -> "*"'])
+  })
+
+  it('names both characters when the default is on the right', () => {
+    expect(detail('1) a\n', '1. a\n')).toEqual(['delim: ")" -> "."'])
+    expect(detail('* a\n', '- a\n')).toEqual(['bulletChar: "*" -> "-"'])
+  })
+
+  it('reports nothing for a field neither document spells', () => {
+    // The filled-in default must not become a change of its own: two default
+    // lists differing in their text report the text and nothing else.
+    expect(diff('1. a\n', '1. b\n').map((c) => `${c.type} ${c.detail}`)).toEqual(['text value: "a" -> "b"'])
+    expect(diff('- a\n', '- b\n').map((c) => `${c.type} ${c.detail}`)).toEqual(['text value: "a" -> "b"'])
+  })
+
+  it('still reports no change between two identical documents', () => {
+    expect(formatChanges(diff('1. a\n', '1. a\n'))).toBe('no structural changes\n')
+    expect(formatChanges(diff('- a\n', '- a\n'))).toBe('no structural changes\n')
+  })
+})
