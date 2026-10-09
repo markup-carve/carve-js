@@ -2698,7 +2698,7 @@ function neighbourAfter(parts: string[], i: number): string {
  * (carve-js#1688). An empty run emits nothing rather than a bare separator.
  */
 function wrapperLine(inner: string, delimiter: string, tag: string, suffix = '\n\n'): string {
-  const run = padOutside(inner, delimiter, tag)
+  const run = trimNonNbsp(padOutside(inner, delimiter, tag))
 
   return run === '' ? '' : `${run}${suffix}`
 }
