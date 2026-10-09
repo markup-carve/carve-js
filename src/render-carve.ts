@@ -1141,6 +1141,7 @@ function nearestOfType(nodes: readonly InlineNode[], type: string, scopes?: Weak
         found.push(item as InlineNode)
         continue
       }
+      if ((item as { type?: unknown }).type === 'span' || (item as { type?: unknown }).type === 'link') continue
       // A braced span of another kind starts its own scope (carve#2091), so
       // nothing below it shares a level with the span above.
       if (scopes?.has(item)) continue
@@ -4279,7 +4280,7 @@ class CarveRenderSession {
       case 'image':
         return renderImage(node, renderSession.inlineAttrs(node.attrs, node), ctx.tableCellDepth > 0)
       case 'span':
-        return `[${escapeNoteReferenceLabel(renderSession.renderInlines(node.children, ctx), ctx)}]${renderSession.inlineAttrs(node.attrs, node) || '{}'}`
+        return `[${renderSession.renderLabel(node.children, ctx)}]${renderSession.inlineAttrs(node.attrs, node) || '{}'}`
       case 'ruby': {
         return renderSession.renderInlines(flattenRubyForCarve([node]), ctx)
       }
@@ -4399,16 +4400,19 @@ class CarveRenderSession {
     if (node.ref !== undefined && node.rawRef !== undefined) {
       return node.rawRef
     }
+    const text = this.renderLabel(node.children, ctx)
+    const title = node.title === undefined ? '' : ` "${ctx.tableCellDepth > 0 ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
+    return `[${text}](${escapeDestination(node.href)}${title})${this.inlineAttrs(node.attrs, node)}`
+  }
+
+  private renderLabel(children: InlineNode[], ctx: CarveContext): string {
     const outer = this.labelKinds
     this.labelKinds = new Set([...outer, ...this.openEmphasisKinds])
-    let text: string
     try {
-      text = escapeNoteReferenceLabel(this.renderInlines(node.children, ctx), ctx)
+      return escapeNoteReferenceLabel(this.renderInlines(children, ctx), ctx)
     } finally {
       this.labelKinds = outer
     }
-    const title = node.title === undefined ? '' : ` "${ctx.tableCellDepth > 0 ? escapeQuoted(node.title).replace(/[|`]/g, '\\$&') : escapeQuoted(node.title)}"`
-    return `[${text}](${escapeDestination(node.href)}${title})${this.inlineAttrs(node.attrs, node)}`
   }
 
   /**

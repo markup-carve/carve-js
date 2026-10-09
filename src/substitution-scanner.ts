@@ -11,7 +11,7 @@ export class SubstitutionScanner {
 
   private readonly lastArrow: number
 
-  constructor(private readonly text: string) {
+  constructor(private readonly text: string, private readonly hosts: ReadonlyMap<number, number> = new Map()) {
     this.lastArrow = text.lastIndexOf('~>')
   }
 
@@ -46,7 +46,9 @@ export class SubstitutionScanner {
     const lastEditorial = text.lastIndexOf('#}')
     let disabled = 0
     for (let at = from; at < to; at++) {
-      if (text[at] === '\\') at++
+      const hostEnd = this.hosts.get(at)
+      if (hostEnd !== undefined) at = hostEnd - 1
+      else if (text[at] === '\\') at++
       else if (text[at] === '`') {
         let width = 1
         while (text[at + width] === '`') width++
@@ -87,7 +89,9 @@ export class SubstitutionScanner {
     const nextEvents = new Int32Array(n + 2).fill(points.length - 1)
     let event = points.length - 2
     for (let at = n - 1; at >= 0; at--) {
+      const hostEnd = this.hosts.get(at)
       if (points[event] === at) nextEvents[at] = event--
+      else if (hostEnd !== undefined) nextEvents[at] = nextEvents[hostEnd]!
       else if (text[at] === '\\') nextEvents[at] = nextEvents[at + 2]!
       else if (text[at] === '`') nextEvents[at] = codeEnds![at]! === -1 ? points.length - 1 : nextEvents[codeEnds![at]!]!
       else nextEvents[at] = nextEvents[at + 1]!
