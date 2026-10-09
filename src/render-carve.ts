@@ -38,7 +38,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { codeSource, payloadTerminated } from './verbatim-payload.js'
-import { thematicBreakSpelling } from './thematic-break-marker.js'
+import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
@@ -2760,7 +2760,7 @@ class CarveRenderSession {
     // by every document with frontmatter. Verified by mutation.
     if (ast.frontmatter || !opensFrontmatter(canonicalForm)) return canonicalForm
     const previousMarker = this.thematicBreakMarker
-    this.thematicBreakMarker = '***'
+    this.thematicBreakMarker = FRONTMATTER_SAFE_BREAK
     try {
       const fallback = this.renderOnePass(ast, mode)
       return opensFrontmatter(fallback) ? canonicalForm : fallback
