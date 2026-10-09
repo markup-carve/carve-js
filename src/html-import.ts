@@ -4102,7 +4102,8 @@ class Importer {
         if (child === languageWrapper && lang && !attr.prefix && ((attr.name === 'class' && /[^ \t\r\n\f]/.test(attr.value) && attr.value.split(/[ \t\r\n\f]+/).filter(Boolean).every(token => token === `language-${lang}` || token === `lang-${lang}`)) || (attr.name === 'data-lang' && attr.value.replace(/^[ \t\r\n\f]+|[ \t\r\n\f]+$/g, '') === lang))) continue
         const name = attr.prefix ? `${attr.prefix}:${attr.name}` : attr.name
         const dangerous = isDangerousAttrName(name)
-        this.report.refuseAttribute(child, frame.path, name, ` inside <${context}>: ${description} holds only text`, dangerous ? 'warning' : 'info', dangerous || destinationIsDenied(attr.value))
+        const deniedUrl = ((tag === 'a' && name === 'href') || (tag === 'img' && name === 'src')) && destinationIsDenied(attr.value)
+        this.report.refuseAttribute(child, frame.path, name, ` inside <${context}>: ${description} holds only text`, dangerous || (block && deniedUrl) ? 'warning' : 'info', dangerous || destinationIsDenied(attr.value))
       }
       if (isFlattenedBlock(child) || ['dialog', 'menu', 'search'].includes(tag)) {
         runs.push('')

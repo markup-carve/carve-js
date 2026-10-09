@@ -25,4 +25,16 @@ describe('code block child markup', () => {
       expect(() => htmlToAst('<pre><code>' + '<span>x</span>'.repeat(100) + '</code></pre>', { mode, maxNodes: 10 })).toThrow()
     })
   }
+  it('reports truncated losses for a large highlighted code block', () => {
+    const html = '<pre><code>' + '<span class="token">x</span>'.repeat(600) + '</code></pre>'
+    for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+      const ast = htmlToAst(html, { mode })
+      expect(ast.value.children[0]).toMatchObject({ type: 'code_block', content: 'x'.repeat(600) })
+      for (const result of [ast, htmlToCarve(html, { mode })]) {
+        expect(result.report.diagnostics).toHaveLength(1000)
+        expect(result.report.diagnostics.at(-1)).toMatchObject({ code: 'diagnostics-truncated', severity: 'error' })
+      }
+    }
+  })
+
 })
