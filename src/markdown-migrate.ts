@@ -5393,11 +5393,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (line?.endsWith('---')) out[at] = line.slice(0, -3) + FRONTMATTER_SAFE_BREAK
     }
     const respelled = assemble()
-    if (!opensFrontmatter(respelled)) body = respelled
+    if (!opensFrontmatter(respelled)) body = renderCarve(parse(respelled))
   }
   let output = frontmatter.length === 0
     ? body
-    : body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
+    : body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n\n${body.replace(/^\n+/, '')}`
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
   if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {

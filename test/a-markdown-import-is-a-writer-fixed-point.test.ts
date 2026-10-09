@@ -620,3 +620,18 @@ describe('a Markdown import keeps quoted items and item looseness', () => {
     expect(carveToCarve(out)).toBe(out)
   })
 })
+
+describe('front matter and thematic-break collision imports', () => {
+  it('separates an immediate body from front matter', () => {
+    const out = markdownToCarve('---\ntitle: Hi\n---\nBody\n')
+    expect(out).toBe('---yaml\ntitle: Hi\n---\n\nBody\n')
+    expect(carveToCarve(out)).toBe(out)
+  })
+  it('keeps opt-in attributes when respelling an opening rule', () => {
+    const out = markdownToCarve('---\n- one\n- two\n---\n::: note\n{.kept data-x=payload}\nbody\n:::\n', {
+      fencedDivs: true, attributes: true,
+    })
+    expect(carveToCarve(out)).toBe(out)
+    expect(carveToHtml(out)).toContain('<p class="kept" data-x="payload">body</p>')
+  })
+})

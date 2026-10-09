@@ -199,7 +199,7 @@ describe('tableOfContents extension', () => {
  *
  * The mark is object IDENTITY - `Document.trailerBlocks` holds references to
  * nodes in `children` - and a profile that denies raw HTML REPLACES the node
- * with a paragraph of escaped text. A new object, so the mark pointed at a node
+ * with a code block of escaped text. A new object, so the mark pointed at a node
  * no longer in the tree and the nav went straight back inside the last section:
  * markup-carve/carve-js#728 all over again, reachable only under a profile and
  * invisible to every test that renders without one.
@@ -216,11 +216,11 @@ describe('a bottom TOC stays at document level under a profile', () => {
       '<section id="A">\n' +
         '  <h1>A</h1>\n' +
         '</section>\n' +
-        '<p>&lt;nav class="toc" aria-label="Table of contents"&gt;<br>\n' +
-        '&lt;ul&gt;<br>\n' +
-        '&lt;li&gt;&lt;a href="#A"&gt;A&lt;/a&gt;&lt;/li&gt;<br>\n' +
-        '&lt;/ul&gt;<br>\n' +
-        '&lt;/nav&gt;</p>',
+        '<pre><code class="language-html">&lt;nav class="toc" aria-label="Table of contents"&gt;\n' +
+        '&lt;ul&gt;\n' +
+        '&lt;li&gt;&lt;a href="#A"&gt;A&lt;/a&gt;&lt;/li&gt;\n' +
+        '&lt;/ul&gt;\n' +
+        '&lt;/nav&gt;\n</code></pre>',
     )
   })
 

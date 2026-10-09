@@ -204,7 +204,8 @@ describe('borrowed HTML layout', () => {
     // Pin the accepted population so an empty fast-path sweep cannot pass.
     // Re-derive the accepted set when changing the corpus or fast-path coverage.
     // Plain-space trimming adds corpus 104 and both corpus 268 documents.
-    expect(accepted).toBe(60)
+    // Corpus 549 adds the all-dot ordered-list example.
+    expect(accepted).toBe(61)
   })
 
   it('falls back for normalization-sensitive or stateful shapes', () => {

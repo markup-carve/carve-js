@@ -514,7 +514,7 @@ describe('Profile presets behave per spec', () => {
  */
 const PHP_GOLDEN: { preset: 'full' | 'article' | 'comment' | 'minimal'; src: string; out: string }[] = [
   // --- article: raw block disabled, everything else passes ---
-  { preset: 'article', src: '``` =html\n<b>x</b>\n```', out: '<p>&lt;b&gt;x&lt;/b&gt;</p>' },
+  { preset: 'article', src: '``` =html\n<b>x</b>\n```', out: '<pre><code class="language-html">&lt;b&gt;x&lt;/b&gt;\n</code></pre>' },
   {
     preset: 'article',
     src: '| a | b |\n|---|---|\n| 1 | 2 |',
@@ -541,7 +541,7 @@ const PHP_GOLDEN: { preset: 'full' | 'article' | 'comment' | 'minimal'; src: str
     src: '[home](/home)',
     out: '<p><a href="/home" rel="nofollow ugc">home</a></p>',
   },
-  { preset: 'comment', src: '``` =html\n<b>x</b>\n```', out: '<p>&lt;b&gt;x&lt;/b&gt;</p>' },
+  { preset: 'comment', src: '``` =html\n<b>x</b>\n```', out: '<pre><code class="language-html">&lt;b&gt;x&lt;/b&gt;\n</code></pre>' },
   { preset: 'comment', src: '- one\n- two', out: '<ul>\n  <li>one</li>\n  <li>two</li>\n</ul>' },
   { preset: 'comment', src: '> quoted text', out: '<blockquote><p>quoted text</p></blockquote>' },
   { preset: 'comment', src: '`inline code`', out: '<p><code>inline code</code></p>' },
@@ -564,4 +564,30 @@ describe('Profile golden parity with carve-php', () => {
       expect(carveToHtml(src, { profile: Profile[preset]() })).toBe(out)
     })
   }
+})
+
+describe('denied raw block code fallback', () => {
+  it('keeps the raw block source position', () => {
+    const doc = parse('``` =html\n<b>x</b>\n```\n', { positions: true })
+    const pos = doc.children[0].pos
+    expect(pos).toBeDefined()
+    const filtered = applyProfile(doc, Profile.article()).doc.children[0]
+    expect(filtered.type).toBe('code_block')
+    expect(filtered.pos).toEqual(pos)
+  })
+
+  for (const payload of ['', '\n', '<b>x</b>\n', '<b>x</b>\n\n']) {
+    it(`keeps payload and attributes: ${JSON.stringify(payload)}`, () => {
+      const prefix = '{.kept data-x=payload}\n'
+      const raw = prefix + '``` =html\n' + payload + '```\n'
+      const code = prefix + '``` html\n' + payload + '```\n'
+      expect(carveToHtml(raw, { profile: Profile.article() })).toBe(
+        carveToHtml(code, { profile: Profile.article() }),
+      )
+    })
+  }
+  it('uses paragraph text when code blocks are also denied', () => {
+    const profile = new Profile().denyBlock(['raw_block', 'code_block'])
+    expect(carveToHtml('``` =html\n<b>x</b>\n```\n', { profile })).toBe('<p>&lt;b&gt;x&lt;/b&gt;</p>')
+  })
 })

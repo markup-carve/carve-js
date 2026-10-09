@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'an-ordered-list-carries-its-authored-delimiter',
   'multiple-table-bodies-have-positional-source-metadata',
   'empty-table-bodies-keep-their-source-boundaries',
   'a-table-with-no-bodies-keeps-its-head-and-foot',
@@ -959,17 +960,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  [
-    '31-ordered-list-start-and-delimiter-2',
-    {
-      reason:
-        'markup-carve/carve#2796: PART 10 §12 carries the authored `)` as `data-delim`, ' +
-        'and the pinned golden predates the clause.',
-      html: '<ol data-delim=")">\n  <li>one</li>\n  <li>two</li>\n</ol>',
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
 
 
 

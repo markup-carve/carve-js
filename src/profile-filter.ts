@@ -18,7 +18,7 @@
  * `replaceChildNode()` semantics.
  */
 
-import { codeLines, codeTerminated } from './verbatim-payload.js'
+import { codeContent, codeLines, codeTerminated, verbatimLines } from './verbatim-payload.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import type {
@@ -26,6 +26,7 @@ import type {
   BlockNode,
   Document,
   InlineNode,
+  RawBlock,
   Text,
 } from './ast.js'
 import {
@@ -497,6 +498,17 @@ class ProfileFilter {
         throw new ProfileViolationError(this.violations)
       case Profile.ACTION_TO_TEXT:
       default:
+        if (node.type === 'raw_block' && slot.block && profile.isTypeAllowed('code_block', true)) {
+          const raw = node as unknown as RawBlock
+          this.replaceAt(slot, {
+            type: 'code_block',
+            lang: raw.format,
+            content: codeContent(verbatimLines(raw.content), true),
+            ...(raw.attrs ? { attrs: raw.attrs } : {}),
+            ...(raw.pos ? { pos: raw.pos } : {}),
+          } as unknown as NodeLike)
+          return
+        }
         this.convertToText(node, slot)
         return
     }
