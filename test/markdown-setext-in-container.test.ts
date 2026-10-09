@@ -172,12 +172,24 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
 
   it('does not fold an underline onto a heading it already wrote', () => {
     // CommonMark reads: <blockquote>\n<h1>T</h1>\n<p>===</p>\n</blockquote>
-    expect(markdownToCarve('> T\n> ===\n> ===\n')).toBe('> # T\n> ===\n')
+    //
+    // The second `===` stays a PARAGRAPH, which is what this case is about. It
+    // is written one empty quote line below the heading, because `fmt` sets a
+    // heading apart from the block under it (carve-js#2642); the render is the
+    // same either way, which the assertion below states.
+    const out = markdownToCarve('> T\n> ===\n> ===\n')
+    expect(out).toBe('> # T\n>\n> ===\n')
+    expect(carveToHtml(out)).toBe('<blockquote>\n  <h1 id="T">T</h1>\n  <p>===</p>\n</blockquote>')
   })
 
   it('does not fold an underline onto an authored ATX heading', () => {
     // CommonMark reads: <blockquote>\n<h1>T</h1>\n<p>===</p>\n</blockquote>
-    expect(markdownToCarve('> # T\n> ===\n')).toBe('> # T\n> ===\n')
+    //
+    // As above: `===` stays a paragraph, and the heading takes the separator
+    // `fmt` writes below it (carve-js#2642).
+    const out = markdownToCarve('> # T\n> ===\n')
+    expect(out).toBe('> # T\n>\n> ===\n')
+    expect(carveToHtml(out)).toBe('<blockquote>\n  <h1 id="T">T</h1>\n  <p>===</p>\n</blockquote>')
   })
 
   it('leaves the first line of a fenced code block a quote holds', () => {

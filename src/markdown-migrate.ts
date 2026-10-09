@@ -1679,6 +1679,9 @@ const RE_TABLE_DELIMITER = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$/
  */
 const RE_MD_THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 
+/** An ATX heading line, as the writer emits it: the marker run at column 0. */
+const RE_ATX_HEADING = /^#{1,6}(?:[ \t]|$)/
+
 /**
  * A setext underline: a run of `=` or `-` with only spaces or tabs around it
  * (CommonMark 4.3); a form feed or a no-break space after the run leaves the
@@ -3319,10 +3322,14 @@ function respellQuotedBlocks(
     // its own, so `fmt` sets what follows it apart too, and the rule above
     // reaches only the paragraph ABOVE one - so the import carried a separator
     // on one side and failed this engine's own `fmt --check` (carve-js#2633).
-    // Asked of the EMITTED lines, since the source's own spelling of a break
-    // can be read back as paragraph text. A break the quote's list item holds
-    // is indented past the content column and stays tight, which is where a
-    // bare separator would make the list loose.
+    // A HEADING is such a block too, and had the same half-written boundary
+    // (carve-js#2642).
+    //
+    // Asked of the EMITTED lines, since neither construct need be spelled that
+    // way in the source: a Markdown `***` can be read back as paragraph text,
+    // and a setext underline reaches here already written as `# h`. A block the
+    // quote's list item holds is indented past the content column and stays
+    // tight, which is where a bare separator would make the list loose.
     if (
       part.continued !== true &&
       indentColumns(text) === 0 &&
@@ -3330,7 +3337,7 @@ function respellQuotedBlocks(
       prev !== undefined &&
       prev.prefix === part.prefix &&
       indentColumns(prev.text) === 0 &&
-      RE_MD_THEMATIC.test(prev.text)
+      (RE_MD_THEMATIC.test(prev.text) || RE_ATX_HEADING.test(prev.text))
     ) separate(part.prefix)
     out.push({ prefix: part.prefix, text, continued: part.continued })
     // A fence on the item's own line holds the lines up to its closer.
