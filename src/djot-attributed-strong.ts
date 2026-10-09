@@ -8,7 +8,7 @@ export function attributedDjotStrong(source: string, masked: string, convert: (b
   const pattern = new RegExp(String.raw`(?<![\\*])\*(?![\s*])([^*\n{}]+)(${attribute})([^*\n{}]*)(?<!\s)\*(?!\*)`, 'gu')
   let token = '\x00DJOTATTR\x00'
   while (source.includes(token)) token += '\x00'
-  return source.replace(pattern, (whole: string, before: string, attrs: string, after: string, offset: number) => {
+  return source.replace(pattern, (whole: string, before: string, _attrs: string, after: string, offset: number) => {
     if (masked[offset] !== '*' || masked[offset + whole.length - 1] !== '*' || /\\$/.test(after)) return whole
     const normalized = readNative(offset + 1 + before.length)
     if (!normalized) return whole
