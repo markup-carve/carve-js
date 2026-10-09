@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { markdownToCarve } from '../src/markdown-migrate.js'
-import { carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml } from '../src/index.js'
 
 /**
  * A setext heading inside a block quote or a list item has to migrate as a
@@ -147,9 +147,16 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
 
   it('leaves two thematic breaks in a quote as two rules', () => {
     // CommonMark reads: <blockquote>\n<hr />\n<hr />\n</blockquote> - `***`
-    // over `---` is two rules, not an h2 titled `***`.
+    // over `---` is two rules, not an h2 titled `***`, which is what the HTML
+    // below holds and what this case is about.
+    //
+    // The two rules are written one empty quote line apart, because `fmt` sets
+    // a break apart from the block under it (carve-js#2633). This used to read
+    // `> ---\n> ---\n`, which the writer did not endorse: it was not a fixed
+    // point of this engine's own formatter.
     const out = markdownToCarve('> ***\n> ---\n')
-    expect(out).toBe('> ---\n> ---\n')
+    expect(out).toBe('> ---\n>\n> ---\n')
+    expect(carveToCarve(out)).toBe(out)
     expect(carveToHtml(out)).toBe('<blockquote>\n  <hr>\n  <hr>\n</blockquote>')
   })
 
