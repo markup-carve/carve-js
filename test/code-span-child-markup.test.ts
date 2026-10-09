@@ -53,6 +53,30 @@ describe('code span child markup losses', () => {
       expect(() => convert(html, { maxNodes: 3 })).toThrow()
     }
   })
+  it('charges template content against both limits', () => {
+    const html = '<p><code><template><b>x</b></template>word</code></p>'
+    expect(() => htmlToAst(html, { maxNodes: 5 })).toThrow()
+    expect(() => htmlToAst(html, { maxDepth: 4 })).toThrow()
+    expect(() => htmlToAst(html, { maxNodes: 6, maxDepth: 5 })).not.toThrow()
+  })
+  it('keeps footnote-looking text inside code and names source elements', () => {
+    const html = '<p><code>x<sup><a href="#fn1" role="doc-noteref">1</a></sup></code></p><section role="doc-endnotes"><ol><li id="fn1"><p>note</p></li></ol></section>'
+    const result = htmlToCarve(html)
+    expect(carveToHtml(result.value)).toContain('<code>x1</code>')
+    expect(result.report.diagnostics.every(d => !d.message.includes('carve-footnote-ref'))).toBe(true)
+    expect(result.report.diagnostics.filter(d => d.path?.startsWith('/p[1]/code[1]/')).map(d => d.code)).toEqual([
+      'element-unwrapped', 'element-unwrapped', 'attribute-dropped', 'attribute-dropped',
+    ])
+  })
+  it('does not report a table fold for discarded active payload', () => {
+    const result = htmlToCarve('<table><tr><td><code><script>x\ny</script>word</code></td></tr></table>')
+    expect(result.report.diagnostics.map(d => d.code)).toEqual(['element-dropped'])
+  })
+  it('preserves code-span line breaks in AST table cells', () => {
+    const result = htmlToAst('<table><tr><td><code>x\ny</code></td></tr></table>')
+    expect(result.report.diagnostics).toEqual([])
+    expect(JSON.stringify(result.value)).toContain('"value":"x\\ny"')
+  })
   it('a code span line break in a pipe cell stays in the table and is reported', () => {
     const result = htmlToCarve('<table><tr><td><code>x\ny</code></td></tr></table>')
     expect(result.report.diagnostics.some(d => d.code === 'structure-unspellable')).toBe(true)
