@@ -298,7 +298,18 @@ function escapeInvalidAttributeHashes(source: string): string {
 /** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
 function escapePlainDjotText(source: string): string {
   source = escapeInvalidAttributeHashes(source)
-  const masked = maskDjotCodeAndDestinations(source)
+  let masked = maskDjotCodeAndDestinations(source)
+  if (source.includes('{')) {
+    const chars = masked.split('')
+    for (let at = 0; at < source.length; at++) {
+      if (chars[at] !== '{' || isDjotEscaped(source, at)) continue
+      const attrs = readAttributes(source, at)
+      if (!attrs) continue
+      for (let i = at; i < attrs.end; i++) if (chars[i] !== '\n') chars[i] = ' '
+      at = attrs.end - 1
+    }
+    masked = chars.join('')
+  }
   let output = ''
   let plain = ''
   for (let i = 0; i < source.length; i++) {

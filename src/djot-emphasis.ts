@@ -42,17 +42,18 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
     i = attrs.end - 1
   }
   const validBraces = new Set<number>(), pendingBraces = new Map<string, number[]>()
-  let braceLineStart = 0
+  let braceLineStart = 0, lastEscaped = -1
   for (let i = 0; i < source.length; i++) {
     if (source[i] === '\n') {
       if (source.slice(braceLineStart, i).replace(/^(?:[ \t]*>)*[ \t]*/, '').trim() === '') pendingBraces.clear()
       braceLineStart = i + 1
     }
-    if (mask[i] !== source[i] || isDjotEscaped(source, i)) continue
+    if (mask[i] !== source[i]) continue
+    if (source[i] === '\\' && source[i + 1] !== '\n') { lastEscaped = i + 1; i++; continue }
     if (source[i] === '{' && '+-=^~'.includes(source[i + 1] ?? '\0')) {
       const kind = source[i + 1]!, stack = pendingBraces.get(kind) ?? []
       stack.push(i); pendingBraces.set(kind, stack)
-    } else if (source[i] === '}' && '+-=^~'.includes(source[i - 1] ?? '\0')) {
+    } else if (source[i] === '}' && i - 1 !== lastEscaped && '+-=^~'.includes(source[i - 1] ?? '\0')) {
       const start = pendingBraces.get(source[i - 1]!)?.pop()
       if (start !== undefined && i > start + 2) validBraces.add(start)
     }
@@ -150,6 +151,14 @@ export function djotEmphasis(source: string, convert: (plain: string) => string)
     if (contexts.get(start) !== contexts.get(end)) {
       literalBrackets.add(start)
       literalBrackets.add(end)
+    }
+  }
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\\') { i++; continue }
+    if (mask[i] === '{' && '+-=^~_*'.includes(source[i + 1] ?? '\0') && !validBraces.has(i) && !starts.has(i)) {
+      if (i > 0 && source[i - 1] === '`' && mask[i - 1] === ' ' && /^\{=[^\s{}`]+\}/.test(source.slice(i))) continue
+      literalBrackets.add(i)
+      literalBrackets.add(i + 1)
     }
   }
   let literalPrefix = '\0DJOTLITERAL\0'

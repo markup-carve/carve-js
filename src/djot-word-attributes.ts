@@ -47,6 +47,7 @@ export function readAttributes(source: string, start: number): { end: number; so
       while (i < source.length && !/[\s{}%"'=<>]/u.test(source[i]!)) i++
       if (i === from) return undefined
       const value = source.slice(from, i)
+      if (kind === '#' ? /[\]\[~!@#$%^&*(){}`,.<>\\|=+/?\s]/u.test(value) : !/^[A-Za-z0-9_:-]+$/.test(value)) return undefined
       parts.push(/^[A-Za-z0-9_][\w-]*$/.test(value) ? kind + value : `${kind === '#' ? 'id' : 'class'}=${quoteValue(value)}`)
     } else {
       const key = /^[A-Za-z][A-Za-z0-9_-]*=/.exec(source.slice(i))

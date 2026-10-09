@@ -715,7 +715,18 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   // `masked`, so the captured content for a suggestion is sliced from
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
-  const masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode)
+  let masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode)
+  if (nativeDjotCode && norm.includes('{')) {
+    const chars = masked.split('')
+    for (let at = 0; at < norm.length; at++) {
+      if (chars[at] !== '{' || isDjotEscaped(norm, at)) continue
+      const attrs = readAttributes(norm, at)
+      if (!attrs) continue
+      for (let i = at; i < attrs.end; i++) if (chars[i] !== '\n') chars[i] = ' '
+      at = attrs.end - 1
+    }
+    masked = chars.join('')
+  }
   // A `+ ` line carrying a pipe is ambiguous by text alone: without a table
   // above it, it is a Djot bullet that degrades to prose in Carve; after a
   // table row, it is Carve's native continuation-row syntax. Ask the parser
