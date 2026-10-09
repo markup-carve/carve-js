@@ -169,18 +169,9 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       continue
     }
     if (mask[i] !== ch) continue
-    if (ch === '{' && validBraces.has(i)) {
-      braces.push(i)
-      continue
-    }
-    if (ch === '}' && braces.at(-1) !== undefined && source[i - 1] === source[braces.at(-1)! + 1]) {
-      clear(braces.pop()!)
-      continue
-    }
-    if (ch === '[') {
-      brackets.push(i)
-      continue
-    }
+    if (ch === '{' && validBraces.has(i) && !'_*'.includes(source[i + 1] ?? '\0')) { braces.push(i); continue }
+    if (ch === '}' && !isDjotEscaped(source, i - 1) && braces.at(-1) !== undefined && source[i - 1] === source[braces.at(-1)! + 1]) { clear(braces.pop()!); continue }
+    if (ch === '[') { brackets.push(i); continue }
     if (ch === ']') {
       const start = brackets.pop()
       if (start !== undefined) {
