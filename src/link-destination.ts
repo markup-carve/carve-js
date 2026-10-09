@@ -69,7 +69,7 @@ export function linkDestinationValue(run: string): string | null {
   return scanned.dest
 }
 
-export const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)/
+export const RE_LINK_REST = /^(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')?\)/
 
 const RE_LINK_REST_STICKY = new RegExp(RE_LINK_REST.source.slice(1), 'y')
 
