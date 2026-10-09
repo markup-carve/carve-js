@@ -2054,8 +2054,11 @@ function escapeAutolinkHref(text: string): string {
   return text.replace(/[\\<>]/g, '\\$&')
 }
 
-function escapeCrossrefTarget(text: string): string {
-  return text.replace(/[\\>]/g, '\\$&')
+function spellCrossrefTarget(text: string): string {
+  if (text === '' || /[> \t\r\n\0]/.test(text)) {
+    throw new SourceUnspellableError('heading_ref', 'an empty target or a target with a closer or whitespace has no Carve source spelling')
+  }
+  return text
 }
 
 function holdsHardBreak(nodes: readonly unknown[]): boolean {
@@ -4379,7 +4382,7 @@ class CarveRenderSession {
         }
         return `{#${node.text}#}`
       case 'heading_ref':
-        return `</#${escapeCrossrefTarget(node.target)}>`
+        return `</#${spellCrossrefTarget(node.target)}>`
       case 'caption_number':
         return '#'
       case 'citation_group': {
