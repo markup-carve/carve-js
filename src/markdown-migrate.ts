@@ -3315,6 +3315,23 @@ function respellQuotedBlocks(
       opensParagraph(prev.text.replace(RE_LIST_MARKER, '')) &&
       opensAtTheContentColumn(text)
     ) separate(part.prefix)
+    // The same boundary on the OTHER side of a break. A break is a block of
+    // its own, so `fmt` sets what follows it apart too, and the rule above
+    // reaches only the paragraph ABOVE one - so the import carried a separator
+    // on one side and failed this engine's own `fmt --check` (carve-js#2633).
+    // Asked of the EMITTED lines, since the source's own spelling of a break
+    // can be read back as paragraph text. A break the quote's list item holds
+    // is indented past the content column and stays tight, which is where a
+    // bare separator would make the list loose.
+    if (
+      part.continued !== true &&
+      indentColumns(text) === 0 &&
+      text.trim() !== '' &&
+      prev !== undefined &&
+      prev.prefix === part.prefix &&
+      indentColumns(prev.text) === 0 &&
+      RE_MD_THEMATIC.test(prev.text)
+    ) separate(part.prefix)
     out.push({ prefix: part.prefix, text, continued: part.continued })
     // A fence on the item's own line holds the lines up to its closer.
     const lead = asText ? null : quotedItemLead(part.text)
@@ -5214,6 +5231,21 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       if (prevType !== 'blank' && prevType !== 'block_quote' && out.length > 0) out.push('')
       breakLines.add(out.length)
       out.push(containerPad + '> '.repeat(depth) + '---')
+      // `fmt` sets the block under the break apart from it, and inside a quote
+      // that separator is the quote's own markers: a bare blank would end the
+      // quote and split it in two (carve-js#2633). Only when a line follows
+      // inside a quote at all: a blank one below needs nothing, and a line
+      // that leaves the quote altogether is separated by the source's blank.
+      const below = i + 1 < lines.length
+        ? lines[i + 1]!.match(/^ {0,3}((?:>[ \t]?){1,})(.*)$/)
+        : null
+      // Between two quote depths the separator carries the SHALLOWER one, the
+      // way the writer's own separator does: markers the deeper quote does not
+      // hold would reopen it.
+      if (below !== null && below[2]!.trim() !== '') {
+        const shallower = Math.min(depth, (below[1]!.match(/>/g) ?? []).length)
+        out.push(containerPad + '> '.repeat(shallower).trimEnd())
+      }
       prevType = 'block_quote'
       continue
     }
