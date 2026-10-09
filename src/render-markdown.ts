@@ -990,10 +990,11 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
         const display = node.href.startsWith('mailto:') ? node.href.slice(7) : label
         return escapeText(stripControls(display))
       }
+      const renderedLabel = withinLink(() => escapeText(label))
       const destination = markdownDestination(node.href)
       destinationDenied(ctx.options, 'autolink', 'markdown', deniedProbeInput(node.href), destination, node.pos)
       const title = node.attrs?.keyValues?.title
-      return title === undefined ? `[${label}](${destination})` : `[${label}](${destination} "${escapeMdTitle(title)}")`
+      return title === undefined ? `[${renderedLabel}](${destination})` : `[${renderedLabel}](${destination} "${escapeMdTitle(title)}")`
     }
     case 'mention':
       return `@${stripControls(node.user)}`
@@ -1071,24 +1072,22 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // opening tag once this Markdown is rendered, so the target takes the
       // HTML pass while the writer's own delimiters stay literal (carve-js#894).
       if (!node.href) return `</#${escapeMdHtml(stripControls(node.target))}>`
-      // IN THE LINK CONTEXT, always: the display text either lands inside this
-      // crossref's own Markdown link below, or inside an enclosing one. Either
-      // way a link cloned in from the target heading may not nest, and the
-      // resolver no longer unwraps the clone before the renderer sees it
-      // (PART 12 §3a, markup-carve/carve#817).
+      // Suppress links cloned from the target even when the reference renders
+      // as plain text (PART 12 §3a, markup-carve/carve#817). Label escaping
+      // follows the brackets this writer emits.
       // Same expansion budget the abbreviation arm spends, degrading to the
       // authored target (markup-carve/carve-js#892). See abbr-budget.ts.
+      const crossrefId = fragmentId(node.href)
+      const crossrefSlug = crossrefId === undefined ? undefined : ctx.headingSlugs.get(crossrefId)
       const crossrefText =
         ctx.abbrBudget.chargeRenderedLabel(node.resolvedText, () =>
-          withinLink(() => renderInlines(node.resolvedText ?? [], ctx)),
-        ) ?? escapeText(node.target)
+          withinLink(() => renderInlines(node.resolvedText ?? [], ctx), crossrefSlug !== undefined),
+        ) ?? withinLink(() => escapeText(node.target), crossrefSlug !== undefined)
       // Inside a link's text, and for a target this format cannot anchor: the
       // display text alone. Markdown can carry `{#id}` on a heading and
       // nothing else, so a crossref to a figure or a table renders as the
       // words it resolved to - the same rule `renderLink` applies to an
       // ordinary `#fragment` link.
-      const crossrefId = fragmentId(node.href)
-      const crossrefSlug = crossrefId === undefined ? undefined : ctx.headingSlugs.get(crossrefId)
       if (insideLink || crossrefSlug === undefined) return crossrefText
       // Resolved: the Markdown link this crossref always rendered as. The
       // authored `</#target>` stays in the tree (PART 12 §3a); only this
@@ -1125,14 +1124,18 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
 
 /** See the note on the same pair in render-html.ts. */
 let insideLink = false
+let insideLabel = false
 
-function withinLink<T>(fn: () => T): T {
+function withinLink<T>(fn: () => T, label = true): T {
   const previous = insideLink
+  const previousLabel = insideLabel
   insideLink = true
+  insideLabel ||= label
   try {
     return fn()
   } finally {
     insideLink = previous
+    insideLabel = previousLabel
   }
 }
 
@@ -1526,7 +1529,7 @@ function escapeText(text: string): string {
   // the one-tilde form, which pulldown-cmark does.
   text = text.replace(/[\\`*_~[\]#]/g, (ch) => {
     if (ch === '#') return positionalHash()
-    if (ch === '[' && insideLink) return '\\['
+    if (ch === '[' && insideLabel) return '\\['
 
     return NARROWED_SENTINEL[ch] ?? `\\${ch}`
   })
@@ -1556,7 +1559,7 @@ function escapeText(text: string): string {
     .replace(/<$/, CONTEXT_SENTINEL['<']!)
     .replace(/!$/, CONTEXT_SENTINEL['!']!)
   const openReference = new RegExp(`&((?:${hash}(?:[0-9]{0,7}|[xX][0-9a-fA-F]{0,6})|[A-Za-z][A-Za-z0-9]*)?)$`)
-  if (!insideLink) text = autolinkCarriers(text)
+  if (!insideLabel) text = autolinkCarriers(text)
 
   return text.replace(openReference, `${CONTEXT_SENTINEL['&']}$1`)
 }
