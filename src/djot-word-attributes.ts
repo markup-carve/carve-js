@@ -6,6 +6,28 @@ export { readAttributes, nativeAttributeReader } from './djot-attributes.js'
 export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string): string {
   if (!source.includes('{')) return source
   const paired = djotPairedEmphasisOpeners(source)
+  const literalBraces = new Map<number, number>()
+  const escapedBraceCloses = new Set<number>()
+  const braceStack: Array<{ begin: number; literal: boolean; spaces: number }> = []
+  let spaces = 0
+  for (let at = 0; at < source.length; at++) {
+    if (/\s/u.test(source[at]!)) spaces++
+    if (source[at] === '\\') {
+      if (source[at + 1] === '{' && masked[at + 1] === '{') braceStack.push({ begin: at, literal: true, spaces })
+      else if (source[at + 1] === '}') {
+        if (braceStack.at(-1)?.literal) braceStack.pop()
+        literalBraces.set(at + 1, at); escapedBraceCloses.add(at + 1)
+      }
+      at++
+      continue
+    }
+    if (masked[at] !== source[at]) continue
+    if (source[at] === '{') braceStack.push({ begin: at, literal: false, spaces })
+    else if (source[at] === '}') {
+      const open = braceStack.pop()
+      if (open?.literal && open.spaces === spaces) literalBraces.set(at, open.begin)
+    }
+  }
   let output = '', cursor = 0
   const readNative = nativeAttributeReader(source)
   const lastClose = source.lastIndexOf('}')
@@ -23,8 +45,13 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     }
     if (attrs.source === '{}') { i = attrs.end - 1; continue }
     let word = i
-    if (i > 0 && masked[i - 1] === source[i - 1] && !/[`*_~^\]}>]/.test(source[i - 1]!)) {
-      while (word > cursor && masked[word - 1] === source[word - 1] && !/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) word--
+    if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1))) {
+      while (word > cursor && masked[word - 1] === source[word - 1]) {
+        const literal = literalBraces.get(word - 1)
+        if (literal !== undefined && literal >= cursor) { const escaped = escapedBraceCloses.has(word - 1); word = literal; if (escaped) break; continue }
+        if (/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) break
+        word--
+      }
       let pairedWord: number | undefined
       for (let at = i - 1; at >= word; at--) {
         if ((paired.get(at) ?? -1) > attrs.end) { pairedWord = at + 1; break }

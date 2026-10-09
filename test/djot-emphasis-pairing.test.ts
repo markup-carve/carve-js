@@ -18,7 +18,7 @@ test.each([
   ['^_x_^', '<p><sup><em>x</em></sup></p>'],
   ['_a_+ b', '<p><em>a</em>+ b</p>'],
   ['x {.a}{.b}', '<p>x</p>'],
-  ['a\n{.c}\nb', '<p>a\nb</p>'],
+  ['a\n{.c}\nb', '<p>a\n\nb</p>'],
   ['_emph_{.a}', '<p><em class="a">emph</em></p>'],
   ['*s*{#id .cls key=val}', '<p><strong id="id" class="cls" key="val">s</strong></p>'],
   ['{+ins+}{.a}', '<p><ins class="a">ins</ins></p>'],

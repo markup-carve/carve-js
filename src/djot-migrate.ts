@@ -406,8 +406,11 @@ export function maskDjotFences(src: string, onFenceLine?: (line: number, replace
       const start = line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
     }
-    normalizeBoundary = /^(?:[ 	]*[-*]){3,}[ 	]*$/.test(content) || /^[ 	]*\[(?!\^)[^\]]+\]:/.test(content) || content.trim() === '' || /^[ \t]*\[\^[^\]\n]+\]:[ \t]*$/.test(content) || /^[ \t]*(?:#{1,6} |:{3,}|\{[.#A-Za-z])/.test(content)
-    previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} |\{[.#A-Za-z])/.test(content)
+    const attributeStart = content.length - content.trimStart().length
+    const lineAttributes = content[attributeStart] === '{' ? readAttributes(content, attributeStart) : undefined
+    const attributeBoundary = canNormalize && lineAttributes?.end === content.trimEnd().length
+    normalizeBoundary = /^(?:[ 	]*[-*]){3,}[ 	]*$/.test(content) || /^[ 	]*\[(?!\^)[^\]]+\]:/.test(content) || content.trim() === '' || /^[ \t]*\[\^[^\]\n]+\]:[ \t]*$/.test(content) || /^[ \t]*(?:#{1,6} |:{3,})/.test(content) || attributeBoundary
+    previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} )/.test(content) || attributeBoundary
     return line
   })
   return staged.join('\n')
@@ -486,7 +489,7 @@ export function maskDjotCodeAndDestinations(src: string, references = true, uncl
   masked = masked.replace(/(?<=\])\([^()\n]*\)/g, (g) => blanks(g))
   if (references) masked = masked.replace(/^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[(?!\^)[^\]\n]*\]:[^\n]*/gm, (value, at: number) => {
     const previous = (previousLines.get(at) ?? '')?.replace(/^[ \t]*(?:>[ \t]*)*/, '').trim() ?? ''
-    return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[.#A-Za-z]|\[(?!\^)[^\]]*\]:)/.test(previous) ? blanks(value) : value
+    return previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous) ? blanks(value) : value
   }).replace(/(?<=\])\[[^\]\n]*\]/g, blanks)
   masked = masked.replace(/^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?:{3,}[ \t]+([A-Za-z_][A-Za-z0-9_.-]*)/gm, (value: string, name: string, at: number) => (previousLines.get(at) ?? '').trim() === '' || /(?:[-*+]|[0-9]+[.)])[ \t]+:{3,}/.test(value) ? value.slice(0, -name.length) + blanks(name) : value)
   return masked.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (value: string, label: string, at: number) => isDjotEscaped(src, at) || isDjotEscaped(src, at + value.length - 1) ? value : `![${blanks(label)}]`)

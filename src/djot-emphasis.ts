@@ -22,8 +22,11 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
   const readAttributes = nativeAttributeReader(source)
   const attributes = new Map<number, { end: number; source: string }>()
   const emptyBlockAttributes = new Set<number>()
+  const listBoundaryComments = new Map<number, string>()
   let attributeLineStart = 0, attributeLineEnd = -1, previousAttributeLine = ''
   let attributePrefixEnd = 0, listAttribute = false
+  let previousContent = '', previousItemWidth = 0, attributeIndent = 0
+  let activeAttributeListColumn: number | undefined
   for (let i = 0; i < source.length; i++) {
     if (mask[i] !== '{') continue
     while (attributeLineEnd < i) {
@@ -34,9 +37,18 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       const newline = source.indexOf('\n', attributeLineStart)
       attributeLineEnd = newline < 0 ? source.length : newline
       const line = source.slice(attributeLineStart, attributeLineEnd)
-      const prefix = /^[ \t>]*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?/.exec(line)![0]
+      const prefix = /^[ \t>]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)?/.exec(line)![0]
       attributePrefixEnd = attributeLineStart + prefix.length
       listAttribute = /[-*+.)]/.test(prefix)
+      previousContent = previousAttributeLine.replace(/^(?:[ \t]*>[ \t]?)*/, '')
+      previousItemWidth = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(previousContent)?.[0].length ?? 0
+      attributeIndent = prefix.replace(/^(?:[ \t]*>[ \t]?)*/, '').length
+      listAttribute = listAttribute && (attributeLineStart === 0 || previousContent.trim() === '' || activeAttributeListColumn !== undefined)
+      if (activeAttributeListColumn !== undefined && line.trim() !== '' && attributeIndent < activeAttributeListColumn && !listAttribute) {
+        previousItemWidth = activeAttributeListColumn
+        activeAttributeListColumn = undefined
+      }
+      if (listAttribute) activeAttributeListColumn = attributeIndent
     }
     let attrs = readAttributes(i)
     if (!attrs) continue
@@ -46,11 +58,13 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       if (!next) break
       attrs = { end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
     }
+    if (i === attributePrefixEnd && attrs.end !== firstAttributeEnd && /^[ \t]*$/.test(source.slice(attrs.end, attributeLineEnd))) attrs = { ...attrs, source: '{%%}' }
     attributes.set(i, attrs)
     if (attrs.source === '{}' && attrs.end === firstAttributeEnd && i === attributePrefixEnd &&
         /^[ \t]*$/.test(source.slice(attrs.end, attributeLineEnd)) &&
-        (listAttribute || attributeLineStart === 0 || previousAttributeLine.trim() === '' || /^\{.*\}$/.test(previousAttributeLine.trim()))) {
+        (listAttribute || attributeLineStart === 0 || previousContent.trim() === '' || /^\{.*\}$/.test(previousContent.trim()) || attributeIndent < previousItemWidth)) {
       emptyBlockAttributes.add(i)
+      if (attributeIndent < previousItemWidth) listBoundaryComments.set(i, '%%%\n' + source.slice(attributeLineStart, attributePrefixEnd) + '%%%')
     }
     for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
     i = attrs.end - 1
@@ -99,7 +113,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       else if (previousBlank) container = listColumn !== undefined && indent >= listColumn
       if (marker && container) { const item = /^[ \t]*(?:[-*+]|[0-9]+[.)])[ \t]+/.exec(line); if (item) listColumn = item[0].length }
       if (/^[ \t]*(?:`{3,}|~{3,})/.test(line) || (previousBlank || container) && /^[ \t]*(?::{3,})/.test(line) || /^[ \t]*#{1,6}[ \t]/.test(line)) clear(0)
-      previousBlank = line.trim() === '' || /^[ \t]*(?:`{3,}|~{3,}|:{3,}|\{[.#A-Za-z])/.test(line)
+      previousBlank = line.trim() === '' || /^[ \t]*(?:`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%])/.test(line)
     }
     const ch = source[i]!
     if (ch === '\n') {
@@ -191,7 +205,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
         text += `${literalPrefix}${literals.length}\0`
         if (attrs.source === '{}') {
           const span = bracketCloses.has(i - 1) && !literalBrackets.has(i - 1)
-          literals.push(span ? '{}' : emptyBlockAttributes.has(i) ? '%%' : '{%%}')
+          literals.push(span ? '{}' : listBoundaryComments.get(i) ?? (emptyBlockAttributes.has(i) ? '%%' : '{%%}'))
         } else literals.push(attrs.source)
         i = attrs.end - 1
         continue
