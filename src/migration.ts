@@ -104,7 +104,10 @@ export function migrateMarkdown(
       // `normalized`, not `preserved`: a bare `---` block becoming front
       // matter is an alternate block form resolved, which is what the term
       // covers in docs/format-bridges.md (markup-carve/carve#2806).
-      fidelity: loss.code === 'frontmatter-synthesized' ? 'normalized' : 'dropped',
+      // A loss may name its own fidelity where the construct survives and the
+      // text does not: a raw span keeps its tag and loses the whitespace Carve
+      // drops at a content line's end (markup-carve/carve#2804).
+      fidelity: loss.fidelity ?? (loss.code === 'frontmatter-synthesized' ? 'normalized' : 'dropped'),
       confidence: loss.confidence ?? 'exact',
       ...(path ? { path } : {}),
     }
