@@ -37,6 +37,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (/\s/u.test(source[at]!)) lastSpace = at
     if (pairedCloses.has(at)) lastInlineEnd = at
     if (source[at] === '\\') {
+      if (masked[at] !== source[at] || masked[at + 1] !== source[at + 1]) { lastInlineEnd = at + 2; at++; continue }
       lastEscaped = at + 1
       if (/\s/u.test(source[at + 1] ?? '')) lastSpace = at + 1
       inheritedMarker.lastIndex = at + 2

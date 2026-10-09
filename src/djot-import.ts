@@ -290,6 +290,10 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   }
 }
 
+function removeInheritedAttributeMarkers(source: string, inherited: ReadonlySet<string>): string {
+  return source.replace(/\0DJOTINVALIDATTR\d+\0/g, value => inherited.has(value) ? '' : value)
+}
+
 function escapeInvalidDjotAttributes(source: string): { source: string; inherited: Set<string>; restore: (text: string) => string } {
   const masked = maskDjotCodeAndDestinations(source).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length))
   const escapes: number[] = []
@@ -325,7 +329,7 @@ function escapeInvalidDjotAttributes(source: string): { source: string; inherite
     output += source.slice(cursor, at) + '\\{' + marker() + (source[at + 1] === '#' ? '\\#' + marker() : '')
     cursor = at + (source[at + 1] === '#' ? 2 : 1)
   }
-  return { source: output + source.slice(cursor), inherited, restore: text => text.replace(/\0DJOTINVALIDATTR\d+\0/g, value => inherited.has(value) ? '' : value) }
+  return { source: output + source.slice(cursor), inherited, restore: text => removeInheritedAttributeMarkers(text, inherited) }
 }
 
 /** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
@@ -426,7 +430,7 @@ export function djotToCarve(djot: string): string {
     strippedDefinitions.isBoundary,
     invalidAttributes.inherited,
   )
-  const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody)))
+  const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody, invalidAttributes.inherited)))
   const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)))
   const headingFolded = foldHeadingContinuations(dropLeadingDjotSeparators(layout))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
@@ -484,7 +488,7 @@ function dropLeadingDjotSeparators(source: string): string {
     .join('\n')
 }
 
-function normalizeDjotLinks(source: string): string {
+function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new Set()): string {
   if (!source.includes('](')) return source
   const mask = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false })
   const rows = djotTableRows(source, mask)
@@ -641,7 +645,7 @@ function normalizeDjotLinks(source: string): string {
       if (rows[line])
         destination = destination.replace(/\\+\|/g, (value) => '%5C'.repeat(Math.floor((value.length - 1) / 2)) + '%7C')
       if (source[owner.at - 1] === '!' && !isDjotEscaped(source, owner.at - 1) && label.includes('[')) {
-        label = renderPlainText(parse(djotToCarve('DJOTALT ' + label + ' DJOTEND')), { smartTypography: false })
+        label = renderPlainText(parse(djotToCarve('DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND')), { smartTypography: false })
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
           .replace(/[\[\]\\]/g, (value) => '\\' + value)
@@ -858,7 +862,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
     offset = 0
   const lineHeads = new Set<number>(),
     emptyDefinitions = new Set<number>()
-  const keyOf = (label: string) => label.trim().replace(/[ \t\r\n]+/g, ' ')
+  const keyOf = (label: string) => removeInheritedAttributeMarkers(label, inherited).trim().replace(/[ \t\r\n]+/g, ' ')
   const alias = (key: string): string => {
     let name = labels.get(key)
     if (!name) {
