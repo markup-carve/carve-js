@@ -1047,7 +1047,9 @@ describe('markdownToCarve — frontmatter', () => {
   })
 
   it('handles a frontmatter-only document with no body', () => {
-    expect(conv('---\ntitle: X\n---')).toBe('---yaml\ntitle: X\n---')
+    // `fmt` ends the document on a newline, so the import does too
+    // (carve-js#2614).
+    expect(conv('---\ntitle: X\n---')).toBe('---yaml\ntitle: X\n---\n')
   })
 
   it('keeps frontmatter out of the rendered body', () => {

@@ -1952,6 +1952,18 @@ function escapeFormat(text: string): string {
 }
 
 /**
+ * The separator the writer writes between two sibling blocks: exactly one
+ * blank line.
+ *
+ * Exported so the Markdown importer joins its frontmatter prefix to the body
+ * with the writer's own separator. Frontmatter is a document part the writer
+ * joins with this, so the boundary under its closer is this and nothing more
+ * specific, and an importer that echoed the source's spacing produced output
+ * the engine's own `fmt --check` rejected (carve-js#2614).
+ */
+export const BLOCK_SEPARATOR = '\n\n'
+
+/**
  * The canonical frontmatter opener, which spells the format token for every
  * format including the default (CARVE-P11-011).
  *
@@ -2826,7 +2838,7 @@ class CarveRenderSession {
       if (ast.frontmatter) parts.push(this.renderFrontmatter(ast.frontmatter))
       const body = this.renderDocumentBody(ast, ctx)
       if (body) parts.push(body)
-      rendered = this.normalize(parts.join('\n\n'))
+      rendered = this.normalize(parts.join(BLOCK_SEPARATOR))
     } catch (error) {
       // Earlier row refusals are reported before the error a retry will reach.
       if (this.refusedTableRows.length === 0) throw error
