@@ -64,6 +64,15 @@ describe('Markdown construct assessment', () => {
     expect(losses).toEqual([expect.objectContaining({ path: 'line:3' })])
   })
 
+  it('locates native task losses when the assessor reads a different list structure', () => {
+    for (const [source, paths] of [
+      ['a\n2. [x] b\n\n1. [x] c', ['line:4']],
+      ['- a\n    1. [x] b\n\n1. [x] c', ['line:2', 'line:4']],
+    ] as const) {
+      expect(rows(source).filter(row => row.code === 'structure-unspellable').map(row => row.path)).toEqual(paths)
+    }
+  })
+
   it('fails closed for opt-in dialects and bounded scanner inputs', () => {
     expect(migrateMarkdown('hello', { dialect: { highlight: true } }).report.diagnostics[0]?.code).toBe('fidelity-unverified')
     expect(assessMarkdown('x ' + '<!--'.repeat(240000), 'wrong').complete).toBe(false)

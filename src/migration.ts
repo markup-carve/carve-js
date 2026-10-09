@@ -92,10 +92,8 @@ export function migrateMarkdown(
   const result = markdownToCarveWithLosses(source, options.dialect)
   const supportedDialect = !Object.values(options.dialect ?? {}).some(Boolean)
   const assessment = supportedDialect ? assessMarkdown(source, result.value) : { complete: false, diagnostics: [] }
-  const taskPaths = assessment.diagnostics.filter(row => row.code === 'structure-unspellable' && row.message === ORDERED_TASK_ITEM_UNSPELLABLE).map(row => row.path)
-  let taskIndex = 0
   const fallback = assessed(source, result.value, 'markdown', result.losses.map(loss => {
-    const path = loss.message === ORDERED_TASK_ITEM_UNSPELLABLE ? taskPaths[taskIndex++] : undefined
+    const path = loss.line === undefined ? undefined : `line:${loss.line}`
     return {
       code: loss.code,
       message: loss.message,
