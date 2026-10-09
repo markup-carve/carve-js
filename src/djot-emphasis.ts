@@ -108,7 +108,9 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       stack.push(i); pendingBraces.set(kind, stack)
     } else if (source[i] === '}' && i - 1 !== lastEscaped && '+-=^~_*'.includes(source[i - 1] ?? '\0')) {
       const start = pendingBraces.get(source[i - 1]!)?.pop()
-      if (start !== undefined && i > start + 2) { validBraces.add(start); validBraceClosers.add(i - 1)
+      if (start !== undefined && i > start + 2) {
+        validBraces.add(start); validBraceClosers.add(i - 1)
+        if (paired) paired.set(start + 1, i + 1)
         for (const stack of pendingBraces.values()) while (stack.at(-1) !== undefined && stack.at(-1)! > start) stack.pop()
       }
       else if (source[i - 1] === '-') {
