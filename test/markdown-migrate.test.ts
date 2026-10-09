@@ -1019,7 +1019,7 @@ describe('markdownToCarve — frontmatter', () => {
       '\n',
     )
     expect(conv(md)).toBe(
-      ['---', 'title: X', 'description: Y', '---', '', '# H', '', 'a *bold* word'].join('\n'),
+      ['---yaml', 'title: X', 'description: Y', '---', '', '# H', '', 'a *bold* word'].join('\n'),
     )
   })
 
@@ -1029,7 +1029,7 @@ describe('markdownToCarve — frontmatter', () => {
       '\n',
     )
     expect(conv(md)).toBe(
-      ['---', 'title: a **bold** and _under_ value', '---', '', 'a *bold* word'].join('\n'),
+      ['---yaml', 'title: a **bold** and _under_ value', '---', '', 'a *bold* word'].join('\n'),
     )
   })
 
@@ -1038,15 +1038,16 @@ describe('markdownToCarve — frontmatter', () => {
     expect(conv(md)).toBe(['---toml', 'title = "X"', '---', '', 'text'].join('\n'))
   })
 
-  it('preserves the lenient spaced form of the format label', () => {
+  it('reads the lenient spaced form of the format label and writes it canonically', () => {
     // The parser accepts `--- toml` as well as `---toml`; the migrator must
-    // recognize the same openers or a spaced fence would be shredded.
+    // recognize the same openers or a spaced fence would be shredded. What it
+    // WRITES is the canonical opener either way (CARVE-P11-011).
     const md = ['--- toml', 'title = "X"', '---', '', 'a **bold** word'].join('\n')
-    expect(conv(md)).toBe(['--- toml', 'title = "X"', '---', '', 'a *bold* word'].join('\n'))
+    expect(conv(md)).toBe(['---toml', 'title = "X"', '---', '', 'a *bold* word'].join('\n'))
   })
 
   it('handles a frontmatter-only document with no body', () => {
-    expect(conv('---\ntitle: X\n---')).toBe('---\ntitle: X\n---')
+    expect(conv('---\ntitle: X\n---')).toBe('---yaml\ntitle: X\n---')
   })
 
   it('keeps frontmatter out of the rendered body', () => {

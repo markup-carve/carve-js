@@ -97,7 +97,9 @@ describe('the Markdown importer replaces an authored NUL rather than reading it 
     // part of it is a block.
     const markdown = `---\ntitle: a${NUL}b\n---\n\ntext`
 
-    expect(markdownToCarve(markdown)).toBe(`---\ntitle: a${FFFD}b\n---\n\ntext`)
+    // The opener is the canonical writer's to spell (CARVE-P11-011); the NUL
+    // in the metadata is what this case is about.
+    expect(markdownToCarve(markdown)).toBe(`---yaml\ntitle: a${FFFD}b\n---\n\ntext`)
   })
 
   it('never emits a NUL for any of these', () => {

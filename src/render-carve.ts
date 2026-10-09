@@ -1941,6 +1941,19 @@ function escapeFormat(text: string): string {
   return safe || 'text'
 }
 
+/**
+ * The canonical frontmatter opener, which spells the format token for every
+ * format including the default (CARVE-P11-011).
+ *
+ * Exported so the Markdown importer spells the opener the one way the canonical
+ * writer does. A reader accepts a bare `---` as `yaml`, but that leniency is
+ * not a writer's license, so an importer that emitted the source opener
+ * verbatim produced output the engine's own `fmt --check` rejected.
+ */
+export function canonicalFrontmatterOpener(format: string): string {
+  return `---${escapeFormat(format)}`
+}
+
 function escapeFenceToken(text: string): string {
   // The info token ends at `whitespace` (PART 7), not at `\s`: a language name
   // carrying a vertical tab was truncated on the way out while the same name
@@ -4415,7 +4428,7 @@ class CarveRenderSession {
    * `yaml` on the next pass, under the option's default.
    */
   private renderFrontmatter(frontmatter: { format: string; content: string }): string {
-    return `---${escapeFormat(frontmatter.format)}\n${this.protectVerbatim(frontmatter.content)}\n---`
+    return `${canonicalFrontmatterOpener(frontmatter.format)}\n${this.protectVerbatim(frontmatter.content)}\n---`
   }
 
   private renderBlockComment(content: string): string {
