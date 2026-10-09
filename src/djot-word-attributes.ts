@@ -45,7 +45,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (source[at] === '{') braceStack.push({ begin: at, literal: false, spaces })
     else if (source[at] === '}') {
       const open = braceStack.pop()
-      if (open?.literal && open.spaces === spaces) literalBraces.set(at, open.begin)
+      if (open?.literal && open.spaces === spaces && !escapedBraceCloses.has(at)) literalBraces.set(at, open.begin)
     }
   }
   let output = '', cursor = 0
