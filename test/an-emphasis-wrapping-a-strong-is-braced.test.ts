@@ -6,6 +6,7 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
 describe('an emphasis wrapping a strong is braced', () => {
   it.each([
     ['{/*x*/}', '{/*x*/}\n'],
+    ['{/*x* y/}', '{/*x* y/}\n'],
     ['/{*x*}/', '{/*x*/}\n'],
     ['{/{*x*}/}', '{/*x*/}\n'],
     ['{/*x* y *z*/}', '{/*x* y *z*/}\n'],
@@ -20,7 +21,6 @@ describe('an emphasis wrapping a strong is braced', () => {
   it.each([
     ['/*x*/', '/*x*/\n'],
     ['{*/x/*}', '*/x/*\n'],
-    ['{/*x* y/}', '/*x* y/\n'],
     ['{/y *x*/}', '/y *x*/\n'],
     ['{_*x*_}', '_*x*_\n'],
     ['{~*x*~}', '~*x*~\n'],

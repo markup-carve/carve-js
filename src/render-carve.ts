@@ -1191,10 +1191,8 @@ function renderEmphasis(
     // (space, tab, newline; grammar GUARD NOTATION). A trailing hard break
     // also puts the closer at the start of the next line (carve-js#1786).
     /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
-    // `/*` opens `bold_italic` and `*/` closes it, so a bare emphasis whose
-    // content has both would read back as a strong wrapping an emphasis - the
-    // other nesting (carve-js#1758).
-    (delim === '/' && content.startsWith('*') && content.endsWith('*'))
+    // A leading `*` would form the combined bold-italic opener.
+    (delim === '/' && content.startsWith('*'))
   return needsForced
     ? `{${delim}${content}${closeDelim}}`
     : `${delim}${content}${closeDelim}`
@@ -1280,7 +1278,7 @@ function renderBlockAttrs(attrs: Attrs | undefined): string {
 
 function renderAttrs(attrs: Attrs | undefined, markers: string = ''): string {
   const conflicts = (value: string) => [...markers].some(marker => value.includes(marker))
-  const quote = (value: string) => quoteAttrValue(value, conflicts(value))
+  const quote = (value: string) => quoteAttrValue(value, conflicts(value), markers)
   if (!attrs) return ''
   const parts: string[] = []
   const kv = attrs.keyValues ?? {}
@@ -1300,7 +1298,7 @@ function renderAttrs(attrs: Attrs | undefined, markers: string = ''): string {
       // its own parser reads as a PARAGRAPH - `{.-2col}` came back as text plus
       // a class-less element, losing the class.
       if (isExplicitIdOrClassIdentifier(cls) && !conflicts(cls)) parts.push(`.${escapeAttrNameValue(cls)}`)
-      else parts.push(`class="${cls.replace(/[\\"|]/g, '\\$&')}"`)
+      else parts.push(`class=${quoteAttrValue(cls, true, markers)}`)
     }
   }
   const emitKey = (key: string) => {
@@ -1379,13 +1377,14 @@ function escapeQuotedValue(value: string, separators: string): string {
   return out
 }
 
-function quoteAttrValue(value: string, force: boolean = false): string {
+function quoteAttrValue(value: string, force: boolean = false, markers: string = ''): string {
   // Unquoted values exclude space, tab, CR, LF, quotes, pipes and backslashes.
   // Keep braces quoted too. Other whitespace remains valid unquoted text.
   // Quoted backslashes are doubled; pipes are escaped so table cell splitting
   // leaves them inside the value (CARVE-P2-019).
-  if (!force && /^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
-  return `"${escapeQuotedValue(value, '"|')}"`
+  const enclosureSyntax = markers ? '{}[]`' : ''
+  if (!force && ![...enclosureSyntax].some(ch => value.includes(ch)) && /^[^ \t\n\r"'{}|\\]+$/.test(value)) return value
+  return `"${escapeQuotedValue(value, '"|' + enclosureSyntax)}"`
 }
 
 /**
@@ -2790,6 +2789,7 @@ class CarveRenderSession {
     this.labelKinds = new Set()
     this.bracedForScope = new WeakSet()
     this.attributeEnclosures = []
+    this.attributeBracketDepth = 0
     this.expandedBoldItalic = new WeakSet()
     this.bracedForAttributes = new WeakSet()
     // "Already written on a description line" is true of THIS PASS, not of the
@@ -4295,7 +4295,7 @@ class CarveRenderSession {
         return renderSession.renderInlines(flattenRubyForCarve([node]), ctx)
       }
       case 'small_caps': {
-        const content = renderSession.renderInlines(node.children, ctx)
+        const content = node.attrs ? renderSession.renderAttributeBracket(node.children, ctx) : renderSession.renderInlines(node.children, ctx)
         return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderSession.inlineAttrs(node.attrs, node)}` : content
       }
       case 'math':
@@ -4333,7 +4333,7 @@ class CarveRenderSession {
       case 'footnote_ref':
       case 'inline_footnote':
         return withAttrs(node.inline
-          ? `^[${renderSession.renderInlines(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
+          ? `^[${renderSession.renderAttributeBracket(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
           : `[^${writeFlatBracketRun(node.id ?? '')}]`)
       case 'non_breaking_space':
         return renderSession.inlineAttrs(node.attrs, node) ? `[${renderSession.sentinels[3]}]${renderSession.inlineAttrs(node.attrs, node)}` : renderSession.sentinels[3]!
@@ -4415,13 +4415,24 @@ class CarveRenderSession {
     return `[${text}](${escapeDestination(node.href)}${title})${this.inlineAttrs(node.attrs, node)}`
   }
 
+  private renderAttributeBracket(children: InlineNode[], ctx: CarveContext): string {
+    this.attributeBracketDepth++
+    try {
+      return this.renderInlines(children, ctx)
+    } finally {
+      this.attributeBracketDepth--
+    }
+  }
+
   private renderLabel(children: InlineNode[], ctx: CarveContext): string {
     const outer = this.labelKinds
     this.labelKinds = new Set([...outer, ...this.openEmphasisKinds])
+    this.attributeBracketDepth++
     try {
       return escapeNoteReferenceLabel(this.renderInlines(children, ctx), ctx)
     } finally {
       this.labelKinds = outer
+      this.attributeBracketDepth--
     }
   }
 
@@ -4799,6 +4810,7 @@ class CarveRenderSession {
 
   /** Attribute values must not close an enclosing emphasis span. */
   private attributeEnclosures: InlineNode[] = []
+  private attributeBracketDepth = 0
   private expandedBoldItalic = new WeakSet<object>()
   private bracedForAttributes = new WeakSet<object>()
 
@@ -4809,11 +4821,11 @@ class CarveRenderSession {
     }
     const enclosures = this.attributeEnclosures.filter(node => node !== owner)
     const delimiters = (node: InlineNode) => node.type === 'strong' && node.boldItalic && !this.expandedBoldItalic.has(node) ? '*/' : markers[node.type] ?? ''
-    const active = enclosures.map(delimiters).join('')
+    const active = enclosures.map(delimiters).join('') + (this.attributeBracketDepth > 0 ? '[]' : '')
     const rendered = renderAttrs(attrs, active)
     const payload = [attrs?.id ?? '', ...(attrs?.classes ?? []), ...Object.entries(attrs?.keyValues ?? {}).flat()].join('')
     for (const node of enclosures) {
-      if ([...delimiters(node)].some(marker => payload.includes(marker))) this.bracedForAttributes.add(node)
+      if ([...delimiters(node)].some(marker => payload.includes(marker)) || node.type === 'highlight' && rendered.includes('="')) this.bracedForAttributes.add(node)
     }
     return rendered
   }
