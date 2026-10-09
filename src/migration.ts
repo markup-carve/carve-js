@@ -124,7 +124,7 @@ export function migrateMarkdown(
 
 export function migrateDjot(source: string): MigrationResult {
   const stripped = stripDjotFootnoteDefinitionAttributes(source)
-  const result = assessed(source, stripped.restore(djotToCarve(stripped.source)), 'djot')
+  const result = assessed(source, djotToCarve(source), 'djot')
   for (const loss of stripped.losses) result.report.diagnostics.push({
     code: 'djot-footnote-definition-attributes-dropped',
     message: 'Carve cannot represent attributes on a footnote definition; they were dropped instead of applying them to later content.',

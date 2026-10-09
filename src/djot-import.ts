@@ -352,7 +352,7 @@ export function djotToCarve(djot: string): string {
   const spans: string[] = []
   let prefix = '\x00DJOTSTRONG'
   while (body.includes(prefix)) prefix += '\x00'
-  const normalizedBody = normalizeDjotFootnotes(foldDjotReferences(normalizeDjotFences(normalizeDjotAttributeLines(escapeInvalidDjotAttributes(body)))))
+  const normalizedBody = normalizeDjotFootnotes(foldDjotReferences(normalizeDjotFences(normalizeDjotAttributeLines(escapeInvalidDjotAttributes(body)))), strippedDefinitions.isBoundary)
   const headingFolded = foldHeadingContinuations(normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody))))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
   const collapsedChars = collapsedMask.split('')
@@ -554,7 +554,7 @@ function normalizeDjotParagraphFences(source: string): string {
   output.push(source.slice(copied)); return output.join('')
 }
 
-function normalizeDjotFootnotes(source: string): string {
+function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false): string {
   if (!source.includes('[^')) return source
   const mask = maskDjotCodeAndDestinations(source, false, true, false)
   const rows = djotTableRows(source, mask)
@@ -576,7 +576,7 @@ function normalizeDjotFootnotes(source: string): string {
     const previousPrefix = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)*/.exec(previousLine)![0]
     const previous = previousLine.slice(previousPrefix.length).trim()
     const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(prefix)
-    const boundary = previous === '' || rows[n - 1] || item || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || at < previousPrefix.length && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousPrefix) || (prefix.match(/>/g)?.length ?? 0) < (previousPrefix.match(/>/g)?.length ?? 0) || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
+    const boundary = isDefinitionBoundary(previousLine) || previous === '' || rows[n - 1] || item || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || at < previousPrefix.length && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousPrefix) || (prefix.match(/>/g)?.length ?? 0) < (previousPrefix.match(/>/g)?.length ?? 0) || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
     const head = /^\[\^([^\]\n]+)\]:(?:[ \t]|$)/.exec(line.slice(at))
     if (head && boundary && mask[offset + at] === '[') { const key = keyOf(head[1]!); defined.add(key); definitions.set(offset + at, { key, end: offset + at + 2 + head[1]!.length }); if (unsupported(key)) alias(key); if (!line.slice(at + head[0].length).trim()) emptyDefinitions.add(offset + at) }
     offset += line.length + 1
@@ -1148,43 +1148,79 @@ function normalizeDjotTablePipes(source: string): string {
 
 export interface DjotFootnoteAttributeLoss { line: number }
 
-export function stripDjotFootnoteDefinitionAttributes(input: string): { source: string; losses: DjotFootnoteAttributeLoss[]; restore: (text: string) => string } {
+export function stripDjotFootnoteDefinitionAttributes(input: string): { source: string; losses: DjotFootnoteAttributeLoss[]; restore: (text: string) => string; isBoundary: (line: string) => boolean } {
   const source = input.replace(/\r\n?/g, '\n')
-  if (!source.includes('{') || !source.includes('[^')) return { source, losses: [], restore: text => text }
+  if (!source.includes('{') || !source.includes('[^')) return { source, losses: [], restore: text => text, isBoundary: () => false }
   const [frontmatter, separator, body] = splitSiteFrontmatter(source)
   const header = frontmatter === '' ? '' : frontmatter + separator
   const headerLines = header.split('\n').length - 1
   const fenceLines = new Set<number>()
   maskDjotFences(body, line => { fenceLines.add(line) }, [], true)
-  const mask = maskDjotCodeAndDestinations(body)
+  const mask = maskDjotCodeAndDestinations(body, false, true, false)
   const lines = body.split('\n'), losses: DjotFootnoteAttributeLoss[] = []
   const reserved = new Set([...source.matchAll(/\0DJOTNOTEATTR(\d+)\0/g)].map(match => Number(match[1])))
   const comments = new Set<number>()
   let serial = 0
   let offset = 0, boundary = true, pending: Array<{ line: number; end: number; start: number; wire: string }> = [], quoteDepth = 0
+  let metadataNote = false
   let consumedUntil = -1
+  let dedent: { column: number; delta: number; depth: number } | undefined
   let listColumn: number | undefined, listQuoteDepth = 0
-  let heading = false, table = false, noteColumn: number | undefined
+  let heading = false, table = false, noteColumn: number | undefined, referenceColumn: number | undefined
   const divWidths: number[] = []
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n]!
     if (offset < consumedUntil) { offset += line.length + 1; continue }
     const prefix = /^(?:[ \t]*>[ \t]?|[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*[ \t]*/.exec(line)![0]
-    const content = line.slice(prefix.length).trimEnd()
+    const content = line.slice(prefix.length).replace(/[ \t]+$/, '')
     const depth = (prefix.match(/>/g) ?? []).length
     const marker = /[-*+.)]/.test(prefix)
-    const column = prefix.replace(/^(?:[ \t]*>[ \t]?)*/, '').length
+    let column = prefix.replace(/^(?:[ \t]*>[ \t]?)*/, '').length
+    if (mask[offset + prefix.length] !== ' ' && prefix.includes('\t') && (boundary || pending.length > 0 || listColumn !== undefined)) {
+      if (!marker && listColumn !== undefined && depth === listQuoteDepth && column === listColumn - 1) {
+        column = listColumn
+        const quotes = /^(?:[ \t]*>[ \t]?)*/.exec(prefix)![0]
+        lines[n] = quotes.replaceAll('\t', ' ') + ' '.repeat(column) + line.slice(prefix.length)
+      } else lines[n] = prefix.replaceAll('\t', ' ') + line.slice(prefix.length)
+    }
+    if (dedent) {
+      const quotes = /^(?:[ \t]*>[ \t]?)*/.exec(line)![0]
+      const indent = /^[ \t]*/.exec(line.slice(quotes.length))![0].length
+      if (content !== '' && (depth !== dedent.depth || indent < dedent.column)) dedent = undefined
+      else if (content !== '') lines[n] = quotes + line.slice(quotes.length + dedent.delta)
+    }
+    if (metadataNote && noteColumn !== undefined && content !== '' && column === noteColumn - 1) {
+      const raw = lines[n]!, quotes = /^(?:[ \t]*>[ \t]?)*/.exec(raw)![0]
+      lines[n] = quotes + ' ' + raw.slice(quotes.length)
+      column++
+    }
+    const parentNoteColumn = noteColumn
     if (depth < quoteDepth) { boundary = true; heading = false }
     if (listColumn !== undefined && (depth !== listQuoteDepth || content !== '' && !marker && column < listColumn)) {
       listColumn = undefined; boundary = true; heading = false
     }
-    if (noteColumn !== undefined && content !== '' && column < noteColumn) { noteColumn = undefined; boundary = true }
-    const opensItem = marker && (boundary || pending.length > 0 || listColumn !== undefined)
-    const opensQuote = depth > quoteDepth && (boundary || pending.length > 0 || opensItem)
+    if (noteColumn !== undefined && content !== '' && column < noteColumn) {
+      if (metadataNote && listColumn !== undefined && column >= listColumn && n > 0 && /^[ \t]*$/.test(lines[n - 1]!)) {
+        while (reserved.has(serial)) serial++
+        comments.add(serial)
+        lines[n - 1] = ' '.repeat(listColumn) + `\0DJOTNOTEATTR${serial++}\0`
+      }
+      noteColumn = undefined; metadataNote = false; boundary = true
+    }
+    const opensItem: boolean = marker && (boundary || pending.length > 0 || listColumn !== undefined)
+    const opensQuote: boolean = depth > quoteDepth && (boundary || pending.length > 0 || opensItem)
     if (opensItem || opensQuote) { pending = []; heading = false }
     if (opensItem) { listColumn = column; listQuoteDepth = depth }
     if (opensQuote || depth < quoteDepth) quoteDepth = depth
+    if (referenceColumn !== undefined) {
+      if (content !== '' && column > referenceColumn && !marker && /^\S+$/.test(content)) {
+        offset += line.length + 1; boundary = false; pending = []; continue
+      }
+      referenceColumn = undefined
+      if (content !== '') boundary = true
+    }
     const blockAllowed: boolean = boundary || pending.length > 0 || opensItem || opensQuote
+    let handledNote = false
     const attrs = content.startsWith('{') && mask[offset + prefix.length] === '{' ? readAttributes(body, offset + prefix.length) : undefined
     const trailingEnd = attrs ? body.indexOf('\n', attrs.end) : -1
     const standalone = attrs !== undefined && /^[ \t]*$/.test(body.slice(attrs.end, trailingEnd < 0 ? body.length : trailingEnd))
@@ -1193,9 +1229,12 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       consumedUntil = attrs!.end
     } else {
       if (pending.length && /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.test(content) && mask[offset + prefix.length] === '[') {
+        handledNote = true
         const quotePrefix = /^(?:[ \t]*>[ \t]?)*/.exec(prefix)![0]
-        const notePrefix = quotePrefix + ' '.repeat(listColumn ?? 0)
-        lines[n] = prefix.trimEnd() + '\n' + notePrefix + line.slice(prefix.length)
+        const targetColumn = Math.min(column, Math.max(listColumn ?? 0, parentNoteColumn ?? 0))
+        const notePrefix = quotePrefix + ' '.repeat(targetColumn)
+        if (column > targetColumn) dedent = { column, delta: column - targetColumn, depth }
+        lines[n] = notePrefix + line.slice(prefix.length)
         for (const group of pending) {
           if (group.wire !== '{}') losses.push({ line: headerLines + group.line + 1 })
           let end = group.line, position = group.start
@@ -1211,11 +1250,13 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       }
       pending = []
     }
+    const reference: boolean = blockAllowed && mask[offset + prefix.length] === '[' && /^\[(?!\^)[^\]\n]*\]:(?:[ \t]+\S*[ \t]*|)$/.test(content)
+    if (reference) { referenceColumn = column; heading = false }
     const note = /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.exec(content)
-    if (note && blockAllowed && mask[offset + prefix.length] === '[') { noteColumn = column + 2; heading = false }
+    if (note && blockAllowed && mask[offset + prefix.length] === '[') { noteColumn = column + 2; metadataNote = handledNote; heading = false }
     if (standalone || fenceLines.has(n) || content === '') heading = false
     else if (blockAllowed && /^#{1,6}(?:[ \t]|$)/.test(content)) heading = true
-    const row: boolean = (blockAllowed || table) && content.startsWith('|') && content.endsWith('|') && mask[offset + prefix.length] === '|' && !isDjotEscaped(body, offset + line.trimEnd().length - 1)
+    const row: boolean = (blockAllowed || table) && content.startsWith('|') && content.endsWith('|') && mask[offset + prefix.length] === '|' && !isDjotEscaped(body, offset + line.replace(/[ \t]+$/, '').length - 1)
     table = row
     const colon = /^(:{3,})(?:[ \t].*)?$/.exec(content)
     let div = false
@@ -1225,8 +1266,8 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       else divWidths.push(colon[1]!.length)
       heading = false
     }
-    boundary = content === '' || fenceLines.has(n) || row || div || heading || blockAllowed && /^(?:[-*][ \t]*){3,}$/.test(content)
+    boundary = content === '' || reference || fenceLines.has(n) || row || div || heading || blockAllowed && /^(?:[-*][ \t]*){3,}$/.test(content)
     offset += line.length + 1
   }
-  return { source: header + lines.join('\n'), losses, restore: text => text.replace(/\0DJOTNOTEATTR(\d+)\0/g, (value, index: string) => comments.has(Number(index)) ? '%%' : value) }
+  return { source: header + lines.join('\n'), losses, isBoundary: line => { const token = /\0DJOTNOTEATTR(\d+)\0$/.exec(line.replace(/[ \t]+$/, '')); return token !== null && comments.has(Number(token[1])) }, restore: text => text.replace(/\0DJOTNOTEATTR(\d+)\0/g, (value, index: string) => comments.has(Number(index)) ? '%%' : value) }
 }
