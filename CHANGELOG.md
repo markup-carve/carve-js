@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- HTML import reports markup discarded inside code spans, including nested formatting.
+
 - Formatting preserves literal backslashes in cross-reference targets. Targets with no source spelling are refused (carve-js#2645).
 
 - Link and image titles accept a literal backslash before a wrapped line. Unicode line separators also remain title content in block images and reference definitions (carve-js#2646).
