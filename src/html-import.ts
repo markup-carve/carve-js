@@ -4056,6 +4056,7 @@ class Importer {
 
   private codeText(node: P5Node, path: string, depth: number, block = false, languageWrapper?: P5Node, lang?: string): string {
     const context = block ? 'pre' : 'code'
+    const description = block ? 'a code block' : 'a code span'
     const runs = ['']
     type Frame = { node: P5Node, path: string, depth: number } | { boundary: true }
     const pending: Frame[] = []
@@ -4079,7 +4080,7 @@ class Importer {
         continue
       }
       if (child.nodeName === '#comment') {
-        this.report.add('element-dropped', `Dropped a comment inside <${context}>: code holds only text`, 'warning', frame.path, child)
+        this.report.add('element-dropped', `Dropped a comment inside <${context}>: ${description} holds only text`, 'warning', frame.path, child)
         continue
       }
       const tag = domTag(child)
@@ -4098,10 +4099,10 @@ class Importer {
         this.report.add(dropped ? 'element-dropped' : 'element-unwrapped', `${dropped ? 'Dropped' : 'Unwrapped'} <${tag}> inside <${context}>`, dropped ? 'warning' : 'info', frame.path, child)
       }
       for (const attr of rawAttrs) {
-        if (child === languageWrapper && lang && !attr.prefix && ((attr.name === 'class' && attr.value.trim().split(/[ \t\r\n\f]+/).every(token => token === `language-${lang}` || token === `lang-${lang}`)) || (attr.name === 'data-lang' && attr.value.trim() === lang))) continue
+        if (child === languageWrapper && lang && !attr.prefix && ((attr.name === 'class' && /[^ \t\r\n\f]/.test(attr.value) && attr.value.split(/[ \t\r\n\f]+/).filter(Boolean).every(token => token === `language-${lang}` || token === `lang-${lang}`)) || (attr.name === 'data-lang' && attr.value.replace(/^[ \t\r\n\f]+|[ \t\r\n\f]+$/g, '') === lang))) continue
         const name = attr.prefix ? `${attr.prefix}:${attr.name}` : attr.name
         const dangerous = isDangerousAttrName(name)
-        this.report.refuseAttribute(child, frame.path, name, ` inside <${context}>: code holds only text`, dangerous ? 'warning' : 'info', dangerous || destinationIsDenied(attr.value))
+        this.report.refuseAttribute(child, frame.path, name, ` inside <${context}>: ${description} holds only text`, dangerous ? 'warning' : 'info', dangerous || destinationIsDenied(attr.value))
       }
       if (isFlattenedBlock(child) || ['dialog', 'menu', 'search'].includes(tag)) {
         runs.push('')
@@ -4109,8 +4110,8 @@ class Importer {
       }
       pushChildren(child, frame.path, frame.depth)
     }
-    if (runs.filter(run => /[^ \t\r\n\f]/.test(run)).length > 1) {
-      this.report.add('structure-unspellable', `Code text cannot hold the block boundary inside <${context}>`, 'warning', path, node)
+    if (!block && runs.filter(run => /[^ \t\r\n\f]/.test(run)).length > 1) {
+      this.report.add('structure-unspellable', "A code span's value cannot hold the block boundary inside <code>", 'warning', path, node)
     }
     return runs.join('')
   }

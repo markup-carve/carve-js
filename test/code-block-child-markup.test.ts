@@ -11,7 +11,10 @@ describe('code block child markup', () => {
         const code = ast.value.children[0]
         expect(code?.type).toBe('code_block')
         if (code?.type === 'code_block') expect(code.content).toBe(item.content)
-        for (const result of [ast, source]) expect(result.report.diagnostics.map(d => d.code)).toEqual(item.codes)
+        for (const result of [ast, source]) {
+          expect(result.report.diagnostics.map(d => d.code)).toEqual(item.codes)
+          if (item.warnings) expect(result.report.diagnostics.filter(d => d.severity === 'warning').map(d => d.code)).toEqual(item.warnings)
+        }
         expect(carveToHtml(source.value)).toContain('<p>after</p>')
         expect(carveToCarve(source.value)).toBe(source.value)
         const reparsed = htmlToAst(carveToHtml(source.value))
