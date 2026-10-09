@@ -8,6 +8,7 @@ import {
   type HtmlImportOptions,
 } from './html-import.js'
 import { markdownToCarveWithLosses, type MarkdownDialect } from './markdown-migrate.js'
+import { assessMarkdown } from './markdown-assessment.js'
 
 export type SourceFormat = 'html' | 'markdown' | 'djot' | 'bbcode'
 export type MigrationFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
@@ -91,7 +92,7 @@ export function migrateMarkdown(
   // beside `fidelity-unverified` rather than replacing it: the importer still
   // reports nothing about the constructs it has no answer for, so the
   // conservative worst case still stands for the rest of the document.
-  return assessed(source, result.value, 'markdown', result.losses.map((loss) => ({
+  const fallback = assessed(source, result.value, 'markdown', result.losses.map((loss) => ({
     code: loss.code,
     message: loss.message,
     // `frontmatter-synthesized` records a DECISION between two readings, not a
@@ -101,6 +102,12 @@ export function migrateMarkdown(
     fidelity: loss.code === 'frontmatter-synthesized' ? 'preserved' : 'dropped',
     confidence: 'exact',
   })))
+  if (fallback.report.diagnostics[0]?.code === 'literal-text-verified') return fallback
+  const assessment = assessMarkdown(source, result.value)
+  if (assessment.complete && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
+    return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: assessment.diagnostics } }
+  }
+  return fallback
 }
 
 export function migrateDjot(source: string): MigrationResult {
