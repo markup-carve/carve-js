@@ -1590,21 +1590,36 @@ const SINGLE_CHARACTER_OPENERS = '!'
  * E3 scope (markup-carve/carve#2091), so such a span is written braced and
  * the descendant nests inside it.
  */
-function holdsOpenKind(nodes: readonly InlineNode[], kinds: ReadonlySet<string>): boolean {
-  const stack: unknown[] = [...nodes]
-  while (stack.length > 0) {
-    const node = stack.pop()
-    if (node === null || typeof node !== 'object') continue
-    if (Array.isArray(node)) {
-      stack.push(...node)
+function repeatedEmphasisNodes(ast: Document): WeakSet<object> {
+  const repeated = new WeakSet<object>()
+  const active = new Map<string, object[]>()
+  const path = new WeakSet<object>()
+  const stack: Array<{ value: unknown; exit?: boolean; kind?: string | undefined }> = [{ value: ast }]
+  while (stack.length) {
+    const frame = stack.pop()!
+    const value = frame.value
+    if (value === null || typeof value !== 'object') continue
+    if (frame.exit) {
+      path.delete(value)
+      if (frame.kind) active.get(frame.kind)!.pop()
       continue
     }
-    const record = node as { type?: string }
-    if (record.type !== undefined && kinds.has(record.type)) return true
-    for (const value of Object.values(node)) if (typeof value === 'object') stack.push(value)
+    if (path.has(value)) continue
+    path.add(value)
+    const node = value as { type?: string; children?: unknown[] }
+    const kind = node.type && EMPHASIS_KINDS.has(node.type) && Array.isArray(node.children) ? node.type : undefined
+    if (kind) {
+      const ancestors = active.get(kind) ?? []
+      const ancestor = ancestors.at(-1)
+      if (ancestor) { repeated.add(ancestor); repeated.add(value) }
+      ancestors.push(value)
+      active.set(kind, ancestors)
+    }
+    stack.push({ value, exit: true, kind })
+    const children = value instanceof Map ? [...value.values()] : Object.entries(value).filter(([key]) => key !== 'attrs' && key !== 'pos').map(([, child]) => child)
+    for (let at = children.length - 1; at >= 0; at--) stack.push({ value: children[at] })
   }
-
-  return false
+  return repeated
 }
 
 /** A bare emphasis closer cannot bound a `%%` comment. */
@@ -1624,10 +1639,7 @@ function holdsUnboundedComment(nodes: readonly InlineNode[]): boolean {
   return false
 }
 
-/**
- * The seven kinds E3 puts on one stack: a second level of a kind has no
- * spelling, braced or bare (markup-carve/carve#2078).
- */
+/** The seven native emphasis kinds. */
 const EMPHASIS_KINDS = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript'])
 
 const BRACEABLE_TYPES = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
@@ -2815,7 +2827,7 @@ class CarveRenderSession {
     this.writtenBraced = new WeakSet()
     this.openEmphasisKinds = new Set()
     this.labelKinds = new Set()
-    this.bracedForScope = new WeakSet()
+    this.bracedForScope = repeatedEmphasisNodes(ast)
     this.attributeEnclosures = []
     this.attributeBracketDepth = 0
     this.expandedBoldItalic = new WeakSet()
@@ -4229,27 +4241,16 @@ class CarveRenderSession {
         ? renderForcedEmphasis(delim, content)
         : renderEmphasis(delim, content, prevChar, nextChar)
     }
-    // E3 pushes no second level of one kind while one is open, and the forced
-    // form is on the same stack, so a span of a kind already open has no
-    // spelling at all (markup-carve/carve#2078).
     if (node.type === 'insert' || node.type === 'delete' || node.type === 'substitution') {
       renderSession.attributeEnclosures.push(node)
       try { return renderInlineDispatch() } finally { renderSession.attributeEnclosures.pop() }
     }
     if (EMPHASIS_KINDS.has(node.type)) {
-      if (renderSession.openEmphasisKinds.has(node.type) && !renderSession.labelKinds.has(node.type)) {
-        const refusal = new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
-        if (!renderSession.collectRefusedSpans) throw refusal
-        if (renderSession.refusedSpans.length === 0) renderSession.rowsBeforeFirstSpan = renderSession.refusedTableRows.length
-        renderSession.refusedSpans.push(refusal)
-        return renderSession.renderInlines((node as { children?: InlineNode[] }).children ?? [], ctx)
-      }
       const labelKinds = renderSession.labelKinds
       renderSession.labelKinds = new Set(labelKinds)
       renderSession.labelKinds.delete(node.type)
       const outer = renderSession.openEmphasisKinds
-      const children = (node as { children?: InlineNode[] }).children ?? []
-      const scoped = node.type === 'superscript' || node.type === 'subscript' || holdsOpenKind(children, outer)
+      const scoped = node.type === 'superscript' || node.type === 'subscript' || renderSession.bracedForScope.has(node)
       if (scoped) renderSession.bracedForScope.add(node)
       renderSession.openEmphasisKinds = scoped ? new Set([node.type]) : new Set([...outer, node.type])
       renderSession.attributeEnclosures.push(node)
@@ -4381,10 +4382,9 @@ class CarveRenderSession {
         return withAttrs(`{~${renderSession.renderInlines(node.old, ctx)}~>${renderSession.renderInlines(node.new, ctx)}~}`)
       case 'critic_comment':
         // The content is literal (PART 3 EDITORIAL COMMENT CONTENT IS LITERAL),
-        // so an escape reaches the reader as a backslash. A `}` has no spelling
-        // at all: the content production takes none (carve-js#1847).
-        if (node.text.includes('}')) {
-          throw new SourceUnspellableError('critic_comment', 'an editorial comment holding a closing brace has no Carve source spelling')
+        // so an escape reaches the reader as a backslash.
+        if (node.text.includes('#}')) {
+          throw new SourceUnspellableError('critic_comment', 'an editorial comment holding its closing sequence has no Carve source spelling')
         }
         return `{#${node.text}#}`
       case 'heading_ref':
@@ -4838,7 +4838,6 @@ class CarveRenderSession {
   private redundantIds = new WeakSet<object>()
 
   /** The inline nodes this pass wrote with a braced opener. */
-  private writtenBraced = new WeakSet<object>()
 
   /** Attribute values must not close an enclosing emphasis span. */
   private attributeEnclosures: InlineNode[] = []
@@ -4871,17 +4870,17 @@ class CarveRenderSession {
   /** Spans written braced so their content starts a scope of its own. */
   private bracedForScope = new WeakSet<object>()
 
-  /**
-   * Records a braced emphasis, and refuses one holding a braced span of the same
-   * kind with no braced span of another kind between them: E3 keeps that inner
-   * `{*` literal (markup-carve/carve#2066, carve#2091).
-   */
+  private writtenBraced = new WeakSet<object>()
+
+  /** Keep the existing editorial nesting ceiling. */
   private bracedOnce(node: InlineNode, body: string): string {
     if (!BRACEABLE_TYPES.has(node.type) || !body.startsWith('{')) return body
+    if (node.type === 'insert' || node.type === 'delete') {
     const children = (node as { children?: InlineNode[] }).children ?? []
     const inner = nearestOfType(children, node.type, this.writtenBraced).find((child) => this.writtenBraced.has(child))
     if (inner !== undefined) {
       throw new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
+    }
     }
     this.writtenBraced.add(node)
     return body

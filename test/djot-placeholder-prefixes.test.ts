@@ -43,10 +43,10 @@ it('keeps user empty-term markers in image alt text', () => {
 })
 
 for (const base of ['DJOTSTRONG0', 'DJOTLITERAL\0' + '0', 'DJOTUSERNUL']) {
-  it(`keeps user markers across flattened emphasis: ${base.replaceAll('\0', '')}`, () => {
+  it(`keeps user markers across nested emphasis: ${base.replaceAll('\0', '')}`, () => {
     const source = '{*a \0{*' + base + '\0' + '0\0*} b*} w{.c}'
     const converted = djotToCarve(source)
-    expect(converted).toContain('\0' + base + '\0' + '0\0')
+    expect(converted).toContain('\0{*' + base + '\0' + '0\0*}')
     expect(carveToHtml(converted).match(/class="c"/g)).toHaveLength(1)
   })
 }
@@ -81,7 +81,7 @@ for (const base of ['DJOTINVALIDATTR0', 'DJOTINVALIDATTR\0' + '0', 'DJOTNOTEATTR
     const token = '\0' + base + '\0'
     for (const source of ['\0{.a}' + base + '\0 {x y}', '{*a \0{*' + base + '\0*} b*} {x y}']) {
       const converted = djotToCarve(source + '\n\n[^n]: note\n\n  {.c}\n\n[^n]')
-      expect(converted).toContain(source.startsWith('\0{.a}') ? '[\0]{.a}' + base + '\0' : token)
+      expect(converted).toContain(source.startsWith('\0{.a}') ? '[\0]{.a}' + base + '\0' : '\0{*' + base + '\0*}')
       expect(converted.replaceAll(token, '')).not.toContain('\0DJOT')
     }
   })

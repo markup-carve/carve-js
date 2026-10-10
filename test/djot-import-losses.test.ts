@@ -2,6 +2,10 @@ import { expect, it } from 'vitest'
 import { djotToCarve, migrateDjot } from '../src/index.js'
 import { djotToCarveWithLosses } from '../src/djot-import.js'
 
+it.each(['_({_foo_})_\n', '*****a*****\n', '__emphasis inside_ emphasis_\n'])('preserves repeated emphasis without an import loss: %s', source => {
+  expect(djotToCarveWithLosses(source).losses).toEqual([])
+})
+
 it.each([
   '<https://example.com/[x][missing]>\n',
   '[x](a(b[x][missing]c))\n',
@@ -17,9 +21,6 @@ it.each([
 })
 
 it.each([
-  ['_({_foo_})_\n', 'Nested same-kind emphasis', 1],
-  ['*****a*****\n', 'Nested same-kind emphasis', 1],
-  ['__emphasis inside_ emphasis_\n', 'Nested same-kind emphasis', 1],
   ['##\n', 'An empty heading', 1],
   ['[link][]\n\n[link]:\n[link2]: url\n', 'A link with an empty destination', 1],
   ['[link][a and\nb]\n', 'An unresolved Djot reference', 1],

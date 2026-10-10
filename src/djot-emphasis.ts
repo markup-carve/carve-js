@@ -1,3 +1,4 @@
+import { MAX_NESTING_DEPTH } from './parse.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
@@ -346,17 +347,17 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     return text + plain(cursor, end)
   }
-  const render = (pair: Pair, outer: Set<string>): string => {
-    if (outer.has(pair.kind)) {
+  const render = (pair: Pair, outer: Set<string>, depth: number): string => {
+    if (depth >= MAX_NESTING_DEPTH - 1) {
       flattened?.(pair.start)
       return body(pair.openEnd, pair.close, pair.children, outer)
     }
-    const scope = pair.children.some((child) => [...child.kinds].some((kind) => outer.has(kind)))
+    const scope = outer.has(pair.kind) || pair.children.some((child) => child.kinds.has(pair.kind))
     const content = body(
       pair.openEnd,
       pair.close,
       pair.children,
-      scope ? new Set([pair.kind]) : new Set([...outer, pair.kind]),
+      new Set([...outer, pair.kind]),
     )
     const delimiter = pair.kind === '_' ? '/' : pair.kind === '~' ? ',' : pair.kind ==='^' ? '^' : '*'
     const emptyBoundary =
@@ -381,24 +382,19 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     return protect(forced ? `{${delimiter}` : delimiter) + content + protect(forced ? `${delimiter}}` : delimiter)
   }
-  const work: Array<{ pair: Pair; outer: Set<string>; ready: boolean }> = roots
-    .map((pair) => ({ pair, outer: new Set<string>(), ready: false }))
+  const work: Array<{ pair: Pair; outer: Set<string>; ready: boolean; depth: number }> = roots
+    .map((pair) => ({ pair, outer: new Set<string>(), ready: false, depth: 0 }))
     .reverse()
   while (work.length) {
     const frame = work.pop()!
     if (frame.ready) {
-      rendered.set(frame.pair, render(frame.pair, frame.outer))
+      rendered.set(frame.pair, render(frame.pair, frame.outer, frame.depth))
       continue
     }
     work.push({ ...frame, ready: true })
-    const scope = frame.pair.children.some((child) => [...child.kinds].some((kind) => frame.outer.has(kind)))
-    const inner = frame.outer.has(frame.pair.kind)
-      ? frame.outer
-      : scope
-        ? new Set([frame.pair.kind])
-        : new Set([...frame.outer, frame.pair.kind])
+    const childScope = new Set([...frame.outer, frame.pair.kind])
     for (let i = frame.pair.children.length - 1; i >= 0; i--)
-      work.push({ pair: frame.pair.children[i]!, outer: inner, ready: false })
+      work.push({ pair: frame.pair.children[i]!, outer: childScope, ready: false, depth: frame.depth + 1 })
   }
   return convert(body(0, source.length, roots, new Set())).replace(
     new RegExp(`${literalPrefix}(\\d+)\0`, 'g'),

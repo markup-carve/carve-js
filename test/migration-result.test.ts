@@ -49,7 +49,7 @@ describe('shared migration result', () => {
 
   it('does not claim a Djot rewrite was applied without importer evidence', () => {
     const result = migrateDjot('_emphasis_ and **strong**')
-    expect(result.value).toBe('/emphasis/ and *strong*')
+    expect(result.value).toBe('/emphasis/ and {*{*strong*}*}')
     expect(result.report.diagnostics).toEqual([
       expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
       expect.objectContaining({ code: 'structure-unspellable', fidelity: 'dropped', confidence: 'exact', path: 'line:1' }),

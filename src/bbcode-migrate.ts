@@ -489,7 +489,7 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): Writt
     // The parent's own delimiters are not text: a child at its edge has no
     // neighbor there, which is how the writer spells `/_x_/`.
     const inner = writeMarks(piece.children, '', '')
-    const body = inner.text
+    let body = inner.text
     if (body === '') return
     // The post's own text was escaped while the tags were still tags, so a
     // literal delimiter now touching an opener was never seen: escape it.
@@ -514,6 +514,11 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): Writt
       body.startsWith(delim) ||
       body.endsWith(delim) ||
       (delim === '/' && body.startsWith('*') && body.endsWith('*'))
+    if (body.endsWith('{')) {
+      let backslashes = 0
+      while (body[body.length - 2 - backslashes] === '\\') backslashes++
+      if (backslashes % 2 === 0) body = body.slice(0, -1) + '\\{'
+    }
     const open = braced ? `{${delim}` : delim
     const close = braced ? `${delim}}` : delim
     const text = open + body + close
