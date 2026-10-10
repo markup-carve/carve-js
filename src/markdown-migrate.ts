@@ -1136,6 +1136,7 @@ function convertInline(
   table = false,
   reportEmptyLosses = true,
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
+  unwrapEmptyLinks = true,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -1263,6 +1264,7 @@ function convertInline(
       ...(sourceLine === undefined ? {} : { line: sourceLine }),
     })
   }, (subject, offset) => {
+    if (!unwrapEmptyLinks) return true
     if (subject !== opaqueSubject) {
       opaqueSubject = subject
       opaqueRanges = []
@@ -5905,7 +5907,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     while (out.length > 0 && out.at(-1)!.trim() === '') out.pop()
     for (const definition of removed.definitions) {
       if (out.length > 0) out.push('')
-      out.push(convertInline(definition, dialect))
+      out.push(convertInline(definition, dialect, false, false, undefined, true, false, false, undefined, false))
     }
     if (markdown.endsWith('\n')) out.push('')
   }

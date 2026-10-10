@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { markdownToCarve, migrateMarkdown } from '../src/index.js'
+import { carveToHtml, markdownToCarve, migrateMarkdown } from '../src/index.js'
 
 it.each([["``` f&ouml;&ouml;\nfoo\n```\n", 1], ["````;\n````\n", 1], ["[foo]: <>\n\n[foo]\n", 3], ["[link]()\n", 1], ["[link](<>)\n", 1], ["[]()\n", 1], ["[foo]()\n\n[foo]: /url1\n", 1], ["before\n\n> ```föö\n> x\n> ```\n", 3], ["before\n\n- ```föö\n  x\n  ```\n", 3], ["before\n\n![alt](<> \"title\")\n", 3], ["before\n\nfirst\n[link]()\n", 4]])('reports an unspellable Markdown construct at its source line: %s', (source, line) => {
   const result = migrateMarkdown(source)
@@ -42,4 +42,15 @@ it.each([
 ])('keeps first item lines and protected HTML offsets: %s', (source, line) => {
   const loss = migrateMarkdown(source).report.diagnostics.find(row => row.code === 'structure-unspellable')
   expect(loss?.path).toBe(`line:${line}`)
+})
+
+
+it.each([
+  ["[foo]: /u '[l]()'\n\n[foo]", '[l]()'],
+  ['[foo]: /u "![l]()"\n\n[foo]', '![l]()'],
+  ["[foo]: /u '[l]()'\n\n" + '\n'.repeat(8) + '[foo]', '[l]()'],
+])('keeps moved reference titles literal without loss diagnostics: %s', (source, title) => {
+  const result = migrateMarkdown(source)
+  expect(result.report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
+  expect(carveToHtml(result.value)).toContain(`title="${title}"`)
 })
