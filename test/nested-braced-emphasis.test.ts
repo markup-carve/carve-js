@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { carveToHtml, markdownToCarve, parse, renderCarve, renderHtml, toAstJson } from '../src/index.js'
+import { carveToHtml, markdownToCarve, parse, renderCarve, renderHtml, migrateDjot, migrateMarkdown, toAstJson, carveToCarvePatch, applySourcePatch, createSourcePatch } from '../src/index.js'
 import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
 import { MAX_NESTING_DEPTH } from '../src/parse.js'
 
@@ -97,6 +97,96 @@ describe('explicit same-kind emphasis', () => {
   }
 })
 
+it('retains source positions and edits for Unicode nested braced spans', () => {
+  const source = '😀 {*outer {*inner ä*} tail*}{.outer}\n';
+  const document = parse(source);
+  const paragraph = document.children[0] as { children: Array<{ type: string; pos?: { startOffset: number; endOffset: number }; children?: Array<{ type: string; pos?: { startOffset: number; endOffset: number } }> }> };
+  const outer = paragraph.children.find(node => node.type === 'strong')!;
+  const inner = outer.children!.find(node => node.type === 'strong')!;
+  const slice = (node: typeof inner) => [...source].slice(node.pos!.startOffset, node.pos!.endOffset).join('');
+  expect(slice(outer)).toBe('{*outer {*inner ä*} tail*}{.outer}');
+  expect(slice(inner)).toBe('{*inner ä*}');
+  const canonical = renderCarve(document);
+  expect(applySourcePatch(source, carveToCarvePatch(source))).toBe(canonical);
+  expect(carveToCarvePatch(canonical).edits).toEqual([]);
+  const edited = source.replace('inner ä', 'inner ö');
+  const patch = createSourcePatch(source, edited);
+  expect(applySourcePatch(source, patch)).toBe(edited);
+  expect(renderHtml(parse(edited))).toContain('<strong>inner ö</strong>');
+});
+
+const attributeBoundaries = JSON.parse(readFileSync(new URL('./fixtures/attribute-comment-boundaries.json', import.meta.url), 'utf8')) as Vector[]
+it.each(attributeBoundaries)('attribute/comment boundary $id', ({ source, html }) => {
+  const document = parse(source)
+  expect(renderHtml(document)).toBe(html)
+  expect(renderHtml(parse(renderCarve(document)))).toBe(html)
+})
+
+
+it.each([MAX_NESTING_DEPTH, MAX_NESTING_DEPTH + 5])('refuses an API tree at native depth %i', limit => {
+  const document = parse('x');
+  let children = (document.children[0] as { children: unknown[] }).children;
+  for (let depth = 0; depth < limit; depth++) {
+    children = [{ type: 'strong', children }];
+  }
+  (document.children[0] as { children: unknown[] }).children = children;
+  expect(() => renderCarve(document)).toThrow('native parser nesting limit');
+});
+
+
+it.each([
+  '{*a `x`{=html}{#id} b*} {# n #}',
+  '{*a <https://a.b>{#id} b*} {#n#}',
+])('keeps attached raw-code and autolink tails in %s', source => {
+  const document = parse(source);
+  expect(renderHtml(document).startsWith('<p><strong>a ')).toBe(true);
+  expect(renderHtml(parse(renderCarve(document)))).toBe(renderHtml(document));
+});
+
+
+it('reports Djot emphasis flattened to fit a link label depth budget', () => {
+  const source = '[' + '{*'.repeat(MAX_NESTING_DEPTH - 1) + 'x' + '*}'.repeat(MAX_NESTING_DEPTH - 1) + '](/u)';
+  const result = migrateDjot(source);
+  expect(renderHtml(parse(result.value))).not.toContain('{*');
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});
+
+
+it('refuses a glued comment whose prefix would become an attribute', () => {
+  const document = parse('/y/ {#a}b#}');
+  const paragraph = document.children[0] as { children: Array<{ type: string; value?: string }> };
+  paragraph.children = paragraph.children.filter(node => node.type !== 'text');
+  expect(() => renderCarve(document)).toThrow('glued editorial comment');
+  expect(renderHtml(parse('{#a}b#}'))).toContain('a}b');
+});
+
+
+it('bounds distant editorial-closer scans for many attached IDs', () => {
+  const source = '{*a ' + '/x/{#id} '.repeat(2048) + ' b*} {#note#}';
+  const original = String.prototype.indexOf;
+  let searched = 0;
+  const spy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (this: string, needle: string, from = 0) {
+    if (needle === '#}') searched += this.length - from;
+    return original.call(this, needle, from);
+  });
+  try {
+    expect(renderHtml(parse(source))).toContain('<strong>a ');
+    expect(searched).toBeLessThan(source.length * 4);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+it('fits Markdown emphasis inside a link label with an explicit loss diagnostic', () => {
+  const source = '[' + '**a _a '.repeat(MAX_NESTING_DEPTH / 2) + 'x' + ' b_ b**'.repeat(MAX_NESTING_DEPTH / 2) + '](/u)';
+  const result = migrateMarkdown(source);
+  const html = renderHtml(parse(result.value));
+  expect(html).not.toContain('{*');
+  expect(html).not.toContain('{/');
+  expect(html.match(/<strong>/g)?.length).toBe(MAX_NESTING_DEPTH / 2 - 1);
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});
+
 /*
  * A Markdown import writes the nested spelling now, so its generated braces
  * meet text and escapers that never saw one before.
@@ -125,3 +215,36 @@ describe('a Markdown import writing the nested spelling', () => {
     expect((html.match(/<strong>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 2)
   })
 })
+
+it.each(['highlight', 'mixed'])('counts Djot %s spans in the native depth budget', shape => {
+  const count = MAX_NESTING_DEPTH / 2;
+  const source = shape === 'highlight'
+    ? '{='.repeat(MAX_NESTING_DEPTH) + 'x' + '=}'.repeat(MAX_NESTING_DEPTH)
+    : '{='.repeat(count) + '{*'.repeat(count) + 'x' + '*}'.repeat(count) + '=}'.repeat(count);
+  const result = migrateDjot(source);
+  const html = renderHtml(parse(result.value));
+  expect(html).not.toContain('{=');
+  expect(html).not.toContain('{*');
+  expect((html.match(/<(?:mark|strong)>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 1);
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});
+
+it('counts emphasis around a Markdown link together with emphasis in its label', () => {
+  const source = '**a _a '.repeat(50) + '[' + '**b _b '.repeat(50) + 'x' + ' c_ c**'.repeat(50) + '](/u)' + ' d_ d**'.repeat(50);
+  const result = migrateMarkdown(source);
+  const html = renderHtml(parse(result.value));
+  expect(html).not.toContain('{*');
+  expect(html).not.toContain('{/');
+  expect(html).toContain('<a href="/u">');
+  expect((html.match(/<(?:strong|em)>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 2);
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});
+
+it.each([['{+', '+}'], ['{-', '-}']])('counts a Djot editorial host %s in the depth budget', (open, close) => {
+  const source = open + '{*'.repeat(MAX_NESTING_DEPTH - 1) + 'x' + '*}'.repeat(MAX_NESTING_DEPTH - 1) + close;
+  const result = migrateDjot(source);
+  const html = renderHtml(parse(result.value));
+  expect(html).not.toContain('{*');
+  expect((html.match(/<strong>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 2);
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});

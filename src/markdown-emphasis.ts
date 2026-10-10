@@ -15,8 +15,16 @@ interface Run {
 }
 interface Pair { open: number; close: number; width: number; kind: '*' | '/' | '~' }
 
+const protectedDepths = new WeakMap<readonly string[], Map<string, number>>()
+
+export function recordMarkdownProtectedDepth(spans: readonly string[], token: string, depth: number): void {
+  let depths = protectedDepths.get(spans)
+  if (!depths) protectedDepths.set(spans, depths = new Map())
+  depths.set(token, depth)
+}
+
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -144,12 +152,14 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       bracketStarts.set(i, start)
     }
   }
-  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; repeated: boolean; keep: boolean }
+  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; repeated: boolean; keep: boolean; peak: number }
   const output: string[] = []
   const stack: Frame[] = []
   const active = new Map<string, number>()
   let flattened = false
-  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true }
+  const hostPeaks = protectedDepths.get(protectedSpans)
+  const protectedToken = /\x00P(\d+)\x00/y
+  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true, peak: 0 }
   const record = (first: string, last: string): void => {
     if (frame.first === '') frame.first = first
     if (last !== '') frame.last = last
@@ -161,7 +171,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         frame.i = pair.close + pair.width
         stack.push(frame)
         frame = { i: pair.open + pair.width, end: pair.close, kind: pair.kind, pair, parent: frame.kind,
-          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true }
+          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true, peak: 0 }
         frame.repeated = (active.get(pair.kind) ?? 0) > 0
         // `hostDepth` is the inline nesting this text already sits under - a
         // link label is converted on its own, so its own levels are not here.
@@ -171,6 +181,11 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       } else {
         const ch = source[frame.i++]!
         const at = frame.i - 1
+        if (ch === '\0' && hostPeaks) {
+          protectedToken.lastIndex = at
+          const token = protectedToken.exec(source)
+          if (token) frame.peak = Math.max(frame.peak, hostPeaks.get(token[0]) ?? 0)
+        }
         const crossesBracket = frame.pair !== undefined && (
           ch === '[' && (bracketEnds.get(at) ?? -1) >= frame.end
           || ch === ']' && (bracketStarts.get(at) ?? at) < frame.pair.open
@@ -184,6 +199,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     const { pair } = frame
     let first = frame.first, last = frame.last
     let strong = frame.strong, italic = frame.italic, strike = frame.strike
+    frame.keep &&= hostDepth + stack.length + frame.peak < MAX_NESTING_DEPTH
     if (frame.keep) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
       const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => /[*_]/.test(source[i] ?? '') && !claimed.has(i))
@@ -201,12 +217,15 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       last = braced ? '}' : pair.kind
     } else flattened = true
     active.set(pair.kind, active.get(pair.kind)! - 1)
+    const peak = frame.peak + (frame.keep ? 1 : 0)
     frame = stack.pop()!
+    frame.peak = Math.max(frame.peak, peak)
     frame.strong ||= strong
     frame.italic ||= italic
     frame.strike ||= strike
     record(first, last)
   }
   if (flattened) onFlatten()
+  onDepth?.(frame.peak)
   return output.join('')
 }

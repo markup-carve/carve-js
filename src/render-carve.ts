@@ -1616,8 +1616,22 @@ function repeatedEmphasisNodes(ast: Document): WeakSet<object> {
       active.set(kind, ancestors)
     }
     stack.push({ value, exit: true, kind })
-    const children = value instanceof Map ? [...value.values()] : Object.entries(value).filter(([key]) => key !== 'attrs' && key !== 'pos').map(([, child]) => child)
-    for (let at = children.length - 1; at >= 0; at--) stack.push({ value: children[at] })
+    if (Array.isArray(value)) {
+      for (let at = value.length - 1; at >= 0; at--) {
+        const child: unknown = value[at]
+        if (child !== null && typeof child === 'object') stack.push({ value: child })
+      }
+    } else if (value instanceof Map) {
+      for (const child of value.values()) {
+        if (child !== null && typeof child === 'object') stack.push({ value: child })
+      }
+    } else {
+      for (const key of Object.keys(value)) {
+        if (key === 'attrs' || key === 'pos') continue
+        const child = (value as Record<string, unknown>)[key]
+        if (child !== null && typeof child === 'object') stack.push({ value: child })
+      }
+    }
   }
   return repeated
 }
@@ -4011,6 +4025,7 @@ class CarveRenderSession {
     const nodes = flattenRubyForCarve(sourceNodes)
     if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
     if (ctx.inlineDepth >= MAX_NESTING_DEPTH && nodes.length === 1 && nodes[0]!.type === 'text') return nodes[0]!.value
+    if (ctx.inlineDepth >= MAX_NESTING_DEPTH - 1 && nodes.some(node => ['strong', 'emphasis', 'underline', 'superscript', 'subscript', 'strike', 'highlight'].includes(node.type))) throw new SourceUnspellableError(nodes[0]?.type ?? 'inline', 'inline content exceeds the native parser nesting limit')
     if (ctx.inlineDepth === 0) {
       collectLoneBrackets(sourceNodes, false, this.loneBrackets, this.leftToSearch, this.pairedClosers, this.crossingOpeners, this.crossingClosers)
     }
@@ -4090,6 +4105,14 @@ class CarveRenderSession {
           outTail = out.slice(-OUT_TAIL_LENGTH)
           lineLength += 1
           lineTail = out.slice(-2)
+        }
+
+        if (node.type === 'critic_comment' && node.text.includes('}') && nodes[idx - 1]
+          && !['text', 'escaped_text', 'non_breaking_space', 'soft_break', 'hard_break', 'mention', 'tag', 'heading_ref', 'smart_punctuation', 'substitution', 'critic_comment'].includes(nodes[idx - 1]!.type)) {
+          const probe = parse('/x/' + piece).children[0];
+          if (probe?.type !== 'paragraph' || !probe.children.some(child => child.type === 'critic_comment' && child.text === node.text)) {
+            throw new SourceUnspellableError('critic_comment', 'a glued editorial comment would attach attributes to the preceding node');
+          }
         }
 
         refuseGluedName(node, nodes[idx - 1], outTail, piece)

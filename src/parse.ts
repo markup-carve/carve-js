@@ -7534,11 +7534,22 @@ function spanAttrProvablyInvalid(text: string, brace: number, quoteEnd: (start: 
 // cost nothing: the string it took was an empty `<del>`.
 const RE_BRACED_EN_DASH = /^\{--\}/
 
-function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destinations: Map<number, number>, lineComments: Map<number, number>, brackets: ((at: number) => number | undefined) | undefined): Map<number, number> {
+function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destinations: Map<number, number>, lineComments: Map<number, number>, attributeTails: Map<number, number>, brackets: ((at: number) => number | undefined) | undefined): Map<number, number> {
+  if (codeEnds) {
+    for (let at = 0; at < text.length; at++) {
+      const end = codeEnds[at]!;
+      if (end >= 0 && text[end] === '{') {
+        const raw = RE_RAW_INLINE.exec(text.slice(end));
+        if (raw) codeEnds[at] = end + raw[0].length;
+      }
+    }
+  }
   const ends = new Map<number, number>()
   const labels: number[] = []
+  let lastLabelClose = -1
   const lastComment = text.lastIndexOf('%}')
   const lastEditorial = text.lastIndexOf('#}')
+  const nextComments = new Map<string, number>()
     let valueStops: Int32Array | undefined
     const valueEnd = (start: number): number => {
       if (!valueStops) {
@@ -7571,7 +7582,7 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
       return (text[start] === '"' ? quoteStops.double : quoteStops.single)[start + 1]!
     }
   for (let at = 0; at < text.length; at++) {
-    while (labels.length && labels.at(-1)! <= at) labels.pop()
+    while (labels.length && labels.at(-1)! <= at) lastLabelClose = labels.pop()!
     if (text[at] === '[') { const close = brackets?.(at); if (close !== undefined) labels.push(close) }
     if (text[at] === '\\') { at++; continue }
     const protectedEnd = destinations.get(at) ?? (text[at] === '`' && (codeEnds?.[at] ?? -1) !== -1 ? codeEnds![at] : undefined)
@@ -7588,16 +7599,37 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
       const autolink = RE_AUTOLINK_STICKY.exec(text)
       if (autolink) { ends.set(at, at + autolink[0].length); at += autolink[0].length - 1; continue }
     }
+    if (text[at] === '{' && text[at + 1] === '#' && lastLabelClose === at - 1 && !spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd)) {
+      const attribute = RE_INLINE_ATTR.exec(text.slice(at))
+      if (attribute && isValidInlineAttrPayload(attribute[1]!) && !isEmptyAttrs(parseAttrs(attribute[1]!))) {
+        ends.set(at, at + attribute[0].length)
+        attributeTails.set(at, at + attribute[0].length)
+        at += attribute[0].length - 1
+        continue
+      }
+    }
     if (text[at] === '{' && (text[at + 1] === '%' || text[at + 1] === '#')) {
       const marker = text[at + 1]!
       const last = marker === '%' ? lastComment : lastEditorial
-      const close = last >= at + 2 ? text.indexOf(`${marker}}`, at + 2) : -1
-      if (close !== -1 && (marker === '%' || close > at + 2)) { ends.set(at, close + 2); at = close + 1; continue }
+      let close = nextComments.get(marker) ?? -1
+      if (close < at + 2) {
+        close = last >= at + 2 ? text.indexOf(`${marker}}`, at + 2) : -1
+        nextComments.set(marker, close)
+      }
+      const prefix = marker === '#' && !spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd) ? RE_INLINE_ATTR.exec(text.slice(at)) : null
+      const prefixEnd = prefix && isValidInlineAttrPayload(prefix[1]!) && !isEmptyAttrs(parseAttrs(prefix[1]!)) ? at + prefix[0].length : undefined
+      if (prefixEnd !== undefined) attributeTails.set(at, prefixEnd)
+      if (close !== -1 && (marker === '%' || close > at + 2)) {
+        ends.set(at, close + 2)
+        at = (prefixEnd ?? close + 2) - 1
+        continue
+      }
     }
     if (text[at] !== '{' || spanAttrProvablyInvalid(text, at, quoteEnd, valueEnd)) continue
     const match = RE_INLINE_ATTR.exec(text.slice(at))
     if (match && isValidInlineAttrPayload(match[1]!) && !isEmptyAttrs(parseAttrs(match[1]!))) {
       ends.set(at, at + match[0].length)
+      attributeTails.set(at, at + match[0].length)
       at += match[0].length - 1
     }
   }
@@ -13625,22 +13657,27 @@ class ParseSession {
 
   private pairEndTable: Array<Int32Array | undefined> = []
 
-  private pairEndCache = new Map<string, { tables: Array<Int32Array | undefined>; bytes: number }>()
+  private pairAttributeTails = new Map<number, number>()
+  private bareAttributePairs = new Map<number, { close: number; end: number }>()
+
+  private pairEndCache = new Map<string, { tables: Array<Int32Array | undefined>; bytes: number; attributeTails: Map<number, number>; barePairs: Map<number, { close: number; end: number }> }>()
   private pairEndCacheBytes = 0
   private pairEndCacheBudget = 0
   private inlinePairFrameDepth = 0
 
-  private rememberPairTables(text: string, tables: Array<Int32Array | undefined>): void {
-    const bytes = 128 + text.length * 2 + tables.reduce((sum, table) => sum + (table?.byteLength ?? 0), 0)
+  private rememberPairTables(text: string, tables: Array<Int32Array | undefined>, attributeTails = new Map<number, number>(), barePairs = new Map<number, { close: number; end: number }>()): void {
+    const bytes = 128 + text.length * 2 + attributeTails.size * 16 + barePairs.size * 24 + tables.reduce((sum, table) => sum + (table?.byteLength ?? 0), 0)
     while (this.pairEndCacheBytes + bytes > this.pairEndCacheBudget && this.pairEndCache.size > 0) {
       const oldest = this.pairEndCache.keys().next().value!
       this.pairEndCacheBytes -= this.pairEndCache.get(oldest)!.bytes
       this.pairEndCache.delete(oldest)
     }
-    this.pairEndCache.set(text, { tables, bytes })
+    this.pairEndCache.set(text, { tables, bytes, attributeTails, barePairs })
     this.pairEndCacheBytes += bytes
     this.pairEndText = text
     this.pairEndTable = tables
+    this.pairAttributeTails = attributeTails
+    this.bareAttributePairs = barePairs
   }
 
   /**
@@ -13658,6 +13695,8 @@ class ParseSession {
       this.pairEndCache.set(text, cached)
       this.pairEndText = text
       this.pairEndTable = cached.tables
+      this.pairAttributeTails = cached.attributeTails
+      this.bareAttributePairs = cached.barePairs
       return cached.tables
     }
     const n = text.length
@@ -13671,7 +13710,7 @@ class ParseSession {
       tables[m] = new Int32Array(n + 2).fill(-1)
       raws[m] = new Int32Array(n + 2).fill(-1)
     }
-    if (markers.length === 0) {
+    if (markers.length === 0 && !text.includes('{#')) {
       this.rememberPairTables(text, tables)
       return tables
     }
@@ -13680,7 +13719,18 @@ class ParseSession {
     const brackets = text.includes('[') ? buildBracketMap(text, true) : undefined
     const destinations = linkDestinations(text, newEmphasisMemo())
     const lineComments = new Map<number, number>()
-    const attributes = inlineOpaqueEnds(text, codeEnds, destinations, lineComments, brackets)
+    const attributeTails = new Map<number, number>()
+    const barePairs = new Map<number, { close: number; end: number }>()
+    const attributes = inlineOpaqueEnds(text, codeEnds, destinations, lineComments, attributeTails, brackets)
+    for (const [start, end] of [...attributeTails].reverse()) attributeTails.set(start, attributeTails.get(end) ?? end)
+    const bareMarkers = new Set<number>()
+    for (const start of attributeTails.keys()) {
+      const marker = text[start - 1]
+      if (marker !== undefined && '/*_~='.includes(marker)) bareMarkers.add(PAIR_MARKERS.indexOf(marker))
+    }
+    const bareTables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
+    for (const m of bareMarkers) bareTables[m] = new Int32Array(n + 2).fill(-1)
+    const afterAttributes = (end: number): number => attributeTails.get(end) ?? end
     const bracketEnds = new Set<number>()
     const openerMarks = new Set<number>()
     for (let at = 0; at < n; at++) {
@@ -13704,6 +13754,31 @@ class ParseSession {
       const bracketEnd = ch === '[' ? brackets?.(j) : undefined
       const destinationEnd = destinations.get(j)
       const attributeEnd = attributes.get(j)
+      for (const m of bareMarkers) {
+        const table = bareTables[m]!
+        const marker = PAIR_MARKERS[m]!
+        const before = text[j - 1]
+        let stop: number
+        if (ch === '\\') stop = table[j + 2]!
+        else if (bracketEnds.has(j)) stop = -1
+        else if (lineComments.has(j)) stop = table[lineComments.get(j)!]!
+        else if (codeEnd !== undefined) stop = codeEnd === -1 ? -1 : table[afterAttributes(codeEnd)]!
+        else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
+        else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
+        else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
+        else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
+        else if (ch === marker && before !== undefined && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next))) stop = j
+        else stop = table[j + 1]!
+        table[j] = stop
+      }
+      const bareId = PAIR_MARKERS.indexOf(ch)
+      const before = text[j - 1]
+      const canOpenBare = bareTables[bareId] !== undefined && next !== undefined && !isCarveWhitespace(next)
+        && next !== ch && before !== ch && (!before || !/[A-Za-z0-9_]/.test(before))
+        && (ch !== '=' || next !== '>') && ((ch !== '/' && ch !== '_') || before !== '/')
+      const bareClose = canOpenBare ? bareTables[bareId]![j + 1]! : -1
+      const bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
+      if (bareTail !== undefined) barePairs.set(j, { close: bareClose, end: bareTail })
       for (const m of markers) {
         const table = tables[m]!
         const raw = raws[m]!
@@ -13728,20 +13803,23 @@ class ParseSession {
         else if (codeEnd !== undefined) {
           // An unclosed run ends at the pair's closer instead of running to the
           // end of the block (markup-carve/carve#2056).
-          stop = codeEnd !== -1 ? table[codeEnd]! : raw[j]!
-        } else if (attributeEnd !== undefined) stop = table[attributeEnd]!
-        else if (bracketEnd !== undefined) stop = table[bracketEnd + 1]!
-        else if (destinationEnd !== undefined) stop = table[destinationEnd + 1]!
+          stop = codeEnd !== -1 ? table[afterAttributes(codeEnd)]! : raw[j]!
+        } else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
+        else if (bracketEnd !== undefined) stop = table[afterAttributes(bracketEnd + 1)]!
+        else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
         else if (isCloser) stop = j
         else if (ch === '{' && nextId !== -1 && (nextId !== m || FORCED_TYPE[next!] !== undefined) && ends[j] !== -1) {
           // A matched child owns its closer, including a child of this kind.
           // Unmatched openers leave the following closer visible.
-          stop = table[ends[j]!]!
-        } else stop = table[j + 1]!
+          stop = table[afterAttributes(ends[j]!)]!
+        } else {
+          stop = table[j + 1]!
+          if (bareTail !== undefined && bareId !== m && (stop === -1 || stop >= bareClose)) stop = table[bareTail]!
+        }
         table[j] = stop
       }
     }
-    this.rememberPairTables(text, tables)
+    this.rememberPairTables(text, tables, attributeTails, barePairs)
 
     return tables
   }
@@ -14735,30 +14813,6 @@ class ParseSession {
           i += 4
           continue
         }
-        const criticClose = text[i + 1] === '#' && criticCmtSuf?.[i] ? text.indexOf('#}', i + 2) : -1
-        if (criticClose > i + 2) {
-          flush()
-          out.push(this.withPos({ type: 'critic_comment', text: text.slice(i + 2, criticClose) } as CriticComment, source, text, i, criticClose + 2))
-          i = criticClose + 2
-          continue
-        }
-        // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
-        // bare delimiter, but with no word-boundary condition.
-        const delim = text[i + 1]
-        const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined
-          ? this.bracedPairEnd(text, i, `${delim}}`)
-          : -1
-        if (forced !== -1 && forced <= inlineEnd) {
-          flush()
-          if (inlineDepth >= MAX_NESTING_DEPTH) {
-            out.push(this.withPos({ type: 'text', value: text.slice(i, forced) } as Text, source, text, i, forced))
-            i = forced
-            continue
-          }
-          out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!])) } as Emphasis, source, text, i, forced))
-          i = forced
-          continue
-        }
         // Inline attribute block — attaches to preceding node. It must be GLUED:
         // a non-empty `buf` means unflushed text (e.g. a space) sits between the
         // preceding node and the `{`, so the block is NOT attached -- it stays
@@ -14795,6 +14849,31 @@ class ParseSession {
             continue
           }
         }
+        const criticClose = text[i + 1] === '#' && criticCmtSuf?.[i] ? text.indexOf('#}', i + 2) : -1
+        if (criticClose > i + 2) {
+          flush()
+          out.push(this.withPos({ type: 'critic_comment', text: text.slice(i + 2, criticClose) } as CriticComment, source, text, i, criticClose + 2))
+          i = criticClose + 2
+          continue
+        }
+        // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
+        // bare delimiter, but with no word-boundary condition.
+        const delim = text[i + 1]
+        const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined
+          ? this.bracedPairEnd(text, i, `${delim}}`)
+          : -1
+        if (forced !== -1 && forced <= inlineEnd) {
+          flush()
+          if (inlineDepth >= MAX_NESTING_DEPTH) {
+            out.push(this.withPos({ type: 'text', value: text.slice(i, forced) } as Text, source, text, i, forced))
+            i = forced
+            continue
+          }
+          out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!])) } as Emphasis, source, text, i, forced))
+          i = forced
+          continue
+        }
+
       }
 
       // Mention
@@ -15247,10 +15326,16 @@ class ParseSession {
   ): number {
     // PART 8: a delimiter inside a balanced label cannot pair past its close.
     // Keep the original text so flanking and source offsets use the same run.
+    this.pairEndTables(text)
+    const attached = new Map<number, number>()
     for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!
+      const child = ch !== delim && !this.openKinds.has(ch) ? this.bareAttributePairs.get(j) : undefined
+      if (child) attached.set(child.close + 1, child.end)
+      const attachedEnd = attached.get(j)
+      if (attachedEnd !== undefined) { j = attachedEnd - 1; continue }
       // Skip escapes
       if (ch === '\\' && j + 1 < text.length) {
         j++
@@ -15261,7 +15346,7 @@ class ParseSession {
       if (ch === '`') {
         const span = verbatimSpanEnd(text, j)
         if (!span.closed) return -1
-        j = span.end - 1
+        j = (this.pairAttributeTails.get(span.end) ?? span.end) - 1
         continue
       }
       // An unbounded comment consumes the rest of its line before the delimiter
@@ -15291,7 +15376,7 @@ class ParseSession {
         RE_RAW_INLINE_STICKY.lastIndex = j
         const m = RE_RAW_INLINE_STICKY.exec(text)
         if (m) {
-          j += m[0].length - 1
+          j = (this.pairAttributeTails.get(j + m[0].length) ?? j + m[0].length) - 1
           continue
         }
       }
@@ -15299,7 +15384,7 @@ class ParseSession {
       if (ch === '{') {
         const end = this.bracedInlineEnd(text, j, memo)
         if (end !== -1) {
-          j = end
+          j = (this.pairAttributeTails.get(end + 1) ?? end + 1) - 1
           continue
         }
       }
@@ -15317,7 +15402,7 @@ class ParseSession {
       if (ch === '[') {
         const close = emphasisBrackets(text, memo)(j)
         if (close !== undefined) {
-          j = close
+          j = (this.pairAttributeTails.get(close + 1) ?? close + 1) - 1
           continue
         }
       }
@@ -15326,7 +15411,7 @@ class ParseSession {
       if (ch === '(' && text[j - 1] === ']') {
         const end = linkDestinations(text, memo).get(j)
         if (end !== undefined) {
-          j = end
+          j = (this.pairAttributeTails.get(end + 1) ?? end + 1) - 1
           continue
         }
       }
@@ -15334,7 +15419,7 @@ class ParseSession {
         RE_AUTOLINK_STICKY.lastIndex = j
         const m = RE_AUTOLINK_STICKY.exec(text)
         if (m) {
-          j += m[0].length - 1
+          j = (this.pairAttributeTails.get(j + m[0].length) ?? j + m[0].length) - 1
           continue
         }
       }
@@ -15361,7 +15446,7 @@ class ParseSession {
     const marker = text[open + 1]
     if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-')) {
       const stop = this.pairEndTables(text)[PAIR_MARKERS.indexOf(marker)]?.[open + 2] ?? -1
-      if (stop !== -1) return stop + 1
+      if (stop !== -1) return (this.pairAttributeTails.get(stop + 2) ?? stop + 2) - 1
     }
     if (marker === '#') {
       memo.lastCritic ??= text.lastIndexOf('#}')
