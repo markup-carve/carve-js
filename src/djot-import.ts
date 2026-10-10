@@ -445,7 +445,7 @@ function convertDjotDocument(djot: string): string {
   )
   const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody, invalidAttributes.inherited)))
   const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)))
-  const headingFolded = foldHeadingContinuations(dropLeadingDjotSeparators(layout))
+  const headingFolded = foldHeadingContinuations(dropLeadingDjotSeparators(escapeDjotNonTableRows(layout)))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
 
   const collapsedChars = collapsedMask.split('')
@@ -1715,6 +1715,19 @@ function closeDjotTableCode(source: string): string {
   }
   output.push(source.slice(cursor))
   return output.join('')
+}
+
+function escapeDjotNonTableRows(source: string): string {
+  if (!source.includes('|')) return source
+  const mask = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false, autolinks: false, attributeValues: false })
+  const rows = djotTableRows(source, mask)
+  let offset = 0
+  return source.split('\n').map((line, n) => {
+    const start = djotContentStart(line), end = line.trimEnd().length - 1
+    const escape = !rows[n] && line[start] === '|' && line[end] === '|' && mask[offset + start] === '|' && mask[offset + end] !== '|'
+    offset += line.length + 1
+    return escape ? line.slice(0, start) + '\\' + line.slice(start) : line
+  }).join('\n')
 }
 
 function normalizeDjotTablePipes(source: string): string {

@@ -1,6 +1,6 @@
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
-import { isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
+import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { nativeAttributeReader } from './djot-attributes.js'
 
 type Pair = {
@@ -29,6 +29,11 @@ export function djotPairedEmphasisOpeners(source: string): Map<number, number> {
 
 function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
+  const cells = new Set<number>()
+  if (source.includes('|')) {
+    const cellMask = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false, autolinks: false, attributeValues: false })
+    for (const at of djotInlineBoundaries(source, cellMask)) if (source[at] === '|' && cellMask[at] === '|') cells.add(at)
+  }
   const readAttributes = nativeAttributeReader(source)
   const attributes = new Map<number, { end: number; source: string }>()
   const emptyBlockAttributes = new Set<number>()
@@ -93,6 +98,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
   }
   for (let i = 0; i < source.length; i++) {
+    if (cells.has(i)) pendingBraces.clear()
     if (source[i] === '\n') {
       if (
         source
@@ -136,6 +142,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     for (const stack of openers.values()) while (stack.at(-1) && stack.at(-1)!.start >= from) stack.pop()
   }
   for (let i = 0; i < source.length; i++) {
+    if (cells.has(i)) { clear(0); brackets.length = 0; braces.length = 0 }
     if (i === lineStart) {
       const end = source.indexOf('\n', i)
       lineEnd = end < 0 ? source.length : end
