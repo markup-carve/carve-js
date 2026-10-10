@@ -8,8 +8,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
   const lines = source.split('\n')
   const maskedSource = maskDjotCodeAndDestinations(source)
   const mask = maskedSource.split('\n')
-  const divClosers = new Map<number, number>()
-  djotInlineBoundaries(source, maskedSource, true, divClosers)
+  const divClosers = new Map<number, number[]>()
+  if (source.includes(':::')) djotInlineBoundaries(source, maskedSource, true, divClosers)
   let lineOffset = 0
   const lineOffsets = lines.map(line => { const at = lineOffset; lineOffset += line.length + 1; return at })
   const fences = maskDjotFences(source).split('\n')
@@ -18,6 +18,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     prefix: string
     itemColumn?: number
     depth: number
+    start: number
   }[] = []
   const lists: {
     column: number
@@ -149,12 +150,17 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     }
     const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(visible)
     const top = divs.at(-1)
-    const closeCount = divClosers.get(lineOffsets[n]!)
-    if (div && top && closeCount !== undefined) {
+    const closeStarts = divClosers.get(lineOffsets[n]!)
+    if (div && top && closeStarts !== undefined) {
       dropOrphanAttributeLine(out)
-      for (let remaining = closeCount; remaining > 0 && divs.length; remaining--) {
+      let matched = 0
+      const outerStart = closeStarts.at(-1)!
+      while (divs.length && divs.at(-1)!.start >= outerStart) {
         const closed = divs.pop()!
-        out.push(closed.prefix + ':'.repeat(closed.width))
+        if (closed.start === closeStarts[matched]) {
+          out.push(closed.prefix + ':'.repeat(closed.width))
+          matched++
+        }
       }
       paragraph = false
       headingMarker = ''
@@ -238,6 +244,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
           prefix: quote + ' '.repeat(context!.target + context!.content),
           itemColumn: context!.column + context!.content,
           depth: quoteDepth,
+          start: lineOffsets[n]!,
         })
       paragraph = !itemDiv && !itemHeading && !body.startsWith('>')
       blank = !!itemDiv
@@ -249,6 +256,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         width: div[1]!.length,
         prefix: quote + ' '.repeat(indent),
         depth: quoteDepth,
+        start: lineOffsets[n]!,
         ...(parent && indent >= parent.column + parent.content ? { itemColumn: parent.column + parent.content } : {}),
       })
       out.push(original)

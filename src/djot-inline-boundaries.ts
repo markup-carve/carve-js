@@ -37,11 +37,11 @@ export function djotTableRows(source: string, mask: string): boolean[] {
 }
 
 
-export function djotInlineBoundaries(source: string, mask: string, codeScopes = false, divClosers?: Map<number, number>): number[] {
+export function djotInlineBoundaries(source: string, mask: string, codeScopes = false, divClosers?: Map<number, number[]>): number[] {
   const boundaries: number[] = []
   const rows = djotTableRows(source, mask)
   const items: Array<{ column: number; depth: number }> = []
-  const divs: Array<{ width: number; column: number; depth: number; itemColumn: number | undefined; itemDepth: number; minimumWidth: number; scopeStart: number }> = []
+  const divs: Array<{ width: number; column: number; depth: number; itemColumn: number | undefined; itemDepth: number; minimumWidth: number; scopeStart: number; start: number }> = []
   let previousBlock = true, previousDepth = 0
   let codeFence: { ch: string; width: number; depth: number; itemColumn: number | undefined } | undefined
   let offset = 0, previousBlank = true, row = 0
@@ -52,9 +52,12 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
     const content = line.slice(prefix.length), trimmed = content.replace(/^[ \t]*/, ''), indent = content.length - trimmed.length
     const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)/.exec(trimmed)
     const active = items.at(-1)
-    const startsItem = marker && (previousBlank || (active && depth <= active.depth && indent < active.column))
+    const startsItem: boolean = !!marker && ((previousBlank || codeScopes && previousBlock) || (!!active && depth <= active.depth && indent < active.column))
     const blank = trimmed === '' || trimmed === '\r'
     if (codeScopes) {
+      if (previousBlock && !blank) {
+        while (items.length && depth === items.at(-1)!.depth && indent < items.at(-1)!.column && !startsItem) items.pop()
+      }
       const blockStart = /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(trimmed) || !!marker
       while (divs.length) {
         const owner = divs.at(-1)!
@@ -73,12 +76,15 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
       const bodyDepth = depth + (nestedQuote.match(/>/g) ?? []).length
       body = body.slice(nestedQuote.length)
       if (nestedQuote) column = 0
-      const canOpen: boolean = previousBlock || previousBlank || !!startsItem || (blockStart && (depth < previousDepth || !!active && depth === active.depth && indent < active.column))
-      if (codeFence && (depth < codeFence.depth || codeFence.itemColumn !== undefined && depth === codeFence.depth && indent < codeFence.itemColumn && !blank)) codeFence = undefined
+      const canOpen: boolean = previousBlock || previousBlank || !!startsItem || (blockStart && (depth < previousDepth || !!items.at(-1) && depth === items.at(-1)!.depth && indent < items.at(-1)!.column))
+      if (codeFence && (depth < codeFence.depth || codeFence.itemColumn !== undefined && depth === codeFence.depth && indent < codeFence.itemColumn && !blank)) {
+        codeFence = undefined
+        while (items.length && depth === items.at(-1)!.depth && indent < items.at(-1)!.column) items.pop()
+      }
       const ticks = /^(`{3,}|~{3,})(.*)$/.exec(body)
       if (codeFence) {
         if (ticks && ticks[1]![0] === codeFence.ch && ticks[1]!.length >= codeFence.width &&
-            ticks[2]!.trim() === '' && bodyDepth === codeFence.depth) {
+            /^[ \t]*$/.test(ticks[2]!) && bodyDepth === codeFence.depth) {
           codeFence = undefined
           previousBlock = true
         } else previousBlock = false
@@ -98,18 +104,18 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
             if (divs[mid]!.minimumWidth <= fence[1]!.length) high = mid
             else low = mid + 1
           }
-          divClosers?.set(offset, divs.length - low)
+          divClosers?.set(offset, divs.slice(low).map(owner => owner.start).reverse())
           divs.length = low
           previousBlock = true
         } else if (fence && visible && canOpen) {
           boundaries.push(offset)
           divs.push({ width: fence[1]!.length, column, depth: bodyDepth,
             itemColumn: startsItem ? indent + (marker![0].startsWith('[^') ? 2 : marker![0].length) : (active && depth === active.depth && indent >= active.column ? active.column : undefined),
-            itemDepth: depth, minimumWidth: owner?.depth === bodyDepth ? Math.min(owner.minimumWidth, fence[1]!.length) : fence[1]!.length, scopeStart: owner?.depth === bodyDepth ? owner.scopeStart : divs.length })
+            itemDepth: depth, start: offset, minimumWidth: owner?.depth === bodyDepth ? Math.min(owner.minimumWidth, fence[1]!.length) : fence[1]!.length, scopeStart: owner?.depth === bodyDepth ? owner.scopeStart : divs.length })
           previousBlock = true
         } else {
           const attrs = body.startsWith('{') ? readAttributes(body, 0) : undefined
-          previousBlock = blank || rows[row] || (canOpen && (/^(?:#{1,6}(?: |$)|(?:[*-][ \t]*){3,}$|\[[^\]]+\]:)/.test(body) || !!attrs && body.slice(attrs.end).trim() === ''))
+          previousBlock = blank || rows[row] || (canOpen && (/^(?:#{1,6}(?: |$)|(?:[*-][ \t]*){3,}$|\[[^\]]+\]:)/.test(body) || !!attrs && /^[ \t]*$/.test(body.slice(attrs.end))))
         }
       }
     }
@@ -117,7 +123,7 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
       boundaries.push(offset)
       if (!blank) {
         while (items.length) { const item = items.at(-1)!; if (depth > item.depth || (depth === item.depth && indent >= item.column)) break; items.pop() }
-        if (startsItem) items.push({ column: indent + (marker[0].startsWith('[^') ? 2 : marker[0].length), depth })
+        if (startsItem) items.push({ column: indent + (marker![0].startsWith('[^') ? 2 : marker![0].length), depth })
       }
     }
     if (rows[row]) for (let at = 0; at < line.length; at++) if (line[at] === '|' && mask[offset + at] === '|' && line[at - 1] !== '\\') boundaries.push(offset + at)
