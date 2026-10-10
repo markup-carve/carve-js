@@ -49,8 +49,9 @@ describe('a block below a nested list keeps its blank line', () => {
 
   it('leaves a tail that cannot take lazy text glued', () => {
     // A heading inside the nested item ended its paragraph, so the line below is
-    // not lazy continuation of anything and the item stays tight.
-    expect(carveToMarkdown('- a\n  - b\n    # N\nlazy\n')).toBe('- a\n  - b\n    # N\n  lazy\n')
+    // not lazy continuation of anything - and no enclosing frame adopts it
+    // either, so it is written as a block of its own (markup-carve/carve#2884).
+    expect(carveToMarkdown('- a\n  - b\n    # N\nlazy\n')).toBe('- a\n  - b\n    # N\n\nlazy\n')
     // A thematic break closes what is above it rather than continuing it.
     expect(carveToMarkdown('- - A\n\n    ---\n  second\n')).toBe('- - A\n\n    ---\n  second\n')
   })

@@ -34,11 +34,20 @@ const cases: [string, string, string][] = [
   ["info-string", ":: t\n: - ```\n    ```\n```js\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p><code>js</code></p>\n  </dd>\n</dl>"],
   ["paragraph-continues", ":: t\n: - ```\n    ```\n```\nx\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p><code>\nx</code></p>\n  </dd>\n</dl>"],
   ["blank-ends-it", ":: t\n: - ```\n    ```\n```\n\nz\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p><code></code></p>\n  </dd>\n</dl>\n<p>z</p>"],
-  ["depth-two", ":: t\n: - - ```\n      ```\n```\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code></code></pre>\n          </li>\n        </ul>\n        <code></code>\n      </li>\n    </ul>\n  </dd>\n</dl>"],
+  // DIVERGES FROM THE EXECUTABLE SPEC ON THIS ROW, knowingly. carve#2884 makes
+  // the item collector answer at the deepest frame, so the inner item's closed
+  // fence closes the list here as it does in `ctrl-list-item-host`. The spec's
+  // description-body host still applies the carve-js#2515 / carve#1958 clamp
+  // instead and keeps the run inside the OUTER item. Which host wins for a
+  // flush-left run below a dd-held list is open at markup-carve/carve#2895.
+  ["depth-two", ":: t\n: - - ```\n      ```\n```\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code></code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <p><code></code></p>\n  </dd>\n</dl>"],
   ["ctrl-closer-ahead", ":: t\n: - ```\n    ```\n```\n```\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<pre><code></code></pre>"],
   ["ctrl-at-body-column", ":: t\n: ```\n  ```\n  ```\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n    <pre><code></code></pre>\n  </dd>\n</dl>"],
   ["ctrl-nested-fence-open", ":: t\n: - ```\n```\n\n:: t\n```\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code>```\n</code></pre>\n      </li>\n    </ul>\n  </dd>\n  <dt>t</dt>\n</dl>\n<pre><code></code></pre>"],
-  ["ctrl-list-item-host", "- - ```\n    ```\n```\n", "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <code></code>\n  </li>\n</ul>"],
+  // No longer a fold: the inner item ends on a CLOSED fence, so no paragraph is
+  // open at the deepest frame and the flush-left run is a block of its own
+  // (markup-carve/carve#2884). This is the executable spec's output.
+  ["ctrl-list-item-host", "- - ```\n    ```\n```\n", "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>"],
   ["ctrl-plain-description-body", ":: t\n: ```\n```\n\n:: u\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code></code></pre>\n  </dd>\n</dl>\n<pre><code>\n:: u\n</code></pre>"],
   ["ctrl-raw-block-lead-body", ":: t\n: - =html\n```\n\n:: u\n", "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>=html\n<code></code></li>\n    </ul>\n  </dd>\n  <dt>u</dt>\n</dl>"],
   ["ctrl-term-bare-fence", ":: t\n```\n", "<dl>\n  <dt>t</dt>\n</dl>\n<pre><code></code></pre>"],
