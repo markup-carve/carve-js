@@ -1303,6 +1303,10 @@ function convertInline(
       : codeSourceMatchesInput ? sourceLineAtOffset(codeSourceOffset) ?? undefined : undefined
   }
 
+  const activeHtmlCodeLinkBoundaries: number[] = []
+  let nextHtmlCodeLinkBoundary = 0
+  let activationOriginalSource: string | undefined
+  let codeSourceMatchesActivation: boolean | undefined
   const standaloneHtmlCode = input.trim()
   const writeHtmlCode = (match: string, offset: number): string | undefined => {
     const codeSourceLine = htmlCodeLineAt(offset)
@@ -1315,6 +1319,17 @@ function convertInline(
     const parts = match.slice(6, -7).split('<!---->').map(restoreLiteral)
     const body = parts.join('')
     if (body.includes('\x00')) return undefined
+    if (activationOriginalSource !== undefined) {
+      codeSourceMatchesActivation ??= referenceSourceText(line, protectedSources) === activationOriginalSource
+      if (!codeSourceMatchesActivation) {
+        if (/[\[\]]/.test(body)) return undefined
+      } else {
+        while (nextHtmlCodeLinkBoundary < activeHtmlCodeLinkBoundaries.length
+          && activeHtmlCodeLinkBoundaries[nextHtmlCodeLinkBoundary]! < codeSourceOffset + 6) nextHtmlCodeLinkBoundary++
+        if ((activeHtmlCodeLinkBoundaries[nextHtmlCodeLinkBoundary] ?? Infinity)
+          < codeSourceOffset + referenceSourceText(match, protectedSources).length - 7) return undefined
+      }
+    }
     if (/[\\`*_~\[\]]/.test(body)) {
       if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(offset)) return undefined
       const savedLosses = importLosses
@@ -1514,7 +1529,8 @@ function convertInline(
   const activationSource = line
   const activationOpaque = opaqueHtmlScanner(activationSource)
   const activationAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
-  line = escapeInactiveMarkdownLinkBrackets(activationSource, protect,
+  const activeLinkBoundaries = new Set<number>()
+  line = escapeInactiveMarkdownLinkBrackets(activationSource, value => protect(value, value.slice(1)),
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     offset => {
       const opaque = activationOpaque(offset)
@@ -1522,7 +1538,25 @@ function convertInline(
       activationAutolink.lastIndex = offset
       const autolink = activationAutolink.exec(activationSource)
       return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
-    })
+    }, (opener, closer) => { activeLinkBoundaries.add(opener); activeLinkBoundaries.add(closer) })
+  if (activeLinkBoundaries.size > 0) {
+    activationOriginalSource = referenceSourceText(activationSource, protectedSources)
+    let activationSourceOffset = 0
+    const activationToken = /\x00P\d+\x00/y
+    for (let at = 0; at < activationSource.length; at++) {
+      if (activeLinkBoundaries.has(at)) activeHtmlCodeLinkBoundaries.push(activationSourceOffset)
+      if (activationSource[at] === '\x00') {
+        activationToken.lastIndex = at
+        const token = activationToken.exec(activationSource)
+        if (token) {
+          activationSourceOffset += referenceSourceText(token[0], protectedSources).length
+          at += token[0].length - 1
+          continue
+        }
+      }
+      activationSourceOffset++
+    }
+  }
 
   const referenceTail = (canonical: string, fallback: string, source = fallback): string => {
     const target = referenceInlineTarget(canonical, table)
@@ -1535,7 +1569,9 @@ function convertInline(
   }
   const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
     const encoded = encodeDest(dest)
-    return encoded === undefined ? alt + protect('\\(', '(') + dest.slice(1) : protect(alt + encoded, source)
+    return encoded === undefined
+      ? (alt === '' ? '' : protect(alt, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
+      : protect(alt + encoded, source)
   }
   const protectDestinations = (pattern: RegExp): void => {
     const subject = line
@@ -1632,9 +1668,9 @@ function convertInline(
       const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (middle !== undefined) {
         if (chainSubject[offset - 1] === '!' || chainSubject[offset + match.length] === '[') return match
-        return `[${first}]${referenceTail(middle, `[${middle}]`)}[${third}]${last !== undefined ? referenceTail(last, `[${last}]`) : ''}`
+        return `[${first}]${referenceTail(middle, `[${middle}]`, `[${second}]`)}[${third}]${last !== undefined ? referenceTail(last, `[${last}]`, '') : ''}`
       }
-      if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${referenceTail(last, `[${last}]`)}`
+      if (last !== undefined) return protect(`\\[${first}]`, `[${first}]`) + `[${second}]${referenceTail(last, `[${last}]`, `[${third}]`)}`
       return match
     })
 
@@ -1642,13 +1678,13 @@ function convertInline(
     (match, label: string, reference: string | undefined, offset: number, source: string) => {
       if (source[offset + match.length] === '(') return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
-      if (canonical === undefined) return table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
+      if (canonical === undefined) return table && match.includes('|') ? protect(match.replace(/[\[\]]/g, '\\$&'), match) : match
       if (/[\[\]]/.test(canonical)) return match
       const target = referenceInlineTarget(canonical, table)
-      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
+      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`, match)
     })
 
-  line = line.replace(/\[\^(?=[^[\]\n]*\[(?!\^))/g, () => protect('\\[') + '^')
+  line = line.replace(/\[\^(?=[^[\]\n]*\[(?!\^))/g, () => protect('\\[', '[') + '^')
 
   const footnoteSource = line
   let footnoteCursor = 0
@@ -1666,17 +1702,17 @@ function convertInline(
     }
     if (footnoteCursor > offset) return match
     const renamed = importedFootnoteLabel(referenceSourceText(label, protectedSpans))
-    return renamed === undefined ? match : `[^${renamed}]`
+    return renamed === undefined ? match : protect(`[^${renamed}]`, match)
   })
 
   if (table) {
     line = line.replace(/(?<!\\)\[([^[\]\n^]+)\]\[([^[\]\n]+)\]/g, (match, label: string, reference: string) =>
       label.includes('|') && referenceDestinationLabel(reference, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
-        ? protect(writeLiteralReference(match)) : match,
+        ? protect(writeLiteralReference(match), match) : match,
     )
     line = line.replace(/(?<!\\)(!?)\[([^[\]\n^][^[\]\n]*)\]\[\]/g, (match, _image: string, label: string) =>
       label.includes('|') && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
-        ? protect(writeLiteralReference(match)) : match,
+        ? protect(writeLiteralReference(match), match) : match,
     )
   }
 
@@ -1818,7 +1854,7 @@ function convertInline(
     if (source[offset + match.length] === ':' && /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*$/.test(before)) return match
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
-    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table)
+    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSources, table)
     if (destinationLabel === undefined) return table && label.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
     if (/[\[\]]/.test(destinationLabel)) return match
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
