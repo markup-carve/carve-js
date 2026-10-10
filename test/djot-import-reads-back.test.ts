@@ -80,3 +80,39 @@ it('keeps a real attribute line off the heading line too', () => {
   expect(djotToCarve('# a\n{.x}\n')).toBe('# a\n')
   expect(djotToCarve('# a {% c %}\n')).toBe('# a {%%}\n')
 })
+
+// carve#2854: the angle form promises display text = destination, and a Carve
+// destination holds a square bracket literally, so encoding one changes the href
+// against a body djot.js emits verbatim.
+it.each([
+  ['<mailto:a[x][missing]@b.c>\n', 'mailto:a[x][missing]@b.c'],
+  ['para <mailto:a[x][missing]@b.c> tail\n', 'mailto:a[x][missing]@b.c'],
+  ['<mailto:a[r][]@b.c>\n', 'mailto:a[r][]@b.c'],
+  ['para <mailto:a[r][]@b.c> tail\n', 'mailto:a[r][]@b.c'],
+  ['<http://u/a[1]b>\n', 'http://u/a[1]b'],
+  ['<http://u/a[@b.c>\n', 'http://u/a[@b.c'],
+  ['<http://u/a]b>\n', 'http://u/a]b'],
+  ['<http://[::1]/[x]>\n', 'http://[::1]/[x]'],
+])('carries a destination bracket through the Djot import unencoded: %j', (source, destination) => {
+  const converted = djotToCarve(source)
+  expect(converted).not.toContain('%5B')
+  expect(converted).not.toContain('%5D')
+  expect(carveToHtml(converted)).toContain(`<a href="${destination}">${destination}</a>`)
+})
+
+it.each([
+  // A real percent sign stays one byte, never `%25`, and an encoded space stays encoded.
+  ['<http://u/100%25?a=b%20c>\n', 'http://u/100%25?a=b%20c'],
+  ['<http://u/a%20b>\n', 'http://u/a%20b'],
+  ['<mailto:a@b.c>\n', 'mailto:a@b.c'],
+])('leaves a destination with no bracket byte for byte: %j', (source, destination) => {
+  expect(carveToHtml(djotToCarve(source))).toContain(`href="${destination}"`)
+})
+
+it('still encodes the destination bytes a Carve destination cannot hold', () => {
+  // One body carries both: the parens would close the destination and stay encoded,
+  // the brackets do not and stay literal.
+  expect(djotToCarve('<http://u/a(b)[c]>\n')).toContain('(http://u/a%28b%29[c])')
+  expect(djotToCarve('<http://u/a`b>\n')).toContain('(http://u/a%60b)')
+  expect(djotToCarve('<http://u/a|b>\n')).toContain('(http://u/a%7Cb)')
+})
