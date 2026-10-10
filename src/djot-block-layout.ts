@@ -1,4 +1,5 @@
 import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences } from './djot-migrate.js'
+import { trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 
@@ -279,7 +280,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       out.push(
         quote +
           heading[1] +
-          (text.slice(heading[1]!.length).trim() ? ' ' + text.slice(heading[1]!.length).trimStart() : ''),
+          // Carve whitespace does not include a vertical tab or a form feed, so
+          // `String.prototype.trim` would eat heading content (carve-js#2681).
+          (trimNonNbsp(text.slice(heading[1]!.length)) ? ' ' + trimStartNonNbsp(text.slice(heading[1]!.length)) : ''),
       )
     } else if (rule && !lists.length && !paragraph) out.push(quote + '***')
     else {

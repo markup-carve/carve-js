@@ -320,9 +320,37 @@ function escapeInvalidDjotAttributes(source: string): string {
   return output + source.slice(cursor)
 }
 
+/**
+ * Make an angle run that only LOOKS like an autolink visible to the plain-text
+ * escape again.
+ *
+ * An autolink body is opaque, so `<a--@b.c>` keeps its bare `@` and its link.
+ * A body holding a LIFTED construct is not an autolink body at all - the reader
+ * takes the comment out before it ever looks for an autolink - so
+ * `<mailto:a{%%}@b.c>` is plain text whose `@` would open a mention and lose the
+ * address (carve-php#3037, carve-js#2680). A lifted construct is a NUL-delimited
+ * placeholder and Carve source carries no NUL of its own, so the byte is the
+ * whole test.
+ */
+function unmaskLiftedDjotAutolinkBodies(source: string, masked: string): string {
+  if (!source.includes('<') || !source.includes('\x00')) return masked
+  const visible = maskDjotCodeAndDestinations(source, true, true, true, undefined, [], {
+    autolinks: false,
+    comments: false,
+  })
+  const chars = masked.split('')
+  for (const match of source.matchAll(/<[^<>\s]+>/g)) {
+    const at = match.index!,
+      value = match[0]
+    if (!value.includes('\x00') || visible[at] !== '<' || masked.slice(at, at + value.length).trim() !== '') continue
+    for (let i = 0; i < value.length; i++) chars[at + i] = value[i]!
+  }
+  return chars.join('')
+}
+
 /** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
 function escapePlainDjotText(source: string): string {
-  let masked = maskDjotCodeAndDestinations(source, true, true, true, undefined, [], { autolinks: false })
+  let masked = unmaskLiftedDjotAutolinkBodies(source, maskDjotCodeAndDestinations(source))
   if (source.includes('{')) {
     const chars = masked.split('')
     for (let at = 0; at < source.length; at++) {
