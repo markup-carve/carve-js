@@ -146,6 +146,10 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
   let lineStart = 0, lineEnd = source.length, structuralEnd = 0, thematicLine = false
   let previousBlank = true, container = false
   let listColumn: number | undefined
+  // A Djot table caption (`^ text` under a table, blank line allowed) carries
+  // the same marker Carve uses, so its `^` must reach the output bare. Only a
+  // line in the table's own marker column and quote depth can hold one.
+  let tableColumn: number | undefined, tableQuoteDepth: number | undefined, captionLine = false
   const clear = (from: number): void => {
     for (const stack of openers.values()) while (stack.at(-1) && stack.at(-1)!.start >= from) stack.pop()
   }
@@ -156,6 +160,16 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       lineEnd = end < 0 ? source.length : end
       const rawLine = source.slice(i, lineEnd)
       structuralEnd = i + djotStructuralPrefixEnd(rawLine)
+      const prefix = rawLine.slice(0, structuralEnd - i)
+      const quoteDepth = (prefix.match(/>/g) ?? []).length
+      captionLine = tableColumn !== undefined && prefix.length >= tableColumn && quoteDepth === tableQuoteDepth
+      // A blank line leaves the table in scope, which is how a caption separated
+      // from its table by one keeps binding to it.
+      if (rawLine.slice(prefix.length).trim() !== '') {
+        const tableLine = source[structuralEnd] === '|' && mask[structuralEnd] === '|'
+        tableColumn = tableLine ? prefix.length : undefined
+        tableQuoteDepth = tableLine ? quoteDepth : undefined
+      }
       thematicLine = /^(?:[ \t]*>)*[ \t]*(?:\*[ \t]*){3,}$/.test(rawLine)
       const line = rawLine.replace(/^(?:[ \t]*>[ ]?)*/, '')
       const indent = /^[ \t]*/.exec(line)![0].length
@@ -200,6 +214,11 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       continue
     }
     if (ch !== '_' && ch !== '*' && ch !== '~' && ch !== '^') continue
+    if (ch === '^' && captionLine && i === structuralEnd && (i === lineStart || /[ \t]/.test(source[i - 1]!))
+      && source[i + 1] !== undefined && /[ \t]/.test(source[i + 1]!)) {
+      structural.add(i)
+      continue
+    }
     if (ch === '*' && i <= structuralEnd) {
       if (thematicLine) {
         for (let at = i; at < lineEnd; at++) if (source[at] === '*') structural.add(at)
@@ -305,10 +324,15 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
         literals.push(ch)
         continue
       }
-      if (mask[i] === ch && ((ch === '~' || ch === '^') || (ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {
+      if (mask[i] === ch && ('~^_*'.includes(ch) && !structural.has(i) || literalBrackets.has(i))) {
         text += `${literalPrefix}${literals.length}\0`
         literals.push(`\\${ch}`)
-      } else text += literalDashes.has(i) ? '\\-' : ch
+      } else {
+        text += literalDashes.has(i) ? '\\-' : ch
+        // Carve opens a caption on `^ `, never on `^\t`, so a tab-separated Djot
+        // caption needs the space the marker requires.
+        if (ch === '^' && structural.has(i) && source[i + 1] === '\t') { text += ' '; i++ }
+      }
     }
     return text
   }
