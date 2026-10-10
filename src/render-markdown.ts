@@ -1395,10 +1395,11 @@ function safeFence(content: string, min: number, marker = '`'): string {
 
 function renderCode(content: string): string {
   if (content === '') return '<code></code>'
-  if (content.includes('\n')) {
-    // Entities preserve newlines and markup. Split email runs for GFM's autolinker.
-    const escaped = content.replace(/[\n\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/g,
-      (character) => `&#${character.charCodeAt(0)};${character === '@' ? '<!---->' : ''}`)
+  if (/[\n\t]/.test(content)) {
+    // Entities preserve tabs and markup. Comments guard newline spaces and emails.
+    const escaped = content.replace(/[\n\t\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/g,
+      (character) => character === '\n' ? '<!---->&#10;<!---->'
+        : `&#${character.charCodeAt(0)};${character === '@' ? '<!---->' : ''}`)
     return `<code>${escaped}</code>`
   }
   const fence = safeFence(content, 1)

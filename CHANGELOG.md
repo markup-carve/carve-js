@@ -13,7 +13,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 - Markdown export preserves terminal hard breaks and hard breaks in headings with inline HTML. A break-only paragraph stays a paragraph in GFM readers.
 
-- Markdown code spans preserve significant edge spaces. Empty spans and payloads containing newlines use an inline HTML fallback that preserves the code text.
+- Markdown code spans preserve significant edge spaces. Empty spans and payloads containing tabs or newlines use an inline HTML fallback that preserves the code text.
 
 - Document `srcByteLength` counts the original UTF-8 input, including a leading BOM and NUL bytes, before parser normalization.
 
