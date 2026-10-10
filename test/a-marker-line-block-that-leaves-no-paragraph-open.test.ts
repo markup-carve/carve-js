@@ -109,9 +109,11 @@ describe('a marker-line block that leaves no paragraph open ends the item', () =
   })
 
   it('a collected heading closes the inner item too', () => {
-    // Corpus 75-list-nesting-and-looseness-4, updated by carve#1377.
+    // Corpus 75-list-nesting-and-looseness-4, updated by carve#2884: the outer
+    // item does not adopt the line either. A column-0 line is below its content
+    // column too, so it is not that item's content and no owner is selected.
     expect(carveToHtml('- a\n  - b\n    # N\nlazy\n')).toBe(
-      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <h1 id="N">N</h1>\n      </li>\n    </ul>\n    lazy\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <h1 id="N">N</h1>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>lazy</p>',
     )
   })
 

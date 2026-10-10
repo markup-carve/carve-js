@@ -4474,6 +4474,22 @@ interface ItemLazyState {
    * AT the base is more of the same block.
    */
   ownedAuthored: boolean
+  /**
+   * Q1 FOR THE DESCENDANT `ownedColumn` NAMES, while that frame is open.
+   *
+   * A below-column line continues a paragraph if and only if one is open at the
+   * DEEPEST frame (`CARVE-P0-009`, markup-carve/carve#2884), and the arms below
+   * answer for THIS item's column. A line at or past a nested marker's content
+   * column is the deeper item's, so it is classified there - by this same
+   * tracker, one frame in, which is what makes a fence span, a `:::` container
+   * and a quote answer as well as the three one-line blocks do.
+   *
+   * Null until a nested marker opens a frame, and dropped again when a line
+   * lands back at this item's own content. An AUTHORED over-indent keeps the
+   * narrower arm below instead: a line AT an authored base is more of the same
+   * block, so a fence written there is the one its paragraph ABSORBED.
+   */
+  deepest?: ItemLazyState | null
 }
 
 /**
@@ -5196,12 +5212,30 @@ interface ItemLineFacts {
   terminatorFree: boolean
   whitespace?: number | undefined
   prefixMemo?: Map<number, number> | undefined
+  /**
+   * May a line at or past a nested marker's content column be classified in
+   * that DESCENDANT's frame (`CARVE-P0-009`, markup-carve/carve#2884)?
+   *
+   * The LIST ITEM host opts in. A description body does not: a flush-left fence
+   * line below a closed nested fence is clamped to one column there and stays
+   * the outer item's text, which is its own ruling (carve-js#2515, carve#1958)
+   * and is what the executable spec still writes.
+   */
+  descendantFrames?: boolean | undefined
 }
 
 function trackItemLazyState(
   content: string,
   state: ItemLazyState,
-  hasFenceCloser: (marker: string) => boolean = () => true,
+  /**
+   * Does a fence of this marker have a closer ahead (PART 9 section 10 I4)?
+   *
+   * `extraColumns` is how far PAST the container's content column the opener is
+   * read, which the descendant recursion below needs: a closer at this item's
+   * column is not the descendant's closer, and asking without the offset read an
+   * unterminated descendant fence as a terminated one (corpus 509 rows 4 and 5).
+   */
+  hasFenceCloser: (marker: string, extraColumns?: number) => boolean = () => true,
   /**
    * Does this line sit AT the container's content column, rather than below it?
    *
@@ -5274,6 +5308,10 @@ function trackItemLazyState(
     // `%%% end` closes one. It also matches on EXACT length, where this read
     // `>=`.
     const run = commentFenceRun(content)
+    // THE FRAME IS NOT FED THESE LINES, so a span it opened would never close
+    // and every later line would read as payload. Dropping it here hands the
+    // next descendant-owned line a frame that starts where the span ended.
+    state.deepest = null
     if (run === comment.length) {
       state.opaque = null
       // THE OPENER'S COLUMN DECIDES, NOT THE CLOSER'S (PART 9 §53,
@@ -5292,6 +5330,8 @@ function trackItemLazyState(
     return
   }
   if (state.opaque?.kind === 'code') {
+    // See the comment twin above.
+    state.deepest = null
     if (state.opaque.close.test(content)) state.opaque = null
     state.lazyFoldable = false
     state.inDefList = false
@@ -5340,6 +5380,7 @@ function trackItemLazyState(
   const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
   if (fenceMarker !== null && (!state.lazyFoldable || hasFenceCloser(fenceMarker))) {
     state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker) }
+    state.deepest = null
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -5374,6 +5415,7 @@ function trackItemLazyState(
   // carve-php at once.
   if (commentRun !== undefined && hasCommentCloser(commentRun)) {
     state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: atContentColumn }
+    state.deepest = null
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -5395,16 +5437,48 @@ function trackItemLazyState(
   // report the run leaves the whole arm shut rather than measuring one.
   const run = facts?.whitespace
   let readFlush = false
+  let readDescendant = false
   if (run !== undefined) {
     if (state.ownedColumn >= 0) {
-      if (run < state.ownedColumn) state.ownedColumn = -1
-      else if (state.ownedAuthored && run === state.ownedColumn) readFlush = true
+      if (run < state.ownedColumn) {
+        state.ownedColumn = -1
+        state.deepest = null
+      } else if (state.ownedAuthored && run === state.ownedColumn) readFlush = true
+      else if (!state.ownedAuthored && facts?.descendantFrames === true) readDescendant = true
     }
     if (state.ownedColumn < 0 && atContentColumn && run > 0) {
       state.ownedColumn = run
       state.ownedAuthored = true
       readFlush = true
     }
+  }
+  // THE DESCENDANT FRAME ANSWERS. One line, in the deeper item's coordinates,
+  // through this same tracker - so a fenced body, a `:::` container and a quote
+  // are read there exactly as they are here, rather than enumerated. An
+  // enumeration of block kinds is how the three engines drifted apart.
+  if (readDescendant && state.divDepth === 0 && state.inDefList === false) {
+    const inner = (state.deepest ??= verbatimOnlyLazyState())
+    const dedented = content.slice(run!)
+    trackItemLazyState(
+      dedented,
+      inner,
+      (marker, extra = 0) => hasFenceCloser(marker, extra + run!),
+      true,
+      // NO COMMENT SPAN OPENS IN THE FRAME. The callers that can look ahead ask
+      // at THIS container's column, and a `%%%` run at the descendant's is a
+      // different question nobody answers here. PART 9 section 28 degrades an
+      // opener with no exact-width closer to one `%%` line comment, and that
+      // answer - invisible, closes the paragraph, opens nothing - is the same
+      // one a terminated span gives for Q1, because what follows the span is
+      // what Q1 reads either way.
+      () => false,
+      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true },
+    )
+    state.lazyFoldable = inner.lazyFoldable
+    state.inTable = inner.inTable
+    state.inDefList = false
+
+    return
   }
   // An open quote's own paragraph takes the line as lazy text, so its run is
   // not authored either. A quote that ended on a block holds no such paragraph
@@ -5601,6 +5675,19 @@ function trackItemLazyState(
     state.inTable = nested.endsOnTableRow
     state.quoteInner = nested.quote
     state.inDefList = false
+    // THE FRAME THIS MARKER OPENS, seeded with what the marker itself holds.
+    // Starting it empty would say no paragraph is open in the sub-item, and
+    // that is what decides whether a fence written in it INTERRUPTS or is
+    // absorbed (section 10 I4).
+    if (state.ownedColumn >= 0) {
+      const frame = verbatimOnlyLazyState()
+      frame.lazyFoldable = nested.leavesParagraphOpen
+      frame.inTable = nested.endsOnTableRow
+      frame.quoteInner = nested.quote
+      state.deepest = frame
+    } else {
+      state.deepest = null
+    }
     return
   }
   // Everything else (plain prose, div body text) leaves an open paragraph the
@@ -10232,7 +10319,7 @@ class ParseSession {
         ownedColumn: -1,
         ownedAuthored: false,
       }
-      let defFenceMemo: QuotedFenceCloserMemo | undefined
+      let defFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       /**
        * Is a LIST this body opened still collecting at the body's own column 0?
        *
@@ -10290,17 +10377,29 @@ class ParseSession {
         if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
           commentPayloadState = { ...lazyState, quoteInner: null }
         }
-        const hasFenceCloser = (marker: string): boolean => {
+        const hasFenceCloser = (marker: string, extraColumns = 0): boolean => {
           if (atLineIndex === undefined) return true
+          // ONE MEMO PER COLUMN. The memo records "no closer of this run from
+          // here", which is only true of the column it was measured at.
+          const perColumn = defFenceMemos ??= new Map()
+          let memo = perColumn.get(extraColumns)
+          if (memo === undefined) perColumn.set(extraColumns, memo = new Map())
           const answer = itemFenceHasCloser(
             lexer,
             marker,
             atLineIndex,
-            openerCol,
-            defFenceMemo ??= new Map(),
+            openerCol + extraColumns,
+            memo,
             bodyEndsAt,
           )
-          lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
+          // THE CACHE IS KEYED BY LINE AND MARKER, NOT BY COLUMN, and the block
+          // parser reads it. An offset query answers for a column that parser
+          // never reads the fence at, so it must not publish: writing it turned
+          // an over-indented descendant fence that closes at its holding column
+          // into inline verbatim.
+          if (extraColumns === 0) {
+            lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
+          }
           return answer
         }
         trackItemLazyState(content, lazyState, hasFenceCloser, atContentColumn)
@@ -11553,6 +11652,8 @@ class ParseSession {
           prefixMemo: this.markerPrefixMemo(lexer, origin.parentIndex),
         }
       }
+      const itemFrameFacts = (facts: ItemLineFacts | undefined): ItemLineFacts | undefined =>
+        facts === undefined ? undefined : { ...facts, descendantFrames: true }
       const invisibleNested = (index: number): boolean => {
         const text = nested[index]!
         const origin = nestedOrigins.get(index)
@@ -11803,7 +11904,7 @@ class ParseSession {
       // below the content column folded into the code text - body and closer
       // both. Nothing precedes the lead, so no closer lookahead applies: the
       // fence opens unconditionally, exactly as it does at the top of a quote.
-      let itemFenceMemo: QuotedFenceCloserMemo | undefined
+      let itemFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       // A sibling or outer marker ends the item, and so does a line below the
       // column after a blank (carve#1379).
       const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
@@ -12095,19 +12196,25 @@ class ParseSession {
           trackItemLazyState(
             trackedContent,
             lazyState,
-            (marker) => {
+            (marker, extraColumns = 0) => {
+              const perColumn = itemFenceMemos ??= new Map()
+              let memo = perColumn.get(extraColumns)
+              if (memo === undefined) perColumn.set(extraColumns, memo = new Map())
               const answer = itemFenceHasCloser(
                 lexer,
                 marker,
                 fenceLineIndex,
-                contentCol,
-                itemFenceMemo ??= new Map(),
+                contentCol + extraColumns,
+                memo,
                 itemEndsAt,
               )
-              lexer.fenceLookaheadAnswers.set(
-                `${lexer.lineNumber(fenceLineIndex)}:${marker}`,
-                answer,
-              )
+              // Not published for an offset query; see the twin above.
+              if (extraColumns === 0) {
+                lexer.fenceLookaheadAnswers.set(
+                  `${lexer.lineNumber(fenceLineIndex)}:${marker}`,
+                  answer,
+                )
+              }
               return answer
             },
             true,
@@ -12119,7 +12226,11 @@ class ParseSession {
               if (!closes) degradedOpeners.add(nested.length - 1)
               return closes
             },
-            lineFacts(trackedContent, nestedOrigins.get(nested.length - 1)),
+            // THE LIST ITEM HOST OPTS IN to classifying a descendant-owned line
+            // in the descendant's own frame (carve#2884). The flag rides on the
+            // facts, and the arm needs the measured run anyway, so a line with
+            // no facts opts in to nothing.
+            itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
           )
           // The item holds no paragraph a below-column line can continue while a
           // descendant holds a fence open. PART 1 S4 asks about the open STACK.

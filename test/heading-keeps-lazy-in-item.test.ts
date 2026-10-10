@@ -22,11 +22,13 @@ describe('a heading leaves no item paragraph open', () => {
     )
   })
 
-  it('a deeply nested indented heading closes the inner item', () => {
-    // Corpus 75-list-nesting-and-looseness-4. The outer item still owns the
-    // flush-left line after the inner item closes.
+  it('a deeply nested indented heading closes the inner item and the list', () => {
+    // Corpus 75-list-nesting-and-looseness-4. The outer item does NOT own the
+    // flush-left line: that line is below its content column too, and a line
+    // below an item's content column is not that item's content
+    // (markup-carve/carve#2884).
     expect(carveToHtml('- a\n  - b\n    # N\nlazy')).toBe(
-      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <h1 id="N">N</h1>\n      </li>\n    </ul>\n    lazy\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <h1 id="N">N</h1>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>lazy</p>',
     )
   })
 
