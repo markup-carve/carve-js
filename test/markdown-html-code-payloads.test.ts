@@ -42,3 +42,9 @@ it('keeps a spellable paragraph code payload native', () => {
   expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(false)
   expect(carveToHtml(result.value, { allowRawHtml: false })).toBe('<p><code>a\nb</code></p>')
 })
+
+it('does not report losses from the discarded native-code probe', () => {
+  const result = migrateMarkdown('<code>&#32;a_b</code>')
+  expect(result.report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
+  expect(carveToHtml(result.value, { allowRawHtml: false })).toBe('<p><code> a_b</code></p>')
+})

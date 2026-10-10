@@ -1190,7 +1190,14 @@ function convertInline(
     const body = match.slice(6, -7)
     if (body.includes('\x00')) return undefined
     if (/[\\`*_~\[\]]/.test(body)) {
-      const probe = parse(`x ${convertInline(body.replaceAll('<!---->', ''), dialect)}\n`)
+      const savedLosses = importLosses
+      importLosses = []
+      let probe: ReturnType<typeof parse>
+      try {
+        probe = parse(`x ${convertInline(body.replaceAll('<!---->', ''), dialect)}\n`)
+      } finally {
+        importLosses = savedLosses
+      }
       const paragraph = probe.children[0]
       if (probe.children.length !== 1 || paragraph?.type !== 'paragraph' || paragraph.children.some(node => !['text', 'escaped_text', 'smart_punctuation', 'non_breaking_space', 'soft_break'].includes(node.type))) return undefined
     }
@@ -1581,6 +1588,10 @@ function convertInline(
       if (entity && /[\r\n]/.test(decodeHtmlEntitiesRaw(entity[0]))) {
         codeWritten += protect(rawInlineHtml('<!---->&#10;<!---->'))
         i += entity[0].length
+        if (decodeHtmlEntitiesRaw(entity[0]) === '\r') {
+          const following = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7});/.exec(line.slice(i))
+          if (following && decodeHtmlEntitiesRaw(following[0]) === '\n') i += following[0].length
+        }
         continue
       }
     }
