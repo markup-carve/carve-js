@@ -62,3 +62,10 @@ it('treats footnote suffix parentheses as text', () => {
     if (prefix) expect(html).toContain('<p>!<a id="fnref1"')
   }
 })
+
+it('escapes outer destinations after nested links', () => {
+  for (const [source, expected] of [
+    ['[[a](u)](v w)', '[[a](u)](v%20w)'],
+    ['[x [a](u) y](v"w)', '[x [a](u) y](v%22w)'],
+  ]) expect(djotToCarve(source!)).toBe(expected)
+})

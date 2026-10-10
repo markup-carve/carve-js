@@ -345,7 +345,7 @@ export function maskDjotFences(
   src: string,
   onFenceLine?: (line: number, replacement: string) => void,
   rowBoundaries: readonly boolean[] = [],
-  strict = false,
+  strict = true,
 ): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
@@ -507,6 +507,7 @@ export function maskDjotCodeAndDestinations(
   onFenceLine?: (line: number, replacement: string) => void,
   rowBoundaries: readonly boolean[] = [],
   opaqueOptions: DjotOpaqueOptions = {},
+  strictFences = true,
 ): string {
   const previousLines = new Map<number, string>()
   let sourceOffset = 0,
@@ -516,7 +517,7 @@ export function maskDjotCodeAndDestinations(
     sourceOffset += line.length + 1
     previousLine = line
   }
-  const s = maskDjotFences(src, onFenceLine, rowBoundaries)
+  const s = maskDjotFences(src, onFenceLine, rowBoundaries, strictFences)
 
   // Every rewrite and loss scan shares the same opaque payload mask.
   let masked = maskDjotOpaque(s, unclosedCode, { ...(!inlineForms ? { inlineDestinations: opaqueOptions.destinations === true, autolinks: false, attributeValues: false, comments: false } : {}), ...opaqueOptions })
@@ -807,7 +808,7 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   // `masked`, so the captured content for a suggestion is sliced from
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
-  let masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode)
+  let masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode, true, undefined, [], {}, nativeDjotCode)
   if (nativeDjotCode && norm.includes('{')) {
     const chars = masked.split('')
     for (let at = 0; at < norm.length; at++) {

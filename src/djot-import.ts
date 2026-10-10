@@ -514,7 +514,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
     .split('\n')
     .map((line) => (line.match(/^(?:[ \t]*>(?:[ \t]|$))*/)?.[0].match(/>/g) ?? []).length)
   const rejectedAttribute = /\0DJOTINVALIDATTR\x00\d+\0/y
-  const stack: { at: number; depth: number; labelEnd?: number; target?: number; parens: number }[] = []
+  const stack: { at: number; image: boolean; depth: number; labelEnd?: number; target?: number; parens: number }[] = []
   const pendingNotes = new Set<number>(),
     literalNotes = new Map<number, number>()
   const edits = new Map<number, { end: number; text: string }>()
@@ -556,7 +556,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
   }
   let destinationOwner: typeof stack[number] | undefined
   const clearScope = (): void => {
-    if (destinationOwner) edits.set(destinationOwner.at, { end: destinationOwner.at + 1, text: '\\[' })
+    if (destinationOwner) edits.set(destinationOwner.target! - 1, { end: destinationOwner.target!, text: '\\(' })
     stack.length = 0
     destinationOwner = undefined
     pendingNotes.clear()
@@ -587,7 +587,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
     }
     if (source[i] === '[') {
       if (stack.length >= 200) return source
-      stack.push({ at: i, depth: quoteDepths[line] ?? 0, parens: 0 })
+      stack.push({ at: i, image: i > 0 && source[i - 1] === '!' && !isDjotEscaped(source, i - 1), depth: quoteDepths[line] ?? 0, parens: 0 })
       if (source[i + 1] === '^') pendingNotes.add(i)
       continue
     }
@@ -602,7 +602,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
       }
       if (source[i + 1] === '(') {
         if (destinationOwner && destinationOwner !== tip)
-          edits.set(destinationOwner.at, { end: destinationOwner.at + 1, text: '\\[' })
+          edits.set(destinationOwner.target! - 1, { end: destinationOwner.target!, text: '\\(' })
         tip.labelEnd = i
         tip.target = i + 2
         tip.parens = 0
@@ -612,11 +612,11 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
       }
       if (source[i + 1] === '[') {
         let end = i + 2
-        while (end < source.length && source[end] !== ']') {
+        while (end < source.length && source[end] !== ']' && source[end] !== '[') {
           if (source[end] === '\\') end++
           end++
         }
-        if (source[end] === ']') {
+        if (source[end] === ']' && mask[end] === ']') {
           if (tip.target !== undefined) edits.set(tip.at, { end: i + 1, text: '[' + labelOf(tip.at + 1, i) + ']' })
           if (destinationOwner === tip) destinationOwner = undefined
           stack.pop()
@@ -641,7 +641,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
         continue
       }
       if (tip !== owner) {
-        edits.set(owner.at, { end: owner.at + 1, text: '\\[' })
+        edits.set(owner.target! - 1, { end: owner.target!, text: '\\(' })
         stack.length = 0
         destinationOwner = undefined
         pendingNotes.clear()
@@ -669,7 +669,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
         })
       if (rows[line])
         destination = destination.replace(/\\+\|/g, (value) => '%5C'.repeat(Math.floor((value.length - 1) / 2)) + '%7C')
-      if (source[owner.at - 1] === '!' && !isDjotEscaped(source, owner.at - 1) && label.includes('[')) {
+      if (owner.image && label.includes('[')) {
         label = renderPlainText(parse(djotToCarve('DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND')), { smartTypography: false })
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
@@ -792,7 +792,7 @@ function foldDjotReferences(source: string): string {
 function normalizeDjotParagraphFences(source: string): string {
   const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
   const mask = maskDjotOpaque(maskDjotFences(source, undefined, rows, true), false, { code: false })
-  if (!mask.includes('```') && !mask.includes('~~~')) return source
+  if (!mask.includes('```')) return source
   const runs = new Map<number, { width: number; end: number }>()
   const next = new Map<number, number>()
   const matches = [...mask.matchAll(/`+/g)]
@@ -852,15 +852,6 @@ function normalizeDjotParagraphFences(source: string): string {
       }
       i = end + (closed ? run.width : 0)
       continue
-    }
-    if (source[i] === '~' && lineHeads.has(i)) {
-      const fence = /^~{3,}[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*(?=\n|$)/.exec(source.slice(i))
-      if (fence) {
-        output.push(source.slice(copied, i), '\\' + fence[0])
-        copied = i + fence[0].length
-        i = copied
-        continue
-      }
     }
     i++
   }

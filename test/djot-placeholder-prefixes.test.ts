@@ -10,7 +10,7 @@ for (const base of ['\0DJOTSTRONG', '\0DJOTWORD', '\0DJOTORPHAN\0', '\0DJOTEMPTY
       expect(djotPlaceholderPrefix(token, base)).toBe(base + (mode === 'overlap' ? 2 : mode === 'reserved-series' ? 128 : 0) + '\0')
       const source = token + ' w{x}{.c} ![*alt*](u)\n\na {.o} b\n\n{.orphan}\n\n: ```\n  payload\n  ```\n\n{+unclosed\n'
       const converted = djotToCarve(source)
-      expect(converted).toContain(token)
+      expect(converted).toContain(source.startsWith('\0{.a}') ? '[\0]{.a}' + base + '\0' : token)
       expect(converted.replaceAll(token, '')).not.toContain('\0DJOT')
       const html = carveToHtml(converted)
       expect(html).toContain('class="c"')
@@ -31,8 +31,8 @@ it('preserves placeholder text in frontmatter', () => {
 })
 
 for (const index of [0, 7]) {
-  it(`preserves user markers formed by orphan removal: ${index}`, () => {
-    const token = '\0DJOTSTRONG0\0' + index + '\0'
+  it(`preserves attributed NULs before foreign markers: ${index}`, () => {
+    const token = '[\0]{.a}DJOTSTRONG0\0' + index + '\0'
     expect(djotToCarve('\0{.a}DJOTSTRONG0\0' + index + '\0 w{.c}')).toBe(token + ' [w]{.c}')
   })
 }
@@ -81,8 +81,14 @@ for (const base of ['DJOTINVALIDATTR0', 'DJOTINVALIDATTR\0' + '0', 'DJOTNOTEATTR
     const token = '\0' + base + '\0'
     for (const source of ['\0{.a}' + base + '\0 {x y}', '{*a \0{*' + base + '\0*} b*} {x y}']) {
       const converted = djotToCarve(source + '\n\n[^n]: note\n\n  {.c}\n\n[^n]')
-      expect(converted).toContain(token)
+      expect(converted).toContain(source.startsWith('\0{.a}') ? '[\0]{.a}' + base + '\0' : token)
       expect(converted.replaceAll(token, '')).not.toContain('\0DJOT')
     }
+  })
+}
+
+for (const word of ['\0', 'a\0', 'x\0y', '\0U\0', '\0\0']) {
+  it(`keeps the whole attributed word with NULs: ${JSON.stringify(word)}`, () => {
+    expect(djotToCarve(word + '{.a}')).toBe('[' + word + ']{.a}')
   })
 }

@@ -9,7 +9,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
   const literalBraces = new Map<number, number>()
   const pairedCloses = new Set(paired.values())
   const escapedBraceCloses = new Set<number>()
-  const escapedWordCharacters = new Map<number, number>()
+  const wordAtoms = new Map<number, number>()
   for (const note of source.matchAll(/\[\^[^\]\n]*\]/g)) {
     const at = note.index!
     let begin = at
@@ -30,7 +30,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (/\s/u.test(source[at]!)) lastSpace = at
     if (pairedCloses.has(at)) lastInlineEnd = at
     if (source[at] === '\\') {
-      if (source[at + 1] !== undefined && !/\s/u.test(source[at + 1]!)) escapedWordCharacters.set(source.slice(at + 1, at + 4) === '\0U\0' ? at + 4 : at + 2, at)
+      if (source[at + 1] !== undefined && !/\s/u.test(source[at + 1]!)) wordAtoms.set(source.slice(at + 1, at + 4) === '\0U\0' ? at + 4 : at + 2, at)
       if (masked[at] !== source[at] || masked[at + 1] !== source[at + 1]) { lastInlineEnd = at + 2; at++; continue }
       lastEscaped = at + 1
       if (/\s/u.test(source[at + 1] ?? '')) lastSpace = at + 1
@@ -48,6 +48,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
       continue
     }
     if (masked[at] !== source[at]) { lastInlineEnd = at + 1; continue }
+    if (source.startsWith('\0U\0', at)) { wordAtoms.set(at + 3, at); at += 2; continue }
     if (source[at] === '{' && at >= attributeEnd) attributeEnd = readBraceAttributes(at)?.end ?? at
     if (at >= attributeEnd && source[at] === '}' && '+-=~^*_'.includes(source[at - 1] ?? '\0') && !pairedCloses.has(at + 1)) {
       literalBraces.set(at, at - 1 === lastEscaped ? at - 2 : at - 1)
@@ -56,7 +57,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (source[at] === '{') braceStack.push({ begin: at, literal: at >= attributeEnd && /[.#% \tA-Za-z]/.test(source[at + 1] ?? ''), space: lastSpace })
     else if (source[at] === '}') {
       const open = braceStack.pop()
-      if (open?.literal && !escapedBraceCloses.has(at)) {
+      if (open?.literal && !escapedBraceCloses.has(at) && !pairedCloses.has(at + 1)) {
         const from = Math.max(lastAtomEscape, lastInlineEnd)
         if (from >= open.begin && from > lastSpace) {
           literalBraces.set(at, from)
@@ -82,11 +83,11 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     }
     if (attrs.source === '{}') { i = attrs.end - 1; continue }
     let word = i
-    if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1) || escapedWordCharacters.has(i))) {
+    if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1) || wordAtoms.has(i))) {
       while (word > cursor && masked[word - 1] === source[word - 1]) {
         const literal = literalBraces.get(word - 1)
         if (literal !== undefined && literal >= cursor) { word = literal; continue }
-        const escaped = escapedWordCharacters.get(word)
+        const escaped = wordAtoms.get(word)
         if (escaped !== undefined && escaped >= cursor) { word = escaped; continue }
         if (/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) break
         word--

@@ -168,12 +168,6 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       lineStart = i + 1
       continue
     }
-    if (ch === '\\' && i <= structuralEnd && source.startsWith('\\~~~', i)) {
-      let end = i + 1
-      while (source[end] === '~') structural.add(end++)
-      i = end - 1
-      continue
-    }
     if (ch === '\\' && source[i + 1] !== '\n') {
       i++
       continue
@@ -191,12 +185,6 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       continue
     }
     if (ch !== '_' && ch !== '*' && ch !== '~' && ch !== '^') continue
-    if (ch === '~' && i <= structuralEnd && source.startsWith('~~~', i)) {
-      let end = i
-      while (source[end] === '~') structural.add(end++)
-      i = end - 1
-      continue
-    }
     if (ch === '*' && i <= structuralEnd) {
       if (thematicLine) {
         for (let at = i; at < lineEnd; at++) if (source[at] === '*') structural.add(at)
@@ -297,9 +285,9 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       }
       const ch = source[i]!
       if (ch === '\\') { text += source.slice(i, Math.min(end, i + 2)); i++; continue }
-      if (ch === '~' && structural.has(i) || ch === '=' && (validBraceClosers.has(i) || validBraces.has(i - 1))) {
+      if (ch === '=' && (validBraceClosers.has(i) || validBraces.has(i - 1))) {
         text += `${literalPrefix}${literals.length}\0`
-        literals.push(ch === '~' ? '\\~' : ch)
+        literals.push(ch)
         continue
       }
       if (mask[i] === ch && ((ch === '~' || ch === '^') || (ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {
