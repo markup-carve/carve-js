@@ -1,6 +1,7 @@
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
+import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
@@ -1151,6 +1152,7 @@ function convertInline(
   joinedLines?: Set<number>,
   terminal = true,
   table = false,
+  nativeCode = false,
   reportEmptyLosses = true,
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
   unwrapEmptyLinks = true,
@@ -1186,12 +1188,28 @@ function convertInline(
   // Keep empty and multiline values in HTML where a source slot may fold them.
   const writeHtmlCode = (match: string): string | undefined => {
     const body = match.slice(6, -7)
-    if (/[\x00\\`*_~\[\]]/.test(body)) return undefined
+    if (body.includes('\x00')) return undefined
+    if (/[\\`*_~\[\]]/.test(body)) {
+      const probe = parse(`x ${convertInline(body.replaceAll('<!---->', ''), dialect)}\n`)
+      const paragraph = probe.children[0]
+      if (probe.children.length !== 1 || paragraph?.type !== 'paragraph' || paragraph.children.some(node => !['text', 'escaped_text', 'smart_punctuation', 'non_breaking_space', 'soft_break'].includes(node.type))) return undefined
+    }
     const value = decodeHtmlEntitiesRaw(body.replaceAll('<!---->', ''))
+    if (nativeCode && terminal && !table && input.trim() === match) {
+      try {
+        const source = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
+        const document = parse(source)
+        const paragraph = document.children[0]
+        const code = paragraph?.type === 'paragraph' ? paragraph.children[0] : undefined
+        if (document.children.length === 1 && paragraph?.type === 'paragraph' && paragraph.children.length === 1 && code?.type === 'code' && code.value === value.replace(/\r\n?/g, '\n')) return protect(source.replace(/\n$/, ''))
+      } catch (error) {
+        if (!(error instanceof SourceUnspellableError)) throw error
+      }
+    }
     if (value === '' || value.includes('\n') || value.includes('\r')) {
       importLosses.push({
         code: 'raw-code-fallback',
-        message: 'Preserved an HTML code payload as raw HTML; targets and profiles that omit raw HTML do not preserve this code span',
+        message: 'Preserved an HTML code payload as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content',
         fidelity: 'degraded',
         ...(inlineRunSourceLine === undefined ? {} : { line: inlineRunSourceLine }),
       })
@@ -1240,24 +1258,15 @@ function convertInline(
     if (line[i] === '<') {
       const opaque = opaqueEnd(i)
       if (opaque !== undefined) {
-        escaped += protect(rawInlineHtml(line.slice(i, opaque)), line.slice(i, opaque))
+        const html = line.slice(i, opaque)
+        escaped += html === '<!---->' ? html : protect(rawInlineHtml(html), html)
         i = opaque
-        continue
-      }
-      const code = /^<code>((?:[^<\n]|<!---->)*)<\/code>/i.exec(line.slice(i))
-      const writtenCode = code ? writeHtmlCode(code[0]) : undefined
-      if (code && writtenCode !== undefined) {
-        escaped += writtenCode
-        i += code[0].length
         continue
       }
       const tag = scanHtmlTag(line, i)
       if (tag) {
         const sourceTag = line.slice(i, tag.end)
-        if (tag.name === 'code') {
-          if (!tag.closing) importLosses.push({ code: 'raw-code-fallback', message: 'Preserved HTML code markup as raw HTML; targets and profiles that omit raw HTML do not preserve its code structure', fidelity: 'degraded', ...(inlineRunSourceLine === undefined ? {} : { line: inlineRunSourceLine }) })
-          escaped += protect(rawInlineHtml(sourceTag))
-        } else escaped += sourceTag
+        escaped += sourceTag
         i = tag.end
         continue
       }
@@ -1563,6 +1572,37 @@ function convertInline(
       : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
   )
 
+  let codeWritten = ''
+  let htmlCodeDepth = 0
+  const codeOpaqueEnd = opaqueHtmlScanner(line)
+  for (let i = 0; i < line.length;) {
+    if (htmlCodeDepth > 0 && line[i] === '&') {
+      const entity = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/.exec(line.slice(i))
+      if (entity && /[\r\n]/.test(decodeHtmlEntitiesRaw(entity[0]))) {
+        codeWritten += protect(rawInlineHtml('<!---->&#10;<!---->'))
+        i += entity[0].length
+        continue
+      }
+    }
+    if (line[i] !== '<') { codeWritten += line[i++]; continue }
+    const opaque = codeOpaqueEnd(i)
+    if (opaque !== undefined) { codeWritten += line.slice(i, opaque); i = opaque; continue }
+    const code = /^<code>((?:[^<\n]|<!---->)*)<\/code>/i.exec(line.slice(i))
+    const written = code ? writeHtmlCode(code[0]) : undefined
+    if (code && written !== undefined) { codeWritten += written; i += code[0].length; continue }
+    const tag = scanHtmlTag(line, i)
+    if (tag) {
+      const sourceTag = line.slice(i, tag.end)
+      if (tag.name === 'code') {
+        htmlCodeDepth = Math.max(0, htmlCodeDepth + (tag.closing ? -1 : 1))
+        if (!tag.closing) importLosses.push({ code: 'raw-code-fallback', message: 'Preserved HTML code markup as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content', fidelity: 'degraded', ...(inlineRunSourceLine === undefined ? {} : { line: inlineRunSourceLine }) })
+        codeWritten += protect(rawInlineHtml(sourceTag))
+      } else codeWritten += sourceTag
+      i = tag.end
+    } else codeWritten += line[i++]
+  }
+  line = codeWritten
+
   const autolinkSubject = line
   let htmlCursor = 0
   line = line.replace(/<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*/g, (match, offset: number) => {
@@ -1772,8 +1812,10 @@ function convertInline(
     line = line.replace(/(\x00P(\d+)\x00)(?=\x00P(\d+)\x00)/g, (token, _leftToken: string, leftIndex: string, rightIndex: string) => {
       const left = protectedSpans[Number(leftIndex)] ?? ''
       const right = protectedSpans[Number(rightIndex)] ?? ''
-      const backslashes = /(\\*)`$/.exec(left)?.[1]?.length
-      return left.endsWith('`') && right.startsWith('`') && (backslashes ?? 0) % 2 === 0 ? token + '{%  %}' : token
+      if (!left.endsWith('`') || !right.startsWith('`')) return token
+      let start = left.length - 2
+      while (start >= 0 && left[start] === '\\') start--
+      return left.startsWith('`') || (left.length - 2 - start) % 2 === 0 ? token + '{%  %}' : token
     })
     line = line
       // A stash/protect index that has no stored value means the NUL-wrapped
@@ -5915,7 +5957,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
     }
     if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
-    const converted = convertInline(body, dialect)
+    const converted = convertInline(body, dialect, false, false, undefined, true, false, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body))
     // A pipe row GFM did NOT read as a table row stays text. Carve needs no
     // delimiter row, so passing the line through was itself the conversion and
     // the migrated document grew a table the author never saw

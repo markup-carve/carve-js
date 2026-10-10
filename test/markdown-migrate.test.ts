@@ -884,8 +884,8 @@ describe('markdownToCarve — code protection edge cases', () => {
     expect(conv('\\*literal\\* and \\_keep\\_')).toBe('\\*literal\\* and \\_keep\\_')
   })
 
-  it('does not convert delimiters inside <code>', () => {
-    expect(conv('<code>*x* _y_</code>')).toBe('`*x* _y_`')
+  it('keeps native Markdown emphasis inside HTML code', () => {
+    expect(carveToHtml(conv('<code>*x* _y_</code>'))).toBe('<p><code><em>x</em> <em>y</em></code></p>')
   })
 })
 
