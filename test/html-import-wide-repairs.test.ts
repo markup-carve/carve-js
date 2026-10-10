@@ -23,10 +23,10 @@ it('drops empty spans and preserves following text', () => {
   expect(htmlToCarve(source('empty-spans', 8)).value).toBe('xxxxxxxx\n')
 })
 
-it('unwraps every refused inner span and retains its text', () => {
+it('preserves every repeated inner span and its text', () => {
   const result = htmlToCarve(source('nested-spans', 8))
-  expect(result.value).toContain('`x` y `x` y')
-  expect(result.report.diagnostics.filter(item => item.code === 'structure-unspellable')).toHaveLength(8)
+  expect(result.value).toContain('{*`x`*} y {*`x`*} y')
+  expect(result.report.diagnostics.filter(item => item.code === 'structure-unspellable')).toHaveLength(0)
 })
 
 for (const [shape, small] of [['sections', 2048], ['empty-code', 8192], ['nested-spans', 128]] as const) {
