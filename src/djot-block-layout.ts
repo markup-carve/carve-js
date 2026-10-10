@@ -6,7 +6,12 @@ import { backtickRunEnds } from './backtick-run-index.js'
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
 export function djotBlockLayout(source: string, rows: readonly boolean[]): string {
   const lines = source.split('\n')
-  const mask = maskDjotCodeAndDestinations(source).split('\n')
+  const maskedSource = maskDjotCodeAndDestinations(source)
+  const mask = maskedSource.split('\n')
+  const divClosers = new Map<number, number>()
+  djotInlineBoundaries(source, maskedSource, true, divClosers)
+  let lineOffset = 0
+  const lineOffsets = lines.map(line => { const at = lineOffset; lineOffset += line.length + 1; return at })
   const fences = maskDjotFences(source).split('\n')
   const divs: {
     width: number
@@ -144,6 +149,18 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     }
     const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(visible)
     const top = divs.at(-1)
+    const closeCount = divClosers.get(lineOffsets[n]!)
+    if (div && top && closeCount !== undefined) {
+      dropOrphanAttributeLine(out)
+      for (let remaining = closeCount; remaining > 0 && divs.length; remaining--) {
+        const closed = divs.pop()!
+        out.push(closed.prefix + ':'.repeat(closed.width))
+      }
+      paragraph = false
+      headingMarker = ''
+      blank = true
+      continue
+    }
     if (div && /^:{3,}[ \t]*$/.test(text) && top && (div[1]!.length >= top.width || paragraph)) {
       if (div[1]!.length >= top.width) {
         dropOrphanAttributeLine(out)
