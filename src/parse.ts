@@ -13833,7 +13833,7 @@ class ParseSession {
     }
     const bareTables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
     for (const m of bareMarkers) bareTables[m] = new Int32Array(n + 2).fill(-1)
-    const afterAttributes = (end: number): number => attributeTails.get(end) ?? end
+    const afterAttributes = attributeTails.size === 0 ? (end: number): number => end : (end: number): number => attributeTails.get(end) ?? end
     const bracketEnds = new Set<number>()
     const openerMarks = new Set<number>()
     for (let at = 0; at < n; at++) {
@@ -13857,31 +13857,36 @@ class ParseSession {
       const bracketEnd = ch === '[' ? brackets?.(j) : undefined
       const destinationEnd = destinations.get(j)
       const attributeEnd = attributes.get(j)
-      for (const m of bareMarkers) {
-        const table = bareTables[m]!
-        const marker = PAIR_MARKERS[m]!
+      let bareId = -1
+      let bareClose = -1
+      let bareTail: number | undefined
+      if (bareMarkers.size !== 0) {
+        for (const m of bareMarkers) {
+          const table = bareTables[m]!
+          const marker = PAIR_MARKERS[m]!
+          const before = text[j - 1]
+          let stop: number
+          if (ch === '\\') stop = table[j + 2]!
+          else if (bracketEnds.has(j)) stop = -1
+          else if (lineComments.has(j)) stop = table[lineComments.get(j)!]!
+          else if (codeEnd !== undefined) stop = codeEnd === -1 ? -1 : table[afterAttributes(codeEnd)]!
+          else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
+          else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
+          else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
+          else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
+          else if (ch === marker && before !== undefined && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next))) stop = j
+          else stop = table[j + 1]!
+          table[j] = stop
+        }
+        bareId = PAIR_MARKERS.indexOf(ch)
         const before = text[j - 1]
-        let stop: number
-        if (ch === '\\') stop = table[j + 2]!
-        else if (bracketEnds.has(j)) stop = -1
-        else if (lineComments.has(j)) stop = table[lineComments.get(j)!]!
-        else if (codeEnd !== undefined) stop = codeEnd === -1 ? -1 : table[afterAttributes(codeEnd)]!
-        else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
-        else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
-        else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
-        else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
-        else if (ch === marker && before !== undefined && !isCarveWhitespace(before) && (!next || !/[A-Za-z0-9]/.test(next))) stop = j
-        else stop = table[j + 1]!
-        table[j] = stop
+        const canOpenBare = bareTables[bareId] !== undefined && next !== undefined && !isCarveWhitespace(next)
+          && next !== ch && before !== ch && (!before || !/[A-Za-z0-9_]/.test(before))
+          && (ch !== '=' || next !== '>') && ((ch !== '/' && ch !== '_') || before !== '/')
+        bareClose = canOpenBare ? bareTables[bareId]![j + 1]! : -1
+        bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
+        if (bareTail !== undefined) barePairs.set(j, { close: bareClose, end: bareTail })
       }
-      const bareId = PAIR_MARKERS.indexOf(ch)
-      const before = text[j - 1]
-      const canOpenBare = bareTables[bareId] !== undefined && next !== undefined && !isCarveWhitespace(next)
-        && next !== ch && before !== ch && (!before || !/[A-Za-z0-9_]/.test(before))
-        && (ch !== '=' || next !== '>') && ((ch !== '/' && ch !== '_') || before !== '/')
-      const bareClose = canOpenBare ? bareTables[bareId]![j + 1]! : -1
-      const bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
-      if (bareTail !== undefined) barePairs.set(j, { close: bareClose, end: bareTail })
       for (const m of markers) {
         const table = tables[m]!
         const raw = raws[m]!
@@ -14120,9 +14125,11 @@ class ParseSession {
         this.singleQuoteSpan = outerQuoteSpan
         this.quoteScopeDepth = outerQuoteScopeDepth
       }
-      const outerTables = outerPairText === undefined ? undefined : this.pairEndCache.get(outerPairText)?.tables
-      this.pairEndText = outerTables === undefined ? undefined : outerPairText
-      this.pairEndTable = outerTables ?? []
+      const outerPair = outerPairText === undefined ? undefined : this.pairEndCache.get(outerPairText)
+      this.pairEndText = outerPair === undefined ? undefined : outerPairText
+      this.pairEndTable = outerPair?.tables ?? []
+      this.pairAttributeTails = outerPair?.attributeTails ?? new Map()
+      this.bareAttributePairs = outerPair?.barePairs ?? new Map()
       this.substitutionScans = outerSubstitutions
       this.openKinds = outer
       inlineDepth--
@@ -15430,14 +15437,14 @@ class ParseSession {
     // PART 8: a delimiter inside a balanced label cannot pair past its close.
     // Keep the original text so flanking and source offsets use the same run.
     this.pairEndTables(text)
-    const attached = new Map<number, number>()
+    const attached = this.bareAttributePairs.size === 0 ? undefined : new Map<number, number>()
     for (let j = from; j < end; j++) {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!
       const child = ch !== delim && !this.openKinds.has(ch) ? this.bareAttributePairs.get(j) : undefined
-      if (child) attached.set(child.close + 1, child.end)
-      const attachedEnd = attached.get(j)
+      if (child) attached?.set(child.close + 1, child.end)
+      const attachedEnd = attached?.get(j)
       if (attachedEnd !== undefined) { j = attachedEnd - 1; continue }
       // Skip escapes
       if (ch === '\\' && j + 1 < text.length) {
