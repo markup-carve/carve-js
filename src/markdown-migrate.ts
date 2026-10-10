@@ -2403,7 +2403,7 @@ type PrefixedInlineLine = {
   // The line's index into the array the collector was given, so a loss found
   // inside a container names a line of the INPUT (markup-carve/carve-js#2668).
   source?: number | undefined
-  sourceSegments?: Array<{ offset: number; line: number | undefined }>
+  sourceSegments?: Array<{ offset: number; line: number | undefined }> | undefined
 }
 
 const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
