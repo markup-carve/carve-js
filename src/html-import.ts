@@ -2603,7 +2603,7 @@ class Importer {
     const delim = ordered && this.readsDelim(node) ? (')' as const) : undefined
     // The task list's base class (PART 19 §1) is structural, not authored: it is
     // read only where an item carries the box that makes the list a task list.
-    if (listItems.some((li) => this.taskCheckbox(li) !== undefined)) attrs = this.stripClass(attrs, TASK_LIST_CLASS)
+    if (!ordered && listItems.every((li) => this.taskCheckbox(li) !== undefined)) attrs = this.stripClass(attrs, TASK_LIST_CLASS)
     const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(delim !== undefined ? { delim } : {}), ...(attrs ? { attrs } : {}) }
     return [...before, list]
   }

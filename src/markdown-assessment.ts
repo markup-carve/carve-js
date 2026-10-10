@@ -165,7 +165,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
       if ((match = /^ {0,3}([-+*]|\d{1,9}[.)])[ \t]+(.*)$/.exec(line))) {
         const ordered = /\d/.test(match[1]!), tag = ordered ? 'ol' : 'ul'; emit(ordered ? 'ordered-list' : 'bullet-list', n)
         const open = `<${tag}${ordered && parseInt(match[1]!, 10) !== 1 ? ` start="${parseInt(match[1]!, 10)}"` : ''}`
-        let items = '', taskList = false
+        let items = '', taskList = true
         while (i < input.length && (match = /^ {0,3}([-+*]|\d{1,9}[.)])[ \t]+(.*)$/.exec(input[i]!)) && /\d/.test(match[1]!) === ordered) {
           emit('list-item', first + i); const body = match[2]!
           const task = /^\[([ xX])\][ \t]+(.*)$/.exec(body)
@@ -176,10 +176,10 @@ export function assessMarkdown(source: string, value: string): Assessment {
             emit('bullet-task', first + i); taskList = true
             const done = task[1] !== ' '
             items += `<li${done ? ' data-task-state="x"' : ''}><input type="checkbox"${done ? ' checked' : ''} disabled aria-label="${escape(task[2]!)}"> ${inline(task[2]!, first + i)}</li>\n`
-          } else items += `<li>${inline(body, first + i)}</li>\n`
+          } else { taskList = false; items += `<li>${inline(body, first + i)}</li>\n` }
           i++
         }
-        html += `${open}${taskList ? ' class="task-list"' : ''}>\n${items}</${tag}>\n`; continue
+        html += `${open}${!ordered && taskList ? ' class="task-list"' : ''}>\n${items}</${tag}>\n`; continue
       }
       if (/^ {0,3}</.test(line) && /^(?: {0,3}<(?:div|table|script|style|pre|!--)(?:[\s>]|$))/i.test(line)) {
         const body: string[] = []
