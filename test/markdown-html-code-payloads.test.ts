@@ -12,10 +12,10 @@ const records = (html: string) => {
   const roots: Array<{ tag: string; value: string }> = []
   const attributes: Array<Record<string, string>> = []
   const visit = (node: Node, ancestors: string[] = []) => {
-    const tag = 'tagName' in node ? node.tagName : undefined
+    const tag = 'tagName' in node ? node.tagName === 's' ? 'del' : node.tagName : undefined
     const next = tag && tag !== 'section' ? [...ancestors, tag] : ancestors
     if (tag && ['a', 'img'].includes(tag) && 'attrs' in node) attributes.push({ tag, ...Object.fromEntries(node.attrs.filter(attr => ['href', 'title', 'src', 'alt'].includes(attr.name)).map(attr => [attr.name, attr.value])) })
-    if (tag === 'code' && 'childNodes' in node) codes.push({ value: text(node), ancestors: next, elements: node.childNodes.flatMap(child => 'tagName' in child ? [child.tagName] : []) })
+    if (tag === 'code' && 'childNodes' in node) codes.push({ value: text(node), ancestors: next, elements: node.childNodes.flatMap(child => 'tagName' in child ? [child.tagName === 's' ? 'del' : child.tagName] : []) })
     if (tag && ['p', 'h1', 'h2', 'td', 'th'].includes(tag)) roots.push({ tag, value: text(node) })
     if ('childNodes' in node) for (const child of node.childNodes) visit(child, next)
   }
@@ -47,4 +47,10 @@ it('does not report losses from the discarded native-code probe', () => {
   const result = migrateMarkdown('<code>&#32;a_b</code>')
   expect(result.report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
   expect(carveToHtml(result.value, { allowRawHtml: false })).toBe('<p><code> a_b</code></p>')
+})
+
+it.each(['café_au', '名前_id', 'größ_e'])('keeps intraword underscores native: %s', value => {
+  const result = migrateMarkdown(`<code>${value}</code>`)
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
+  expect(carveToHtml(result.value, { allowRawHtml: false })).toBe(`<p><code>${value}</code></p>`)
 })

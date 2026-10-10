@@ -1200,7 +1200,7 @@ function convertInline(
         masked += `\x00P${scratch.length - 1}\x00`
         at = end
       }
-      const converted = markdownEmphasis(masked, undefined, undefined, scratch).replace(
+      const converted = markdownEmphasis(masked, undefined, undefined, scratch, true).replace(/~~([^~]+)~~/g, '$1').replace(
         /\x00P(\d+)\x00/g,
         (token, index: string) => Number(index) >= firstScratch ? scratch[Number(index)] ?? token : token,
       )
@@ -1214,6 +1214,7 @@ function convertInline(
     }
     return unchangedHtmlCode.has(fragment)
   }
+  const htmlCodeSourceLine = input.includes('\n') ? undefined : inlineRunSourceLine
   const standaloneHtmlCode = input.trim()
   const writeHtmlCode = (match: string): string | undefined => {
     const body = match.slice(6, -7).replace(/\x00P(\d+)\x00/g, (token, index: string) => {
@@ -1222,7 +1223,7 @@ function convertInline(
     })
     if (body.includes('\x00')) return undefined
     if (/[\\`*_~\[\]]/.test(body)) {
-      if (/[*_]/.test(body) && !htmlCodeSurvivesEmphasis(match)) return undefined
+      if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(match)) return undefined
       const savedLosses = importLosses
       importLosses = []
       let probe: ReturnType<typeof parse>
@@ -1255,7 +1256,7 @@ function convertInline(
         code: 'raw-code-fallback',
         message: 'Preserved an HTML code payload as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content',
         fidelity: 'degraded',
-        ...(inlineRunSourceLine === undefined ? {} : { line: inlineRunSourceLine }),
+        ...(htmlCodeSourceLine === undefined ? {} : { line: htmlCodeSourceLine }),
       })
       const html = value.replace(/\r\n?/g, '\n').replace(/[ !-\/:-@\[-`{-~\t\n]/g, char => {
         if (char === '\n') return '<!---->&#10;<!---->'
@@ -1628,6 +1629,7 @@ function convertInline(
         if (decodeHtmlEntitiesRaw(entity[0]) === '\r') {
           const following = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/.exec(line.slice(i))
           if (following && decodeHtmlEntitiesRaw(following[0]) === '\n') i += following[0].length
+          else if (line[i] === '\n') i++
         }
         continue
       }
@@ -1643,7 +1645,7 @@ function convertInline(
       const sourceTag = line.slice(i, tag.end)
       if (tag.name === 'code') {
         htmlCodeDepth = Math.max(0, htmlCodeDepth + (tag.closing ? -1 : 1))
-        if (!tag.closing) importLosses.push({ code: 'raw-code-fallback', message: 'Preserved HTML code markup as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content', fidelity: 'degraded', ...(inlineRunSourceLine === undefined ? {} : { line: inlineRunSourceLine }) })
+        if (!tag.closing) importLosses.push({ code: 'raw-code-fallback', message: 'Preserved HTML code markup as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content', fidelity: 'degraded', ...(htmlCodeSourceLine === undefined ? {} : { line: htmlCodeSourceLine }) })
         codeWritten += protect(rawInlineHtml(sourceTag))
       } else codeWritten += sourceTag
       i = tag.end
