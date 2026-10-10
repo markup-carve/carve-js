@@ -35,10 +35,10 @@ describe('a task box is named by the block it sits beside', () => {
   // from that text, and an item with no visible paragraph at all takes NO
   // attribute, because an empty name is worse than none.
   it.each([
-    ['text on the marker line', '- [ ] a\n      tail\n', '<ul>\n  <li><input type="checkbox" disabled aria-label="a tail"> a\ntail</li>\n</ul>'],
-    ['a comment below the marker line', '- [ ] a\n      %%\n      tail\n', '<ul>\n  <li><input type="checkbox" disabled aria-label="a"> a\n    tail\n  </li>\n</ul>'],
-    ['a comment and nothing under it', '- [ ] %%\n', '<ul>\n  <li><input type="checkbox" disabled> </li>\n</ul>'],
-    ['a heading where the paragraph would be', '- [ ] %%\n      # h\n      tail\n', '<ul>\n  <li><input type="checkbox" disabled> \n    <h1 id="h">h</h1>\n    tail\n  </li>\n</ul>'],
+    ['text on the marker line', '- [ ] a\n      tail\n', '<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="a tail"> a\ntail</li>\n</ul>'],
+    ['a comment below the marker line', '- [ ] a\n      %%\n      tail\n', '<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="a"> a\n    tail\n  </li>\n</ul>'],
+    ['a comment and nothing under it', '- [ ] %%\n', '<ul class="task-list">\n  <li><input type="checkbox" disabled> </li>\n</ul>'],
+    ['a heading where the paragraph would be', '- [ ] %%\n      # h\n      tail\n', '<ul class="task-list">\n  <li><input type="checkbox" disabled> \n    <h1 id="h">h</h1>\n    tail\n  </li>\n</ul>'],
     ['no marker content at all', '- [ ]\n      tail\n', '<ul>\n  <li>[ ]\ntail</li>\n</ul>'],
   ])('leaves %s where it was', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)

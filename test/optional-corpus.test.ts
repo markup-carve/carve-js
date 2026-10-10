@@ -182,7 +182,15 @@ const DECLARED_UNIMPLEMENTED: Record<string, string> = {}
  *  - and it must still DIFFER from the pinned fixture, so an entry the pin has
  *    caught up on fails and is deleted in the commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; expected: string }>()
+const AHEAD_OF_PIN = new Map<string, { reason: string; expected: string }>([
+  [
+    "66-smart-typography-quotes-off-html",
+    {
+      "reason": "Task-list class, markup-carve/carve#2887",
+      "expected": "<p>He said \"hello\" and 'yes'; it's fine… a–b, c—d.</p>\n<p>Arrows → ← ↔ ⇒ and comparisons ≠ ≤ ≥ and © ® ™ ±.</p>\n<p>Typed “curly” ‘quotes’ and escaped \"plain\" stay literal.</p>\n<p>Code: <code>a--b \"q\" (c)</code>.</p>\n<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"Don&apos;t &quot;guess&quot;… a–b\"> Don't \"guess\"… a–b</li>\n</ul>\n<section id=\"Don-t-guess-a-b\">\n  <h1>Don't \"guess\"… a–b</h1>\n  <p><a href=\"#Don-t-guess-a-b\">Don't \"guess\"… a–b</a></p>\n</section>"
+    }
+  ]
+])
 
 /*
  * THE RATCHET ON THE EXCUSE, because a DECLARED_UNIMPLEMENTED entry can only

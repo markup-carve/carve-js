@@ -967,9 +967,121 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-// Empty while the pin is level with this engine: spec 9eda67e6 rewrote both
-// former entries to the values this parser already produced.
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+// Exact expectations until the spec pin includes carve#2887.
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    "05-lists-12",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"outer\"> outer\n    <ul>\n      <li>inner</li>\n    </ul>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "06-task-lists",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"todo\"> todo</li>\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"done\"> done</li>\n</ul>\n"
+    }
+  ],
+  [
+    "06-task-lists-2",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li data-task-state=\"-\"><input type=\"checkbox\" disabled aria-label=\"dropped\"> dropped</li>\n  <li data-task-state=\"_\"><input type=\"checkbox\" disabled aria-label=\"paused\"> paused</li>\n  <li data-task-state=\"&gt;\"><input type=\"checkbox\" disabled aria-label=\"deferred\"> deferred</li>\n  <li data-task-state=\"?\"><input type=\"checkbox\" disabled aria-label=\"maybe\"> maybe</li>\n</ul>\n"
+    }
+  ],
+  [
+    "144-nested-item-looseness-does-not-propagate-to-the-outer-item-3",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"a\"> a\n    <ul>\n      <li>b\n        <blockquote><p>q</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "363-a-task-item-s-checkbox-is-not-decided-by-its-first-block",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <blockquote><p>q</p></blockquote>\n  </li>\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled> \n    <h1 id=\"h\">h</h1>\n  </li>\n  <li><input type=\"checkbox\" disabled> \n    <hr>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "393-an-engine-written-shape-says-what-it-is-called-3",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"read the docs\"> read the <em>docs</em></li>\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"done\"> done</li>\n</ul>\n"
+    }
+  ],
+  [
+    "393-an-engine-written-shape-says-what-it-is-called-4",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <blockquote><p>quoted lead</p></blockquote>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\" id=\"k\"><input type=\"checkbox\" checked disabled aria-label=\"bare\"> bare\n    <h1 id=\"inside\">inside</h1>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not-2",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\" id=\"k\"><input type=\"checkbox\" checked disabled aria-label=\"old\"> old\n    <h1 id=\"outside\">outside</h1>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not-3",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"a\"> a\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not-6",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul>\n  <li><p>outer</p>\n    <ul class=\"task-list\">\n      <li data-task-state=\"x\" id=\"k\"><input type=\"checkbox\" checked disabled aria-label=\"inner\"> inner</li>\n    </ul>\n    <p>after</p>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not-9",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\" title=\"😀\"><input type=\"checkbox\" checked disabled aria-label=\"a\"> a\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "415-a-floating-attribute-does-not-widen-a-list-item-s-content-column-3",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\" id=\"k\"><input type=\"checkbox\" checked disabled> \n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "415-a-floating-attribute-does-not-widen-a-list-item-s-content-column-7",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li data-task-state=\"x\" id=\"k\"><input type=\"checkbox\" checked disabled> </li>\n</ul>\n<p># h</p>\n"
+    }
+  ],
+  [
+    "75-list-nesting-and-looseness-9",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"item\"> item\n    <h1 id=\"H\">H</h1>\n  </li>\n</ul>\n"
+    }
+  ],
+  [
+    "90-list-item-attributes-4",
+    {
+      "reason": "Task-list HTML hooks, markup-carve/carve#2887",
+      "html": "<ul class=\"task-list\">\n  <li class=\"c\"><input type=\"checkbox\" disabled aria-label=\"A classed task item.\"> A classed task item.</li>\n</ul>\n"
+    }
+  ]
+])
 
 
 
@@ -1088,13 +1200,13 @@ describe('spec corpus', () => {
     if (ahead) {
       it(`${name} (ahead of the pinned corpus)`, () => {
         const actual = carveToHtml(source).trim()
-        expect(actual, ahead.reason).toBe(ahead.html)
+        expect(actual, ahead.reason).toBe(ahead.html.trim())
         // The staleness half: when the pin moves past this rule the fixture is
         // rewritten to exactly this value, and the entry must be deleted.
         expect(
           expected.trim(),
           `${name} now matches: delete its AHEAD_OF_PIN entry`,
-        ).not.toBe(ahead.html)
+        ).not.toBe(ahead.html.trim())
       })
       continue
     }
