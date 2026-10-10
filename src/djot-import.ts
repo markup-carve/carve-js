@@ -473,6 +473,11 @@ function convertDjotDocument(djot: string): string {
   const spans: string[] = []
   const prefix = djotPlaceholderPrefix(body, '\x00DJOTSTRONG')
   const invalidAttributes = escapeInvalidDjotAttributes(body)
+  // Carve has no empty footnote body: `[^b]:` alone is a paragraph, not a
+  // definition, so an empty Djot body needs a body that renders nothing - a
+  // comment. It travels as a NUL token so the text escaper cannot reach it and
+  // turn the comment into a literal `%%%%` the reader was never shown.
+  const emptyNote = djotPlaceholderPrefix(body, '\x00DJOTEMPTYNOTE\x00')
   const normalizedBody = normalizeDjotFootnotes(
     djotReferenceLayout(
       foldDjotReferences(
@@ -484,6 +489,7 @@ function convertDjotDocument(djot: string): string {
     ),
     strippedDefinitions.isBoundary,
     invalidAttributes.inherited,
+    emptyNote,
   )
   const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody, invalidAttributes.inherited)))
   const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)))
@@ -525,6 +531,7 @@ function convertDjotDocument(djot: string): string {
   }, invalidAttributes.inherited)
   const restoreSpans = new RegExp(`${prefix}(\\d+)\x00`, 'g')
   const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
+    .replaceAll(emptyNote, '%%%%')
   return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
 
@@ -895,7 +902,7 @@ function normalizeDjotParagraphFences(source: string): string {
   return output.join('')
 }
 
-function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false, inherited: ReadonlySet<string> = new Set()): string {
+function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false, inherited: ReadonlySet<string> = new Set(), emptyNote = '%%%%'): string {
   if (!source.includes('[^')) return source
   const mask = maskDjotCodeAndDestinations(source, false, true, false)
   const rows = djotTableRows(source, mask)
@@ -1095,7 +1102,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
         output.push(rename || key !== source.slice(i + 2, end) ? `[^${name}]` : source.slice(i, end + 1))
         i = end + 1
         if (definition && emptyDefinitions.has(at)) {
-          output.push(': %%%%')
+          output.push(`: ${emptyNote}`)
           i++
         }
         if (!definition && source[i] === ':' && lineHeads.has(at)) {
@@ -1108,7 +1115,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
     output.push(source[i++]!)
   }
   const stubs: string[] = []
-  for (const key of used) if (!defined.has(key)) stubs.push(`[^${alias(key)}]: %%%%`)
+  for (const key of used) if (!defined.has(key)) stubs.push(`[^${alias(key)}]: ${emptyNote}`)
   return (stubs.length ? stubs.join('\n\n') + '\n\n' : '') + output.join('')
 }
 
