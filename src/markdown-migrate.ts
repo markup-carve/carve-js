@@ -1153,10 +1153,10 @@ function convertInline(
   joinedLines?: Set<number>,
   terminal = true,
   table = false,
-  nativeCode = false,
   reportEmptyLosses = true,
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
   unwrapEmptyLinks = true,
+  nativeCode = false,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -6017,7 +6017,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
     }
     if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
-    const converted = convertInline(body, dialect, false, false, undefined, true, false, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body))
+    const converted = convertInline(body, dialect, false, false, undefined, true, false, true, undefined, true, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body))
     // A pipe row GFM did NOT read as a table row stays text. Carve needs no
     // delimiter row, so passing the line through was itself the conversion and
     // the migrated document grew a table the author never saw
