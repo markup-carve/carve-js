@@ -943,6 +943,11 @@ const IMPLEMENTED = new Set([
   // before the entry was added: markup-carve/carve#2752 pins a description
   // body whose own block is a fence, which this parser already did.
   'a-description-body-whose-own-block-is-a-fence-keeps-no-line-below-its-column',
+  // ARRIVED WITH THIS PIN BUMP (spec 9eda67e6). All seven rows are byte-exact
+  // on this build before the entry was added: markup-carve/carve#2876 says a
+  // braced comment does not decide a quote's direction, which is what this
+  // parser already did.
+  'a-braced-comment-does-not-decide-a-quote',
 ])
 
 /**
@@ -962,16 +967,9 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['19-smart-typography-dashes-and-quotes-11', {
-    reason: 'Listed elisions use apostrophes.',
-    html: '<p>’tis the season to be ‘jolly’</p>',
-  }],
-  ['29-non-breaking-space-2', {
-    reason: 'Listed elisions use apostrophes after nonbreaking spaces.',
-    html: '<p>say&nbsp;’twas a fine&nbsp;“day”</p>',
-  }],
-])
+// Empty while the pin is level with this engine: spec 9eda67e6 rewrote both
+// former entries to the values this parser already produced.
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 
 
 
