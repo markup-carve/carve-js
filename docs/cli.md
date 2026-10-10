@@ -16,9 +16,13 @@ echo '# Hello' | carve           # render from stdin
 
 `--html` / `--markdown` (`--md`) / `--plain` (`--plain-text`) / `--ansi` /
 `--carve` select the format (the explicit `render` subcommand also works:
-`carve render --ansi`). For anything you did not author, add `--safe` and
-optionally `--profile` - see [Untrusted input](#untrusted-input). Three more
-subcommands round out the tooling:
+`carve render --ansi`). `--carry-markers` applies to `--markdown` only: it
+brackets every container Markdown drops with an HTML comment holding its Carve
+opener, so `carve migrate --from markdown` returns the container - see
+[Carrying a container through a Markdown round trip](rendering.md#carrying-a-container-through-a-markdown-round-trip).
+For anything you did not author, add `--safe` and optionally `--profile` - see
+[Untrusted input](#untrusted-input). Three more subcommands round out the
+tooling:
 
 ```bash
 carve fmt  file.crv        # print canonically formatted Carve to stdout

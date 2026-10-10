@@ -52,3 +52,14 @@ export const FRONTMATTER_SYNTHESIZED =
  */
 export const RAW_SPAN_WHITESPACE_TRIMMED =
   'A raw span ends a content line in whitespace, which Carve drops; the whitespace did not reach the converted source'
+
+/**
+ * PART 11 §10s: a carrier marker set that no longer records a structure - one
+ * marker deleted, two reordered, or the set left unbalanced.
+ *
+ * Reported rather than reconstructed: a Markdown editor that broke the set
+ * destroyed the structure the markers recorded, and a reconstruction that is
+ * wrong is worse than a fallback that is honest.
+ */
+export const CARRIER_MARKERS_DAMAGED =
+  'Carrier markers no longer record a structure; read the source as plain Markdown'
