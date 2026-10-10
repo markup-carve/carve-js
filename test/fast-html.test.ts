@@ -194,11 +194,13 @@ describe('borrowed HTML layout', () => {
     const corpus = fileURLToPath(new URL('../spec/tests/corpus/', import.meta.url))
     const files = readdirSync(corpus).filter((file) => file.endsWith('.crv')).sort()
     let accepted = 0
+    const acceptedFiles: string[] = []
     for (const file of files) {
       const source = readFileSync(`${corpus}/${file}`, 'utf8')
       const fast = tryFastHtml(source, {})
       if (fast === undefined) continue
       accepted++
+      acceptedFiles.push(file)
       expect(fast, file).toBe(authoritative(source))
     }
     // Pin the accepted population so an empty fast-path sweep cannot pass.
@@ -208,6 +210,11 @@ describe('borrowed HTML layout', () => {
     // The spec pin past carve#2867 adds five more accepted documents; each one
     // is held against the authoritative render above before it is counted.
     expect(accepted).toBe(66)
+    // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
+    expect(acceptedFiles).toEqual(expect.arrayContaining([
+      '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',
+      '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-4.crv',
+    ]))
   })
 
   it('falls back for normalization-sensitive or stateful shapes', () => {

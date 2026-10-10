@@ -2,6 +2,7 @@ interface Run {
   start: number
   end: number
   char: string
+  scope: number
   open: boolean
   close: boolean
   left: number
@@ -10,10 +11,10 @@ interface Run {
   previous: number
   next: number
 }
-interface Pair { open: number; close: number; width: number; kind: '*' | '/' }
+interface Pair { open: number; close: number; width: number; kind: '*' | '/' | '~' }
 
 /** Pair CommonMark delimiter runs before applying Carve's nesting ceiling. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -30,16 +31,43 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
   }
   const punctuation = (s: string): boolean => /[\p{P}\p{S}]/u.test(s)
   const whitespace = (s: string): boolean => s === '' || /\s/u.test(s)
-  for (const m of source.matchAll(/\*+|_+/g)) {
+  for (const m of source.matchAll(strikethrough ? /\*+|_+|~+/g : /\*+|_+/g)) {
     const start = m.index
     const end = start + m[0].length
+    if (m[0][0] === '~' && m[0].length > 2) continue
     if (source[start - 1] === '\\') continue
     const before = neighbor(start - 1, true)
     const after = neighbor(end, false)
     const left = !whitespace(after) && (!punctuation(after) || whitespace(before) || punctuation(before))
     const right = !whitespace(before) && (!punctuation(before) || whitespace(after) || punctuation(after))
-    runs.push({ start, end, char: m[0][0]!, open: left && (m[0][0] === '*' || !right || punctuation(before)),
-      close: right && (m[0][0] === '*' || !left || punctuation(after)), left: 0, right: 0, active: true, previous: runs.length - 1, next: runs.length + 1 })
+    runs.push({ start, end, scope: -1, char: m[0][0]!, open: left && (m[0][0] !== '_' || !right || punctuation(before)),
+      close: right && (m[0][0] !== '_' || !left || punctuation(after)), left: 0, right: 0, active: true, previous: runs.length - 1, next: runs.length + 1 })
+  }
+  if (strikethrough) {
+    const brackets: number[] = []
+    const boundaries = new Map<number, { scope: number; open: boolean }>()
+    for (let i = 0; i < source.length; i++) {
+      if (source[i] === '\\') { i++; continue }
+      if (source[i] === '[') brackets.push(i)
+      else if (source[i] === ']' && brackets.length) {
+        const open = brackets.pop()!
+        const target = source[i + 1] === '\x00' ? /^\x00P(\d+)\x00/.exec(source.slice(i + 1)) : null
+        if (open + 1 < i && target && protectedSpans[Number(target[1])]?.startsWith('(')) {
+          boundaries.set(open + 1, { scope: open, open: true })
+          boundaries.set(i, { scope: open, open: false })
+        }
+      }
+    }
+    const scopes: number[] = []
+    let cursor = 0
+    for (const run of runs) {
+      while (cursor <= run.start) {
+        const boundary = boundaries.get(cursor++)
+        if (boundary?.open) scopes.push(boundary.scope)
+        else if (boundary) scopes.pop()
+      }
+      run.scope = scopes.at(-1) ?? -1
+    }
   }
   const remaining = (r: Run): number => r.end - r.start - r.left - r.right
   const unlink = (index: number): void => {
@@ -54,15 +82,17 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     const closer = runs[c]!
     if (!closer.active || !closer.close) continue
     while (remaining(closer) > 0) {
-      const key = `${closer.char}:${closer.open}:${remaining(closer) % 3}`
+      const key = `${closer.scope}:${closer.char}:${closer.open}:${remaining(closer) % 3}`
       const bottom = bottoms.get(key) ?? -1
       let o = closer.previous
       for (; o > bottom; o = runs[o]!.previous) {
         onStep?.()
         const opener = runs[o]!
         if (!opener.active || !opener.open || opener.char !== closer.char || remaining(opener) === 0) continue
+        if (opener.scope !== closer.scope) continue
         const a = remaining(opener), b = remaining(closer)
-        if ((opener.close || closer.open) && (a + b) % 3 === 0 && (a % 3 !== 0 || b % 3 !== 0)) continue
+        if (opener.char === '~' && a !== b) continue
+        if (opener.char !== '~' && (opener.close || closer.open) && (a + b) % 3 === 0 && (a % 3 !== 0 || b % 3 !== 0)) continue
         break
       }
       if (o <= bottom) {
@@ -73,7 +103,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       const width = Math.min(remaining(opener), remaining(closer)) >= 2 ? 2 : 1
       const open = opener.end - opener.right - width
       const close = closer.start + closer.left
-      pairs.set(open, { open, close, width, kind: width === 2 ? '*' : '/' })
+      pairs.set(open, { open, close, width, kind: opener.char === '~' ? '~' : width === 2 ? '*' : '/' })
       for (let k = 0; k < width; k++) { claimed.add(open + k); claimed.add(close + k) }
       opener.right += width
       closer.left += width

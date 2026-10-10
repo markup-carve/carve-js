@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Markdown import preserves HTML code payloads, nested markup and native code where source readback succeeds. Raw HTML fallbacks report their effect on other targets and profiles.
+
 - Keep adjacent verbatim spans separate when a payload ends in a backslash, including empty siblings and transparent wrappers.
 
 - Markdown fragment links to headings with hard breaks use GitHub’s text anchor (#2679).
