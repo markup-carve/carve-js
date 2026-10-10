@@ -11,7 +11,11 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
-- Markdown code spans preserve significant edge spaces and normalize payload newlines before paragraph and table layout. Empty spans use an inline HTML fallback.
+- Markdown fragment links to headings with hard breaks use GitHub’s text anchor (#2679).
+
+- Markdown export preserves terminal hard breaks and hard breaks in headings with inline HTML. A break-only paragraph stays a paragraph in GFM readers.
+
+- Markdown code spans preserve significant edge spaces. Empty spans and payloads containing tabs or newlines use an inline HTML fallback that preserves the code text.
 
 - Document `srcByteLength` counts the original UTF-8 input, including a leading BOM and NUL bytes, before parser normalization.
 
@@ -117,6 +121,7 @@ references and external fragment links need manual review. See the
 - A destination the URL scheme denylist blanks takes one render-loss row under the new code `destination-denied`, on every target that emits a destination, carrying the normative message `Blanked a denied destination scheme` for a link or an autolink and `Blanked a denied image source` for an image. `RenderLossCode` has a third member, `carve render --strict-losses` fails on a document that holds such a destination, and `--allow-loss` will not waive the code (#2432, #2433, #2435; markup-carve/carve#2679, markup-carve/carve#2681, markup-carve/carve#2686).
 
 ### Fixes
+
 
 - The upgrade guide distinguishes newly exact lookups from labels that already
   matched case exactly, and explains migration limits. Tests keep case-distinct
