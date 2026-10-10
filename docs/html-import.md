@@ -140,11 +140,11 @@ rather than a placeholder for a mapping still to come:
   `1. [x] done`. A `data-task-state` character reaches the brackets, because
   that is the marker a bullet would have carried. `htmlToAst` keeps the box on
   the item and reports nothing, only a writer losing it.
-- **A span nested directly in a span of the same kind can lose a level.**
-  Carve cannot open a braced span inside a braced span of the same kind, so
-  where both levels need braces the inner element is unwrapped with a
-  `structure-unspellable` warning: `<sup><sup>x</sup></sup>` imports as
-  `{^x^}`. Where one level can be written bare, as in `a{**x**}b`, both stay.
+- **A repeated emphasis wrapper is kept, a repeated editorial one is not.**
+  Braced emphasis nests its own kind, so `<sup><sup>x</sup></sup>` imports as
+  `{^{^x^}^}` and reports nothing. An insert or delete has no such spelling, so
+  the inner element is unwrapped with a `structure-unspellable` warning:
+  `<ins><ins>x</ins></ins>` imports as `{+x+}`.
 
 `migrate` reaches the other importers too - `--from markdown` (or `md`),
 `--from djot`, and `--from bbcode` - which need no report because they parse

@@ -3,9 +3,9 @@ import { djotToCarve, carveToHtml } from '../src/index.js'
 
 test.each([
   ['_(_foo_)_', '<p><em>(</em>foo<em>)</em></p>'],
-  ['_({_foo_})_', '<p><em>(foo)</em></p>'],
+  ['_({_foo_})_', '<p><em>(<em>foo</em>)</em></p>'],
   ['{_ x_ _} _x_}', '<p><em> x_ </em> _x_}</p>'],
-  ['*****a*****', '<p><strong>a</strong></p>'],
+  ['*****a*****', '<p><strong><strong><strong><strong><strong>a</strong></strong></strong></strong></strong></p>'],
   ['foo*bar*baz', '<p>foo<strong>bar</strong>baz</p>'],
   ['_}b_', '<p>_}b_</p>'],
   ['___', '<p>___</p>'],
@@ -48,7 +48,9 @@ test('inline code in a definition term remains in the term', () => {
 })
 
 test('deep same-kind spans migrate without using the call stack', () => {
-  expect(djotToCarve('{_'.repeat(10000) + 'x' + '_}'.repeat(10000))).toBe('{/x/}')
+  const converted = djotToCarve('{_'.repeat(10000) + 'x' + '_}'.repeat(10000))
+  expect(converted).toBe('{/'.repeat(199) + 'x' + '/}'.repeat(199))
+  expect(carveToHtml(converted)).toBe('<p>' + '<em>'.repeat(199) + 'x' + '</em>'.repeat(199) + '</p>')
 })
 
 test.each(['_a\n- b_', '_a\n1. b_', '_a\n| b_', 'para _a\n  - b_'])('keeps emphasis across paragraph marker text: %s', source => {

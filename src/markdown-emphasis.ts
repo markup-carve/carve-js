@@ -1,3 +1,5 @@
+import { MAX_NESTING_DEPTH } from './parse.js'
+
 interface Run {
   start: number
   end: number
@@ -13,8 +15,8 @@ interface Run {
 }
 interface Pair { open: number; close: number; width: number; kind: '*' | '/' | '~' }
 
-/** Pair CommonMark delimiter runs before applying Carve's nesting ceiling. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false): string {
+/** Pair CommonMark delimiter runs before writing native emphasis. */
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -142,11 +144,12 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       bracketStarts.set(i, start)
     }
   }
-  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean }
-  let flattened = false
+  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; repeated: boolean; keep: boolean }
   const output: string[] = []
   const stack: Frame[] = []
-  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false }
+  const active = new Map<string, number>()
+  let flattened = false
+  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true }
   const record = (first: string, last: string): void => {
     if (frame.first === '') frame.first = first
     if (last !== '') frame.last = last
@@ -158,7 +161,12 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         frame.i = pair.close + pair.width
         stack.push(frame)
         frame = { i: pair.open + pair.width, end: pair.close, kind: pair.kind, pair, parent: frame.kind,
-          slot: output.length, first: '', last: '', strong: false, italic: false }
+          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true }
+        frame.repeated = (active.get(pair.kind) ?? 0) > 0
+        // `hostDepth` is the inline nesting this text already sits under - a
+        // link label is converted on its own, so its own levels are not here.
+        frame.keep = hostDepth + stack.length < MAX_NESTING_DEPTH
+        active.set(pair.kind, (active.get(pair.kind) ?? 0) + 1)
         output.push('')
       } else {
         const ch = source[frame.i++]!
@@ -175,21 +183,28 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     if (!frame.pair) break
     const { pair } = frame
     let first = frame.first, last = frame.last
-    let strong = frame.strong, italic = frame.italic
-    if (frame.parent !== frame.kind) {
+    let strong = frame.strong, italic = frame.italic, strike = frame.strike
+    if (frame.keep) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
       const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => /[*_]/.test(source[i] ?? '') && !claimed.has(i))
-      const braced = intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const braced = frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
+      strike ||= pair.kind === '~'
+      // A literal `{` at the body's end would glue to the closer and read as a
+      // braced opener of this kind, which nests since markup-carve/carve#2877.
+      const tail = output.length - 1
+      if (tail > frame.slot && output[tail] === '{') output[tail] = '\\{'
       output[frame.slot] = braced ? `{${pair.kind}` : pair.kind
       output.push(braced ? `${pair.kind}}` : pair.kind)
       first = braced ? '{' : pair.kind
       last = braced ? '}' : pair.kind
     } else flattened = true
+    active.set(pair.kind, active.get(pair.kind)! - 1)
     frame = stack.pop()!
     frame.strong ||= strong
     frame.italic ||= italic
+    frame.strike ||= strike
     record(first, last)
   }
   if (flattened) onFlatten()

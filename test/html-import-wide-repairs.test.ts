@@ -6,7 +6,9 @@ function source(shape: string, n: number): string {
   if (shape === 'sections') return '<table><tbody><tr><td>x</td></tr></tbody>' + '<tbody></tbody>'.repeat(n) + '</table>'
   if (shape === 'empty-code') return '<p>' + '<code></code>x'.repeat(n) + '</p>'
   if (shape === 'empty-spans') return '<p>' + '<strong></strong>x'.repeat(n) + '</p>'
-  return '<p><strong>' + '<strong><code>x</code></strong> y '.repeat(n) + '</strong></p>'
+  // An editorial wrapper, not an emphasis one: carve#2877 gave repeated
+  // emphasis a spelling, and the repair path under test needs a refusal.
+  return '<p><ins>' + '<ins><code>x</code></ins> y '.repeat(n) + '</ins></p>'
 }
 
 it('retains table sections in document order', () => {
@@ -37,8 +39,8 @@ for (const [shape, small] of [['sections', 2048], ['empty-code', 8192], ['nested
 }
 
 it('repairs consecutive nested spans before text merging changes their identities', () => {
-  const result = htmlToCarve('<p><strong><strong>x</strong> y <strong>x</strong> y</strong></p>')
-  expect(result.value).toBe('*x y x y*\n')
+  const result = htmlToCarve('<p><ins><ins>x</ins> y <ins>x</ins> y</ins></p>')
+  expect(result.value).toBe('{+x y x y+}\n')
   expect(result.report.diagnostics.filter(item => item.code === 'structure-unspellable')).toHaveLength(2)
 })
 
@@ -64,8 +66,8 @@ it('bounds array removal work when many empty code spans are dropped', () => {
 
 it('keeps the first refusal when row and span repairs reach the diagnostic cap', () => {
   const blank = '<table><tr><td></td></tr></table>'
-  const nested = '<p><strong><strong><code>x</code></strong><strong><code>y</code></strong></strong></p>'
-  for (const [html, message] of [[blank + nested, 'Dropped a row'], [nested + blank, 'Unwrapped <strong>'], [blank + nested + blank, 'Dropped a row'], [nested + blank + nested, 'Unwrapped <strong>']] as const) {
+  const nested = '<p><ins><ins><code>x</code></ins><ins><code>y</code></ins></ins></p>'
+  for (const [html, message] of [[blank + nested, 'Dropped a row'], [nested + blank, 'Unwrapped <ins>'], [blank + nested + blank, 'Dropped a row'], [nested + blank + nested, 'Unwrapped <ins>']] as const) {
     const result = htmlToCarve(html, { maxDiagnostics: 2 })
     expect(result.report.diagnostics[0]?.message).toContain(message)
   }

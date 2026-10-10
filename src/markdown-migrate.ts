@@ -1195,7 +1195,7 @@ const RE_BRACED_DELIMITER_FORM = /^([\^,=+\-~/#*_])[^\n]*\1$/
 
 function escapeAttributeListsThatAttach(input: string): string {
   const escapeUnlessDelimiterPair = (match: string, interior: string): string => {
-    if (RE_BRACED_DELIMITER_FORM.test(interior)) return match
+    if (RE_BRACED_DELIMITER_FORM.test(interior) || /^[/*_^,~=]/.test(interior) && interior.includes('{')) return match
     // A TAG opener at the head of the payload needs escaping too. The general
     // tag rule skips a `#` that an unescaped `{` precedes, because inside a
     // brace it is the braced form's business - and escaping the brace here is
@@ -1941,7 +1941,7 @@ function convertInline(
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
-    message: 'Unwrapped nested emphasis of the same kind; its text is preserved',
+    message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
   })
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
@@ -1970,6 +1970,8 @@ function convertInline(
     line = typeof repl === 'string' ? line.replace(re, repl) : line.replace(re, repl)
   }
 
+  if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
+
   // ^superscript^ (pandoc-style) -> {^x^}. Carve has no bare superscript, so
   // an unconverted `^x^` would render literal. (Highlight ==x== was converted
   // to =x= above; math was converted and protected before the emphasis passes.)
@@ -1981,7 +1983,6 @@ function convertInline(
     line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
   }
 
-  if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
 
   if (!holdsFenceBody) {
     if (dialect.attributes) {

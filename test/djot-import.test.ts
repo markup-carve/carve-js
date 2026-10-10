@@ -6,8 +6,8 @@ describe('djotToCarve', () => {
     ['_em_', '/em/'],
     ['H~2~O', 'H{,2,}O'],
     ['x^2^', 'x{^2^}'],
-    ['**bold**', '*bold*'],
-    ['~~old~~', '{,old,}'],
+    ['**bold**', '{*{*bold*}*}'],
+    ['~~old~~', '{,{,old,},}'],
     ['snake_case_name', 'snake{/case/}name'],
     ['+ one\n+ two', '- one\n- two'],
   ])('converts %s', (source, expected) => expect(djotToCarve(source)).toBe(expected))

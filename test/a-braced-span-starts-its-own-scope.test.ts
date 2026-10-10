@@ -16,13 +16,13 @@ describe('a braced span of another kind', () => {
     expect(html(source)).toBe(expected)
   })
 
-  it('keeps a forced opener of its own kind literal', () => {
-    expect(html('a{*{*x*}*}b')).toBe('<p>a<strong>{*x</strong>*}b</p>')
+  it('allows an explicit opener of its own kind', () => {
+    expect(html('a{*{*x*}*}b')).toBe('<p>a<strong><strong>x</strong></strong>b</p>')
   })
 
-  it('is written braced where a descendant repeats an outer kind', () => {
-    expect(carveToCarve('*a {/b *c* d/} e*\n')).toBe('*a {/b *c* d/} e*\n')
-    expect(htmlToCarve('<p><strong>a <em>b <strong>c</strong> d</em> e</strong></p>').value).toBe('*a {/b *c* d/} e*\n')
+  it('braces both levels of a repeated kind', () => {
+    expect(carveToCarve('*a {/b *c* d/} e*\n')).toBe('{*a /b {*c*} d/ e*}\n')
+    expect(htmlToCarve('<p><strong>a <em>b <strong>c</strong> d</em> e</strong></p>').value).toBe('{*a /b {*c*} d/ e*}\n')
   })
 
   it('is written bare where nothing below repeats an outer kind', () => {

@@ -1,21 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// E3 pushes no second level of one kind while one is open, and PART 9 §9 puts
-// the forced `{X X}` form on the same stack as the bare one, so an opener of an
-// open kind is content (markup-carve/carve#2078). The four rows are corpus
-// section 471.
-
 const html = (source: string) => carveToHtml(source).trim()
 
 describe('a forced opener of an open kind', () => {
   it.each([
-    ['a forced opener inside a forced span of its kind', 'a{*{*x*}*}b', '<p>a<strong>{*x</strong>*}b</p>'],
-    ['a forced opener inside a bare span of its kind', '*a {*b*} c*', '<p><strong>a {*b</strong>} c*</p>'],
+    ['a forced opener inside a forced span of its kind', 'a{*{*x*}*}b', '<p>a<strong><strong>x</strong></strong>b</p>'],
+    ['a forced opener inside a bare span of its kind', '*a {*b*} c*', '<p><strong>a <strong>b</strong> c</strong></p>'],
     ['a bare opener inside a forced span of its kind', '{*a *b* c*}', '<p><strong>a *b* c</strong></p>'],
-    ['a forced opener of an open kind through another span', '{/a *b {/c/}*/}', '<p><em>a *b {/c</em>*/}</p>'],
-    ['a forced pair the outer closer scan runs past', '*a {*b *} c*', '<p><strong>a {*b *} c</strong></p>'],
-  ])('is literal for %s', (_, source, expected) => {
+    ['a forced opener of an open kind through another span', '{/a *b {/c/}*/}', '<p><em>a <strong>b <em>c</em></strong></em></p>'],
+    ['a forced pair the outer closer scan runs past', '*a {*b *} c*', '<p><strong>a <strong>b </strong> c</strong></p>'],
+  ])('follows explicit and bare nesting rules for %s', (_, source, expected) => {
     expect(html(source)).toBe(expected)
   })
 

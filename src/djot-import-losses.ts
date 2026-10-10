@@ -53,7 +53,7 @@ export function djotImportLosses(
   djotEmphasis(
     source,
     (text) => text,
-    (at) => report('Nested same-kind emphasis is flattened; Carve cannot spell it.', lineAt(at)),
+    (at) => report('Emphasis exceeding the native nesting budget is flattened; its text is preserved.', lineAt(at)),
   )
   const destinations = new Map<number, number>()
   const masked = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: true, autolinks: true, comments: true, onDestination: (start, end) => destinations.set(start, end) }).split('')
