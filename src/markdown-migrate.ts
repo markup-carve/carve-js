@@ -509,8 +509,68 @@ function decodeEntitiesInTitle(rest: string): string {
 /** An ATX marker, its separator, and whitespace past it: `#` + ` ` + ` `. */
 const RE_HEADING_HEAD_WHITESPACE = /^(#{1,6}[ \t])[ \t]+/
 
+/**
+ * The container prefixes a marker run can sit behind: indentation, quote
+ * markers and list markers. `> #&#32;x` and `- #&#32;x` decode into the same
+ * shape as a bare line, and carve-rs escapes the run in all three.
+ */
+const RE_CONTAINER_PREFIX = /^(?:[ \t]*(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+))*[ \t]*/
+
+/** A Carve heading opener: a marker run of at most six, then ONE space. */
+const RE_CARVE_HEADING_OPENER = /^#{1,6} /
+
+/** A Markdown ATX opener: its separator may be a tab, and may end the line. */
+const RE_MD_HEADING_OPENER = /^#{1,6}(?:[ \t]|$)/
+
+/** A marker run with nothing but the separator behind it. */
+const RE_MARKER_RUN_ALONE = /^(#{1,6})[ \t]+$/
+
+/**
+ * Escape a marker run that only a DECODED separator turns into a heading.
+ *
+ * CommonMark decides the block before any reference is decoded, and an ATX
+ * heading needs a LITERAL space or tab after its marker run, so `#&#32;nosep`
+ * is a paragraph whose text begins with `#`. Written bare, the line read back
+ * as a level-1 heading: it gained an id, entered the outline and changed the
+ * rendered structure, with no diagnostic (carve-js#2698). Escaping the run
+ * keeps the block the source had, which is what carve-rs writes.
+ *
+ * Run on EVERY line of the body, not just the first: a paragraph's later line
+ * opens a heading at column 0 just as its first one does, so `foo\n#&#32;x`
+ * split one paragraph into a paragraph and a heading.
+ *
+ * Only a SPACE opens a Carve heading, so a decoded tab stays bare, as does a
+ * run of seven. A marker that was itself decoded is already escaped as decoded
+ * content and never reaches this.
+ */
+function escapeMarkerRunADecodedSeparatorPromotes(decoded: string, source: string): string {
+  const sourceLines = source.split('\n')
+
+  return decoded
+    .split('\n')
+    .map((line, index) => {
+      const prefix = RE_CONTAINER_PREFIX.exec(line)![0]
+      const rest = line.slice(prefix.length)
+      const sourceLine = sourceLines[index] ?? ''
+      // The SOURCE opens a heading here, so the line IS one and carve-js#2695
+      // rules what its decoded whitespace does. That is the control.
+      if (RE_MD_HEADING_OPENER.test(sourceLine.slice(RE_CONTAINER_PREFIX.exec(sourceLine)![0].length))) {
+        return line
+      }
+      // The decode left NOTHING but the run and the separator it supplied. A
+      // run alone on its line is already a paragraph, so the separator goes
+      // and the run stays bare: `#&#32;` writes `#`.
+      const alone = RE_MARKER_RUN_ALONE.exec(rest)
+      if (alone && line !== sourceLine) return prefix + alone[1]
+      if (!RE_CARVE_HEADING_OPENER.test(rest)) return line
+
+      return prefix + rest.replace(/^#{1,6}/, (run) => run.replace(/#/g, '\\#'))
+    })
+    .join('\n')
+}
+
 function decodeHtmlEntities(s: string, headingHeadDrops = true): string {
-  const decoded = s.replace(
+  let decoded = s.replace(
     RE_HTML_ENTITY,
     (match, dec: string | undefined, hex: string | undefined, named: string | undefined) => {
       const resolved = resolveEntity(match, dec, hex, named)
@@ -540,6 +600,15 @@ function decodeHtmlEntities(s: string, headingHeadDrops = true): string {
   // rather than the character: `#  head` and `# head` render the same document
   // and `carve fmt` rewrites the first back to the second
   // (markup-carve/carve-rs#2449).
+  // Whitespace a decode put at the line's HEAD belongs to the drop rule below,
+  // which escapes whatever marker the drop uncovers at column 0. Taking that
+  // whitespace for a container prefix here kept it instead.
+  const decodedIndents = /^[ \t]/.test(decoded) && !/^[ \t]/.test(s)
+  // Not in a table cell: a `#` run there is literal text, and the space after
+  // it is content Carve holds.
+  if (headingHeadDrops && !decodedIndents) {
+    decoded = escapeMarkerRunADecodedSeparatorPromotes(decoded, s)
+  }
   if (headingHeadDrops && RE_HEADING_HEAD_WHITESPACE.test(decoded) && !RE_HEADING_HEAD_WHITESPACE.test(s)) {
     importLosses.push({
       code: 'structure-unspellable',

@@ -181,4 +181,158 @@ describe("a decoded space at a heading's head", () => {
     expect(value).toBe('# lit\n')
     expect(losses).toEqual([])
   })
+
+  /*
+   * A decoded reference that supplies the separator changes the BLOCK, not a
+   * character: CommonMark decides the block before any reference is decoded and
+   * an ATX heading needs a literal space or tab, so `#&#32;nosep` is a PARAGRAPH
+   * whose text begins with `#`. Written bare it read back as a level-1 heading,
+   * gaining an id and entering the outline, with no diagnostic
+   * (markup-carve/carve-js#2698). Escaping the run is what carve-rs writes, and
+   * every expectation below is byte-identical to carve-rs 879d32c0a.
+   */
+  describe('a decoded separator must not turn a paragraph into a heading', () => {
+    it.each([
+      ['#&#32;nosep\n', '\\# nosep\n', '<p># nosep</p>'],
+      ['##&#32;x\n', '\\#\\# x\n', '<p>## x</p>'],
+      ['######&#32;x\n', '\\#\\#\\#\\#\\#\\# x\n', '<p>###### x</p>'],
+      ['#&#x20;y\n', '\\# y\n', '<p># y</p>'],
+      ['> #&#32;x\n', '> \\# x\n', '<blockquote><p># x</p></blockquote>'],
+      ['- #&#32;x\n', '- \\# x\n', '<ul>\n  <li># x</li>\n</ul>'],
+    ])('%j re-reads as the paragraph it was', (markdown, carve, html) => {
+      const { value, losses } = convert(markdown)
+      expect(value).toBe(carve)
+      expect(carveToHtml(value)).toBe(html)
+      expect(losses).toEqual([])
+    })
+
+    // Only a SPACE opens a Carve heading, so a decoded tab needs no escape.
+    it.each([['#&#9;x\n'], ['#&Tab;x\n']])('%j leaves a decoded tab bare', (markdown) => {
+      const { value, losses } = convert(markdown)
+      expect(value).toBe('#\tx\n')
+      expect(carveToHtml(value)).toBe('<p>#\tx</p>')
+      expect(losses).toEqual([])
+    })
+
+    it('leaves a run of seven alone, which opens no heading at any level', () => {
+      expect(convert('#######&#32;x\n').value).toBe('####### x\n')
+    })
+
+    it.each([['#&#32;\n', '#\n'], ['##&#32;\n', '##\n']])(
+      '%j keeps the marker run bare when the decode was the whole content',
+      (markdown, carve) => {
+        expect(convert(markdown).value).toBe(carve)
+      },
+    )
+
+    // The #2449 control: the SOURCE supplies the separator, so this IS a
+    // heading and must keep dropping the decoded space and naming the loss.
+    it('still drops, and reports, when the source supplies the separator', () => {
+      const { value, losses } = convert('# &#32;head\n')
+      expect(value).toBe('# head\n')
+      expect(carveToHtml(value)).toBe('<section id="head">\n  <h1>head</h1>\n</section>')
+      expect(losses).toEqual([
+        { code: 'structure-unspellable', message: HEADING_LEADING_WHITESPACE_UNSPELLABLE },
+      ])
+    })
+
+    it('leaves an authored escape and an authored heading untouched', () => {
+      expect(convert('\\# para\n').value).toBe('\\# para\n')
+      expect(convert('# x\n').value).toBe('# x\n')
+    })
+
+    /*
+     * A LATER line of a paragraph opens a heading at column 0 just as the
+     * first one does, so `foo\n#&#32;x` split one paragraph into a paragraph
+     * and a heading. Raised by codex review on this change.
+     */
+    it.each([
+      ['foo\n#&#32;x\n', 'foo\n\\# x\n', '<p>foo\n# x</p>'],
+      ['foo\n##&#32;x\n', 'foo\n\\#\\# x\n', '<p>foo\n## x</p>'],
+      ['> foo\n> #&#32;x\n', '> foo\n> \\# x\n', '<blockquote><p>foo\n# x</p></blockquote>'],
+    ])('%j keeps the continuation in its paragraph', (markdown, carve, html) => {
+      const { value } = convert(markdown)
+      expect(value).toBe(carve)
+      expect(carveToHtml(value)).toBe(html)
+    })
+
+    it('leaves a continuation the SOURCE opens a heading on alone', () => {
+      expect(convert('foo\n# x\n').value).toBe('foo\n\n# x\n')
+      expect(convert('foo\n\\# x\n').value).toBe('foo\n\\# x\n')
+    })
+
+    // A `#` run in a cell is literal text, so no escape is owed there either.
+    it('leaves a heading-shaped table cell alone', () => {
+      const { value, losses } = convert('| a |\n| --- |\n| #&#32;c |\n')
+      expect(value).toBe('|= a |\n| # c |\n')
+      expect(losses).toEqual([])
+    })
+  })
+
+  /*
+   * A decoded reference that supplies the separator changes the BLOCK, not a
+   * character: CommonMark decides the block before any reference is decoded and
+   * an ATX heading needs a literal space or tab, so `#&#32;nosep` is a PARAGRAPH
+   * whose text begins with `#`. Written bare it read back as a level-1 heading,
+   * gaining an id and entering the outline, with no diagnostic
+   * (markup-carve/carve-js#2698). Escaping the run is what carve-rs writes, and
+   * every expectation below is byte-identical to carve-rs 879d32c0a.
+   */
+  describe('a decoded separator must not turn a paragraph into a heading', () => {
+    it.each([
+      ['#&#32;nosep\n', '\\# nosep\n', '<p># nosep</p>'],
+      ['##&#32;x\n', '\\#\\# x\n', '<p>## x</p>'],
+      ['######&#32;x\n', '\\#\\#\\#\\#\\#\\# x\n', '<p>###### x</p>'],
+      ['#&#x20;y\n', '\\# y\n', '<p># y</p>'],
+      ['> #&#32;x\n', '> \\# x\n', '<blockquote><p># x</p></blockquote>'],
+      ['- #&#32;x\n', '- \\# x\n', '<ul>\n  <li># x</li>\n</ul>'],
+    ])('%j re-reads as the paragraph it was', (markdown, carve, html) => {
+      const { value, losses } = convert(markdown)
+      expect(value).toBe(carve)
+      expect(carveToHtml(value)).toBe(html)
+      expect(losses).toEqual([])
+    })
+
+    // Only a SPACE opens a Carve heading, so a decoded tab needs no escape.
+    it.each([['#&#9;x\n'], ['#&Tab;x\n']])('%j leaves a decoded tab bare', (markdown) => {
+      const { value, losses } = convert(markdown)
+      expect(value).toBe('#\tx\n')
+      expect(carveToHtml(value)).toBe('<p>#\tx</p>')
+      expect(losses).toEqual([])
+    })
+
+    it('leaves a run of seven alone, which opens no heading at any level', () => {
+      expect(convert('#######&#32;x\n').value).toBe('####### x\n')
+    })
+
+    it.each([['#&#32;\n', '#\n'], ['##&#32;\n', '##\n']])(
+      '%j keeps the marker run bare when the decode was the whole content',
+      (markdown, carve) => {
+        expect(convert(markdown).value).toBe(carve)
+      },
+    )
+
+    // The #2449 control: the SOURCE supplies the separator, so this IS a
+    // heading and must keep dropping the decoded space and naming the loss.
+    it('still drops, and reports, when the source supplies the separator', () => {
+      const { value, losses } = convert('# &#32;head\n')
+      expect(value).toBe('# head\n')
+      expect(carveToHtml(value)).toBe('<section id="head">\n  <h1>head</h1>\n</section>')
+      expect(losses).toEqual([
+        { code: 'structure-unspellable', message: HEADING_LEADING_WHITESPACE_UNSPELLABLE },
+      ])
+    })
+
+    it('leaves an authored escape and an authored heading untouched', () => {
+      expect(convert('\\# para\n').value).toBe('\\# para\n')
+      expect(convert('# x\n').value).toBe('# x\n')
+    })
+
+    // A `#` run in a cell is literal text, so no escape is owed there either.
+    it('leaves a heading-shaped table cell alone', () => {
+      const { value, losses } = convert('| a |\n| --- |\n| #&#32;c |\n')
+      expect(value).toBe('|= a |\n| # c |\n')
+      expect(losses).toEqual([])
+    })
+  })
 })
