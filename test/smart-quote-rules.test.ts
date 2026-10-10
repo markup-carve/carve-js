@@ -4,6 +4,13 @@ import { carveToAstJson, carveToCarve, carveToHtml, smartQuotes } from '../src/i
 const h = (source: string) => carveToHtml(source)
 
 describe('smart quote direction rules', () => {
+  it('judges a letter outside the BMP as a whole code point', () => {
+    expect(h("say '𐐀")).toBe('<p>say ’𐐀</p>')
+    expect(h("'one '𐐀 two'")).toBe('<p>‘one ’𐐀 two’</p>')
+    expect(h("'𐐀bc' d")).toBe('<p>‘𐐀bc’ d</p>')
+    expect(h("'em'𐐀")).toBe('<p>’em’𐐀</p>')
+  })
+
   it('keeps previous-character context through empty blocks and attribute comments', () => {
     for (const block of ['{%%}', '{% hidden %}', '{%%}{% hidden %}']) {
       expect(h(`\\{${block}"q"`)).toBe('<p>{“q”</p>')

@@ -7531,6 +7531,11 @@ const closesAfterDash = (prev: string, next: string) =>
 // (`. , ; ! ?`), letters, digits and closing brackets stay CLOSING. The en/em
 // dash also opens (a quote right after a `--` dash run opens), as does a quote
 // directly after an opening curly quote (nested-quote context).
+// Letters outside the BMP are two UTF-16 units; the quote rules judge whole code points.
+const codePointAfter = (text: string, i: number): string => {
+  const cp = text.codePointAt(i + 1)
+  return cp === undefined ? '' : String.fromCodePoint(cp)
+}
 const isQuoteOpenContext = (prev: string) =>
   prev === '' ||
   /[ \t\n\r\u00a0([{\-–—/=:]/.test(prev) ||
@@ -13517,7 +13522,7 @@ class ParseSession {
       return { out: open ? this.activeQuoteCharacters[0] : this.activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
     }
     if (c === "'") {
-      const next = text[i + 1] ?? ''
+      const next = codePointAfter(text, i)
       const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
       let apostrophe = /[0-9]/.test(next) || (!open && isQuoteAlnum(next))
       if (!apostrophe && !open && !isQuoteSpace(prev)) this.singleQuoteSpan = null
@@ -13527,7 +13532,7 @@ class ParseSession {
           const word = QUOTE_LETTER_RUN.exec(text)?.[0] ?? ''
           const end = i + 1 + word.length
           const elision = ELISION_WORDS.has(word.toLowerCase())
-            && !(text[end] === "'" && !isQuoteAlnum(text[end + 1] ?? ''))
+            && !(text[end] === "'" && !isQuoteAlnum(codePointAfter(text, end)))
           apostrophe = elision || this.singleQuoteSpan !== null
         }
         if (!apostrophe && this.singleQuoteSpan === null) {
