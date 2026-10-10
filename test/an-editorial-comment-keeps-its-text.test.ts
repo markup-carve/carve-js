@@ -11,7 +11,7 @@ const commentText = (source: string): unknown =>
   (toAstJson(parse(source)).children[0] as unknown as { children: Array<{ text?: string }> }).children[0]!.text
 
 describe('the Carve writer on an editorial comment', () => {
-  it.each(['{#{-#}', '{#a\\b#}', '{# x #}', '{#a#b#}'])('writes %s back unchanged', (source) => {
+  it.each(['{#{-#}', '{#a\\b#}', '{# x #}', '{#a#b#}', '{#a}b#}'])('writes %s back unchanged', (source) => {
     expect(carveToCarve(`${source}\n`)).toBe(`${source}\n`)
     expect(commentText(carveToCarve(`${source}\n`))).toBe(commentText(source))
   })

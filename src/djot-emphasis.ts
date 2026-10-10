@@ -13,6 +13,7 @@ type Pair = {
   forced: boolean
   children: Pair[]
   kinds: Set<string>
+  hostDepth?: number
 }
 type Opener = { start: number; end: number; kind: string; forced: boolean }
 
@@ -337,6 +338,21 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     return text
   }
+  const hostChanges = new Map<number, number>()
+  for (const [start, end] of bracketPairs) {
+    if (literalBrackets.has(start) || literalBrackets.has(end)) continue
+    if (!'([{'.includes(source[end + 1] ?? '\0') && source[start - 1] !== '^') continue
+    hostChanges.set(start + 1, (hostChanges.get(start + 1) ?? 0) + 1)
+    hostChanges.set(end, (hostChanges.get(end) ?? 0) - 1)
+  }
+  if (hostChanges.size) {
+    let hostDepth = 0
+    for (let at = 0; at < source.length; at++) {
+      hostDepth += hostChanges.get(at) ?? 0
+      const pair = starts.get(at)
+      if (pair) pair.hostDepth = hostDepth
+    }
+  }
   const rendered = new Map<Pair, string>()
   const body = (start: number, end: number, children: Pair[], _outer: Set<string>): string => {
     let text = '',
@@ -348,7 +364,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     return text + plain(cursor, end)
   }
   const render = (pair: Pair, outer: Set<string>, depth: number): string => {
-    if (depth >= MAX_NESTING_DEPTH - 1) {
+    if (depth + (pair.hostDepth ?? 0) >= MAX_NESTING_DEPTH - 1) {
       flattened?.(pair.start)
       return body(pair.openEnd, pair.close, pair.children, outer)
     }
