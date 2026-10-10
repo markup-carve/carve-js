@@ -163,3 +163,10 @@ it('keeps earlier unmatched brackets native when only the last code starts a lin
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toHaveLength(1)
   expect(records(carveToHtml(result.value)).codes).toHaveLength(count)
 })
+
+it('keeps code native after renaming a footnote label', () => {
+  const markdown = '[^a&amp;b] [l](u) <code>[x]</code>\n\n[^a&amp;b]: n'
+  const result = migrateMarkdown(markdown)
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
+  expect(records(carveToHtml(result.value, { allowRawHtml: false })).codes[0]?.value).toBe('[x]')
+})

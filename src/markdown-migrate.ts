@@ -1569,7 +1569,9 @@ function convertInline(
   }
   const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
     const encoded = encodeDest(dest)
-    return encoded === undefined ? alt + protect('\\(', '(') + dest.slice(1) : protect(alt + encoded, source)
+    return encoded === undefined
+      ? (alt === '' ? '' : protect(alt, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
+      : protect(alt + encoded, source)
   }
   const protectDestinations = (pattern: RegExp): void => {
     const subject = line
@@ -1676,7 +1678,7 @@ function convertInline(
     (match, label: string, reference: string | undefined, offset: number, source: string) => {
       if (source[offset + match.length] === '(') return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
-      if (canonical === undefined) return table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
+      if (canonical === undefined) return table && match.includes('|') ? protect(match.replace(/[\[\]]/g, '\\$&'), match) : match
       if (/[\[\]]/.test(canonical)) return match
       const target = referenceInlineTarget(canonical, table)
       return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`, match)
@@ -1700,7 +1702,7 @@ function convertInline(
     }
     if (footnoteCursor > offset) return match
     const renamed = importedFootnoteLabel(referenceSourceText(label, protectedSpans))
-    return renamed === undefined ? match : `[^${renamed}]`
+    return renamed === undefined ? match : protect(`[^${renamed}]`, match)
   })
 
   if (table) {
