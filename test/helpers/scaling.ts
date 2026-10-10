@@ -47,6 +47,14 @@ const ROUNDS = 5
 /** Healthy reads ~1.0, quadratic reads ~4.0 (the size multiple). */
 const MAX_PER_BYTE_RATIO = 2.0
 
+/**
+ * Samples one accused shape may take before the guard reports it.
+ *
+ * Each extra sample costs time only on a shape that already read over the
+ * threshold, so a healthy run takes exactly one.
+ */
+const MAX_SAMPLE_ATTEMPTS = 4
+
 /** Catastrophic backstop per sample: the pre-fix quadratic took seconds here. */
 const MAX_MS = 20_000
 
@@ -96,6 +104,42 @@ export function timeCalls(
   } while (elapsed < minSampleMs || calls < minCalls)
 
   return { msPerCall: elapsed / calls, calls }
+}
+
+/**
+ * Samples a ratio until one clears the threshold, and the LOWEST reading stands.
+ *
+ * Interleaving and a median already absorb a stall inside one sample, and they
+ * are not enough: a runner that is slow for the whole of it moves every round
+ * together. A stall can only ADD time, so among several estimates the lowest is
+ * the one least contaminated.
+ *
+ * ONE retry was not enough either. carve-js#2691 put main red at 2.21x on a
+ * commit that touched only the Djot importer, while the guard measures `parse`
+ * of nested blockquotes, and the same shape read ~1.0x locally - so the first
+ * two samples were both contaminated. The bound stays small because retries
+ * only ever run on the failing path, and sensitivity does not suffer: a REAL
+ * quadratic path reads the size multiple, 4x against a 2.0 threshold, and no
+ * number of honest samples drifts it down by half.
+ *
+ * Exported for `test/a-batched-scaling-sample-averages-several-calls.test.ts`:
+ * the policy is deterministic even though a ratio is not.
+ */
+export function lowestAccusedRatio<T extends { ratio: number }>(
+  sample: () => T,
+  threshold: number = MAX_PER_BYTE_RATIO,
+  maxAttempts: number = MAX_SAMPLE_ATTEMPTS,
+): { measured: T; attempts: number } {
+  let measured = sample()
+  let attempts = 1
+
+  while (measured.ratio >= threshold && attempts < maxAttempts) {
+    const next = sample()
+    attempts++
+    if (next.ratio < measured.ratio) measured = next
+  }
+
+  return { measured, attempts }
 }
 
 function median(values: number[]): number {
@@ -214,25 +258,7 @@ export function expectBuiltInputScansLinearly(
     }
   }
 
-  // A second sample when the first one accuses, and the SMALLER ratio stands.
-  //
-  // Interleaving and a median already absorb a stall inside one sample, and
-  // they are not enough: a runner that is slow for the whole of it moves every
-  // round together. Measured over six days of this workflow, five of 100 runs
-  // failed, each within 2% of the threshold and on code that had not changed
-  // between a green run and the red one.
-  //
-  // A stall can only ADD time, so between two estimates the lower one is the
-  // one less contaminated. It costs sensitivity in proportion: a REAL
-  // regression reads the size multiple, 4x against a 2.0 threshold, and
-  // survives a few percent of downward bias with room to spare. A second
-  // sample also runs only on the failing path, so the healthy case is as fast
-  // as before.
-  let measured = sample()
-  if (measured.ratio >= MAX_PER_BYTE_RATIO) {
-    const second = sample()
-    if (second.ratio < measured.ratio) measured = second
-  }
+  const { measured, attempts } = lowestAccusedRatio(sample)
 
   const { medianSmall, medianLarge, worstSmall, worstLarge, ratio } = measured
 
@@ -254,6 +280,7 @@ export function expectBuiltInputScansLinearly(
     ratio,
     `Per-byte cost grew ${ratio.toFixed(2)}x for ${label} at ${multiple.toFixed(1)}x the input ` +
       `(linear ~1x, quadratic ~${multiple.toFixed(1)}x): ` +
-      `small=${(medianSmall * 1000).toFixed(4)}us/byte large=${(medianLarge * 1000).toFixed(4)}us/byte`,
+      `small=${(medianSmall * 1000).toFixed(4)}us/byte large=${(medianLarge * 1000).toFixed(4)}us/byte ` +
+      `over ${attempts} sample(s)`,
   ).toBeLessThan(MAX_PER_BYTE_RATIO)
 }

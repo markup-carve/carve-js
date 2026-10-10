@@ -235,7 +235,17 @@ export function escapePlainCarveInlineSyntax(
   // reached and cannot be escaped twice. The offset the helper would insert at
   // is the captured character's, not the delimiter's, so it does not fit here
   // either.
-  let out = line.replace(/(^|[ \t])%%(?!%)/g, '$1\\%%')
+  //
+  // A LONGER RUN IS STILL AN OPENER, on its first two signs: a third does not
+  // close or cancel anything, so `a %%%c b` left bare loses the rest of the
+  // line (carve-js#2690). One escape on the first sign is the whole of what the
+  // run owes, because after `\%` the rest sits inside a word.
+  //
+  // THE START OF THE LINE, not of the string: callers hand this function a
+  // whole paragraph, and a run opening the SECOND line of one was left bare
+  // because an unanchored `^` never reached it. A lazy continuation and a
+  // folded Djot heading both put a run there, and both lost the line.
+  let out = line.replace(/(^|[ \t])%%/gm, '$1\\%%')
 
   // Braced forms first, so the bare rules below see an escaped `{` and leave
   // the delimiter inside it alone instead of escaping it twice.

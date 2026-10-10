@@ -205,7 +205,9 @@ describe('borrowed HTML layout', () => {
     // Re-derive the accepted set when changing the corpus or fast-path coverage.
     // Plain-space trimming adds corpus 104 and both corpus 268 documents.
     // Corpus 549 adds the all-dot ordered-list example.
-    expect(accepted).toBe(61)
+    // The spec pin past carve#2867 adds five more accepted documents; each one
+    // is held against the authoritative render above before it is counted.
+    expect(accepted).toBe(66)
   })
 
   it('falls back for normalization-sensitive or stateful shapes', () => {
