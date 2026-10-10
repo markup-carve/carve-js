@@ -240,7 +240,12 @@ export function escapePlainCarveInlineSyntax(
   // close or cancel anything, so `a %%%c b` left bare loses the rest of the
   // line (carve-js#2690). One escape on the first sign is the whole of what the
   // run owes, because after `\%` the rest sits inside a word.
-  let out = line.replace(/(^|[ \t])%%/g, '$1\\%%')
+  //
+  // THE START OF THE LINE, not of the string: callers hand this function a
+  // whole paragraph, and a run opening the SECOND line of one was left bare
+  // because an unanchored `^` never reached it. A lazy continuation and a
+  // folded Djot heading both put a run there, and both lost the line.
+  let out = line.replace(/(^|[ \t])%%/gm, '$1\\%%')
 
   // Braced forms first, so the bare rules below see an escaped `{` and leave
   // the delimiter inside it alone instead of escaping it twice.

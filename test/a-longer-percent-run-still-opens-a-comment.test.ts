@@ -68,6 +68,27 @@ describe('a longer percent run still opens a comment', () => {
     expect(text(carveToHtml(carve))).toBe('<p>%%%</p>')
   })
 
+  it('escapes a run opening the SECOND line of a multi-line run of text', () => {
+    // Callers hand the escaper a whole paragraph, so `^` had to be anchored per
+    // line: a lazy continuation puts a run on line two, where an unanchored
+    // rule never reached it. The two-sign run was bare there as well.
+    expect(escapePlainCarveInlineSyntax('a\n%%%c b')).toBe('a\n\\%%%c b')
+    expect(escapePlainCarveInlineSyntax('a\n%% c')).toBe('a\n\\%% c')
+  })
+
+  it('keeps a lazily continued line through both importers', () => {
+    expect(markdownToCarve('x\n%%%c y\n')).toBe('x\n\\%%%c y\n')
+    expect(djotToCarve('x\n%%%c y\n')).toBe('x\n\\%%%c y\n')
+    expect(text(carveToHtml(markdownToCarve('x\n%%%c y\n')))).toBe('<p>x %%%c y</p>')
+  })
+
+  it('keeps a folded Djot heading continuation', () => {
+    const carve = djotToCarve('# A\n%%%\n')
+
+    expect(carve).toBe('# A \\%%%\n')
+    expect(carveToHtml(carve)).toContain('%%%')
+  })
+
   it('still reads an authored comment as a comment, in both profiles', () => {
     // The control: nothing here touches the parser, so authored Carve is
     // unchanged and a real comment still hides its text.
