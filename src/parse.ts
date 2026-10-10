@@ -12583,9 +12583,9 @@ class ParseSession {
       // flushed only when a later line reaches the content column, so a fence
       // running to the end of the item never received them.
       //
-      // A fence still on a child's marker line has received no body line, so
-      // the buffered separator belongs to the parent. Once a body line arrives,
-      // preserve the existing child extent, including trailing payload blanks.
+      // A collected run ending on a child marker-line fence keeps the buffered
+      // separator at its parent. Other trailing lines retain their existing
+      // extent, including blanks owned by a child fence's payload.
       let emptyChildMarkerFence = false
       if (pendingBlanks > 0 && (firstBlockIdx >= 0 || leadIsMarker)) {
         let lastContent = content
