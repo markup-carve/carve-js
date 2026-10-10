@@ -8025,6 +8025,7 @@ class ParseSession {
   }
 
   private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
+  private markerFenceMemos = new WeakMap<Map<number, number>, Map<number, { offset: number; column: number; close: RegExp | null }>>()
 
   // Only literal source suffixes share numeric offsets; reconstructed lines do not.
   private markerPrefixMemo(lexer: Lexer, index: number): Map<number, number> | undefined {
@@ -8065,6 +8066,7 @@ class ParseSession {
     this.recordPositions = opts.positions !== false
     this.newlineIndexCache.clear()
     this.markerPrefixMemos = new WeakMap()
+    this.markerFenceMemos = new WeakMap()
     this.activeQuoteCharacters = opts.extensions
       ?.map((extension) => extension.quoteCharacters)
       .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
@@ -12504,11 +12506,32 @@ class ParseSession {
       // even though that child's body has already reached a fence run.
       let trailingDescendantFence = false
       if (pendingBlanks > 0) {
-        const markerFenceAt = (text: string, column: number): DescendantOpaque | null => {
+        const markerFenceAt = (
+          text: string,
+          column: number,
+          prefixMemo?: Map<number, number>,
+        ): DescendantOpaque | null => {
+          let memo = prefixMemo ? this.markerFenceMemos.get(prefixMemo) : undefined
+          if (prefixMemo && !memo) {
+            memo = new Map()
+            this.markerFenceMemos.set(prefixMemo, memo)
+          }
           const bound = prefixWalkBound(text)
           let at = 0
           let base = column
+          let close: RegExp | null = null
+          let reused = false
+          const path: Array<{ length: number; offset: number; column: number }> = []
           for (;;) {
+            const cached = memo?.get(text.length - at)
+            if (cached) {
+              at += cached.offset
+              base += cached.column
+              close = cached.close
+              reused = true
+              break
+            }
+            if (memo) path.push({ length: text.length - at, offset: at, column: base })
             const quoted = quotePrefixLength(text, at, bound)
             if (quoted > 0) {
               base += quoted
@@ -12520,15 +12543,23 @@ class ParseSession {
             base += markerContentColumn(text.slice(at, at + prefix) + 'x')
             at += prefix
           }
-          const bottom = text.slice(at)
-          const fence = RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom)
-          if (fence === null) return null
-          const marker = RE_FENCE.test(bottom) ? fence[2]! : fence[1]!
-          return { close: fenceCloseRe(marker), base }
+          if (!reused) {
+            const bottom = text.slice(at)
+            const fence = RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom)
+            if (fence !== null) {
+              const marker = RE_FENCE.test(bottom) ? fence[2]! : fence[1]!
+              close = fenceCloseRe(marker)
+            }
+          }
+          for (const entry of path) {
+            memo!.set(entry.length, { offset: at - entry.offset, column: base - entry.column, close })
+          }
+          return close === null ? null : { close, base }
         }
-        let markerFence = markerFenceAt(content, 0)
+        let markerFence = markerFenceAt(content, 0, this.markerPrefixMemo(lexer, itemStartLineIndex))
         let bodyFence: DescendantOpaque | null = null
-        for (const bodyLine of nested) {
+        for (let bodyIndex = 0; bodyIndex < nested.length; bodyIndex++) {
+          const bodyLine = nested[bodyIndex]!
           if (isBlankLine(bodyLine)) continue
           const column = indentColumns(bodyLine)
           const opener = bodyLine.trimStart()
@@ -12549,7 +12580,7 @@ class ParseSession {
           }
           if (markerCloser) continue
           if (markerFence === null && isListMarkerLine(bodyLine)) {
-            markerFence = markerFenceAt(opener, column)
+            markerFence = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
           }
           const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
           if (fence !== null) {
@@ -12756,7 +12787,9 @@ class ParseSession {
       // must not latch this pass either: an unterminated `%%%` swallowed every
       // later line and a genuinely CLOSED code fence below it went unmarked, so a
       // blank inside that code loosened the item.
-      const closers = buildCloserIndex(fenceLines)
+      const closerLines = fenceLines.map((line, index) => index === 0 ? line :
+        line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0))
+      const closers = buildCloserIndex(closerLines)
       // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
       // `:::` container that IS the item's first block is the item's own body:
       // the blank line between two of its blocks is the only blank line the item
