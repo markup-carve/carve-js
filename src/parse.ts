@@ -12556,13 +12556,31 @@ class ParseSession {
           }
           return close === null ? null : { close, base }
         }
-        let markerFence = markerFenceAt(content, 0, this.markerPrefixMemo(lexer, itemStartLineIndex))
+        const commentRuns: Array<number | undefined> = []
+        const commentClosers = new Map<number, number>()
+        for (let index = 0; index < nested.length; index++) {
+          const line = nested[index]!
+          const facts = lineFacts(line, nestedOrigins.get(index))
+          const text = line.slice(facts?.whitespace ?? 0).trimStart()
+          const run = commentFenceRun(markerLineBottomBlock(text, facts?.prefixMemo))
+          commentRuns.push(run)
+          if (run !== undefined) commentClosers.set(run, index)
+        }
+        const leadMemo = this.markerPrefixMemo(lexer, itemStartLineIndex)
+        let markerFence = markerFenceAt(content, 0, leadMemo)
         let bodyFence: DescendantOpaque | null = null
+        let commentOpen = commentFenceRun(markerLineBottomBlock(content, leadMemo))
+        if (commentOpen !== undefined && !commentClosers.has(commentOpen)) commentOpen = undefined
         for (let bodyIndex = 0; bodyIndex < nested.length; bodyIndex++) {
           const bodyLine = nested[bodyIndex]!
           if (isBlankLine(bodyLine)) continue
           const column = indentColumns(bodyLine)
           const opener = bodyLine.trimStart()
+          const commentRun = commentRuns[bodyIndex]
+          if (commentOpen !== undefined) {
+            if (commentRun === commentOpen) commentOpen = undefined
+            continue
+          }
           let markerCloser = false
           if (markerFence !== null) {
             if (column < markerFence.base) markerFence = null
@@ -12579,6 +12597,11 @@ class ParseSession {
             }
           }
           if (markerCloser) continue
+          if (markerFence === null && commentRun !== undefined &&
+            (commentClosers.get(commentRun) ?? -1) > bodyIndex) {
+            commentOpen = commentRun
+            continue
+          }
           if (markerFence === null && isListMarkerLine(bodyLine)) {
             markerFence = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
           }
