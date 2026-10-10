@@ -124,3 +124,16 @@ it('keeps many entity newline continuations in one code fallback', () => {
   expect(rows[0]?.path).toBe('line:1')
   expect(records(carveToHtml(result.value)).codes[0]?.value).toBe('a\n' + 'b\n'.repeat(count))
 })
+
+it('keeps many unmatched link brackets as native code when no link closes', () => {
+  const count = 4000
+  const markdown = Array(count).fill('<code>[x</code>').join(' ')
+  const result = migrateMarkdown(markdown)
+  const document = parse(result.value)
+  const paragraph = document.children[0]
+  expect(paragraph?.type).toBe('paragraph')
+  if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
+  expect(paragraph.children.filter(node => node.type === 'code')).toHaveLength(count)
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
+  expect(carveToHtml(result.value, { allowRawHtml: false })).toBe(`<p>${Array(count).fill('<code>[x</code>').join(' ')}</p>`)
+})

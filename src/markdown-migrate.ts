@@ -1303,6 +1303,7 @@ function convertInline(
       : codeSourceMatchesInput ? sourceLineAtOffset(codeSourceOffset) ?? undefined : undefined
   }
 
+  let lastLinkTailSourceOffset: number | undefined
   const standaloneHtmlCode = input.trim()
   const writeHtmlCode = (match: string, offset: number): string | undefined => {
     const codeSourceLine = htmlCodeLineAt(offset)
@@ -1315,6 +1316,19 @@ function convertInline(
     const parts = match.slice(6, -7).split('<!---->').map(restoreLiteral)
     const body = parts.join('')
     if (body.includes('\x00')) return undefined
+    let openBrackets = 0
+    for (let at = 0; at < body.length; at++) {
+      if (body[at] === '\\') { at++; continue }
+      if (body[at] === '[') openBrackets++
+      else if (body[at] === ']') openBrackets = Math.max(0, openBrackets - 1)
+    }
+    if (openBrackets > 0) {
+      if (lastLinkTailSourceOffset === undefined) {
+        lastLinkTailSourceOffset = -1
+        for (const tail of referenceSourceText(line, protectedSources).matchAll(/\](?:\(|\[)/g)) lastLinkTailSourceOffset = tail.index!
+      }
+      if (lastLinkTailSourceOffset >= codeSourceOffset + referenceSourceText(match, protectedSources).length) return undefined
+    }
     if (/[\\`*_~\[\]]/.test(body)) {
       if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(offset)) return undefined
       const savedLosses = importLosses
