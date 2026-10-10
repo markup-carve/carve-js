@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
 import { expect, it } from 'vitest'
-import { carveToHtml, migrateMarkdown } from '../src/index.js'
+import { carveToHtml, migrateMarkdown, parse } from '../src/index.js'
 
 const cases: Array<{ template: string; value: string; markdown: string; ancestors: string[] }> = JSON.parse(readFileSync(new URL('./fixtures/markdown-html-code-payloads.json', import.meta.url), 'utf8'))
 
@@ -70,4 +70,39 @@ it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code>'])('reports the o
 it('keeps a code fallback line after a multiline link title', () => {
   const result = migrateMarkdown('[x](u\n"t") <code></code>')
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')[0]?.path).toBe('line:2')
+})
+
+it.each(cases)('keeps unrelated code native after $template: $value', item => {
+  const result = migrateMarkdown(item.markdown + '\n\n`keep`\n')
+  const last = parse(result.value).children.at(-1)
+  expect(last?.type).toBe('paragraph')
+  if (last?.type === 'paragraph') expect(last.children.some(node => node.type === 'code' && node.value === 'keep')).toBe(true)
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback').length).toBeLessThanOrEqual(1)
+})
+
+it('does not degrade code because of a delimiter in an autolink', () => {
+  const result = migrateMarkdown('<code>*a</code> <http://e.test/b*>')
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
+  expect(carveToHtml(result.value, { allowRawHtml: false })).toContain('<code>*a</code>')
+})
+
+it('keeps the code line after an invalid destination in a setext heading', () => {
+  const result = migrateMarkdown('Title [a](b c) <code></code>\n=====')
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')[0]?.path).toBe('line:1')
+})
+
+it.each([
+  ['<em><strong>x</strong></em>', '<p><em><strong>x</strong></em></p>'],
+  ['<b>x<sup>2</sup></b>', '<p><strong>x<sup>2</sup></strong></p>'],
+  ['<em>H<sub>2</sub>O</em>', '<p><em>H<sub>2</sub>O</em></p>'],
+  ['<strong><del>x</del></strong>', '<p><strong><del>x</del></strong></p>'],
+])('preserves formatting outside code: %s', (markdown, expected) => {
+  const html = carveToHtml(migrateMarkdown(markdown!).value).replace(/<(\/?)(b|i|s)>/g, (_tag, close: string, tag: string) => '<' + close + (tag === 'b' ? 'strong' : tag === 'i' ? 'em' : 'del') + '>')
+  expect(html).toBe(expected)
+})
+
+it('keeps a code delimiter in a link from pairing with outside text', () => {
+  const result = migrateMarkdown('[<code>*a</code>](u) b*')
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
+  expect(carveToHtml(result.value, { allowRawHtml: false })).toBe('<p><a href="u"><code>*a</code></a> b*</p>')
 })

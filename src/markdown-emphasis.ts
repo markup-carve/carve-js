@@ -2,6 +2,7 @@ interface Run {
   start: number
   end: number
   char: string
+  scope: number
   open: boolean
   close: boolean
   left: number
@@ -39,8 +40,34 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     const after = neighbor(end, false)
     const left = !whitespace(after) && (!punctuation(after) || whitespace(before) || punctuation(before))
     const right = !whitespace(before) && (!punctuation(before) || whitespace(after) || punctuation(after))
-    runs.push({ start, end, char: m[0][0]!, open: left && (m[0][0] !== '_' || !right || punctuation(before)),
+    runs.push({ start, end, scope: -1, char: m[0][0]!, open: left && (m[0][0] !== '_' || !right || punctuation(before)),
       close: right && (m[0][0] !== '_' || !left || punctuation(after)), left: 0, right: 0, active: true, previous: runs.length - 1, next: runs.length + 1 })
+  }
+  if (strikethrough) {
+    const brackets: number[] = []
+    const boundaries = new Map<number, { scope: number; open: boolean }>()
+    for (let i = 0; i < source.length; i++) {
+      if (source[i] === '\\') { i++; continue }
+      if (source[i] === '[') brackets.push(i)
+      else if (source[i] === ']' && brackets.length) {
+        const open = brackets.pop()!
+        const target = source[i + 1] === '\x00' ? /^\x00P(\d+)\x00/.exec(source.slice(i + 1)) : null
+        if (open + 1 < i && target && protectedSpans[Number(target[1])]?.startsWith('(')) {
+          boundaries.set(open + 1, { scope: open, open: true })
+          boundaries.set(i, { scope: open, open: false })
+        }
+      }
+    }
+    const scopes: number[] = []
+    let cursor = 0
+    for (const run of runs) {
+      while (cursor <= run.start) {
+        const boundary = boundaries.get(cursor++)
+        if (boundary?.open) scopes.push(boundary.scope)
+        else if (boundary) scopes.pop()
+      }
+      run.scope = scopes.at(-1) ?? -1
+    }
   }
   const remaining = (r: Run): number => r.end - r.start - r.left - r.right
   const unlink = (index: number): void => {
@@ -55,13 +82,14 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     const closer = runs[c]!
     if (!closer.active || !closer.close) continue
     while (remaining(closer) > 0) {
-      const key = `${closer.char}:${closer.open}:${remaining(closer) % 3}`
+      const key = `${closer.scope}:${closer.char}:${closer.open}:${remaining(closer) % 3}`
       const bottom = bottoms.get(key) ?? -1
       let o = closer.previous
       for (; o > bottom; o = runs[o]!.previous) {
         onStep?.()
         const opener = runs[o]!
         if (!opener.active || !opener.open || opener.char !== closer.char || remaining(opener) === 0) continue
+        if (opener.scope !== closer.scope) continue
         const a = remaining(opener), b = remaining(closer)
         if (opener.char === '~' && a !== b) continue
         if (opener.char !== '~' && (opener.close || closer.open) && (a + b) % 3 === 0 && (a % 3 !== 0 || b % 3 !== 0)) continue

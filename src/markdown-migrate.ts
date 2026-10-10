@@ -1195,7 +1195,8 @@ function convertInline(
       let masked = ''
       const opaqueEnd = opaqueHtmlScanner(line)
       for (let at = 0; at < line.length;) {
-        const end = line[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(line, at)?.end : undefined
+        const autolink = line[at] === '<' ? /^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/.exec(line.slice(at)) : null
+        const end = autolink ? at + autolink[0].length : line[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(line, at)?.end : undefined
         if (end === undefined) { masked += line[at++]; continue }
         scratch.push(line.slice(at, end))
         masked += `\x00P${scratch.length - 1}\x00`
@@ -1465,7 +1466,7 @@ function convertInline(
   }
   const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
     const encoded = encodeDest(dest)
-    return encoded === undefined ? alt + '\\(' + dest.slice(1) : protect(alt + encoded, source)
+    return encoded === undefined ? alt + protect('\\(', '(') + dest.slice(1) : protect(alt + encoded, source)
   }
   const protectDestinations = (pattern: RegExp): void => {
     const subject = line
@@ -1531,11 +1532,11 @@ function convertInline(
   // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
-  protectDestinations(/(!\[(?:[^[\]]|\[[^[\]]*\])*\])(\([ \t]*(?:\n(?![ \t]*\n)[ \t]*)?(?:[^()\n]|\([^()\n]*\))*\))/g)
+  protectDestinations(/(!\[(?:[^[\]]|\[[^[\]]*\])*\])(\((?:[ \t]*\n(?![ \t]*\n))?(?:[^()\n]|\([^()\n]*\))*\))/g)
 
   // Link destinations `](dest "title")`. (Images already handled above.) The
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
-  protectDestinations(/(?<=\])()(\([ \t]*(?:\n(?![ \t]*\n)[ \t]*)?(?:[^()\n]|\([^()\n]*\))*\))/g)
+  protectDestinations(/(?<=\])()(\((?:[ \t]*\n(?![ \t]*\n))?(?:[^()\n]|\([^()\n]*\))*\))/g)
 
 
   // In a plain three-label chain, an unknown full-reference label can begin
