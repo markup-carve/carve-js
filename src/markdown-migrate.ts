@@ -2304,34 +2304,28 @@ function carrierSetBalances(payloads: readonly string[]): boolean {
  * untouched, the markers import as the raw HTML they are, and one
  * `carrier-markers-damaged` loss is reported.
  */
-function prepareCarrierMarkers(markdown: string): string {
+function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>): string {
   carrierSlots = []
   carrierToken = ''
   if (!markdown.includes(CARRIER_PREFIX)) return markdown
 
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const payloads = new Map<number, string>()
-  // A MARKER INSIDE A FENCED CODE BLOCK IS NOT A MARKER. The payload of a code
-  // block is verbatim content, so a doc page showing what the mode writes holds
-  // marker-shaped lines that record no container - lifting one rewrote the
-  // sample inside the fence (measured on spec/docs/graceful-degradation.md).
-  // An indented code block needs no test: a marker is only read at column 0.
-  let fence: string | undefined
+  const hosts = new Map<number, string>()
+  // A MARKER IS A LINE THE BLOCK STRUCTURE READ AS HTML. The payload of a code
+  // construct is verbatim content, so a marker-shaped line in one records no
+  // container and must be left where it is - lifting one rewrote the sample
+  // inside the fence on this engine's own docs page. The structure the importer
+  // derives answers that at every indent and behind every host prefix, which a
+  // fence scan over the raw lines could not (markup-carve/carve#2850).
   for (const [at, line] of lines.entries()) {
-    const opener = RE_MD_FENCE_LINE.exec(line)
-    if (fence !== undefined) {
-      if (
-        opener !== null && columnWidth(opener[1]!) <= 3 && opener[2]![0] === fence[0]
-        && opener[2]!.length >= fence.length && opener[3]!.trim() === ''
-      ) fence = undefined
-      continue
+    if (!blockLines.has(at)) continue
+    const host = carrierHostPrefix(line)
+    const payload = carrierPayload(line.slice(host.length))
+    if (payload !== undefined) {
+      payloads.set(at, payload)
+      hosts.set(at, host)
     }
-    if (opener !== null && columnWidth(opener[1]!) <= 3 && fenceRunIsAFence(opener[2]!, opener[3]!)) {
-      fence = opener[2]!
-      continue
-    }
-    const payload = carrierPayload(line)
-    if (payload !== undefined) payloads.set(at, payload)
   }
   if (payloads.size === 0) return markdown
   if (!carrierSetBalances([...payloads.values()])) {
@@ -2352,11 +2346,13 @@ function prepareCarrierMarkers(markdown: string): string {
   const out: string[] = []
   let drop = 0
   let skipBlank = false
+  let host = ''
   const last = lines.length - 1
   for (const [at, line] of lines.entries()) {
     const payload = payloads.get(at)
     if (payload === undefined) {
-      if (drop > 0 && /^\*\*.+\*\*$/.test(line)) {
+      const body = withoutCarrierHost(line, host)
+      if (drop > 0 && /^\*\*.+\*\*$/.test(body)) {
         drop--
         skipBlank = true
         continue
@@ -2364,7 +2360,7 @@ function prepareCarrierMarkers(markdown: string): string {
       // The LAST element is the source's trailing newline, not a separator the
       // dropped fallback brought with it: consuming it would leave the Carve
       // output without its own final newline.
-      if (skipBlank && at !== last && line === '') {
+      if (skipBlank && at !== last && body === '') {
         skipBlank = false
         continue
       }
@@ -2372,7 +2368,10 @@ function prepareCarrierMarkers(markdown: string): string {
       out.push(line)
       continue
     }
-    out.push(`${token}${carrierSlots.length}Z`)
+    host = hosts.get(at)!
+    // The placeholder keeps the host prefix, so a marker inside a list item or
+    // a block quote stays in that host when the lifted source is read.
+    out.push(`${host}${token}${carrierSlots.length}Z`)
     carrierSlots.push({ payload, closer: carrierIsCloser(payload), caption: carrierIsCaption(payload) })
     drop = carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
   }
@@ -2381,43 +2380,118 @@ function prepareCarrierMarkers(markdown: string): string {
 }
 
 /**
+ * The host prefix a marker line carries before the marker itself: a block
+ * quote's `>` runs, a list item's indentation, and the item marker or task box
+ * that opens it.
+ */
+function carrierHostPrefix(line: string): string {
+  const at = line.indexOf(CARRIER_PREFIX)
+  return at === -1 ? '' : line.slice(0, at)
+}
+
+/**
+ * A line with the recorded host prefix taken off, for the fallback lines
+ * travelling under an opener. A block quote writes its blank lines as a bare
+ * `>`, which the opener's own prefix does not cover.
+ */
+function withoutCarrierHost(line: string, host: string): string {
+  if (host === '') return line
+  if (line.startsWith(host)) return line.slice(host.length)
+  return line.replace(/^[ \t>]+/, '')
+}
+
+/**
  * Give every restored marker line the blank lines the canonical writer puts
  * around it: a container's opener and closer hug its body, and what follows a
  * closer is a block of its own.
  */
-function separateCarrierLines(
-  items: ReadonlyArray<{ text: string; kind: CarrierLineKind }>,
-): Array<{ text: string; kind: CarrierLineKind }> {
+function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
+  const blank = (item: CarrierLine): boolean => item.kind === undefined && item.text === ''
   const hugged = new Set<number>()
   for (let at = 0; at < items.length; at++) {
-    if (items[at]!.kind !== undefined || items[at]!.text !== '') continue
+    if (!blank(items[at]!)) continue
     let end = at
-    while (end < items.length && items[end]!.kind === undefined && items[end]!.text === '') end++
+    while (end < items.length && blank(items[end]!)) end++
     let before = at - 1
-    while (before >= 0 && items[before]!.kind === undefined && items[before]!.text === '') before--
+    while (before >= 0 && blank(items[before]!)) before--
     const above = before >= 0 ? items[before]!.kind : undefined
     const below = end < items.length ? items[end]!.kind : undefined
     // A blank above a closer and one below an opener are both inside the
     // container, where the canonical writer puts none. A caption line hugs the
     // closer above it the same way, because its slot hangs on that fence.
-    if (below === 'close' || below === 'caption' || above === 'open') {
+    let marker: CarrierLine | undefined
+    if (below === 'close' || below === 'caption') marker = items[end]
+    else if (above === 'open') marker = items[before]
+    // The blank has to share the marker's HOST to be inside it: a `>` line next
+    // to a marker standing at column 0 belongs to a block quote of its own.
+    if (marker !== undefined) {
+      for (let dropAt = at; dropAt < end; dropAt++) {
+        if (items[dropAt]!.lead.trimEnd() !== marker.lead.trimEnd()) {
+          marker = undefined
+          break
+        }
+      }
+    }
+    if (marker !== undefined) {
       for (let dropAt = at; dropAt < end; dropAt++) hugged.add(dropAt)
     }
     at = end - 1
   }
 
-  const out: Array<{ text: string; kind: CarrierLineKind }> = []
+  const out: CarrierLine[] = []
   for (const [at, item] of items.entries()) {
     if (hugged.has(at)) continue
     const last = out[out.length - 1]
     const closes = last !== undefined && (last.kind === 'close' || last.kind === 'caption')
-    if (closes && item.kind !== 'close' && item.kind !== 'caption' && item.text !== '') {
-      out.push({ text: '', kind: undefined })
+    // A closer and what follows take a blank line between them only where they
+    // are SIBLINGS. A list item opening after a closer is a block of the host
+    // above, and a blank there would turn a tight list loose.
+    if (
+      closes && item.kind !== 'close' && item.kind !== 'caption' && item.text !== ''
+      && item.lead.length >= last!.lead.length
+    ) {
+      out.push({ lead: last!.lead.trimEnd(), text: '', kind: undefined })
     }
     out.push(item)
   }
 
   return out
+}
+
+type CarrierLine = { lead: string; text: string; kind: CarrierLineKind }
+
+/**
+ * Put every restored closer at its OPENER's column.
+ *
+ * Where a container opens a list item and its body begins with a list, the
+ * closer's placeholder is a lazy continuation of that inner item's paragraph,
+ * so the written Carve puts it at the inner content column and the container
+ * would close in the wrong host. The opener's own prefix is the answer, with
+ * any list marker in it blanked out and any task box dropped: a closer cannot
+ * repeat an item's marker, and a task box stands in the item's CONTENT, so the
+ * body sits at the item's own content column rather than past the box.
+ */
+function anchorCarrierClosers(items: CarrierLine[]): CarrierLine[] {
+  const open: string[] = []
+  let closed: string | undefined
+  for (const item of items) {
+    if (item.kind === 'open' && carrierFenceWidth(item.text) > 0) {
+      open.push(item.lead.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' '))
+      closed = undefined
+      continue
+    }
+    if (item.kind === 'close' && open.length > 0) {
+      closed = open.pop()!
+      item.lead = closed
+      continue
+    }
+    // A CAPTION HANGS ON THE CLOSING FENCE, so it stands at that closer's
+    // column. Its placeholder is a lazy continuation of the same inner item,
+    // and a caption at the wrong column attaches to nothing.
+    if (item.kind === 'caption' && closed !== undefined) item.lead = closed
+  }
+
+  return items
 }
 
 /** Write every lifted payload back as the Carve line it is. */
@@ -2427,16 +2501,25 @@ function restoreCarrierMarkers(carve: string): string {
   // Each line as its text plus which kind of marker, if any, produced it:
   // 'open' for an opener or the attribute line travelling with it, 'close' for
   // a bare closer, 'caption' for a composite figure's caption line.
-  const items = carve.split('\n').map((line) => {
-    const match = pattern.exec(line.trim())
-    if (match === null) return { text: line, kind: undefined as CarrierLineKind }
+  // THE PREFIX IS WHATEVER STANDS BEFORE THE TOKEN rather than a character
+  // class: a container opening a list item puts the marker behind that item's
+  // `-`, and leaving the token in the output would be corruption rather than a
+  // missed restore. It is taken off the CARVE line, because the Markdown host
+  // the placeholder was lifted from spells its prefix differently.
+  const items: CarrierLine[] = carve.split('\n').map((line) => {
+    const at = line.indexOf(carrierToken)
+    const match = at === -1 ? null : pattern.exec(line.slice(at).trimEnd())
+    if (match === null) {
+      const lead = /^[ \t>]*/.exec(line)![0]
+      return { lead, text: line.slice(lead.length), kind: undefined as CarrierLineKind }
+    }
     const slot = carrierSlots[Number(match[1])]!
     const kind: CarrierLineKind = slot.caption ? 'caption' : slot.closer ? 'close' : 'open'
 
-    return { text: slot.payload, kind }
+    return { lead: line.slice(0, at), text: slot.payload, kind }
   })
 
-  return separateCarrierLines(items).map((item) => item.text).join('\n')
+  return separateCarrierLines(anchorCarrierClosers(items)).map((item) => item.lead + item.text).join('\n')
 }
 
 let importLosses: MarkdownImportLoss[] = []
@@ -4848,7 +4931,7 @@ export function markdownToCarveWithLosses(
     // conversion and written back as the Carve line it is afterwards, so the
     // Markdown reading in between never sees a comment it would carry across as
     // raw HTML.
-    const prepared = prepareCarrierMarkers(markdown)
+    const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
 
     return { value: restoreCarrierMarkers(convertMarkdown(prepared, dialect)), losses }
   } finally {
@@ -5190,6 +5273,37 @@ function dropTrailingEmptyQuoteLines(source: string): string {
     if (reading(without(drop)) !== was) drop.delete(at)
   }
   return without(drop)
+}
+
+/**
+ * Which lines of the given source this importer reads as HTML BLOCK content,
+ * as indices into the whole source.
+ *
+ * The answer is the reference-definition pass's own, because that pass already
+ * carries fence state, a block quote's `>` prefix and a list item's content
+ * column; a marker at a list item's content column is HTML there and one at
+ * four columns is code text, which is the distinction a flat scan cannot make.
+ * A line opening a list item whose content is a task box plus an HTML comment
+ * is admitted too: `[ ] ` is inline content, so no HTML block can begin after
+ * it (markup-carve/carve#2850).
+ */
+function markdownBlockHtmlLines(markdown: string): ReadonlySet<number> {
+  if (!markdown.includes(CARRIER_PREFIX)) return new Set()
+  const allLines = markdown.replace(/\0/g, '\ufffd').replace(/\r\n?/g, '\n').split('\n')
+  const { bodyStart } = splitFrontmatter(allLines)
+  const read = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw, (line) =>
+    interruptingHtmlBlock(line) || isMarkdownFenceLine(line) || RE_MD_THEMATIC.test(line) ||
+    /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|(?:[-*+]|0{0,8}1[.)])[ \t]+\S|=+[ \t]*$)/.test(line),
+    (line, atBlockStart) => {
+      const block = htmlBlockAt([line], 0)
+      return block !== null && (atBlockStart || block.interrupts)
+    },
+  )
+  const lines = new Set<number>()
+  for (const at of read.htmlLines) lines.add(at + bodyStart)
+  for (const at of read.taskHtmlLines) lines.add(at + bodyStart)
+
+  return lines
 }
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {

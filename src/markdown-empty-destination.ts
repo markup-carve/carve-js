@@ -153,7 +153,18 @@ export function extractReferenceDefinitions(
   decodeEntity: (entity: string) => string,
   interruptsParagraph: (line: string) => boolean,
   opensOpaqueHtml: (line: string, atBlockStart: boolean) => boolean = () => false,
-): { lines: string[]; sourceLines: number[]; references: EmptyDestinationReferences; definitions: string[] } {
+): {
+  lines: string[]
+  sourceLines: number[]
+  references: EmptyDestinationReferences
+  definitions: string[]
+  /** Input line indices this pass read as HTML BLOCK content. */
+  htmlLines: Set<number>
+  /** Input line indices opening a list item whose content is a task box plus an HTML comment. */
+  taskHtmlLines: Set<number>
+} {
+  const htmlLines = new Set<number>()
+  const taskHtmlLines = new Set<number>()
   const lines = [...inputLines]
   const empty = new Map<string, string>()
   const defined = new Set<string>()
@@ -223,6 +234,8 @@ export function extractReferenceDefinitions(
   let canStart = true
   let depth = 0
   let listIndent = 0
+  /** The content column every container prefix on the line put the body at. */
+  let blockIndent = 0
   const leadingSpaces = (s: string) => /^ */.exec(s)![0].length
   const lineTitle = new RegExp(String.raw`^[ \t]*(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*$`)
   const opensBlock = (text: string): boolean =>
@@ -247,6 +260,7 @@ export function extractReferenceDefinitions(
       canStart = true
     }
     if (htmlCloser !== null) {
+      htmlLines.add(i)
       let htmlStart = 0
       for (let level = 0; level < blockDepth; level++) {
         htmlStart = quotePrefix.indexOf('>', htmlStart) + 1
@@ -269,8 +283,49 @@ export function extractReferenceDefinitions(
       if (leadingSpaces(line) >= listIndent) content = line.slice(listIndent)
       else listIndent = 0
     }
+    // CONTAINER PREFIXES NEST, and the BLOCK decisions below need the innermost
+    // content. An item's indentation or marker came off the line without the
+    // quote regex running again, so a block quote inside that item still has its
+    // `>` run on the content and a fence or an HTML block opening there would be
+    // read as the block's own text. Only the fence and HTML-block readings take
+    // the nested run off; everything else keeps the content it has today, so a
+    // definition inside such a quote is handled exactly as before
+    // (markup-carve/carve#2850).
+    // Every container prefix the line carries comes off, not just the first:
+    // `- - ::: note` opens TWO items on one line, and a quote inside an item
+    // carries both prefixes. One marker stripped is not enough.
+    //
+    // A LIST MARKER INSIDE AN OPEN FENCE IS VERBATIM CONTENT, so only the
+    // quote prefix keeps coming off there - stripping a marker would let a
+    // `- ```` line inside the fence read as its closer.
+    let blockContent = fence !== null && leadingSpaces(line) >= blockIndent
+      ? line.slice(blockIndent)
+      : content
+    while (listIndent > 0) {
+      const nested = /^((?: {0,3}>[ \t]?)*)/.exec(blockContent)![1]!
+      if (nested !== '') {
+        blockContent = blockContent.slice(nested.length)
+        continue
+      }
+      if (fence !== null) break
+      const inner = /^ {0,3}(?:[-*+]|[0-9]{1,9}[.)])[ \t]+(?=\S)/.exec(blockContent)
+      // `- - -` is a thematic break, not two nested items.
+      if (inner === null || /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(blockContent)) break
+      blockContent = blockContent.slice(inner[0].length)
+    }
+    // The content column EVERY prefix on the line put the body at, which is
+    // what a continuation line of this item is read against. `listIndent` only
+    // counts the first marker, so a body six columns in under `- - - ` would
+    // otherwise read as code.
+    if (opensItem) blockIndent = line.length - blockContent.length
+    else if (listIndent === 0) blockIndent = 0
+    if (!opensItem && blockIndent > listIndent && leadingSpaces(line) >= blockIndent) {
+      blockContent = line.slice(blockIndent)
+      const nested = /^((?: {0,3}>[ \t]?)*)/.exec(blockContent)![1]!
+      if (nested !== '') blockContent = blockContent.slice(nested.length)
+    }
     if (fence !== null) {
-      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(content)
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(blockContent)
       if (close && close[1]![0] === fence[0] && close[1]!.length >= fence.length) {
         fence = null
         canStart = true
@@ -279,7 +334,7 @@ export function extractReferenceDefinitions(
       depth = lineDepth
       continue
     }
-    const open = /^ {0,3}(`{3,}|~{3,})/.exec(content)
+    const open = /^ {0,3}(`{3,}|~{3,})/.exec(blockContent)
     if (open) {
       fence = open[1]!
       blockDepth = lineDepth
@@ -288,9 +343,16 @@ export function extractReferenceDefinitions(
       depth = lineDepth
       continue
     }
-    const closer = htmlBlockCloser(content.replace(/^ +/, ''))
-    if (closer !== null && leadingSpaces(content) <= 3) {
-      if (!closer.test(content.replace(/^ +/, '').slice(2))) {
+    // A TASK BOX IS INLINE CONTENT, so an HTML block cannot begin after it and
+    // a carrier marker standing there is not one. It is still the whole line,
+    // which is what admits it (markup-carve/carve#2850).
+    if (opensItem && leadingSpaces(blockContent) <= 3 && /^\[[ xX]\][ \t]+<!--/.test(blockContent.replace(/^ +/, ''))) {
+      taskHtmlLines.add(i)
+    }
+    const closer = htmlBlockCloser(blockContent.replace(/^ +/, ''))
+    if (closer !== null && leadingSpaces(blockContent) <= 3) {
+      htmlLines.add(i)
+      if (!closer.test(blockContent.replace(/^ +/, '').slice(2))) {
         htmlCloser = closer
         blockDepth = lineDepth
         blockList = listIndent
@@ -300,7 +362,8 @@ export function extractReferenceDefinitions(
       canStart = true
       continue
     }
-    if (leadingSpaces(content) <= 3 && opensOpaqueHtml(content, canStart)) {
+    if (leadingSpaces(blockContent) <= 3 && opensOpaqueHtml(blockContent, canStart)) {
+      htmlLines.add(i)
       htmlCloser = /^[ \t]*$/
       blockDepth = lineDepth
       blockList = listIndent
@@ -473,7 +536,14 @@ export function extractReferenceDefinitions(
     depth = lineDepth
     canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
   }
-  return { lines: kept, sourceLines: keptSource, references: { empty, defined, labels, inline, tableInline, sourceLabels, footnotes }, definitions }
+  return {
+    lines: kept,
+    sourceLines: keptSource,
+    references: { empty, defined, labels, inline, tableInline, sourceLabels, footnotes },
+    definitions,
+    htmlLines,
+    taskHtmlLines,
+  }
 }
 
 /** A line-initial block opener in text, escaped so the text stays a paragraph. */
