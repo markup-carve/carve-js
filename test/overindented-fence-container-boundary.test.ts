@@ -43,7 +43,7 @@ describe('over-indented fence boundary controls', () => {
   })
   it('task host', () => {
     expect(carveToHtml('- [x] head\n\n      ```\n      a\ntext\n')).toBe(
-      '<ul>\n  <li><input type="checkbox" checked disabled aria-label="head"> head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul class="task-list">\n  <li data-task-state="x"><input type="checkbox" checked disabled aria-label="head"> head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('closer at the base', () => {

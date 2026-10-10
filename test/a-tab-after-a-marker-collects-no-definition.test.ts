@@ -43,7 +43,7 @@ describe('a tab after a marker collects no definition', () => {
     [
       'a task box and a space',
       '- [ ] [t]: /t\n\n[x][t]\n',
-      '<ul>\n  <li><input type="checkbox" disabled> </li>\n</ul>\n<p><a href="/t">x</a></p>',
+      '<ul class="task-list">\n  <li><input type="checkbox" disabled> </li>\n</ul>\n<p><a href="/t">x</a></p>',
     ],
   ]
 

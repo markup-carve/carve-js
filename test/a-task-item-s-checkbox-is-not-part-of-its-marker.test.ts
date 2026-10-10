@@ -59,7 +59,7 @@ describe("a task item's checkbox is not part of its marker", () => {
    * `# h`.
    */
   it('round-trips an imported heading id on a task item', () => {
-    const html = '<ul>\n  <li><input type="checkbox" checked disabled> \n    <h1 id="h">h</h1>\n  </li>\n</ul>'
+    const html = '<ul class="task-list">\n  <li data-task-state="x"><input type="checkbox" checked disabled> \n    <h1 id="h">h</h1>\n  </li>\n</ul>'
     const written = htmlToCarve(html).value
     expect(written).toBe('- [x] {#h}\n  # h\n')
     expect(carveToHtml(written)).toBe(html)

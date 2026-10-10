@@ -8,7 +8,7 @@ describe('floating attributes at list content columns', () => {
     [
       'task',
       '-{#k} [x] {#h}\n # h\n',
-      '<ul>\n  <li id="k"><input type="checkbox" checked disabled> </li>\n</ul>\n<p># h</p>',
+      '<ul class="task-list">\n  <li data-task-state="x" id="k"><input type="checkbox" checked disabled> </li>\n</ul>\n<p># h</p>',
     ],
   ])('closes an attribute-only %s item before a below-column heading', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)

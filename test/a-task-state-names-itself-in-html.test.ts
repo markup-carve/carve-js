@@ -18,10 +18,13 @@ describe('an extended task state names itself in the HTML', () => {
     expect(carveToHtml('- [>] deferred')).toContain('<li data-task-state="&gt;">')
   })
 
-  it('writes nothing for the two states the box already tells apart', () => {
+  it('writes nothing on an open item', () => {
     expect(carveToHtml('- [ ] a')).not.toContain('data-task-state')
-    expect(carveToHtml('- [x] a')).not.toContain('data-task-state')
-    expect(carveToHtml('- [X] a')).not.toContain('data-task-state')
+  })
+
+  it('writes a lowercase x on a done item, whichever case was authored', () => {
+    expect(carveToHtml('- [x] a')).toContain('<li data-task-state="x"><input type="checkbox" checked')
+    expect(carveToHtml('- [X] a')).toContain('<li data-task-state="x"><input type="checkbox" checked')
   })
 
   it('writes nothing on a plain bullet', () => {

@@ -43,6 +43,6 @@ describe('nested item looseness does not propagate to the outer item (carve#322)
   it('a nested TASK item (content column is the bullet width, not the checkbox) keeps the outer tight', () => {
     // The sub-list content column is 2 (`- `), not 6 (`- [ ] `), so the
     // post-blank paragraph belongs to the task sub-item, not the outer item.
-    expect(carveToHtml('- a\n  - [ ] b\n\n    text\n')).toContain('<li>a\n    <ul>')
+    expect(carveToHtml('- a\n  - [ ] b\n\n    text\n')).toContain('<li>a\n    <ul class="task-list">')
   })
 })
