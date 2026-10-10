@@ -11906,7 +11906,7 @@ class ParseSession {
         // descendant's own paragraph still open and no closer ahead the run is an
         // inline verbatim span inside that paragraph, which stays open - so a
         // below-column line still folds there and nothing ends.
-        if (followsBlank || closerAhead) {
+        if (followsBlank || !lazyState.lazyFoldable || closerAhead) {
           descendantOpaque = { close: fenceCloseRe(marker), base }
         }
       }
@@ -12499,6 +12499,67 @@ class ParseSession {
         }
       }
 
+      // Preserve the existing extent of a fence-shaped descendant body span.
+      // The parent tracker can leave its paragraph open after a child marker,
+      // even though that child's body has already reached a fence run.
+      let trailingDescendantFence = false
+      if (pendingBlanks > 0) {
+        const markerFenceAt = (text: string, column: number): DescendantOpaque | null => {
+          const bound = prefixWalkBound(text)
+          let at = 0
+          let base = column
+          for (;;) {
+            const quoted = quotePrefixLength(text, at, bound)
+            if (quoted > 0) {
+              base += quoted
+              at += quoted
+              continue
+            }
+            const prefix = markerPrefixLength(text, at, bound)
+            if (prefix === 0) break
+            base += markerContentColumn(text.slice(at, at + prefix) + 'x')
+            at += prefix
+          }
+          const bottom = text.slice(at)
+          const fence = RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom)
+          if (fence === null) return null
+          const marker = RE_FENCE.test(bottom) ? fence[2]! : fence[1]!
+          return { close: fenceCloseRe(marker), base }
+        }
+        let markerFence = markerFenceAt(content, 0)
+        let bodyFence: DescendantOpaque | null = null
+        for (const bodyLine of nested) {
+          if (isBlankLine(bodyLine)) continue
+          const column = indentColumns(bodyLine)
+          const opener = bodyLine.trimStart()
+          let markerCloser = false
+          if (markerFence !== null) {
+            if (column < markerFence.base) markerFence = null
+            else if (column === markerFence.base && markerFence.close.test(opener)) {
+              markerFence = null
+              markerCloser = true
+            }
+          }
+          if (bodyFence !== null) {
+            if (column < bodyFence.base) bodyFence = null
+            else {
+              if (column === bodyFence.base && bodyFence.close.test(opener)) bodyFence = null
+              continue
+            }
+          }
+          if (markerCloser) continue
+          if (markerFence === null && isListMarkerLine(bodyLine)) {
+            markerFence = markerFenceAt(opener, column)
+          }
+          const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+          if (fence !== null) {
+            const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+            bodyFence = { close: fenceCloseRe(marker), base: column }
+          }
+        }
+        trailingDescendantFence = bodyFence !== null
+      }
+
       // A block opener may be authored past the canonical item-body column.  The
       // collector above deliberately keeps the whole physical run; rebase each
       // recognized block group now, before tightness and block parsing inspect
@@ -12583,24 +12644,11 @@ class ParseSession {
       // flushed only when a later line reaches the content column, so a fence
       // running to the end of the item never received them.
       //
-      // A collected run ending on a child marker-line fence keeps the buffered
-      // separator at its parent. Other trailing lines retain their existing
-      // extent, including blanks owned by a child fence's payload.
-      let emptyChildMarkerFence = false
-      if (pendingBlanks > 0 && (firstBlockIdx >= 0 || leadIsMarker)) {
-        let lastContent = content
-        for (let index = nested.length - 1; index >= 0; index--) {
-          if (!isBlankLine(nested[index]!)) {
-            lastContent = nested[index]!
-            break
-          }
-        }
-        emptyChildMarkerFence = isListMarkerLine(lastContent) &&
-          opensCodeFence(markerLineBottomBlock(lastContent))
-      }
+      // A descendant's body-line fence keeps its trailing payload blanks.
+      // Parent separators do not belong to fences on child marker lines.
       if (pendingBlanks > 0 && (
-        lazyState.opaque !== null || authoredCodeFenceOpen ||
-        ((firstBlockIdx >= 0 || leadIsMarker) && !emptyChildMarkerFence)
+        lazyState.opaque !== null || authoredCodeFenceOpen || descendantOpaque !== null ||
+        ((firstBlockIdx >= 0 || leadIsMarker) && trailingDescendantFence)
       )) {
         hasBlank = true
         for (let k = 0; k < pendingBlanks; k++) {
