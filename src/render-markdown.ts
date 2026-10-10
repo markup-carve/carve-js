@@ -309,18 +309,21 @@ function withMarker(marker: string, content: string): string {
  */
 function carrierMarkers(node: BlockNode, ctx: MarkdownContext): CarrierMarkers | undefined {
   if (!ctx.carryMarkers) return undefined
-  // A HOST THAT PREFIXES ITS LINES TAKES NO MARKER YET. Inside a list item or a
-  // block quote the comment is written at the host's content column or behind
-  // its `>`, and the import reads a marker only at column 0 - so the marker
-  // would be emitted and never read back, which is worse than degrading
-  // honestly (markup-carve/carve#2810 follow-up). A table cell never reaches
-  // this writer's block arms at all.
+  // A HOST THAT PREFIXES ITS LINES TAKES NO MARKER. The import reads a marker
+  // at a line's own start, so one written at a list item's content column or
+  // behind a block quote's `>` would be emitted and never read back - worse
+  // than degrading honestly. Reading one through the prefix needs the block
+  // structure the source pre-pass does not have: a marker at an item's content
+  // column is indistinguishable there from verbatim text in a code block
+  // inside that item, which markup-carve/carve#2850 records with the
+  // measurement. A table cell never reaches this writer's block arms at all,
+  // and could not carry anyway: a cell is flattened to a single line.
   if (ctx.listDepth > 0 || ctx.inBlockQuote) return undefined
 
   return spellCarrierMarkers(node, ctx.carrierDepth)
 }
 
-type CarrierMarkers = { prelude: string[]; opener: string; closer: string }
+type CarrierMarkers = { prelude: string[]; opener: string; closer: string; postlude: string[] }
 
 /** Render a carried container's children one fence width in. */
 function carriedChildren(children: BlockNode[], markers: CarrierMarkers | undefined, ctx: MarkdownContext): string {
@@ -342,8 +345,11 @@ function carriedChildren(children: BlockNode[], markers: CarrierMarkers | undefi
 function carried(markers: CarrierMarkers | undefined, body: string): string {
   if (markers === undefined) return body
   const head = [...markers.prelude, markers.opener].map((payload) => `${carrierLine(payload)}\n`).join('')
+  // A caption line sits BELOW the closer in Carve, so its marker sits below the
+  // closer's here, directly above the paragraph it replaces on import.
+  const tail = [markers.closer, ...markers.postlude].map((payload) => `${carrierLine(payload)}\n`).join('')
 
-  return `${head}${body}${carrierLine(markers.closer)}\n`
+  return `${head}${body}${tail}`
 }
 
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
@@ -459,8 +465,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       }
       out = carried(markers, out)
       // The group's own caption sits OUTSIDE the container in Carve too - the
-      // slot hangs on the closing fence - so its fallback follows the closer
-      // and is NOT restored by the round trip.
+      // slot hangs on the closing fence - so its fallback follows the closer,
+      // directly under the caption marker that restores it.
       if (node.caption !== undefined) {
         out += wrapperLine(renderInlines(node.caption, ctx), '**', 'strong')
       }
