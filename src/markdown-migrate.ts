@@ -1305,6 +1305,8 @@ function convertInline(
 
   const activeHtmlCodeLinkOpeners: number[] = []
   let nextHtmlCodeLinkOpener = 0
+  let activationOriginalSource: string | undefined
+  let codeSourceMatchesActivation: boolean | undefined
   const standaloneHtmlCode = input.trim()
   const writeHtmlCode = (match: string, offset: number): string | undefined => {
     const codeSourceLine = htmlCodeLineAt(offset)
@@ -1317,10 +1319,17 @@ function convertInline(
     const parts = match.slice(6, -7).split('<!---->').map(restoreLiteral)
     const body = parts.join('')
     if (body.includes('\x00')) return undefined
-    while (nextHtmlCodeLinkOpener < activeHtmlCodeLinkOpeners.length
-      && activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener]! < codeSourceOffset + 6) nextHtmlCodeLinkOpener++
-    if ((activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener] ?? Infinity)
-      < codeSourceOffset + referenceSourceText(match, protectedSources).length - 7) return undefined
+    if (activationOriginalSource !== undefined) {
+      codeSourceMatchesActivation ??= referenceSourceText(line, protectedSources) === activationOriginalSource
+      if (!codeSourceMatchesActivation) {
+        if (body.includes('[')) return undefined
+      } else {
+        while (nextHtmlCodeLinkOpener < activeHtmlCodeLinkOpeners.length
+          && activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener]! < codeSourceOffset + 6) nextHtmlCodeLinkOpener++
+        if ((activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener] ?? Infinity)
+          < codeSourceOffset + referenceSourceText(match, protectedSources).length - 7) return undefined
+      }
+    }
     if (/[\\`*_~\[\]]/.test(body)) {
       if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(offset)) return undefined
       const savedLosses = importLosses
@@ -1530,20 +1539,23 @@ function convertInline(
       const autolink = activationAutolink.exec(activationSource)
       return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
     }, offset => { activeLinkOpeners.add(offset) })
-  let activationSourceOffset = 0
-  const activationToken = /\x00P\d+\x00/y
-  for (let at = 0; at < activationSource.length; at++) {
-    if (activeLinkOpeners.has(at)) activeHtmlCodeLinkOpeners.push(activationSourceOffset)
-    if (activationSource[at] === '\x00') {
-      activationToken.lastIndex = at
-      const token = activationToken.exec(activationSource)
-      if (token) {
-        activationSourceOffset += referenceSourceText(token[0], protectedSources).length
-        at += token[0].length - 1
-        continue
+  if (activeLinkOpeners.size > 0) {
+    activationOriginalSource = referenceSourceText(activationSource, protectedSources)
+    let activationSourceOffset = 0
+    const activationToken = /\x00P\d+\x00/y
+    for (let at = 0; at < activationSource.length; at++) {
+      if (activeLinkOpeners.has(at)) activeHtmlCodeLinkOpeners.push(activationSourceOffset)
+      if (activationSource[at] === '\x00') {
+        activationToken.lastIndex = at
+        const token = activationToken.exec(activationSource)
+        if (token) {
+          activationSourceOffset += referenceSourceText(token[0], protectedSources).length
+          at += token[0].length - 1
+          continue
+        }
       }
+      activationSourceOffset++
     }
-    activationSourceOffset++
   }
 
   const referenceTail = (canonical: string, fallback: string, source = fallback): string => {
@@ -1654,9 +1666,9 @@ function convertInline(
       const last = referenceDestinationLabel(third, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (middle !== undefined) {
         if (chainSubject[offset - 1] === '!' || chainSubject[offset + match.length] === '[') return match
-        return `[${first}]${referenceTail(middle, `[${middle}]`)}[${third}]${last !== undefined ? referenceTail(last, `[${last}]`) : ''}`
+        return `[${first}]${referenceTail(middle, `[${middle}]`, `[${second}]`)}[${third}]${last !== undefined ? referenceTail(last, `[${last}]`, '') : ''}`
       }
-      if (last !== undefined) return protect(`\\[${first}]`) + `[${second}]${referenceTail(last, `[${last}]`)}`
+      if (last !== undefined) return protect(`\\[${first}]`, `[${first}]`) + `[${second}]${referenceTail(last, `[${last}]`, `[${third}]`)}`
       return match
     })
 
@@ -1667,10 +1679,10 @@ function convertInline(
       if (canonical === undefined) return table && match.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
       if (/[\[\]]/.test(canonical)) return match
       const target = referenceInlineTarget(canonical, table)
-      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`)
+      return protect(`${imageLabel(`![${label}]`)}${target === undefined ? `[${canonical}]` : encodeDest(`(${target})`) ?? `[${canonical}]`}`, match)
     })
 
-  line = line.replace(/\[\^(?=[^[\]\n]*\[(?!\^))/g, () => protect('\\[') + '^')
+  line = line.replace(/\[\^(?=[^[\]\n]*\[(?!\^))/g, () => protect('\\[', '[') + '^')
 
   const footnoteSource = line
   let footnoteCursor = 0
@@ -1694,11 +1706,11 @@ function convertInline(
   if (table) {
     line = line.replace(/(?<!\\)\[([^[\]\n^]+)\]\[([^[\]\n]+)\]/g, (match, label: string, reference: string) =>
       label.includes('|') && referenceDestinationLabel(reference, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
-        ? protect(writeLiteralReference(match)) : match,
+        ? protect(writeLiteralReference(match), match) : match,
     )
     line = line.replace(/(?<!\\)(!?)\[([^[\]\n^][^[\]\n]*)\]\[\]/g, (match, _image: string, label: string) =>
       label.includes('|') && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
-        ? protect(writeLiteralReference(match)) : match,
+        ? protect(writeLiteralReference(match), match) : match,
     )
   }
 
