@@ -12583,10 +12583,10 @@ class ParseSession {
       // flushed only when a later line reaches the content column, so a fence
       // running to the end of the item never received them.
       //
-      // A child item receives the run too: its parser owns any fence hidden
-      // from this item's tracker. Other trailing blanks remain spacing.
+      // Only a fence owned by this item receives the trailing run. A nested
+      // item's fence does not own the parent item's buffered separator.
       if (pendingBlanks > 0 && (
-        lazyState.opaque !== null || authoredCodeFenceOpen || firstBlockIdx >= 0 || leadIsMarker
+        lazyState.opaque !== null || authoredCodeFenceOpen
       )) {
         hasBlank = true
         for (let k = 0; k < pendingBlanks; k++) {
