@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Keep adjacent verbatim spans separate when a payload ends in a backslash, including empty siblings and transparent wrappers.
+
 - Markdown fragment links to headings with hard breaks use GitHub’s text anchor (#2679).
 
 - Markdown export preserves terminal hard breaks and hard breaks in headings with inline HTML. A break-only paragraph stays a paragraph in GFM readers.

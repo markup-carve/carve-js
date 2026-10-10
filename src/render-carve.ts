@@ -2307,11 +2307,11 @@ function boundaryEscapeAt(written: string, piece: string): number {
 const EMPTY_COMMENT = '{%  %}'
 
 /** Whether a separator belongs between what is written and the next piece. */
-function separatesBacktickRuns(written: string, piece: string): boolean {
+function separatesBacktickRuns(written: string, piece: string, verbatimTail: boolean): boolean {
   return (
     written.endsWith('`') &&
     piece.startsWith('`') &&
-    !precededByOddBackslashRun(written, written.length - 1)
+    (verbatimTail || !precededByOddBackslashRun(written, written.length - 1))
   )
 }
 
@@ -2375,6 +2375,8 @@ function lastBoundary(node: InlineNode | undefined): string {
 
 /** State owned by one synchronous source-render operation. */
 class CarveRenderSession {
+  private renderedVerbatimTail = false
+
   private refusedTableRows: TableRow[] = []
   private refusedSpans: SourceUnspellableError[] = []
   private rowsBeforeFirstSpan = 0
@@ -4003,6 +4005,7 @@ class CarveRenderSession {
     ctx.inlineDepth++
     try {
       let out = ''
+      let verbatimTail = false
       const literalRanges: LiteralRange[] = []
       const noteCloses: number[] = []
       let firstLine = true
@@ -4028,6 +4031,7 @@ class CarveRenderSession {
         this.lastLiteralRanges = []
         this.lastNoteCloses = []
         const override = overrides.get(idx)
+        this.renderedVerbatimTail = false
         let piece = override?.text ?? this.renderInline(
           node,
           ctx,
@@ -4078,7 +4082,7 @@ class CarveRenderSession {
 
         refuseGluedName(node, nodes[idx - 1], outTail, piece)
 
-        if (separatesBacktickRuns(written().text, piece)) {
+        if (separatesBacktickRuns(written().text, piece, verbatimTail)) {
           out += EMPTY_COMMENT
           outTail = (outTail + EMPTY_COMMENT).slice(-OUT_TAIL_LENGTH)
           lineLength += EMPTY_COMMENT.length
@@ -4092,6 +4096,7 @@ class CarveRenderSession {
           }
         }
         out += piece
+        if (piece !== '') verbatimTail = piece.endsWith('`') && (this.renderedVerbatimTail || ['code', 'math', 'literal_inline'].includes(node.type))
         outTail = (outTail + piece).slice(-OUT_TAIL_LENGTH)
         const lastNewline = piece.lastIndexOf('\n')
         if (lastNewline === -1) {
@@ -4112,6 +4117,7 @@ class CarveRenderSession {
         lineHostsCaption = lineNodeCount === 1 && inlineHostsCaption(node)
         captionCanOpen = false
       })
+      this.renderedVerbatimTail = verbatimTail
       if (this.escapeMode === 'minimal' || this.escalatedUnits !== null) {
         // A bracket or destination may cross a nested emphasis boundary. Keep
         // its text-node ranges until the outer inline run is complete.
