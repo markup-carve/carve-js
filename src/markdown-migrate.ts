@@ -1858,6 +1858,7 @@ function writeTableRow(
 import {
   CARRIER_PREFIX,
   carrierFenceWidth,
+  carrierIsCaption,
   carrierIsCloser,
   carrierPayload,
 } from './carrier-markers.js'
@@ -1878,10 +1879,13 @@ export type MarkdownImportLoss = {
  * PART 11 §10s: the carrier payloads this conversion lifted out of the source,
  * in the order their marker lines appeared.
  */
-let carrierSlots: Array<{ payload: string; closer: boolean }> = []
+let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean }> = []
 
 /** The placeholder a lifted marker line stands in as, unique in the source. */
 let carrierToken = ''
+
+/** Which kind of marker, if any, produced a line of the restored Carve. */
+type CarrierLineKind = 'open' | 'close' | 'caption' | undefined
 
 /**
  * How many bold fallback lines the Markdown target wrote for an opener's own
@@ -1889,6 +1893,10 @@ let carrierToken = ''
  * them now, so leaving the fallback would be the same text twice.
  */
 function carrierFallbackLines(payload: string): number {
+  // A CAPTION MARKER REPLACES ITS RENDERED PARAGRAPH rather than adding a
+  // second copy of it: a caption, unlike an attribute line, also renders as
+  // body text (PART 11 §10s).
+  if (carrierIsCaption(payload)) return 1
   const width = carrierFenceWidth(payload)
   if (width === 0) return 0
   let rest = payload.slice(width)
@@ -1911,18 +1919,29 @@ function carrierFallbackLines(payload: string): number {
 function carrierSetBalances(payloads: readonly string[]): boolean {
   const open: number[] = []
   let prelude = false
+  let closed = false
   for (const payload of payloads) {
+    if (carrierIsCaption(payload)) {
+      // A caption line belongs to the container the marker before it closed,
+      // so one standing anywhere else records nothing.
+      if (prelude || !closed) return false
+      closed = false
+      continue
+    }
     const width = carrierFenceWidth(payload)
     if (width === 0) {
       // An attribute line belongs to the opener on the next marker.
       prelude = true
+      closed = false
       continue
     }
     if (carrierIsCloser(payload)) {
       if (prelude || open.length === 0 || open.pop() !== width) return false
+      closed = true
       continue
     }
     prelude = false
+    closed = false
     if (open.length > 0 && width <= open[open.length - 1]!) return false
     open.push(width)
   }
@@ -1985,6 +2004,7 @@ function prepareCarrierMarkers(markdown: string): string {
   const out: string[] = []
   let drop = 0
   let skipBlank = false
+  const last = lines.length - 1
   for (const [at, line] of lines.entries()) {
     const payload = payloads.get(at)
     if (payload === undefined) {
@@ -1993,7 +2013,10 @@ function prepareCarrierMarkers(markdown: string): string {
         skipBlank = true
         continue
       }
-      if (skipBlank && line === '') {
+      // The LAST element is the source's trailing newline, not a separator the
+      // dropped fallback brought with it: consuming it would leave the Carve
+      // output without its own final newline.
+      if (skipBlank && at !== last && line === '') {
         skipBlank = false
         continue
       }
@@ -2002,7 +2025,7 @@ function prepareCarrierMarkers(markdown: string): string {
       continue
     }
     out.push(`${token}${carrierSlots.length}Z`)
-    carrierSlots.push({ payload, closer: carrierIsCloser(payload) })
+    carrierSlots.push({ payload, closer: carrierIsCloser(payload), caption: carrierIsCaption(payload) })
     drop = carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
   }
 
@@ -2015,8 +2038,8 @@ function prepareCarrierMarkers(markdown: string): string {
  * closer is a block of its own.
  */
 function separateCarrierLines(
-  items: ReadonlyArray<{ text: string; kind: 'open' | 'close' | undefined }>,
-): Array<{ text: string; kind: 'open' | 'close' | undefined }> {
+  items: ReadonlyArray<{ text: string; kind: CarrierLineKind }>,
+): Array<{ text: string; kind: CarrierLineKind }> {
   const hugged = new Set<number>()
   for (let at = 0; at < items.length; at++) {
     if (items[at]!.kind !== undefined || items[at]!.text !== '') continue
@@ -2027,18 +2050,20 @@ function separateCarrierLines(
     const above = before >= 0 ? items[before]!.kind : undefined
     const below = end < items.length ? items[end]!.kind : undefined
     // A blank above a closer and one below an opener are both inside the
-    // container, where the canonical writer puts none.
-    if (below === 'close' || above === 'open') {
+    // container, where the canonical writer puts none. A caption line hugs the
+    // closer above it the same way, because its slot hangs on that fence.
+    if (below === 'close' || below === 'caption' || above === 'open') {
       for (let dropAt = at; dropAt < end; dropAt++) hugged.add(dropAt)
     }
     at = end - 1
   }
 
-  const out: Array<{ text: string; kind: 'open' | 'close' | undefined }> = []
+  const out: Array<{ text: string; kind: CarrierLineKind }> = []
   for (const [at, item] of items.entries()) {
     if (hugged.has(at)) continue
     const last = out[out.length - 1]
-    if (last !== undefined && last.kind === 'close' && item.kind !== 'close' && item.text !== '') {
+    const closes = last !== undefined && (last.kind === 'close' || last.kind === 'caption')
+    if (closes && item.kind !== 'close' && item.kind !== 'caption' && item.text !== '') {
       out.push({ text: '', kind: undefined })
     }
     out.push(item)
@@ -2053,13 +2078,14 @@ function restoreCarrierMarkers(carve: string): string {
   const pattern = new RegExp(`^${carrierToken}(\\d+)Z$`)
   // Each line as its text plus which kind of marker, if any, produced it:
   // 'open' for an opener or the attribute line travelling with it, 'close' for
-  // a bare closer.
+  // a bare closer, 'caption' for a composite figure's caption line.
   const items = carve.split('\n').map((line) => {
     const match = pattern.exec(line.trim())
-    if (match === null) return { text: line, kind: undefined as 'open' | 'close' | undefined }
+    if (match === null) return { text: line, kind: undefined as CarrierLineKind }
     const slot = carrierSlots[Number(match[1])]!
+    const kind: CarrierLineKind = slot.caption ? 'caption' : slot.closer ? 'close' : 'open'
 
-    return { text: slot.payload, kind: slot.closer ? ('close' as const) : ('open' as const) }
+    return { text: slot.payload, kind }
   })
 
   return separateCarrierLines(items).map((item) => item.text).join('\n')

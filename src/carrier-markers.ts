@@ -47,6 +47,17 @@ export function carrierFenceWidth(payload: string): number {
   return /^(:{3,})/.exec(payload)?.[1]?.length ?? 0
 }
 
+/**
+ * Whether a payload is a composite figure's caption line, which travels in a
+ * marker of its own directly after the closer (PART 11 §10s).
+ *
+ * The caption slot hangs BELOW the closing fence, so the pair bracketing the
+ * container cannot enclose it.
+ */
+export function carrierIsCaption(payload: string): boolean {
+  return /^\^[ \t]/.test(payload)
+}
+
 /** Whether a colon-fence payload is a bare closer. */
 export function carrierIsCloser(payload: string): boolean {
   return /^:{3,}$/.test(payload)
@@ -62,11 +73,15 @@ export function carrierIsCloser(payload: string): boolean {
  * container costs one fence line instead of a second render of its subtree, and
  * the fence runs are then widened to the depth the Markdown writer is at -
  * which is what `colonFenceFor` would have produced for the same node.
+ *
+ * A COMPOSITE FIGURE'S CAPTION LINE HANGS BELOW THE CLOSER, so the canonical
+ * spelling puts it after the closing fence and it comes back in `postlude`.
+ * Dropping the children does not drop it: the caption is a field of its own.
  */
 export function spellCarrierMarkers(
   node: BlockNode,
   depth: number,
-): { prelude: string[]; opener: string; closer: string } | undefined {
+): { prelude: string[]; opener: string; closer: string; postlude: string[] } | undefined {
   const bodyless = { ...node, children: [] } as BlockNode
   const document: Document = { type: 'document', children: [bodyless] }
   let lines: string[]
@@ -89,5 +104,6 @@ export function spellCarrierMarkers(
     prelude: lines.slice(0, open),
     opener: widen(lines[open]!),
     closer: widen(lines[close]!),
+    postlude: lines.slice(close + 1).filter((line) => line !== ''),
   }
 }
