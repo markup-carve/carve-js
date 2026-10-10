@@ -28,6 +28,10 @@ it.each(cases)('preserves imported code payload in $template: $value', item => {
   expect(records(carveToHtml(result.value)).codes).toEqual([{ value: item.value, ancestors: item.ancestors, elements: [] }])
   const fallback = result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')
   expect(fallback).toHaveLength(result.value.includes('{=html}') ? 1 : 0)
+  if (item.value !== '' && !/[\r\n]/.test(item.value)) {
+    expect(fallback).toHaveLength(0)
+    expect(records(carveToHtml(result.value, { allowRawHtml: false })).codes).toEqual([{ value: item.value, ancestors: item.ancestors, elements: [] }])
+  }
   for (const row of fallback) expect(row).toMatchObject({ fidelity: 'degraded', confidence: 'exact', severity: 'warning' })
 })
 
@@ -105,4 +109,18 @@ it('keeps a code delimiter in a link from pairing with outside text', () => {
   const result = migrateMarkdown('[<code>*a</code>](u) b*')
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
   expect(carveToHtml(result.value, { allowRawHtml: false })).toBe('<p><a href="u"><code>*a</code></a> b*</p>')
+})
+
+it('keeps the code line after a reference label spanning lines', () => {
+  const result = migrateMarkdown('[x][a\nb] <code></code>\n\n[a b]: /u\n')
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')[0]?.path).toBe('line:2')
+})
+
+it('keeps many entity newline continuations in one code fallback', () => {
+  const count = 16000
+  const result = migrateMarkdown('> <code>a&#13;\n' + '> b&#13;\n'.repeat(count))
+  const rows = result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')
+  expect(rows).toHaveLength(1)
+  expect(rows[0]?.path).toBe('line:1')
+  expect(records(carveToHtml(result.value)).codes[0]?.value).toBe('a\n' + 'b\n'.repeat(count))
 })

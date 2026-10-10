@@ -1455,9 +1455,9 @@ function convertInline(
       return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
     })
 
-  const referenceTail = (canonical: string, fallback: string): string => {
+  const referenceTail = (canonical: string, fallback: string, source = fallback): string => {
     const target = referenceInlineTarget(canonical, table)
-    return protect(target === undefined ? fallback : encodeDest(`(${target})`) ?? fallback)
+    return protect(target === undefined ? fallback : encodeDest(`(${target})`) ?? fallback, source)
   }
 
   const imageLabel = (label: string): string => {
@@ -1532,11 +1532,11 @@ function convertInline(
   // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
-  protectDestinations(/(!\[(?:[^[\]]|\[[^[\]]*\])*\])(\((?:[ \t]*\n(?![ \t]*\n))?(?:[^()\n]|\([^()\n]*\))*\))/g)
+  protectDestinations(/(!\[(?:[^[\]]|\[[^[\]]*\])*\])(\((?:[ \t]*\n(?![ \t]*\n))?(?:[^()\n]|\([^()\n]*\)|\n(?=[ \t]*\)))*\))/g)
 
   // Link destinations `](dest "title")`. (Images already handled above.) The
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
-  protectDestinations(/(?<=\])()(\((?:[ \t]*\n(?![ \t]*\n))?(?:[^()\n]|\([^()\n]*\))*\))/g)
+  protectDestinations(/(?<=\])()(\((?:[ \t]*\n(?![ \t]*\n))?(?:[^()\n]|\([^()\n]*\)|\n(?=[ \t]*\)))*\))/g)
 
 
   // In a plain three-label chain, an unknown full-reference label can begin
@@ -1623,14 +1623,14 @@ function convertInline(
     if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel, table) !== undefined) return referenceTail(sourceLabel, match)
     const literal = referenceLiteralText(reference, decodeHtmlEntitiesRaw, protectedSpans)
     if (canonical === undefined && sourceLabel === undefined && !reference.startsWith('^') && /\\[!*]/.test(referenceSourceText(reference, protectedSpans)) && literal !== reference && /[!*]/.test(literal)) {
-      return protect(`\\[${writeLiteralReference(reference)}\\]`)
+      return protect(`\\[${writeLiteralReference(reference)}\\]`, match)
     }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
     if (canonical === undefined || /[\[\]]/.test(canonical)) {
-      if (!referenceSourceText(reference, protectedSpans).includes('|')) return protect(match)
-      return protect(`\\[${writeLiteralReference(reference)}\\]`)
+      if (!referenceSourceText(reference, protectedSpans).includes('|')) return protect(match, match)
+      return protect(`\\[${writeLiteralReference(reference)}\\]`, match)
     }
-    return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`)
+    return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`, match)
   })
 
   // Reference-link definition `[label]: dest "title"` (optional space after
@@ -1645,7 +1645,7 @@ function convertInline(
   line = line.replace(/^(\s*\[([^^\]][^\]]*)\]:[ \t]*)((?:\x00P\d+\x00|[^\x00-\x20\x7f])+)([\s\S]*)$/u, (match, head, label: string, dest, rest) =>
     referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined
       ? match
-      : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest)),
+      : protect(head + writeMarkdownDestination(dest, protectedSpans) + decodeEntitiesInTitle(rest), match),
   )
 
   let codeWritten = ''
@@ -1661,7 +1661,7 @@ function convertInline(
           const following = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/.exec(line.slice(i))
           if (following && decodeHtmlEntitiesRaw(following[0]) === '\n') i += following[0].length
           else if (line[i] === '\n') {
-            if (joinedLines) joinedLines.add((referenceSourceText(line.slice(0, i + 1), protectedSources).match(/\n/g) ?? []).length)
+            if (joinedLines) { htmlCodeLineAt(i + 1); joinedLines.add(codeSourceLines) }
             i++
             while (line[i] === ' ' || line[i] === '\t') i++
           }
