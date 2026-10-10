@@ -16,7 +16,7 @@ interface Run {
 interface Pair { open: number; close: number; width: number; kind: '*' | '/' | '~' }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -163,7 +163,9 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         frame = { i: pair.open + pair.width, end: pair.close, kind: pair.kind, pair, parent: frame.kind,
           slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true }
         frame.repeated = (active.get(pair.kind) ?? 0) > 0
-        frame.keep = stack.length < MAX_NESTING_DEPTH
+        // `hostDepth` is the inline nesting this text already sits under - a
+        // link label is converted on its own, so its own levels are not here.
+        frame.keep = hostDepth + stack.length < MAX_NESTING_DEPTH
         active.set(pair.kind, (active.get(pair.kind) ?? 0) + 1)
         output.push('')
       } else {
@@ -189,6 +191,10 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'
+      // A literal `{` at the body's end would glue to the closer and read as a
+      // braced opener of this kind, which nests since markup-carve/carve#2877.
+      const tail = output.length - 1
+      if (tail > frame.slot && output[tail] === '{') output[tail] = '\\{'
       output[frame.slot] = braced ? `{${pair.kind}` : pair.kind
       output.push(braced ? `${pair.kind}}` : pair.kind)
       first = braced ? '{' : pair.kind

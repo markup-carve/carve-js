@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { parse, renderCarve, renderHtml, toAstJson } from '../src/index.js'
+import { carveToHtml, markdownToCarve, parse, renderCarve, renderHtml, toAstJson } from '../src/index.js'
+import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
 import { MAX_NESTING_DEPTH } from '../src/parse.js'
 
 interface Vector {
@@ -94,4 +95,33 @@ describe('explicit same-kind emphasis', () => {
       expect(semantic(children)).toEqual(semantic(vector.children))
     })
   }
+})
+
+/*
+ * A Markdown import writes the nested spelling now, so its generated braces
+ * meet text and escapers that never saw one before.
+ */
+describe('a Markdown import writing the nested spelling', () => {
+  it('escapes a literal brace that would glue to the closer it wrote', () => {
+    const written = markdownToCarve('**a **b {** c**')
+    expect(written).toBe('{*a {*b \\{*} c*}')
+    expect(carveToHtml(written).trim()).toBe('<p><strong>a <strong>b {</strong> c</strong></p>')
+  })
+
+  it('keeps the braces it wrote inside a link label out of the literal-pair escaper', () => {
+    const written = markdownToCarve('[****word****](u)')
+    expect(written).toBe('[{*{*word*}*}](u)')
+    expect(carveToHtml(written).trim()).toBe('<p><a href="u"><strong><strong>word</strong></strong></a></p>')
+  })
+
+  it('counts the link label itself against the nesting budget', () => {
+    const run = '*'.repeat(2 * (MAX_NESTING_DEPTH - 1)) + 'word' + '*'.repeat(2 * (MAX_NESTING_DEPTH - 1))
+    const inside = markdownToCarveWithLosses(`[${run}](u)`)
+    expect(inside.losses.map((loss) => loss.code)).toEqual(['structure-unspellable'])
+    const html = renderHtml(parse(inside.value))
+    // Over-budget levels flatten on the way out, so none of them comes back as
+    // a literal opener on the way in.
+    expect(html).not.toContain('{*')
+    expect((html.match(/<strong>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 2)
+  })
 })

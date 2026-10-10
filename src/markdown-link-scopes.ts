@@ -35,8 +35,15 @@ export function protectMarkdownLinkLabels(
       const valid = tail.startsWith('(') || reference !== null && isReference(reference[1] || label)
       if (valid && token) {
         if (active) {
-          output.splice(opener.slot, output.length - opener.slot,
-            '[', markdownEmphasis(label, () => { flattened = true }, undefined, spans).replace(/[*_]/g, char => protect(char)), ']', token[0])
+          // The braces the conversion wrote are markup, not label text, so they
+          // are protected with their delimiters: unprotected, the line's own
+          // literal-pair escaper reads this output back as text and backslashes
+          // an opener it generated (markup-carve/carve#2877 made such a nested
+          // opener reachable in the first place).
+          const converted = markdownEmphasis(label, () => { flattened = true }, undefined, spans, false, false, 1)
+            .replace(/[*_]/g, char => protect(char))
+            .replace(/\{(?=\x00P\d+\x00)|(?<=\x00P\d+\x00)\}/g, char => protect(char))
+          output.splice(opener.slot, output.length - opener.slot, '[', converted, ']', token[0])
           generation++
         } else return source
         i += token[0].length
