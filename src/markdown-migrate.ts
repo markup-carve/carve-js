@@ -1135,7 +1135,7 @@ function convertInline(
   terminal = true,
   table = false,
   reportEmptyLosses = true,
-  sourceLineAtOffset?: (offset: number) => number | undefined,
+  sourceLineAtOffset?: (offset: number) => number | undefined | null,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -1228,7 +1228,7 @@ function convertInline(
 
 
 
-  const sourceLineCounts = new Map<string, Array<{ offset: number; count: number }>>()
+  const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
   let opaqueSubject: string | undefined
   let opaqueRanges: Array<[number, number]> = []
   line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before, subject) => {
@@ -1236,10 +1236,12 @@ function convertInline(
     let counts = sourceLineCounts.get(subject)
     if (counts === undefined) {
       counts = []
-      let count = 0
+      let count = 0, delta = 0
       for (const match of subject.matchAll(/\n|\x00P(\d+)\x00/g)) {
-        count += match[1] === undefined ? 1 : countNewlines(protectedSources[Number(match[1])] ?? '')
-        counts.push({ offset: match.index! + match[0].length - 1, count })
+        const source = match[1] === undefined ? '\n' : referenceSourceText(match[0], protectedSources)
+        count += countNewlines(source)
+        delta += source.length - match[0].length
+        counts.push({ offset: match.index! + match[0].length - 1, count, delta })
       }
       sourceLineCounts.set(subject, counts)
     }
@@ -1251,7 +1253,8 @@ function convertInline(
     }
     const sourceLine = sourceLineAtOffset === undefined
       ? inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + (counts[low - 1]?.count ?? 0)
-      : sourceLineAtOffset(referenceSourceText(before, protectedSources).length)
+      : sourceLineAtOffset(before.length + (counts[low - 1]?.delta ?? 0))
+    if (sourceLine === null) return
     importLosses.push({
       code: 'structure-unspellable',
       message: image
@@ -1263,7 +1266,7 @@ function convertInline(
     if (subject !== opaqueSubject) {
       opaqueSubject = subject
       opaqueRanges = []
-      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
       for (let cursor = 0; cursor < subject.length; cursor++) {
         if (subject[cursor] !== '<') continue
         autolink.lastIndex = cursor
@@ -2400,6 +2403,7 @@ type PrefixedInlineLine = {
   // The line's index into the array the collector was given, so a loss found
   // inside a container names a line of the INPUT (markup-carve/carve-js#2668).
   source?: number | undefined
+  sourceSegments?: Array<{ offset: number; line: number | undefined }>
 }
 
 const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
@@ -2780,6 +2784,23 @@ function runPartSourceLine(part: PrefixedInlineLine): number | undefined {
   return part.source === undefined ? undefined : importSourceLine?.(part.source)
 }
 
+function containerTableRows(run: readonly PrefixedInlineLine[]): boolean[] {
+  const held = heldByItem(run)
+  const container = run.map(
+    (part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`,
+  )
+  const inTable = new Array<boolean>(run.length).fill(false)
+  for (let start = 0; start < run.length; ) {
+    let end = start + 1
+    while (end < run.length && container[end] === container[start] && !run[end]!.continued) end++
+    const flags = gfmTableRowLines(held.slice(start, end).map((part) => part.body))
+    for (let offset = 0; offset < flags.length; offset++) inTable[start + offset] = flags[offset]!
+    start = end
+  }
+
+  return inTable
+}
+
 function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
@@ -2787,6 +2808,13 @@ function restorePrefixedInlineRun(
 ): string[] {
   const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
   const joinedLines = new Set<number>()
+  const tableRows = containerTableRows(run)
+  let offset = 0
+  const sourceSegments = run.flatMap((part, index) => {
+    const entries = (part.sourceSegments ?? [{offset:0, line:runPartSourceLine(part)}]).map(entry => ({offset:offset + entry.offset, line:tableRows[index] ? null : entry.line}))
+    offset += part.text.length + 1
+    return entries
+  })
   const converted = convertInline(
     run.map((part) => part.text).join('\n'),
     dialect,
@@ -2794,6 +2822,17 @@ function restorePrefixedInlineRun(
     /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(run[0]?.prefix ?? ''),
     joinedLines,
     terminal,
+    false,
+    true,
+    at => {
+      let low = 0, high = sourceSegments.length
+      while (low < high) {
+        const mid = (low + high) >>> 1
+        if (sourceSegments[mid]!.offset <= at) low = mid + 1
+        else high = mid
+      }
+      return sourceSegments[low - 1]?.line
+    },
   ).split('\n')
   run = run.filter((_, index) => !joinedLines.has(index))
   const held = heldByItem(run)
@@ -2810,17 +2849,8 @@ function restorePrefixedInlineRun(
   )
   if (!modellable) return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
 
-  const container = run.map(
-    (part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`,
-  )
-  const inTable = new Array<boolean>(run.length).fill(false)
-  for (let start = 0; start < run.length; ) {
-    let end = start + 1
-    while (end < run.length && container[end] === container[start] && !run[end]!.continued) end++
-    const flags = gfmTableRowLines(held.slice(start, end).map((part) => part.body))
-    for (let offset = 0; offset < flags.length; offset++) inTable[start + offset] = flags[offset]!
-    start = end
-  }
+  const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}:${held[idx]!.marker.length}`)
+  const inTable = containerTableRows(run)
 
   const out: string[] = []
   let tableWidth = 0
@@ -2835,12 +2865,18 @@ function restorePrefixedInlineRun(
       if (idx === 0 || !inTable[idx - 1] || container[idx - 1] !== container[idx]) {
         const headers = splitTableRow(held[idx + 1]!.body.trim()).map((cell) => `=${alignMarker(cell)}`)
         tableWidth = headers.length
-        const header = writeTableRow(splitTableRow(body.trim()), headers, dialect, undefined, false)
+        const previousLine = inlineRunSourceLine
+        inlineRunSourceLine = runPartSourceLine(part)
+        const header = writeTableRow(splitTableRow(body.trim()), headers, dialect)
+        inlineRunSourceLine = previousLine
         if (keepTableRow(header, runPartSourceLine(part))) out.push(part.prefix + marker + header)
         idx++ // consume the delimiter row
         continue
       }
-      const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth, false)
+      const previousLine = inlineRunSourceLine
+      inlineRunSourceLine = runPartSourceLine(part)
+      const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth)
+      inlineRunSourceLine = previousLine
       if (keepTableRow(row, runPartSourceLine(part))) out.push(part.prefix + marker + row)
       continue
     }
@@ -3031,15 +3067,16 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
       if ((lead !== '' || indentColumns(first) - col < 4) && at >= col && at - col < 4) {
         const quote = heldInContainer(part).quote
         const indent = lead !== '' ? lead : /^[ \t]*/.exec(first)![0]
-        const body = out
-          .slice(start)
-          // The collector's escape guarded a marker standing at the start of a
-          // line; in the heading that marker sits in the middle of one line and
-          // opens nothing, so the bare body is what gets written.
-          .map((entry, index, entries) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body, index === entries.length - 1))
-          .join(' ')
-        const heading = `${held.lead}${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} ${body}`
-        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: heading })
+        const entries = out.slice(start)
+        const parts = entries.map((entry, index) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body, index === entries.length - 1))
+        const head = `${held.lead}${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} `
+        let offset = head.length
+        const sourceSegments = parts.map((text, index) => {
+          const entry = { offset, line: runPartSourceLine(entries[index]!) }
+          offset += text.length + 1
+          return entry
+        })
+        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: head + parts.join(' '), source: out[start]!.source, sourceSegments })
         starts.splice(start, starts.length - start, -1)
         continue
       }
@@ -3722,7 +3759,7 @@ function respellQuotedBlocks(
       indentColumns(prev.text) === 0 &&
       (RE_MD_THEMATIC.test(prev.text) || RE_ATX_HEADING.test(prev.text))
     ) separate(part.prefix)
-    out.push({ prefix: part.prefix, text, continued: part.continued, source: part.source })
+    out.push({ ...part, text, sourceSegments: part.sourceSegments?.map(entry => ({...entry, offset:entry.offset + text.length - part.text.length})) })
     // A fence on the item's own line holds the lines up to its closer.
     const lead = asText ? null : quotedItemLead(part.text)
     const opener = lead === null ? null : RE_MD_FENCE_LINE.exec(part.text.slice(lead.lead.length))

@@ -22,3 +22,14 @@ it.each([["- | h |\n  |---|\n  | [x]() |\n", 3], ["> | h |\n> |---|\n> | [x]() |
 it.each(['<span title="[x]()">a</span>', '<http://a/[x]()>', '![a [b]() c](img.png)', '[foo]: <>\n\n![x [foo] y](i.png)'])('does not confuse opaque syntax or image descriptions with links: %s', source => {
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
 })
+
+it.each([["> a\n> [x]()\n> ---\n", 2], ["- a\n  [x]()\n  ---\n", 2], ["> a\n> ```\n> x\n> ```\n> b\n> [x]()\n", 6], ["[a][a] z\n\n[a]: <> \"t\"\n", 1], ["<a@[x]()>", 1]])('keeps contained and reference diagnostics exact: %s', (source, line) => {
+  const losses = migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')
+  expect(losses).toHaveLength(1)
+  expect(losses[0]?.path).toBe(`line:${line}`)
+})
+
+it('does not read a link across nested table cells', () => {
+  const source = '- | h | i |\n  |---|---|\n  | [a | b]() |\n'
+  expect(migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
+})

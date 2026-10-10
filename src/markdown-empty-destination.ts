@@ -624,7 +624,7 @@ export function unwrapEmptyDestinations(
     let subject = line
     replaceAt(new RegExp(String.raw`!?\[${LABEL}\](?:\[\]|\[([^[\]\n]+)\])`, 'g'), (m) => byReference(m, m[2] ?? m[1]!, subject))
     subject = line
-    replaceAt(/!?\[([^[\]\n]+)\](?![[(:])/g, (m) => byReference(m, m[1]!, subject))
+    replaceAt(/!?\[([^[\]\n]+)\](?![[(:\x00])/g, (m) => byReference(m, m[1]!, subject))
   }
   const subject = line
   replaceAt(
