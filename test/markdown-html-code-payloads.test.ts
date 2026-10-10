@@ -137,3 +137,29 @@ it('keeps many unmatched link brackets as native code when no link closes', () =
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
   expect(carveToHtml(result.value, { allowRawHtml: false })).toBe(`<p>${Array(count).fill('<code>[x</code>').join(' ')}</p>`)
 })
+
+it.each([
+  '<code>[x</code> [y](u)',
+  '<code>[x</code>] then [y](u)',
+  '<code>[x</code> \\](u)',
+  '<code>[x</code> `](u)`',
+  '<code>[x</code> ![y](u)',
+  '<code>[x</code>](a b)',
+  '<code>[x</code>][undefined]',
+])('keeps native code when another bracket cannot form its link: %s', markdown => {
+  const result = migrateMarkdown(markdown)
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
+  expect(records(carveToHtml(result.value, { allowRawHtml: false })).codes[0]?.value).toBe('[x')
+})
+
+it('keeps earlier unmatched brackets native when only the last code starts a link', () => {
+  const count = 4000
+  const markdown = Array(count).fill('<code>[x</code>').join(' ') + '](u)'
+  const result = migrateMarkdown(markdown)
+  const document = parse(result.value)
+  const paragraph = document.children[0]
+  if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
+  expect(paragraph.children.filter(node => node.type === 'code')).toHaveLength(count - 1)
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toHaveLength(1)
+  expect(records(carveToHtml(result.value)).codes).toHaveLength(count)
+})

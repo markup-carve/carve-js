@@ -54,6 +54,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   protect: (value: string) => string,
   isReference: (label: string) => boolean,
   opaqueEnd: (offset: number) => number | undefined,
+  onActiveLink: (offset: number) => void = () => {},
 ): string {
   const opaque = new Map<number, number>()
   const parens = new Map<number, number>()
@@ -126,6 +127,7 @@ export function escapeInactiveMarkdownLinkBrackets(
     }
     const end = activationTailEnd(source, i + 1)
     if (end !== undefined) {
+      onActiveLink(opener.at)
       if (!opener.image) generation++
       i = end
       continue
@@ -138,6 +140,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       referenceEnd = close
     }
     if (label !== null && isReference(label)) {
+      onActiveLink(opener.at)
       if (!opener.image) generation++
       i = referenceEnd
     }

@@ -1303,7 +1303,8 @@ function convertInline(
       : codeSourceMatchesInput ? sourceLineAtOffset(codeSourceOffset) ?? undefined : undefined
   }
 
-  let lastLinkTailSourceOffset: number | undefined
+  const activeHtmlCodeLinkOpeners: number[] = []
+  let nextHtmlCodeLinkOpener = 0
   const standaloneHtmlCode = input.trim()
   const writeHtmlCode = (match: string, offset: number): string | undefined => {
     const codeSourceLine = htmlCodeLineAt(offset)
@@ -1316,19 +1317,10 @@ function convertInline(
     const parts = match.slice(6, -7).split('<!---->').map(restoreLiteral)
     const body = parts.join('')
     if (body.includes('\x00')) return undefined
-    let openBrackets = 0
-    for (let at = 0; at < body.length; at++) {
-      if (body[at] === '\\') { at++; continue }
-      if (body[at] === '[') openBrackets++
-      else if (body[at] === ']') openBrackets = Math.max(0, openBrackets - 1)
-    }
-    if (openBrackets > 0) {
-      if (lastLinkTailSourceOffset === undefined) {
-        lastLinkTailSourceOffset = -1
-        for (const tail of referenceSourceText(line, protectedSources).matchAll(/\](?:\(|\[)/g)) lastLinkTailSourceOffset = tail.index!
-      }
-      if (lastLinkTailSourceOffset >= codeSourceOffset + referenceSourceText(match, protectedSources).length) return undefined
-    }
+    while (nextHtmlCodeLinkOpener < activeHtmlCodeLinkOpeners.length
+      && activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener]! < codeSourceOffset + 6) nextHtmlCodeLinkOpener++
+    if ((activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener] ?? Infinity)
+      < codeSourceOffset + referenceSourceText(match, protectedSources).length - 7) return undefined
     if (/[\\`*_~\[\]]/.test(body)) {
       if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(offset)) return undefined
       const savedLosses = importLosses
@@ -1528,7 +1520,8 @@ function convertInline(
   const activationSource = line
   const activationOpaque = opaqueHtmlScanner(activationSource)
   const activationAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
-  line = escapeInactiveMarkdownLinkBrackets(activationSource, protect,
+  const activeLinkOpeners = new Set<number>()
+  line = escapeInactiveMarkdownLinkBrackets(activationSource, value => protect(value, value.slice(1)),
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     offset => {
       const opaque = activationOpaque(offset)
@@ -1536,7 +1529,22 @@ function convertInline(
       activationAutolink.lastIndex = offset
       const autolink = activationAutolink.exec(activationSource)
       return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
-    })
+    }, offset => { activeLinkOpeners.add(offset) })
+  let activationSourceOffset = 0
+  const activationToken = /\x00P\d+\x00/y
+  for (let at = 0; at < activationSource.length; at++) {
+    if (activeLinkOpeners.has(at)) activeHtmlCodeLinkOpeners.push(activationSourceOffset)
+    if (activationSource[at] === '\x00') {
+      activationToken.lastIndex = at
+      const token = activationToken.exec(activationSource)
+      if (token) {
+        activationSourceOffset += referenceSourceText(token[0], protectedSources).length
+        at += token[0].length - 1
+        continue
+      }
+    }
+    activationSourceOffset++
+  }
 
   const referenceTail = (canonical: string, fallback: string, source = fallback): string => {
     const target = referenceInlineTarget(canonical, table)
@@ -1832,7 +1840,7 @@ function convertInline(
     if (source[offset + match.length] === ':' && /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*[ \t]*$/.test(before)) return match
     if (/^[ xX]$/.test(label) && ((taskBox && offset === 0) ||
       /^(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/.test(before))) return match
-    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table)
+    const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSources, table)
     if (destinationLabel === undefined) return table && label.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
     if (/[\[\]]/.test(destinationLabel)) return match
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
