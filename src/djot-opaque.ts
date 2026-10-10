@@ -1,3 +1,4 @@
+import { djotSimpleDestinationRanges, djotDestinationRanges } from './djot-inline-boundaries.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-word-attributes.js'
 
@@ -5,6 +6,7 @@ export interface DjotOpaqueOptions {
   comments?: boolean
   code?: boolean
   destinations?: boolean
+  inlineDestinations?: boolean
   autolinks?: boolean
   attributeValues?: boolean
   onComment?: (start: number, end: number) => void
@@ -12,6 +14,7 @@ export interface DjotOpaqueOptions {
 
 /** Mask opaque inline payloads while preserving source offsets and newlines. */
 export function maskDjotOpaque(source: string, unclosedCode: boolean, options: DjotOpaqueOptions = {}): string {
+  const destinations = options.destinations !== false && options.inlineDestinations !== false ? djotSimpleDestinationRanges(source) ?? djotDestinationRanges(source, maskDjotOpaque(source, unclosedCode, { destinations: false, autolinks: false, attributeValues: false, comments: false })) : new Map<number, number>()
   const out = source.split('')
   const hide = (start: number, end: number): void => {
     for (let at = start; at < end; at++) if (out[at] !== '\n') out[at] = ' '
@@ -25,6 +28,8 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       boundary++
       brackets.length = 0
     }
+    const destinationEnd = destinations.get(at)
+    if (destinationEnd !== undefined) { hide(at, destinationEnd); at = destinationEnd - 1; continue }
     if (source[at] === '\\') {
       at++
       continue
@@ -66,27 +71,6 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
     }
     if (source[at] === ']' && brackets.length) {
       brackets.pop()
-      if (source[at + 1] === '(') {
-        let end = at + 2,
-          depth = 1
-        const lineStart = source.lastIndexOf('\n', at) + 1
-        const table = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\|/.test(source.slice(lineStart, at))
-        for (; end < (breaks[boundary] ?? source.length); end++) {
-          if (
-            (table && (source[end] === '|' || source[end] === '`')) ||
-            (source[at + 2] === '<' && source[end] === '`')
-          )
-            break
-          if (source[end] === '\\') end++
-          else if (source[end] === '(') depth++
-          else if (source[end] === ')' && --depth === 0) break
-        }
-        if (!depth) {
-          if (options.destinations !== false) hide(at + 1, end + 1)
-          at = end
-          continue
-        }
-      }
       if (
         source[at + 1] === ':' &&
         /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[(?!\^)[^\]\n]+$/.test(

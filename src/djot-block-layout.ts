@@ -415,7 +415,7 @@ export function djotInlineLayout(source: string): string {
 
 /** Pad closed code spans for Carve's one-space trimming rule. */
 export function djotCodePadding(source: string): string {
-  const mask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { code: false })
+  const mask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { destinations: true, code: false })
   const ends = backtickRunEnds(mask)
   if (!ends) return source
   let output = '',

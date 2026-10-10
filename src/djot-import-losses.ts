@@ -49,7 +49,7 @@ export function djotImportLosses(
     (text) => text,
     (at) => report('Nested same-kind emphasis is flattened; Carve cannot spell it.', lineAt(at)),
   )
-  const masked = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { autolinks: true, comments: true }).split('')
+  const masked = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: true, autolinks: true, comments: true }).split('')
   for (let at = 0; at < source.length; at++) {
     if (masked[at] !== '{' || isDjotEscaped(source, at)) continue
     const attrs = readAttributes(source, at)
