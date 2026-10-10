@@ -30,6 +30,17 @@ export const LEADING_WHITESPACE_UNSPELLABLE =
   'Dropped whitespace a decoded reference put at the start of a line; Carve spells no leading whitespace on a paragraph'
 
 /**
+ * Whitespace an entity decode put at a HEADING's head, which Carve does not
+ * spell there either: the marker separator is a run of spaces and none of it is
+ * content, so padding the separator writes bytes `carve fmt` undoes without
+ * keeping the character (markup-carve/carve-rs#2449).
+ *
+ * Dropped rather than substituted, for the same reason as the paragraph case.
+ */
+export const HEADING_LEADING_WHITESPACE_UNSPELLABLE =
+  "Dropped whitespace a decoded reference put at the start of a heading; Carve spells no leading whitespace after a heading's marker"
+
+/**
  * A leading `---` pair whose content is shaped like a mapping, carried over as
  * Carve front matter rather than read as a thematic break over setext headings
  * (markup-carve/carve#2799).
