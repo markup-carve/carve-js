@@ -54,3 +54,15 @@ it.each(['café_au', '名前_id', 'größ_e'])('keeps intraword underscores nati
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')).toEqual([])
   expect(carveToHtml(result.value, { allowRawHtml: false })).toBe(`<p><code>${value}</code></p>`)
 })
+
+it('keeps code in text following a defined footnote reference', () => {
+  const result = migrateMarkdown('x[^1](u<code>a</code>)\n\n[^1]: note')
+  expect(carveToHtml(result.value)).toContain('<code>a</code>')
+})
+
+it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code>'])('reports the original code line: %s', markdown => {
+  const result = migrateMarkdown(markdown)
+  const rows = result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')
+  expect(rows).toHaveLength(1)
+  expect(rows[0]?.path).toBe('line:2')
+})

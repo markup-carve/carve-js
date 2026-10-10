@@ -1187,8 +1187,8 @@ function convertInline(
   })
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
   // Keep empty and multiline values in HTML where a source slot may fold them.
-  let unchangedHtmlCode: Set<string> | undefined
-  const htmlCodeSurvivesEmphasis = (fragment: string): boolean => {
+  let unchangedHtmlCode: Set<number> | undefined
+  const htmlCodeSurvivesEmphasis = (offset: number): boolean => {
     if (unchangedHtmlCode === undefined) {
       const scratch = [...protectedSpans]
       const firstScratch = scratch.length
@@ -1205,19 +1205,37 @@ function convertInline(
         /\x00P(\d+)\x00/g,
         (token, index: string) => Number(index) >= firstScratch ? scratch[Number(index)] ?? token : token,
       )
-      const counts = (value: string): Map<string, number> => {
-        const result = new Map<string, number>()
-        for (const match of value.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>/gi)) result.set(match[0], (result.get(match[0]) ?? 0) + 1)
-        return result
-      }
-      const before = counts(line), after = counts(converted)
-      unchangedHtmlCode = new Set([...before].filter(([code, count]) => after.get(code) === count).map(([code]) => code))
+      const before = [...line.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>/gi)]
+      const after = [...converted.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>/gi)]
+      unchangedHtmlCode = new Set(before.filter((match, index) => after[index]?.[0] === match[0]).map(match => match.index!))
     }
-    return unchangedHtmlCode.has(fragment)
+    return unchangedHtmlCode.has(offset)
   }
-  const htmlCodeSourceLine = input.includes('\n') ? undefined : inlineRunSourceLine
+  let codeSourceCursor = 0, codeSourceOffset = 0, codeSourceLines = 0
+  let codeSourceMatchesInput: boolean | undefined
+  const htmlCodeLineAt = (offset: number): number | undefined => {
+    codeSourceMatchesInput ??= sourceLineAtOffset === undefined || referenceSourceText(line, protectedSources) === input
+    while (codeSourceCursor < offset) {
+      const token = line[codeSourceCursor] === '\x00' ? /^\x00P\d+\x00/.exec(line.slice(codeSourceCursor)) : null
+      if (token) {
+        const source = referenceSourceText(token[0], protectedSources)
+        codeSourceOffset += source.length
+        codeSourceLines += (source.match(/\n/g) ?? []).length
+        codeSourceCursor += token[0].length
+      } else {
+        if (line[codeSourceCursor] === '\n') codeSourceLines++
+        codeSourceOffset++
+        codeSourceCursor++
+      }
+    }
+    return sourceLineAtOffset === undefined
+      ? inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + codeSourceLines
+      : codeSourceMatchesInput ? sourceLineAtOffset(codeSourceOffset) ?? undefined : undefined
+  }
+
   const standaloneHtmlCode = input.trim()
-  const writeHtmlCode = (match: string): string | undefined => {
+  const writeHtmlCode = (match: string, offset: number): string | undefined => {
+    const codeSourceLine = htmlCodeLineAt(offset)
     const restoreLiteral = (part: string): string => part.replace(/\x00P(\d+)\x00/g, (token, index: string) => {
       const span = protectedSpans[Number(index)]
       if (span && /^\\[!-\/:-@\[-`{-~]$/.test(span)) return span
@@ -1228,7 +1246,7 @@ function convertInline(
     const body = parts.join('')
     if (body.includes('\x00')) return undefined
     if (/[\\`*_~\[\]]/.test(body)) {
-      if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(match)) return undefined
+      if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(offset)) return undefined
       const savedLosses = importLosses
       importLosses = []
       let probe: ReturnType<typeof parse>
@@ -1256,7 +1274,7 @@ function convertInline(
         const document = parse(source)
         const paragraph = document.children[0]
         const code = paragraph?.type === 'paragraph' ? paragraph.children[0] : undefined
-        if (document.children.length === 1 && paragraph?.type === 'paragraph' && paragraph.children.length === 1 && code?.type === 'code' && code.value === value.replace(/\r\n?/g, '\n')) return protect(source.replace(/\n$/, ''))
+        if (document.children.length === 1 && paragraph?.type === 'paragraph' && paragraph.children.length === 1 && code?.type === 'code' && code.value === value.replace(/\r\n?/g, '\n')) return protect(source.replace(/\n$/, ''), referenceSourceText(match, protectedSources))
       } catch (error) {
         if (!(error instanceof SourceUnspellableError)) throw error
       }
@@ -1266,14 +1284,14 @@ function convertInline(
         code: 'raw-code-fallback',
         message: 'Preserved an HTML code payload as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content',
         fidelity: 'degraded',
-        ...(htmlCodeSourceLine === undefined ? {} : { line: htmlCodeSourceLine }),
+        ...(codeSourceLine === undefined ? {} : { line: codeSourceLine }),
       })
       const html = value.replace(/\r\n?/g, '\n').replace(/[ !-\/:-@\[-`{-~\t\n]/g, char => {
         if (char === '\n') return '<!---->&#10;<!---->'
         const entity = `&#${char.charCodeAt(0)};`
         return char === '@' ? entity + '<!---->' : entity
       })
-      return protect(rawInlineHtml(`<code>${html}</code>`))
+      return protect(rawInlineHtml(`<code>${html}</code>`), referenceSourceText(match, protectedSources))
     }
     const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] }).replace(/\n$/, '')
     return protect(written)
@@ -1451,6 +1469,10 @@ function convertInline(
   }
   const protectDestinations = (pattern: RegExp): void => {
     const subject = line
+    const footnoteClosers = new Set<number>()
+    for (const match of subject.matchAll(/\[\^([^\]\n]+)\]/g)) {
+      if (importedFootnoteLabel(referenceSourceText(match[1]!, protectedSpans)) !== undefined) footnoteClosers.add(match.index! + match[0].length - 1)
+    }
     let cursor = 0, depth = 0, pairedEnd = -1
     let lineCursor = 0, lineNumber = 0
     const origins = joinedLines ? input.split('\n').map((_text, index) => index).filter(index => !joinedLines.has(index)) : []
@@ -1473,6 +1495,7 @@ function convertInline(
       }
       if (cursor > offset || (label === '' && pairedEnd !== offset - 1)) return match
       const image = label.startsWith('!')
+      if (!image && footnoteClosers.has(label === '' ? offset - 1 : offset + label.length - 1)) return match
       const written = protectDestination(image ? imageLabel(label) : '', dest)
       if (written.startsWith('\x00P')) cursor = offset + match.length
       if (joinedLines && written.startsWith('\x00P')) {
@@ -1634,13 +1657,17 @@ function convertInline(
     if (htmlCodeDepth > 0 && line[i] === '&') {
       const entity = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/.exec(line.slice(i))
       if (entity && /[\r\n]/.test(decodeHtmlEntitiesRaw(entity[0]))) {
-        codeWritten += protect(rawInlineHtml('<!---->&#10;<!---->'))
+        const start = i
         i += entity[0].length
         if (decodeHtmlEntitiesRaw(entity[0]) === '\r') {
           const following = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/.exec(line.slice(i))
           if (following && decodeHtmlEntitiesRaw(following[0]) === '\n') i += following[0].length
-          else if (line[i] === '\n') i++
+          else if (line[i] === '\n') {
+            if (joinedLines) joinedLines.add((referenceSourceText(line.slice(0, i + 1), protectedSources).match(/\n/g) ?? []).length)
+            i++
+          }
         }
+        codeWritten += protect(rawInlineHtml('<!---->&#10;<!---->'), referenceSourceText(line.slice(start, i), protectedSources))
         continue
       }
     }
@@ -1648,15 +1675,16 @@ function convertInline(
     const opaque = codeOpaqueEnd(i)
     if (opaque !== undefined) { codeWritten += line.slice(i, opaque); i = opaque; continue }
     const code = /^<code>((?:[^<\n]|<!---->)*)<\/code>/i.exec(line.slice(i))
-    const written = code ? writeHtmlCode(code[0]) : undefined
+    const written = code ? writeHtmlCode(code[0], i) : undefined
     if (code && written !== undefined) { codeWritten += written; i += code[0].length; continue }
     const tag = scanHtmlTag(line, i)
     if (tag) {
       const sourceTag = line.slice(i, tag.end)
       if (tag.name === 'code') {
         htmlCodeDepth = Math.max(0, htmlCodeDepth + (tag.closing ? -1 : 1))
-        if (!tag.closing) importLosses.push({ code: 'raw-code-fallback', message: 'Preserved HTML code markup as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content', fidelity: 'degraded', ...(htmlCodeSourceLine === undefined ? {} : { line: htmlCodeSourceLine }) })
-        codeWritten += protect(rawInlineHtml(sourceTag))
+        const codeSourceLine = htmlCodeLineAt(i)
+        if (!tag.closing) importLosses.push({ code: 'raw-code-fallback', message: 'Preserved HTML code markup as raw HTML; targets and profiles that escape or omit raw HTML change its code structure and content', fidelity: 'degraded', ...(codeSourceLine === undefined ? {} : { line: codeSourceLine }) })
+        codeWritten += protect(rawInlineHtml(sourceTag), sourceTag)
       } else codeWritten += sourceTag
       i = tag.end
     } else codeWritten += line[i++]
