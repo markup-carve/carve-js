@@ -1186,10 +1186,43 @@ function convertInline(
   })
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
   // Keep empty and multiline values in HTML where a source slot may fold them.
+  let unchangedHtmlCode: Set<string> | undefined
+  const htmlCodeSurvivesEmphasis = (fragment: string): boolean => {
+    if (unchangedHtmlCode === undefined) {
+      const scratch = [...protectedSpans]
+      const firstScratch = scratch.length
+      let masked = ''
+      const opaqueEnd = opaqueHtmlScanner(line)
+      for (let at = 0; at < line.length;) {
+        const end = line[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(line, at)?.end : undefined
+        if (end === undefined) { masked += line[at++]; continue }
+        scratch.push(line.slice(at, end))
+        masked += `\x00P${scratch.length - 1}\x00`
+        at = end
+      }
+      const converted = markdownEmphasis(masked, undefined, undefined, scratch).replace(
+        /\x00P(\d+)\x00/g,
+        (token, index: string) => Number(index) >= firstScratch ? scratch[Number(index)] ?? token : token,
+      )
+      const counts = (value: string): Map<string, number> => {
+        const result = new Map<string, number>()
+        for (const match of value.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>/gi)) result.set(match[0], (result.get(match[0]) ?? 0) + 1)
+        return result
+      }
+      const before = counts(line), after = counts(converted)
+      unchangedHtmlCode = new Set([...before].filter(([code, count]) => after.get(code) === count).map(([code]) => code))
+    }
+    return unchangedHtmlCode.has(fragment)
+  }
+  const standaloneHtmlCode = input.trim()
   const writeHtmlCode = (match: string): string | undefined => {
-    const body = match.slice(6, -7)
+    const body = match.slice(6, -7).replace(/\x00P(\d+)\x00/g, (token, index: string) => {
+      const span = protectedSpans[Number(index)]
+      return span && /^\\[!-\/:-@\[-`{-~]$/.test(span) ? span : token
+    })
     if (body.includes('\x00')) return undefined
     if (/[\\`*_~\[\]]/.test(body)) {
+      if (/[*_]/.test(body) && !htmlCodeSurvivesEmphasis(match)) return undefined
       const savedLosses = importLosses
       importLosses = []
       let probe: ReturnType<typeof parse>
@@ -1201,8 +1234,12 @@ function convertInline(
       const paragraph = probe.children[0]
       if (probe.children.length !== 1 || paragraph?.type !== 'paragraph' || paragraph.children.some(node => !['text', 'escaped_text', 'smart_punctuation', 'non_breaking_space', 'soft_break'].includes(node.type))) return undefined
     }
-    const value = decodeHtmlEntitiesRaw(body.replaceAll('<!---->', ''))
-    if (nativeCode && terminal && !table && input.trim() === match) {
+    const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
+    const value = body.split('<!---->').map(part => part.replace(
+      escapesAndEntities,
+      (entity, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(entity),
+    ).replace(/\r\n?/g, '\n')).join('')
+    if (nativeCode && terminal && !table && standaloneHtmlCode === match) {
       try {
         const source = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
         const document = parse(source)
@@ -1589,7 +1626,7 @@ function convertInline(
         codeWritten += protect(rawInlineHtml('<!---->&#10;<!---->'))
         i += entity[0].length
         if (decodeHtmlEntitiesRaw(entity[0]) === '\r') {
-          const following = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7});/.exec(line.slice(i))
+          const following = /^&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/.exec(line.slice(i))
           if (following && decodeHtmlEntitiesRaw(following[0]) === '\n') i += following[0].length
         }
         continue
