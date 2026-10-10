@@ -1,4 +1,4 @@
-import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences } from './djot-migrate.js'
+import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotInlineBoundaries } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 
@@ -418,6 +418,13 @@ export function djotCodePadding(source: string): string {
   const mask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { destinations: true, code: false })
   const ends = backtickRunEnds(mask)
   if (!ends) return source
+  const breaks = Array.from(source.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), match => match.index!)
+  if (source.includes('\n')) {
+    for (const at of djotInlineBoundaries(source, mask, true))
+      if (at > 0 && at < source.length && source[at - 1] === '\n' && source[at] !== '|') breaks.push(at - 1)
+    breaks.sort((a, b) => a - b)
+  }
+  let paragraph = 0
   let output = '',
     copied = 0
   for (let at = 0; at < source.length; at++) {
@@ -430,8 +437,10 @@ export function djotCodePadding(source: string): string {
     let width = 1
     while (source[at + width] === '`') width++
     const end = ends[at]!
-    if (end < 0 || /\n[ \t]*(?:>[ \t]*)*\n/.test(source.slice(at, end))) {
-      at += width - 1
+    while ((breaks[paragraph] ?? source.length) <= at) paragraph++
+    const paragraphEnd = breaks[paragraph] ?? source.length
+    if (end < 0 || end > paragraphEnd) {
+      at = paragraphEnd - 1
       continue
     }
     const content = source

@@ -1,4 +1,4 @@
-import { djotSimpleDestinationRanges, djotDestinationRanges } from './djot-inline-boundaries.js'
+import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries } from './djot-inline-boundaries.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-word-attributes.js'
 
@@ -41,6 +41,11 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
     for (let at = start; at < end; at++) if (out[at] !== '\n') out[at] = ' '
   }
   const breaks = [...source.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g)].map((match) => match.index!)
+  if (source.includes('`') && source.includes('\n')) {
+    for (const at of djotInlineBoundaries(source, source, true))
+      if (at > 0 && at < source.length && source[at - 1] === '\n' && source[at] !== '|') breaks.push(at - 1)
+    breaks.sort((a, b) => a - b)
+  }
   let boundary = 0
   const brackets: number[] = []
   let ends: Int32Array | undefined
