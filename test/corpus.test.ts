@@ -967,9 +967,17 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-// Empty while the pin is level with this engine: spec 9eda67e6 rewrote both
-// former entries to the values this parser already produced.
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+// CARVE-P9-043 lets a braced emphasis hold a braced child of its own kind
+// (markup-carve/carve#2877). markup-carve/carve#2882 renames this category to
+// `471-braced-emphasis-can-nest-its-own-kind` and records exactly the values
+// below, so the pin bump that lands it orphans all three entries and the guard
+// above deletes them.
+const nested = 'CARVE-P9-043 nests a braced child of the same kind (markup-carve/carve#2877); the pinned corpus still reads the inner opener as literal'
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['471-a-forced-opener-of-an-open-kind-is-literal', { reason: nested, html: '<p>a<strong><strong>x</strong></strong>b</p>' }],
+  ['471-a-forced-opener-of-an-open-kind-is-literal-2', { reason: nested, html: '<p><strong>a <strong>b</strong> c</strong></p>' }],
+  ['471-a-forced-opener-of-an-open-kind-is-literal-4', { reason: nested, html: '<p><em>a <strong>b <em>c</em></strong></em></p>' }],
+])
 
 
 

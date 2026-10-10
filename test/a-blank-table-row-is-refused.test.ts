@@ -90,21 +90,21 @@ describe('the HTML importer', () => {
   })
 
   it('does not batch a later table past an intervening inline refusal', () => {
-    const html = '<table><tr><td></td></tr><tr><td><mark><mark>x</mark></mark></td></tr></table>'
+    const html = '<table><tr><td></td></tr><tr><td><ins><ins>x</ins></ins></td></tr></table>'
       + '<table><tr><td></td></tr><tr><td></td></tr></table>'
     const result = htmlToCarve(html, { maxDiagnostics: 3 })
     expect(result.report.diagnostics.map((d) => d.path)).toEqual([
-      '/table[1]/tr[1]', '/table[1]/tr[2]/td[1]/mark[1]/mark[1]', undefined,
+      '/table[1]/tr[1]', '/table[1]/tr[2]/td[1]/ins[1]/ins[1]', undefined,
     ])
   })
 
   it('keeps earlier row losses before a later inline refusal', () => {
-    const html = '<table><tr><td></td></tr><tr><td><mark><mark>x</mark></mark></td></tr>'
+    const html = '<table><tr><td></td></tr><tr><td><ins><ins>x</ins></ins></td></tr>'
       + '<tr><td></td></tr></table>'
     const result = htmlToCarve(html)
-    expect(result.value).toBe('| =x= |\n')
+    expect(result.value).toBe('| {+x+} |\n')
     expect(result.report.diagnostics.map((d) => d.path)).toEqual([
-      '/table[1]/tr[1]', '/table[1]/tr[2]/td[1]/mark[1]/mark[1]', '/table[1]/tr[3]',
+      '/table[1]/tr[1]', '/table[1]/tr[2]/td[1]/ins[1]/ins[1]', '/table[1]/tr[3]',
     ])
     expect(htmlToCarve(html, { maxDiagnostics: 2 }).report.diagnostics.map((d) => d.path)).toEqual([
       '/table[1]/tr[1]', undefined,
@@ -118,11 +118,11 @@ describe('the HTML importer', () => {
 
   it.each([
     ['<ul><li><table><tr><td></td></tr><tr><td>a</td></tr></table></li>'
-      + '<li><mark><mark>x</mark></mark></li></ul>', 1],
-    ['<table><caption><mark><mark>x</mark></mark></caption><tr><td></td></tr><tr><td>a</td></tr></table>', 0],
+      + '<li><ins><ins>x</ins></ins></li></ul>', 1],
+    ['<table><caption><ins><ins>x</ins></ins></caption><tr><td></td></tr><tr><td>a</td></tr></table>', 0],
   ] as const)('keeps composite-block losses ahead of later table rows', (prefix, markIndex) => {
     const result = htmlToCarve(prefix + '<table><tr><td></td></tr><tr><td></td></tr></table>', { maxDiagnostics: 3 })
-    expect(result.report.diagnostics[markIndex]?.message).toContain('Unwrapped <mark>')
+    expect(result.report.diagnostics[markIndex]?.message).toContain('Unwrapped <ins>')
     expect(result.report.diagnostics.at(-1)?.code).toBe('diagnostics-truncated')
   })
 

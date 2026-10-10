@@ -61,15 +61,29 @@ describe('fmt escapes only where the channel actually opens', () => {
     expect(carveToHtml(out)).toBe(carveToHtml(src))
   })
 
-  it('a caret before a closing brace is written bare', () => {
-    // carve-js#1763. Built as a tree: since carve-js#1841 a braced `{^ ^}` is a
-    // scope, so the source this used to start from now nests the emphasis.
+  it('a caret before a closing brace is written bare where nothing can reach it', () => {
+    // carve-js#1763. No braced opener precedes it, so neither `^}` nor `/}`
+    // closes anything and the writer adds no backslash.
+    const tree = {
+      type: 'document',
+      children: [{ type: 'paragraph', children: [{ type: 'text', value: '^}/}' }] }],
+    } as unknown as Document
+    const out = renderCarve(tree)
+    expect(out).toBe('^}/}\n')
+    expect(carveToHtml(out)).toBe(renderHtml(tree))
+    expect(carveToCarve(out)).toBe(out)
+  })
+
+  it('escapes that caret once a same-kind braced child can own the closer', () => {
+    // Since carve#2877 a braced `{/` inside a bare italic is a matched child
+    // that owns the `/}`, so the bare source this used to write would reparse
+    // as that child rather than as italic plus literal text.
     const tree = {
       type: 'document',
       children: [{ type: 'paragraph', children: [{ type: 'emphasis', children: [{ type: 'text', value: '{^{/x' }] }, { type: 'text', value: '^}/}' }] }],
     } as unknown as Document
     const out = renderCarve(tree)
-    expect(out).toBe('/{^{/x/^}/}\n')
+    expect(out).toBe('/{^{/x/^\\}\\/}\n')
     expect(carveToHtml(out)).toBe(renderHtml(tree))
     expect(carveToCarve(out)).toBe(out)
   })

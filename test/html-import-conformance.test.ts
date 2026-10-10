@@ -22,7 +22,15 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>()
+// The importer keeps a same-kind wrapper since markup-carve/carve#2877, so it
+// writes the braced child and reports no loss. markup-carve/carve#2882 records
+// both fixtures that way; the pin bump that lands it makes these entries stale.
+const nested = 'CARVE-P9-043 retains a same-kind wrapper (markup-carve/carve#2877); the pinned fixture still flattens the inner level'
+const quiet = { mode: 'safe', adapter: 'generic', diagnostics: [] }
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
+  ['same-kind-strong-nesting', { reason: nested, carve: 'a{*{*x\\\n*}*}b\n', report: quiet }],
+  ['same-kind-superscript-nesting', { reason: nested, carve: '{^{^x^}^}\n', report: quiet }],
+])
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.

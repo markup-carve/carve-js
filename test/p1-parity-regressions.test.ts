@@ -6,8 +6,8 @@ import { djotToCarve } from '../src/djot-import.js'
 
 it.each([
   ['***foo**', '<p>*<strong>foo</strong></p>'],
-  ['*(*word*)*', '<p><em>(word)</em></p>'],
-  ['__one __two__ three__', '<p><strong>one two three</strong></p>'],
+  ['*(*word*)*', '<p><em>(<em>word</em>)</em></p>'],
+  ['__one __two__ three__', '<p><strong>one <strong>two</strong> three</strong></p>'],
   ['alpha*beta*gamma', '<p>alpha<em>beta</em>gamma</p>'],
   ['***word** rest*', '<p><em><strong>word</strong> rest</em></p>'],
   ['**word *rest***', '<p><strong>word <em>rest</em></strong></p>'],
@@ -18,15 +18,21 @@ it.each([
   expect(carveToHtml(markdownToCarve(source))).toBe(expected)
 })
 
-it('reports the nested wrapper that cannot be represented', () => {
-  expect(markdownToCarveWithLosses('*(*word*)*').losses).toEqual([
+it('reports only the nested wrapper that cannot be represented', () => {
+  // carve#2877 gave a same-kind wrapper a spelling, so only one past the
+  // native nesting budget is still a loss.
+  expect(markdownToCarveWithLosses('*(*word*)*').losses).toEqual([])
+  expect(markdownToCarveWithLosses('*word*').losses).toEqual([])
+  expect(markdownToCarveWithLosses('*'.repeat(600) + 'word' + '*'.repeat(600)).losses).toEqual([
     { code: 'structure-unspellable', message: expect.any(String) },
   ])
-  expect(markdownToCarveWithLosses('*word*').losses).toEqual([])
 })
 
 it('handles deep delimiter runs without recursive rendering', () => {
-  expect(markdownEmphasis('*'.repeat(20_000) + 'word' + '*'.repeat(20_000))).toBe('*word*')
+  // The run nests to the native budget and the rest flattens, so the guard is
+  // the absence of recursion, not a one-level result.
+  expect(markdownEmphasis('*'.repeat(20_000) + 'word' + '*'.repeat(20_000)))
+    .toBe('{*'.repeat(199) + 'word' + '*}'.repeat(199))
   expect(markdownEmphasis('a_ '.repeat(10_000))).toBe('a_ '.repeat(10_000))
 })
 

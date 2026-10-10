@@ -50,9 +50,10 @@ describe('shared migration result', () => {
   it('does not claim a Djot rewrite was applied without importer evidence', () => {
     const result = migrateDjot('_emphasis_ and **strong**')
     expect(result.value).toBe('/emphasis/ and {*{*strong*}*}')
+    // The repeated strong wrapper has a spelling since carve#2877, so the
+    // fallback claim is the only diagnostic left.
     expect(result.report.diagnostics).toEqual([
       expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
-      expect.objectContaining({ code: 'structure-unspellable', fidelity: 'dropped', confidence: 'exact', path: 'line:1' }),
     ])
   })
 

@@ -4382,7 +4382,10 @@ class CarveRenderSession {
         return withAttrs(`{~${renderSession.renderInlines(node.old, ctx)}~>${renderSession.renderInlines(node.new, ctx)}~}`)
       case 'critic_comment':
         // The content is literal (PART 3 EDITORIAL COMMENT CONTENT IS LITERAL),
-        // so an escape reaches the reader as a backslash.
+        // so an escape reaches the reader as a backslash. The content takes any
+        // character but its own closer (`edChar = any` under `edCommentBody`),
+        // so only a text holding `#}` has no spelling (carve-js#1847 read the
+        // old `[^}]` matcher as the rule and refused one brace too many).
         if (node.text.includes('#}')) {
           throw new SourceUnspellableError('critic_comment', 'an editorial comment holding its closing sequence has no Carve source spelling')
         }
@@ -4870,17 +4873,25 @@ class CarveRenderSession {
   /** Spans written braced so their content starts a scope of its own. */
   private bracedForScope = new WeakSet<object>()
 
+  /** The inline nodes this pass wrote with a braced opener. */
   private writtenBraced = new WeakSet<object>()
 
-  /** Keep the existing editorial nesting ceiling. */
+  /**
+   * Records a braced emphasis, and keeps the editorial ceiling carve#2877 left
+   * in place: a braced insert or delete directly inside one of its own kind has
+   * no spelling. An importer collects the refusal instead of taking the throw,
+   * so one pass can unwrap every such span.
+   */
   private bracedOnce(node: InlineNode, body: string): string {
     if (!BRACEABLE_TYPES.has(node.type) || !body.startsWith('{')) return body
     if (node.type === 'insert' || node.type === 'delete') {
-    const children = (node as { children?: InlineNode[] }).children ?? []
-    const inner = nearestOfType(children, node.type, this.writtenBraced).find((child) => this.writtenBraced.has(child))
-    if (inner !== undefined) {
-      throw new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
-    }
+      const children = (node as { children?: InlineNode[] }).children ?? []
+      for (const inner of nearestOfType(children, node.type, this.writtenBraced).filter((child) => this.writtenBraced.has(child))) {
+        const refusal = new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
+        if (!this.collectRefusedSpans) throw refusal
+        if (this.refusedSpans.length === 0) this.rowsBeforeFirstSpan = this.refusedTableRows.length
+        this.refusedSpans.push(refusal)
+      }
     }
     this.writtenBraced.add(node)
     return body

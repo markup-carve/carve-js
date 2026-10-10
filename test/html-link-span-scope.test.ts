@@ -7,8 +7,10 @@ test.each(['em', 'strong', 'u', 's', 'mark'])('an HTML %s inside a link has its 
   expect(carveToHtml(result.value).trim()).toBe(source)
 })
 
-test('same-kind HTML spans without a link still lose the inner level', () => {
-  expect(carveToHtml(htmlToCarve('<p><em>foo <em>bar</em></em></p>').value).trim()).toBe('<p><em>foo bar</em></p>')
+test('same-kind HTML spans without a link keep the inner level too', () => {
+  // Since carve#2877 the importer braces the inner span instead of unwrapping
+  // it, so the no-link path preserves the same tree the link path does.
+  expect(carveToHtml(htmlToCarve('<p><em>foo <em>bar</em></em></p>').value).trim()).toBe('<p><em>foo <em>bar</em></em></p>')
 })
 
 test('a forced span between superscripts inside a link keeps its scope', () => {
