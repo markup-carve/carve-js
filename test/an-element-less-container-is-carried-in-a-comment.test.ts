@@ -322,39 +322,168 @@ describe('an element-less container is carried in a comment', () => {
   })
 
   /**
-   * A HOST THAT PREFIXES ITS LINES TAKES NO MARKER. The comment would sit at
-   * the host's content column or behind its `>`, where the import does not read
-   * it, so it would be written and never read back. The container degrades
-   * there exactly as it does with the mode off.
+   * A HOST THAT PREFIXES ITS LINES CARRIES, and byte-exactly.
    *
-   * READING ONE THROUGH THE PREFIX IS NOT A PATCH, which is why
-   * markup-carve/carve#2850 stays open. The marker lift is a pre-pass over the
-   * SOURCE LINES, and at that point a marker standing at a list item's content
-   * column cannot be told apart from verbatim text in a code block inside that
-   * item - the two prefixed cases in the verbatim test below are exactly the
-   * lines such a pre-pass would eat. Reading the marker off the PARSED tree,
-   * where the markers already arrive as raw-HTML nodes, is the shape that can
-   * tell them apart, and that is a restructuring of this import path.
+   * The marker stands at the host's content column or behind its `>`, and the
+   * import finds it there because WHICH LINES ARE MARKERS NOW COMES FROM THE
+   * BLOCK STRUCTURE this importer derives rather than from a flat scan of the
+   * source lines. A flat scan cannot tell a marker at a list item's content
+   * column from code text inside that item - the verbatim cases below are
+   * exactly what it would have eaten - while the structure pass already carries
+   * fence state, a quote's `>` prefix and an item's content column
+   * (markup-carve/carve#2850).
+   *
+   * The two-level and quote-in-item sources are spelled TIGHT on purpose: a
+   * blank line between an outer item and its nested list is lost by this target
+   * whether a container is involved or not, so a loose spelling would measure
+   * that instead of this.
    */
-  for (const [name, carve] of [
-    ['inside a list item', '- item\n\n  ::: note\n  Body.\n  :::\n'],
-    ['inside a block quote', '> ::: note\n> Body.\n> :::\n'],
-    ['inside a block quote inside a list item', '- item\n\n  > ::: note\n  > Body.\n  > :::\n'],
+  const PREFIXED: Array<[name: string, carve: string, carrier: string]> = [
     [
-      'a figure group with a caption inside a list item',
-      '- item\n\n  ::: figure\n  :::: panel\n  ![a](x.png)\n  ::::\n  :::\n  ^ Group caption\n',
+      'in a list item',
+      '- Item.\n\n  ::: note\n  Body.\n  :::\n',
+      '- Item.\n\n  <!-- carve: ::: note -->\n  Body.\n\n  <!-- carve: ::: -->\n',
     ],
-  ] as const) {
-    it(`a container ${name} takes no marker`, () => {
-      const carrier = carveToMarkdown(carve, { carryMarkers: true })
-      expect(carrier).not.toContain('<!-- carve:')
-      expect(carrier).toBe(carveToMarkdown(carve))
-      // And no marker written means no damage claimed on the way back.
-      expect(migrateMarkdown(carrier).report.diagnostics.map((d) => d.code)).not.toContain(
-        'carrier-markers-damaged',
-      )
+    [
+      'two list levels in',
+      '- Outer.\n  - Inner.\n\n    ::: note\n    Body.\n    :::\n',
+      '- Outer.\n  - Inner.\n\n    <!-- carve: ::: note -->\n    Body.\n\n    <!-- carve: ::: -->\n',
+    ],
+    [
+      'in a block quote',
+      '> ::: note\n> Body.\n> :::\n',
+      '> <!-- carve: ::: note -->\n> Body.\n>\n> <!-- carve: ::: -->\n',
+    ],
+    [
+      'in a block quote in a list item',
+      '- Item.\n  > ::: note\n  > Body.\n  > :::\n',
+      '- Item.\n  > <!-- carve: ::: note -->\n  > Body.\n  >\n  > <!-- carve: ::: -->\n',
+    ],
+    // THE OPENER SHARES THE ITEM'S MARKER LINE here, so the placeholder the
+    // import lifts the marker to stands behind a `-`. Leaving the token in the
+    // output would be corruption rather than a missed restore, which is why the
+    // prefix is read as whatever precedes the token and not as a character class.
+    [
+      'opening a list item',
+      '- ::: note\n  Body.\n  :::\n',
+      '- <!-- carve: ::: note -->\n  Body.\n\n  <!-- carve: ::: -->\n',
+    ],
+    // AND ITS BODY BEGINS WITH A LIST, so the closer's placeholder is a lazy
+    // continuation of that inner item's paragraph and the written Carve puts it
+    // at the inner content column. A closer stands at its OPENER's column.
+    [
+      'opening a list item, holding a list',
+      '- ::: note\n  - one\n  - two\n  :::\n',
+      '- <!-- carve: ::: note -->\n  - one\n  - two\n  <!-- carve: ::: -->\n',
+    ],
+    ['empty, opening a list item', '- ::: note\n  :::\n', '- <!-- carve: ::: note -->\n  <!-- carve: ::: -->\n'],
+    // A SIBLING ITEM AFTER THE CLOSER MUST NOT GO LOOSE: a closer and what
+    // follows take a blank line only where they are siblings, and the item
+    // below belongs to the host above the container.
+    [
+      'opening a list item, with a sibling item after it',
+      '- ::: note\n  - one\n  - two\n  :::\n- next\n',
+      '- <!-- carve: ::: note -->\n  - one\n  - two\n  <!-- carve: ::: -->\n- next\n',
+    ],
+    // A TASK BOX IS INLINE CONTENT, so no HTML block can begin after it: the
+    // structure pass admits this one as a task-marker line. The box is also not
+    // part of the column, so the closer stands at the ITEM's content column.
+    [
+      'opening a task item',
+      '- [ ] ::: note\n  Body.\n  :::\n',
+      '- [ ] <!-- carve: ::: note -->\n  Body.\n\n  <!-- carve: ::: -->\n',
+    ],
+    // A BLOCK QUOTE OPENING A LIST ITEM carries both prefixes on one line.
+    [
+      'a block quote opening a list item',
+      '- > ::: note\n  > Body.\n  > :::\n',
+      '- > <!-- carve: ::: note -->\n  > Body.\n  >\n  > <!-- carve: ::: -->\n',
+    ],
+    // TWO ITEMS OPEN ON ONE LINE here, so the block reading has to take EVERY
+    // container prefix off and not only the first.
+    [
+      'opening two list items at once',
+      '- - ::: note\n    Body.\n    :::\n',
+      '- - <!-- carve: ::: note -->\n    Body.\n\n    <!-- carve: ::: -->\n',
+    ],
+    // AND THREE, where the body stands six columns in. The content column is
+    // the one EVERY prefix put the body at, not the one the first marker did,
+    // or the closer would read as code.
+    [
+      'opening three list items at once',
+      '- - - ::: note\n      Body.\n      :::\n',
+      '- - - <!-- carve: ::: note -->\n      Body.\n\n      <!-- carve: ::: -->\n',
+    ],
+    // A CAPTION HANGS ON THE CLOSING FENCE, so it stands at that closer's
+    // column. With a list body its placeholder is a lazy continuation of the
+    // inner item just as the closer's is, and a caption at the wrong column
+    // attaches to nothing.
+    [
+      'a figure caption, with a list body, in a list item',
+      '- ::: figure\n  - one\n  - two\n  :::\n  ^ Caption\n',
+      '- <!-- carve: ::: figure -->\n  - one\n  - two\n  <!-- carve: ::: -->\n' +
+        '  <!-- carve: ^ Caption -->\n  **Caption**\n',
+    ],
+    [
+      'a figure group with a caption in a list item',
+      '- item\n\n  ::: figure\n  :::: panel\n  ![a](x.png)\n  ::::\n  :::\n  ^ Group caption\n',
+      '- item\n\n  <!-- carve: ::: figure -->\n  <!-- carve: :::: panel -->\n  ![a](x.png)\n\n' +
+        '  <!-- carve: :::: -->\n  <!-- carve: ::: -->\n  <!-- carve: ^ Group caption -->\n  **Group caption**\n',
+    ],
+  ]
+
+  for (const [name, carve, carrier] of PREFIXED) {
+    it(`a container ${name} takes a marker at its host's column`, () => {
+      expect(carveToMarkdown(carve, { carryMarkers: true })).toBe(carrier)
+    })
+
+    it(`a container ${name} comes back`, () => {
+      const restored = markdownToCarve(carrier)
+      expect(restored).not.toContain('CARVECARRIER')
+      expect(restored).toBe(carve)
+    })
+
+    // The bytes are the point, but so is the MEANING: a round trip that returns
+    // the same text under a different element passes a byte comparison.
+    it(`a container ${name} round trips to the same HTML`, () => {
+      expect(carveToHtml(markdownToCarve(carrier))).toBe(carveToHtml(carve))
     })
   }
+
+  /** A damaged set inside a prefixed host is still never guessed at. */
+  for (
+    const [shape, source] of Object.entries({
+      'one marker deleted in a list item': '- Item.\n\n  Body.\n\n  <!-- carve: ::: -->\n',
+      'two reordered in a list item':
+        '- Item.\n\n  <!-- carve: ::: -->\n  Body.\n\n  <!-- carve: ::: note -->\n',
+      'unbalanced in a block quote':
+        '> <!-- carve: ::: note -->\n> <!-- carve: ::: wrapper -->\n> Body.\n>\n> <!-- carve: ::: -->\n',
+    })
+  ) {
+    it(`a damaged set, ${shape}, reports and reconstructs nothing`, () => {
+      const { value, report } = migrateMarkdown(source)
+      const damaged = report.diagnostics.filter((d) => d.code === 'carrier-markers-damaged')
+      expect(damaged).toHaveLength(1)
+      expect(damaged[0]!.fidelity).toBe('degraded')
+      expect(damaged[0]!.confidence).toBe('fallback')
+      expect(value).not.toMatch(/^[ \t>]*:{3,}/m)
+      expect(value).toContain('```=html')
+    })
+  }
+
+  /**
+   * A TABLE CELL STILL CARRIES NOTHING: this target flattens a cell to one line
+   * and the container's body with it, so there is no line for a marker to stand
+   * on (markup-carve/carve#2856).
+   */
+  it('a container in a table cell takes no marker either way', () => {
+    const source = '{header-rows=1}\n::: list-table\n- - A\n  - B\n' +
+      '- - cell one\n  - ::: note\n    Body.\n    :::\n:::\n'
+    const on = carveToMarkdown(source, { carryMarkers: true })
+    expect(on).not.toContain('<!-- carve:')
+    expect(on).toBe(carveToMarkdown(source))
+    expect(on).toContain('| cell one | Body. |')
+  })
 
   /**
    * A MARKER INSIDE A FENCED CODE BLOCK IS NOT A MARKER: a code block's payload
@@ -373,6 +502,22 @@ describe('an element-less container is carried in a comment', () => {
         '- item\n\n  ```\n  <!-- carve: ::: note -->\n  Body.\n  <!-- carve: ::: -->\n  ```\n',
       'inside an indented code block in a list item':
         '- item\n\n      <!-- carve: ::: note -->\n      body\n',
+      // A FENCE INDENTED PAST THREE COLUMNS is code text, not a fence.
+      'inside a fence indented past three columns':
+        'Intro.\n\n     ```md\n     <!-- carve: ::: note -->\n     ```\n',
+      // AND A FENCE IN A QUOTE IN A LIST ITEM, which carries both host
+      // prefixes. This is the shape that made the structure pass's own reading
+      // have to take the nested `>` off the content: without that, the fence is
+      // invisible and its payload is lifted.
+      'inside a fence in a block quote in a list item':
+        '- Item.\n  > ```md\n  > <!-- carve: ::: note -->\n  > Body.\n  > <!-- carve: ::: -->\n  > ```\n',
+      'inside an inline code span': 'Text with `<!-- carve: ::: note -->` in it.\n',
+      // A LIST MARKER INSIDE AN OPEN FENCE IS VERBATIM CONTENT. Reading the
+      // nested prefixes off a line inside the fence would let this `- ````
+      // read as its closer, and the comments below it would then be lifted out
+      // of the payload.
+      'inside a fence whose payload holds a marker-shaped fence line':
+        '- ```\n  - ```\n  <!-- carve: ::: note -->\n  Body\n  <!-- carve: ::: -->\n  ```\n',
     })
   ) {
     it(`a marker-shaped line ${shape} is left alone`, () => {

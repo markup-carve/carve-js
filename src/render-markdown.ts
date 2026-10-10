@@ -108,7 +108,6 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     inlineDepth: 0,
     carryMarkers: opts.carryMarkers === true,
     carrierDepth: 0,
-    inBlockQuote: false,
     abbrBudget: budgetForDocument(ast),
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
@@ -154,7 +153,6 @@ interface MarkdownContext {
    */
   carrierDepth: number
   /** Inside a block quote, whose every line this target prefixes with `> `. */
-  inBlockQuote: boolean
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
   smartTypography: SmartTypographyOption
@@ -309,17 +307,12 @@ function withMarker(marker: string, content: string): string {
  */
 function carrierMarkers(node: BlockNode, ctx: MarkdownContext): CarrierMarkers | undefined {
   if (!ctx.carryMarkers) return undefined
-  // A HOST THAT PREFIXES ITS LINES TAKES NO MARKER. The import reads a marker
-  // at a line's own start, so one written at a list item's content column or
-  // behind a block quote's `>` would be emitted and never read back - worse
-  // than degrading honestly. Reading one through the prefix needs the block
-  // structure the source pre-pass does not have: a marker at an item's content
-  // column is indistinguishable there from verbatim text in a code block
-  // inside that item, which markup-carve/carve#2850 records with the
-  // measurement. A table cell never reaches this writer's block arms at all,
-  // and could not carry anyway: a cell is flattened to a single line.
-  if (ctx.listDepth > 0 || ctx.inBlockQuote) return undefined
-
+  // A TABLE CELL never reaches this writer's block arms at all, and could not
+  // carry anyway: a cell is flattened to a single line and the container's body
+  // with it (markup-carve/carve#2856). A list item and a block quote prefix
+  // their lines and DO carry: the import now reads a marker off the block
+  // structure rather than off a flat scan of the source lines
+  // (markup-carve/carve#2850).
   return spellCarrierMarkers(node, ctx.carrierDepth)
 }
 
@@ -391,14 +384,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${infoSeparator}${info}${payload}${fence}\n\n`
     }
     case 'block_quote': {
-      const quoted = ctx.inBlockQuote
-      ctx.inBlockQuote = true
-      let inner: string
-      try {
-        inner = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx)))
-      } finally {
-        ctx.inBlockQuote = quoted
-      }
+      const inner = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx)))
       const lines = inner.split('\n')
       return `${lines.map((line) => withMarker('> ', line)).join('\n')}\n\n`
     }
