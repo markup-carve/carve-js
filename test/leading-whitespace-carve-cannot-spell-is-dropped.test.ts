@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
-import { LEADING_WHITESPACE_UNSPELLABLE } from '../src/import-report-messages.js'
+import { HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE } from '../src/import-report-messages.js'
 
 /*
  * Whitespace a decoded character reference puts at the start of a line has no
@@ -123,5 +123,50 @@ describe('a table cell, the input carve-js#2677 was raised on', () => {
   it('reports nothing for a TRAILING decoded space, which is not line-leading', () => {
     expect(convert(table('x&#32;')).losses).toEqual([])
     expect(convert('trailing&#32;\n').losses).toEqual([])
+  })
+})
+
+/*
+ * The same character at a HEADING's head (markup-carve/carve-rs#2449). carve-js
+ * used to pad the marker separator instead of dropping, which keeps bytes and
+ * not the character: `#  head` renders the document `# head` renders, and
+ * `carve fmt` rewrites the padding away. carve-rs drops and is the reference.
+ */
+describe("a decoded space at a heading's head", () => {
+  it('drops it and names the loss', () => {
+    const { value, losses } = convert('# &#32;head\n')
+    expect(value).toBe('# head\n')
+    expect(carveToHtml(value)).toBe('<section id="head">\n  <h1>head</h1>\n</section>')
+    expect(losses).toEqual([{ code: 'structure-unspellable', message: HEADING_LEADING_WHITESPACE_UNSPELLABLE }])
+  })
+
+  it.each([
+    ['## &#32;h2\n', '## h2\n'],
+    ['###### &#32;h6\n', '###### h6\n'],
+    ['# &#9;tab\n', '# tab\n'],
+    ['# &#32;&#32;two\n', '# two\n'],
+  ])('%j', (markdown, carve) => {
+    const { value, losses } = convert(markdown)
+    expect(value).toBe(carve)
+    expect(losses).toEqual([{ code: 'structure-unspellable', message: HEADING_LEADING_WHITESPACE_UNSPELLABLE }])
+  })
+
+  it('leaves a decoded space that is NOT at the head alone', () => {
+    const { value, losses } = convert('# mid &#32;x\n')
+    expect(value).toBe('# mid  x\n')
+    expect(losses).toEqual([])
+  })
+
+  it('keeps a non-breaking space, which the author did write', () => {
+    const { value, losses } = convert('# &nbsp;head\n')
+    expect(value).toBe('# \u00a0head\n')
+    expect(value.codePointAt(2)).toBe(0x00a0)
+    expect(losses).toEqual([])
+  })
+
+  it('reports nothing when the author wrote the separator run themselves', () => {
+    const { value, losses } = convert('#    lit\n')
+    expect(value).toBe('# lit\n')
+    expect(losses).toEqual([])
   })
 })

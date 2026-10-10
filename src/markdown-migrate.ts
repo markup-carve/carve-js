@@ -27,7 +27,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
-import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
+import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
@@ -504,6 +504,9 @@ function decodeEntitiesInTitle(rest: string): string {
   return `${lead}${quote}${escaped}${quote}${trail}`
 }
 
+/** An ATX marker, its separator, and whitespace past it: `#` + ` ` + ` `. */
+const RE_HEADING_HEAD_WHITESPACE = /^(#{1,6}[ \t])[ \t]+/
+
 function decodeHtmlEntities(s: string): string {
   const decoded = s.replace(
     RE_HTML_ENTITY,
@@ -530,6 +533,18 @@ function decodeHtmlEntities(s: string): string {
   //
   // A marker the drop leaves at column 0 is escaped, so the line stays the
   // paragraph it was: `&#32;- item` reads as text, not as a list.
+  // The same character at a HEADING's head. The marker separator is a run of
+  // spaces and none of it is content, so widening the separator keeps bytes
+  // rather than the character: `#  head` and `# head` render the same document
+  // and `carve fmt` rewrites the first back to the second
+  // (markup-carve/carve-rs#2449).
+  if (RE_HEADING_HEAD_WHITESPACE.test(decoded) && !RE_HEADING_HEAD_WHITESPACE.test(s)) {
+    importLosses.push({
+      code: 'structure-unspellable',
+      message: HEADING_LEADING_WHITESPACE_UNSPELLABLE,
+    })
+    return decoded.replace(RE_HEADING_HEAD_WHITESPACE, '$1')
+  }
   if (!/^[ \t]/.test(decoded) || /^[ \t]/.test(s)) return decoded
   const dropped = decoded.replace(/^[ \t]+/, '')
   importLosses.push({
