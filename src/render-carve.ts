@@ -2307,11 +2307,11 @@ function boundaryEscapeAt(written: string, piece: string): number {
 const EMPTY_COMMENT = '{%  %}'
 
 /** Whether a separator belongs between what is written and the next piece. */
-function separatesBacktickRuns(written: string, piece: string): boolean {
+function separatesBacktickRuns(written: string, piece: string, previous?: InlineNode): boolean {
   return (
     written.endsWith('`') &&
     piece.startsWith('`') &&
-    !precededByOddBackslashRun(written, written.length - 1)
+    (previous?.type === 'code' || previous?.type === 'literal_inline' || !precededByOddBackslashRun(written, written.length - 1))
   )
 }
 
@@ -4078,7 +4078,7 @@ class CarveRenderSession {
 
         refuseGluedName(node, nodes[idx - 1], outTail, piece)
 
-        if (separatesBacktickRuns(written().text, piece)) {
+        if (separatesBacktickRuns(written().text, piece, nodes[idx - 1])) {
           out += EMPTY_COMMENT
           outTail = (outTail + EMPTY_COMMENT).slice(-OUT_TAIL_LENGTH)
           lineLength += EMPTY_COMMENT.length
@@ -4519,6 +4519,7 @@ class CarveRenderSession {
       throw new SourceUnspellableError('code', 'a block marker on a continuation line ends the definition term')
     }
     if (ctx.lineBlockDepth > 0) return written
+    if (written.includes('\n\n')) throw new SourceUnspellableError('code', 'a blank line ends the code span paragraph')
     return written.replace(marker, `\n${this.sentinels[6]}`)
   }
 
