@@ -49,7 +49,7 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
 
     it('keeps a marker literal when a code span newline becomes a space', () => {
-      expect(md('para ``code\n- literal``')).toBe('para `code - literal`')
+      expect(md('para ``code\n- literal``')).toBe('para <code>code&#10;&#45; literal</code>')
     })
   })
 

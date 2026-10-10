@@ -360,7 +360,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // A folded heading's line join takes PART 7's four characters. The class
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
       // newline that the HTML target kept.
-      const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r\n]+/g, (run) => {
+      const text = trimNonNbsp(withinSingleLineSlot(() => renderInlines(node.children, ctx)).replace(/[ \t\r\n]+/g, (run) => {
         const count = run.split('\n').length - 1
         return count === 0 ? run : ' '.repeat(count)
       }))
@@ -781,7 +781,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   for (const row of node.rows) {
     const cells = row.cells.map((cell) =>
       escapeCellPipes(
-        withinTableCell(() => {
+        withinSingleLineSlot(() => {
           if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
           return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
         }),
@@ -951,6 +951,23 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
   ctx.inlineDepth++
   try {
     const parts = nodes.map((node) => renderInline(node, ctx))
+
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i]!
+      if (normalizeLegacyInline(nodes[i]!).type === 'hard_break' && part === '\\\n') {
+        let precedingContent = false
+        for (let j = 0; j < i; j++) {
+          if (/[^ \t\r\n]/.test(parts[j]!)) {
+            precedingContent = true
+            break
+          }
+        }
+        // A terminal backslash reads as text. Keep a lone <br> inline too.
+        parts[i] = precedingContent ? '<br>' : '<br><!-- -->'
+        break
+      }
+      if (/[^ \t\r\n]/.test(part)) break
+    }
 
     return reflankRuns(nodes, parts)
   } finally {
@@ -1141,7 +1158,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // table. Not `<br>`: a soft break is the break that does not render as a
       // break, and inventing a visible one is what CARVE-P11-008 forbids. §9a
       // gives the identical reasoning for the hard break below.
-      return insideTableCell ? ' ' : '\n'
+      return insideSingleLineSlot ? ' ' : '\n'
     case 'hard_break':
       // A BACKSLASH, not two trailing spaces (PART 11 section 9). Both mean
       // `<br />` to a CommonMark reader, but trailing whitespace is removed by
@@ -1149,7 +1166,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // whitespace checks - and losing ONE of the two spaces is enough for the
       // break to vanish rather than degrade, silently, in a file nobody edited.
       // In a table cell the newline would end the GFM row (PART 11 section 9a).
-      return insideTableCell ? '<br>' : '\\\n'
+      return insideSingleLineSlot ? '<br>' : '\\\n'
     case 'insert':
       return `<ins>${renderInlines(node.children, ctx)}</ins>`
     case 'delete':
@@ -1249,15 +1266,15 @@ function outsideLink<T>(fn: () => T): T {
   }
 }
 
-let insideTableCell = false
+let insideSingleLineSlot = false
 
-function withinTableCell<T>(fn: () => T): T {
-  const previous = insideTableCell
-  insideTableCell = true
+function withinSingleLineSlot<T>(fn: () => T): T {
+  const previous = insideSingleLineSlot
+  insideSingleLineSlot = true
   try {
     return fn()
   } finally {
-    insideTableCell = previous
+    insideSingleLineSlot = previous
   }
 }
 
@@ -1374,7 +1391,12 @@ function safeFence(content: string, min: number, marker = '`'): string {
 
 function renderCode(content: string): string {
   if (content === '') return '<code></code>'
-  content = content.replace(/\n/g, ' ')
+  if (content.includes('\n')) {
+    // Entities preserve newlines and markup. Split email runs for GFM's autolinker.
+    const escaped = content.replace(/[\n\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/g,
+      (character) => `&#${character.charCodeAt(0)};${character === '@' ? '<!---->' : ''}`)
+    return `<code>${escaped}</code>`
+  }
   const fence = safeFence(content, 1)
   const needsPadding = content.startsWith('`') || content.endsWith('`') ||
     (content.startsWith(' ') && content.endsWith(' ') && /[^ ]/.test(content))
