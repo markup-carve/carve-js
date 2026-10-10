@@ -146,14 +146,17 @@ const INLINE_HANDLED = new Set([
 const MEDIA_FALLBACK = new Set(['video', 'audio', 'object', 'canvas', 'picture'])
 
 /**
- * The states an item can be READ into (PART 10 §11). Not `x` or ` `: the box
- * says those, and reading `x` off an empty box would tick it.
+ * The states an item can be READ into (PART 10 §11). Not ` `: the bare box
+ * says that, and `x` is the done state, read only beside a ticked box.
  */
 const READABLE_TASK_STATES = new Set(['-', '_', '>', '?'])
 
 function isReadableTaskState(value: string | undefined): value is NonNullable<ListItem['taskState']> {
   return value !== undefined && READABLE_TASK_STATES.has(value)
 }
+
+/** The base class PART 19 §1 gives a task list's element. */
+const TASK_LIST_CLASS = 'task-list'
 /**
  * Is this node a BLOCK being flattened into an inline slot?
  *
@@ -1695,13 +1698,17 @@ class Importer {
   }
 
   /**
-   * Whether `data-task-state` IS this item's state: one PART 10 §11 writes, on
-   * an EMPTY box. Anything else is the author's attribute, and kept.
+   * Whether `data-task-state` IS this item's state: one PART 10 §11 writes,
+   * an extended state on an EMPTY box or `x` on a ticked one. Anything else
+   * is the author's attribute, and kept.
    */
   private readsTaskState(li: P5Node): boolean {
-    if (!isReadableTaskState(this.attr(li, 'data-task-state'))) return false
+    const state = this.attr(li, 'data-task-state')
     const input = this.taskCheckbox(li)
-    return input !== undefined && this.attr(input, 'checked') === undefined
+    if (input === undefined) return false
+    const ticked = this.attr(input, 'checked') !== undefined
+    if (state === 'x') return ticked
+    return isReadableTaskState(state) && !ticked
   }
 
   /** The item's task-list checkbox, which carries half of its state. */
@@ -2525,7 +2532,10 @@ class Importer {
       // difference. It is READ rather than dropped as derived - the same
       // treatment the checkbox `<input>` already gets.
       const checked = input ? this.attr(input, 'checked') !== undefined : undefined
-      const taskState = this.readsTaskState(li) ? (this.attr(li, 'data-task-state') as NonNullable<ListItem['taskState']>) : undefined
+      // `x` is the done state the ticked box already gives, so the AST records
+      // nothing for it (PART 12).
+      const readState = this.readsTaskState(li) ? this.attr(li, 'data-task-state') : undefined
+      const taskState = readState === 'x' ? undefined : (readState as ListItem['taskState'])
       // UNSPELLABLE BEHIND AN ORDERED MARKER. `task_marker` in
       // `resources/spec/03-blocks-core.ebnf` hangs off `unordered_item` alone,
       // so no Carve source carries a box on an ordered item and the writer
@@ -2591,6 +2601,9 @@ class Importer {
     // The delimiter the renderer wrote (PART 10 §12), which is the only place
     // it survives: `1)` and `1.` rendered the same bytes before that clause.
     const delim = ordered && this.readsDelim(node) ? (')' as const) : undefined
+    // The task list's base class (PART 19 §1) is structural, not authored: it is
+    // read only where an item carries the box that makes the list a task list.
+    if (listItems.some((li) => this.taskCheckbox(li) !== undefined)) attrs = this.stripClass(attrs, TASK_LIST_CLASS)
     const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(delim !== undefined ? { delim } : {}), ...(attrs ? { attrs } : {}) }
     return [...before, list]
   }

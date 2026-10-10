@@ -9,8 +9,8 @@ it('preserves Unicode separators in list marker payloads', () => {
         const html = carveToHtml(source)
         const payload = `before${separator}after`
         const opening = marker === 'a. ' ? '<ol type="a">' : marker === '2.{#x} '
-          ? '<ol start="2">' : marker === '1. ' ? '<ol>' : '<ul>'
-        const li = marker.includes('{#x}') ? '<li id="x">' : '<li>'
+          ? '<ol start="2">' : marker === '1. ' ? '<ol>' : marker === '- [x] ' ? '<ul class="task-list">' : '<ul>'
+        const li = marker.includes('{#x}') ? '<li id="x">' : marker === '- [x] ' ? '<li data-task-state="x">' : '<li>'
         const content = marker === '- [x] '
           ? `<input type="checkbox" checked disabled aria-label="${payload}"> ${payload}` : payload
         const closing = opening.startsWith('<ol') ? '</ol>' : '</ul>'

@@ -1667,7 +1667,10 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
-  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
+  // PART 19 §1: a task list's mandatory base class leads the authored ones.
+  const isTaskList = node.items.some((it) => it.checked !== undefined)
+  const listAttrs = isTaskList ? renderAttrs2(node.attrs, { baseClass: 'task-list' }) : renderAttrs(node.attrs)
+  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(
@@ -1712,9 +1715,11 @@ function renderListItem(
       : item.checked
         ? `<input type="checkbox" checked disabled${taskNameAttr}> `
         : `<input type="checkbox" disabled${taskNameAttr}> `
-  // PART 10 §11. Structural, so it leads the authored attributes (§1).
+  // PART 10 §11. Structural, so it leads the authored attributes (§1). A done
+  // item records no `taskState` but still names itself, always as lowercase `x`.
+  const taskState = item.checked === true ? 'x' : item.taskState
   const taskStateAttr =
-    item.taskState === undefined ? '' : ` data-task-state="${escapeAttr(item.taskState)}"`
+    taskState === undefined ? '' : ` data-task-state="${escapeAttr(taskState)}"`
 
   // `isLead` is the item's FIRST paragraph. In a tight item only the lead
   // paragraph is unwrapped (it sits on the <li> line); a SUBSEQUENT paragraph

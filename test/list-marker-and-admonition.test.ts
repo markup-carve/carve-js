@@ -38,7 +38,7 @@ describe('list marker change starts a new list (§11)', () => {
 
   it('splits plain then task (different kind)', () => {
     const html = h('- a\n- [x] b')
-    expect(html.match(/<ul>/g)).toHaveLength(2)
+    expect(html.match(/<ul(?: class="task-list")?>/g)).toEqual(['<ul>', '<ul class="task-list">'])
   })
 
   it('does not split on a nested differing marker (deeper indent)', () => {

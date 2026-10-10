@@ -42,7 +42,7 @@ describe('a band marker after a block the item cannot extend', () => {
     [
       'a task marker',
       '- t\n  {.k}\n - [ ] b\n',
-      '<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li><input type="checkbox" disabled aria-label="b"> b</li>\n</ul>',
+      '<ul>\n  <li>t</li>\n</ul>\n<ul class="task-list">\n  <li><input type="checkbox" disabled aria-label="b"> b</li>\n</ul>',
     ],
     [
       'a marker carrying an abutting attribute block',

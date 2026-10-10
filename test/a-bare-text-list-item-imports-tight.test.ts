@@ -121,7 +121,7 @@ describe('list tightness survives HTML import', () => {
     // a task list of bare items is still tight.
     expect(
       imp('<ul class="task-list"><li><input type="checkbox" checked> done</li><li><input type="checkbox"> open</li></ul>'),
-    ).toBe('{.task-list}\n- [x] done\n- [ ] open\n')
+    ).toBe('- [x] done\n- [ ] open\n')
   })
 
   it('the engine of both looseness spellings round-trips through its own HTML', () => {
