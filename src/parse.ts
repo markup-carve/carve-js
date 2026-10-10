@@ -12583,10 +12583,24 @@ class ParseSession {
       // flushed only when a later line reaches the content column, so a fence
       // running to the end of the item never received them.
       //
-      // Only a fence owned by this item receives the trailing run. A nested
-      // item's fence does not own the parent item's buffered separator.
+      // A fence still on a child's marker line has received no body line, so
+      // the buffered separator belongs to the parent. Once a body line arrives,
+      // preserve the existing child extent, including trailing payload blanks.
+      let emptyChildMarkerFence = false
+      if (pendingBlanks > 0 && (firstBlockIdx >= 0 || leadIsMarker)) {
+        let lastContent = content
+        for (let index = nested.length - 1; index >= 0; index--) {
+          if (!isBlankLine(nested[index]!)) {
+            lastContent = nested[index]!
+            break
+          }
+        }
+        emptyChildMarkerFence = isListMarkerLine(lastContent) &&
+          opensCodeFence(markerLineBottomBlock(lastContent))
+      }
       if (pendingBlanks > 0 && (
-        lazyState.opaque !== null || authoredCodeFenceOpen
+        lazyState.opaque !== null || authoredCodeFenceOpen ||
+        ((firstBlockIdx >= 0 || leadIsMarker) && !emptyChildMarkerFence)
       )) {
         hasBlank = true
         for (let k = 0; k < pendingBlanks; k++) {
