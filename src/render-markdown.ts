@@ -1367,10 +1367,12 @@ function safeFence(content: string, min: number, marker = '`'): string {
 }
 
 function renderCode(content: string): string {
+  if (content === '') return '<code></code>'
+  content = content.replace(/\n/g, ' ')
   const fence = safeFence(content, 1)
-  return content.startsWith('`') || content.endsWith('`')
-    ? `${fence} ${content} ${fence}`
-    : `${fence}${content}${fence}`
+  const needsPadding = content.startsWith('`') || content.endsWith('`') ||
+    (content.startsWith(' ') && content.endsWith(' ') && /[^ ]/.test(content))
+  return needsPadding ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 
 /**
