@@ -110,3 +110,81 @@ construct and is still emitted. The option is HTML-only - no other target emits
 ---
 
 [Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
+
+## Carrying a container through a Markdown round trip
+
+Flattening keeps the words and loses the container. On the Markdown target that
+loss is total for a tab set, an admonition, a named div, a columns container, a
+disclosure, a spoiler and a composite figure's group wrapper: no element, no
+marker and no attribute of its own reaches the output, so an import cannot tell
+a container was ever there. An admonition loses its kind along with its title.
+
+`CARVE-P11-063` closes that round trip with an opt-in *carrier mode*. It leaves
+the visible fallback exactly as it is and brackets each of those containers with
+an HTML comment holding the Carve opener and closer verbatim:
+
+```bash
+carve render --markdown --carry-markers note.crv
+```
+
+```markdown
+<!-- carve: ::: note "Heads up" -->
+**Heads up**
+
+An admonition body.
+
+<!-- carve: ::: -->
+```
+
+`carve migrate --from markdown` reads those markers back and returns the
+container. Programmatically the mode is the `carryMarkers` option on
+`carveToMarkdown` and `renderMarkdown`.
+
+The mode is **off by default**, and the default output is unchanged: a renderer
+with raw HTML turned off shows the comment as text, so the carrier is a choice
+the host makes for files it will re-import. Markers are only ever *added* - the
+body bytes are the ones this target writes today.
+
+### What the markers carry
+
+An attributed container's attributes live on the line **above** the opener,
+because `PART 4` admits no inline `{...}` attributes on an opener line. So an
+attributed container is two Carve lines, and it takes two markers:
+
+```markdown
+<!-- carve: {.fancy} -->
+<!-- carve: ::: wrapper -->
+A generic div.
+
+<!-- carve: ::: -->
+```
+
+A `-->` inside a payload is written `--\>`, and a backslash already sitting
+where that escape would land grows by one, so the transform reverses exactly.
+Nothing else is escaped: the payload is Carve source, and Carve's own escape is
+the one the reader already has.
+
+### What takes no marker
+
+- A container this target already spells. An attributes-only opener
+  (`::: {.warning}`) is written verbatim and a list table becomes a pipe table,
+  so neither is element-less.
+- A container inside a line-prefixing host - a list item, a block quote, a table
+  cell. The comment would sit at the host's content column or behind its `>`,
+  where the import does not read it, so writing one would look like a carry and
+  not be. Such a container degrades exactly as it does with the mode off.
+- A marker-shaped line inside a fenced code block, on the way back in: a code
+  block's payload is verbatim content, so a page like this one holds lines that
+  record no container.
+
+A composite figure group's own caption is not restored either. The caption slot
+hangs on the closing fence, outside the container the markers bracket.
+
+### A damaged marker set is never guessed
+
+A Markdown editor that deleted one marker, reordered two or left the set
+unbalanced has destroyed the structure the markers recorded, and a
+reconstruction that is wrong is worse than a fallback that is honest. The import
+then reads the file as ordinary Markdown, comments and all, and reports one
+`carrier-markers-damaged` diagnostic at `degraded` fidelity and `fallback`
+confidence. There is no partial reconstruction and no per-marker recovery.

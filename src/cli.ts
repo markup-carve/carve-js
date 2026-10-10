@@ -134,6 +134,13 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --report-includes FILE
                    Write the JSON include-dependency list (use - for stderr).
 
+  rendering:
+    --carry-markers
+                   Markdown only: bracket every container Markdown drops with
+                   an HTML comment holding its Carve opener, so
+                   'carve migrate --from markdown' returns it. Off by default:
+                   a renderer with raw HTML off shows the comment as text.
+
   input options:
     --from-json    read an encoded AST instead of Carve source, and render it
                    to the chosen format
@@ -649,7 +656,10 @@ function renderDocumentTarget(
         maxRenderLosses: lossOptions.maxRenderLosses,
       })
     case 'markdown':
-      return renderMarkdownWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
+      return renderMarkdownWithReport(doc, {
+        maxRenderLosses: lossOptions.maxRenderLosses,
+        carryMarkers: lossOptions.carryMarkers === true,
+      })
     case 'plain':
       return renderPlainTextWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
     case 'ansi':
@@ -759,6 +769,8 @@ interface RenderCliLossOptions {
   reportLosses?: string
   allowedLosses: ReadonlySet<RenderLossCode>
   maxRenderLosses: number
+  /** PART 11 §10s, Markdown output only. */
+  carryMarkers?: boolean
 }
 
 function finishRender(result: RenderResult, file: string, opts: RenderCliLossOptions, io: CliIO): number {
@@ -839,6 +851,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     'include-root'?: string
     'no-includes'?: boolean
     'report-includes'?: string
+    'carry-markers'?: boolean
     help?: boolean
   }
   let positionals: string[]
@@ -869,6 +882,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         'include-root': { type: 'string' },
         'no-includes': { type: 'boolean' },
         'report-includes': { type: 'string' },
+        'carry-markers': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -917,6 +931,13 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     io.writeErr('carve render: --profile-base-host requires --profile\n')
     return 2
   }
+  // PART 11 §10s belongs to the Markdown target alone: no other writer has a
+  // comment a Markdown reader passes through.
+  if (values['carry-markers'] && target !== 'markdown') {
+    io.writeErr('carve render: --carry-markers applies to --markdown output only\n')
+    return 2
+  }
+  const carryMarkers = values['carry-markers'] === true
 
   const opts: ProfileOptions & { allowRawHtml?: false } = {}
   if (values['no-raw-html'] || values.safe) opts.allowRawHtml = false
@@ -962,6 +983,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     strictLosses: values['strict-losses'] ?? false,
     allowedLosses: new Set(allowedLosses as RenderLossCode[]),
     maxRenderLosses,
+    carryMarkers,
     ...(values['report-losses'] !== undefined ? { reportLosses: values['report-losses'] } : {}),
   }
 
@@ -1095,7 +1117,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         result = carveToHtmlWithReport(src, { ...opts, maxRenderLosses })
         break
       case 'markdown':
-        result = carveToMarkdownWithReport(src, { ...opts, maxRenderLosses })
+        result = carveToMarkdownWithReport(src, { ...opts, maxRenderLosses, carryMarkers })
         break
       case 'plain':
         result = carveToPlainTextWithReport(src, { ...opts, maxRenderLosses })

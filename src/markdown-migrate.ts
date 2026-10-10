@@ -27,7 +27,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
-import { FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
+import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
@@ -1855,14 +1855,214 @@ function writeTableRow(
  * vocabulary (docs/migration-results.md). `migrateMarkdown` carries these out
  * as diagnostics; `markdownToCarve` returns the source alone.
  */
+import {
+  CARRIER_PREFIX,
+  carrierFenceWidth,
+  carrierIsCloser,
+  carrierPayload,
+} from './carrier-markers.js'
+
 export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized' | 'raw-span-whitespace-trimmed'
+    | 'carrier-markers-damaged'
   message: string
   line?: number
   /** Overrides the code's default, for a reading the importer derived. */
-  confidence?: 'exact' | 'inferred'
+  confidence?: 'exact' | 'inferred' | 'fallback'
   /** Overrides the code's default, where the construct survives the text does not. */
   fidelity?: 'degraded'
+}
+
+
+/**
+ * PART 11 §10s: the carrier payloads this conversion lifted out of the source,
+ * in the order their marker lines appeared.
+ */
+let carrierSlots: Array<{ payload: string; closer: boolean }> = []
+
+/** The placeholder a lifted marker line stands in as, unique in the source. */
+let carrierToken = ''
+
+/**
+ * How many bold fallback lines the Markdown target wrote for an opener's own
+ * metadata: one for a quoted title, one for a `[label]`. The payload carries
+ * them now, so leaving the fallback would be the same text twice.
+ */
+function carrierFallbackLines(payload: string): number {
+  const width = carrierFenceWidth(payload)
+  if (width === 0) return 0
+  let rest = payload.slice(width)
+  let lines = 0
+  const label = /[ \t]?\[.*\]$/.exec(rest)
+  if (label !== null) {
+    lines++
+    rest = rest.slice(0, rest.length - label[0].length)
+  }
+  if (/[ \t]"[^"]*"$/.test(rest)) lines++
+
+  return lines
+}
+
+/**
+ * Whether a marker set records a structure at all: every opener closed by a
+ * bare fence of its own width, every attribute line against an opener, and
+ * nothing left open.
+ */
+function carrierSetBalances(payloads: readonly string[]): boolean {
+  const open: number[] = []
+  let prelude = false
+  for (const payload of payloads) {
+    const width = carrierFenceWidth(payload)
+    if (width === 0) {
+      // An attribute line belongs to the opener on the next marker.
+      prelude = true
+      continue
+    }
+    if (carrierIsCloser(payload)) {
+      if (prelude || open.length === 0 || open.pop() !== width) return false
+      continue
+    }
+    prelude = false
+    if (open.length > 0 && width <= open[open.length - 1]!) return false
+    open.push(width)
+  }
+
+  return !prelude && open.length === 0
+}
+
+/**
+ * Lift every carrier marker line out of the source, leaving a placeholder.
+ *
+ * A set that does not balance is NEVER reconstructed: the source comes back
+ * untouched, the markers import as the raw HTML they are, and one
+ * `carrier-markers-damaged` loss is reported.
+ */
+function prepareCarrierMarkers(markdown: string): string {
+  carrierSlots = []
+  carrierToken = ''
+  if (!markdown.includes(CARRIER_PREFIX)) return markdown
+
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const payloads = new Map<number, string>()
+  // A MARKER INSIDE A FENCED CODE BLOCK IS NOT A MARKER. The payload of a code
+  // block is verbatim content, so a doc page showing what the mode writes holds
+  // marker-shaped lines that record no container - lifting one rewrote the
+  // sample inside the fence (measured on spec/docs/graceful-degradation.md).
+  // An indented code block needs no test: a marker is only read at column 0.
+  let fence: string | undefined
+  for (const [at, line] of lines.entries()) {
+    const opener = RE_MD_FENCE_LINE.exec(line)
+    if (fence !== undefined) {
+      if (
+        opener !== null && columnWidth(opener[1]!) <= 3 && opener[2]![0] === fence[0]
+        && opener[2]!.length >= fence.length && opener[3]!.trim() === ''
+      ) fence = undefined
+      continue
+    }
+    if (opener !== null && columnWidth(opener[1]!) <= 3 && fenceRunIsAFence(opener[2]!, opener[3]!)) {
+      fence = opener[2]!
+      continue
+    }
+    const payload = carrierPayload(line)
+    if (payload !== undefined) payloads.set(at, payload)
+  }
+  if (payloads.size === 0) return markdown
+  if (!carrierSetBalances([...payloads.values()])) {
+    importLosses.push({
+      code: 'carrier-markers-damaged',
+      message: CARRIER_MARKERS_DAMAGED,
+      fidelity: 'degraded',
+      confidence: 'fallback',
+    })
+
+    return markdown
+  }
+
+  let token = 'CARVECARRIER'
+  while (markdown.includes(token)) token += 'X'
+  carrierToken = token
+
+  const out: string[] = []
+  let drop = 0
+  let skipBlank = false
+  for (const [at, line] of lines.entries()) {
+    const payload = payloads.get(at)
+    if (payload === undefined) {
+      if (drop > 0 && /^\*\*.+\*\*$/.test(line)) {
+        drop--
+        skipBlank = true
+        continue
+      }
+      if (skipBlank && line === '') {
+        skipBlank = false
+        continue
+      }
+      skipBlank = false
+      out.push(line)
+      continue
+    }
+    out.push(`${token}${carrierSlots.length}Z`)
+    carrierSlots.push({ payload, closer: carrierIsCloser(payload) })
+    drop = carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
+  }
+
+  return out.join('\n')
+}
+
+/**
+ * Give every restored marker line the blank lines the canonical writer puts
+ * around it: a container's opener and closer hug its body, and what follows a
+ * closer is a block of its own.
+ */
+function separateCarrierLines(
+  items: ReadonlyArray<{ text: string; kind: 'open' | 'close' | undefined }>,
+): Array<{ text: string; kind: 'open' | 'close' | undefined }> {
+  const hugged = new Set<number>()
+  for (let at = 0; at < items.length; at++) {
+    if (items[at]!.kind !== undefined || items[at]!.text !== '') continue
+    let end = at
+    while (end < items.length && items[end]!.kind === undefined && items[end]!.text === '') end++
+    let before = at - 1
+    while (before >= 0 && items[before]!.kind === undefined && items[before]!.text === '') before--
+    const above = before >= 0 ? items[before]!.kind : undefined
+    const below = end < items.length ? items[end]!.kind : undefined
+    // A blank above a closer and one below an opener are both inside the
+    // container, where the canonical writer puts none.
+    if (below === 'close' || above === 'open') {
+      for (let dropAt = at; dropAt < end; dropAt++) hugged.add(dropAt)
+    }
+    at = end - 1
+  }
+
+  const out: Array<{ text: string; kind: 'open' | 'close' | undefined }> = []
+  for (const [at, item] of items.entries()) {
+    if (hugged.has(at)) continue
+    const last = out[out.length - 1]
+    if (last !== undefined && last.kind === 'close' && item.kind !== 'close' && item.text !== '') {
+      out.push({ text: '', kind: undefined })
+    }
+    out.push(item)
+  }
+
+  return out
+}
+
+/** Write every lifted payload back as the Carve line it is. */
+function restoreCarrierMarkers(carve: string): string {
+  if (carrierSlots.length === 0) return carve
+  const pattern = new RegExp(`^${carrierToken}(\\d+)Z$`)
+  // Each line as its text plus which kind of marker, if any, produced it:
+  // 'open' for an opener or the attribute line travelling with it, 'close' for
+  // a bare closer.
+  const items = carve.split('\n').map((line) => {
+    const match = pattern.exec(line.trim())
+    if (match === null) return { text: line, kind: undefined as 'open' | 'close' | undefined }
+    const slot = carrierSlots[Number(match[1])]!
+
+    return { text: slot.payload, kind: slot.closer ? ('close' as const) : ('open' as const) }
+  })
+
+  return separateCarrierLines(items).map((item) => item.text).join('\n')
 }
 
 let importLosses: MarkdownImportLoss[] = []
@@ -4230,8 +4430,16 @@ export function markdownToCarveWithLosses(
   const losses: MarkdownImportLoss[] = []
   importLosses = losses
   try {
-    return { value: convertMarkdown(markdown, dialect), losses }
+    // PART 11 §10s: a carrier marker is lifted to a placeholder before the
+    // conversion and written back as the Carve line it is afterwards, so the
+    // Markdown reading in between never sees a comment it would carry across as
+    // raw HTML.
+    const prepared = prepareCarrierMarkers(markdown)
+
+    return { value: restoreCarrierMarkers(convertMarkdown(prepared, dialect)), losses }
   } finally {
+    carrierSlots = []
+    carrierToken = ''
     useEmptyDestinationReferences(null)
     importLosses = []
     inlineRunSourceLine = undefined

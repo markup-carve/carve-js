@@ -30,6 +30,7 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
+import { carrierLine, spellCarrierMarkers } from './carrier-markers.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -49,6 +50,16 @@ export type SmartTypographyMode = 'glyph' | 'source'
 export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   /** Defaults to `'glyph'`. */
   smartTypography?: SmartTypographyMode | boolean
+  /**
+   * Carry an element-less container through a Markdown round trip in an HTML
+   * comment holding its Carve opener verbatim (PART 11 §10s). OFF by default,
+   * because a Markdown renderer with raw HTML turned off shows the comment as
+   * text.
+   *
+   * The mode only ADDS comment lines: with it off the emitted bytes are the
+   * ones this target emits today.
+   */
+  carryMarkers?: boolean
 }
 
 function renderHtmlAttrs(attrs: Attrs | undefined): string {
@@ -95,6 +106,9 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
+    carryMarkers: opts.carryMarkers === true,
+    carrierDepth: 0,
+    inBlockQuote: false,
     abbrBudget: budgetForDocument(ast),
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
@@ -132,6 +146,15 @@ interface MarkdownContext {
   listDepth: number
   blockDepth: number
   inlineDepth: number
+  /** PART 11 §10s: whether an element-less container is bracketed with a marker. */
+  carryMarkers: boolean
+  /**
+   * How many carried containers enclose the block being written, which is what
+   * decides the colon-fence width a marker payload carries.
+   */
+  carrierDepth: number
+  /** Inside a block quote, whose every line this target prefixes with `> `. */
+  inBlockQuote: boolean
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
   smartTypography: SmartTypographyMode
@@ -277,6 +300,52 @@ function withMarker(marker: string, content: string): string {
   return trimEndMatchingEdges(marker, (code) => code === 32)
 }
 
+/**
+ * The marker payloads a container takes, or undefined when the mode is off or
+ * the container is not element-less on this target.
+ *
+ * A LIST TABLE is spelled by the output already, so it is not element-less and
+ * takes no marker - its arm returns before this is reached.
+ */
+function carrierMarkers(node: BlockNode, ctx: MarkdownContext): CarrierMarkers | undefined {
+  if (!ctx.carryMarkers) return undefined
+  // A HOST THAT PREFIXES ITS LINES TAKES NO MARKER YET. Inside a list item or a
+  // block quote the comment is written at the host's content column or behind
+  // its `>`, and the import reads a marker only at column 0 - so the marker
+  // would be emitted and never read back, which is worse than degrading
+  // honestly (markup-carve/carve#2810 follow-up). A table cell never reaches
+  // this writer's block arms at all.
+  if (ctx.listDepth > 0 || ctx.inBlockQuote) return undefined
+
+  return spellCarrierMarkers(node, ctx.carrierDepth)
+}
+
+type CarrierMarkers = { prelude: string[]; opener: string; closer: string }
+
+/** Render a carried container's children one fence width in. */
+function carriedChildren(children: BlockNode[], markers: CarrierMarkers | undefined, ctx: MarkdownContext): string {
+  if (markers === undefined) return renderBlocks(children, ctx)
+  ctx.carrierDepth++
+  try {
+    return renderBlocks(children, ctx)
+  } finally {
+    ctx.carrierDepth--
+  }
+}
+
+/**
+ * Bracket a container's output with its marker lines.
+ *
+ * The body is emitted UNCHANGED, separator and all: the mode adds lines and
+ * moves none, which is what keeps the mode-off bytes the bytes of today.
+ */
+function carried(markers: CarrierMarkers | undefined, body: string): string {
+  if (markers === undefined) return body
+  const head = [...markers.prelude, markers.opener].map((payload) => `${carrierLine(payload)}\n`).join('')
+
+  return `${head}${body}${carrierLine(markers.closer)}\n`
+}
+
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'section':
@@ -316,7 +385,15 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${infoSeparator}${info}${payload}${fence}\n\n`
     }
     case 'block_quote': {
-      const lines = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx))).split('\n')
+      const quoted = ctx.inBlockQuote
+      ctx.inBlockQuote = true
+      let inner: string
+      try {
+        inner = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx)))
+      } finally {
+        ctx.inBlockQuote = quoted
+      }
+      const lines = inner.split('\n')
       return `${lines.map((line) => withMarker('> ', line)).join('\n')}\n\n`
     }
     case 'list':
@@ -338,7 +415,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // caption floor; title first when both are present), then the body.
       const hasLead = (node.title !== undefined && node.title.length > 0) || Boolean(node.label)
       if (hasLead) ctx.lastList = undefined
-      const body = renderBlocks(node.children, ctx)
+      const markers = carrierMarkers(node, ctx)
+      const body = carriedChildren(node.children, markers, ctx)
       const title =
         node.title !== undefined ? renderInlines(unwrapStrong(node.title), ctx) : ''
       // Escape the label the same way text is escaped (HTML + Markdown
@@ -346,15 +424,17 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // must not emit live HTML when the Markdown is re-rendered.
       const labelLine = node.label ? wrapperLine(escapeText(node.label), '**', 'strong') : ''
       if (title !== '') {
-        return `${wrapperLine(title, '**', 'strong')}${labelLine}${body}`
+        return carried(markers, `${wrapperLine(title, '**', 'strong')}${labelLine}${body}`)
       }
-      return `${labelLine}${body}`
+      return carried(markers, `${labelLine}${body}`)
     }
-    case 'div':
+    case 'div': {
       if (node.label) ctx.lastList = undefined
-      return node.label
-        ? `${wrapperLine(escapeText(node.label), '**', 'strong')}${renderBlocks(node.children, ctx)}`
-        : renderBlocks(node.children, ctx)
+      const markers = carrierMarkers(node, ctx)
+      const body = carriedChildren(node.children, markers, ctx)
+
+      return carried(markers, node.label ? `${wrapperLine(escapeText(node.label), '**', 'strong')}${body}` : body)
+    }
     case 'line_block':
       return renderBlocks(node.children, ctx)
     case 'definition_list':
@@ -367,10 +447,20 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // it; stray content in place; the group caption as a BOLD paragraph at
       // the end. A table panel's caption is the table's own and stays where
       // that renderer puts it.
+      const markers = carrierMarkers(node, ctx)
+      if (markers !== undefined) ctx.carrierDepth++
       let out = ''
-      for (const child of node.children) {
-        out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+      try {
+        for (const child of node.children) {
+          out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+        }
+      } finally {
+        if (markers !== undefined) ctx.carrierDepth--
       }
+      out = carried(markers, out)
+      // The group's own caption sits OUTSIDE the container in Carve too - the
+      // slot hangs on the closing fence - so its fallback follows the closer
+      // and is NOT restored by the round trip.
       if (node.caption !== undefined) {
         out += wrapperLine(renderInlines(node.caption, ctx), '**', 'strong')
       }
