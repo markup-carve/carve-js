@@ -341,8 +341,6 @@ export function extractReferenceDefinitions(
       if ((label.includes('|') || decodeLinkTitle(label, decodeEntity) !== label) && !footnotes.has(key)) {
         while (reservedFootnotes.has(nextFootnote)) nextFootnote++
         footnotes.set(key, `carve-import-footnote-${nextFootnote++}`)
-      } else if (!footnotes.has(key)) {
-        footnotes.set(key, label)
       }
       const next = lines[nextNonblankFrom(i + 1)]
       const empty = definition[2]!.trim() === '' && (next === undefined || !/^ {4}/.test(next.slice(quotePrefix.length)))

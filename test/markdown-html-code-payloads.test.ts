@@ -55,9 +55,9 @@ it.each(['café_au', '名前_id', 'größ_e'])('keeps intraword underscores nati
   expect(carveToHtml(result.value, { allowRawHtml: false })).toBe(`<p><code>${value}</code></p>`)
 })
 
-it('keeps code in text following a defined footnote reference', () => {
+it('reads a footnote-shaped label with a destination as a link', () => {
   const result = migrateMarkdown('x[^1](u<code>a</code>)\n\n[^1]: note')
-  expect(carveToHtml(result.value)).toContain('<code>a</code>')
+  expect(carveToHtml(result.value)).toBe('<p>x<a href="u%3Ccode%3Ea%3C/code%3E">^1</a></p>')
 })
 
 it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code>'])('reports the original code line: %s', markdown => {
@@ -65,4 +65,9 @@ it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code>'])('reports the o
   const rows = result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')
   expect(rows).toHaveLength(1)
   expect(rows[0]?.path).toBe('line:2')
+})
+
+it('keeps a code fallback line after a multiline link title', () => {
+  const result = migrateMarkdown('[x](u\n"t") <code></code>')
+  expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')[0]?.path).toBe('line:2')
 })

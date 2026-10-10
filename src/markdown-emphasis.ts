@@ -30,10 +30,10 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
   }
   const punctuation = (s: string): boolean => /[\p{P}\p{S}]/u.test(s)
   const whitespace = (s: string): boolean => s === '' || /\s/u.test(s)
-  for (const m of source.matchAll(strikethrough ? /~+/g : /\*+|_+/g)) {
+  for (const m of source.matchAll(strikethrough ? /\*+|_+|~+/g : /\*+|_+/g)) {
     const start = m.index
     const end = start + m[0].length
-    if (strikethrough && m[0].length > 2) continue
+    if (m[0][0] === '~' && m[0].length > 2) continue
     if (source[start - 1] === '\\') continue
     const before = neighbor(start - 1, true)
     const after = neighbor(end, false)
@@ -63,8 +63,8 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         const opener = runs[o]!
         if (!opener.active || !opener.open || opener.char !== closer.char || remaining(opener) === 0) continue
         const a = remaining(opener), b = remaining(closer)
-        if (strikethrough && a !== b) continue
-        if (!strikethrough && (opener.close || closer.open) && (a + b) % 3 === 0 && (a % 3 !== 0 || b % 3 !== 0)) continue
+        if (opener.char === '~' && a !== b) continue
+        if (opener.char !== '~' && (opener.close || closer.open) && (a + b) % 3 === 0 && (a % 3 !== 0 || b % 3 !== 0)) continue
         break
       }
       if (o <= bottom) {
@@ -75,7 +75,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       const width = Math.min(remaining(opener), remaining(closer)) >= 2 ? 2 : 1
       const open = opener.end - opener.right - width
       const close = closer.start + closer.left
-      pairs.set(open, { open, close, width, kind: strikethrough ? '~' : width === 2 ? '*' : '/' })
+      pairs.set(open, { open, close, width, kind: opener.char === '~' ? '~' : width === 2 ? '*' : '/' })
       for (let k = 0; k < width; k++) { claimed.add(open + k); claimed.add(close + k) }
       opener.right += width
       closer.left += width

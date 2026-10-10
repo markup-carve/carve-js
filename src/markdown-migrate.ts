@@ -1201,7 +1201,7 @@ function convertInline(
         masked += `\x00P${scratch.length - 1}\x00`
         at = end
       }
-      const converted = markdownEmphasis(markdownEmphasis(masked, undefined, undefined, scratch, true), undefined, undefined, scratch, true, true).replace(
+      const converted = markdownEmphasis(masked, undefined, undefined, scratch, true, true).replace(
         /\x00P(\d+)\x00/g,
         (token, index: string) => Number(index) >= firstScratch ? scratch[Number(index)] ?? token : token,
       )
@@ -1294,7 +1294,7 @@ function convertInline(
       return protect(rawInlineHtml(`<code>${html}</code>`), referenceSourceText(match, protectedSources))
     }
     const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] }).replace(/\n$/, '')
-    return protect(written)
+    return protect(written, referenceSourceText(match, protectedSources))
   }
   line = escapeCarveOnlyMarker(line)
   // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
@@ -1463,16 +1463,12 @@ function convertInline(
     const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw)
     return `![${rawBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : alt.replace(/[\\[\]`]/g, '\\$&')}]`
   }
-  const protectDestination = (alt: string, dest: string): string => {
+  const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
     const encoded = encodeDest(dest)
-    return encoded === undefined ? alt + '\\(' + dest.slice(1) : protect(alt + encoded)
+    return encoded === undefined ? alt + '\\(' + dest.slice(1) : protect(alt + encoded, source)
   }
   const protectDestinations = (pattern: RegExp): void => {
     const subject = line
-    const footnoteClosers = new Set<number>()
-    for (const match of subject.matchAll(/\[\^([^\]\n]+)\]/g)) {
-      if (importedFootnoteLabel(referenceSourceText(match[1]!, protectedSpans)) !== undefined) footnoteClosers.add(match.index! + match[0].length - 1)
-    }
     let cursor = 0, depth = 0, pairedEnd = -1
     let lineCursor = 0, lineNumber = 0
     const origins = joinedLines ? input.split('\n').map((_text, index) => index).filter(index => !joinedLines.has(index)) : []
@@ -1495,8 +1491,7 @@ function convertInline(
       }
       if (cursor > offset || (label === '' && pairedEnd !== offset - 1)) return match
       const image = label.startsWith('!')
-      if (!image && footnoteClosers.has(label === '' ? offset - 1 : offset + label.length - 1)) return match
-      const written = protectDestination(image ? imageLabel(label) : '', dest)
+      const written = protectDestination(image ? imageLabel(label) : '', dest, image ? label + dest : dest)
       if (written.startsWith('\x00P')) cursor = offset + match.length
       if (joinedLines && written.startsWith('\x00P')) {
         while (lineCursor < offset) {
@@ -1520,25 +1515,27 @@ function convertInline(
       }
       return (image ? '' : label) + written
     })
+    line = line.replace(/\[\^([^\[\]\n]+)\](?=\x00P(\d+)\x00)/g, (match, label: string, index: string) =>
+      protectedSpans[Number(index)]?.startsWith('(') ? '[' + protect('\\^', '^') + label + ']' : match,
+    )
   }
 
   const pointyDestination = String.raw`\([ \t]*<[^<>\n]*>(?:[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'))?[ \t]*\)`
   protectDestinations(new RegExp(String.raw`(!\[(?:[^[\]]|\[[^[\]]*\])*\])(${pointyDestination})`, 'g'))
   protectDestinations(new RegExp(String.raw`(?<=\])()(${pointyDestination})`, 'g'))
 
-  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\[\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
+  const multilineTitle = /(!?\[(?:[^\[\]\n]|\n(?![ \t]*\n)|\[(?:[^\[\]\n]|\n(?![ \t]*\n))*\])*\])(\([ \t\n]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g
   protectDestinations(multilineTitle)
-  protectDestinations(/(?<=\])()(\([ \t]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g)
+  protectDestinations(/(?<=\])()(\([ \t\n]*(?:[^()\s]|\([^()\n]*\))+[ \t\n]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'|\((?:[^()\n]|\n(?![ \t]*\n))*\))[ \t\n]*\))/g)
 
   // Images `![alt](dest)`: Carve renders the alt as scalar text, so protect the
   // whole construct (alt and dest alike). The alt may contain one level of
   // nested brackets (`![a [b]](url)`); the dest is paren-normalized.
-  protectDestinations(/(!\[(?:[^[\]]|\[[^[\]]*\])*\])(\((?:[^()\n]|\([^()\n]*\))*\))/g)
+  protectDestinations(/(!\[(?:[^[\]]|\[[^[\]]*\])*\])(\([ \t]*(?:\n(?![ \t]*\n)[ \t]*)?(?:[^()\n]|\([^()\n]*\))*\))/g)
 
   // Link destinations `](dest "title")`. (Images already handled above.) The
   // delimiters in a URL (e.g. /_v1_/) are never markup, so protect it whole.
-  protectDestinations(/(?<=\])()(\((?:[^()\n]|\([^()\n]*\))*\))/g)
-
+  protectDestinations(/(?<=\])()(\([ \t]*(?:\n(?![ \t]*\n)[ \t]*)?(?:[^()\n]|\([^()\n]*\))*\))/g)
 
 
   // In a plain three-label chain, an unknown full-reference label can begin
@@ -1665,6 +1662,7 @@ function convertInline(
           else if (line[i] === '\n') {
             if (joinedLines) joinedLines.add((referenceSourceText(line.slice(0, i + 1), protectedSources).match(/\n/g) ?? []).length)
             i++
+            while (line[i] === ' ' || line[i] === '\t') i++
           }
         }
         codeWritten += protect(rawInlineHtml('<!---->&#10;<!---->'), referenceSourceText(line.slice(start, i), protectedSources))
