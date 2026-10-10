@@ -355,9 +355,37 @@ function escapeInvalidDjotAttributes(source: string): { source: string; inherite
   return { source: output + source.slice(cursor), inherited, restore: text => removeInheritedAttributeMarkers(text, inherited) }
 }
 
+/**
+ * Make an angle run that only LOOKS like an autolink visible to the plain-text
+ * escape again.
+ *
+ * An autolink body is opaque, so `<a--@b.c>` keeps its bare `@` and its link.
+ * A body holding a LIFTED construct is not an autolink body at all - the reader
+ * takes the comment out before it ever looks for an autolink - so
+ * `<mailto:a{%%}@b.c>` is plain text whose `@` would open a mention and lose the
+ * address (carve-php#3037, carve-js#2680). A lifted construct is a NUL-delimited
+ * placeholder and Carve source carries no NUL of its own, so the byte is the
+ * whole test.
+ */
+function unmaskLiftedDjotAutolinkBodies(source: string, masked: string): string {
+  if (!source.includes('<') || !source.includes('\x00')) return masked
+  const visible = maskDjotCodeAndDestinations(source, true, true, true, undefined, [], {
+    autolinks: false,
+    comments: false,
+  })
+  const chars = masked.split('')
+  for (const match of source.matchAll(/<[^<>\s]+>/g)) {
+    const at = match.index!,
+      value = match[0]
+    if (!value.includes('\x00') || visible[at] !== '<' || masked.slice(at, at + value.length).trim() !== '') continue
+    for (let i = 0; i < value.length; i++) chars[at + i] = value[i]!
+  }
+  return chars.join('')
+}
+
 /** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
 function escapePlainDjotText(source: string): string {
-  let masked = maskDjotCodeAndDestinations(source, true, true, true, undefined, [], { autolinks: false })
+  let masked = unmaskLiftedDjotAutolinkBodies(source, maskDjotCodeAndDestinations(source))
   if (source.includes('{')) {
     const chars = masked.split('')
     for (let at = 0; at < source.length; at++) {
@@ -1243,12 +1271,12 @@ function normalizeDjotAutolinks(source: string): string {
     if (rows[line] && /[|`]/.test(body)) continue
     const label = body.replace(/[!-\/:-@\[-`{-~]/g, (value) => '\\' + value)
     const destination = email ? 'mailto:' + body : body
-    const authority = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\\]*/.exec(destination)?.[0].length ?? 0
-    const encode = (text: string, brackets: boolean) =>
-      text.replace(brackets ? /[`|\\()[\]]/g : /[`|\\()]/g, (value) =>
-        value === '\\' ? '\\\\' : '%' + value.charCodeAt(0).toString(16).toUpperCase(),
-      )
-    const target = encode(destination.slice(0, authority), false) + encode(destination.slice(authority), true)
+    // carve#2854: a square bracket is not encoded. A Carve destination holds it
+    // literally, balanced or not, so encoding it would change the href against a
+    // body the angle form promises to show verbatim.
+    const target = destination.replace(/[`|\\()]/g, (value) =>
+      value === '\\' ? '\\\\' : '%' + value.charCodeAt(0).toString(16).toUpperCase(),
+    )
     parts.push(source.slice(copied, at), image ? label : '[' + label + '](' + target + ')')
     copied = end
   }

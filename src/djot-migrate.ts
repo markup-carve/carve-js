@@ -280,12 +280,20 @@ const RULES: Rule[] = [
   //                      which the `:{2,}` guard already covers)
   // The `+` bullet and a tab-after-bullet are covered by the `[-*+][ \t]`
   // guard, and 7-or-more hashes by the `#` guard.
+  //
+  // A LIFTED CONSTRUCT IS GUARDED BY THE BYTE, not by its spelling. By the time
+  // this scan runs, the Djot importer has already replaced a brace run with a
+  // NUL-delimited placeholder, so the `{` guard above cannot see it and the
+  // comment in `# a` / `{% x` / `y %}` folded onto the heading line - and a
+  // heading after it was swallowed too (carve-js#2682). djot.js ends the heading
+  // at such a line and starts a new block, which is the reading this preserves.
+  // Carve source carries no NUL of its own, so the byte is the whole test.
   {
     id: 'djot-heading-continuation',
     category: 'djot-shift',
     family: 'heading-continuation',
     pattern:
-      /^((#{1,6})[ ]+[^\n]*\S(?:\n(?:\2[ ]+\S[^\n]*|(?![ \t]*$)(?![-*][ \t]*[-*][ \t]*[-*][-* \t]*$)(?!#)(?![>|])(?![-*+][ \t])(?!(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t])(?!:[ \t])(?!:{2,})(?!\([0-9a-zA-Z]+\)[ \t])(?![`~]{3,})(?!\^[ \t])(?!%{3,})(?!\{)(?!\[[^\]\n]*\]:)[^\n]*\S))+)/dgm,
+      /^((#{1,6})[ ]+[^\n]*\S(?:\n(?:\2[ ]+\S[^\n]*|(?![ \t]*$)(?![-*][ \t]*[-*][ \t]*[-*][-* \t]*$)(?!#)(?![>|])(?![-*+][ \t])(?!(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t])(?!:[ \t])(?!:{2,})(?!\([0-9a-zA-Z]+\)[ \t])(?![`~]{3,})(?!\^[ \t])(?!%{3,})(?!\{)(?!\x00)(?!\[[^\]\n]*\]:)[^\n]*\S))+)/dgm,
     message: () =>
       'Djot folds the line(s) below a heading INTO it (a plain line, or one with the same number of `#`); Carve ends the heading at the newline, so they are separate blocks and the heading id changes.',
     suggestion: (m) => {

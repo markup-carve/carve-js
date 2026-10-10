@@ -88,3 +88,40 @@ describe('dropping it does not open a block', () => {
     expect(convert('&#32;[a] b\n').value).toBe('[a] b\n')
   })
 })
+
+/*
+ * The site reports a REAL loss, and only where one happens. carve-js#2677 asked
+ * whether it fires on an input nothing is lost on, and the answer measured on
+ * all three engines is that it does not: `&nbsp;` decodes to U+00A0, which the
+ * author did write and Carve spells, so no engine reports anything. On `&#32;`
+ * all three engines drop the character; carve-js is the only one that names the
+ * loss, so the under-report is on the other two
+ * (markup-carve/carve-php#3050, markup-carve/carve-rs#2446).
+ */
+describe('a table cell, the input carve-js#2677 was raised on', () => {
+  const table = (cell: string) => `| A | B |\n| --- | --- |\n| ${cell} | y |\n`
+
+  it('keeps a decoded non-breaking space and reports nothing', () => {
+    const { value, losses } = convert(table('&nbsp;x'))
+    expect(value).toBe('|= A |= B |\n| \u00a0x | y |\n')
+    expect(value.codePointAt(14)).toBe(0x00a0)
+    expect(losses).toEqual([])
+  })
+
+  it('drops a decoded space and names that loss', () => {
+    const { value, losses } = convert(table('&#32;x'))
+    expect(value).toBe('|= A |= B |\n| x | y |\n')
+    expect(losses).toEqual([{ code: 'structure-unspellable', message: LEADING_WHITESPACE_UNSPELLABLE }])
+  })
+
+  it('reports nothing for an entity that decodes to a non-whitespace character', () => {
+    const { value, losses } = convert(table('&amp;x'))
+    expect(value).toBe('|= A |= B |\n| &x | y |\n')
+    expect(losses).toEqual([])
+  })
+
+  it('reports nothing for a TRAILING decoded space, which is not line-leading', () => {
+    expect(convert(table('x&#32;')).losses).toEqual([])
+    expect(convert('trailing&#32;\n').losses).toEqual([])
+  })
+})

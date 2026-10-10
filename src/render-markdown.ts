@@ -309,18 +309,21 @@ function withMarker(marker: string, content: string): string {
  */
 function carrierMarkers(node: BlockNode, ctx: MarkdownContext): CarrierMarkers | undefined {
   if (!ctx.carryMarkers) return undefined
-  // A HOST THAT PREFIXES ITS LINES TAKES NO MARKER YET. Inside a list item or a
-  // block quote the comment is written at the host's content column or behind
-  // its `>`, and the import reads a marker only at column 0 - so the marker
-  // would be emitted and never read back, which is worse than degrading
-  // honestly (markup-carve/carve#2810 follow-up). A table cell never reaches
-  // this writer's block arms at all.
+  // A HOST THAT PREFIXES ITS LINES TAKES NO MARKER. The import reads a marker
+  // at a line's own start, so one written at a list item's content column or
+  // behind a block quote's `>` would be emitted and never read back - worse
+  // than degrading honestly. Reading one through the prefix needs the block
+  // structure the source pre-pass does not have: a marker at an item's content
+  // column is indistinguishable there from verbatim text in a code block
+  // inside that item, which markup-carve/carve#2850 records with the
+  // measurement. A table cell never reaches this writer's block arms at all,
+  // and could not carry anyway: a cell is flattened to a single line.
   if (ctx.listDepth > 0 || ctx.inBlockQuote) return undefined
 
   return spellCarrierMarkers(node, ctx.carrierDepth)
 }
 
-type CarrierMarkers = { prelude: string[]; opener: string; closer: string }
+type CarrierMarkers = { prelude: string[]; opener: string; closer: string; postlude: string[] }
 
 /** Render a carried container's children one fence width in. */
 function carriedChildren(children: BlockNode[], markers: CarrierMarkers | undefined, ctx: MarkdownContext): string {
@@ -342,8 +345,11 @@ function carriedChildren(children: BlockNode[], markers: CarrierMarkers | undefi
 function carried(markers: CarrierMarkers | undefined, body: string): string {
   if (markers === undefined) return body
   const head = [...markers.prelude, markers.opener].map((payload) => `${carrierLine(payload)}\n`).join('')
+  // A caption line sits BELOW the closer in Carve, so its marker sits below the
+  // closer's here, directly above the paragraph it replaces on import.
+  const tail = [markers.closer, ...markers.postlude].map((payload) => `${carrierLine(payload)}\n`).join('')
 
-  return `${head}${body}${carrierLine(markers.closer)}\n`
+  return `${head}${body}${tail}`
 }
 
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
@@ -354,7 +360,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // A folded heading's line join takes PART 7's four characters. The class
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
       // newline that the HTML target kept.
-      const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r\n]+/g, (run) => {
+      const text = trimNonNbsp(withinSingleLineSlot(() => renderInlines(node.children, ctx), false).replace(/[ \t\r\n]+/g, (run) => {
         const count = run.split('\n').length - 1
         return count === 0 ? run : ' '.repeat(count)
       }))
@@ -459,8 +465,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       }
       out = carried(markers, out)
       // The group's own caption sits OUTSIDE the container in Carve too - the
-      // slot hangs on the closing fence - so its fallback follows the closer
-      // and is NOT restored by the round trip.
+      // slot hangs on the closing fence - so its fallback follows the closer,
+      // directly under the caption marker that restores it.
       if (node.caption !== undefined) {
         out += wrapperLine(renderInlines(node.caption, ctx), '**', 'strong')
       }
@@ -775,7 +781,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   for (const row of node.rows) {
     const cells = row.cells.map((cell) =>
       escapeCellPipes(
-        withinTableCell(() => {
+        withinSingleLineSlot(() => {
           if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
           return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
         }),
@@ -945,6 +951,23 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
   ctx.inlineDepth++
   try {
     const parts = nodes.map((node) => renderInline(node, ctx))
+
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i]!
+      if (normalizeLegacyInline(nodes[i]!).type === 'hard_break' && part === '\\\n') {
+        let precedingContent = false
+        for (let j = 0; j < i; j++) {
+          if (/[^ \t\r\n]/.test(parts[j]!)) {
+            precedingContent = true
+            break
+          }
+        }
+        // A terminal backslash reads as text. Keep a lone <br> inline too.
+        parts[i] = precedingContent ? '<br>' : '<br><!---->'
+        break
+      }
+      if (/[^ \t\r\n]/.test(part)) break
+    }
 
     return reflankRuns(nodes, parts)
   } finally {
@@ -1135,7 +1158,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // table. Not `<br>`: a soft break is the break that does not render as a
       // break, and inventing a visible one is what CARVE-P11-008 forbids. §9a
       // gives the identical reasoning for the hard break below.
-      return insideTableCell ? ' ' : '\n'
+      return flattenSingleLineSoftBreaks ? ' ' : '\n'
     case 'hard_break':
       // A BACKSLASH, not two trailing spaces (PART 11 section 9). Both mean
       // `<br />` to a CommonMark reader, but trailing whitespace is removed by
@@ -1143,7 +1166,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // whitespace checks - and losing ONE of the two spaces is enough for the
       // break to vanish rather than degrade, silently, in a file nobody edited.
       // In a table cell the newline would end the GFM row (PART 11 section 9a).
-      return insideTableCell ? '<br>' : '\\\n'
+      return insideSingleLineSlot ? '<br>' : '\\\n'
     case 'insert':
       return `<ins>${renderInlines(node.children, ctx)}</ins>`
     case 'delete':
@@ -1243,15 +1266,19 @@ function outsideLink<T>(fn: () => T): T {
   }
 }
 
-let insideTableCell = false
+let insideSingleLineSlot = false
+let flattenSingleLineSoftBreaks = false
 
-function withinTableCell<T>(fn: () => T): T {
-  const previous = insideTableCell
-  insideTableCell = true
+function withinSingleLineSlot<T>(fn: () => T, flattenSoftBreaks = true): T {
+  const previous = insideSingleLineSlot
+  const previousSoftBreaks = flattenSingleLineSoftBreaks
+  insideSingleLineSlot = true
+  flattenSingleLineSoftBreaks = flattenSoftBreaks
   try {
     return fn()
   } finally {
-    insideTableCell = previous
+    insideSingleLineSlot = previous
+    flattenSingleLineSoftBreaks = previousSoftBreaks
   }
 }
 
@@ -1368,7 +1395,13 @@ function safeFence(content: string, min: number, marker = '`'): string {
 
 function renderCode(content: string): string {
   if (content === '') return '<code></code>'
-  content = content.replace(/\n/g, ' ')
+  if (/[\n\t]/.test(content)) {
+    // Entities preserve tabs and markup. Comments guard newline spaces and emails.
+    const escaped = content.replace(/[\n\t\x20-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/g,
+      (character) => character === '\n' ? '<!---->&#10;<!---->'
+        : `&#${character.charCodeAt(0)};${character === '@' ? '<!---->' : ''}`)
+    return `<code>${escaped}</code>`
+  }
   const fence = safeFence(content, 1)
   const needsPadding = content.startsWith('`') || content.endsWith('`') ||
     (content.startsWith(' ') && content.endsWith(' ') && /[^ ]/.test(content))
@@ -1443,12 +1476,15 @@ function gfmSlugBase(text: string): string {
     .replace(/ /g, '-')
 }
 
-/** A heading's inlines with smart punctuation spelled the way this target writes it. */
+/** A heading's inlines as the Markdown reader sees their text. */
 function writtenTypography(nodes: InlineNode[], typography: SmartTypographyMode): InlineNode[] {
-  if (typography !== 'source') return nodes
-  return JSON.parse(JSON.stringify(nodes), (_key, value) =>
-    value && value.type === 'smart_punctuation' ? { type: 'text', value: value.value } : value,
-  ) as InlineNode[]
+  return JSON.parse(JSON.stringify(nodes), (_key, value) => {
+    if (value?.type === 'hard_break') return { type: 'text', value: '' }
+    if (typography === 'source' && value?.type === 'smart_punctuation') {
+      return { type: 'text', value: value.value }
+    }
+    return value
+  }) as InlineNode[]
 }
 
 /**

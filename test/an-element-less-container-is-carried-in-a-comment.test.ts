@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToMarkdown, markdownToCarve, migrateMarkdown } from '../src/index.js'
+import { carveToHtml, carveToMarkdown, markdownToCarve, migrateMarkdown } from '../src/index.js'
 
 /**
  * CARVE-P11-063, PART 11 §10s: under the opt-in carrier mode the Markdown
@@ -198,15 +198,152 @@ describe('an element-less container is carried in a comment', () => {
   }
 
   /**
-   * A HOST THAT PREFIXES ITS LINES TAKES NO MARKER YET. The comment would sit
-   * at the host's content column or behind its `>`, where the import does not
-   * read it, so it would be written and never read back. The container degrades
-   * there exactly as it does with the mode off. Reading a prefixed marker is an
-   * owed follow-up on markup-carve/carve#2810, not part of this clause.
+   * A COMPOSITE FIGURE'S CAPTION LINE TAKES A MARKER OF ITS OWN, directly after
+   * the closer's, exactly as an attribute line above an opener takes one. The
+   * caption slot hangs BELOW the closing fence, so the pair bracketing the
+   * container cannot enclose it.
+   *
+   * THE ONE THING THE ATTRIBUTE-LINE PRECEDENT DOES NOT COVER: a caption also
+   * renders as body text, so the import REPLACES that rendered paragraph
+   * instead of appending a second copy of the caption.
+   */
+  const CAPTIONS: Array<[name: string, carve: string, carrier: string]> = [
+    [
+      'a figure group with a caption',
+      '::: figure\n:::: panel\n![a](x.png)\n::::\n:::\n^ Group caption\n',
+      '<!-- carve: ::: figure -->\n<!-- carve: :::: panel -->\n![a](x.png)\n\n' +
+        '<!-- carve: :::: -->\n<!-- carve: ::: -->\n<!-- carve: ^ Group caption -->\n' +
+        '**Group caption**\n',
+    ],
+    // GAINS NOTHING is the control on the writer half: no caption, no third
+    // marker, and the bytes are the ones the clause already had.
+    [
+      'a figure group with no caption',
+      '::: figure\n:::: panel\n![a](x.png)\n::::\n:::\n',
+      '<!-- carve: ::: figure -->\n<!-- carve: :::: panel -->\n![a](x.png)\n\n' +
+        '<!-- carve: :::: -->\n<!-- carve: ::: -->\n',
+    ],
+    [
+      'a caption carrying the comment terminator',
+      '::: figure\n:::: panel\n![a](x.png)\n::::\n:::\n^ A --> B\n',
+      '<!-- carve: ::: figure -->\n<!-- carve: :::: panel -->\n![a](x.png)\n\n' +
+        '<!-- carve: :::: -->\n<!-- carve: ::: -->\n<!-- carve: ^ A --\\> B -->\n' +
+        '**A \u2192 B**\n',
+    ],
+    // THE CAPTION'S TEXT ALSO APPEARING AS ORDINARY BODY TEXT must not be
+    // consumed: only the paragraph the marker stands directly above is the one
+    // the caption replaces.
+    [
+      'a caption whose text is also ordinary body text',
+      '::: figure\n:::: panel\n![a](x.png)\n::::\n:::\n^ Group caption\n\n*Group caption*\n',
+      '<!-- carve: ::: figure -->\n<!-- carve: :::: panel -->\n![a](x.png)\n\n' +
+        '<!-- carve: :::: -->\n<!-- carve: ::: -->\n<!-- carve: ^ Group caption -->\n' +
+        '**Group caption**\n\n**Group caption**\n',
+    ],
+    [
+      'a caption carrying inline strong',
+      '::: figure\n:::: panel\n![a](x.png)\n::::\n:::\n^ A *strong* caption\n',
+      '<!-- carve: ::: figure -->\n<!-- carve: :::: panel -->\n![a](x.png)\n\n' +
+        '<!-- carve: :::: -->\n<!-- carve: ::: -->\n<!-- carve: ^ A *strong* caption -->\n' +
+        '**A **strong** caption**\n',
+    ],
+  ]
+
+  for (const [name, carve, carrier] of CAPTIONS) {
+    it(`the carrier mode writes the caption line verbatim for ${name}`, () => {
+      expect(carveToMarkdown(carve, { carryMarkers: true })).toBe(carrier)
+    })
+
+    it(`the carrier mode round-trips ${name} into its own slot`, () => {
+      expect(markdownToCarve(carrier)).toBe(carve)
+      // The ROLE is what was lost before this: a <figcaption> came back as
+      // emphasized body text, so the HTML is where the fix is visible.
+      expect(carveToHtml(markdownToCarve(carrier))).toBe(carveToHtml(carve))
+    })
+
+    it(`${name} comes back as a caption, not as body text`, () => {
+      // THE IMPORT'S OWN OUTPUT, not the expectation: a check on the expected
+      // Carve alone would measure the HTML renderer and never the importer.
+      const html = carveToHtml(markdownToCarve(carrier))
+      const count = (html.match(/<figcaption>/g) ?? []).length
+      // Replaced, not joined: one figcaption where the source had a caption.
+      expect(count).toBe(carve.includes('\n^ ') ? 1 : 0)
+    })
+
+    it(`${name} claims no damage`, () => {
+      expect(migrateMarkdown(carrier).report.diagnostics.map((d) => d.code)).not.toContain(
+        'carrier-markers-damaged',
+      )
+    })
+
+    it(`the mode off leaves ${name} unmarked`, () => {
+      expect(carveToMarkdown(carve)).not.toContain('<!-- carve:')
+    })
+  }
+
+  /**
+   * A caption marker belongs to the container the marker before it closed, so
+   * one standing anywhere else has lost what it recorded and the set is
+   * damaged: reported, never guessed.
+   */
+  for (
+    const [shape, source] of Object.entries({
+      'a caption marker with no closer before it':
+        '<!-- carve: ^ Group caption -->\n**Group caption**\n',
+      'a caption marker whose container is left open':
+        '<!-- carve: ::: figure -->\n![a](x.png)\n\n<!-- carve: ^ Group caption -->\n**Group caption**\n',
+      'a caption marker standing above an opener':
+        '<!-- carve: ^ Group caption -->\n<!-- carve: ::: figure -->\n![a](x.png)\n\n<!-- carve: ::: -->\n',
+    })
+  ) {
+    it(`${shape} is reported, never guessed`, () => {
+      const { value, report } = migrateMarkdown(source)
+      const damaged = report.diagnostics.filter((d) => d.code === 'carrier-markers-damaged')
+      expect(damaged).toHaveLength(1)
+      expect(damaged[0]!.fidelity).toBe('degraded')
+      expect(damaged[0]!.confidence).toBe('fallback')
+      expect(value).not.toMatch(/^\s*:{3,}/m)
+      expect(value).toContain('```=html')
+    })
+  }
+
+  /**
+   * THE CONTROL ON THE CAPTION SPELLING. A `^ ...` line INSIDE the container is
+   * not the caption slot: it is literal text, it renders as a paragraph rather
+   * than a `<figcaption>`, and the carrier mode must leave it literal.
+   */
+  it('a caption line inside the container stays literal', () => {
+    const carve = '::: figure\n:::: panel\n![a](x.png)\n::::\n^ Group caption\n:::\n'
+    expect(carveToHtml(carve)).toContain('<p>^ Group caption</p>')
+    const carrier = carveToMarkdown(carve, { carryMarkers: true })
+    expect(carrier).not.toContain('<!-- carve: ^')
+    expect(carrier).toContain('^ Group caption')
+    expect(carveToHtml(markdownToCarve(carrier))).not.toContain('<figcaption>')
+  })
+
+  /**
+   * A HOST THAT PREFIXES ITS LINES TAKES NO MARKER. The comment would sit at
+   * the host's content column or behind its `>`, where the import does not read
+   * it, so it would be written and never read back. The container degrades
+   * there exactly as it does with the mode off.
+   *
+   * READING ONE THROUGH THE PREFIX IS NOT A PATCH, which is why
+   * markup-carve/carve#2850 stays open. The marker lift is a pre-pass over the
+   * SOURCE LINES, and at that point a marker standing at a list item's content
+   * column cannot be told apart from verbatim text in a code block inside that
+   * item - the two prefixed cases in the verbatim test below are exactly the
+   * lines such a pre-pass would eat. Reading the marker off the PARSED tree,
+   * where the markers already arrive as raw-HTML nodes, is the shape that can
+   * tell them apart, and that is a restructuring of this import path.
    */
   for (const [name, carve] of [
     ['inside a list item', '- item\n\n  ::: note\n  Body.\n  :::\n'],
     ['inside a block quote', '> ::: note\n> Body.\n> :::\n'],
+    ['inside a block quote inside a list item', '- item\n\n  > ::: note\n  > Body.\n  > :::\n'],
+    [
+      'a figure group with a caption inside a list item',
+      '- item\n\n  ::: figure\n  :::: panel\n  ![a](x.png)\n  ::::\n  :::\n  ^ Group caption\n',
+    ],
   ] as const) {
     it(`a container ${name} takes no marker`, () => {
       const carrier = carveToMarkdown(carve, { carryMarkers: true })
@@ -225,13 +362,26 @@ describe('an element-less container is carried in a comment', () => {
    * lines that record no container. Lifting one rewrote the sample inside the
    * fence, which is how this was found.
    */
-  it('a marker-shaped line inside a fenced code block is left alone', () => {
-    const source = 'Intro.\n\n```markdown\n<!-- carve: ::: note -->\nAn admonition body.\n<!-- carve: ::: -->\n```\n'
-    const value = markdownToCarve(source)
-    expect(value).toContain('<!-- carve: ::: note -->')
-    expect(value).not.toMatch(/^::: note$/m)
-    expect(migrateMarkdown(source).report.diagnostics.map((d) => d.code)).not.toContain(
-      'carrier-markers-damaged',
-    )
-  })
+  for (
+    const [shape, source] of Object.entries({
+      'inside a fenced code block':
+        'Intro.\n\n```markdown\n<!-- carve: ::: note -->\nAn admonition body.\n<!-- carve: ::: -->\n```\n',
+      'inside an indented code block': 'Intro.\n\n    <!-- carve: ::: note -->\n    body\n',
+      // THE PREFIXED SHAPES, which is what carve#2850's narrowing rests on: a
+      // marker is read at a line's own start, so these stay where they are.
+      'inside a fenced code block in a list item':
+        '- item\n\n  ```\n  <!-- carve: ::: note -->\n  Body.\n  <!-- carve: ::: -->\n  ```\n',
+      'inside an indented code block in a list item':
+        '- item\n\n      <!-- carve: ::: note -->\n      body\n',
+    })
+  ) {
+    it(`a marker-shaped line ${shape} is left alone`, () => {
+      const value = markdownToCarve(source)
+      expect(value).toContain('<!-- carve: ::: note -->')
+      expect(value).not.toMatch(/^\s*::: note$/m)
+      expect(migrateMarkdown(source).report.diagnostics.map((d) => d.code)).not.toContain(
+        'carrier-markers-damaged',
+      )
+    })
+  }
 })
