@@ -11,7 +11,7 @@ import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
 import { escapePlainCarveInlineSyntax, HANDLED_DJOT } from './carve-escape.js'
-import { applyMigrationFixes, isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences } from './djot-migrate.js'
+import { applyMigrationFixes, isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-migrate.js'
 
 const fencedLines = (lines: readonly string[]): boolean[] => {
   let fence: { ch: string; len: number } | null = null
@@ -451,7 +451,7 @@ export function djotToCarve(djot: string): string {
   const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && definitions.has(key) ? `${label}[${key}]` : value)
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
   const folded = rawFolded.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (image: string, label: string, at: number) => {
-    if (imageMask[at] !== '!' || isDjotEscaped(rawFolded, at) || label.includes('\\')) return image
+    if (imageMask[at] !== '!' || isDjotEscaped(rawFolded, at) || label.includes('\\') || label.startsWith('^')) return image
     if (!/[_*`{^~]/.test(label)) {
       spans.push(label)
       return `![${prefix}${spans.length - 1}\x00]`
@@ -505,17 +505,11 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
     literalNotes = new Map<number, number>()
   const edits = new Map<number, { end: number; text: string }>()
   let line = 0
-  let destinationOwner: (typeof stack)[number] | undefined
+  const boundaries = new Set(djotInlineBoundaries(source, mask))
+  let destinationOwner: typeof stack[number] | undefined
   for (let i = 0; i < source.length; i++) {
-    if (source[i] === '\n') {
-      line++
-      if (/^\n[ \t]*(?:>[ \t]*)*\n/.test(source.slice(i))) {
-        stack.length = 0
-        destinationOwner = undefined
-        pendingNotes.clear()
-        continue
-      }
-    }
+    if (boundaries.has(i)) { stack.length = 0; destinationOwner = undefined; pendingNotes.clear() }
+    if (source[i] === '\n') { line++; if (/^\n[ \t]*(?:>[ \t]*)*\n/.test(source.slice(i))) { stack.length = 0; destinationOwner = undefined; pendingNotes.clear(); continue } }
     if (mask[i] === ' ') continue
     if (source[i] === '\\') {
       i++
@@ -663,7 +657,8 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
               ? '\\\\'
               : encodeURIComponent(value).replace(/[()]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase()),
       )
-      edits.set(owner.at, { end: i + 1, text: `[${label}](${target})` })
+      const protectedTarget = target.replace(/\](?=[\[{])/g, '%5D')
+      edits.set(owner.at, { end: i + 1, text: `[${label}](${protectedTarget})` })
       stack.pop()
       destinationOwner = undefined
       for (const at of pendingNotes) edits.set(at, { end: at + 1, text: '\\[' })
@@ -1228,50 +1223,6 @@ function normalizeDjotAutolinks(source: string): string {
   }
   parts.push(source.slice(copied))
   return parts.join('')
-}
-
-function djotContentStart(line: string): number {
-  let at = 0
-  while (at < line.length) {
-    while (line[at] === ' ' || line[at] === '\t') at++
-    if (line[at] === '>') {
-      at++
-      continue
-    }
-    const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+)/.exec(line.slice(at))
-    if (!marker) break
-    at += marker[0].length
-  }
-  return at
-}
-
-function djotTableRows(source: string, mask: string): boolean[] {
-  let offset = 0,
-    previousRow = false,
-    previousBlock = true,
-    footnoteColumn = -1
-  return source.split('\n').map((line) => {
-    const at = djotContentStart(line),
-      end = line.trimEnd().length - 1,
-      content = line.slice(at)
-    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
-    const closesNote = footnoteColumn >= 0 && at < footnoteColumn
-    if (closesNote) footnoteColumn = -1
-    const allowed = previousBlock || previousRow || opensItem || closesNote
-    const note = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)*\[\^[^\]\n]+\]:/.exec(line)
-    if (note && allowed) footnoteColumn = note[0].indexOf('[^') + 2
-    const row: boolean =
-      allowed &&
-      line[at] === '|' &&
-      mask[offset + at] === '|' &&
-      line[end] === '|' &&
-      mask[offset + end] === '|' &&
-      line[end - 1] !== '\\'
-    previousBlock = content.trim() === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]+\]:)/.test(content)
-    previousRow = row
-    offset += line.length + 1
-    return row
-  })
 }
 
 function renameDjotPipeFootnotes(source: string): string {
