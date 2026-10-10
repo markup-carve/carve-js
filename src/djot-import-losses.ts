@@ -1,3 +1,4 @@
+import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
@@ -25,6 +26,7 @@ export function djotImportLosses(
   const losses: DjotImportLoss[] = []
   const reported = new Set<string>()
   const lines = source.split('\n')
+  const quoteDepths = lines.map(line => (line.match(/^(?:[ \t]*>(?:[ \t]|$))*/)?.[0].match(/>/g) ?? []).length)
   const offsets: number[] = []
   let offset = 0
   for (const line of lines) {
@@ -198,7 +200,8 @@ export function djotImportLosses(
   let next = -1
   for (let at = source.length - 1; at >= 0; at--) {
     if (breaks.has(at)) next = -1
-    else if (source[at] === ']' && !escaped[at]) next = at
+    else if (masked[at] === ']' && !escaped[at]) next = at
+    else if (masked[at] === '[' && !escaped[at]) next = -1
     referenceEnds[at] = next
   }
   const stack: { at: number; nested: boolean }[] = []
@@ -228,7 +231,7 @@ export function djotImportLosses(
     if (source[end] === '(') {
       const destinationEnd = destinations.get(end)
       if (destinationEnd === undefined) { carryNested(opener.nested); continue }
-      destination = source.slice(end + 1, destinationEnd - 1)
+      destination = djotDestinationLines(source.slice(end + 1, destinationEnd - 1), quoteDepths[lineAt(open) - 1]!)
       end = destinationEnd
     } else if (source[end] === '[') {
       const start = end + 1
@@ -238,9 +241,9 @@ export function djotImportLosses(
       const label = source.slice(open + 1, at)
       const key = referenceKey(
         explicit ||
-          renderPlainText(parse(djotEmphasis(label, (text) => text)), {
+          (definitions.size === 0 ? '' : renderPlainText(parse(djotEmphasis(label, (text) => text)), {
             smartTypography: false,
-          }),
+          })),
       )
       destination = definitions.get(key)
       end++

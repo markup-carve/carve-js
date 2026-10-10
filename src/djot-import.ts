@@ -1,3 +1,4 @@
+import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
@@ -659,14 +660,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
           at = end
         } else rawDestination += source[at++]!
       }
-      let destination = rawDestination
-        .replace(/\\(?:\r?\n|[^\r\n])/g, (value) => (value.endsWith('\n') ? '\n' : value))
-        .replace(/\n([ \t]*[^\n]*)/g, (_all, tail: string) => {
-          let rest = tail.replace(/^[ \t]*/, '')
-          for (let n = 0; n < owner.depth && /^>(?:[ \t]|$)/.test(rest); n++)
-            rest = rest.slice(1).replace(/^[ \t]*/, '')
-          return rest
-        })
+      let destination = djotDestinationLines(rawDestination, owner.depth)
       if (rows[line])
         destination = destination.replace(/\\+\|/g, (value) => '%5C'.repeat(Math.floor((value.length - 1) / 2)) + '%7C')
       if (owner.image && label.includes('[')) {

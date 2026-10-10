@@ -228,3 +228,26 @@ it.each(['![a]()', '![a][missing]', '![a][]\n\n[a]:'])('reports images with miss
 it('preserves a space-only destination without an empty-target loss', () => {
   expect(djotToCarveWithLosses('[a]( )').losses).toEqual([])
 })
+
+
+it('keeps an unfinished reference label with an inner opener literal', () => {
+  expect(djotToCarveWithLosses('[a][[b]').losses).toEqual([])
+})
+
+it('reports a newline-only destination as empty', () => {
+  expect(djotToCarveWithLosses('[a](\n)').losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('empty destination') }))
+})
+
+
+it('does not turn an unfinished reference containing code into a link loss', () => {
+  expect(djotToCarveWithLosses('[a][b `c] [x][y]` z').losses).toEqual([])
+})
+
+
+it.each(['> [a](\n> )', '- [a](\n  )', '[a](\n  )'])('reports empty destinations after folding container prefixes: %s', (source) => {
+  expect(djotToCarveWithLosses(source).losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('empty destination') }))
+})
+
+it.each(['[a][b][c]\n\n[b]: /u', '[a][b]()\n\n[b]: /u'])('does not reuse an accepted reference payload: %s', (source) => {
+  expect(djotToCarveWithLosses(source).losses).toEqual([])
+})
