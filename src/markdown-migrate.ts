@@ -1199,7 +1199,7 @@ function convertInline(
     if (line[i] === '<') {
       const opaque = opaqueEnd(i)
       if (opaque !== undefined) {
-        escaped += protect(rawInlineHtml(line.slice(i, opaque)))
+        escaped += protect(rawInlineHtml(line.slice(i, opaque)), line.slice(i, opaque))
         i = opaque
         continue
       }
@@ -1214,7 +1214,7 @@ function convertInline(
       escaped += protect(line.slice(i, i + 2))
       i += 2
     } else {
-      escaped += line[i] === '\\' && (line[i + 1] === ' ' || (terminal && i + 1 === line.length)) ? protect('\\\\') : line[i]
+      escaped += line[i] === '\\' && (line[i + 1] === ' ' || (terminal && i + 1 === line.length)) ? protect('\\\\', line[i]) : line[i]
       i++
     }
   }
@@ -1224,7 +1224,7 @@ function convertInline(
   // <code>...</code> without attributes has a Carve-native equivalent. Protect
   // it before delimiter rewrites so its body stays verbatim. Attributed code
   // is handled by convertInlineHtml as raw HTML so attributes are not lost.
-  line = line.replace(/<code>([^<]+)<\/code>/gi, (_m, inner) => protect(`\`${inner}\``))
+  line = line.replace(/<code>([^<]+)<\/code>/gi, (_m, inner) => protect(`\`${inner}\``, _m))
 
 
 
@@ -3952,7 +3952,7 @@ function collectListInlineRun(
     taskLead === null
       ? respellHeldQuoteMarkers(first.slice(marker[0].length))
       : first.slice(marker[0].length, taskLead[0].length) + escapeBlockOpener(first.slice(taskLead[0].length))
-  const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: firstLineText }]
+  const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: firstLineText, source: start }]
   const itemCols = [contentCol, ...nestedItems.map((item) => item.content)]
   const firstText = first.slice(nestedEnd)
   let end = start + 1

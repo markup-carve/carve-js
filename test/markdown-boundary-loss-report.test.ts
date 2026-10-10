@@ -33,3 +33,13 @@ it('does not read a link across nested table cells', () => {
   const source = '- | h | i |\n  |---|---|\n  | [a | b]() |\n'
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
 })
+
+it.each([
+  ['- a [x]()', 1],
+  ['- a\n- b [x]()\n  c', 2],
+  ['> <code>a</code>\n> [x]()', 2],
+  ['<code>a</code>\n[x]()\n===', 2],
+])('keeps first item lines and protected HTML offsets: %s', (source, line) => {
+  const loss = migrateMarkdown(source).report.diagnostics.find(row => row.code === 'structure-unspellable')
+  expect(loss?.path).toBe(`line:${line}`)
+})
