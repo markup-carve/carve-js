@@ -164,6 +164,18 @@ describe("a decoded space at a heading's head", () => {
     expect(losses).toEqual([])
   })
 
+  it('drops the separator too when the decode WAS the content', () => {
+    expect(convert('# &#32;\n').value).toBe('#\n')
+  })
+
+  // Raised by codex review: a `#` run in a table cell is literal text, so the
+  // space after it is content Carve holds. carve-rs keeps it.
+  it('leaves a heading-shaped table cell alone', () => {
+    const { value, losses } = convert('| # &#32;x |\n| --- |\n| a |\n')
+    expect(value).toBe('|= #  x |\n| a |\n')
+    expect(losses).toEqual([])
+  })
+
   it('reports nothing when the author wrote the separator run themselves', () => {
     const { value, losses } = convert('#    lit\n')
     expect(value).toBe('# lit\n')

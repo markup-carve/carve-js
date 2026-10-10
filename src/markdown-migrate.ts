@@ -507,7 +507,7 @@ function decodeEntitiesInTitle(rest: string): string {
 /** An ATX marker, its separator, and whitespace past it: `#` + ` ` + ` `. */
 const RE_HEADING_HEAD_WHITESPACE = /^(#{1,6}[ \t])[ \t]+/
 
-function decodeHtmlEntities(s: string): string {
+function decodeHtmlEntities(s: string, headingHeadDrops = true): string {
   const decoded = s.replace(
     RE_HTML_ENTITY,
     (match, dec: string | undefined, hex: string | undefined, named: string | undefined) => {
@@ -538,12 +538,14 @@ function decodeHtmlEntities(s: string): string {
   // rather than the character: `#  head` and `# head` render the same document
   // and `carve fmt` rewrites the first back to the second
   // (markup-carve/carve-rs#2449).
-  if (RE_HEADING_HEAD_WHITESPACE.test(decoded) && !RE_HEADING_HEAD_WHITESPACE.test(s)) {
+  if (headingHeadDrops && RE_HEADING_HEAD_WHITESPACE.test(decoded) && !RE_HEADING_HEAD_WHITESPACE.test(s)) {
     importLosses.push({
       code: 'structure-unspellable',
       message: HEADING_LEADING_WHITESPACE_UNSPELLABLE,
     })
-    return decoded.replace(RE_HEADING_HEAD_WHITESPACE, '$1')
+    // Nothing is left but the separator when the decode WAS the content, and a
+    // separator with no content behind it is not canonical either.
+    return decoded.replace(RE_HEADING_HEAD_WHITESPACE, '$1').replace(/^(#{1,6})[ \t]+$/, '$1')
   }
   if (!/^[ \t]/.test(decoded) || /^[ \t]/.test(s)) return decoded
   const dropped = decoded.replace(/^[ \t]+/, '')
@@ -1728,7 +1730,9 @@ function convertInline(
     }
     line = line.replace(/["']/g, '\\$&')
   }
-  line = decodeHtmlEntities(line)
+  // In a table cell a `#` run is literal text, not a heading marker, so the
+  // space after it is content Carve holds.
+  line = decodeHtmlEntities(line, !table)
 
   if (table) line = escapeTablePipes(line)
 
