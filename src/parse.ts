@@ -8025,6 +8025,7 @@ class ParseSession {
   }
 
   private markerPrefixMemos = new WeakMap<readonly string[], Map<number, Map<number, number>>>()
+  private markerFenceMemos = new WeakMap<Map<number, number>, Map<number, { offset: number; column: number; close: RegExp | null }>>()
 
   // Only literal source suffixes share numeric offsets; reconstructed lines do not.
   private markerPrefixMemo(lexer: Lexer, index: number): Map<number, number> | undefined {
@@ -8065,6 +8066,7 @@ class ParseSession {
     this.recordPositions = opts.positions !== false
     this.newlineIndexCache.clear()
     this.markerPrefixMemos = new WeakMap()
+    this.markerFenceMemos = new WeakMap()
     this.activeQuoteCharacters = opts.extensions
       ?.map((extension) => extension.quoteCharacters)
       .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
@@ -11906,7 +11908,7 @@ class ParseSession {
         // descendant's own paragraph still open and no closer ahead the run is an
         // inline verbatim span inside that paragraph, which stays open - so a
         // below-column line still folds there and nothing ends.
-        if (followsBlank || closerAhead) {
+        if (followsBlank || !lazyState.lazyFoldable || closerAhead) {
           descendantOpaque = { close: fenceCloseRe(marker), base }
         }
       }
@@ -12499,6 +12501,96 @@ class ParseSession {
         }
       }
 
+      // Preserve the existing extent of a fence-shaped descendant body span.
+      // The parent tracker can leave its paragraph open after a child marker,
+      // even though that child's body has already reached a fence run.
+      let trailingDescendantFence = false
+      if (pendingBlanks > 0) {
+        const markerFenceAt = (
+          text: string,
+          column: number,
+          prefixMemo?: Map<number, number>,
+        ): DescendantOpaque | null => {
+          let memo = prefixMemo ? this.markerFenceMemos.get(prefixMemo) : undefined
+          if (prefixMemo && !memo) {
+            memo = new Map()
+            this.markerFenceMemos.set(prefixMemo, memo)
+          }
+          const bound = prefixWalkBound(text)
+          let at = 0
+          let base = column
+          let close: RegExp | null = null
+          let reused = false
+          const path: Array<{ length: number; offset: number; column: number }> = []
+          for (;;) {
+            const cached = memo?.get(text.length - at)
+            if (cached) {
+              at += cached.offset
+              base += cached.column
+              close = cached.close
+              reused = true
+              break
+            }
+            if (memo) path.push({ length: text.length - at, offset: at, column: base })
+            const quoted = quotePrefixLength(text, at, bound)
+            if (quoted > 0) {
+              base += quoted
+              at += quoted
+              continue
+            }
+            const prefix = markerPrefixLength(text, at, bound)
+            if (prefix === 0) break
+            base += markerContentColumn(text.slice(at, at + prefix) + 'x')
+            at += prefix
+          }
+          if (!reused) {
+            const bottom = text.slice(at)
+            const fence = RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom)
+            if (fence !== null) {
+              const marker = RE_FENCE.test(bottom) ? fence[2]! : fence[1]!
+              close = fenceCloseRe(marker)
+            }
+          }
+          for (const entry of path) {
+            memo!.set(entry.length, { offset: at - entry.offset, column: base - entry.column, close })
+          }
+          return close === null ? null : { close, base }
+        }
+        let markerFence = markerFenceAt(content, 0, this.markerPrefixMemo(lexer, itemStartLineIndex))
+        let bodyFence: DescendantOpaque | null = null
+        for (let bodyIndex = 0; bodyIndex < nested.length; bodyIndex++) {
+          const bodyLine = nested[bodyIndex]!
+          if (isBlankLine(bodyLine)) continue
+          const column = indentColumns(bodyLine)
+          const opener = bodyLine.trimStart()
+          let markerCloser = false
+          if (markerFence !== null) {
+            if (column < markerFence.base) markerFence = null
+            else if (column === markerFence.base && markerFence.close.test(opener)) {
+              markerFence = null
+              markerCloser = true
+            }
+          }
+          if (bodyFence !== null) {
+            if (column < bodyFence.base) bodyFence = null
+            else {
+              if (column === bodyFence.base && bodyFence.close.test(opener)) bodyFence = null
+              continue
+            }
+          }
+          if (markerCloser) continue
+          if (markerFence === null && isListMarkerLine(bodyLine)) {
+            markerFence = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
+          }
+          const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+          if (fence !== null) {
+            const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+            bodyFence = { close: fenceCloseRe(marker), base: column }
+          }
+        }
+        trailingDescendantFence = bodyFence !== null
+      }
+
       // A block opener may be authored past the canonical item-body column.  The
       // collector above deliberately keeps the whole physical run; rebase each
       // recognized block group now, before tightness and block parsing inspect
@@ -12583,10 +12675,11 @@ class ParseSession {
       // flushed only when a later line reaches the content column, so a fence
       // running to the end of the item never received them.
       //
-      // A child item receives the run too: its parser owns any fence hidden
-      // from this item's tracker. Other trailing blanks remain spacing.
+      // A descendant's body-line fence keeps its trailing payload blanks.
+      // Parent separators do not belong to fences on child marker lines.
       if (pendingBlanks > 0 && (
-        lazyState.opaque !== null || authoredCodeFenceOpen || firstBlockIdx >= 0 || leadIsMarker
+        lazyState.opaque !== null || authoredCodeFenceOpen || descendantOpaque !== null ||
+        ((firstBlockIdx >= 0 || leadIsMarker) && trailingDescendantFence)
       )) {
         hasBlank = true
         for (let k = 0; k < pendingBlanks; k++) {
@@ -12694,7 +12787,9 @@ class ParseSession {
       // must not latch this pass either: an unterminated `%%%` swallowed every
       // later line and a genuinely CLOSED code fence below it went unmarked, so a
       // blank inside that code loosened the item.
-      const closers = buildCloserIndex(fenceLines)
+      const closerLines = fenceLines.map((line, index) => index === 0 ? line :
+        line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0))
+      const closers = buildCloserIndex(closerLines)
       // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
       // `:::` container that IS the item's first block is the item's own body:
       // the blank line between two of its blocks is the only blank line the item

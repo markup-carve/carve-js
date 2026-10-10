@@ -14,6 +14,7 @@ import { carveToHtml } from '../src/index.js'
  * item ABOVE, with the closer coming back as an empty inline `code`. Every
  * expectation here is the executable spec's answer, read from
  * `scripts/spec/layout.mjs` into `scripts/spec/html.mjs` at spec 4ce23fe9.
+ * The blank-before-outside-body control was corrected against spec b738ffe7.
  *
  * The OUTERMOST spelling is the control and must NOT move: with no container
  * above it, nothing was folded in, and the spec leaks the body to the document
@@ -91,9 +92,9 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
     )
   })
 
-  it("a blank line above the body is unchanged", () => {
+  it("a blank before an outside body stays outside the nested fence", () => {
     expect(carveToHtml("- - ``` x\n\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
     )
   })
 
