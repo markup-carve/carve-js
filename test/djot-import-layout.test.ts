@@ -395,6 +395,40 @@ it('attaches word attributes across escaped punctuation', () => {
   expect(carveToHtml(djotToCarve('foo\\*bar{.c}\n'))).toBe('<p><span class="c">foo*bar</span></p>')
 })
 
+// An attribute attaches to the whole non-ASCII-whitespace run, escapes included. djot.js
+// splits the run at an escape against its own test/attributes.test wording, so it is not the
+// authority here: markup-carve/carve#2848, jgm/djot#417.
+it.each([
+  ['\\{a\\_b}{.c}\n', '[\\{a\\_b}]{.c}\n', '<p><span class="c">{a_b}</span></p>'],
+  ['a\\{b{.c}\n', '[a\\{b]{.c}\n', '<p><span class="c">a{b</span></p>'],
+  ['a\\}b{.c}\n', '[a\\}b]{.c}\n', '<p><span class="c">a}b</span></p>'],
+  ['\\{a\\_b\\*c\\}d{.c}\n', '[\\{a\\_b\\*c\\}d]{.c}\n', '<p><span class="c">{a_b*c}d</span></p>'],
+  ['x\\_y \\{z\\}{.c}\n', 'x\\_y [\\{z\\}]{.c}\n', '<p>x_y <span class="c">{z}</span></p>'],
+  ['a\\{{.c}\n', '[a\\{]{.c}\n', '<p><span class="c">a{</span></p>'],
+  ['a\\}{.c}\n', '[a\\}]{.c}\n', '<p><span class="c">a}</span></p>'],
+  ['a\\{b\\}c{.c}\n', '[a\\{b\\}c]{.c}\n', '<p><span class="c">a{b}c</span></p>'],
+  ['a\\{b\\_c{.c}\n', '[a\\{b\\_c]{.c}\n', '<p><span class="c">a{b_c</span></p>'],
+  ['\\{\\}{.c}\n', '[\\{\\}]{.c}\n', '<p><span class="c">{}</span></p>'],
+  ['a \\{b{.c}\n', 'a [\\{b]{.c}\n', '<p>a <span class="c">{b</span></p>'],
+  ['a \\}b{.c}\n', 'a [\\}b]{.c}\n', '<p>a <span class="c">}b</span></p>'],
+  ['a\\]b{.c}\n', '[a\\]b]{.c}\n', '<p><span class="c">a]b</span></p>'],
+  ['a\\"b{.c}\n', '[a\\"b]{.c}\n', '<p><span class="c">a"b</span></p>'],
+])('attaches a word attribute across an escaped brace: %j', (source, carve, html) => {
+  expect(djotToCarve(source)).toBe(carve)
+  expect(carveToHtml(djotToCarve(source))).toBe(html)
+})
+
+it('keeps literal whitespace a word boundary even when it is escaped', () => {
+  expect(djotToCarve('a\\ b{.c}\n')).toBe('a\\ [b]{.c}\n')
+  expect(carveToHtml(djotToCarve('a\\ b{.c}\n'))).toBe('<p>a&nbsp;<span class="c">b</span></p>')
+})
+
+it('still attributes an unescaped brace pair inside the word', () => {
+  expect(djotToCarve('w{x}{.c}\n')).toBe('[w\\{x}]{.c}\n')
+  expect(carveToHtml(djotToCarve('w{x}{.c}\n'))).toBe('<p><span class="c">w{x}</span></p>')
+  expect(carveToHtml(djotToCarve('word{.c}\n'))).toBe('<p><span class="c">word</span></p>')
+})
+
 it.each(['<mailto:a@b.c>\n', '<mailto:a--@b.c>\n', '<mailto:a...@b.c>\n', '<https://example.com>\n', '<a@b.c>\n'])(
   'writes an address autolink with a single scheme: %j',
   (source) => {

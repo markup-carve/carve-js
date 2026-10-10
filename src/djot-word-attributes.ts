@@ -3,6 +3,14 @@ import { djotPairedEmphasisOpeners } from './djot-emphasis.js'
 
 export { readAttributes, nativeAttributeReader } from './djot-attributes.js'
 
+/** An escaped character belongs to the attribute's word: the boundary is whitespace, not an escape. */
+function escapedWordCharacter(source: string, at: number, cursor: number): boolean {
+  if (at - 1 < cursor || source[at - 1] !== '\\' || /\s/u.test(source[at] ?? ' ')) return false
+  let slashes = 0
+  for (let s = at - 1; s >= cursor && source[s] === '\\'; s--) slashes++
+  return slashes % 2 === 1
+}
+
 export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string): string {
   if (!source.includes('{')) return source
   const paired = djotPairedEmphasisOpeners(source)
@@ -56,10 +64,11 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     }
     if (attrs.source === '{}') { i = attrs.end - 1; continue }
     let word = i
-    if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1))) {
+    if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1) || escapedWordCharacter(source, i - 1, cursor))) {
       while (word > cursor && masked[word - 1] === source[word - 1]) {
         const literal = literalBraces.get(word - 1)
-        if (literal !== undefined && literal >= cursor) { const escaped = escapedBraceCloses.has(word - 1); word = literal; if (escaped) break; continue }
+        if (literal !== undefined && literal >= cursor) { word = literal; continue }
+        if (escapedWordCharacter(source, word - 1, cursor)) { word -= 2; continue }
         if (/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) break
         word--
       }
