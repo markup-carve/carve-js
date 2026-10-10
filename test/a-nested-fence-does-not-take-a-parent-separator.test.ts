@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import markerPayloads from './fixtures/nested-fence-marker-payload.json'
 import { carveToCarve, carveToHtml, parse, renderHtml } from '../src/index.js'
 
 const empty = '<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>'
@@ -46,4 +47,10 @@ it('keeps fence-shaped payload and its trailing blank inside a child fence', () 
   expect(carveToHtml(source)).toBe(expected)
   expect(renderHtml(parse(source))).toBe(expected)
   expect(carveToHtml(carveToCarve(source))).toBe(expected)
+})
+
+it.each(markerPayloads)('keeps marker-shaped fence payload at its native extent: $source', ({ source, html }) => {
+  expect(carveToHtml(source)).toBe(html)
+  expect(renderHtml(parse(source))).toBe(html)
+  expect(carveToHtml(carveToCarve(source))).toBe(html)
 })
