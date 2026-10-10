@@ -12,3 +12,13 @@ it.each([["``` f&ouml;&ouml;\nfoo\n```\n", 1], ["````;\n````\n", 1], ["[foo]: <>
 it.each(['[link](url)', '![alt](image.png)', '`[link]()`', '\\[link]()', '```c++ metadata\nx\n```', '```&#99;\nx\n```', '```\nx\n```'])('does not report a boundary loss for %s', source => {
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
 })
+
+it.each([["- | h |\n  |---|\n  | [x]() |\n", 3], ["> | h |\n> |---|\n> | [x]() |\n", 3], ["a `c\nd`\n[x]()\n", 3], ["a\n[x]()\n===\n", 2]])('reports a folded source construct once at its original line: %s', (source, line) => {
+  const losses = migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')
+  expect(losses).toHaveLength(1)
+  expect(losses[0]?.path).toBe(`line:${line}`)
+})
+
+it.each(['<span title="[x]()">a</span>', '<http://a/[x]()>', '![a [b]() c](img.png)', '[foo]: <>\n\n![x [foo] y](i.png)'])('does not confuse opaque syntax or image descriptions with links: %s', source => {
+  expect(migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
+})

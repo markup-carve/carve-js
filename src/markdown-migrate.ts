@@ -1134,6 +1134,7 @@ function convertInline(
   joinedLines?: Set<number>,
   terminal = true,
   table = false,
+  reportEmptyLosses = true,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -1143,8 +1144,10 @@ function convertInline(
   // contain one, which is an assumption about a file rather than about the
   // string a host passes, and carve-js#1291 measured what an authored one did.
   const protectedSpans: string[] = []
-  const protect = (s: string) => {
+  const protectedSources: string[] = []
+  const protect = (s: string, source = s) => {
     protectedSpans.push(s)
+    protectedSources.push(source)
     return `\x00P${protectedSpans.length - 1}\x00`
   }
   let codeCursor = 0, codeLine = 0
@@ -1158,7 +1161,7 @@ function convertInline(
     let value = span.slice(fence.length, -fence.length).replace(/\n[ \t]*/g, ' ')
     if (value.startsWith(' ') && value.endsWith(' ') && /[^ ]/.test(value)) value = value.slice(1, -1)
     const rendered = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
-    return protect(rendered.replace(/\n$/, ''))
+    return protect(rendered.replace(/\n$/, ''), span)
   })
   line = escapeCarveOnlyMarker(line)
   // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
@@ -1224,9 +1227,28 @@ function convertInline(
 
 
 
-  line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before) => {
-    const prefix = referenceSourceText(before, protectedSpans)
-    const sourceLine = inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + (prefix.match(/\n/g) ?? []).length
+  const sourceLineCounts = new Map<string, Array<{ offset: number; count: number }>>()
+  let opaqueSubject: string | undefined
+  let opaqueRanges: Array<[number, number]> = []
+  line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before, subject) => {
+    if (!reportEmptyLosses) return
+    let counts = sourceLineCounts.get(subject)
+    if (counts === undefined) {
+      counts = []
+      let count = 0
+      for (const match of subject.matchAll(/\n|\x00P(\d+)\x00/g)) {
+        count += match[1] === undefined ? 1 : countNewlines(protectedSources[Number(match[1])] ?? '')
+        counts.push({ offset: match.index! + match[0].length - 1, count })
+      }
+      sourceLineCounts.set(subject, counts)
+    }
+    let low = 0, high = counts.length
+    while (low < high) {
+      const mid = (low + high) >>> 1
+      if (counts[mid]!.offset < before.length) low = mid + 1
+      else high = mid
+    }
+    const sourceLine = inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + (counts[low - 1]?.count ?? 0)
     importLosses.push({
       code: 'structure-unspellable',
       message: image
@@ -1234,6 +1256,23 @@ function convertInline(
         : 'Dropped a link with an empty destination; retained its label and title.',
       ...(sourceLine === undefined ? {} : { line: sourceLine }),
     })
+  }, (subject, offset) => {
+    if (subject !== opaqueSubject) {
+      opaqueSubject = subject
+      opaqueRanges = []
+      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
+      for (let cursor = 0; cursor < subject.length; cursor++) {
+        if (subject[cursor] !== '<') continue
+        autolink.lastIndex = cursor
+        const auto = autolink.exec(subject)
+        const end = auto ? cursor + auto[0].length : scanHtmlTag(subject, cursor)?.end
+        if (end !== undefined) {
+          opaqueRanges.push([cursor, end])
+          cursor = end - 1
+        }
+      }
+    }
+    return opaqueRanges.some(([start, end]) => offset > start && offset < end)
   })
 
   const encodeDest = (paren: string): string | undefined => {
@@ -1851,10 +1890,11 @@ function writeTableRow(
   prefixes: readonly string[],
   dialect: MarkdownDialect,
   width: number = cells.length,
+  reportEmptyLosses = true,
 ): string {
   let row = ''
   for (let c = 0; c < width; c++) {
-    const cell = convertInline((cells[c] ?? '').replace(/\\\|/g, '|'), dialect, false, false, undefined, true, true)
+    const cell = convertInline((cells[c] ?? '').replace(/\\\|/g, '|'), dialect, false, false, undefined, true, true, reportEmptyLosses)
     row += '|' + padCell(prefixes[c] ?? '', escapeSpanMarkerPayload(cell))
   }
   return row + '|'
@@ -2792,12 +2832,12 @@ function restorePrefixedInlineRun(
       if (idx === 0 || !inTable[idx - 1] || container[idx - 1] !== container[idx]) {
         const headers = splitTableRow(held[idx + 1]!.body.trim()).map((cell) => `=${alignMarker(cell)}`)
         tableWidth = headers.length
-        const header = writeTableRow(splitTableRow(body.trim()), headers, dialect)
+        const header = writeTableRow(splitTableRow(body.trim()), headers, dialect, undefined, false)
         if (keepTableRow(header, runPartSourceLine(part))) out.push(part.prefix + marker + header)
         idx++ // consume the delimiter row
         continue
       }
-      const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth)
+      const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth, false)
       if (keepTableRow(row, runPartSourceLine(part))) out.push(part.prefix + marker + row)
       continue
     }
@@ -5736,7 +5776,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        out.push(containerPad + convertInline(`${heading} ${bare.map((text, index) => headingLine(text, index === bare.length - 1)).join(' ')}`, dialect))
+        out.push(containerPad + convertInline(`${heading} ${bare.map((text, index) => headingLine(text, index === bare.length - 1)).join('\n')}`, dialect).replace(/\n/g, ' '))
         i = end
         if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
         prevType = 'heading'

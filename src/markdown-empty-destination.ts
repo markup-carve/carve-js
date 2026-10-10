@@ -578,7 +578,8 @@ export function unwrapEmptyDestinations(
   placeholders: readonly string[],
   protect: (s: string) => string,
   decodeEntity: (entity: string) => string,
-  onUnwrap?: (image: boolean, before: string) => void,
+  onUnwrap?: (image: boolean, before: string, subject: string) => void,
+  excluded?: (subject: string, offset: number) => boolean,
 ): string {
   const replaceAt = (re: RegExp, pick: (m: RegExpExecArray) => string | null): void => {
     const subject = line
@@ -587,6 +588,7 @@ export function unwrapEmptyDestinations(
     re.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = re.exec(subject)) !== null) {
+      if (excluded?.(subject, m.index)) continue
       const replacement = pick(m)
       if (replacement === null) continue
       out += subject.slice(cursor, m.index) + replacement
@@ -594,8 +596,23 @@ export function unwrapEmptyDestinations(
     }
     line = out + subject.slice(cursor)
   }
+  let imageSubject: string | undefined
+  let imageRanges: Array<[number, number]> = []
   const unwrap = (m: RegExpExecArray, title: string, subject: string) => {
-    onUnwrap?.(m[0][0] === '!', subject.slice(0, m.index))
+    if (subject !== imageSubject) {
+      imageSubject = subject
+      imageRanges = []
+      const images = new RegExp(String.raw`!\[${LABEL}\](?:(\((?:[^()\n]|\([^()\n]*\))*\))|\[([^[\]\n]*)\])?`, 'g')
+      for (const image of subject.matchAll(images)) {
+        const key = normalizeReferenceLabel(decodeLinkTitle(image[3] || image[1]!, decodeEntity, placeholders))
+        if (image[2] !== undefined || references.defined.has(key)) {
+          imageRanges.push([image.index!, image.index! + 2 + image[1]!.length])
+        }
+      }
+    }
+    if (!imageRanges.some(([start, end]) => m.index > start && m.index < end)) {
+      onUnwrap?.(m[0][0] === '!', subject.slice(0, m.index), subject)
+    }
     return unwrapEmptyDestination(m[1]!, m[0][0] === '!', title, subject.slice(0, m.index), placeholders, protect, decodeEntity)
   }
   if (references.empty.size > 0) {
