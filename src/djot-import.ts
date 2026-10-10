@@ -1229,12 +1229,12 @@ function normalizeDjotAutolinks(source: string): string {
     if (rows[line] && /[|`]/.test(body)) continue
     const label = body.replace(/[!-\/:-@\[-`{-~]/g, (value) => '\\' + value)
     const destination = email ? 'mailto:' + body : body
-    const authority = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\\]*/.exec(destination)?.[0].length ?? 0
-    const encode = (text: string, brackets: boolean) =>
-      text.replace(brackets ? /[`|\\()[\]]/g : /[`|\\()]/g, (value) =>
-        value === '\\' ? '\\\\' : '%' + value.charCodeAt(0).toString(16).toUpperCase(),
-      )
-    const target = encode(destination.slice(0, authority), false) + encode(destination.slice(authority), true)
+    // carve#2854: a square bracket is not encoded. A Carve destination holds it
+    // literally, balanced or not, so encoding it would change the href against a
+    // body the angle form promises to show verbatim.
+    const target = destination.replace(/[`|\\()]/g, (value) =>
+      value === '\\' ? '\\\\' : '%' + value.charCodeAt(0).toString(16).toUpperCase(),
+    )
     parts.push(source.slice(copied, at), image ? label : '[' + label + '](' + target + ')')
     copied = end
   }
