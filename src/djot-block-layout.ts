@@ -157,6 +157,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       const outerStart = closeStarts.at(-1)!
       while (divs.length && divs.at(-1)!.start >= outerStart) {
         const closed = divs.pop()!
+        while ((closeStarts[matched] ?? -1) > closed.start) matched++
         if (closed.start === closeStarts[matched]) {
           out.push(closed.prefix + ':'.repeat(closed.width))
           matched++
