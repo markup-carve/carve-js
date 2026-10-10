@@ -360,7 +360,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // A folded heading's line join takes PART 7's four characters. The class
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
       // newline that the HTML target kept.
-      const text = trimNonNbsp(withinSingleLineSlot(() => renderInlines(node.children, ctx)).replace(/[ \t\r\n]+/g, (run) => {
+      const text = trimNonNbsp(withinSingleLineSlot(() => renderInlines(node.children, ctx), false).replace(/[ \t\r\n]+/g, (run) => {
         const count = run.split('\n').length - 1
         return count === 0 ? run : ' '.repeat(count)
       }))
@@ -1158,7 +1158,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // table. Not `<br>`: a soft break is the break that does not render as a
       // break, and inventing a visible one is what CARVE-P11-008 forbids. §9a
       // gives the identical reasoning for the hard break below.
-      return insideSingleLineSlot ? ' ' : '\n'
+      return flattenSingleLineSoftBreaks ? ' ' : '\n'
     case 'hard_break':
       // A BACKSLASH, not two trailing spaces (PART 11 section 9). Both mean
       // `<br />` to a CommonMark reader, but trailing whitespace is removed by
@@ -1267,14 +1267,18 @@ function outsideLink<T>(fn: () => T): T {
 }
 
 let insideSingleLineSlot = false
+let flattenSingleLineSoftBreaks = false
 
-function withinSingleLineSlot<T>(fn: () => T): T {
+function withinSingleLineSlot<T>(fn: () => T, flattenSoftBreaks = true): T {
   const previous = insideSingleLineSlot
+  const previousSoftBreaks = flattenSingleLineSoftBreaks
   insideSingleLineSlot = true
+  flattenSingleLineSoftBreaks = flattenSoftBreaks
   try {
     return fn()
   } finally {
     insideSingleLineSlot = previous
+    flattenSingleLineSoftBreaks = previousSoftBreaks
   }
 }
 

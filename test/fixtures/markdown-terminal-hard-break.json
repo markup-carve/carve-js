@@ -1982,5 +1982,63 @@
     },
     "markdown": "|  |\n| --- |\n| seed<br> |\n",
     "nativeHtml": "<table>\n<thead>\n<tr>\n<th></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>seed<br></td>\n</tr>\n</tbody>\n</table>\n"
+  },
+  {
+    "template": "# seed",
+    "name": "soft-break-edge-spaces",
+    "document": {
+      "type": "document",
+      "children": [
+        {
+          "type": "heading",
+          "level": 1,
+          "children": [
+            {
+              "type": "text",
+              "value": "a "
+            },
+            {
+              "type": "soft_break"
+            },
+            {
+              "type": "text",
+              "value": " b"
+            }
+          ]
+        }
+      ],
+      "srcByteLength": 6
+    },
+    "markdown": "# a b\n",
+    "nativeHtml": "<h1>a b</h1>\n"
+  },
+  {
+    "template": "# seed",
+    "name": "soft-break-edge-tabs",
+    "document": {
+      "type": "document",
+      "children": [
+        {
+          "type": "heading",
+          "level": 1,
+          "children": [
+            {
+              "type": "text",
+              "value": "a\t"
+            },
+            {
+              "type": "soft_break"
+            },
+            {
+              "type": "text",
+              "value": "\tb"
+            }
+          ]
+        }
+      ],
+      "srcByteLength": 6
+    },
+    "markdown": "# a b\n",
+    "nativeHtml": "<h1>a b</h1>\n"
   }
 ]
