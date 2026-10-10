@@ -7896,6 +7896,7 @@ class ParseSession {
   private skipParagraphInlines = false
 
   parse(source: string, opts: ParseOptions = {}): Document {
+    const sourceByteLength = utf8ByteLength(source)
     this.recordPositions = opts.positions !== false
     this.newlineIndexCache.clear()
     this.markerPrefixMemos = new WeakMap()
@@ -7953,7 +7954,7 @@ class ParseSession {
     const doc: Document = { type: 'document', children }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
-    doc.srcByteLength = utf8ByteLength(source)
+    doc.srcByteLength = sourceByteLength
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
