@@ -47,6 +47,15 @@ carveToHtmlWithReport('`x`{=latex}', { strictLosses: true })
 See the [full usage reference](https://github.com/markup-carve/carve-js/blob/main/docs/reference.md)
 for checked output, custom renderers, symbols, profiles, and static output.
 
+### Straight quotes with smart typography
+
+Pass `{ smartTypography: { quotes: false } }` to `carveToHtml`,
+`carveToMarkdown`, `carveToPlainText`, or `carveToAnsi` to keep quote source
+runs, including apostrophes. Other smart substitutions still render as glyphs.
+An empty family object or `{ quotes: true }` keeps the default output.
+`false` and `'source'` still emit every source run. Parsing and heading IDs
+are unchanged; typed curly quotes and escapes keep their existing behavior.
+
 ## Browser and CLI
 
 The package works as an ES module, a browser bundle, or through the `carve`

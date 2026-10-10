@@ -934,3 +934,5 @@ export function carveToPreservationReport(
   }
   return { ...renderers[target](source, opts), preservation }
 }
+
+export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './smart-typography-mode.js'

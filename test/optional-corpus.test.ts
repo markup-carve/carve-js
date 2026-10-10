@@ -135,6 +135,7 @@ const featureRunners: Record<string, (source: string, render: Render) => string>
    * without the option shows up as a case nobody compared, rather than
    * silently passing on differently-configured output.
    */
+  'smart-typography-quotes-off': (source, render) => render(source, { smartTypography: { quotes: false } }),
   'smart-typography-off': (source, render) => render(source, { smartTypography: false }),
   'markdown-typography-source': (source, render) => render(source, { smartTypography: 'source' }),
   'plain-typography-source': (source, render) => render(source, { smartTypography: 'source' }),

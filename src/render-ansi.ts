@@ -1,3 +1,4 @@
+import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { renderCellContent } from './render-cell-content.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
@@ -6,8 +7,6 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
-import { smartTypographyIsSource } from './render-plain.js'
-import type { SmartTypographyMode } from './render-markdown.js'
 import { codeLines } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
@@ -24,7 +23,7 @@ const NO_EXPANDED_DEFINITIONS: ReadonlySet<string> = new Set()
 
 export interface AnsiRenderOptions extends RenderLossSinkOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
-  smartTypography?: SmartTypographyMode | boolean
+  smartTypography?: SmartTypographyOption
 }
 
 /**
@@ -76,7 +75,7 @@ function renderPass(
 ): { text: string; expanded: Set<string> } {
   const ctx: AnsiContext = {
     options: opts,
-    smartSource: smartTypographyIsSource(opts.smartTypography),
+    smartTypography: normalizeSmartTypography(opts.smartTypography),
     listDepth: 0,
     blockQuoteDepth: 0,
     ordered: [],
@@ -94,7 +93,7 @@ function renderPass(
 
 interface AnsiContext {
   options: AnsiRenderOptions
-  smartSource: boolean
+  smartTypography: SmartTypographyOption
   listDepth: number
   blockQuoteDepth: number
   ordered: number[]
@@ -717,7 +716,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return ''
     case 'smart_punctuation':
       // Same rule as every other target: the switch asks for the authored run.
-      if (ctx.smartSource) return node.value
+      if (smartTypographyUsesSource(ctx.smartTypography, node.kind)) return node.value
       return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
     default: {
       const t: never = node

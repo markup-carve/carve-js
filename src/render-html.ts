@@ -1,3 +1,4 @@
+import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 /*
  * HTML renderer — emits the canonical output the spec corpus expects.
  *
@@ -204,7 +205,7 @@ export interface RenderOptions extends RenderLossSinkOptions {
    * Escaping is unaffected, deliberately: that is a separate concern with its
    * own rationale (carve#357).
    */
-  smartTypography?: 'glyph' | 'source' | boolean
+  smartTypography?: SmartTypographyOption
   /**
    * Opt in to a strict ALLOWLIST instead of the default denylist: when set,
    * ONLY these schemes pass on `href`/`src` (case-insensitive); everything
@@ -589,6 +590,7 @@ export function renderHtml(
   opts: RenderOptions = {},
   seededDocumentIds?: DocumentIdRegistry,
 ): string {
+  normalizeSmartTypography(opts.smartTypography)
   // A sole-image paragraph renders as a bare block image at EVERY column, and
   // the parse tree deliberately does not say so (markup-carve/carve#1660). This
   // is the one place the two are reconciled, and it has to be AHEAD of every
@@ -1701,7 +1703,7 @@ function renderListItem(
   // announce something the reader cannot see.
   const lead = visible[0]
   const taskName = item.checked !== undefined && lead?.type === 'paragraph'
-    ? inlineText(lead.children).replace(/[ \t\n\r\f\v]+/g, ' ').trim()
+    ? inlineText(lead.children, opts.smartTypography).replace(/[ \t\n\r\f\v]+/g, ' ').trim()
     : ''
   const taskNameAttr = taskName === '' ? '' : ` aria-label="${escapeAttr(taskName)}"`
   const checkbox =
@@ -2586,7 +2588,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'smart_punctuation':
       // With the switch off, emit what the author typed. The node carries the
       // source run in `value`, so this needs no parser cooperation (PART 9 §8).
-      if (opts.smartTypography === false || opts.smartTypography === 'source')
+      if (smartTypographyUsesSource(opts.smartTypography, node.kind))
         return escapeHtml(node.value)
       // The resolved glyph, escaped like any other text: a locale quote glyph
       // can carry a non-breaking space (French guillemets are `«` + U+00A0).

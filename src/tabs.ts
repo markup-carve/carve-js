@@ -1,3 +1,4 @@
+import type { SmartTypographyOption } from './smart-typography-mode.js'
 import type { Admonition, Attrs, BlockNode, Div, Heading } from './ast.js'
 import { inlineText } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
@@ -129,6 +130,7 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
   // Per-document counters, reset in beforeRender (matches carve-php clear()).
   let tabSetCounter = 0
   let labelCounter = 0
+  let typography: SmartTypographyOption | undefined
 
   // An explicit label is the opener `[label]` (canonical) or a `{label="..."}`
   // attribute (deprecated). When present, an inner heading stays as content.
@@ -139,7 +141,7 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
     const label = explicitLabel(tab)
     if (label !== undefined) return label
     for (const child of tab.children) {
-      if (child.type === 'heading') return inlineText((child as Heading).children)
+      if (child.type === 'heading') return inlineText((child as Heading).children, typography)
     }
     return `Tab ${++labelCounter}`
   }
@@ -371,7 +373,8 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
 
   return {
     name: 'tabs',
-    beforeRender(doc) {
+    beforeRender(doc, ctx) {
+      typography = ctx.options.smartTypography
       tabSetCounter = 0
       labelCounter = 0
       return doc

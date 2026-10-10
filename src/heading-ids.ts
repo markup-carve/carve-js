@@ -1,3 +1,4 @@
+import { smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { trimMatchingEdges, trimEndNonNbsp } from './trim-non-nbsp.js'
 import { visitDocumentIds } from './document-ids.js'
 import { resolveReferenceDestination } from './reference-state.js'
@@ -440,7 +441,7 @@ export function slugify(
  * `# [Title][maybe]` slugs to `title` regardless of whether `maybe`
  * resolves, so an implicit `[Title][]` can target it consistently.
  */
-export function inlineText(nodes: InlineNode[]): string {
+export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOption): string {
   let out = ''
   for (const n of nodes) {
     switch (n.type) {
@@ -459,7 +460,9 @@ export function inlineText(nodes: InlineNode[]): string {
       // slugified from the rendered character (`Don't` -> `Don-t`), and moving
       // the substitution into a node must not change that.
       case 'smart_punctuation':
-        out += n.glyph ?? SMART_PUNCTUATION_GLYPHS[n.kind] ?? n.value
+        out += smartTypographyUsesSource(typography, n.kind)
+          ? n.value
+          : (n.glyph ?? SMART_PUNCTUATION_GLYPHS[n.kind] ?? n.value)
         break
       case 'math':
       // An inline literal renders as visible prose (§27), so it contributes
@@ -480,19 +483,19 @@ export function inlineText(nodes: InlineNode[]): string {
       case 'small_caps':
       case 'insert':
       case 'delete':
-        out += inlineText(n.children)
+        out += inlineText(n.children, typography)
         break
       case 'ruby':
-        for (const pair of n.pairs) out += `${inlineText(pair.base)}(${inlineText(pair.annotation)})`
+        for (const pair of n.pairs) out += `${inlineText(pair.base, typography)}(${inlineText(pair.annotation, typography)})`
         break
       case 'inline_extension':
         // An `:index[term]` marker is invisible (§8.1): it emits no visible
         // text, so its term must not feed a heading slug or any derived text.
         if (n.name === 'index') break
-        out += inlineText(n.content)
+        out += inlineText(n.content, typography)
         break
       case 'substitution':
-        out += inlineText(n.new)
+        out += inlineText(n.new, typography)
         break
       case 'abbreviation':
         out += n.abbr
