@@ -1,3 +1,4 @@
+import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { nativeAttributeReader } from './djot-attributes.js'
@@ -259,8 +260,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       literalBrackets.add(i + 1)
     }
   }
-  let literalPrefix = '\0DJOTLITERAL\0'
-  while (source.includes(literalPrefix)) literalPrefix += '\0'
+  const literalPrefix = djotPlaceholderPrefix(source, '\0DJOTLITERAL\0')
   const literals: string[] = []
   const bracketCloses = new Set(bracketPairs.map(([, close]) => close))
   const plain = (start: number, end: number): string => {

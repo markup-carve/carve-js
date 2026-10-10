@@ -1,3 +1,4 @@
+import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { trimEndMatchingEdges } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderPlainText } from './render-plain.js'
@@ -249,18 +250,8 @@ function collapseFalseListBoundaries(source: string): string {
   return result.join('\n')
 }
 
-function djotPlaceholderPrefix(source: string, base: string): string {
-  if (!source.includes(base)) return base + '0\0'
-  const reserved = new Set<string>()
-  for (const match of source.matchAll(/(\0DJOT[A-Z]+\0?)([0-9]+)/g)) {
-    if (match[1] === base && source[match.index! + match[0].length] === '\0') reserved.add(match[2]!)
-  }
-  let serial = 0
-  while (reserved.has(String(serial))) serial++
-  return base + serial + '\0'
-}
 
-function consumeOrphanDjotAttributes(source: string): { source: string; restore: (text: string) => string } {
+function consumeOrphanDjotAttributes(source: string): { source: string; restore: (text: string, transform?: (chunk: string) => string) => string } {
   const masked = maskDjotCodeAndDestinations(source).replace(/\[\^[^\]\n]*\]/g, (value, at: number) => isDjotEscaped(source, at) ? value : ' '.repeat(value.length)).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length)).split('\n')
   const item = String.raw`(?:[.#][A-Za-z0-9_][A-Za-z0-9_-]*|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
   const pattern = new RegExp(String.raw`\{[ \t]*${item}(?:[ \t]+${item})*[ \t]*\}`, 'g')
@@ -295,8 +286,16 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
     .join('\n')
   return {
     source: converted,
-    restore: (text) =>
-      text.replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spaces[Number(index)]!),
+    restore: (text, transform = chunk => chunk) => {
+      const chunks: string[] = []
+      let end = 0
+      for (const match of text.matchAll(new RegExp(`${prefix}(\\d+)\x00`, 'g'))) {
+        chunks.push(transform(text.slice(end, match.index)), spaces[Number(match[1])] ?? match[0])
+        end = match.index! + match[0].length
+      }
+      chunks.push(transform(text.slice(end)))
+      return chunks.join('')
+    },
   }
 }
 
@@ -412,7 +411,7 @@ export function djotToCarve(djot: string): string {
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
-  const convert = (text: string): string => {
+  const convert = (text: string, transform?: (chunk: string) => string): string => {
     const emptyTerm = djotPlaceholderPrefix(text, '\x00DJOTEMPTYTERM\x00')
     const attrs = consumeOrphanDjotAttributes(convertDefinitionLists(convertDjotBlockMarkers(text), emptyTerm))
     return attrs
@@ -420,6 +419,7 @@ export function djotToCarve(djot: string): string {
         collapseFalseListBoundaries(
           djotEmphasis(attrs.source, (plain) => applyMigrationFixes(escapePlainDjotText(plain), true).output),
         ),
+        transform,
       )
       .replaceAll(emptyTerm, '%%')
   }
@@ -476,7 +476,8 @@ export function djotToCarve(djot: string): string {
     spans.push(span)
     return `${prefix}${spans.length - 1}\x00`
   }, invalidAttributes.inherited)
-  const converted = invalidAttributes.restore(convert(words).replace(new RegExp(`${prefix}(\\d+)\x00`, 'g'), (_all, index: string) => spans[Number(index)]!))
+  const restoreSpans = new RegExp(`${prefix}(\\d+)\x00`, 'g')
+  const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
   return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
 
