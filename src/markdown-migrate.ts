@@ -1874,6 +1874,12 @@ let importLosses: MarkdownImportLoss[] = []
  */
 let inlineRunSourceLine: number | undefined
 
+/**
+ * The source line of an index into the stripped line array, for a report
+ * raised where that array is all the caller holds.
+ */
+let importSourceLine: ((index: number) => number | undefined) | undefined
+
 function reportRawSpanTrailingWhitespace(content: string): void {
   const run = /[ \t\v\f]+\n/g
   let match: RegExpExecArray | null
@@ -1923,20 +1929,21 @@ function reportOrderedTask(line: string, sourceLine?: number): void {
  * invented value round-trips back out as if it were theirs, and an honest
  * omission with a report beats a wrong value.
  *
- * The row is reported WITHOUT a position. A document-order table index would
- * be wrong wherever the converter leaves a table alone - a table two container
- * levels down reaches `restorePrefixedInlineRun`'s unmodellable return, stays
- * a table in the output, and is never counted - and a source line cannot be
- * had either, since the container runs are folded and re-spelled before a row
- * is written. Only the drop itself is exact, so only the drop is reported.
+ * `sourceLine` is the line of the INPUT the dropped row stood on, which carve-php
+ * and carve-rs both report and which the ruling on carve-js#2668 settled: a
+ * diagnostic naming what was dropped needs the one field that says where. It is
+ * an index into the source, never into the stripped array the importer writes
+ * from (markup-carve/carve#2792), and the row goes out pathless where the
+ * caller cannot name one rather than carrying a guess.
  */
-function keepTableRow(row: string): boolean {
+function keepTableRow(row: string, sourceLine?: number): boolean {
   if (isTableRow(row)) return true
   // No cell of a blank row can hold an escaped pipe, so splitting counts them.
   const cells = row.split('|').length - 2
   importLosses.push({
     code: 'structure-unspellable',
     message: `Dropped a table row of ${cells} blank cells; Carve spells no row whose every cell is blank`,
+    ...(sourceLine === undefined ? {} : { line: sourceLine }),
   })
   return false
 }
@@ -2111,6 +2118,9 @@ type PrefixedInlineLine = {
   // and a folded heading is one line with the marker in its middle, where it
   // opens nothing (carve#2244).
   bareBody?: string | undefined
+  // The line's index into the array the collector was given, so a loss found
+  // inside a container names a line of the INPUT (markup-carve/carve-js#2668).
+  source?: number | undefined
 }
 
 const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
@@ -2486,6 +2496,11 @@ function quoteDepth(marker: string): number {
   return marker.split('>').length - 1
 }
 
+/** The source line a collected run line stands on, where the fold kept it. */
+function runPartSourceLine(part: PrefixedInlineLine): number | undefined {
+  return part.source === undefined ? undefined : importSourceLine?.(part.source)
+}
+
 function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
@@ -2542,12 +2557,12 @@ function restorePrefixedInlineRun(
         const headers = splitTableRow(held[idx + 1]!.body.trim()).map((cell) => `=${alignMarker(cell)}`)
         tableWidth = headers.length
         const header = writeTableRow(splitTableRow(body.trim()), headers, dialect)
-        if (keepTableRow(header)) out.push(part.prefix + marker + header)
+        if (keepTableRow(header, runPartSourceLine(part))) out.push(part.prefix + marker + header)
         idx++ // consume the delimiter row
         continue
       }
       const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth)
-      if (keepTableRow(row)) out.push(part.prefix + marker + row)
+      if (keepTableRow(row, runPartSourceLine(part))) out.push(part.prefix + marker + row)
       continue
     }
     // The same containers `held` peeled, so a row a quoted item holds is
@@ -2934,7 +2949,7 @@ function collectBlockquoteInlineRun(
     if (!parsed && paragraph && line.trim() !== '' && (plain || over)) {
       const text = over && !plain ? escapeBlockOpener(strip(line).trimStart()) : strip(line)
       lazyPrefix ??= lazyQuotePrefix(run)
-      run.push({ prefix: lazyPrefix, text, continued: true })
+      run.push({ prefix: lazyPrefix, text, continued: true, source: end })
       end++
       continue
     }
@@ -3037,7 +3052,7 @@ function collectBlockquoteInlineRun(
         paragraph = inner.trim() !== '' && (quoteParagraphIsOpen(inner) || (row && !table.has(prefix)))
       }
     }
-    run.push(continues ? { ...parsed, continued: true } : parsed)
+    run.push(continues ? { ...parsed, continued: true, source: end } : { ...parsed, source: end })
     end++
   }
   if (run.length === 0) {
@@ -3080,7 +3095,7 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
     const bodies = out.slice(opener + 1)
     for (const [offset, part] of bodies.entries()) {
       const text = part.text.trim() === '' ? part.text : ' '.repeat(col) + stripColumns(stripColumns(part.text, col), indent)
-      out[opener + 1 + offset] = { prefix: part.prefix, text }
+      out[opener + 1 + offset] = { prefix: part.prefix, text, source: part.source }
     }
     const fence = canonicalFence(out.slice(opener + 1).map((part) => part.text))
     out[opener] = { prefix: out[opener]!.prefix, text: lead + fence + info }
@@ -3252,7 +3267,7 @@ function respellQuotedBlocks(
             !RE_LIST_MARKER.test(trimmed) &&
             (isParagraphRunLine([trimmed], 0, 'text') || isStandardTableRow(trimmed))))
       if (lazy) {
-        out.push({ prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true })
+        out.push({ prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true, source: part.source })
         prevTable = false
         continue
       }
@@ -3428,7 +3443,7 @@ function respellQuotedBlocks(
       indentColumns(prev.text) === 0 &&
       (RE_MD_THEMATIC.test(prev.text) || RE_ATX_HEADING.test(prev.text))
     ) separate(part.prefix)
-    out.push({ prefix: part.prefix, text, continued: part.continued })
+    out.push({ prefix: part.prefix, text, continued: part.continued, source: part.source })
     // A fence on the item's own line holds the lines up to its closer.
     const lead = asText ? null : quotedItemLead(part.text)
     const opener = lead === null ? null : RE_MD_FENCE_LINE.exec(part.text.slice(lead.lead.length))
@@ -3744,18 +3759,18 @@ function collectListInlineRun(
     if (inner !== null && inner.prefix === quote && inner.text.trim() !== '' && (definition || /^[ \t]/.test(inner.text))) {
       const body = inner.text.trimStart()
       const asText = definition || indentColumns(inner.text) >= 4
-      run.push({ prefix, text: pad + quote + (asText ? escapeBlockOpener(body) : body), bareBody: body })
-    } else if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true, bareBody: plain })
+      run.push({ prefix, text: pad + quote + (asText ? escapeBlockOpener(body) : body), bareBody: body, source: end })
+    } else if (continues && quote === null) run.push({ prefix, text: pad + escapeBlockOpener(trimmed), continued: true, bareBody: plain, source: end })
     else if (quote !== null && (over >= 4 || (!trimmed.startsWith('>') && isParagraphRunLine([trimmed], 0, 'text')))) {
       // A lazy line of the quote the item holds, written with its marker.
-      run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain })
+      run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain, source: end })
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
-      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true })
-    } else if (over > 0 && over < 4) run.push({ prefix, text: pad + respellHeldQuoteMarkers(trimmed) })
+      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true, source: end })
+    } else if (over > 0 && over < 4) run.push({ prefix, text: pad + respellHeldQuoteMarkers(trimmed), source: end })
     // A later line the item holds, at the column the quote opens at. As text
     // the marker is escaped above, so a `>` arriving here is structural.
-    else run.push({ prefix, text: orderedText ? pad + trimmed : respellHeldQuoteMarkers(text) })
+    else run.push({ prefix, text: orderedText ? pad + trimmed : respellHeldQuoteMarkers(text), source: end })
     quoteHoldsItem ||= quotesAnItem(run.at(-1)!.text)
     end++
   }
@@ -4220,6 +4235,7 @@ export function markdownToCarveWithLosses(
     useEmptyDestinationReferences(null)
     importLosses = []
     inlineRunSourceLine = undefined
+    importSourceLine = undefined
   }
 }
 
@@ -4588,6 +4604,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     const at = removed.sourceLines[index]
     return at === undefined ? undefined : at + bodyStart + 1
   }
+  importSourceLine = sourceLine
   const out: string[] = []
   let terminalHtmlBlock = false
   // Where `out` holds a blank line of the source, as opposed to one the
@@ -5163,7 +5180,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
           // At the container's content column, so the converted header keeps
           // the item that holds it. Written at column 0 it left the item while
           // the body rows stayed behind, splitting one table into two blocks.
-          if (keepTableRow(header)) out.push(containerPad + header)
+          if (keepTableRow(header, sourceLine(i))) out.push(containerPad + header)
           i++ // consume the delimiter row
           prevType = 'text'
           inTableBody = true
@@ -5177,7 +5194,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // padding matches the formatter's and a pipeless row stays in the table.
     if (inTableBody && inGfmTable[i] && trimmed !== '') {
       const row = writeTableRow(splitTableRow(trimmed), [], dialect, tableWidth)
-      if (keepTableRow(row)) out.push(containerPad + row)
+      if (keepTableRow(row, sourceLine(i))) out.push(containerPad + row)
       continue
     }
     inTableBody = false
