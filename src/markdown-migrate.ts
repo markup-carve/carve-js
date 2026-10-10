@@ -1303,8 +1303,8 @@ function convertInline(
       : codeSourceMatchesInput ? sourceLineAtOffset(codeSourceOffset) ?? undefined : undefined
   }
 
-  const activeHtmlCodeLinkOpeners: number[] = []
-  let nextHtmlCodeLinkOpener = 0
+  const activeHtmlCodeLinkBoundaries: number[] = []
+  let nextHtmlCodeLinkBoundary = 0
   let activationOriginalSource: string | undefined
   let codeSourceMatchesActivation: boolean | undefined
   const standaloneHtmlCode = input.trim()
@@ -1322,11 +1322,11 @@ function convertInline(
     if (activationOriginalSource !== undefined) {
       codeSourceMatchesActivation ??= referenceSourceText(line, protectedSources) === activationOriginalSource
       if (!codeSourceMatchesActivation) {
-        if (body.includes('[')) return undefined
+        if (/[\[\]]/.test(body)) return undefined
       } else {
-        while (nextHtmlCodeLinkOpener < activeHtmlCodeLinkOpeners.length
-          && activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener]! < codeSourceOffset + 6) nextHtmlCodeLinkOpener++
-        if ((activeHtmlCodeLinkOpeners[nextHtmlCodeLinkOpener] ?? Infinity)
+        while (nextHtmlCodeLinkBoundary < activeHtmlCodeLinkBoundaries.length
+          && activeHtmlCodeLinkBoundaries[nextHtmlCodeLinkBoundary]! < codeSourceOffset + 6) nextHtmlCodeLinkBoundary++
+        if ((activeHtmlCodeLinkBoundaries[nextHtmlCodeLinkBoundary] ?? Infinity)
           < codeSourceOffset + referenceSourceText(match, protectedSources).length - 7) return undefined
       }
     }
@@ -1529,7 +1529,7 @@ function convertInline(
   const activationSource = line
   const activationOpaque = opaqueHtmlScanner(activationSource)
   const activationAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
-  const activeLinkOpeners = new Set<number>()
+  const activeLinkBoundaries = new Set<number>()
   line = escapeInactiveMarkdownLinkBrackets(activationSource, value => protect(value, value.slice(1)),
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     offset => {
@@ -1538,13 +1538,13 @@ function convertInline(
       activationAutolink.lastIndex = offset
       const autolink = activationAutolink.exec(activationSource)
       return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
-    }, offset => { activeLinkOpeners.add(offset) })
-  if (activeLinkOpeners.size > 0) {
+    }, (opener, closer) => { activeLinkBoundaries.add(opener); activeLinkBoundaries.add(closer) })
+  if (activeLinkBoundaries.size > 0) {
     activationOriginalSource = referenceSourceText(activationSource, protectedSources)
     let activationSourceOffset = 0
     const activationToken = /\x00P\d+\x00/y
     for (let at = 0; at < activationSource.length; at++) {
-      if (activeLinkOpeners.has(at)) activeHtmlCodeLinkOpeners.push(activationSourceOffset)
+      if (activeLinkBoundaries.has(at)) activeHtmlCodeLinkBoundaries.push(activationSourceOffset)
       if (activationSource[at] === '\x00') {
         activationToken.lastIndex = at
         const token = activationToken.exec(activationSource)

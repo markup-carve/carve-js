@@ -54,7 +54,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   protect: (value: string) => string,
   isReference: (label: string) => boolean,
   opaqueEnd: (offset: number) => number | undefined,
-  onActiveLink: (offset: number) => void = () => {},
+  onActiveLink: (opener: number, closer: number) => void = () => {},
 ): string {
   const opaque = new Map<number, number>()
   const parens = new Map<number, number>()
@@ -96,6 +96,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   const escaped = new Set<number>()
   let generation = 0
   let escapedTailThrough = -1
+  let escapedPosition = -1
   for (let i = 0; i < source.length; i++) {
     if (source[i] === '\x00') {
       tokenAt.lastIndex = i
@@ -104,9 +105,9 @@ export function escapeInactiveMarkdownLinkBrackets(
     }
     const opaqueThrough = opaque.get(i)
     if (opaqueThrough !== undefined) { i = opaqueThrough - 1; continue }
-    if (source[i] === '\\') { i++; continue }
+    if (source[i] === '\\') { escapedPosition = i + 1; i++; continue }
     if (source[i] === '[') {
-      opens.push({ at: i, image: source[i - 1] === '!', generation })
+      opens.push({ at: i, image: source[i - 1] === '!' && escapedPosition !== i - 1, generation })
       continue
     }
     if (source[i] !== ']' || opens.length === 0) continue
@@ -127,7 +128,7 @@ export function escapeInactiveMarkdownLinkBrackets(
     }
     const end = activationTailEnd(source, i + 1)
     if (end !== undefined) {
-      onActiveLink(opener.at)
+      onActiveLink(opener.at, i)
       if (!opener.image) generation++
       i = end
       continue
@@ -140,7 +141,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       referenceEnd = close
     }
     if (label !== null && isReference(label)) {
-      onActiveLink(opener.at)
+      onActiveLink(opener.at, i)
       if (!opener.image) generation++
       i = referenceEnd
     }
