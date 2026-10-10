@@ -578,6 +578,7 @@ export function unwrapEmptyDestinations(
   placeholders: readonly string[],
   protect: (s: string) => string,
   decodeEntity: (entity: string) => string,
+  onUnwrap?: (image: boolean, before: string) => void,
 ): string {
   const replaceAt = (re: RegExp, pick: (m: RegExpExecArray) => string | null): void => {
     const subject = line
@@ -593,8 +594,10 @@ export function unwrapEmptyDestinations(
     }
     line = out + subject.slice(cursor)
   }
-  const unwrap = (m: RegExpExecArray, title: string, subject: string) =>
-    unwrapEmptyDestination(m[1]!, m[0][0] === '!', title, subject.slice(0, m.index), placeholders, protect, decodeEntity)
+  const unwrap = (m: RegExpExecArray, title: string, subject: string) => {
+    onUnwrap?.(m[0][0] === '!', subject.slice(0, m.index))
+    return unwrapEmptyDestination(m[1]!, m[0][0] === '!', title, subject.slice(0, m.index), placeholders, protect, decodeEntity)
+  }
   if (references.empty.size > 0) {
     const byReference = (m: RegExpExecArray, reference: string, subject: string): string | null => {
       const key = normalizeReferenceLabel(decodeLinkTitle(reference, decodeEntity, placeholders))

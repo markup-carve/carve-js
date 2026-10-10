@@ -1224,7 +1224,17 @@ function convertInline(
 
 
 
-  line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw)
+  line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before) => {
+    const prefix = referenceSourceText(before, protectedSpans)
+    const sourceLine = inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + (prefix.match(/\n/g) ?? []).length
+    importLosses.push({
+      code: 'structure-unspellable',
+      message: image
+        ? 'Dropped an image with an empty destination; retained its alt text and title.'
+        : 'Dropped a link with an empty destination; retained its label and title.',
+      ...(sourceLine === undefined ? {} : { line: sourceLine }),
+    })
+  })
 
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
@@ -3393,7 +3403,7 @@ function canonicalQuotedFences(run: readonly PrefixedInlineLine[]): PrefixedInli
     }
     opener = out.length
     out.push(part)
-    info = fenceInfo(open[3]!)
+    info = fenceInfo(open[3]!, runPartSourceLine(part))
     if (item !== null) {
       lead = item.lead
       col = columnWidth(item.lead)
@@ -3747,11 +3757,17 @@ function closeFence(out: string[], openerAt: number, pad: string, info: string):
  * A Markdown info string reduced to the one token a Carve fence takes, or
  * nothing when the complete word is outside Carve's language charset.
  */
-function fenceInfo(rest: string): string {
+function fenceInfo(rest: string, sourceLine?: number): string {
   const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
   rest = rest.replace(escapesAndEntities, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
   const firstInfoWord = trimMatchingEdges(rest, (code) => code === 32 || code === 9).split(/[ \t]/, 1)[0] ?? ''
-  return /^[A-Za-z0-9_+#/.-]+$/.test(firstInfoWord) ? firstInfoWord : ''
+  if (!firstInfoWord || /^[A-Za-z0-9_+#/.-]+$/.test(firstInfoWord)) return firstInfoWord
+  importLosses.push({
+    code: 'structure-unspellable',
+    message: `Dropped code-block language ${JSON.stringify(firstInfoWord)}; Carve cannot spell this language token.`,
+    ...(sourceLine === undefined ? {} : { line: sourceLine }),
+  })
+  return ''
 }
 
 /**
@@ -3839,7 +3855,7 @@ function collectListInlineRun(
   if (codeItem) return collectItemIndentedCode(lines, start, nestedEnd + codeItem[0].length)
   const fence = RE_MD_FENCE_LINE.exec(first.slice(nestedEnd))
   if (fence && fenceRunIsAFence(fence[2]!, fence[3]!)) {
-    return collectItemFence(lines, start, first.slice(0, nestedEnd), fence[2]!, fenceInfo(fence[3]!))
+    return collectItemFence(lines, start, first.slice(0, nestedEnd), fence[2]!, fenceInfo(fence[3]!, importSourceLine?.(start)))
   }
 
   if (RE_MD_THEMATIC.test(first.slice(nestedEnd))) {
@@ -5213,7 +5229,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
-      const info = fenceInfo(open[3]!)
+      const info = fenceInfo(open[3]!, sourceLine(i))
       // Re-base the fence to its container's content column: strip only the
       // indentation ABOVE that column. At document level the column is 0, so a
       // 1-3 space Markdown fence dedents fully; inside a list item the fence's
