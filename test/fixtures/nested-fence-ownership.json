@@ -17242,5 +17242,54 @@
         "value": "x\n\n\n\n"
       }
     ]
+  },
+  {
+    "source": "- - # h\n    ```\nx\n",
+    "codes": [
+      {
+        "pre": true,
+        "value": ""
+      }
+    ]
+  },
+  {
+    "source": "- - # h\n    ```\n  ```\ntail\n",
+    "codes": [
+      {
+        "pre": true,
+        "value": ""
+      },
+      {
+        "pre": true,
+        "value": ""
+      }
+    ]
+  },
+  {
+    "source": "- - ---\n    ```\nx\n",
+    "codes": [
+      {
+        "pre": true,
+        "value": ""
+      }
+    ]
+  },
+  {
+    "source": "- - # h\n    ```\n    x\ntail\n",
+    "codes": [
+      {
+        "pre": true,
+        "value": "x\n"
+      }
+    ]
+  },
+  {
+    "source": "- - # h\n    ```\n    x\n    ```\ntail\n",
+    "codes": [
+      {
+        "pre": true,
+        "value": "x\n"
+      }
+    ]
   }
 ]

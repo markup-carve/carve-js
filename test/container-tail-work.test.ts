@@ -87,6 +87,7 @@ for (const [source, offsets] of [
 for (const [name, sourceAt, suffixAt] of [
   ['lazy quote', (depth: number) => '> '.repeat(depth) + 'end\nlazy\n', (depth: number) => depth * 4],
   ['trailing blanks in a descendant fence', (depth: number) => '- '.repeat(depth) + 'a\n' + '  '.repeat(depth) + '```\n\n', () => 0],
+  ['trailing blanks after a marker-line fence', (depth: number) => '- '.repeat(depth) + '```\n\n', () => 0],
   ['CRLF blank-separated list continuation', (depth: number) => '- '.repeat(depth) + 'a\r\n\r\n' + '  '.repeat(depth) + 'b\r\n', () => 0],
   ['blank-separated comment continuation', (depth: number) => '- '.repeat(depth) + 'a\n\n' + '  '.repeat(depth) + '%% note\n', () => 0],
   ['blank-separated list continuation', (depth: number) => '- '.repeat(depth) + 'a\n\n' + '  '.repeat(depth) + 'b\n', () => 0],
