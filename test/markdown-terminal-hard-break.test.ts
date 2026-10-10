@@ -8,7 +8,7 @@ it.each(cases)('keeps hard breaks for $template with $name', ({ document, markdo
 
 it.each([
   ['a\\\n', 'a<br>\n'],
-  ['\\\n', '<br><!-- -->\n'],
+  ['\\\n', '<br><!---->\n'],
   ['a\\\nb\n', 'a\\\nb\n'],
   ['a\\\n\\\n', 'a\\\n<br>\n'],
 ])('keeps parser-produced hard breaks for %s', (source, markdown) => {

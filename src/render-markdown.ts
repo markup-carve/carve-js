@@ -963,7 +963,7 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
           }
         }
         // A terminal backslash reads as text. Keep a lone <br> inline too.
-        parts[i] = precedingContent ? '<br>' : '<br><!-- -->'
+        parts[i] = precedingContent ? '<br>' : '<br><!---->'
         break
       }
       if (/[^ \t\r\n]/.test(part)) break
@@ -1397,7 +1397,7 @@ function renderCode(content: string): string {
   if (content === '') return '<code></code>'
   if (/[\n\t]/.test(content)) {
     // Entities preserve tabs and markup. Comments guard newline spaces and emails.
-    const escaped = content.replace(/[\n\t\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/g,
+    const escaped = content.replace(/[\n\t\x20-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/g,
       (character) => character === '\n' ? '<!---->&#10;<!---->'
         : `&#${character.charCodeAt(0)};${character === '@' ? '<!---->' : ''}`)
     return `<code>${escaped}</code>`
@@ -1476,12 +1476,15 @@ function gfmSlugBase(text: string): string {
     .replace(/ /g, '-')
 }
 
-/** A heading's inlines with smart punctuation spelled the way this target writes it. */
+/** A heading's inlines as the Markdown reader sees their text. */
 function writtenTypography(nodes: InlineNode[], typography: SmartTypographyMode): InlineNode[] {
-  if (typography !== 'source') return nodes
-  return JSON.parse(JSON.stringify(nodes), (_key, value) =>
-    value && value.type === 'smart_punctuation' ? { type: 'text', value: value.value } : value,
-  ) as InlineNode[]
+  return JSON.parse(JSON.stringify(nodes), (_key, value) => {
+    if (value?.type === 'hard_break') return { type: 'text', value: '' }
+    if (typography === 'source' && value?.type === 'smart_punctuation') {
+      return { type: 'text', value: value.value }
+    }
+    return value
+  }) as InlineNode[]
 }
 
 /**
