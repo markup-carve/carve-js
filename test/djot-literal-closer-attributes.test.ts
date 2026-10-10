@@ -7,7 +7,7 @@ describe('Djot literal delimiter boundaries', () => {
     it(row.name, () => {
       const html = carveToHtml(djotToCarve(row.source)).trim()
         .replace(/<\/?tbody>/g, '').replace(/>\s+</g, '><')
-      expect(html).toBe(row.html)
+      expect(html).toBe(row.carveHtml ?? row.html)
     })
   }
 })

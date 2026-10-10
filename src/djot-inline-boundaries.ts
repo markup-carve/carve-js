@@ -57,7 +57,7 @@ export function djotInlineBoundaries(source: string, mask: string): number[] {
         if (startsItem) items.push({ column: indent + (marker[0].startsWith('[^') ? 2 : marker[0].length), depth })
       }
     }
-    if (rows[row]) for (let at = 0; at < line.length; at++) if (line[at] === '|' && mask[offset + at] === '|' && !isDjotEscaped(line, at)) boundaries.push(offset + at)
+    if (rows[row]) for (let at = 0; at < line.length; at++) if (line[at] === '|' && mask[offset + at] === '|' && line[at - 1] !== '\\') boundaries.push(offset + at)
     previousBlank = blank
     row++; offset += line.length + 1
   }

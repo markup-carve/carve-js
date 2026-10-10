@@ -250,7 +250,6 @@ function collapseFalseListBoundaries(source: string): string {
   return result.join('\n')
 }
 
-
 function consumeOrphanDjotAttributes(source: string): { source: string; restore: (text: string, transform?: (chunk: string) => string) => string } {
   const masked = maskDjotCodeAndDestinations(source).replace(/\[\^[^\]\n]*\]/g, (value, at: number) => isDjotEscaped(source, at) ? value : ' '.repeat(value.length)).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length)).split('\n')
   const item = String.raw`(?:[.#][A-Za-z0-9_][A-Za-z0-9_-]*|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
@@ -300,7 +299,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
 }
 
 function removeInheritedAttributeMarkers(source: string, inherited: ReadonlySet<string>): string {
-  return source.replace(/\0DJOTINVALIDATTR\d+\0/g, value => inherited.has(value) ? '' : value)
+  return source.replace(/\0DJOTINVALIDATTR\x00\d+\0/g, value => inherited.has(value) ? '' : value)
 }
 
 function escapeInvalidDjotAttributes(source: string): { source: string; inherited: Set<string>; restore: (text: string) => string } {
@@ -324,12 +323,12 @@ function escapeInvalidDjotAttributes(source: string): { source: string; inherite
     }
 
   }
-  const reserved = new Set([...source.matchAll(/\0DJOTINVALIDATTR\d+\0/g)].map(match => match[0]))
+  const reserved = new Set([...source.matchAll(/\0DJOTINVALIDATTR\x00\d+\0/g)].map(match => match[0]))
   const inherited = new Set<string>()
   let serial = 0
   const marker = (): string => {
     let value: string
-    do { value = `\0DJOTINVALIDATTR${serial++}\0` } while (reserved.has(value))
+    do { value = `\0DJOTINVALIDATTR\x00${serial++}\0` } while (reserved.has(value))
     inherited.add(value)
     return value
   }
@@ -408,6 +407,12 @@ function foldHeadingContinuations(source: string): string {
 
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
+  if (!djot.includes('\0')) return convertDjotDocument(djot)
+  const token = '\0U\0'
+  return convertDjotDocument(djot.replaceAll('\0', token)).replaceAll(token, '\0')
+}
+
+function convertDjotDocument(djot: string): string {
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
@@ -418,10 +423,9 @@ export function djotToCarve(djot: string): string {
       .restore(
         collapseFalseListBoundaries(
           djotEmphasis(attrs.source, (plain) => applyMigrationFixes(escapePlainDjotText(plain), true).output),
-        ),
+        ).replaceAll(emptyTerm, '%%'),
         transform,
       )
-      .replaceAll(emptyTerm, '%%')
   }
   const spans: string[] = []
   const prefix = djotPlaceholderPrefix(body, '\x00DJOTSTRONG')
@@ -465,7 +469,7 @@ export function djotToCarve(djot: string): string {
       return `![${prefix}${spans.length - 1}\x00]`
     }
     spans.push(
-      renderPlainText(parse(convert(`DJOTALT ${label} DJOTEND`)), { smartTypography: false })
+      renderPlainText(parse(convert(`DJOTALT ${label} DJOTEND`).replaceAll('\0U\0', '\0')), { smartTypography: false })
         .replace(/ DJOTEND\n?$/, '')
         .slice(8),
     )
@@ -509,16 +513,57 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
   const quoteDepths = source
     .split('\n')
     .map((line) => (line.match(/^(?:[ \t]*>(?:[ \t]|$))*/)?.[0].match(/>/g) ?? []).length)
+  const rejectedAttribute = /\0DJOTINVALIDATTR\x00\d+\0/y
   const stack: { at: number; depth: number; labelEnd?: number; target?: number; parens: number }[] = []
   const pendingNotes = new Set<number>(),
     literalNotes = new Map<number, number>()
   const edits = new Map<number, { end: number; text: string }>()
   let line = 0
   const boundaries = new Set(djotInlineBoundaries(source, mask))
+  const labelOf = (start: number, limit: number): string => {
+    let label = '',
+      brackets = 0
+    for (let at = start; at < limit; at++) {
+      const edit = edits.get(at)
+      if (edit && edit.end <= limit) {
+        label += edit.text
+        at = edit.end - 1
+        continue
+      }
+      const end = angles.get(at)
+      if (end !== undefined) {
+        label += source.slice(at, end)
+        at = end - 1
+        continue
+      }
+      if (mask[at] === ' ') {
+        label += source[at]
+        continue
+      }
+      if (source[at] === '\\') {
+        label += source.slice(at, at + 2)
+        at++
+        continue
+      }
+      if (source[at] === '[') brackets++
+      if (source[at] === ']') {
+        if (brackets) brackets--
+        else label += '\\'
+      }
+      label += source[at]
+    }
+    return label
+  }
   let destinationOwner: typeof stack[number] | undefined
+  const clearScope = (): void => {
+    if (destinationOwner) edits.set(destinationOwner.at, { end: destinationOwner.at + 1, text: '\\[' })
+    stack.length = 0
+    destinationOwner = undefined
+    pendingNotes.clear()
+  }
   for (let i = 0; i < source.length; i++) {
-    if (boundaries.has(i)) { stack.length = 0; destinationOwner = undefined; pendingNotes.clear() }
-    if (source[i] === '\n') { line++; if (/^\n[ \t]*(?:>[ \t]*)*\n/.test(source.slice(i))) { stack.length = 0; destinationOwner = undefined; pendingNotes.clear(); continue } }
+    if (boundaries.has(i)) { clearScope() }
+    if (source[i] === '\n') { line++; if (/^\n[ \t]*(?:>[ \t]*)*\n/.test(source.slice(i))) { clearScope(); continue } }
     if (mask[i] === ' ') continue
     if (source[i] === '\\') {
       i++
@@ -537,9 +582,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
       }
     }
     if (rows[line] && source[i] === '|' && source[i - 1] !== '\\') {
-      stack.length = 0
-      destinationOwner = undefined
-      pendingNotes.clear()
+      clearScope()
       continue
     }
     if (source[i] === '[') {
@@ -562,6 +605,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
           edits.set(destinationOwner.at, { end: destinationOwner.at + 1, text: '\\[' })
         tip.labelEnd = i
         tip.target = i + 2
+        tip.parens = 0
         destinationOwner = tip
         i++
         continue
@@ -573,12 +617,20 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
           end++
         }
         if (source[end] === ']') {
+          if (tip.target !== undefined) edits.set(tip.at, { end: i + 1, text: '[' + labelOf(tip.at + 1, i) + ']' })
+          if (destinationOwner === tip) destinationOwner = undefined
           stack.pop()
           i = end
         }
         continue
       }
-      if (source[i + 1] === '{' && readAttributes(source, i + 1)) stack.pop()
+      rejectedAttribute.lastIndex = i + 3
+      const rejected = source[i + 1] === '\\' && source[i + 2] === '{' ? rejectedAttribute.exec(source)?.[0] : undefined
+      if (source[i + 1] === '{' || rejected !== undefined && inherited.has(rejected)) {
+        if (tip.target !== undefined) edits.set(tip.at, { end: i + 1, text: source[i + 1] === '{' && readAttributes(source, i + 1) ? '[' + labelOf(tip.at + 1, i) + ']' : '\\[' + source.slice(tip.at + 1, i + 1) })
+        if (destinationOwner === tip) destinationOwner = undefined
+        stack.pop()
+      }
     }
     if (destinationOwner && source[i] === '(') destinationOwner.parens++
     if (source[i] === ')') {
@@ -595,37 +647,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
         pendingNotes.clear()
         continue
       }
-      let label = '',
-        brackets = 0
-      for (let at = owner.at + 1; at < owner.labelEnd!; at++) {
-        const edit = edits.get(at)
-        if (edit && edit.end <= owner.labelEnd!) {
-          label += edit.text
-          at = edit.end - 1
-          continue
-        }
-        const end = angles.get(at)
-        if (end !== undefined) {
-          label += source.slice(at, end)
-          at = end - 1
-          continue
-        }
-        if (mask[at] === ' ') {
-          label += source[at]
-          continue
-        }
-        if (source[at] === '\\') {
-          label += source.slice(at, at + 2)
-          at++
-          continue
-        }
-        if (source[at] === '[') brackets++
-        if (source[at] === ']') {
-          if (brackets) brackets--
-          else label += '\\'
-        }
-        label += source[at]
-      }
+      let label = labelOf(owner.at + 1, owner.labelEnd!)
       let rawDestination = ''
       for (let at = owner.target!; at < i;) {
         const end = !rows[line] ? literalNotes.get(at) : undefined
@@ -674,6 +696,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
       pendingNotes.clear()
     }
   }
+  clearScope()
   const output: string[] = []
   for (let i = 0; i < source.length;) {
     const edit = edits.get(i)
@@ -926,7 +949,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
     if (source[at] === '\n') nextBrace = -1
     else if (source[at] === '}') nextBrace = at + 1
     else if (source[at] === '{' && nextBrace >= 0) {
-      const malformed = /^\{(\0DJOTINVALIDATTR\d+\0)?[A-Za-z][\w-]*=/.exec(source.slice(at))
+      const malformed = /^\{(\0DJOTINVALIDATTR\x00\d+\0)?[A-Za-z][\w-]*=/.exec(source.slice(at))
       if (malformed && (!malformed[1] || inherited.has(malformed[1]))) malformedEnds.set(at, nextBrace)
     }
   }
@@ -1884,7 +1907,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
   maskDjotFences(body, line => { fenceLines.add(line) }, [], true)
   const mask = maskDjotCodeAndDestinations(body, false, true, false)
   const lines = body.split('\n'), losses: DjotFootnoteAttributeLoss[] = []
-  const reserved = new Set([...source.matchAll(/\0DJOTNOTEATTR(\d+)\0/g)].map(match => Number(match[1])))
+  const reserved = new Set([...source.matchAll(/\0DJOTNOTEATTR\x00(\d+)\0/g)].map(match => Number(match[1])))
   const comments = new Set<number>()
   let serial = 0
   let offset = 0, boundary = true, pending: Array<{ line: number; end: number; start: number; wire: string }> = [], quoteDepth = 0
@@ -1920,7 +1943,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       if (metadataNote && listColumn !== undefined && column >= listColumn && n > 0 && /^[ \t]*$/.test(lines[n - 1]!)) {
         while (reserved.has(serial)) serial++
         comments.add(serial)
-        lines[n - 1] = ' '.repeat(listColumn) + `\0DJOTNOTEATTR${serial++}\0`
+        lines[n - 1] = ' '.repeat(listColumn) + `\0DJOTNOTEATTR\x00${serial++}\0`
       }
       noteColumn = noteParents.pop(); metadataNote = false; boundary = true
     }
@@ -1970,7 +1993,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
             const lead = end === group.line ? raw.slice(0, raw.indexOf('{')) : /^(?:[ \t]*>[ \t]?)*[ \t]*/.exec(raw)![0]
             while (reserved.has(serial)) serial++
             comments.add(serial)
-            lines[end] = lead + `\0DJOTNOTEATTR${serial++}\0`
+            lines[end] = lead + `\0DJOTNOTEATTR\x00${serial++}\0`
             position += raw.length + 1; end++
           }
         }
@@ -1999,5 +2022,5 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
     boundary = content === '' || reference || fenceLines.has(n) || row || div || heading || blockAllowed && /^(?:[-*][ \t]*){3,}$/.test(content)
     offset += line.length + 1
   }
-  return { source: header + lines.join('\n'), losses, isBoundary: line => { const token = /\0DJOTNOTEATTR(\d+)\0$/.exec(line.replace(/[ \t]+$/, '')); return token !== null && comments.has(Number(token[1])) }, restore: text => text.replace(/\0DJOTNOTEATTR(\d+)\0/g, (value, index: string) => comments.has(Number(index)) ? '%%' : value) }
+  return { source: header + lines.join('\n'), losses, isBoundary: line => { const token = /\0DJOTNOTEATTR\x00(\d+)\0$/.exec(line.replace(/[ \t]+$/, '')); return token !== null && comments.has(Number(token[1])) }, restore: text => text.replace(/\0DJOTNOTEATTR\x00(\d+)\0/g, (value, index: string) => comments.has(Number(index)) ? '%%' : value) }
 }

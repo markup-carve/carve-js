@@ -3,20 +3,13 @@ import { djotPairedEmphasisOpeners } from './djot-emphasis.js'
 
 export { readAttributes, nativeAttributeReader } from './djot-attributes.js'
 
-/** An escaped character belongs to the attribute's word: the boundary is whitespace, not an escape. */
-function escapedWordCharacter(source: string, at: number, cursor: number): boolean {
-  if (at - 1 < cursor || source[at - 1] !== '\\' || /\s/u.test(source[at] ?? ' ')) return false
-  let slashes = 0
-  for (let s = at - 1; s >= cursor && source[s] === '\\'; s--) slashes++
-  return slashes % 2 === 1
-}
-
 export function attributedDjotWords(source: string, masked: string, convert: (body: string) => string, protect: (span: string) => string, inherited: ReadonlySet<string> = new Set()): string {
   if (!source.includes('{')) return source
   const paired = djotPairedEmphasisOpeners(source)
   const literalBraces = new Map<number, number>()
   const pairedCloses = new Set(paired.values())
   const escapedBraceCloses = new Set<number>()
+  const escapedWordCharacters = new Map<number, number>()
   for (const note of source.matchAll(/\[\^[^\]\n]*\]/g)) {
     const at = note.index!
     let begin = at
@@ -32,11 +25,12 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
   const readBraceAttributes = nativeAttributeReader(source)
   let attributeEnd = 0
   let lastEscaped = -1, lastAtomEscape = -1, lastSpace = -1, lastInlineEnd = -1
-  const inheritedMarker = /\0DJOTINVALIDATTR\d+\0/y
+  const inheritedMarker = /\0DJOTINVALIDATTR\x00\d+\0/y
   for (let at = 0; at < source.length; at++) {
     if (/\s/u.test(source[at]!)) lastSpace = at
     if (pairedCloses.has(at)) lastInlineEnd = at
     if (source[at] === '\\') {
+      if (source[at + 1] !== undefined && !/\s/u.test(source[at + 1]!)) escapedWordCharacters.set(source.slice(at + 1, at + 4) === '\0U\0' ? at + 4 : at + 2, at)
       if (masked[at] !== source[at] || masked[at + 1] !== source[at + 1]) { lastInlineEnd = at + 2; at++; continue }
       lastEscaped = at + 1
       if (/\s/u.test(source[at + 1] ?? '')) lastSpace = at + 1
@@ -88,11 +82,12 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     }
     if (attrs.source === '{}') { i = attrs.end - 1; continue }
     let word = i
-    if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1) || escapedWordCharacter(source, i - 1, cursor))) {
+    if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1) || escapedWordCharacters.has(i))) {
       while (word > cursor && masked[word - 1] === source[word - 1]) {
         const literal = literalBraces.get(word - 1)
         if (literal !== undefined && literal >= cursor) { word = literal; continue }
-        if (escapedWordCharacter(source, word - 1, cursor)) { word -= 2; continue }
+        const escaped = escapedWordCharacters.get(word)
+        if (escaped !== undefined && escaped >= cursor) { word = escaped; continue }
         if (/[\s"'{}\[\]`\x00>|]/u.test(source[word - 1]!)) break
         word--
       }
