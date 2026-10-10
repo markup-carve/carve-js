@@ -88,10 +88,10 @@ const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
   [/<s>([^<]+)<\/s>/gi, '~$1~'],
   [/<sup>([^<]+)<\/sup>/gi, markerForm('^')],
   [/<sub>([^<]+)<\/sub>/gi, markerForm(',')],
-  [/<strong>([^<]+)<\/strong>/gi, '*$1*'],
-  [/<b>([^<]+)<\/b>/gi, '*$1*'],
-  [/<em>([^<]+)<\/em>/gi, '/$1/'],
-  [/<i>([^<]+)<\/i>/gi, '/$1/'],
+  [/<strong>([^<]+)<\/strong>/gi, markerForm('*')],
+  [/<b>([^<]+)<\/b>/gi, markerForm('*')],
+  [/<em>([^<]+)<\/em>/gi, markerForm('/')],
+  [/<i>([^<]+)<\/i>/gi, markerForm('/')],
 ]
 
 const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
@@ -1182,6 +1182,29 @@ function convertInline(
     const rendered = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
     return protect(rendered.replace(/\n$/, ''), span)
   })
+  // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
+  // Keep empty and multiline values in HTML where a source slot may fold them.
+  const writeHtmlCode = (match: string): string | undefined => {
+    const body = match.slice(6, -7)
+    if (/[\x00\\`*_~\[\]]/.test(body)) return undefined
+    const value = decodeHtmlEntitiesRaw(body.replaceAll('<!---->', ''))
+    if (value === '' || value.includes('\n') || value.includes('\r')) {
+      importLosses.push({
+        code: 'raw-code-fallback',
+        message: 'Preserved an HTML code payload as raw HTML; targets and profiles that omit raw HTML do not preserve this code span',
+        fidelity: 'degraded',
+        ...(inlineRunSourceLine === undefined ? {} : { line: inlineRunSourceLine }),
+      })
+      const html = value.replace(/\r\n?/g, '\n').replace(/[ !-\/:-@\[-`{-~\t\n]/g, char => {
+        if (char === '\n') return '<!---->&#10;<!---->'
+        const entity = `&#${char.charCodeAt(0)};`
+        return char === '@' ? entity + '<!---->' : entity
+      })
+      return protect(rawInlineHtml(`<code>${html}</code>`))
+    }
+    const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] }).replace(/\n$/, '')
+    return protect(written)
+  }
   line = escapeCarveOnlyMarker(line)
   // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
   // Carve one, so a continuation line shaped like one is escaped (carve-js#1812).
@@ -1221,9 +1244,20 @@ function convertInline(
         i = opaque
         continue
       }
+      const code = /^<code>((?:[^<\n]|<!---->)*)<\/code>/i.exec(line.slice(i))
+      const writtenCode = code ? writeHtmlCode(code[0]) : undefined
+      if (code && writtenCode !== undefined) {
+        escaped += writtenCode
+        i += code[0].length
+        continue
+      }
       const tag = scanHtmlTag(line, i)
       if (tag) {
-        escaped += line.slice(i, tag.end)
+        const sourceTag = line.slice(i, tag.end)
+        if (tag.name === 'code') {
+          if (!tag.closing) importLosses.push({ code: 'raw-code-fallback', message: 'Preserved HTML code markup as raw HTML; targets and profiles that omit raw HTML do not preserve its code structure', fidelity: 'degraded', ...(inlineRunSourceLine === undefined ? {} : { line: inlineRunSourceLine }) })
+          escaped += protect(rawInlineHtml(sourceTag))
+        } else escaped += sourceTag
         i = tag.end
         continue
       }
@@ -1239,10 +1273,6 @@ function convertInline(
   line = escaped
 
 
-  // <code>...</code> without attributes has a Carve-native equivalent. Protect
-  // it before delimiter rewrites so its body stays verbatim. Attributed code
-  // is handled by convertInlineHtml as raw HTML so attributes are not lost.
-  line = line.replace(/<code>([^<]+)<\/code>/gi, (_m, inner) => protect(`\`${inner}\``, _m))
 
 
 
@@ -1739,6 +1769,12 @@ function convertInline(
   const maxRestorePasses = protectedSpans.length + 1
   for (let pass = 0; pass < maxRestorePasses; pass++) {
     const prev = line
+    line = line.replace(/(\x00P(\d+)\x00)(?=\x00P(\d+)\x00)/g, (token, _leftToken: string, leftIndex: string, rightIndex: string) => {
+      const left = protectedSpans[Number(leftIndex)] ?? ''
+      const right = protectedSpans[Number(rightIndex)] ?? ''
+      const backslashes = /(\\*)`$/.exec(left)?.[1]?.length
+      return left.endsWith('`') && right.startsWith('`') && (backslashes ?? 0) % 2 === 0 ? token + '{%  %}' : token
+    })
     line = line
       // A stash/protect index that has no stored value means the NUL-wrapped
       // sentinel came from the input itself (not one we emitted), so keep the
@@ -1942,7 +1978,7 @@ import {
 
 export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized' | 'raw-span-whitespace-trimmed'
-    | 'carrier-markers-damaged'
+    | 'carrier-markers-damaged' | 'raw-code-fallback'
   message: string
   line?: number
   /** Overrides the code's default, for a reading the importer derived. */
