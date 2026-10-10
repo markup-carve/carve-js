@@ -1,3 +1,4 @@
+import type { InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
@@ -1200,7 +1201,7 @@ function convertInline(
         masked += `\x00P${scratch.length - 1}\x00`
         at = end
       }
-      const converted = markdownEmphasis(masked, undefined, undefined, scratch, true).replace(/~~([^~]+)~~/g, '$1').replace(
+      const converted = markdownEmphasis(markdownEmphasis(masked, undefined, undefined, scratch, true), undefined, undefined, scratch, true, true).replace(
         /\x00P(\d+)\x00/g,
         (token, index: string) => Number(index) >= firstScratch ? scratch[Number(index)] ?? token : token,
       )
@@ -1217,10 +1218,14 @@ function convertInline(
   const htmlCodeSourceLine = input.includes('\n') ? undefined : inlineRunSourceLine
   const standaloneHtmlCode = input.trim()
   const writeHtmlCode = (match: string): string | undefined => {
-    const body = match.slice(6, -7).replace(/\x00P(\d+)\x00/g, (token, index: string) => {
+    const restoreLiteral = (part: string): string => part.replace(/\x00P(\d+)\x00/g, (token, index: string) => {
       const span = protectedSpans[Number(index)]
-      return span && /^\\[!-\/:-@\[-`{-~]$/.test(span) ? span : token
+      if (span && /^\\[!-\/:-@\[-`{-~]$/.test(span)) return span
+      if (span && /^\[[^\]\n^]*\]$/.test(span) && referenceDestinationLabel(span.slice(1, -1), decodeHtmlEntitiesRaw, protectedSpans, table) === undefined) return span
+      return token
     })
+    const parts = match.slice(6, -7).split('<!---->').map(restoreLiteral)
+    const body = parts.join('')
     if (body.includes('\x00')) return undefined
     if (/[\\`*_~\[\]]/.test(body)) {
       if (/[*_~]/.test(body) && !htmlCodeSurvivesEmphasis(match)) return undefined
@@ -1228,19 +1233,24 @@ function convertInline(
       importLosses = []
       let probe: ReturnType<typeof parse>
       try {
-        probe = parse(`x ${convertInline(body.replaceAll('<!---->', ''), dialect)}\n`)
+        probe = parse(`x ${convertInline(body, dialect)}\n`)
       } finally {
         importLosses = savedLosses
       }
       const paragraph = probe.children[0]
-      if (probe.children.length !== 1 || paragraph?.type !== 'paragraph' || paragraph.children.some(node => !['text', 'escaped_text', 'smart_punctuation', 'non_breaking_space', 'soft_break'].includes(node.type))) return undefined
+      const plain = (nodes: readonly InlineNode[]): boolean => nodes.every(node => {
+        if (['text', 'escaped_text', 'smart_punctuation', 'non_breaking_space', 'soft_break'].includes(node.type)) return true
+        return node.type === 'link' && node.href === '' && node.ref !== undefined
+          && referenceDestinationLabel(node.rawRef ?? node.ref, decodeHtmlEntitiesRaw, protectedSpans, table) === undefined && plain(node.children)
+      })
+      if (probe.children.length !== 1 || paragraph?.type !== 'paragraph' || !plain(paragraph.children)) return undefined
     }
     const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
-    const value = body.split('<!---->').map(part => part.replace(
+    const value = parts.map(part => part.replace(
       escapesAndEntities,
       (entity, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(entity),
     ).replace(/\r\n?/g, '\n')).join('')
-    if (nativeCode && terminal && !table && standaloneHtmlCode === match) {
+    if (nativeCode && terminal && !table && standaloneHtmlCode === restoreLiteral(match)) {
       try {
         const source = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
         const document = parse(source)
