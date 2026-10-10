@@ -93,10 +93,10 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
   it('treats a non-breaking space as whitespace for quote flanking', () => {
     // An escaped non-breaking space (`\ ` -> U+E000 placeholder) is
     // whitespace, so a following quote opens, exactly as after a real space.
-    expect(h("say\\ 'twas")).toBe('<p>say&nbsp;‘twas</p>')
+    expect(h("say\\ 'twas")).toBe('<p>say&nbsp;’twas</p>')
     expect(h('a\\ "x"')).toBe('<p>a&nbsp;“x”</p>')
     // A literal U+00A0 in the source behaves the same.
-    expect(h("a 'tis")).toBe('<p>a&nbsp;‘tis</p>')
+    expect(h("a 'tis")).toBe('<p>a&nbsp;’tis</p>')
     expect(h('a "x"')).toBe('<p>a&nbsp;“x”</p>')
   })
 

@@ -7507,7 +7507,6 @@ function allocateDashes(n: number): string {
   }
   return '—'.repeat(em) + '–'.repeat(en)
 }
-const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
 /*
  * The space class the hyphen-run flanking test reads (PART 9 §8, carve#1443).
  *
@@ -7519,6 +7518,12 @@ const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
  * internal U+E000 placeholder for an escaped `\ ` counts too.
  */
 const isFlankSpace = (ch: string) => /[ \t\n\r\u00a0\0]/.test(ch)
+const isQuoteSpace = (ch: string) => /[ \t\n\r\u00a0]/.test(ch)
+const isQuoteAlnum = (ch: string) => /[\p{L}\p{N}]/u.test(ch)
+const QUOTE_LETTER_RUN = /\p{L}+/uy
+const ELISION_WORDS = new Set(['tis', 'tisn', 'twas', 'twasn', 'twere', 'twill', 'twould', 'em', 'cause', 'til', 'n', 'bout'])
+const closesAfterDash = (prev: string, next: string) =>
+  '-–—'.includes(prev) && prev !== '' && (next === '' || isQuoteSpace(next) || `"'.,;:!?)]`.includes(next))
 // Adjudicated smart-quote opening context (matches carve-rs on these inputs):
 // a straight quote curls OPENING when preceded by start-of-content, Unicode
 // whitespace (incl. NBSP, handled below via the U+E000 placeholder), or one of
@@ -7544,10 +7549,9 @@ const isQuoteOpenContext = (prev: string) =>
  * flushes that buffer, so the glyph it produced would otherwise be invisible
  * here. An opening curly quote is one of the few characters that puts the NEXT
  * quote in opening context, so losing it flips `""` from opening to closing.
- * Anything else with prior output is word-adjacent, i.e. closing context.
+ * Nodes without a known trailing character are treated as word-adjacent.
  */
-function lastEmittedGlyph(out: InlineNode[]): string {
-  const previous = out[out.length - 1]
+function lastEmittedGlyph(previous: InlineNode): string {
   if (previous && previous.type === 'smart_punctuation') {
     const glyph = previous.glyph ?? SMART_PUNCTUATION_GLYPHS[previous.kind]
     if (glyph) return glyph
@@ -7557,6 +7561,7 @@ function lastEmittedGlyph(out: InlineNode[]): string {
   // brace exactly as an unescaped `{` would (corpus 163).
   if (previous && previous.type === 'non_breaking_space') return '\u00a0'
   if (previous && previous.type === 'escaped_text') return previous.value
+  if (previous.type === 'text') return previous.value.slice(-1)
   // A line break is whitespace to quote flanking, so a quote starting a line opens (carve#2822).
   if (previous && (previous.type === 'soft_break' || previous.type === 'hard_break')) return '\n'
   return 'x'
@@ -13466,6 +13471,9 @@ class ParseSession {
     return end
   }
 
+  private singleQuoteSpan: { node?: SmartPunctuation; demote: boolean } | null = null
+  private quoteScopeDepth = 0
+
   private activeQuoteCharacters: readonly [string, string, string, string] = ['“', '”', '‘', '’']
 
   private smartToken(
@@ -13505,18 +13513,29 @@ class ParseSession {
     }
     const c = text[i]!
     if (c === '"') {
-      const open = isQuoteOpenContext(prev)
+      const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, text[i + 1] ?? '')
       return { out: open ? this.activeQuoteCharacters[0] : this.activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
     }
     if (c === "'") {
-      // Contextual single quote (matches djot): an apostrophe / closing
-      // quote `’` when the previous char is alphanumeric (`it's`,
-      // `John's`) OR the next char is a digit (decade elision `'70s`, and
-      // `'24'` -> `’24’` as djot does); an opening quote `‘` in an open
-      // context (`'word'`, `rock 'n' roll`); otherwise `’`.
       const next = text[i + 1] ?? ''
-      const open = isQuoteOpenContext(prev)
-      const apostrophe = /[0-9]/.test(next) || (!open && isAlnum(next))
+      const open = isQuoteOpenContext(prev) && !closesAfterDash(prev, next)
+      let apostrophe = /[0-9]/.test(next) || (!open && isQuoteAlnum(next))
+      if (!apostrophe && !open && !isQuoteSpace(prev)) this.singleQuoteSpan = null
+      if (open && !apostrophe) {
+        if (isQuoteAlnum(next)) {
+          QUOTE_LETTER_RUN.lastIndex = i + 1
+          const word = QUOTE_LETTER_RUN.exec(text)?.[0] ?? ''
+          const end = i + 1 + word.length
+          const elision = ELISION_WORDS.has(word.toLowerCase())
+            && !(text[end] === "'" && !isQuoteAlnum(text[end + 1] ?? ''))
+          apostrophe = elision || this.singleQuoteSpan !== null
+        }
+        if (!apostrophe && this.singleQuoteSpan === null) {
+          this.singleQuoteSpan = {
+            demote: isQuoteAlnum(next) && !(i === 0 && this.inlinePairFrameDepth === this.quoteScopeDepth) && prev !== '“',
+          }
+        }
+      }
       return {
         out: apostrophe ? '’' : open ? this.activeQuoteCharacters[2] : this.activeQuoteCharacters[3],
         len: 1,
@@ -13581,6 +13600,7 @@ class ParseSession {
     captionContext = false,
     kinds: ReadonlySet<string> = NO_OPEN_KINDS,
     opensHostRun = false,
+    separateQuoteScope = false,
   ): InlineNode[] {
     if (inlineDepth >= MAX_NESTING_DEPTH) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
@@ -13592,8 +13612,13 @@ class ParseSession {
       this.pairEndText = undefined
       this.pairEndTable = []
     }
+    const quoteRoot = this.inlinePairFrameDepth === 0 || separateQuoteScope
+    const outerQuoteSpan = this.singleQuoteSpan
+    const outerQuoteScopeDepth = this.quoteScopeDepth
+    if (quoteRoot) this.singleQuoteSpan = null
     inlineDepth++
     this.inlinePairFrameDepth++
+    if (quoteRoot) this.quoteScopeDepth = this.inlinePairFrameDepth
     const outerPairText = this.pairEndText
     const outerSubstitutions = this.substitutionScans
     this.substitutionScans = undefined
@@ -13604,6 +13629,15 @@ class ParseSession {
         text, source, inFootnote, captionContext, opensHostRun || inlineDepth === 1,
       )
     } finally {
+      if (quoteRoot) {
+        const span = this.singleQuoteSpan
+        if (span?.demote && span.node) {
+          span.node.kind = 'right_single_quote'
+          span.node.glyph = '’'
+        }
+        this.singleQuoteSpan = outerQuoteSpan
+        this.quoteScopeDepth = outerQuoteScopeDepth
+      }
       const outerTables = outerPairText === undefined ? undefined : this.pairEndCache.get(outerPairText)?.tables
       this.pairEndText = outerTables === undefined ? undefined : outerPairText
       this.pairEndTable = outerTables ?? []
@@ -13641,6 +13675,8 @@ class ParseSession {
     // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
     // once the rope gets deep). A scalar keeps the smart-quote context check O(1).
     let bufLast = ''
+    let quoteContextIndex = 0
+    let quoteContext = ''
     const emphasisNoClose = newEmphasisMemo()
     let crossrefMemo: CrossrefMemo | undefined
 
@@ -13832,14 +13868,12 @@ class ParseSession {
       // by the opaque code branch below (continues before this on a
       // backtick). Multi-char tokens are matched longest-first.
       {
-        // Quote context: the char in buf, else (buf flushed by a prior
-        // inline node like code/emphasis/link) treat it as word-adjacent
-        // so a closing quote stays closing; only true start is "".
-        const prevForQuote = buf.length
-          ? bufLast
-          : out.length
-            ? lastEmittedGlyph(out)
-            : ''
+        // Comments emit no character; visit each appended node only once for quote context.
+        while (quoteContextIndex < out.length) {
+          const node = out[quoteContextIndex++]!
+          if (node.type !== 'comment') quoteContext = lastEmittedGlyph(node)
+        }
+        const prevForQuote = buf.length ? bufLast : quoteContext
         const st = this.smartToken(text, i, prevForQuote)
         if (st && st.kind === 'literal_hyphen_run') {
           // A flag-shaped hyphen run (carve#1443) is ordinary text: it joins the
@@ -13883,6 +13917,9 @@ class ParseSession {
             // Quote glyphs are locale-dependent and decided here, so record the
             // resolved character; other kinds resolve through the glyph table.
             if (st.kind.endsWith('_quote')) node.glyph = st.out
+            if (st.kind === 'left_single_quote' && this.singleQuoteSpan && !this.singleQuoteSpan.node) {
+              this.singleQuoteSpan.node = node
+            }
             out.push(this.withPos(node, source, text, i, i + st.len))
           }
           i += st.len
@@ -14105,7 +14142,7 @@ class ParseSession {
         if (close !== undefined && trimStructural(text.slice(i + 2, close)) !== '') {
           flush()
           const inner = text.slice(i + 2, close)
-          const children = this.scanInline(inner, this.shiftSource(source, text, i + 2), true)
+          const children = this.scanInline(inner, this.shiftSource(source, text, i + 2), true, false, NO_OPEN_KINDS, false, true)
           out.push(this.withPos({ type: 'inline_footnote', inline: children } as InlineFootnote, source, text, i, close + 1))
           i = close + 1
           continue
