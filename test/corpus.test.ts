@@ -960,7 +960,16 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['19-smart-typography-dashes-and-quotes-11', {
+    reason: 'Listed elisions use apostrophes.',
+    html: '<p>’tis the season to be ‘jolly’</p>',
+  }],
+  ['29-non-breaking-space-2', {
+    reason: 'Listed elisions use apostrophes after nonbreaking spaces.',
+    html: '<p>say&nbsp;’twas a fine&nbsp;“day”</p>',
+  }],
+])
 
 
 
