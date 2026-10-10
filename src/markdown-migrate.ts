@@ -1135,6 +1135,7 @@ function convertInline(
   terminal = true,
   table = false,
   reportEmptyLosses = true,
+  sourceLineAtOffset?: (offset: number) => number | undefined,
 ): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
@@ -1248,7 +1249,9 @@ function convertInline(
       if (counts[mid]!.offset < before.length) low = mid + 1
       else high = mid
     }
-    const sourceLine = inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + (counts[low - 1]?.count ?? 0)
+    const sourceLine = sourceLineAtOffset === undefined
+      ? inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + (counts[low - 1]?.count ?? 0)
+      : sourceLineAtOffset(referenceSourceText(before, protectedSources).length)
     importLosses.push({
       code: 'structure-unspellable',
       message: image
@@ -5776,7 +5779,21 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        out.push(containerPad + convertInline(`${heading} ${bare.map((text, index) => headingLine(text, index === bare.length - 1)).join('\n')}`, dialect).replace(/\n/g, ' '))
+        const parts = bare.map((text, index) => headingLine(text, index === bare.length - 1))
+        let offset = heading.length + 1
+        const sourceLines = parts.map((text, index) => {
+          const entry = { offset, line: sourceLine(i + index) }
+          offset += text.length + 1
+          return entry
+        })
+        out.push(containerPad + convertInline(`${heading} ${parts.join(' ')}`, dialect, false, false, undefined, true, false, true, at => {
+          let line = sourceLines[0]?.line
+          for (const entry of sourceLines) {
+            if (entry.offset > at) break
+            line = entry.line
+          }
+          return line
+        }))
         i = end
         if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
         prevType = 'heading'
