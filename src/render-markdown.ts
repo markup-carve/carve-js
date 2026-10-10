@@ -1,3 +1,4 @@
+import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { renderCellContent } from './render-cell-content.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
@@ -45,11 +46,11 @@ let suppressAutomaticAbbreviation = false
  * a presentation choice the consumer did not ask for and cannot undo, and a
  * search for the source spelling misses it.
  */
-export type SmartTypographyMode = 'glyph' | 'source'
+export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './smart-typography-mode.js'
 
 export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   /** Defaults to `'glyph'`. */
-  smartTypography?: SmartTypographyMode | boolean
+  smartTypography?: SmartTypographyOption
   /**
    * Carry an element-less container through a Markdown round trip in an HTML
    * comment holding its Carve opener verbatim (PART 11 §10s). OFF by default,
@@ -90,8 +91,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   // Choose the escape carriers before anything is rendered, so every pass that
   // introduces one and every pass that resolves one agrees on them.
   chooseCarriers(ast)
-  const smartTypography: SmartTypographyMode =
-    opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph'
+  const smartTypography = normalizeSmartTypography(opts.smartTypography)
   // PART 11 section 11: GFM has no heading-id syntax, so a heading is linked by
   // the slug a GFM reader derives from its written text.
   const headingSlugs = gfmHeadingSlugs(
@@ -157,7 +157,7 @@ interface MarkdownContext {
   inBlockQuote: boolean
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
-  smartTypography: SmartTypographyMode
+  smartTypography: SmartTypographyOption
   /**
    * Labels that actually have a definition. A reference without one did not form
    * a footnote, so it is ordinary text - and its brackets are Markdown
@@ -1228,7 +1228,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // as an escape decision and write out as a backslash the document never
       // held. `code` has always stripped for the same reason.
       return stripControls(
-        ctx.smartTypography === 'source'
+        smartTypographyUsesSource(ctx.smartTypography, node.kind)
           ? node.value
           : (node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value),
       )
@@ -1413,7 +1413,7 @@ function renderCode(content: string): string {
  * document assigned it (PART 11 section 11, G1-G5). The walk follows the
  * written order and skips table cells, which flatten their headings.
  */
-function gfmHeadingSlugs(blocks: BlockNode[], typography: SmartTypographyMode): Map<string, string> {
+function gfmHeadingSlugs(blocks: BlockNode[], typography: SmartTypographyOption): Map<string, string> {
   const slugs = new Map<string, string>()
   const counts = new Map<string, number>()
   const taken = new Set<string>()
@@ -1477,10 +1477,10 @@ function gfmSlugBase(text: string): string {
 }
 
 /** A heading's inlines as the Markdown reader sees their text. */
-function writtenTypography(nodes: InlineNode[], typography: SmartTypographyMode): InlineNode[] {
+function writtenTypography(nodes: InlineNode[], typography: SmartTypographyOption): InlineNode[] {
   return JSON.parse(JSON.stringify(nodes), (_key, value) => {
     if (value?.type === 'hard_break') return { type: 'text', value: '' }
-    if (typography === 'source' && value?.type === 'smart_punctuation') {
+    if (value?.type === 'smart_punctuation' && smartTypographyUsesSource(typography, value.kind)) {
       return { type: 'text', value: value.value }
     }
     return value

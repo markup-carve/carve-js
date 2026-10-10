@@ -139,7 +139,7 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
   if (
     opts.extensions?.length || opts.profile !== undefined || opts.sourceLine ||
     (opts as RenderOptions & { mode?: unknown }).mode !== undefined ||
-    opts.sections === false || opts.smartTypography === false || opts.smartTypography === 'source' ||
+    opts.sections === false || opts.smartTypography === false || opts.smartTypography === 'source' || typeof opts.smartTypography === 'object' ||
     !eligibleText(source) || source.startsWith('---') ||
     source.includes('[^') || source.includes('^[') || source.includes('[@') ||
     source.includes('</#') || source.includes('![') || source.includes('%%') ||

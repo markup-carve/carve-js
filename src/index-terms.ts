@@ -1,3 +1,4 @@
+import type { SmartTypographyOption } from './smart-typography-mode.js'
 import type { Attrs, BlockNode, Directive, Document, Extension, InlineNode } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import type {
@@ -37,12 +38,14 @@ export function index(opts: IndexOptions = {}): CarveExtension {
   // exhaust memory / V8's max string length. Mirrors AbbrBudget - reset per
   // render in `beforeRender`, capped at max(1MB, 8 x sourceByteLength), far
   // above any real document so the corpus is unaffected.
+  let typography: SmartTypographyOption | undefined
   let budget = new AbbrBudget(undefined)
 
   return {
     name: 'index',
 
-    beforeRender(doc: Document) {
+    beforeRender(doc: Document, ctx) {
+      typography = ctx.options.smartTypography
       // `occ` is a WeakMap keyed by node identity; stale entries (old document's
       // nodes) are unreachable, so only the per-slug tallies need resetting.
       counts.clear()
@@ -87,6 +90,7 @@ export function index(opts: IndexOptions = {}): CarveExtension {
               // Precedence: the extension's own option, then the render's
               // `labels` map, then the English default the map carries.
               opts.backrefLabel ?? ctx.labels.indexBackref,
+              typography,
             )
           : undefined,
     },
@@ -121,6 +125,7 @@ function renderIndexList(
   display: Map<string, InlineNode[]>,
   budget: AbbrBudget,
   backrefLabel: string,
+  typography: SmartTypographyOption | undefined,
 ): string {
   const pad = ctx.indent(ctx.level)
   const inner = ctx.indent(ctx.level + 1)
@@ -143,7 +148,7 @@ function renderIndexList(
     // occurrence shows `↩` and is named by label + term; the k-th of several
     // shows `↩<sup>k</sup>` and takes that k, so a row of otherwise identical
     // arrows is distinguishable BOTH by sight and by ear (WCAG 2.5.3).
-    const term = inlineText(display.get(slug)!)
+    const term = inlineText(display.get(slug)!, typography)
     for (let m = 1; m <= total; m++) {
       const name = total === 1 ? `${backrefLabel} ${term}` : `${backrefLabel} ${term} ${m}`
       const body = total === 1 ? '↩' : `↩<sup>${m}</sup>`

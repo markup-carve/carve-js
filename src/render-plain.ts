@@ -1,3 +1,4 @@
+import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { renderCellContent } from './render-cell-content.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
@@ -5,7 +6,6 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
-import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -27,14 +27,7 @@ export interface PlainTextRenderOptions extends RenderLossSinkOptions {
    * shape it learned from one target silently got glyphs from another
    * (carve#560).
    */
-  smartTypography?: SmartTypographyMode | boolean
-}
-
-/** Whether the switch asks for the authored run rather than the glyph. */
-export function smartTypographyIsSource(
-  value: SmartTypographyMode | boolean | undefined,
-): boolean {
-  return value === 'source' || value === false
+  smartTypography?: SmartTypographyOption
 }
 
 /**
@@ -69,7 +62,7 @@ function renderPass(
 ): { text: string; expanded: Set<string> } {
   const ctx: PlainContext = {
     options: opts,
-    smartSource: smartTypographyIsSource(opts.smartTypography),
+    smartTypography: normalizeSmartTypography(opts.smartTypography),
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
@@ -91,7 +84,7 @@ function renderPass(
 
 interface PlainContext {
   options: PlainTextRenderOptions
-  smartSource: boolean
+  smartTypography: SmartTypographyOption
   listDepth: number
   blockDepth: number
   inlineDepth: number
@@ -532,7 +525,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'smart_punctuation':
       // The node carries the source run in `value`, so honoring the switch
       // needs no parser cooperation (PART 9 §8).
-      if (ctx.smartSource) return node.value
+      if (smartTypographyUsesSource(ctx.smartTypography, node.kind)) return node.value
       return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
     default: {
       const t: never = node
