@@ -1,5 +1,6 @@
+import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
-import { isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
+import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { parse } from './parse.js'
 import { renderPlainText } from './render-plain.js'
@@ -23,7 +24,9 @@ export function djotImportLosses(
   contentStart: (line: string) => number,
 ): DjotImportLoss[] {
   const losses: DjotImportLoss[] = []
+  const reported = new Set<string>()
   const lines = source.split('\n')
+  const quoteDepths = lines.map(line => (line.match(/^(?:[ \t]*>(?:[ \t]|$))*/)?.[0].match(/>/g) ?? []).length)
   const offsets: number[] = []
   let offset = 0
   for (const line of lines) {
@@ -41,15 +44,19 @@ export function djotImportLosses(
     return low + 1
   }
   const report = (message: string, line: number): void => {
-    if (!losses.some((loss) => loss.line === line && loss.message === message))
+    const key = `${line}:${message}`
+    if (!reported.has(key)) {
+      reported.add(key)
       losses.push({ code: 'structure-unspellable', message, line })
+    }
   }
   djotEmphasis(
     source,
     (text) => text,
     (at) => report('Nested same-kind emphasis is flattened; Carve cannot spell it.', lineAt(at)),
   )
-  const masked = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { autolinks: true, comments: true }).split('')
+  const destinations = new Map<number, number>()
+  const masked = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: true, autolinks: true, comments: true, onDestination: (start, end) => destinations.set(start, end) }).split('')
   for (let at = 0; at < source.length; at++) {
     if (masked[at] !== '{' || isDjotEscaped(source, at)) continue
     const attrs = readAttributes(source, at)
@@ -98,6 +105,7 @@ export function djotImportLosses(
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(contentMask)
     if (heading && boundary && !headingLines.has(n)) {
       let text = content.slice(heading[0].length)
+      let lastPart = text
       const marker = new RegExp(`^${heading[1]}[ \\t]+`)
       for (let next = n + 1; next < lines.length; next++) {
         const following = lines[next]!
@@ -108,8 +116,8 @@ export function djotImportLosses(
         )
           break
         const part = following.slice(contentStart(following))
-        if (!part.trim() || /(?:^|[^\\])(?:\\\\)*\\$/.test(text)) break
-        if (marker.test(part)) text += '\n' + part.replace(marker, '')
+        if (!part.trim() || /(?:^|[^\\])(?:\\\\)*\\$/.test(lastPart)) break
+        if (marker.test(part)) { lastPart = part.replace(marker, ''); text += '\n' + lastPart }
         else {
           if (
             /^(?:[#>|{]|[-*+][ \t]|[0-9A-Za-z]+[.)][ \t]|:[ \t]|:{2,}|\([0-9a-zA-Z]+\)[ \t]|[`~]{3,}|\[[^\]\n]*\]:|(?:[*-][ \t]*){3,}$)/.test(
@@ -117,6 +125,7 @@ export function djotImportLosses(
             )
           )
             break
+          lastPart = part
           text += '\n' + part
         }
         headingLines.add(next)
@@ -179,66 +188,76 @@ export function djotImportLosses(
     if (/^\|(?:[ \t]*\|)+[ \t]*$/.test(content))
       report('A table row whose cells are all blank cannot be spelled in Carve.', n + 1)
   }
-  const links: { open: number; close: number; end: number; image: boolean }[] = []
-  const stack: number[] = []
+  const escaped = new Uint8Array(source.length)
+  let slashes = 0
   for (let at = 0; at < source.length; at++) {
-    if (source[at] === '\n' && /^\n[ \t]*\n/.test(source.slice(at))) stack.length = 0
-    if (masked[at] !== source[at] || isDjotEscaped(source, at)) continue
+    escaped[at] = slashes % 2
+    slashes = source[at] === '\\' ? slashes + 1 : 0
+  }
+  const boundaries = djotInlineBoundaries(source, masked.join(''))
+  const breaks = new Set(boundaries)
+  const referenceEnds = new Int32Array(source.length + 1).fill(-1)
+  let next = -1
+  for (let at = source.length - 1; at >= 0; at--) {
+    if (breaks.has(at)) next = -1
+    else if (masked[at] === ']' && !escaped[at]) next = at
+    else if (masked[at] === '[' && !escaped[at]) next = -1
+    referenceEnds[at] = next
+  }
+  const stack: { at: number; nested: boolean }[] = []
+  const carryNested = (nested: boolean): void => {
+    const parent = stack.at(-1)
+    if (nested && parent) parent.nested = true
+  }
+  let boundary = 0
+  for (let at = 0; at < source.length; at++) {
+    while ((boundaries[boundary] ?? source.length) <= at) {
+      stack.length = 0
+      boundary++
+    }
+    if (masked[at] !== source[at] || escaped[at]) continue
     if (source[at] === '[') {
-      stack.push(at)
+      stack.push({ at, nested: false })
       continue
     }
     if (source[at] !== ']') continue
-    const open = stack.pop()
-    if (open === undefined || source[open + 1] === '^') continue
-    const image = source[open - 1] === '!' && !isDjotEscaped(source, open - 1)
+    const opener = stack.pop()
+    if (opener === undefined) continue
+    if (source[opener.at + 1] === '^') { carryNested(opener.nested); continue }
+    const open = opener.at
+    const image = source[open - 1] === '!' && !escaped[open - 1]
     let end = at + 1,
       destination: string | undefined
     if (source[end] === '(') {
-      const start = ++end
-      let depth = 1
-      while (end < source.length && depth > 0) {
-        if (source[end] === '\\') {
-          end += 2
-          continue
-        }
-        if (source[end] === '(') depth++
-        if (source[end] === ')') depth--
-        if (depth > 0) end++
-      }
-      if (depth) continue
-      destination = source.slice(start, end).trim()
-      end++
+      const destinationEnd = destinations.get(end)
+      if (destinationEnd === undefined) { carryNested(opener.nested); continue }
+      destination = djotDestinationLines(source.slice(end + 1, destinationEnd - 1), quoteDepths[lineAt(open) - 1]!)
+      end = destinationEnd
     } else if (source[end] === '[') {
-      const start = ++end
-      while (end < source.length && source[end] !== ']' && !/^\n[ \t]*\n/.test(source.slice(end))) {
-        if (source[end] === '\\') end++
-        end++
-      }
-      if (source[end] !== ']') continue
+      const start = end + 1
+      end = referenceEnds[start]!
+      if (end < 0) { carryNested(opener.nested); continue }
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
       const key = referenceKey(
         explicit ||
-          renderPlainText(parse(djotEmphasis(label, (text) => text)), {
+          (definitions.size === 0 ? '' : renderPlainText(parse(djotEmphasis(label, (text) => text)), {
             smartTypography: false,
-          }),
+          })),
       )
       destination = definitions.get(key)
       end++
-      if (destination === undefined && !image)
-        report('An unresolved Djot reference has no href; Carve cannot spell that link.', lineAt(open))
-    } else continue
-    if (destination === '' && !image)
-      report('A link with an empty destination cannot be spelled in Carve.', lineAt(open))
-    links.push({ open, close: at, end, image })
-    at = end - 1
-  }
-  for (const outer of links) {
-    if (outer.image) continue
-    if (links.some((inner) => !inner.image && inner.open > outer.open && inner.end <= outer.close)) {
-      report('A link inside another link cannot be spelled in Carve.', lineAt(outer.open))
+      if (destination === undefined)
+        report(image ? 'An unresolved Djot image reference has no src; Carve cannot spell that image.' : 'An unresolved Djot reference has no href; Carve cannot spell that link.', lineAt(open))
+    } else { carryNested(opener.nested); continue }
+    if (destination === '')
+      report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(open))
+    if (!image) {
+      if (opener.nested) report('A link inside another link cannot be spelled in Carve.', lineAt(open))
+      const parent = stack.at(-1)
+      if (parent) parent.nested = true
     }
+    at = end - 1
   }
   return losses.sort((a, b) => a.line - b.line)
 }

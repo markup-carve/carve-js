@@ -22,20 +22,48 @@ function referenceMask(source: string): string {
   return mask.join('')
 }
 
+function foldLabelLines(label: string): string {
+  const lines = label.split('\n')
+  const first = lines.shift()!.trimEnd()
+  const last = lines.pop()!.trimStart()
+  return [first, ...lines.map(line => line.trim()).filter(Boolean), last].join(' ')
+}
+
+function normalizeMultilineLabels(
+  source: string,
+  replace: (at: number, label: string) => string | undefined,
+  explicit: boolean,
+): string {
+  let open = -1, multiline = false, copied = 0, consumed = 0, output = ''
+  for (let at = 0; at < source.length; at++) {
+    if (source[at] === '[') { open = at; multiline = false }
+    else if (source[at] === '\n') multiline = true
+    else if (source[at] === ']') {
+      if (open >= 0 && multiline && (explicit ? source[open - 1] === ']' : source[at + 1] === '[')) {
+        const start = explicit ? open - 1 : source[open - 1] === '!' ? open - 1 : open
+        if (start >= consumed) {
+          consumed = at + 1
+          const replacement = replace(start, source.slice(open + 1, at))
+          if (replacement !== undefined) {
+            output += source.slice(copied, start) + source.slice(start, open + 1) + replacement + ']'
+            copied = at + 1
+          }
+        }
+      }
+      open = -1
+    }
+  }
+  return output + source.slice(copied)
+}
+
 /** Normalize reference labels and carry definition attributes to each use. */
 export function djotReferenceLayout(source: string, contentStart: (line: string) => number): string {
   let mask = referenceMask(source)
-  source = source.replace(
-    /(!?\[)([^\[\]]*\n[^\[\]]*)(\])(?=\[)/g,
-    (all: string, open: string, label: string, close: string, at: number) =>
-      mask[at] !== ' ' &&
-      !isDjotEscaped(source, at) &&
-      !label.startsWith('^') &&
-      !label.includes('`') &&
-      !/\n[ \t]*\n/.test(label)
-        ? open + label.replace(/\s*\n\s*/g, ' ') + close
-        : all,
-  )
+  source = normalizeMultilineLabels(source, (at, label) =>
+    mask[at] !== ' ' && !isDjotEscaped(source, at) && !label.startsWith('^') &&
+    !label.includes('`') && !/\n[ \t]*\n/.test(label)
+      ? foldLabelLines(label)
+      : undefined, false)
   mask = referenceMask(source)
   const labels = new Set(
     source.split('\n').flatMap((line) => {
@@ -43,15 +71,12 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       return definition ? [referenceKey(definition[1]!)] : []
     }),
   )
-  source = source.replace(
-    /(\]\[)([^\[\]]*\n[^\[\]]*)(\])/g,
-    (all: string, open: string, label: string, close: string, at: number) =>
-      mask[at] === ']' && !/\n[ \t]*\n/.test(label) && labels.has(referenceKey(label))
-        ? open + label.replace(/\s+/g, ' ').trim() + close
-        : all,
-  )
+  source = normalizeMultilineLabels(source, (at, label) =>
+    mask[at] === ']' && !/\n[ \t]*\n/.test(label) && labels.has(referenceKey(label))
+      ? label.replace(/\s+/g, ' ').trim()
+      : undefined, true)
   const lines = source.split('\n')
-  const definitions = new Map<string, { target: string; attrs: string; line: number; first: number }>()
+  const definitions = new Map<string, { target: string; attrs: string; slots: Map<string, string[]>; line: number; first: number }>()
   const definitionMask = referenceMask(source).split('\n')
   const definitionLines = new Set<number>()
   for (let n = 0; n < lines.length; n++) {
@@ -64,7 +89,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       const preceding = lines[first - 1]!.slice(contentStart(lines[first - 1]!)),
         parsed = readAttributes(preceding, 0)
       if (parsed?.end !== preceding.length) break
-      attrs.unshift(preceding)
+      attrs.push(preceding)
       first--
     }
     const previous = lines[first - 1] ?? ''
@@ -76,16 +101,18 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       !/^(?:#{1,6}(?: |$)|:{3,}|\|)/.test(previousContent)
     )
       continue
+    const attributes = attrs.reverse().join('')
     definitions.set(referenceKey(definition[1]!), {
       target: definition[2]!,
-      attrs: attrs.join(''),
+      attrs: attributes,
+      slots: referenceAttributeSlots(attributes),
       line: n,
       first,
     })
     for (let k = first; k <= n; k++) definitionLines.add(k)
   }
   const references = lines.map((line, n) => {
-    if (definitionLines.has(n)) return []
+    if (definitionLines.has(n) || !line.includes('][')) return []
     const uses: {
       at: number
       end: number
@@ -94,20 +121,33 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       own: string
       formatted: boolean
     }[] = []
-    for (let open = 0; open < line.length; open++) {
-      if (line[open] !== '[' || definitionMask[n]![open] !== '[' || isDjotEscaped(line, open)) continue
-      let close = open + 1,
-        depth = 1
-      for (; close < line.length; close++) {
-        if (definitionMask[n]![close] !== line[close] || isDjotEscaped(line, close)) continue
-        if (line[close] === '[') depth++
-        if (line[close] === ']' && --depth === 0) break
+    const escaped = new Uint8Array(line.length)
+    const closers = new Map<number, number>()
+    const brackets: number[] = []
+    let slashes = 0
+    for (let at = 0; at < line.length; at++) {
+      escaped[at] = slashes % 2
+      slashes = line[at] === '\\' ? slashes + 1 : 0
+      if (definitionMask[n]![at] !== line[at] || escaped[at]) continue
+      if (line[at] === '[') brackets.push(at)
+      else if (line[at] === ']') {
+        const open = brackets.pop()
+        if (open !== undefined) closers.set(open, at)
       }
-      if (line[close + 1] !== '[') continue
-      let labelEnd = close + 2
-      while (labelEnd < line.length && (line[labelEnd] !== ']' || isDjotEscaped(line, labelEnd))) labelEnd++
-      if (labelEnd === line.length) continue
-      const at = line[open - 1] === '!' && !isDjotEscaped(line, open - 1) ? open - 1 : open
+    }
+    const nextCloser = new Int32Array(line.length + 1).fill(-1)
+    let next = -1
+    for (let at = line.length - 1; at >= 0; at--) {
+      if (line[at] === ']' && !escaped[at]) next = at
+      nextCloser[at] = next
+    }
+    for (let open = 0; open < line.length; open++) {
+      if (line[open] !== '[' || definitionMask[n]![open] !== '[' || escaped[open]) continue
+      const close = closers.get(open)
+      if (close === undefined || line[close + 1] !== '[') continue
+      const labelEnd = nextCloser[close + 2]!
+      if (labelEnd < 0) continue
+      const at = line[open - 1] === '!' && !escaped[open - 1] ? open - 1 : open
       const content = line.slice(open + 1, close),
         explicit = line.slice(close + 2, labelEnd)
       const key = referenceKey(
@@ -144,16 +184,20 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     }
   const removed = new Set<number>()
   for (const definition of definitions.values()) for (let n = definition.first; n < definition.line; n++) removed.add(n)
+  for (const key of inline) {
+    const definition = definitions.get(key)!
+    for (let n = definition.first; n <= definition.line; n++) removed.add(n)
+  }
   const joined = lines
     .map((line, n) => {
       let output = '',
         copied = 0
+      const table = line.slice(contentStart(line)).startsWith('|')
       for (const use of references[n]!) {
         const definition = definitions.get(use.key)
         if (!definition || !inline.has(use.key)) continue
-        for (let k = definition.first; k <= definition.line; k++) removed.add(k)
-        let attrs = mergedReferenceAttrs(definition.attrs, use.own)
-        if (line.slice(contentStart(line)).startsWith('|'))
+        let attrs = mergedReferenceAttrs(definition.slots, use.own)
+        if (table)
           attrs = attrs.replace(/\\*\|/g, (value) => (value.length % 2 ? '\\' + value : value))
         output += line.slice(copied, use.at) + `${use.label}(${definition.target})${attrs}`
         copied = use.end
@@ -161,27 +205,32 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       return output + line.slice(copied)
     })
     .filter((_line, n) => !removed.has(n))
-  while (removed.size && joined[0] === '') joined.shift()
-  while (removed.size && joined.length > 1 && joined.at(-1) === '' && joined.at(-2) === '') joined.pop()
-  return joined.join('\n')
+  let first = 0, last = joined.length
+  while (removed.size && joined[first] === '') first++
+  while (removed.size && last - first > 1 && joined[last - 1] === '' && joined[last - 2] === '') last--
+  return joined.slice(first, last).join('\n')
 }
 
-function mergedReferenceAttrs(base: string, own: string): string {
-  const slots = (source: string): Map<string, string[]> => {
-    const result = new Map<string, string[]>()
-    for (let at = 0; at < source.length;) {
-      const attrs = readAttributes(source, at)
-      if (!attrs) break
-      for (const token of attrs.tokens) {
-        if (token.append) result.set(token.key, [...(result.get(token.key) ?? []), token.source])
+function referenceAttributeSlots(source: string): Map<string, string[]> {
+  const result = new Map<string, string[]>()
+  for (let at = 0; at < source.length;) {
+    const attrs = readAttributes(source, at)
+    if (!attrs) break
+    for (const token of attrs.tokens) {
+      if (token.append) {
+        const values = result.get(token.key)
+        if (values) values.push(token.source)
         else result.set(token.key, [token.source])
-      }
-      at = attrs.end
+      } else result.set(token.key, [token.source])
     }
-    return result
+    at = attrs.end
   }
-  const merged = slots(base)
-  for (const [key, value] of slots(own)) merged.set(key, value)
+  return result
+}
+
+function mergedReferenceAttrs(base: ReadonlyMap<string, string[]>, own: string): string {
+  const merged = new Map(base)
+  for (const [key, value] of referenceAttributeSlots(own)) merged.set(key, value)
   const values = [...merged.values()].flat().join(' ')
   return values ? `{${values}}` : ''
 }

@@ -1,5 +1,6 @@
+import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
-import { isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
+import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { nativeAttributeReader } from './djot-attributes.js'
 
 type Pair = {
@@ -28,6 +29,11 @@ export function djotPairedEmphasisOpeners(source: string): Map<number, number> {
 
 function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
+  const cells = new Set<number>()
+  if (source.includes('|')) {
+    const cellMask = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false, autolinks: false, attributeValues: false })
+    for (const at of djotInlineBoundaries(source, cellMask)) if (source[at] === '|' && cellMask[at] === '|') cells.add(at)
+  }
   const readAttributes = nativeAttributeReader(source)
   const attributes = new Map<number, { end: number; source: string }>()
   const emptyBlockAttributes = new Set<number>()
@@ -62,10 +68,18 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     let attrs = readAttributes(i)
     if (!attrs) continue
     const firstAttributeEnd = attrs.end
-    while (source[attrs.end] === '{') {
-      const next = readAttributes(attrs.end)
-      if (!next) break
-      attrs = { tokens: [...attrs.tokens, ...next.tokens], end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
+    if (source[attrs.end] === '{') {
+      const tokens = attrs.tokens.slice()
+      const sources = attrs.source === '{}' ? [] : [attrs.source]
+      let attributeEnd = attrs.end
+      while (source[attributeEnd] === '{') {
+        const next = readAttributes(attributeEnd)
+        if (!next) break
+        for (const token of next.tokens) tokens.push(token)
+        if (next.source !== '{}') sources.push(next.source)
+        attributeEnd = next.end
+      }
+      if (attributeEnd !== attrs.end) attrs = { tokens, end: attributeEnd, source: sources.join('') || '{}' }
     }
     if (i === attributePrefixEnd && attrs.end !== firstAttributeEnd) attrs = { ...attrs, source: '{%%}' }
     attributes.set(i, attrs)
@@ -79,6 +93,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     i = attrs.end - 1
   }
   const validBraceClosers = new Set<number>()
+  const braceEnds = new Map<number, number>()
   const validBraces = new Set<number>(), pendingBraces = new Map<string, number[]>()
   let braceLineStart = 0, lastEscaped = -1
   const literalDashes = new Set<number>()
@@ -91,6 +106,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
   }
   for (let i = 0; i < source.length; i++) {
+    if (cells.has(i)) pendingBraces.clear()
     if (source[i] === '\n') {
       if (
         source
@@ -103,12 +119,16 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     if (mask[i] !== source[i]) continue
     if (source[i] === '\\' && source[i + 1] !== '\n') { lastEscaped = i + 1; i++; continue }
-    if (source[i] === '{' && '+-=^~'.includes(source[i + 1] ?? '\0')) {
+    if (source[i] === '{' && '+-=^~_*'.includes(source[i + 1] ?? '\0')) {
       const kind = source[i + 1]!, stack = pendingBraces.get(kind) ?? []
       stack.push(i); pendingBraces.set(kind, stack)
-    } else if (source[i] === '}' && i - 1 !== lastEscaped && '+-=^~'.includes(source[i - 1] ?? '\0')) {
+    } else if (source[i] === '}' && i - 1 !== lastEscaped && '+-=^~_*'.includes(source[i - 1] ?? '\0')) {
       const start = pendingBraces.get(source[i - 1]!)?.pop()
-      if (start !== undefined && i > start + 2) { validBraces.add(start); validBraceClosers.add(i - 1) }
+      if (start !== undefined && i > start + 2) {
+        validBraces.add(start); validBraceClosers.add(i - 1); braceEnds.set(start, i - 1)
+        if (paired && '+-='.includes(source[start + 1]!)) paired.set(start + 1, i + 1)
+        for (const stack of pendingBraces.values()) while (stack.at(-1) !== undefined && stack.at(-1)! > start) stack.pop()
+      }
       else if (source[i - 1] === '-') {
         let first = i - 1
         while (source[first - 1] === '-') first--
@@ -130,6 +150,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     for (const stack of openers.values()) while (stack.at(-1) && stack.at(-1)!.start >= from) stack.pop()
   }
   for (let i = 0; i < source.length; i++) {
+    if (cells.has(i)) { clear(0); brackets.length = 0; braces.length = 0 }
     if (i === lineStart) {
       const end = source.indexOf('\n', i)
       lineEnd = end < 0 ? source.length : end
@@ -167,18 +188,9 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       continue
     }
     if (mask[i] !== ch) continue
-    if (ch === '{' && validBraces.has(i)) {
-      braces.push(i)
-      continue
-    }
-    if (ch === '}' && braces.at(-1) !== undefined && source[i - 1] === source[braces.at(-1)! + 1]) {
-      clear(braces.pop()!)
-      continue
-    }
-    if (ch === '[') {
-      brackets.push(i)
-      continue
-    }
+    if (ch === '{' && validBraces.has(i) && !'_*'.includes(source[i + 1] ?? '\0')) { braces.push(i); continue }
+    if (ch === '}' && !isDjotEscaped(source, i - 1) && braces.at(-1) !== undefined && source[i - 1] === source[braces.at(-1)! + 1]) { clear(braces.pop()!); continue }
+    if (ch === '[') { brackets.push(i); continue }
     if (ch === ']') {
       const start = brackets.pop()
       if (start !== undefined) {
@@ -187,7 +199,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       }
       continue
     }
-    if (ch !== '_' && ch !== '*' && !(paired && (ch === '~' || ch === '^'))) continue
+    if (ch !== '_' && ch !== '*' && ch !== '~' && ch !== '^') continue
     if (ch === '*' && i <= structuralEnd) {
       if (thematicLine) {
         for (let at = i; at < lineEnd; at++) if (source[at] === '*') structural.add(at)
@@ -205,8 +217,14 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     const canClose = !forcedOpen && (forcedClose || (i > 0 && !/[ \t\r\n]/.test(source[i - 1]!)))
     const stack = openers.get((forcedClose ? '{' : '') + ch)!
     const opener = stack.at(-1)
-    if (canClose && opener && opener.end < i && (opener.start > (braces.at(-1) ?? -1) || (paired && opener.forced && opener.start === braces.at(-1)))) {
+    if (canClose && opener && opener.end < i && (!opener.forced || opener.start > (braces.at(-1) ?? -1) || opener.start === braces.at(-1))) {
       clear(opener.start)
+      while (braces.at(-1) !== undefined && braces.at(-1)! > opener.start) {
+        const start = braces.pop()!
+        validBraces.delete(start)
+        validBraceClosers.delete(braceEnds.get(start)!)
+        paired?.delete(start + 1)
+      }
       pairs.push({
         start: opener.start,
         openEnd: opener.end,
@@ -217,7 +235,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
         children: [],
         kinds: new Set([ch]),
       })
-      if (forcedClose) i++
+      if (forcedClose) { if (braces.at(-1) === opener.start) braces.pop(); i++ }
     } else if (canOpen) {
       openers
         .get((forcedOpen ? '{' : '') + ch)!
@@ -264,8 +282,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       literalBrackets.add(i + 1)
     }
   }
-  let literalPrefix = '\0DJOTLITERAL\0'
-  while (source.includes(literalPrefix)) literalPrefix += '\0'
+  const literalPrefix = djotPlaceholderPrefix(source, '\0DJOTLITERAL\0')
   const literals: string[] = []
   const bracketCloses = new Set(bracketPairs.map(([, close]) => close))
   const plain = (start: number, end: number): string => {
@@ -288,7 +305,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
         literals.push(ch)
         continue
       }
-      if (mask[i] === ch && (((ch === '~' || ch === '^') && source[i + 1] === '}' && !validBraceClosers.has(i)) || (ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {
+      if (mask[i] === ch && ((ch === '~' || ch === '^') || (ch === '_' || ch === '*') && !structural.has(i) || literalBrackets.has(i))) {
         text += `${literalPrefix}${literals.length}\0`
         literals.push(`\\${ch}`)
       } else text += literalDashes.has(i) ? '\\-' : ch
@@ -317,12 +334,12 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       pair.children,
       scope ? new Set([pair.kind]) : new Set([...outer, pair.kind]),
     )
-    const delimiter = pair.kind === '_' ? '/' : '*'
+    const delimiter = pair.kind === '_' ? '/' : pair.kind === '~' ? ',' : pair.kind ==='^' ? '^' : '*'
     const emptyBoundary =
       (mask[pair.end] === '{' && source.startsWith('{}', pair.end)) ||
       (mask[pair.start - 2] === '{' && source.slice(Math.max(0, pair.start - 2), pair.start) === '{}')
     const forced =
-      pair.forced ||
+      pair.kind === '~' || pair.kind === '^' || pair.forced ||
       emptyBoundary ||
       scope ||
       content.startsWith('\0') ||

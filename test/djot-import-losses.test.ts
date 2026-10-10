@@ -182,3 +182,72 @@ it.each(['- a\n\n  - b\n  - c\n\n- d\n', '- a\n  - b\n\n  - c\n\n- d\n'])(
     expect(result.report.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'structure-unspellable' }))
   },
 )
+
+it('reports nested links after an escaped bang', () => {
+  expect(djotToCarveWithLosses('\\![[foo](bar)](baz)').losses)
+    .toContainEqual(expect.objectContaining({ line: 1, message: expect.stringContaining('A link inside another link') }))
+})
+
+it('keeps unfinished destinations literal in a long report scan', () => {
+  expect(djotToCarveWithLosses('x^[[a](b '.repeat(8192)).losses).toEqual([])
+})
+
+it('reports each empty heading at its original line', () => {
+  const result = djotToCarveWithLosses('#\n\n'.repeat(512))
+  expect(result.losses).toHaveLength(512)
+  expect(result.losses[0]!.line).toBe(1)
+  expect(result.losses.at(-1)!.line).toBe(1023)
+})
+
+it('keeps links inside image alt text from becoming nested anchors', () => {
+  expect(djotToCarveWithLosses('[![a [b](u)](image)](outer)').losses).toEqual([])
+})
+
+it.each([
+  '[a [b [c](u)] d](v)',
+  '[text [span [x](u)]{.c}](v)',
+  '[![a [b](u)] text](v)',
+])('reports a nested link through a plain bracket: %s', (source) => {
+  expect(djotToCarveWithLosses(source).losses)
+    .toContainEqual(expect.objectContaining({ message: expect.stringContaining('A link inside another link') }))
+})
+
+it.each([
+  '[a [b](u)\\\n\nc](v)',
+  '> [x [a](u)\n>\n> b](v)',
+  '| [a [b](u) | c](v) |',
+])('keeps nested link reports inside their paragraph or cell: %s', (source) => {
+  expect(djotToCarveWithLosses(source).losses).toEqual([])
+})
+
+
+it.each(['![a]()', '![a][missing]', '![a][]\n\n[a]:'])('reports images with missing destinations: %s', (source) => {
+  expect(djotToCarveWithLosses(source).losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('image') }))
+})
+
+it('preserves a space-only destination without an empty-target loss', () => {
+  expect(djotToCarveWithLosses('[a]( )').losses).toEqual([])
+})
+
+
+it('keeps an unfinished reference label with an inner opener literal', () => {
+  expect(djotToCarveWithLosses('[a][[b]').losses).toEqual([])
+})
+
+it('reports a newline-only destination as empty', () => {
+  expect(djotToCarveWithLosses('[a](\n)').losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('empty destination') }))
+})
+
+
+it('does not turn an unfinished reference containing code into a link loss', () => {
+  expect(djotToCarveWithLosses('[a][b `c] [x][y]` z').losses).toEqual([])
+})
+
+
+it.each(['> [a](\n> )', '- [a](\n  )', '[a](\n  )'])('reports empty destinations after folding container prefixes: %s', (source) => {
+  expect(djotToCarveWithLosses(source).losses).toContainEqual(expect.objectContaining({ message: expect.stringContaining('empty destination') }))
+})
+
+it.each(['[a][b][c]\n\n[b]: /u', '[a][b]()\n\n[b]: /u'])('does not reuse an accepted reference payload: %s', (source) => {
+  expect(djotToCarveWithLosses(source).losses).toEqual([])
+})

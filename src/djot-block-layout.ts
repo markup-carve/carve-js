@@ -1,4 +1,4 @@
-import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences } from './djot-migrate.js'
+import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotInlineBoundaries } from './djot-migrate.js'
 import { trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
@@ -6,13 +6,19 @@ import { backtickRunEnds } from './backtick-run-index.js'
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
 export function djotBlockLayout(source: string, rows: readonly boolean[]): string {
   const lines = source.split('\n')
-  const mask = maskDjotCodeAndDestinations(source).split('\n')
+  const maskedSource = maskDjotCodeAndDestinations(source)
+  const mask = maskedSource.split('\n')
+  const divClosers = new Map<number, number[]>()
+  if (source.includes(':::')) djotInlineBoundaries(source, maskedSource, true, divClosers)
+  let lineOffset = 0
+  const lineOffsets = lines.map(line => { const at = lineOffset; lineOffset += line.length + 1; return at })
   const fences = maskDjotFences(source).split('\n')
   const divs: {
     width: number
     prefix: string
     itemColumn?: number
     depth: number
+    start: number
   }[] = []
   const lists: {
     column: number
@@ -144,6 +150,24 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     }
     const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(visible)
     const top = divs.at(-1)
+    const closeStarts = divClosers.get(lineOffsets[n]!)
+    if (div && top && closeStarts !== undefined) {
+      dropOrphanAttributeLine(out)
+      let matched = 0
+      const outerStart = closeStarts.at(-1)!
+      while (divs.length && divs.at(-1)!.start >= outerStart) {
+        const closed = divs.pop()!
+        while ((closeStarts[matched] ?? -1) > closed.start) matched++
+        if (closed.start === closeStarts[matched]) {
+          out.push(closed.prefix + ':'.repeat(closed.width))
+          matched++
+        }
+      }
+      paragraph = false
+      headingMarker = ''
+      blank = true
+      continue
+    }
     if (div && /^:{3,}[ \t]*$/.test(text) && top && (div[1]!.length >= top.width || paragraph)) {
       if (div[1]!.length >= top.width) {
         dropOrphanAttributeLine(out)
@@ -221,6 +245,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
           prefix: quote + ' '.repeat(context!.target + context!.content),
           itemColumn: context!.column + context!.content,
           depth: quoteDepth,
+          start: lineOffsets[n]!,
         })
       paragraph = !itemDiv && !itemHeading && !body.startsWith('>')
       blank = !!itemDiv
@@ -232,6 +257,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         width: div[1]!.length,
         prefix: quote + ' '.repeat(indent),
         depth: quoteDepth,
+        start: lineOffsets[n]!,
         ...(parent && indent >= parent.column + parent.content ? { itemColumn: parent.column + parent.content } : {}),
       })
       out.push(original)
@@ -418,9 +444,16 @@ export function djotInlineLayout(source: string): string {
 
 /** Pad closed code spans for Carve's one-space trimming rule. */
 export function djotCodePadding(source: string): string {
-  const mask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { code: false })
+  const mask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { destinations: true, code: false })
   const ends = backtickRunEnds(mask)
   if (!ends) return source
+  const breaks = Array.from(source.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), match => match.index!)
+  if (source.includes('\n')) {
+    for (const at of djotInlineBoundaries(source, mask, true))
+      if (at > 0 && at < source.length && source[at - 1] === '\n' && source[at] !== '|') breaks.push(at - 1)
+    breaks.sort((a, b) => a - b)
+  }
+  let paragraph = 0
   let output = '',
     copied = 0
   for (let at = 0; at < source.length; at++) {
@@ -433,8 +466,10 @@ export function djotCodePadding(source: string): string {
     let width = 1
     while (source[at + width] === '`') width++
     const end = ends[at]!
-    if (end < 0 || /\n[ \t]*(?:>[ \t]*)*\n/.test(source.slice(at, end))) {
-      at += width - 1
+    while ((breaks[paragraph] ?? source.length) <= at) paragraph++
+    const paragraphEnd = breaks[paragraph] ?? source.length
+    if (end < 0 || end > paragraphEnd) {
+      at = paragraphEnd - 1
       continue
     }
     const content = source
