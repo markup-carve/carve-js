@@ -10,11 +10,32 @@ export interface DjotOpaqueOptions {
   autolinks?: boolean
   attributeValues?: boolean
   onComment?: (start: number, end: number) => void
+  onDestination?: (start: number, end: number) => void
 }
 
 /** Mask opaque inline payloads while preserving source offsets and newlines. */
 export function maskDjotOpaque(source: string, unclosedCode: boolean, options: DjotOpaqueOptions = {}): string {
   const destinations = options.destinations !== false && options.inlineDestinations !== false ? djotSimpleDestinationRanges(source) ?? djotDestinationRanges(source, maskDjotOpaque(source, unclosedCode, { destinations: false, autolinks: false, attributeValues: false, comments: false })) : new Map<number, number>()
+  const definitionLines = new Map<number, { start: number; previous: string }>()
+  let lineOffset = 0, previousLine = ''
+  if (source.includes(']:')) {
+    for (const line of source.split('\n')) {
+      const definition = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[(?!\^)[^\]\n]+\](?=:)/.exec(line)
+      if (definition) definitionLines.set(lineOffset + definition[0].length - 1, { start: lineOffset, previous: previousLine.trim() })
+      lineOffset += line.length + 1
+      previousLine = line
+    }
+  }
+  const rawFormats = new Map<number, number>()
+  if (source.includes('{=')) {
+    let rawEnd = -1
+    for (let at = source.length - 1; at >= 0; at--) {
+      if (source[at] === '}') rawEnd = at + 1
+      else if (source[at] === '\n') rawEnd = -1
+      if (source[at] === '{' && source[at + 1] === '=' && rawEnd >= 0) rawFormats.set(at, rawEnd)
+    }
+  }
+  const lastBrace = source.lastIndexOf('}')
   const out = source.split('')
   const hide = (start: number, end: number): void => {
     for (let at = start; at < end; at++) if (out[at] !== '\n') out[at] = ' '
@@ -29,7 +50,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       brackets.length = 0
     }
     const destinationEnd = destinations.get(at)
-    if (destinationEnd !== undefined) { hide(at, destinationEnd); at = destinationEnd - 1; continue }
+    if (destinationEnd !== undefined) { options.onDestination?.(at, destinationEnd); hide(at, destinationEnd); at = destinationEnd - 1; continue }
     if (source[at] === '\\') {
       at++
       continue
@@ -44,7 +65,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       }
     }
     if (source[at] === '{') {
-      if (source[at + 1] === '%' && options.comments !== false) {
+      if (source[at + 1] === '%' && options.comments !== false && at < lastBrace) {
         let end = at + 2
         while (end < source.length && source[end] !== '}' && !(source[end] === '%' && source[end + 1] === '}')) end++
         if (source[end] === '%') end++
@@ -71,15 +92,9 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
     }
     if (source[at] === ']' && brackets.length) {
       brackets.pop()
-      if (
-        source[at + 1] === ':' &&
-        /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[(?!\^)[^\]\n]+$/.test(
-          source.slice(source.lastIndexOf('\n', at) + 1, at),
-        )
-      ) {
-        const lineStart = source.lastIndexOf('\n', at) + 1
-        const previousStart = source.lastIndexOf('\n', lineStart - 2) + 1
-        const previous = source.slice(previousStart, lineStart - 1).trim()
+      const definition = definitionLines.get(at)
+      if (definition) {
+        const { start: lineStart, previous } = definition
         if (lineStart && previous && !/^(?:#{1,6} |:{3,}|[`~]{3,}|\{|\[[^\]]+\]:|(?:[*-][ \t]*){3,}$)/.test(previous))
           continue
         const newline = source.indexOf('\n', at)
@@ -102,10 +117,10 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       } else at += width - 1
       continue
     }
-    const raw = /^\{=[^}\n]*\}/.exec(source.slice(end))
+    const rawEnd = rawFormats.get(end)
     const math = source[at - 1] === '$'
-    if (options.code !== false || raw || math) hide(at - (math ? 1 : 0), end)
-    at = end + (raw?.[0].length ?? 0) - 1
+    if (options.code !== false || rawEnd !== undefined || math) hide(at - (math ? 1 : 0), end)
+    at = (rawEnd ?? end) - 1
   }
   return out.join('')
 }
