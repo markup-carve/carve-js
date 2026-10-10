@@ -11,6 +11,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixed
 
+- Markdown code spans preserve significant edge spaces and normalize payload newlines before paragraph and table layout. Empty spans use an inline HTML fallback.
+
 - Document `srcByteLength` counts the original UTF-8 input, including a leading BOM and NUL bytes, before parser normalization.
 
 - HTML code-block import keeps sibling text, omits active payloads and reports discarded child markup, comments and attributes (carve-js#2661).
