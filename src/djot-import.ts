@@ -256,6 +256,20 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   const item = String.raw`(?:[.#][A-Za-z0-9_][A-Za-z0-9_-]*|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
   const pattern = new RegExp(String.raw`\{[ \t]*${item}(?:[ \t]+${item})*[ \t]*\}`, 'g')
   const lines = source.split('\n')
+  const dangling = new Set<number>()
+  const wholeAttribute = new RegExp(`^(?:${pattern.source})$`)
+  let followsBlank = true, nextDepth: number | undefined
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const line = lines[index]!
+    const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(line)![0].length
+    const depth = (line.slice(0, first).match(/>/g) ?? []).length
+    if (line.slice(first).trim() === '') { followsBlank = true; nextDepth = depth || undefined; continue }
+    if (masked[index]![first] === '{' && wholeAttribute.test(line.slice(first).trimEnd())) {
+      if (nextDepth !== undefined && depth !== nextDepth) followsBlank = false
+      if (followsBlank) dangling.add(index)
+      nextDepth = depth
+    } else { followsBlank = false; nextDepth = undefined }
+  }
   const prefix = djotPlaceholderPrefix(source, '\x00DJOTORPHAN\x00')
   const spaces: string[] = []
   const converted = lines.map((line, index) => {
@@ -273,14 +287,14 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
       const alone = at === first && at + attrs.length === last
       const previous = (lines[index - 1] ?? '').replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
       const block = index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous)
-      if (alone && block) { if ((lines[index + 1] ?? '').trim() !== '') return attrs; dropLine = true }
+      if (alone && block) { if (!dangling.has(index)) return attrs; dropLine = true }
       orphanEnd = at + attrs.length
       return prefix + (at === first ? 'L' : 'I')
     }).replace(new RegExp(`${prefix}([LI])([ \t]*)`, 'g'), (_all, kind: string, space: string) => {
       spaces.push(kind === 'I' ? space : space === '' ? '{%%}' : `!\`${space}\``)
       return `${prefix}${spaces.length - 1}\x00`
     })
-    return dropLine ? undefined : written
+    return dropLine ? (line.slice(0, first).includes('>') ? line.slice(0, first).trimEnd() : undefined) : written
   })
     .filter((line) => line !== undefined)
     .join('\n')

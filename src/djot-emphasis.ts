@@ -68,10 +68,18 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     let attrs = readAttributes(i)
     if (!attrs) continue
     const firstAttributeEnd = attrs.end
-    while (source[attrs.end] === '{') {
-      const next = readAttributes(attrs.end)
-      if (!next) break
-      attrs = { tokens: [...attrs.tokens, ...next.tokens], end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
+    if (source[attrs.end] === '{') {
+      const tokens = attrs.tokens.slice()
+      const sources = attrs.source === '{}' ? [] : [attrs.source]
+      let attributeEnd = attrs.end
+      while (source[attributeEnd] === '{') {
+        const next = readAttributes(attributeEnd)
+        if (!next) break
+        for (const token of next.tokens) tokens.push(token)
+        if (next.source !== '{}') sources.push(next.source)
+        attributeEnd = next.end
+      }
+      if (attributeEnd !== attrs.end) attrs = { tokens, end: attributeEnd, source: sources.join('') || '{}' }
     }
     if (i === attributePrefixEnd && attrs.end !== firstAttributeEnd) attrs = { ...attrs, source: '{%%}' }
     attributes.set(i, attrs)
