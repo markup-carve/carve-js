@@ -215,3 +215,36 @@ describe('a Markdown import writing the nested spelling', () => {
     expect((html.match(/<strong>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 2)
   })
 })
+
+it.each(['highlight', 'mixed'])('counts Djot %s spans in the native depth budget', shape => {
+  const count = MAX_NESTING_DEPTH / 2;
+  const source = shape === 'highlight'
+    ? '{='.repeat(MAX_NESTING_DEPTH) + 'x' + '=}'.repeat(MAX_NESTING_DEPTH)
+    : '{='.repeat(count) + '{*'.repeat(count) + 'x' + '*}'.repeat(count) + '=}'.repeat(count);
+  const result = migrateDjot(source);
+  const html = renderHtml(parse(result.value));
+  expect(html).not.toContain('{=');
+  expect(html).not.toContain('{*');
+  expect((html.match(/<(?:mark|strong)>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 1);
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});
+
+it('counts emphasis around a Markdown link together with emphasis in its label', () => {
+  const source = '**a _a '.repeat(50) + '[' + '**b _b '.repeat(50) + 'x' + ' c_ c**'.repeat(50) + '](/u)' + ' d_ d**'.repeat(50);
+  const result = migrateMarkdown(source);
+  const html = renderHtml(parse(result.value));
+  expect(html).not.toContain('{*');
+  expect(html).not.toContain('{/');
+  expect(html).toContain('<a href="/u">');
+  expect((html.match(/<(?:strong|em)>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 2);
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});
+
+it.each([['{+', '+}'], ['{-', '-}']])('counts a Djot editorial host %s in the depth budget', (open, close) => {
+  const source = open + '{*'.repeat(MAX_NESTING_DEPTH - 1) + 'x' + '*}'.repeat(MAX_NESTING_DEPTH - 1) + close;
+  const result = migrateDjot(source);
+  const html = renderHtml(parse(result.value));
+  expect(html).not.toContain('{*');
+  expect((html.match(/<strong>/g) ?? []).length).toBe(MAX_NESTING_DEPTH - 2);
+  expect(result.report.diagnostics.some(item => item.code === 'structure-unspellable')).toBe(true);
+});
