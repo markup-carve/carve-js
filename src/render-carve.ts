@@ -41,7 +41,7 @@ import { codeSource, payloadTerminated } from './verbatim-payload.js'
 import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
-import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
+import { pickSourceSentinels } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
@@ -2432,7 +2432,7 @@ class CarveRenderSession {
     // as the grammar grows.
     // Choose the verbatim sentinels before anything is rendered, so both escape
     // passes below agree on them.
-    this.sentinels = pickSentinelRun(occupiedPrivateUse(ast), SENTINEL_BASE, SENTINEL_COUNT)
+    this.sentinels = pickSourceSentinels(ast, SENTINEL_BASE, SENTINEL_COUNT)
     this.redundantIds = findRedundantHeadingIds(ast)
     this.unspellableEmptyCodeSpans = findUnspellableEmptyCodeSpans(ast)
     // The two "written in place" sets are NOT reset here: they are per-PASS, and
@@ -4627,7 +4627,7 @@ class CarveRenderSession {
   }
 
   private lineBlockLayoutWhitespace(body: string): string {
-    return body.replace(new RegExp(`(?:^${this.sentinels[3]}+)|${this.sentinels[3]}{2,}`, 'gm'), (run) => this.sentinels[0]!.repeat(run.length))
+    return body.replace(new RegExp(`(?:^(?:${this.sentinels[3]})+)|(?:${this.sentinels[3]}){2,}`, 'gm'), (run) => this.sentinels[0]!.repeat(run.length / this.sentinels[3]!.length))
   }
 
   private normalize(text: string): string {

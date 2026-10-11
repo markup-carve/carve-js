@@ -96,3 +96,33 @@ export function pickSentinelRun(occupied: Set<number>, base: number, length: num
 
   return runFrom(base, length)
 }
+
+/** Source markers remain distinct when every single-character slot is occupied. */
+export function pickSourceSentinels(root: unknown, base: number, length: number): string[] {
+  const occupied = occupiedPrivateUse(root)
+  const preferred = pickSentinelRun(occupied, base, length)
+  if (preferred.every(marker => !occupied.has(marker.charCodeAt(0)))) return preferred
+
+  // Count repeated references separately, but stop cycles. The token is longer
+  // than all authored occurrences of its interior character combined.
+  let interiorCount = 0
+  const ancestors = new WeakSet<object>()
+  const stack: Array<{ value: unknown; leave?: boolean }> = [{ value: root }]
+  while (stack.length > 0) {
+    const entry = stack.pop()!
+    const value = entry.value
+    if (typeof value === 'string') {
+      for (let i = 0; i < value.length; i++) if (value.charCodeAt(i) === 0xe008) interiorCount++
+    } else if (value !== null && typeof value === 'object') {
+      if (entry.leave) {
+        ancestors.delete(value)
+      } else if (!ancestors.has(value)) {
+        ancestors.add(value)
+        stack.push({ value, leave: true })
+        for (const child of Object.values(value)) stack.push({ value: child })
+      }
+    }
+  }
+  const prefix = '\ue009' + '\ue008'.repeat(interiorCount + 1)
+  return Array.from({ length }, (_, index) => prefix + String.fromCharCode(0xe010 + index) + '\ue00a')
+}
