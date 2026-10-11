@@ -1,6 +1,26 @@
 import { expect, it } from 'vitest'
 import { djotToCarve, carveToHtml, migrateDjot } from '../src/index.js'
 import { djotReferenceLayout } from '../src/djot-reference-layout.js'
+import { parse, renderHTML } from '@djot/djot'
+
+it.each(['title', 'class', 'data-long'])('keeps a long inherited %s shared', (attribute) => {
+  const value = 'v'.repeat(32768)
+  const source = `{${attribute}="${value}"}\n[r]: /u\n\n` + '[x][r] '.repeat(1024)
+  const result = djotToCarve(source)
+  expect(result.length).toBeLessThan(source.length * 2)
+  expect(result.split(value).length - 1).toBe(1)
+})
+
+it('shares inherited attributes when individual references override their classes', () => {
+  const value = 'v'.repeat(32768)
+  const source = `{.base title="${value}"}\n[r]: /u\n\n[x][r] ` + '[x][r]{.own} '.repeat(1024)
+  const result = djotToCarve(source)
+  expect(result.length).toBeLessThan(source.length * 3)
+  expect(result.split(value).length - 1).toBeLessThanOrEqual(2)
+  const small = '{.base title="a|b"}\n[r]: /u\n\n| [x][r] | [x][r]{.own} |\n'
+  const normalize = (html: string): string => html.replace(/<\/?tbody>/g, '').replace(/>\s+</g, '><').trim()
+  expect(normalize(carveToHtml(djotToCarve(small)))).toBe(normalize(renderHTML(parse(small))))
+})
 
 it.each([
   ['[a [b]][r]\n\n{.c}\n[r]: /u', '[a [b]](/u){.c}\n'],

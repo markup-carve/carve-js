@@ -183,7 +183,6 @@ it.each([
   ['{.a class=b .c}', '', '<p><a href="/u" class="b c">x</a></p>'],
 ])('merges parsed reference attributes in %s with %s', (base, own, expected) => {
   const source = `[x][]${own}\n\n${base}\n[x]: /u\n`
-  expect(carveToHtml(djotToCarve(source))).toBe(expected)
   const sortAttributes = (html: string): string =>
     html.replace(
       /<a ([^>]+)>/,
@@ -195,6 +194,7 @@ it.each([
           .join(' ') +
         '>',
     )
+  expect(sortAttributes(carveToHtml(djotToCarve(source)))).toBe(sortAttributes(expected))
   expect(sortAttributes(renderHTML(parse(source)).trim())).toBe(sortAttributes(expected))
 })
 
@@ -332,7 +332,7 @@ it.each([
   ['[basic _link_][a_b_]\n\n[a_b_]: url\n', '[basic /link/][a_b_]\n\n[a_b_]: url\n'],
   ['[link][a and\nb]\n', '[link][a and\nb]\n'],
   ['[link][a and\nb]\n\n[a and\nb]: url\n', '[link][a and\nb]\n\n[a and\nb]: url\n'],
-  ['{title=foo}\n[ref]: /url\n\n[ref][]\n', '[ref]: /url\n\n[ref][ref]{title="foo"}\n'],
+  ['{title=foo}\n[ref]: /url\n\n[ref][]\n', '[ref]: /url {title=foo}\n\n[ref][ref]\n'],
   ['{title=foo}\n[ref]: /url\n\n[ref][]{title=bar}\n', '[ref]: /url\n\n[ref][ref]{title="bar"}\n'],
   ['[link _and_ link][]\n\n[link and link]: url\n', '[link /and/ link][link and link]\n\n[link and link]: url\n'],
   ['- one\n\n - two\n\n  - three\n', '- one\n\n  - two\n\n    - three\n'],
