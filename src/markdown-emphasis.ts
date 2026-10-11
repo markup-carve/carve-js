@@ -24,7 +24,7 @@ export function recordMarkdownProtectedDepth(spans: readonly string[], token: st
 }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -205,7 +205,8 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     if (frame.keep) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
       const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => /[*_]/.test(source[i] ?? '') && !claimed.has(i))
-      const braced = frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
+      const braced = besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'
