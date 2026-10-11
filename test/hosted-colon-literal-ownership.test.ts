@@ -3,12 +3,16 @@ import {parse, carveToHtml} from '../src/index.js'
 import type {BlockNode, List} from '../src/ast.js'
 import readerScopeFixtures from './fixtures/hosted-colon-reader-scope.json'
 import neighborScopeFixtures from './fixtures/hosted-colon-neighbor-scope.json'
+import review7ScopeFixtures from './fixtures/hosted-colon-review7-scope.json'
 
 // Expected HTML comes from native reader 83fa84fcba4f5d7bddc923219927f8122af1a341.
 for (const fixture of readerScopeFixtures) it(fixture.name, () => {
   expect(carveToHtml(fixture.source)).toBe(fixture.html)
 })
 for (const fixture of neighborScopeFixtures) it(fixture.id, () => {
+  expect(carveToHtml(fixture.source)).toBe(fixture.html)
+})
+for (const fixture of review7ScopeFixtures) it(fixture.id, () => {
   expect(carveToHtml(fixture.source)).toBe(fixture.html)
 })
 
