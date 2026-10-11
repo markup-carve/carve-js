@@ -474,7 +474,11 @@ function writeMarkdownDestination(url: string, protectedSpans: readonly string[]
   }
   const escapesAndEntities = new RegExp(String.raw`\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
   const decoded = restored.replace(escapesAndEntities, (match, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(match))
-  return decoded.replace(/[^\x21-\x7e]|["<>[\\\]`{|}]/gu, (char) => {
+  // carve#2865: a square bracket is NOT encoded. A Carve `(...)` destination
+  // carries it literally, balanced or not, so encoding changed the address the
+  // Markdown writer had emitted verbatim. Same ruling as the Djot side,
+  // carve#2854.
+  return decoded.replace(/[^\x21-\x7e]|["<>\\`{|}]/gu, (char) => {
     const point = char.codePointAt(0)!
     return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
   }).replace(/[()]/g, '\\$&')
