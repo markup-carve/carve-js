@@ -1,4 +1,4 @@
-import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotInlineBoundaries } from './djot-migrate.js'
+import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotInlineBoundaries, djotContentStart } from './djot-migrate.js'
 import { trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { rejectedCommentStartsBlock } from './djot-attributes.js'
@@ -101,11 +101,17 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
   let quoteBoundary = ''
   let headingMarker = ''
   let definitionIndent = -1
+  let rejectedCommentOpen = false
   for (let n = 0; n < lines.length; n++) {
     const original = lines[n]!,
       masked = mask[n]!
+    const pendingCommentContinuation = rejectedCommentOpen && paragraph && !blank
+    const opensRejectedComment = /^\\\{\0DJOTINVALIDATTR\0[0-9]+\0%[^%}]*$/.test(original.slice(djotContentStart(original)))
+    rejectedCommentOpen = opensRejectedComment ||
+      (pendingCommentContinuation && /[^ \t]/.test(original.replace(/^(?:[ \t]*>(?:[ \t]|$))*/, '')) && !/[}%]/.test(original))
     const physicalQuote = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(original)![0]
     const physicalQuoteDepth = (physicalQuote.match(/>/g) ?? []).length
+    const commentContinuation = pendingCommentContinuation && !original.slice(physicalQuote.length).trimStart().startsWith('\\>')
     const quotedNoteItem: RegExpExecArray | null = !noteOwner && (blank || !paragraph || physicalQuoteDepth < depth || lists.at(-1)?.depth === physicalQuoteDepth && /^[ \t]*/.exec(original.slice(physicalQuote.length))![0].length <= lists.at(-1)!.column) && fences[n] === original ? /^([ \t]*)((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(>[ \t](?:[ \t]*>[ \t])*)[ \t]*(?=\[\^[^\]\n]+\]:(?:[ \t]|$))/.exec(original.slice(physicalQuote.length)) : null
     const quote: string = quotedNoteItem ? physicalQuote + quotedNoteItem[1] + quotedNoteItem[2] + quotedNoteItem[3] : physicalQuote
     const quoteDepth: number = (quote.match(/>/g) ?? []).length
@@ -134,7 +140,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const parts: string[] = []
       for (let level = baseDepth; level < quoteDepth; level++) {
         const held = byDepth.get(level)
-        const column = held ? held.target + held.content : level > firstOwned && level < lastOwned ? (quoteColumns[level] ?? 0) : 0
+        const column = held ? commentContinuation ? Math.min(quoteColumns[level] ?? 0, held.target + held.content - 1) : held.target + held.content : commentContinuation || level > firstOwned && level < lastOwned ? (quoteColumns[level] ?? 0) : 0
         parts.push(' '.repeat(column), '>')
         if (level + 1 < quoteDepth || !quote.endsWith('>')) parts.push(' ')
       }
@@ -317,7 +323,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     if (/^:[ \t]+\S/.test(visible) && (blank || definitionIndent >= 0)) definitionIndent = indent
     else if (definitionIndent >= 0 && blank && indent <= definitionIndent) definitionIndent = -1
     if (definitionIndent >= 0 && indent <= definitionIndent && rejectedCommentStartsBlock(visible)) {
-      out.push(quote + ' '.repeat(indent))
+      out.push(quoteForCarve() + ' '.repeat(indent))
       definitionIndent = -1
       paragraph = false
       blank = true
@@ -351,7 +357,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) trimEmbedded(quoteDepth)
       const owner = lists.at(-1)
       if (item && !blank && paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) out.push(closedQuoteBoundary(quoteBoundary, Math.max(0, quoteDepth - (noteOwner?.depth ?? 0))))
-      else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quote.trimEnd())
+      else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quoteForCarve().trimEnd())
       paragraph = false
       headingMarker = ''
       depth = quoteDepth
@@ -479,6 +485,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     }
     const rule = /^(?:[*-][ \t]*){3,}$/.test(visible)
     if (item && !rule) {
+      rejectedCommentOpen = opensRejectedComment
       const previousList = lists.at(-1)
       const endsNestedList = previousList && indent < previousList.column
       while (lists.length && indent < lists.at(-1)!.column) {
@@ -577,7 +584,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
     if (rejectedCommentStartsBlock(visible)) {
       const outsideList = lists.length > 0 && indent <= lists[0]!.column
-      if (headingMarker || outsideList) out.push(quote + ' '.repeat(indent))
+      if (headingMarker || outsideList) out.push(quoteForCarve() + ' '.repeat(indent))
       if (outsideList) { lists.length = 0; paragraph = false; blank = true }
       headingMarker = ''
     }
