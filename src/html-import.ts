@@ -861,6 +861,8 @@ function restoreHoistedSectionId(
   tag: string,
   attrs: Attrs | undefined,
   blocks: BlockNode[],
+  explicitId: boolean,
+  writingNode?: P5Node,
 ): Attrs | undefined {
   if (tag !== 'section' || attrs?.id === undefined) return attrs
   // The heading the wrapper was built around is its FIRST block. Anything else
@@ -877,8 +879,9 @@ function restoreHoistedSectionId(
   // and nothing is what `reportUnwrappedAttributes` reads as "no row" - an
   // empty object would write a row naming no attribute at all.
   const kept = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
-  if (isGeneratedHeadingId(id, inlineText(heading.children))) return kept
+  if (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children))) return kept
   heading.attrs = { ...(heading.attrs ?? {}), id }
+  if (writingNode) heading.attrs.order = slotOrderFromElement(writingNode, heading.attrs)
   return kept
 }
 
@@ -2715,7 +2718,7 @@ class Importer {
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          restoreHoistedSectionId(tag, attrs, children),
+          restoreHoistedSectionId(tag, attrs, children, this.carrierValue(node, 'explicit-id') === '1', this.writing ? node : undefined),
           tag,
           path,
           unwrapped,

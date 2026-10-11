@@ -46,7 +46,7 @@ describe('roundtrip export is off by default', () => {
     // roundtrip output.
     const src = '{.c #i}\n1) a\n'
     expect(carveToHtml(src)).toBe('<ol data-delim=")" class="c" id="i">\n  <li>a</li>\n</ol>')
-    expect(rt(src)).toBe('<ol data-delim=")" data-marker=")" class="c" id="i">\n  <li>a</li>\n</ol>')
+    expect(rt(src)).toBe('<ol data-delim=")" class="c" id="i">\n  <li>a</li>\n</ol>')
   })
 
   it('keeps the task-list hooks of carve#2887 without the option', () => {
@@ -63,8 +63,8 @@ describe('the twelve carriers', () => {
     expect(rt('- a\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 
-  it('data-marker: an ordered list carries its delimiter, not `.`', () => {
-    expect(rt('1) a\n')).toBe('<ol data-delim=")" data-marker=")">\n  <li>a</li>\n</ol>')
+  it('an ordered list carries its delimiter through data-delim', () => {
+    expect(rt('1) a\n')).toBe('<ol data-delim=")">\n  <li>a</li>\n</ol>')
     expect(rt('1. a\n')).toBe('<ol>\n  <li>a</li>\n</ol>')
   })
 

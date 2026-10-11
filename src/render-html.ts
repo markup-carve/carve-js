@@ -1789,14 +1789,10 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
     ? ` start="${node.start}"`
     : ''
   const delimAttr = node.ordered && node.delim === ')' ? ` data-delim="${escapeAttr(node.delim)}"` : ''
-  // PART 10 §13a: the AUTHORED marker, written only where it is not the
-  // default - `-` for a bullet list, `.` for an ordered one. An ordered list's
-  // marker is its delimiter, so `1)` carries `)` here beside §12's own
-  // `data-delim`: one is the spelling the author used, the other is the
-  // distinction every render publishes.
-  const authoredMarker = node.ordered
-    ? (node.delim !== undefined && node.delim !== '.' ? node.delim : undefined)
-    : (node.bulletChar !== undefined && node.bulletChar !== '-' ? node.bulletChar : undefined)
+  // Ordered lists carry their delimiter through data-delim.
+  const authoredMarker = !node.ordered && node.bulletChar !== undefined && node.bulletChar !== '-'
+    ? node.bulletChar
+    : undefined
   const markerAttr = roundtripExport(opts) && authoredMarker !== undefined
     ? ` ${CARRIER_MARKER}="${escapeAttr(authoredMarker)}"`
     : ''
