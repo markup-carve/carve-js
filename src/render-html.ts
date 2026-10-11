@@ -51,7 +51,6 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
-import { renderCarve } from './render-carve.js'
 import {
   CARRIER_CHAR,
   CARRIER_MARKER,
@@ -1586,16 +1585,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       return `${pad}<hr${charAttr}${renderAttrs(hrAttrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
     }
     case 'code_block': {
-      // The opener "header" is resolved to a `title` attribute at parse time
-      // (see parseBlocks), so it renders here AND wherever else a code block is
-      // emitted (e.g. inside a code-group).
-      //
-      // §13a's `data-carve-src` rides the `<pre>` and holds the construct's
-      // Carve source. `<pre><code class="language-x">` loses the fence width,
-      // the info-string spelling and any attribute line, and none of that is a
-      // field on the node, so the source is written back out by the canonical
-      // writer rather than read off the tree.
-      return renderCodeBlockCore(node, opts, pad, codeBlockSourceAttr(node, opts))
+      // The opener header becomes a title attribute at parse time, including in code groups.
+      return renderCodeBlockCore(node, opts, pad)
     }
     case 'block_quote':
       return renderBlockQuote(node, opts, level)
@@ -1732,20 +1723,10 @@ function renderCodeBlockCore(
   node: Pick<CodeBlock, 'lang' | 'content' | 'attrs' | 'pos'>,
   opts: RenderOptions,
   pad: string,
-  srcAttr = '',
 ): string {
   const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
   const escaped = escapeHtml(node.content)
-  const attrs = srcAttr === ''
-    ? node.attrs
-    : dropCollidingAuthored(node.attrs, [carrier('src')], opts, { type: 'code_block', ...(node.pos ? { pos: node.pos } : {}) }, 'block')
-  return `${pad}<pre${srcAttr}${renderAttrs(attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
-}
-
-/** §13a's `data-carve-src` for a code block, empty unless roundtrip is on. */
-function codeBlockSourceAttr(node: CodeBlock, opts: RenderOptions): string {
-  if (!roundtripExport(opts)) return ''
-  return ` ${carrier('src')}="${escapeAttr(renderCarve({ type: 'document', children: [node] }))}"`
+  return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
 }
 
 /**

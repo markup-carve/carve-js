@@ -654,7 +654,8 @@ function fallbackImage(math: P5Node): P5Node | undefined {
  * Everything else the source carries is kept, so these need naming:
  * `RESERVED_CARRIER_ATTRIBUTES` is PART 10 §13a's whole inventory, under both
  * the canonical `data-carve-` spelling and the deprecated `data-djot-` one that
- * released carve-php versions wrote. Re-emitting one as an authored attribute
+ * released carve-php versions wrote, plus the verbatim-source names §13a
+ * excludes from export. Re-emitting one as an authored attribute
  * is what markup-carve/carve#2902 ruling 5 stops: a `<hr data-char="_">` came
  * back as `{data-char=_}` plus `---`, and a reference link as
  * `[text](/u){data-carve-ref=lbl}`, so the importer's own output claimed a
