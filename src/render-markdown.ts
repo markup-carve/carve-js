@@ -478,7 +478,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // slot hangs on the closing fence - so its fallback follows the closer,
       // directly under the caption marker that restores it.
       if (node.caption !== undefined) {
-        out += wrapperLine(renderInlines(node.caption, ctx), '**', 'strong')
+        out += renderWrappedInlines(node.caption, ctx, '**', 'strong')
       }
       return out
     }
@@ -710,7 +710,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): st
   let out = ''
   for (const item of items) {
     for (const term of item.terms) {
-      out += wrapperLine(renderInlines(term, ctx), '**', 'strong')
+      out += renderWrappedInlines(term, ctx, '**', 'strong')
       ctx.lastList = undefined
     }
     for (const def of item.definitions) out += renderBlocks(def, ctx)
@@ -934,7 +934,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
   // example). The single-newline glue is the standalone figure's shape, not
   // the panel's.
-  return `${target}\n\n${wrapperLine(renderInlines(node.caption, ctx), '*', 'em')}`
+  return `${target}\n\n${renderWrappedInlines(node.caption, ctx, '*', 'em')}`
 }
 
 function renderFigureTarget(node: Figure, ctx: MarkdownContext): string {
@@ -1021,6 +1021,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'strong':
     case 'strike': {
       const run = DELIMITER_RUN[node.type]!
+      const attrs = node.attrs === undefined ? '' : renderHtmlAttrs(node.attrs)
+      if (attrs !== '') return `<${run.tag}${attrs}>${renderInlines(node.children, ctx)}</${run.tag}>`
 
       const combined = node.type === 'strong' && node.children.length === 1
         && normalizeLegacyInline(node.children[0]!).type === 'emphasis'
@@ -2915,6 +2917,27 @@ function neighbourAfter(parts: string[], i: number): string {
  * went out as `** **`: a THEMATIC BREAK in the reader, with the title gone
  * (carve-js#1688). An empty run emits nothing rather than a bare separator.
  */
+function renderWrappedInlines(nodes: InlineNode[], ctx: MarkdownContext, delimiter: string, tag: string): string {
+  const owner: InlineNode = { type: delimiter === '**' ? 'strong' : 'emphasis', children: nodes }
+  let inner: string
+  ctx.delimiterAncestors.push(delimiter)
+  try {
+    inner = renderInlines(nodes, ctx, delimiter, owner)
+  } finally {
+    ctx.delimiterAncestors.pop()
+  }
+  try {
+    const rendered = trimNonNbsp(padOutside(inner, delimiter, tag))
+    const split = splitRun(rendered, delimiter)
+    const piece = split ? { run: { delimiter, tag }, ...split } : null
+    const repaired = piece && contentGrowsRun(piece, owner, ctx) ? spellAsHtml(piece, ctx, owner) : rendered
+
+    return repaired === '' ? '' : `${repaired}\n\n`
+  } finally {
+    ctx.renderedChildren.delete(owner)
+  }
+}
+
 function wrapperLine(inner: string, delimiter: string, tag: string, suffix = '\n\n'): string {
   const run = trimNonNbsp(padOutside(inner, delimiter, tag))
 

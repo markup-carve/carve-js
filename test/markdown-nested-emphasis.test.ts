@@ -1,8 +1,9 @@
 import { expect, it } from 'vitest'
 import { carveToMarkdown, carveToMarkdownWithReport, RenderLossError, parse, renderMarkdownWithReport, resolve } from '../src/index.js'
 import controls from './fixtures/markdown-nested-emphasis.json'
+import hostControls from './fixtures/markdown-nested-emphasis-hosts.json'
 
-// Native Carve HTML and cmark-gfm readback validate these Markdown goldens.
+// These goldens were validated offline with native Carve HTML and cmark-gfm.
 it.each(controls)('keeps nested emphasis during Markdown export: $source', ({ source, markdown }) => {
   for (const result of [carveToMarkdownWithReport(source), renderMarkdownWithReport(resolve(parse(source)))]) {
     expect(result.value).toBe(markdown.js)
@@ -29,4 +30,12 @@ it('keeps complete ordered loss counts while repairing nested spans', () => {
   expect(strictError).toMatchObject({ totalLosses: 2, truncated: true })
   expect((strictError as RenderLossError).losses).toEqual(report.losses.slice(0, 1))
   expect(carveToMarkdownWithReport('/clean/').totalLosses).toBe(0)
+})
+
+it.each(hostControls)('preserves nested wrapper emphasis and attributes: $source', ({ source, markdown }) => {
+  for (const report of [carveToMarkdownWithReport(source), renderMarkdownWithReport(resolve(parse(source)))]) {
+    expect(report.value).toBe(markdown)
+    expect(report.losses).toEqual([])
+    expect(report.totalLosses).toBe(0)
+  }
 })
