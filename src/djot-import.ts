@@ -377,7 +377,7 @@ function escapeInvalidDjotAttributes(source: string): { source: string; inherite
       for (let inner = i + 1; inner < source.length && source[inner] !== '\n' && source[inner] !== '}'; inner++)
         if (source[inner] === '{' && masked[inner] === '{' && !readAttributes(source, inner)) escapes.push(inner)
       if (source[i + 1] === '%' && continuesParagraph(source, i)) {
-        for (let inner = i + 2; inner < source.length && source[inner] !== '%' && source[inner] !== '}'; inner++) {
+        for (let inner = Math.max(i + 2, escapes.at(-1)! + 1); inner < source.length && source[inner] !== '%' && source[inner] !== '}'; inner++) {
           if (source[inner] === '{' && masked[inner] === '{') escapes.push(inner)
         }
       }
