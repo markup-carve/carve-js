@@ -14490,8 +14490,31 @@ class ParseSession {
     return tables
   }
 
+  private plainInlineWord(text: string, start: number, end: number, source: InlineSource): InlineNode[] | undefined {
+    if (this.activeMatchers.length !== 0 || end <= start || end - start > 64) return undefined
+    for (let at = start; at < end; at++) {
+      const code = text.charCodeAt(at)
+      if (!(code >= 48 && code <= 57 || code >= 65 && code <= 90 || code >= 97 && code <= 122)) return undefined
+    }
+    return [this.withPos({ type: 'text', value: text.slice(start, end) } as Text, source, text, start, end)]
+  }
+
+  private plainBracedWordEnd(text: string, open: number, marker: string): number {
+    if (this.activeMatchers.length !== 0) return -1
+    let at = open + 2
+    const limit = Math.min(text.length, at + 65)
+    while (at < limit) {
+      const code = text.charCodeAt(at)
+      if (!(code >= 48 && code <= 57 || code >= 65 && code <= 90 || code >= 97 && code <= 122)) break
+      at++
+    }
+    return at > open + 2 && at - open - 2 <= 64 && text[at] === marker && text[at + 1] === '}' ? at + 2 : -1
+  }
+
   /** Where a braced inline opened at `open` closes (exclusive), or -1. */
   private bracedPairEnd(text: string, open: number, closer: string): number {
+    const wordEnd = this.plainBracedWordEnd(text, open, closer[0]!)
+    if (wordEnd !== -1) return wordEnd
     const stop = this.pairCloser(text, open + 2, closer[0]!)
 
     return stop === -1 || stop === open + 2 ? -1 : stop + closer.length
@@ -15571,7 +15594,7 @@ class ParseSession {
             continue
           }
           const pairs = this.pairEndText === text ? this.pairView(i + 2) : undefined
-          out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!]), false, false, pairs) } as Emphasis, source, text, i, forced))
+          out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.plainInlineWord(text, i + 2, forced - 2, source) ?? this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!]), false, false, pairs) } as Emphasis, source, text, i, forced))
           i = forced
           continue
         }
@@ -15739,7 +15762,7 @@ class ParseSession {
         if (close !== -1) {
           const inner = text.slice(i + 1, close)
           return {
-            node: { type, children: this.scanInline(inner, this.shiftSource(source, text, i + 1), inFootnote, false, this.withOpenKind(delim)) },
+            node: { type, children: this.plainInlineWord(text, i + 1, close, source) ?? this.scanInline(inner, this.shiftSource(source, text, i + 1), inFootnote, false, this.withOpenKind(delim)) },
             end: close + 1,
           }
         }
