@@ -13,6 +13,68 @@ function attributeLine(line: string, depth: number): string | undefined {
   return line
 }
 
+function continuesParagraph(source: string, start: number): boolean {
+  const context = attributeContext(source, start)
+  if (context.indent === undefined) return true
+  const marker = /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)\))[ \t]+/
+  let end = source.lastIndexOf('\n', start - 1)
+  const prefix = source.slice(end + 1, start)
+  if (marker.test(prefix)) return false
+  const lines: { raw: string; from: number }[] = []
+  while (end >= 0) {
+    const from = source.lastIndexOf('\n', end - 1) + 1
+    const raw = source.slice(from, end)
+    const depth = raw.match(/^[ \t]*(?:>[ \t]*)+/)?.[0].match(/>/g)?.length ?? 0
+    if (depth !== context.depth) return false
+    if (!raw.slice(djotStructuralPrefixEnd(raw)).trim()) {
+      let parentEnd = from - 1
+      while (parentEnd >= 0) {
+        const parentFrom = source.lastIndexOf('\n', parentEnd - 1) + 1
+        const parent = source.slice(parentFrom, parentEnd)
+        const owner = marker.exec(parent)
+        if (owner) {
+          const column = /^(?:[ \t]*>[ \t]*)*[ \t]*/.exec(parent)![0].length
+          if (lines.length && prefix.length <= column && djotStructuralPrefixEnd(lines.at(-1)!.raw) > column) return false
+          break
+        }
+        if (!parent.trim()) break
+        parentEnd = parentFrom - 1
+      }
+      break
+    }
+    lines.push({ raw, from })
+    end = from - 1
+  }
+  let kind: 'paragraph' | 'heading' | 'fence' | undefined
+  let fence = '', attributeEnd = -1
+  for (const { raw, from } of lines.reverse()) {
+    if (from < attributeEnd) continue
+    const item = marker.exec(raw)
+    if (kind === 'paragraph') continue
+    if (item && prefix.length <= /^(?:[ \t]*>[ \t]*)*[ \t]*/.exec(raw)![0].length) return false
+    const bodyAt = djotStructuralPrefixEnd(raw)
+    const body = raw.slice(bodyAt)
+    if (kind === 'fence') { if (body.startsWith(fence)) kind = undefined; continue }
+    if (body.startsWith('{')) {
+      const attrs = readAttributes(source, from + bodyAt)
+      if (attrs) { attributeEnd = attrs.end; kind = undefined; continue }
+    }
+    if (/^#{1,6}(?:[ \t]|$)/.test(body)) { kind = 'heading'; continue }
+    const opened = /^(`{3,}|~{3,})/.exec(body)
+    if (opened) { kind = 'fence'; fence = opened[1]!; continue }
+    if (kind === 'heading') continue
+    const note = /^\[\^[^\]]+\]:[ \t]*(.*)$/.exec(body)
+    if (note) {
+      if (prefix.length < bodyAt + 2) return false
+      kind = note[1]!.trim() ? 'paragraph' : undefined
+      continue
+    }
+    if (/^(?::::|\||\[[^\]]*\]:|:[ \t]|(?:\*[ \t]*){3,}$|(?:-[ \t]*){3,}$)/.test(body)) { kind = undefined; continue }
+    kind = 'paragraph'
+  }
+  return kind === 'paragraph'
+}
+
 export type DjotAttributeToken = { key: string; source: string; append: boolean }
 
 export function readAttributes(source: string, start: number, carve = false, table = false): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
@@ -29,7 +91,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
       } else i++
     }
-    if (source[i] === '}' && parts.length && source.slice(start, i + 1).includes('\n')) {
+    if (source[i] === '}' && source.slice(start, i + 1).includes('\n') && (parts.length > 0 || !continuesParagraph(source, start))) {
       const context = attributeContext(source, start)
       for (const raw of source.slice(start, i + 1).split('\n').slice(1)) {
         const line = attributeLine(raw, context.depth)

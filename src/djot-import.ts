@@ -432,6 +432,7 @@ function foldHeadingContinuations(source: string): string {
     while (i + 1 < lines.length && (line.length - trimEndMatchingEdges(line, (code) => code === 92).length) % 2 === 0) {
       if (column && /^[ \t]*/.exec(lines[i + 1]!)![0].length < column) break
       const next = lines[i + 1]!.replace(/^[ \t]+/, '')
+      if (/^\\\{\0DJOTINVALIDATTR\0[0-9]+\0%/.test(next)) break
       let part: string
       if (marker.test(next)) {
         part = next.replace(marker, '')

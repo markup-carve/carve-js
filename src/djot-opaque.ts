@@ -70,7 +70,8 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       }
     }
     if (source[at] === '{') {
-      if (source[at + 1] === '%' && options.comments !== false && at < lastBrace) {
+      const attrs = readAttributes(source, at)
+      if (attrs && source[at + 1] === '%' && options.comments !== false && at < lastBrace) {
         let end = at + 2
         while (end < source.length && source[end] !== '}' && !(source[end] === '%' && source[end + 1] === '}')) end++
         if (source[end] === '%') end++
@@ -81,7 +82,6 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
           continue
         }
       }
-      const attrs = readAttributes(source, at)
       if (attrs) {
         for (const value of source.slice(at, attrs.end).matchAll(/=\s*("(?:\\.|[^"\\])*"|[^\s{}%]+)/g)) {
           const start = at + value.index! + value[0].indexOf(value[1]!)

@@ -272,6 +272,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     const outsideColumn = blank && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
     if (outsideColumn !== undefined) lists.length = 0
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
+    if (/^\\\{\0DJOTINVALIDATTR\0[0-9]+\0%/.test(visible)) {
+      const outsideList = lists.length > 0 && indent <= lists[0]!.column
+      if (headingMarker || outsideList) out.push(quote + ' '.repeat(indent))
+      if (outsideList) { lists.length = 0; paragraph = false; blank = true }
+      headingMarker = ''
+    }
     const reference = /^\[[^\]\n]*\]:/.test(visible)
     const row = rows[n] ?? false
     if (row) {
