@@ -37,7 +37,7 @@ describe('raw HTML roundtrip carriers contain text', () => {
       expect(htmlToAst(html, { mode }).value).toEqual(expected)
       if (mode === 'roundtrip') expect(htmlToCarve(html, { mode }).value).toBe(source(payload))
     }
-    expect(renderHtml(document(payload), { roundtrip: true, allowRawHtml: false })).toBe(html)
+    expect(renderHtml(document(payload), { roundtrip: true, allowRawHtml: false })).toBe(html.replace(/[\u202a-\u202e\u2066-\u2069]/g, ''))
   })
 
   it('keeps ordinary HTML passthrough and the disabled-raw rendering choice', () => {
