@@ -11,7 +11,11 @@ test('reports the plain export loss for a multiline code fallback', () => {
   const result = djotToCarveWithLosses('a `b\n> c` d\n')
   expect(result.losses).toContainEqual({
     code: 'structure-unspellable',
-    message: 'Multiline inline code containing a quote marker uses raw HTML; plain-text export omits it.',
-    line: 2,
+    message: 'Multiline inline code uses raw HTML; plain-text export omits it.',
+    line: 1,
   })
+})
+
+test.each(['> a `b\n> c` d\n', '- > a `b\n  > c` d\n'])('keeps container prefixes out of code-loss diagnostics: %s', source => {
+  expect(djotToCarveWithLosses(source).losses).toEqual([])
 })

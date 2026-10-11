@@ -2,7 +2,7 @@ import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { attributeContext, continuesParagraph, resetParagraphContext } from './djot-attributes.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
-import { trimEndMatchingEdges } from './trim-non-nbsp.js'
+import { trimEndMatchingEdges, trimNonNbsp, trimEndNonNbsp } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
@@ -36,7 +36,7 @@ const quoted = (line: string): [number, string] => {
   let depth = 0
   let content = line
   while (true) {
-    const prefix = /^[ \t]*>[ ]?/.exec(content)
+    const prefix = /^[ \t]*>(?:[ \t]|$)/.exec(content)
     if (!prefix) return [depth, content]
     depth++
     content = content.slice(prefix[0].length)
@@ -603,7 +603,9 @@ export function djotToCarveWithLosses(djot: string): { value: string; losses: Dj
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
   const source = (frontmatter + separator).replace(/[^\n]/g, ' ') + body
   const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
-  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart) }
+  const rawCode: number[] = []
+  if (djotCodeQuoteMarkers(source).length) closeDjotTableCode(source, at => rawCode.push(at))
+  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode) }
 }
 
 function dropLeadingDjotSeparators(source: string): string {
@@ -1491,7 +1493,7 @@ function renameDjotPipeFootnotes(source: string): string {
   return out.join('')
 }
 
-function closeDjotTableCode(source: string): string {
+function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): string {
   if (!source.includes('`')) return source
   const mask = maskDjotOpaque(source, false, { code: false })
   const paragraphEnds = Array.from(source.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), (match) => match.index!)
@@ -1603,6 +1605,8 @@ function closeDjotTableCode(source: string): string {
   for (const line of source.split('\n')) {
     const at = djotContentStart(line),
       lineEnd = offset + line.length
+    let codeDepth = 0
+    for (let p = 0; p < at; p++) if (line[p] === '>' && (p + 1 === line.length || line[p + 1] === ' ' || line[p + 1] === '\t')) codeDepth++
     const [depth, content] = quoted(line),
       trimmed = content.trimStart()
     const indent = content.length - trimmed.length,
@@ -1778,13 +1782,13 @@ function closeDjotTableCode(source: string): string {
         .replace(/^ `/, '`')
         .replace(/` $/, '`')
       const normalized = payload.split('\n').map((value, n) => {
-        if (n === 0) return value.replace(/[ \t]+$/, '')
-        for (let q = 0; q < depth; q++) {
+        if (n === 0) return trimEndNonNbsp(value)
+        for (let q = 0; q < codeDepth; q++) {
           const prefix = /^[ \t]*>[ ]?/.exec(value)
           if (!prefix) break
           value = value.slice(prefix[0].length)
         }
-        return value.replace(/^[ \t]+|[ \t]+$/g, '')
+        return trimNonNbsp(value)
       })
       const rawCode =
         normalized
@@ -1794,9 +1798,16 @@ function closeDjotTableCode(source: string): string {
               (block.test(value) || value.startsWith('{')) && (!/^\|[ \t:|-]*\|$/.test(value) || line[at] !== '|'),
           ) ||
         (itemKind.startsWith('[^') && normalized.length > 1)
-      if (rawCode)
+      if (closed && codeDepth > depth && !rawCode) {
+        i = end + width
+        consumed = i
+        continue
+      }
+      if (rawCode) {
+        onRawCode?.(i)
         payload =
           '<code>' + normalized.join('\n').replace(/[!-\/:-@\[-`{-~]|\n/g, (ch) => `&#${ch.charCodeAt(0)};`) + '</code>'
+      }
       let fenceWidth = 1
       for (const run of payload.matchAll(/`+/g)) fenceWidth = Math.max(fenceWidth, run[0].length + 1)
       const fence = '`'.repeat(fenceWidth),
