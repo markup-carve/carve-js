@@ -1,6 +1,7 @@
 import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotInlineBoundaries } from './djot-migrate.js'
 import { trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { readAttributes } from './djot-word-attributes.js'
+import { rejectedCommentStartsBlock } from './djot-attributes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
@@ -39,7 +40,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
   for (let n = 0; n < lines.length; n++) {
     const original = lines[n]!,
       masked = mask[n]!
-    const quote = /^(?:[ \t]*>[ ]?)*/.exec(original)![0]
+    const quote = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(original)![0]
     const quoteDepth = (quote.match(/>/g) ?? []).length
     const raw = original.slice(quote.length),
       view = masked.slice(quote.length)
@@ -55,6 +56,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     }
     if (/^:[ \t]+\S/.test(visible) && (blank || definitionIndent >= 0)) definitionIndent = indent
     else if (definitionIndent >= 0 && blank && indent <= definitionIndent) definitionIndent = -1
+    if (definitionIndent >= 0 && indent <= definitionIndent && rejectedCommentStartsBlock(visible)) {
+      out.push(quote + ' '.repeat(indent))
+      definitionIndent = -1
+      paragraph = false
+      blank = true
+    }
     if (definitionIndent >= 0) {
       out.push(original)
       headingMarker = ''
@@ -74,8 +81,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         visible,
       )
     // A new block can end lazy continuation outside a quote or list item.
-    if (quoteDepth < depth && (blockStart || item)) {
+    if (quoteDepth < depth && (blockStart || item || rejectedCommentStartsBlock(visible))) {
       if (item && !blank) out.push(quote.trimEnd())
+      else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quote.trimEnd())
       paragraph = false
       headingMarker = ''
       lists.length = 0
@@ -272,6 +280,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     const outsideColumn = blank && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
     if (outsideColumn !== undefined) lists.length = 0
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
+    if (rejectedCommentStartsBlock(visible)) {
+      const outsideList = lists.length > 0 && indent <= lists[0]!.column
+      if (headingMarker || outsideList) out.push(quote + ' '.repeat(indent))
+      if (outsideList) { lists.length = 0; paragraph = false; blank = true }
+      headingMarker = ''
+    }
     const reference = /^\[[^\]\n]*\]:/.test(visible)
     const row = rows[n] ?? false
     if (row) {
