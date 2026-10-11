@@ -41,7 +41,7 @@ import { codeSource, payloadTerminated } from './verbatim-payload.js'
 import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
-import { pickSourceSentinels } from './sentinel-run.js'
+import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { collectLoneBrackets, type CrossingClosers, type CrossingOpeners, type LeftToSearch, type LoneBrackets, type PairedClosers } from './bracket-escapes.js'
@@ -2432,7 +2432,9 @@ class CarveRenderSession {
     // as the grammar grows.
     // Choose the verbatim sentinels before anything is rendered, so both escape
     // passes below agree on them.
-    this.sentinels = pickSourceSentinels(ast, SENTINEL_BASE, SENTINEL_COUNT)
+    const occupied = occupiedPrivateUse(ast, true)
+    this.sentinels = pickSentinelRun(occupied, SENTINEL_BASE, SENTINEL_COUNT)
+    const needsStringMarkers = this.sentinels.some(marker => occupied.has(marker.charCodeAt(0)))
     this.redundantIds = findRedundantHeadingIds(ast)
     this.unspellableEmptyCodeSpans = findUnspellableEmptyCodeSpans(ast)
     // The two "written in place" sets are NOT reset here: they are per-PASS, and
@@ -2451,6 +2453,18 @@ class CarveRenderSession {
     for (const [label, pos] of Object.entries(ast.footnoteDefPos ?? {})) {
       const line = pos?.startLine
       if (line !== undefined && !this.footnoteDefsByLine.has(line)) this.footnoteDefsByLine.set(line, label)
+    }
+    if (needsStringMarkers) {
+      // Probe assembled token families with markers absent from authored fields.
+      this.sentinels = shortSentinelTokens(treeSentinelNonces(ast), SENTINEL_COUNT)
+      const nonces = new Set<number>()
+      this.markerProbeNonces = nonces
+      try {
+        this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'conservative'))
+      } finally {
+        this.markerProbeNonces = undefined
+      }
+      this.sentinels = shortSentinelTokens(nonces, SENTINEL_COUNT)
     }
     // The two escape passes each render the WHOLE tree, and the write-back sets
     // below record what a pass has already emitted - so they have to start empty
@@ -4630,7 +4644,10 @@ class CarveRenderSession {
     return body.replace(new RegExp(`(?:^(?:${this.sentinels[3]})+)|(?:${this.sentinels[3]}){2,}`, 'gm'), (run) => this.sentinels[0]!.repeat(run.length / this.sentinels[3]!.length))
   }
 
+  private markerProbeNonces: Set<number> | undefined
+
   private normalize(text: string): string {
+    if (this.markerProbeNonces) collectSentinelNonces(text, this.markerProbeNonces)
     const lines = trimNonNbspKeepingGuard(
       text.replace(new RegExp(`${this.sentinels[3]}(?=[ \t]*(?:\n|$))`, 'g'), '\u00a0').replace(new RegExp(this.sentinels[3]!, 'g'), '\\ '),
     ).split('\n')

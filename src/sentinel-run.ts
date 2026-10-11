@@ -100,34 +100,30 @@ export function pickSentinelRun(occupied: Set<number>, base: number, length: num
   return runFrom(base, length)
 }
 
-/** Source markers remain distinct when every single-character slot is occupied. */
-export function pickSourceSentinels(root: unknown, base: number, length: number): string[] {
-  const occupied = occupiedPrivateUse(root, true)
-  const preferred = pickSentinelRun(occupied, base, length)
-  if (preferred.every(marker => !occupied.has(marker.charCodeAt(0)))) return preferred
+export function collectSentinelNonces(text: string, nonces: Set<number>): void {
+  for (const match of text.matchAll(/\ue009m([0-9]{1,16})x[0-9]+\ue00a/g)) {
+    const nonce = Number(match[1])
+    if (Number.isSafeInteger(nonce)) nonces.add(nonce)
+  }
+}
 
-  // Count repeated references separately, but stop cycles. The token is longer
-  // than all authored occurrences of its interior character combined.
-  let interiorCount = 0
-  const ancestors = new WeakSet<object>()
-  const stack: Array<{ value: unknown; leave?: boolean }> = [{ value: root }]
+export function shortSentinelTokens(nonces: Set<number>, length: number): string[] {
+  let nonce = 0
+  while (nonces.has(nonce)) nonce++
+  return Array.from({ length }, (_, slot) => `\ue009m${nonce}x${slot}\ue00a`)
+}
+
+export function treeSentinelNonces(root: unknown): Set<number> {
+  const nonces = new Set<number>()
+  const seen = new WeakSet<object>()
+  const stack: unknown[] = [root]
   while (stack.length > 0) {
-    const entry = stack.pop()!
-    const value = entry.value
-    if (typeof value === 'string') {
-      for (let i = 0; i < value.length; i++) if (value.charCodeAt(i) === 0xe008) interiorCount++
-    } else if (value !== null && typeof value === 'object') {
-      if (entry.leave) {
-        ancestors.delete(value)
-      } else if (!ancestors.has(value)) {
-        ancestors.add(value)
-        stack.push({ value, leave: true })
-        for (const [key, child] of Object.entries(value)) {
-          stack.push({ value: key }, { value: child })
-        }
-      }
+    const value = stack.pop()
+    if (typeof value === 'string') collectSentinelNonces(value, nonces)
+    else if (value !== null && typeof value === 'object' && !seen.has(value)) {
+      seen.add(value)
+      for (const [key, child] of Object.entries(value)) stack.push(key, child)
     }
   }
-  const prefix = '\ue009' + '\ue008'.repeat(interiorCount + 1)
-  return Array.from({ length }, (_, index) => prefix + String.fromCharCode(0xe010 + index) + '\ue00a')
+  return nonces
 }
