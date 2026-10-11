@@ -19,26 +19,24 @@ function attributeLine(line: string, depth: number): string | undefined {
 }
 
 let paragraphSource = ''
-const paragraphStarts = new Map<number, { key: string; result: boolean }>()
+const paragraphStarts = new Map<number, { key: string; result: boolean; start: number }>()
 
 export function resetParagraphContext(): void { paragraphSource = ''; paragraphStarts.clear() }
 
-export function continuesParagraph(source: string, start: number): boolean {
+export function continuesParagraph(source: string, start: number, context = attributeContext(source, start)): boolean {
   if (paragraphSource !== source) paragraphStarts.clear()
   paragraphSource = source
-  const context = attributeContext(source, start)
+  if (context.indent === undefined) return true
   const key = `${context.depth}:${context.indent}:${context.minimum}`
   const from = source.lastIndexOf('\n', start - 1) + 1
   const cached = paragraphStarts.get(from)
-  if (cached?.result && cached.key === key) return true
-  const result = scanParagraph(source, start, key)
-  paragraphStarts.set(from, {key, result})
+  if (cached?.key === key && cached.start === start) return cached.result
+  const result = scanParagraph(source, start, key, context)
+  paragraphStarts.set(from, {key, result, start})
   return result
 }
 
-function scanParagraph(source: string, start: number, key: string): boolean {
-  const context = attributeContext(source, start)
-  if (context.indent === undefined) return true
+function scanParagraph(source: string, start: number, key: string, context: ReturnType<typeof attributeContext>): boolean {
   const marker = /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)\))[ \t]+/
   let end = source.lastIndexOf('\n', start - 1)
   const prefix = source.slice(end + 1, start)
@@ -113,6 +111,33 @@ function scanParagraph(source: string, start: number, key: string): boolean {
   return kind === 'paragraph'
 }
 
+function validAttributeLines(source: string, start: number, end: number, paragraphContext: boolean, heldContext?: ReturnType<typeof attributeContext>): boolean {
+  const span = source.slice(start, end)
+  let newline = span.indexOf('\n')
+  if (newline < 0) return true
+  const context = heldContext ?? attributeContext(source, start)
+  if (context.indent === undefined) return true
+  while (newline >= 0) {
+    const next = span.indexOf('\n', newline + 1)
+    const raw = span.slice(newline + 1, next >= 0 ? next : span.length)
+    const line = attributeLine(raw, context.depth)
+    const indent = line === undefined ? -1 : /^[ \t]*/.exec(line)![0].length
+    if (indent < context.minimum || indent <= context.indent) return paragraphContext && continuesParagraph(source, start, context)
+    newline = next
+  }
+  return true
+}
+
+const plainComment = /\{%[^%}]*(?:%[ \t\r]*)?\}/y
+
+export function plainCommentEnd(source: string, start: number): number | undefined {
+  plainComment.lastIndex = start
+  const comment = plainComment.exec(source)?.[0]
+  if (comment === undefined || /\n[ \t]*\n/.test(comment)) return undefined
+  const end = start + comment.length
+  return validAttributeLines(source, start, end, true) ? end : undefined
+}
+
 export type DjotAttributeToken = { key: string; source: string; append: boolean }
 
 export function readAttributes(source: string, start: number, carve = false, table = false, paragraphContext = true): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
@@ -129,16 +154,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
       } else i++
     }
-    if (source[i] === '}' && source.slice(start, i + 1).includes('\n')) {
-      const heldContext = context ??= attributeContext(source, start)
-      const invalid = source.slice(start, i + 1).split('\n').slice(1).some(raw => {
-        const line = attributeLine(raw, heldContext.depth)
-        if (heldContext.indent !== undefined && line === undefined) return true
-        const indent = /^[ \t]*/.exec(line ?? raw)![0].length
-        return heldContext.indent !== undefined && (indent < heldContext.minimum || indent <= heldContext.indent)
-      })
-      if (invalid && (parts.length > 0 || !paragraphContext || !continuesParagraph(source, start))) return undefined
-    }
+    if (source[i] === '}' && !validAttributeLines(source, start, i + 1, paragraphContext && parts.length === 0, context)) return undefined
     if (source[i] === '}') {
       if (carve && table) {
         for (let at = start; at <= i; at++) {

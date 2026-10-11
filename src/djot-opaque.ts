@@ -1,3 +1,4 @@
+import { plainCommentEnd } from './djot-attributes.js'
 import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries } from './djot-inline-boundaries.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-word-attributes.js'
@@ -70,6 +71,15 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       }
     }
     if (source[at] === '{') {
+      if (source[at + 1] === '%' && options.comments !== false) {
+        const end = plainCommentEnd(source, at)
+        if (end !== undefined) {
+          options.onComment?.(at, end)
+          hide(at + 1, end - 1)
+          at = end - 1
+          continue
+        }
+      }
       const attrs = readAttributes(source, at)
       if (attrs && source[at + 1] === '%' && options.comments !== false && at < lastBrace) {
         const close = source.indexOf('}', at + 2)
