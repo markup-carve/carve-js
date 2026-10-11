@@ -1847,8 +1847,13 @@ function convertInline(
   line = convertInlineHtml(line, protect, protectedSpans)
 
 
+  const referenceUrls = plainMarkdownUrlRanges(line, protectedSpans)
+  let referenceUrlAt = 0
   const destinationOpeners = completeDestinationOpeners(line)
   line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
+    while (referenceUrlAt < referenceUrls.length && referenceUrls[referenceUrlAt]!.end <= offset) referenceUrlAt++
+    const url = referenceUrls[referenceUrlAt]
+    if (url && offset >= url.start && offset < url.end) return match
     if (destinationOpeners.has(offset + match.length)) return match
     const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
     if (following) {
@@ -1866,6 +1871,7 @@ function convertInline(
     if (/[\[\]]/.test(destinationLabel)) return match
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
+
 
   const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
@@ -6421,4 +6427,24 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
   }
   return output
+}
+
+function plainMarkdownUrlRanges(line: string, spans: readonly string[]): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = []
+  const start = /\bhttps?:\/\//g
+  const protectedToken = /\x00P(\d+)\x00/y
+  for (let match = start.exec(line); match; match = start.exec(line)) {
+    let end = start.lastIndex
+    while (end < line.length && !/[\s<>`]/.test(line[end]!)) {
+      if (line[end] === '\x00') {
+        protectedToken.lastIndex = end
+        const token = protectedToken.exec(line)
+        if (!token || !/^\\[!-/:-@\[-`{-~]$/.test(spans[Number(token[1])] ?? '')) break
+        end += token[0].length
+      } else end++
+    }
+    ranges.push({ start: match.index, end })
+    start.lastIndex = end
+  }
+  return ranges
 }

@@ -26,6 +26,10 @@ it.each(controls)('preserves Markdown URL label text and emphasis: $source', ({ 
   const source = markdownToCarve(markdown)
   const migration = migrateMarkdown(markdown)
   expect(migration.value).toBe(source)
+  expect(migration.report.diagnostics.length).toBeGreaterThan(0)
+  if (migration.report.diagnostics.some(row => row.confidence !== 'exact')) {
+    expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(true)
+  }
   for (const row of migration.report.diagnostics) {
     expect(row.confidence === 'exact' && row.fidelity === 'dropped').toBe(false)
     if (row.code === 'fidelity-unverified') {
@@ -55,6 +59,8 @@ it.each([
 
 it.each([
   ['[a/b](x)\n', '[a/b](x)\n'],
+  ['https://x.test/[r]\n\n[r]: /u\n', 'https://x.test/[r]\n\n[r]: /u\n'],
+  ['https://x.test/a\\_b/[r]\n\n[r]: /u\n', 'https://x.test/a\\_b/[r]\n\n[r]: /u\n'],
   ['[src/index.ts](x)\n', '[src/index.ts](x)\n'],
   ['[https://e.test](https://e.test)\n', '[https://e.test](https://e.test)\n'],
   ['see https://x.test/a\\_b/_c_\n', 'see https://x.test/a\\_b/_c_\n'],
