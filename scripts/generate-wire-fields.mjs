@@ -19,23 +19,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function wireFieldsSource(schema) {
-  const defs = { ...(schema.$defs ?? {}) };
-  // Approved AST 1.1 field, staged before spec #2919 under engine-first order.
-  // Remove this bridge when the published schema names separatorWidths.
-  for (const [name, def] of Object.entries(defs)) {
-    if (def?.properties?.type?.const !== "table" || def.properties.separatorWidths) continue;
-    defs[name] = {
-      ...def,
-      properties: {
-        ...def.properties,
-        separatorWidths: {
-          type: "array",
-          minItems: 1,
-          items: { type: "integer", minimum: 1 },
-        },
-      },
-    };
-  }
+  const defs = schema.$defs ?? {};
   /** type name -> sorted property names */
   const byType = new Map();
   for (const def of Object.values(defs)) {
