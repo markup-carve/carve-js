@@ -9658,5 +9658,33 @@
   {
     "source": "- https://x.test/a--b/a\\*b",
     "html": "<ul>\n<li><a href=\"https://x.test/a--b/a%5C*b\">https://x.test/a--b/a\\*b</a></li>\n</ul>\n"
+  },
+  {
+    "source": "https://x.test/[r]\n\n[r]: /u\n",
+    "html": "<p><a href=\"https://x.test/%5Br%5D\">https://x.test/[r]</a></p>\n"
+  },
+  {
+    "source": "https://x.test/a\\_b/[r]\n\n[r]: /u\n",
+    "html": "<p><a href=\"https://x.test/a%5C_b/%5Br%5D\">https://x.test/a\\_b/[r]</a></p>\n"
+  },
+  {
+    "source": "see https://x.test/a\\_b/_c_\n",
+    "html": "<p>see <a href=\"https://x.test/a%5C_b/_c\">https://x.test/a\\_b/_c</a>_</p>\n"
+  },
+  {
+    "source": "https://x.test/a\\/<em>b</em>\n",
+    "html": "<p><a href=\"https://x.test/a%5C/\">https://x.test/a\\/</a><em>b</em></p>\n"
+  },
+  {
+    "source": "https://x.test/?a=1&amp;b=_c_\n",
+    "html": "<p><a href=\"https://x.test/?a=1&amp;amp;b=_c\">https://x.test/?a=1&amp;amp;b=_c</a>_</p>\n"
+  },
+  {
+    "source": "https://x.test/?a=1&amp;b=*c*\n",
+    "html": "<p><a href=\"https://x.test/?a=1&amp;amp;b=*c\">https://x.test/?a=1&amp;amp;b=*c</a>*</p>\n"
+  },
+  {
+    "source": "https://x.test/?a=1&amp;[r]\n\n[r]: /u\n",
+    "html": "<p><a href=\"https://x.test/?a=1&amp;amp;%5Br%5D\">https://x.test/?a=1&amp;amp;[r]</a></p>\n"
   }
 ]

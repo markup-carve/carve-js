@@ -2,6 +2,8 @@ export interface MarkdownBareLink {
   start: number
   end: number
   prefix: string
+  body?: string
+  tail?: string
 }
 
 const hostCharacter = (value: string): boolean => !/[\s\p{P}]/u.test(value) && !/[!-/:-@\[-`{-~]/.test(value)
@@ -40,7 +42,7 @@ function trimmedEnd(text: string, start: number, end: number): number {
   return end
 }
 
-export function markdownBareLinks(text: string): MarkdownBareLink[] {
+function scanBareLinks(text: string): MarkdownBareLink[] {
   const links: MarkdownBareLink[] = []
   const triggers = /https?:\/\/|ftp:\/\/|www\.|@/gi
   let contextAt = 0, bracketDepth = 0
@@ -55,6 +57,7 @@ export function markdownBareLinks(text: string): MarkdownBareLink[] {
     let start = match.index, end = triggers.lastIndex
     let prefix = ''
     if (match[0] === '@') {
+      let resource = false
       while (start > 0 && /[A-Za-z0-9.+_-]/.test(text[start - 1]!)) start--
       if (start === match.index) continue
       for (const scheme of ['mailto:', 'xmpp:']) {
@@ -62,13 +65,14 @@ export function markdownBareLinks(text: string): MarkdownBareLink[] {
         if (before >= 0 && text.slice(before, start) === scheme && !/[A-Za-z0-9]/.test(text[before - 1] ?? '')) {
           start = before
           prefix = scheme
+          resource = scheme === 'xmpp:'
           break
         }
       }
       let dots = 0
       while (end < text.length) {
         const char = text[end]!
-        if (/[A-Za-z0-9_-]/.test(char)) { end++; continue }
+        if (/[A-Za-z0-9_-]/.test(char) || (resource && char === '/')) { end++; continue }
         if (char === '.' && /[A-Za-z0-9]/.test(text[end + 1] ?? '')) { dots++; end++; continue }
         break
       }
@@ -92,4 +96,44 @@ export function markdownBareLinks(text: string): MarkdownBareLink[] {
     triggers.lastIndex = end
   }
   return links
+}
+
+export function markdownBareLinks(
+  text: string,
+  escapedSource?: (token: string) => string | undefined,
+): MarkdownBareLink[] {
+  if (!escapedSource || !text.includes('\x00')) return scanBareLinks(text)
+  const pieces: { value: string; start: number; end: number; offset: number; escaped: boolean }[] = []
+  let cursor = 0, offset = 0
+  const append = (value: string, start: number, end: number, escaped = false): void => {
+    pieces.push({ value, start, end, offset, escaped })
+    offset += value.length
+  }
+  for (const token of text.matchAll(/\x00P\d+\x00/g)) {
+    if (token.index > cursor) append(text.slice(cursor, token.index), cursor, token.index)
+    const restored = escapedSource(token[0])
+    append(restored ?? token[0], token.index, token.index + token[0].length, restored !== undefined)
+    cursor = token.index + token[0].length
+  }
+  if (cursor < text.length) append(text.slice(cursor), cursor, text.length)
+  const expanded = pieces.map(piece => piece.value).join('')
+  let pieceAt = 0
+  const locate = (position: number): typeof pieces[number] => {
+    while (pieceAt + 1 < pieces.length && position >= pieces[pieceAt]!.offset + pieces[pieceAt]!.value.length) pieceAt++
+    return pieces[pieceAt]!
+  }
+  return scanBareLinks(expanded).map(link => {
+    const first = locate(link.start)
+    const start = first.escaped ? first.start : first.start + link.start - first.offset
+    const last = locate(link.end)
+    const inside = link.end - last.offset
+    const end = last.escaped && inside > 0 ? last.end : last.start + inside
+    return {
+      start,
+      end,
+      prefix: link.prefix,
+      body: expanded.slice(link.start, link.end),
+      tail: last.escaped && inside > 0 ? last.value.slice(inside) : '',
+    }
+  })
 }

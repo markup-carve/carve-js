@@ -43,3 +43,11 @@ it.each(controls)('preserves GFM bare autolinks and surrounding emphasis: $sourc
   expect(htmlTree(renderHtml(resolve(parse(source))))).toEqual(expected)
   expect(htmlTree(carveToHtml(carveToCarve(source)))).toEqual(expected)
 })
+
+it.each(['http://example.test', 'https://example.test/a', 'FTP://example.test/a', 'www.example.test', 'a@example.test'])(
+  'reports verified bare autolinks without a fallback warning: %s', source => {
+    const diagnostics = migrateMarkdown(source).report.diagnostics
+    expect(diagnostics.some(row => row.code === 'markdown-bare-autolink')).toBe(true)
+    expect(diagnostics.every(row => row.confidence === 'exact' && row.fidelity !== 'dropped')).toBe(true)
+  },
+)

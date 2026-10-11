@@ -3,6 +3,7 @@ import { domAttrs, domChildren, domData, domTag, domValue, type P5Node } from '.
 import { carveToHtml } from './index.js'
 import type { MigrationDiagnostic } from './migration.js'
 import { orderedTaskMarkerIsUnspellable } from './markdown-migrate.js'
+import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 
 interface Assessment {
@@ -50,7 +51,11 @@ export function assessMarkdown(source: string, value: string): Assessment {
   }
   const inline = (text: string, line: number, linkLabel = false): string => {
     let result = ''
+    const bareLinks = linkLabel ? [] : markdownBareLinks(text)
+    let bareAt = 0
     for (let i = 0; i < text.length;) {
+      while (bareAt < bareLinks.length && bareLinks[bareAt]!.end <= i) bareAt++
+      const bare = bareLinks[bareAt]
       const rest = text.slice(i)
       let match: RegExpExecArray | null
       if (rest[0] === '`' && /^`+/.exec(rest)![0].length > 64) { complete = false; return result + escape(rest) }
@@ -60,6 +65,15 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('code-span', line); result += `<code>${escape(body)}</code>`; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
       } else if ((match = /^\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/.exec(rest))) {
         emit('escape', line, 'normalized'); result += escape(match[1]!); i += match[0].length
+      } else if (bare?.start === i) {
+        const body = text.slice(bare.start, bare.end)
+        const href = (bare.prefix + body).replace(/[^\x21-\x7e]|["<>\\`{|}\[\]]/gu, char => {
+          const point = char.codePointAt(0)!
+          return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
+        })
+        emit('bare-autolink', line, 'normalized')
+        result += `<a href="${escape(href)}">${escape(body)}</a>`
+        i = bare.end
       } else if ((match = /^&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/.exec(rest))) {
         if (domValue(domChildren(parseFragment(match[0]))?.[0]) !== match[0]) emit('entity', line, 'normalized')
         result += match[0]; i += match[0].length

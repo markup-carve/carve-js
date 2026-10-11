@@ -1419,13 +1419,17 @@ function convertInline(
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
-  const writeLiteralAutolink = (body: string, hrefPrefix = ''): string => {
+  const writeLiteralAutolink = (body: string, hrefPrefix = '', bare = false): string => {
     for (let pass = 0; pass < protectedSpans.length; pass++) {
       const restored = body.replace(/\x00P(\d+)\x00/g, (_token, index: string) => protectedSpans[Number(index)] ?? _token)
       if (restored === body) break
       body = restored
     }
-    const href = hrefPrefix + body.replace(table ? /[\\[\]`|]/g : /[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
+    let href = hrefPrefix + body.replace(table ? /[\\[\]`|]/g : /[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
+    if (bare) href = href.replace(/[^\x21-\x7e]|["<>`{|}]/gu, char => {
+      const point = char.codePointAt(0)!
+      return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
+    })
     const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [
       { type: 'link', href, children: [{ type: 'text', value: body }] },
     ] }] }).replace(/\n$/, '')
@@ -1861,6 +1865,25 @@ function convertInline(
 
   // Markdown inline HTML is live markup. Protect tags that have no lossless
   // Carve-native equivalent as explicit raw HTML before delimiter rewrites.
+  const escapeLabelSlashes = (label: string, guard = false): string => {
+    const opaqueEnd = opaqueHtmlScanner(label)
+    const tokenAt = /\x00P\d+\x00/y
+    let escaped = ''
+    for (let at = 0; at < label.length;) {
+      if (label[at] === '\\') { escaped += label.slice(at, at + 2); at += 2; continue }
+      if (label[at] === '\x00') {
+        tokenAt.lastIndex = at
+        const token = tokenAt.exec(label)
+        if (token) { escaped += token[0]; at += token[0].length; continue }
+      }
+      const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
+      if (tagEnd !== undefined) { escaped += label.slice(at, tagEnd); at = tagEnd; continue }
+      escaped += label[at] === '/' ? (guard ? protect('\\/', '/') : '\\/') : label[at]!
+      at++
+    }
+    return escaped
+  }
+  if (/[*_]|<em\b/i.test(line)) line = escapeLabelSlashes(line, true)
   line = convertInlineHtml(line, protect, protectedSpans)
 
   const referenceUrls = line.includes('http') ? plainMarkdownUrlRanges(line, protectedSpans) : []
@@ -1894,21 +1917,24 @@ function convertInline(
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
-  if (/https?:\/\/|ftp:\/\/|www\.|@/i.test(line)) {
+  if (line.includes(':') || line.includes('www.') || line.includes('@')) {
     const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
     activeLabelRanges.sort((a, b) => a.start - b.start)
     let activeLabelAt = 0
     let cursor = 0
     let protectedUrls = ''
-    for (const link of markdownBareLinks(line)) {
+    for (const link of markdownBareLinks(line, token => {
+      const index = Number(token.slice(2, -1))
+      return isPlainMarkdownUrlToken(index, protectedSpans) ? protectedSources[index] : undefined
+    })) {
       const offset = link.start
       while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
       const label = activeLabelRanges[activeLabelAt]
       if (label && offset >= label.start && offset < label.end) {
         continue
       }
-      protectedUrls += line.slice(cursor, offset) + protect(writeLiteralAutolink(line.slice(offset, link.end), link.prefix))
+      protectedUrls += line.slice(cursor, offset) + protect(writeLiteralAutolink(link.body ?? line.slice(offset, link.end), link.prefix, true)) + (link.tail ?? '')
       cursor = link.end
     }
     line = protectedUrls + line.slice(cursor)
@@ -1993,24 +2019,7 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
-  const escapeLabelSlashes = (label: string): string => {
-    const opaqueEnd = opaqueHtmlScanner(label)
-    const tokenAt = /\x00P\d+\x00/y
-    let escaped = ''
-    for (let at = 0; at < label.length;) {
-      if (label[at] === '\\') { escaped += label.slice(at, at + 2); at += 2; continue }
-      if (label[at] === '\x00') {
-        tokenAt.lastIndex = at
-        const token = tokenAt.exec(label)
-        if (token) { escaped += token[0]; at += token[0].length; continue }
-      }
-      const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
-      if (tagEnd !== undefined) { escaped += label.slice(at, tagEnd); at = tagEnd; continue }
-      escaped += label[at] === '/' ? '\\/' : label[at]!
-      at++
-    }
-    return escaped
-  }
+
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
