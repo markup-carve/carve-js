@@ -145,7 +145,7 @@ source**.
 
 | Attribute | Rides | Holds |
 | --- | --- | --- |
-| `data-marker` | `<ul>`, `<ol>` | the authored list marker, only where it is not the default (`-` for a bullet list, `.` for an ordered one) |
+| `data-marker` | `<ul>` | the authored bullet marker, only where it is not `-` |
 | `data-char` | `<hr>` | the authored thematic-break character, only where it is not `-` |
 | `data-carve-explicit-id` | `<section>`, `<h1>`-`<h6>` | presence: the identifier was authored, not generated |
 | `data-carve-ref` | `<a>`, `<img>` | the reference label the link or image resolved by |

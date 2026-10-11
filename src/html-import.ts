@@ -862,7 +862,7 @@ function restoreHoistedSectionId(
   attrs: Attrs | undefined,
   blocks: BlockNode[],
   explicitId: boolean,
-  writingNode?: P5Node,
+  writing: boolean,
 ): Attrs | undefined {
   if (tag !== 'section' || attrs?.id === undefined) return attrs
   // The heading the wrapper was built around is its FIRST block. Anything else
@@ -881,7 +881,13 @@ function restoreHoistedSectionId(
   const kept = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
   if (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children))) return kept
   heading.attrs = { ...(heading.attrs ?? {}), id }
-  if (writingNode) heading.attrs.order = slotOrderFromElement(writingNode, heading.attrs)
+  if (writing) {
+    const slots = heading.attrs.order ?? [
+      ...(heading.attrs.classes?.length ? ['.class'] : []),
+      ...Object.keys(heading.attrs.keyValues ?? {}),
+    ]
+    heading.attrs.order = ['#id', ...slots.filter(slot => slot !== '#id')]
+  }
   return kept
 }
 
@@ -2380,6 +2386,14 @@ class Importer {
       this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
+    const firstChild = tag === 'section'
+      ? (domChildren(node) ?? []).find(child => !isBlankOrComment(child))
+      : undefined
+    if (
+      this.hasCarrier(node, 'explicit-id') &&
+      this.attr(node, 'id') !== undefined &&
+      (/^h[1-6]$/.test(tag) || (firstChild !== undefined && /^h[1-6]$/.test(domTag(firstChild) ?? '')))
+    ) this.recordCarrier(node, 'explicit-id')
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
       this.headingDepth++
@@ -2416,6 +2430,7 @@ class Importer {
          */
         if (
           this.mode === 'roundtrip' &&
+          !this.hasCarrier(node, 'explicit-id') &&
           idInGeneratedPosition(node) &&
           isGeneratedHeadingId(held.id, inlineText(children))
         ) {
@@ -2718,7 +2733,7 @@ class Importer {
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          restoreHoistedSectionId(tag, attrs, children, this.carrierValue(node, 'explicit-id') === '1', this.writing ? node : undefined),
+          restoreHoistedSectionId(tag, attrs, children, this.hasCarrier(node, 'explicit-id'), this.writing),
           tag,
           path,
           unwrapped,
