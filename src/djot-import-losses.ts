@@ -2,8 +2,8 @@ import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
-import { parse } from './parse.js'
-import { renderPlainText } from './render-plain.js'
+import { parseRefLabelInlines } from './parse.js'
+import { inlineText } from './heading-ids.js'
 
 export type DjotImportLoss = {
   code: 'structure-unspellable'
@@ -11,11 +11,9 @@ export type DjotImportLoss = {
   line: number
 }
 
+const definitionKey = (label: string): string => label.trim().replace(/[ \t\r\n]+/g, ' ')
 const referenceKey = (label: string): string =>
-  label
-    .replace(/\\([ \t!-\/:-@\[-`{-~])/g, '$1')
-    .trim()
-    .replace(/\s+/g, ' ')
+  definitionKey(label.replace(/\\([ \t!-\/:-@\[-`{-~])/g, '$1'))
 
 /** Detect losses before any rewrite can move a source line. */
 export function djotImportLosses(
@@ -75,7 +73,7 @@ export function djotImportLosses(
     const at = contentStart(line),
       content = line.slice(at),
       contentMask = visible.slice(at)
-    const definition = /^\[([^\[\]\n^]+)\]:[ \t]*(\S*)[ \t]*$/.exec(content)
+    const definition = /^\[(?!\^)([^\[\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(content)
     const previous = lines[n - 1] ?? ''
     const previousContent = previous.slice(contentStart(previous)).trim()
     const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(line.slice(0, at))
@@ -100,7 +98,7 @@ export function djotImportLosses(
         destination += lines[next]!.slice(contentStart(lines[next]!))
         definitionLines.add(next)
       }
-      definitions.set(referenceKey(definition[1]!), destination)
+      definitions.set(definitionKey(definition[1]!), destination)
       definitionLines.add(n)
       for (let k = offsets[n]!; k < offsets[n]! + line.length; k++) masked[k] = ' '
     }
@@ -132,10 +130,8 @@ export function djotImportLosses(
         }
         headingLines.add(next)
       }
-      const label = renderPlainText(parse(djotEmphasis(text, (text) => text)), {
-        smartTypography: false,
-      })
-      const key = referenceKey(label)
+      const label = inlineText(parseRefLabelInlines(djotEmphasis(text, (text) => text)), false)
+      const key = definitionKey(label)
       if (!definitions.has(key)) definitions.set(key, '#' + key)
     }
     if (/^#{1,6}[ \t]*$/.test(contentMask) && boundary && !headingLines.has(n)) {
@@ -241,11 +237,8 @@ export function djotImportLosses(
       if (end < 0) { carryNested(opener.nested); continue }
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
-      const key = referenceKey(
-        explicit ||
-          (definitions.size === 0 ? '' : renderPlainText(parse(djotEmphasis(label, (text) => text)), {
-            smartTypography: false,
-          })),
+      const key = explicit ? referenceKey(explicit) : definitionKey(
+        definitions.size === 0 ? '' : inlineText(parseRefLabelInlines(djotEmphasis(label, (text) => text)), false),
       )
       destination = definitions.get(key)
       end++

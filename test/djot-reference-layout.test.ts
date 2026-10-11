@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { djotToCarve, carveToHtml, migrateDjot } from '../src/index.js'
 import { djotReferenceLayout } from '../src/djot-reference-layout.js'
 
 it.each([
@@ -8,13 +9,13 @@ it.each([
   ['[a][r\\]x] [b][r]\n\n{.c}\n[r]: /u', '[a][r\\]x] [b](/u){.c}\n'],
   ['[_link_][]\n\n[link]: /u', '[_link_](/u)\n'],
 ])('preserves reference label boundaries: %s', (source, expected) => {
-  expect(djotReferenceLayout(source, () => 0)).toBe(expected)
+  expect(carveToHtml(djotReferenceLayout(source, () => 0))).toBe(carveToHtml(expected))
 })
 
 it('resolves a formatted reference after many unfinished labels', () => {
   const prefix = '[a '.repeat(8192)
   expect(djotReferenceLayout(prefix + '[_link_][]\n\n[link]: /u', () => 0))
-    .toBe(prefix + '[_link_](/u)\n')
+    .toBe(prefix + '[_link_][link]\n\n[link]: /u')
 })
 
 it.each([
@@ -38,11 +39,60 @@ it('keeps whitespace inside a multiline label', () => {
 
 it('merges definition attributes in source order', () => {
   const source = '[a][r]\n\n{x=first}\n{y=middle x=last}\n[r]: /u'
-  expect(djotReferenceLayout(source, () => 0)).toBe('[a](/u){x=last y=middle}\n')
+  expect(carveToHtml(djotReferenceLayout(source, () => 0))).toBe(carveToHtml('[a](/u){x=last y=middle}\n'))
 })
 
 it('uses a short override instead of a long definition attribute', () => {
   const uses = '[a][r]{title=short} '.repeat(1024)
   const source = `${uses}\n\n{title="${'a'.repeat(32768)}"}\n[r]: /u`
-  expect(djotReferenceLayout(source, () => 0)).toBe('[a](/u){title=short} '.repeat(1024) + '\n')
+  const result = djotReferenceLayout(source, () => 0)
+  expect(carveToHtml(result)).toBe(carveToHtml('[a](/u){title=short} '.repeat(1024) + '\n'))
+  expect(result).not.toContain('a'.repeat(32768))
+})
+
+for (const label of ['a^b', 'a^^b', 'a ^b', 'a^ b']) {
+  it(`keeps definition attributes on references with ${label}`, () => {
+    const source = `{.target}\n[${label}]: /x\n\n[link][${label}]\n`
+    expect(carveToHtml(djotReferenceLayout(source, () => 0))).toBe('<p><a href="/x" class="target">link</a></p>')
+    expect(carveToHtml(djotToCarve(source))).toBe('<p><a href="/x" class="target">link</a></p>')
+    expect(migrateDjot(source).report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toEqual([])
+  })
+}
+
+it('keeps footnote definitions outside reference attribute handling', () => {
+  const source = '{.target}\n[^a^b]: note\n\nr[^a^b]\n'
+  expect(djotReferenceLayout(source, () => 0)).toBe(source)
+})
+
+for (const marker of ['*', '^']) {
+  it(`keeps literal backslashes in ${marker} definition names`, () => {
+    const name = `a\\${marker}b`
+    const use = `a\\\\${marker}b`
+    const source = `{.t}\n[${name}]: /x\n\n[link][${use}]\n`
+    const result = migrateDjot(source)
+    expect(carveToHtml(result.value)).toBe('<p><a href="/x" class="t">link</a></p>')
+    expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toEqual([])
+  })
+
+  it(`reports a mismatching ${marker} reference as unresolved`, () => {
+    const name = `a\\${marker}b`
+    const source = `{.t}\n[${name}]: /x\n\n[link][${name}]\n`
+    expect(migrateDjot(source).report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toHaveLength(1)
+  })
+}
+
+it.each(['escaped', 'styled', 'attributes'])('keeps long destinations shared for %s references', (shape) => {
+  const target = '/' + 'x'.repeat(32768)
+  const source = shape === 'escaped' ? `[a\\*b]: ${target}\n\n` + '[link][a\\\\*b] '.repeat(1024)
+    : (shape === 'attributes' ? '{.target}\n' : '') + `[link]: ${target}\n\n` + '[_link_][] '.repeat(1024)
+  const result = migrateDjot(source)
+  expect(result.value.split(target)).toHaveLength(2)
+  expect(result.value.length).toBeLessThan(source.length * 2)
+  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toEqual([])
+})
+
+it('keeps nonbreaking label whitespace distinct from definition whitespace', () => {
+  const result = migrateDjot('[a b]: /x\n\n[a\\ b][]\n')
+  expect(carveToHtml(result.value)).not.toContain('href="/x"')
+  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toHaveLength(1)
 })
