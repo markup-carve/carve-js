@@ -1,6 +1,6 @@
 import { preservesTableRowGroups, tableSourceAttrs } from './table-source-metadata.js'
 import { codeLanguage } from './html-import-code-language.js'
-import { parseFragment, serializeOuter, defaultTreeAdapter, html as p5html } from 'parse5'
+import { parseFragment, serialize as serializeInner, serializeOuter, defaultTreeAdapter, html as p5html } from 'parse5'
 import { domAttrs, domContainer, domChild, domChildren, domData, domParent, domTag, domValue, type P5Node } from './html-import-dom.js'
 import type {
   Admonition,
@@ -41,8 +41,11 @@ import {
 import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
+import { normalizeRefLabel } from './label-key.js'
+import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
-import { RESERVED_CARRIER_ATTRIBUTES } from './roundtrip-carriers.js'
+import { CARRIER_CHAR, CARRIER_MARKER, RESERVED_CARRIER_ATTRIBUTES, readCarrier } from './roundtrip-carriers.js'
+import type { PrefixedCarrier } from './roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -663,6 +666,19 @@ function fallbackImage(math: P5Node): P5Node | undefined {
  */
 const ROUND_TRIP_MARKER_ATTRIBUTES = RESERVED_CARRIER_ATTRIBUTES
 
+/** What one element's §13a carriers were read as (`HtmlImporter.carrierReads`). */
+interface CarrierRead {
+  names: Set<PrefixedCarrier>
+  /** `data-carve-ref`: the label, and the Carve source of the link's own text.
+   *  `rawRef` is finished in the arm, where the kept attributes are known. */
+  ref?: string
+  labelSource?: string
+  /** `data-carve-autolink`: the display text, absent where it is the default. */
+  autolinkText?: string
+}
+
+
+
 /**
  * Does this URL attribute name no destination at all?
  *
@@ -952,6 +968,29 @@ class Importer {
    */
   private admonitionTitleIds: Map<P5Node, string> | undefined
   private detachedFootnoteBlocks = new Set<P5Node>()
+  /**
+   * What the importer decided to REBUILD from each node's §13a carriers.
+   *
+   * Decided before `attrs()` reads the element, because `attrs()` consults it:
+   * a carrier that reached a node is consumed in silence, exactly as
+   * `data-delim` is, where one left unreadable is still refused by ruling 5.
+   */
+  private readonly carrierReads = new Map<P5Node, CarrierRead>()
+  /**
+   * The reference definitions `data-carve-ref` asks for, first-seen order. A
+   * resolved reference writes back as `[text][label]`, which needs the
+   * `[label]: /url` line beside it or it reads as literal text.
+   */
+  private readonly referenceDefinitions = new Map<string, { label: string; href: string; title: string | undefined }>()
+  /** Bodies of the endnotes `data-carve-inline-footnote` says were authored at
+   *  the point of use, keyed by the label the reference site carries. */
+  /** The labels a rebuilt reference actually used, so an unusable carrier
+   *  does not leave a definition nothing points at. */
+  private readonly referenceLabelsUsed = new Set<string>()
+  private readonly inlineFootnoteBodies = new Map<string, InlineNode[]>()
+  /** `data-carve-abbreviations`: the definitions the document-end `<template>`
+   *  holds, which also say which `<abbr>` expansions the author wrote. */
+  private readonly abbreviationDefs = new Map<string, string>()
   private root: P5Node | undefined
   private readonly maxDepth: number
   private readonly maxNodes: number
@@ -996,6 +1035,9 @@ class Importer {
     // AUTHOR wrote it, or a definition's diagnostics would sort by where the
     // rewrite left it rather than by where it stands in the document.
     this.numberDocumentOrder(fragment)
+    // Before the walk: the `<abbr>` arm asks which expansions the author
+    // DEFINED, and the template that says so sits at document end.
+    this.readAbbreviationCarrier(fragment)
     // Rewrite footnote-shaped HTML before the core policy reads the tree.
     // Under the word-processor adapters the full anchor-pair heuristic runs
     // ("Adapters may normalize editor-specific markup before the core
@@ -1011,7 +1053,15 @@ class Importer {
       FOOTNOTE_SHAPED_ADAPTERS.has(this.adapter),
     )
     const children = this.blocks(domChildren(fragment) ?? [], '', 0)
+    // The `[label]: /url` lines every rebuilt `data-carve-ref` points at. At
+    // document end rather than where the author wrote them: HTML keeps no
+    // record of that position, and a definition resolves from anywhere.
+    children.push(...this.reconstructedDefinitions())
+    // `*[abbr]: expansion` leads the document, where Carve's own writer puts a
+    // definition the prose below it uses.
+    children.unshift(...[...this.abbreviationDefs].map(([abbr, expansion]): BlockNode => ({ type: 'abbreviation_def', abbr, expansion })))
     const doc: Document = { type: 'document', children }
+    if (footnoteDefs) this.pruneInlinedFootnotes(footnoteDefs, children)
     if (footnoteDefs && Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
     return doc
   }
@@ -1179,8 +1229,13 @@ class Importer {
         classes.push(...attr.value.split(/\s+/).filter(Boolean))
       } else if (ROUND_TRIP_MARKER_ATTRIBUTES.has(name)) {
         // A serializer's own marker rather than the author's content, so it is
-        // not re-emitted as an attribute of the imported document.
-        this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
+        // not re-emitted as an attribute of the imported document (ruling 5).
+        // Where the importer REBUILT what it holds it is consumed in silence,
+        // exactly as `data-delim` is: a row here would name a loss that did
+        // not happen.
+        if (!this.isReconstructedCarrier(node, domTag(node) ?? '', name)) {
+          this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
+        }
       } else if (styleSlots.has(name) && (rawKept || !this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name))) {
         this.report.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', destinationIsDenied(attr.value))
       } else if (this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name)) {
@@ -1699,6 +1754,228 @@ class Importer {
   }
 
   /**
+   * A §13a carrier's value, the canonical `data-carve-` spelling first and the
+   * deprecated `data-djot-` one second, so documents released carve-php
+   * versions exported keep round-tripping (markup-carve/carve#2902 ruling 0).
+   */
+  private carrierValue(node: P5Node, name: PrefixedCarrier): string | undefined {
+    return readCarrier((attribute) => this.attr(node, attribute), name)
+  }
+
+  /** A presence carrier: §13a reads PRESENCE and does not compare the value. */
+  private hasCarrier(node: P5Node, name: PrefixedCarrier): boolean {
+    return this.carrierValue(node, name) !== undefined
+  }
+
+  /** The reserved name a carrier was found under, for the consumed test. */
+  private carrierName(node: P5Node, name: PrefixedCarrier): string | undefined {
+    for (const spelling of [`data-carve-${name}`, `data-djot-${name}`]) {
+      if (this.attr(node, spelling) !== undefined) return spelling
+    }
+    return undefined
+  }
+
+  /**
+   * `data-marker` read as the authored list marker, or `undefined`.
+   *
+   * A VALUE OUTSIDE THE ENUMERATION IS NOT THE CARRIER, by PART 10 §12's
+   * precedent - the rule `readsDelim` and `readsTaskState` already apply. Nor
+   * is it the author's attribute: ruling 5 refuses every reserved name on the
+   * way out, so an unreadable value is dropped with a row rather than kept.
+   */
+  private readsMarker(list: P5Node): '*' | ')' | undefined {
+    const value = this.attr(list, CARRIER_MARKER)
+    if (domTag(list) === 'ol') return value === ')' ? ')' : undefined
+    return value === '*' ? '*' : undefined
+  }
+
+  /** `data-char` read as the authored thematic-break character. */
+  private readsChar(hr: P5Node): '-' | '*' | '_' | undefined {
+    const value = this.attr(hr, CARRIER_CHAR)
+    return value === '-' || value === '*' || value === '_' ? value : undefined
+  }
+
+  /** Whether this reserved name was READ as the node's own content here. */
+  private isReconstructedCarrier(node: P5Node, tag: string, name: string): boolean {
+    if (name === CARRIER_MARKER) return (tag === 'ul' || tag === 'ol') && this.readsMarker(node) !== undefined
+    if (name === CARRIER_CHAR) return tag === 'hr' && this.readsChar(node) !== undefined
+    for (const read of this.carrierReads.get(node)?.names ?? []) {
+      if (this.carrierName(node, read) === name) return true
+    }
+    return false
+  }
+
+  private recordCarrier(node: P5Node, name: PrefixedCarrier, read: Omit<CarrierRead, 'names'> = {}): void {
+    const existing = this.carrierReads.get(node)
+    if (existing) {
+      existing.names.add(name)
+      Object.assign(existing, read)
+      return
+    }
+    this.carrierReads.set(node, { names: new Set([name]), ...read })
+  }
+
+  /**
+   * The Carve source of an imported inline run, or `undefined` where the run
+   * has none. `rawRef` is literal source text, so a reference link is only
+   * rebuilt where its own label content can be written back.
+   */
+  private carveInlineSource(children: InlineNode[]): string | undefined {
+    try {
+      // ONLY THE WRITER'S TERMINATOR comes off. `trimEnd()` also took a
+      // trailing no-break space, which is content the label held.
+      const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children }] }).replace(/\n+$/, '')
+      return /[\r\n]/.test(written) ? undefined : written
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * The label a `data-carve-ref` names, where a definition can be written for
+   * it and this document has not already bound it elsewhere. Binding it here
+   * is what makes the second link under a reused label read the first one's
+   * destination rather than silently inherit the wrong one.
+   */
+  private readsRef(node: P5Node, href: string, title: string | undefined): string | undefined {
+    const label = this.carrierValue(node, 'ref')
+    // A LEADING `^` SPELLS A FOOTNOTE DEFINITION, not a reference one: the
+    // `[^r]: /u` line this would write is read back as a footnote and the
+    // link is gone, so the carrier cannot be honored.
+    if (label === undefined || label.trim() === '' || /[[\]\r\n]/.test(label) || label.startsWith('^')) return undefined
+    // KEYED ON THE RESOLUTION KEY, not on the spelling: `r` and ` r ` are one
+    // label to the resolver, so comparing the spellings let two carriers bind
+    // two destinations under one key and sent both links to the second one.
+    const key = normalizeRefLabel(label)
+    const bound = this.referenceDefinitions.get(key)
+    if (bound !== undefined) return bound.href === href && bound.title === title ? bound.label : undefined
+    this.referenceDefinitions.set(key, { label, href, title })
+    return label
+  }
+
+  /**
+   * The Carve spelling of an attribute block, `''` for none, or `undefined`
+   * where it has none.
+   *
+   * `rawRef` is returned VERBATIM by the writer, so a reference link's own
+   * attributes have to be inside it: without this `[t][r]{.foo}` came back as
+   * `[t][r]` and the class was gone.
+   */
+  private carveAttributeSuffix(attrs: Attrs | undefined): string | undefined {
+    if (attrs === undefined) return ''
+    const written = this.carveInlineSource([{ type: 'span', children: [{ type: 'text', value: 'x' }], attrs }])
+    if (written === undefined || !written.startsWith('[x]')) return undefined
+    return written.slice(3)
+  }
+
+  /**
+   * Decide the inline carriers on this element BEFORE `attrs()` reads it.
+   *
+   * The arms below then only spend the answer, which keeps one decision in one
+   * place and lets the attribute pass know which names were consumed.
+   */
+  private readInlineCarriers(node: P5Node, tag: string, children: InlineNode[]): void {
+    if (tag === 'span') {
+      // NEITHER A RAW INLINE NOR AN ESCAPE HAS AN ATTRIBUTE SLOT its writer
+      // emits, so rebuilding one over an element carrying anything else
+      // deletes it silently. Asked of the ELEMENT rather than of `attrs()`,
+      // which has not run yet, and which would in any case have refused a
+      // dangerous name this still has to see.
+      const bare = (domAttrs(node) ?? []).every((attribute) => RESERVED_CARRIER_ATTRIBUTES.has(attribute.name.toLowerCase()))
+      const format = this.carrierValue(node, 'raw')
+      if (format !== undefined) {
+        const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
+        // A format the parser would not read is not a format: the writer
+        // NORMALIZES what it is given, so `h t m l` came back as `{=html}` and
+        // walked markup past the mode gate below. An empty raw inline has no
+        // Carve spelling at all. And `html` is markup every HTML render emits
+        // verbatim, so only `roundtrip` - which already preserves input markup
+        // wholesale - rebuilds one (§13b); every other format is inert here.
+        const spellable = bare && RE_RAW_INLINE_FORMAT.test(format)
+          && (holdsElements || this.flatText(node) !== '')
+          && (this.mode === 'roundtrip' || (format.toLowerCase() !== 'html' && !holdsElements))
+        if (spellable) this.recordCarrier(node, 'raw')
+        return
+      }
+      if (this.hasCarrier(node, 'escaped')) {
+        // ONE ESCAPABLE CHARACTER, TEXT-ONLY (ruling 4). A multi-character
+        // value came back as `\a\b\c`, which is not Carve; `a` is not an
+        // escape at all, it is a backslash and a letter; and flattening a
+        // subtree would swallow whatever the children were.
+        const value = bare && (domChildren(node) ?? []).every((child) => domTag(child) === undefined)
+          ? this.flatText(node)
+          : ''
+        if ([...value].length === 1 && RE_ESCAPABLE_PUNCTUATION.test(value)) this.recordCarrier(node, 'escaped')
+      }
+      return
+    }
+    if (tag !== 'a' && tag !== 'img') return
+    const destination = this.attr(node, tag === 'a' ? 'href' : 'src')
+    // A destination §25 blanked or the source never had stays blanked: no
+    // carrier routes a value back past a security rule, and no node is built
+    // for the carrier to ride (§13b).
+    if (!destinationIsCarried(destination)) return
+    if (tag === 'a' && this.hasCarrier(node, 'autolink')) {
+      const display = children.every((child) => child.type === 'text')
+        ? children.map((child) => (child as { value: string }).value).join('')
+        : undefined
+      const bare = destination!.startsWith('mailto:') ? destination!.slice(7) : destination!
+      // THE TEXT OF AN AUTOLINK IS ITS DESTINATION, AND IT HAS TO SPELL ONE.
+      // The writer emits `<text>`, so a text that is not the destination gives
+      // a `<hi>` that re-parses as literal text and loses the link, and a
+      // destination with no autolink spelling gives a `</u>` that does the
+      // same. The grammar's own matcher answers the second question, rather
+      // than a second hand-spelling of it.
+      //
+      // A TITLE IS THE THIRD WAY THE CARRIER CANNOT BE HONORED: an autolink
+      // node has no title field, and `attrs()` has already consumed the
+      // attribute as the link's own, so rebuilding one would drop it silently.
+      // THE WHOLE TEXT, not a prefix of it: the matcher is anchored at the
+      // start only, so a destination with a `>` in it matched its valid head
+      // and the tail came back as literal text.
+      const matched = display === undefined ? null : RE_AUTOLINK.exec(`<${display}>`)
+      const spellable = matched !== null && matched[0].length === display!.length + 2
+      if (spellable && display !== undefined && this.attr(node, 'title') === undefined && (display === bare || display === destination)) {
+        this.recordCarrier(node, 'autolink', display === bare ? {} : { autolinkText: display })
+        return
+      }
+    }
+    const title = this.attr(node, 'title')
+    const label = this.readsRef(node, destination!, title)
+    if (label === undefined) return
+    const source = tag === 'img'
+      ? this.carveInlineSource([{ type: 'text', value: this.attr(node, 'alt') ?? '' }])
+      : this.carveInlineSource(children)
+    if (source === undefined) return
+    this.recordCarrier(node, 'ref', { ref: label, labelSource: `${tag === 'img' ? '!' : ''}[${source}]` })
+  }
+
+  /**
+   * `ref` and `rawRef` for a rebuilt reference, or nothing.
+   *
+   * The attribute block is part of `rawRef` because the writer emits that
+   * string verbatim. An attribute block with no Carve spelling leaves the link
+   * inline, which keeps the attributes and loses only the reference form.
+   */
+  private referenceFields(carried: CarrierRead | undefined, attrs: Attrs | undefined): { ref?: string; rawRef?: string } {
+    if (carried?.ref === undefined || carried.labelSource === undefined) return {}
+    const suffix = this.carveAttributeSuffix(attrs)
+    if (suffix === undefined) return {}
+    this.referenceLabelsUsed.add(normalizeRefLabel(carried.ref))
+    return { ref: carried.ref, rawRef: `${carried.labelSource}[${carried.ref}]${suffix}` }
+  }
+
+  /** The reference definitions every rebuilt `data-carve-ref` needs beside it. */
+  private reconstructedDefinitions(): BlockNode[] {
+    const defs: BlockNode[] = []
+    for (const [key, { label, href, title }] of this.referenceDefinitions) {
+      if (!this.referenceLabelsUsed.has(key)) continue
+      defs.push({ type: 'link_reference_definition', label, href, ...(title !== undefined ? { title } : {}) })
+    }
+    return defs
+  }
+
+  /**
    * Whether `data-delim` IS this list's delimiter: the one PART 10 §12 writes.
    * Any other value is the author's attribute, and kept.
    */
@@ -2085,6 +2362,17 @@ class Importer {
   private block(node: P5Node, path: string, depth: number): BlockNode[] {
     this.enter(depth)
     const tag = domTag(node)!
+    // Read by `readAbbreviationCarrier` before the walk and emitted at the top
+    // of the document, so it is consumed rather than dropped as an active
+    // element - the carrier is the serializer's protocol, not page content.
+    if (tag === 'template' && this.hasCarrier(node, 'abbreviations')) {
+      // CHARGED, THEN DROPPED. The carrier was read before the walk, so
+      // without this its subtree is the one input that reaches a reconstructed
+      // node without passing the caller's `maxNodes` and `maxDepth`.
+      this.budget(node, depth)
+      for (let count = this.abbreviationDefs.size; count > 0; count -= 1) this.enter(depth)
+      return []
+    }
     if (ACTIVE.has(tag)) {
       this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
@@ -2239,7 +2527,12 @@ class Importer {
     // back as the `::: footnotes` placement directive, which is what puts the
     // rebuilt section back in that slot instead of at document end.
     if (tag === 'carve-footnote-placement') return [{ type: 'directive', kind: 'footnotes', children: [] }]
-    if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
+    if (tag === 'hr') {
+      // §13a `data-char`: the break character the author wrote. Every `<hr>` is
+      // otherwise the same bytes, so HTML has nowhere else to put it.
+      const marker = this.readsChar(node)
+      return [{ type: 'thematic_break', ...(marker !== undefined ? { marker } : {}), ...(attrs ? { attrs } : {}) }]
+    }
     if (tag === 'table') {
       const unspellableBefore = this.unspellable.length
       const table = this.table(node, path, depth, attrs)
@@ -2609,11 +2902,15 @@ class Importer {
     const start = this.listStart(node, path, ordered)
     // The delimiter the renderer wrote (PART 10 §12), which is the only place
     // it survives: `1)` and `1.` rendered the same bytes before that clause.
-    const delim = ordered && this.readsDelim(node) ? (')' as const) : undefined
+    const delim = ordered && (this.readsDelim(node) || this.readsMarker(node) === ')') ? (')' as const) : undefined
+    // §13a `data-marker`: the bullet the author wrote. An ordered list's marker
+    // IS its delimiter, which `delim` above already reads, so only the bullet
+    // adds a field here.
+    const bulletChar = !ordered && this.readsMarker(node) === '*' ? ('*' as const) : undefined
     // The task list's base class (PART 19 §1) is structural, not authored: it is
     // read only where an item carries the box that makes the list a task list.
     if (!ordered && listItems.every((li) => this.taskCheckbox(li) !== undefined)) attrs = this.stripClass(attrs, TASK_LIST_CLASS)
-    const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(delim !== undefined ? { delim } : {}), ...(attrs ? { attrs } : {}) }
+    const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(delim !== undefined ? { delim } : {}), ...(bulletChar !== undefined ? { bulletChar } : {}), ...(attrs ? { attrs } : {}) }
     return [...before, list]
   }
 
@@ -4230,7 +4527,27 @@ class Importer {
     const beforeWalk = this.mark()
     const children = this.inlines(domChildren(node) ?? [], path, depth + 1)
     const walked = this.mark()
+    // BEFORE `attrs()`, which asks what was rebuilt here before deciding
+    // whether a reserved name is a consumed carrier or a refused one.
+    this.readInlineCarriers(node, tag, children)
+    const carried = this.carrierReads.get(node)
     const attrs = this.attrs(node, path)
+    if (tag === 'span' && carried?.names.has('raw')) {
+      // §13a `data-carve-raw`. Without this the carrier span was read as raw
+      // HTML, so `` `x`{=tex} `` came back as
+      // `` `<span data-carve-raw="tex">x</span>`{=html} `` - the carrier buried
+      // inside a raw inline of the WRONG format, which is worse than losing it.
+      // `readInlineCarriers` has already settled that this span can hold one.
+      const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
+      return [{
+        type: 'raw_inline',
+        format: this.carrierValue(node, 'raw') ?? '',
+        content: holdsElements ? serializeInner(node as never) : this.flatText(node),
+      }]
+    }
+    if (tag === 'span' && carried?.names.has('escaped')) {
+      return [{ type: 'escaped_text', value: this.flatText(node) }]
+    }
     // An element the HTML left empty holds nothing a reader sees, so it is
     // dropped without a row (ruling markup-carve/carve-rs#1719): an empty brace
     // pair reads back as literal text, and `{--}` as the braced en dash. Its
@@ -4281,11 +4598,29 @@ class Importer {
         return this.dropDeniedDestination(node, 'href', children, attrs, path)
       }
       const title = this.attr(node, 'title')
+      // §13a `data-carve-autolink`: HTML writes `<https://e>` and
+      // `[https://e](https://e)` as the same bytes, and the AST tells them
+      // apart - an autolink is its own node type.
+      if (carried?.names.has('autolink')) {
+        return [{
+          type: 'autolink',
+          href: this.attr(node, 'href') ?? '',
+          ...(carried.autolinkText !== undefined ? { text: carried.autolinkText } : {}),
+          ...(attrs ? { attrs } : {}),
+        }]
+      }
       // `!== undefined`, not truthiness: `<a href="u" title="">` has a title,
       // and the writer spells the empty one `[x](u "")`. Under a truthiness test
       // it vanished with no diagnostic, because `attrs()` treats a link's title
       // as consumed here rather than keeping it as `{title=…}`.
-      return [{ type: 'link', href: this.attr(node, 'href') ?? '', children, ...(title !== undefined ? { title } : {}), ...(attrs ? { attrs } : {}) }]
+      return [{
+        type: 'link',
+        href: this.attr(node, 'href') ?? '',
+        children,
+        ...(title !== undefined ? { title } : {}),
+        ...this.referenceFields(carried, attrs),
+        ...(attrs ? { attrs } : {}),
+      }]
     }
     if (tag === 'img') {
       // The same rule as the link one branch up, and it is the SAME shape: an
@@ -4308,7 +4643,14 @@ class Importer {
         return this.dropDeniedDestination(node, 'src', stands, attrs, path)
       }
       const title = this.attr(node, 'title')
-      return [{ type: 'image', src: this.attr(node, 'src') ?? '', alt: this.attr(node, 'alt') ?? '', ...(title !== undefined ? { title } : {}), ...(attrs ? { attrs } : {}) }]
+      return [{
+        type: 'image',
+        src: this.attr(node, 'src') ?? '',
+        alt: this.attr(node, 'alt') ?? '',
+        ...(title !== undefined ? { title } : {}),
+        ...this.referenceFields(carried, attrs),
+        ...(attrs ? { attrs } : {}),
+      }]
     }
     if (tag === 'br') {
       // A hard break has no `attrs` slot, so anything `attrs()` kept for this
@@ -4322,7 +4664,22 @@ class Importer {
     // The synthetic element the adapter footnote pass leaves at each
     // reference site (adapterFootnotes); never present in real HTML input.
     if (tag === 'carve-footnote-ref') {
-      return [{ type: 'footnote_ref', id: this.attr(node, 'label') ?? '' }]
+      const label = this.attr(node, 'label') ?? ''
+      const inline = this.inlineFootnoteBodies.get(label)
+      if (inline !== undefined) return [{ type: 'inline_footnote', inline }]
+      return [{ type: 'footnote_ref', id: label }]
+    }
+    if (tag === 'abbr') {
+      // A use of an abbreviation the document DEFINED is prose: the expansion
+      // belongs on the definition line, not on every use, and writing it on
+      // each one is what `[HTML]{abbr=…}` did. Only where the title IS the
+      // defined expansion and the element carries nothing else, so an `<abbr>`
+      // the author wrote by hand still imports as the span.
+      const expansion = this.attr(node, 'title')
+      const onlyTitle = attrs === undefined
+        || (attrs.id === undefined && attrs.classes === undefined
+          && Object.keys(attrs.keyValues ?? {}).every((key) => key === 'title'))
+      if (expansion !== undefined && onlyTitle && this.abbreviationDefs.get(this.flatText(node)) === expansion) return children
     }
     if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, attrs)]
     if (tag === 'span') {
@@ -5272,8 +5629,9 @@ class Importer {
      * document. The pairing was never in doubt - both notes are recognized
      * candidates - only the ORDER in which the two halves ran.
      */
+    const carriers = this.footnoteCarriers(definitions)
     definitions.forEach((definition, index) => {
-      const label = String(index + 1)
+      const label = carriers[index]!.label
       if (index === 0) this.removeFootnoteSeparator(definition.block)
 
       const identities = definition.refs
@@ -5295,7 +5653,21 @@ class Importer {
     // same reason: a body detached early is a body another note cannot reach.
     definitions.forEach((definition, index) => {
       const block = definition.block
-      defs[String(index + 1)] = this.blocks(domChildren(block) ?? [], `footnote[${String(index + 1)}]`, 1)
+      const label = carriers[index]!.label
+      const body = this.blocks(domChildren(block) ?? [], `footnote[${label}]`, 1)
+      // §13a `data-carve-inline-footnote`: the endnote was authored at its
+      // point of use. Only a SINGLE PARAGRAPH can go back there - `^[...]`
+      // holds an inline run - so a richer body keeps the labelled form, which
+      // renders the same endnote and loses only the spelling.
+      setOwn(defs, label, body)
+      // THE DEFINITION STAYS UNTIL THE WALK IS OVER. A note body converted
+      // here can hold a reference to a LATER note, which is read before that
+      // note's inline body is registered, so dropping the definition now lost
+      // the nested note entirely. `pruneInlinedFootnotes` removes the ones
+      // nothing refers to, once everything has been read.
+      if (carriers[index]!.inline && body.length === 1 && body[0]!.type === 'paragraph') {
+        this.inlineFootnoteBodies.set(label, (body[0] as { children: InlineNode[] }).children)
+      }
       this.detachedFootnoteBlocks.add(block)
       const parent = domParent(block)
       if (parent !== undefined) containers.add(parent)
@@ -5309,6 +5681,138 @@ class Importer {
     this.pruneFootnoteContainers(containers)
 
     return defs
+  }
+
+  /**
+   * Drop the definition of every endnote that came back as an INLINE footnote.
+   *
+   * An inline note carries its body at the point of use, so a definition
+   * beside it would render the endnote twice. One that is still referenced by
+   * a `footnote_ref` keeps its definition: a labelled note's body can hold a
+   * reference to a note written inline elsewhere, and that reference is read
+   * before the inline body is registered.
+   */
+  private pruneInlinedFootnotes(defs: Record<string, BlockNode[]>, children: BlockNode[]): void {
+    if (this.inlineFootnoteBodies.size === 0) return
+    const referenced = new Set<string>()
+    const visit = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        for (const item of node) visit(item)
+        return
+      }
+      if (typeof node !== 'object' || node === null) return
+      const record = node as Record<string, unknown>
+      if (record.type === 'footnote_ref' && typeof record.id === 'string') referenced.add(record.id)
+      for (const value of Object.values(record)) if (typeof value === 'object') visit(value)
+    }
+    visit(children)
+    visit(Object.values(defs))
+    for (const label of this.inlineFootnoteBodies.keys()) {
+      if (!referenced.has(label)) delete defs[label]
+    }
+  }
+
+  /**
+   * §13a `data-carve-abbreviations`: the `*[abbr]: expansion` lines the
+   * document-end `<template>` carries.
+   *
+   * The definitions are what `<abbr title=…>` alone cannot say. Without them
+   * an expanded abbreviation came back as `[HTML]{abbr="…"}` on every use -
+   * the rendering is the same and the source is not, and a second use writes
+   * the expansion a second time.
+   *
+   * A line that is not a definition is skipped rather than guessed at, and the
+   * FIRST definition of an abbreviation wins, as a Carve source's would.
+   */
+  private readAbbreviationCarrier(root: P5Node): void {
+    // DOCUMENT LEVEL ONLY, which is where §13a places it: "the document's
+    // abbreviation definitions" on a `<template>` at document end. A deeper
+    // one can sit inside a subtree `roundtrip` mode preserves wholesale, and
+    // reading it there both left the template in the raw bytes AND defined the
+    // abbreviation for the whole document, so unrelated prose gained an
+    // `<abbr>` the source never had.
+    const stack: P5Node[] = [...(domChildren(root) ?? [])].reverse()
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (domTag(node) === 'template' && this.hasCarrier(node, 'abbreviations')) {
+        const content = (node as unknown as { content?: P5Node }).content
+        // EVERY line terminator, not just `\n`: a carriage return inside an
+        // expansion is a line ending to the Carve parser, so leaving one in
+        // let a definition carry a whole fenced raw block into the source.
+        for (const line of this.flatText(content ?? node).split(/\r\n|[\n\r\u2028\u2029]/u)) {
+          // The PARSER's own line shape, not a second spelling of it: a line
+          // it would not read is not a definition, and writing one back would
+          // put a visible paragraph into the document instead.
+          const match = RE_ABBR_DEF.exec(line)
+          if (!match) continue
+          const abbr = match[1]!
+          if (this.abbreviationDefs.has(abbr)) continue
+          this.abbreviationDefs.set(abbr, match[2]!.replace(/[ \t]+$/, ''))
+        }
+        continue
+      }
+    }
+  }
+
+  /**
+   * The label and the inline-note flag each endnote's §13a carriers ask for.
+   *
+   * `data-carve-footnote-label` restores the label the author wrote in place of
+   * the assigned number, and `data-carve-inline-footnote` says the note was
+   * written at its point of use. An endnote carrying BOTH is contradictory -
+   * an inline note has no label and the writer never emits the pair - so
+   * neither is read and the note keeps its number, reported rather than
+   * guessed at.
+   *
+   * A label that is not spellable as `[^label]`, and one a note already took,
+   * fall back to the number for the same reason `readsMarker` refuses a value
+   * outside its enumeration: a carrier that cannot be honored is not one.
+   */
+  private footnoteCarriers(definitions: Array<{ block: P5Node; refs: P5Node[] }>): Array<{ label: string; inline: boolean }> {
+    const read = definitions.map((definition) => {
+      const label = this.carrierValue(definition.block, 'footnote-label')
+      const inline = this.hasCarrier(definition.block, 'inline-footnote')
+      if (label !== undefined && inline) {
+        this.report.add(
+          'attribute-dropped',
+          'Dropped both footnote carriers on one endnote: a label and an inline note contradict each other',
+          'warning',
+          'footnote',
+          definition.block,
+        )
+        return { label: undefined, inline: false }
+      }
+      // An inline note is written back where it is used, so one reference site
+      // is the whole shape: two sites mean a label, which an inline note has
+      // no room for.
+      return { label, inline: inline && definition.refs.length === 1 }
+    })
+    // THE AUTHORED LABELS ARE ALLOCATED FIRST, then a number is found for each
+    // note that needs one. Reserving every number up front rejected an
+    // authored `[^2]` because the second note would have been numbered 2 -
+    // even where no note ended up wearing that number.
+    const taken = new Set<string>()
+    const accepted = read.map((entry) => {
+      // THE PARSER'S OWN LINE SHAPE, not a hand-spelled "no whitespace" rule:
+      // that one rejected `[^my note]`, which the parser reads and the
+      // exporter writes.
+      // A LINE TERMINATOR IS NOT PART OF A LABEL. The definition pattern is
+      // not line-anchored, so its label class admits one, and the writer puts
+      // the label verbatim into the reference AND the definition - which let a
+      // carrier carry whole blocks into the generated source.
+      if (entry.label === undefined || /[\r\n\u2028\u2029]/u.test(entry.label)) return undefined
+      if (!RE_FOOTNOTE_DEF.test(`[^${entry.label}]: x`) || taken.has(entry.label)) return undefined
+      taken.add(entry.label)
+      return entry.label
+    })
+    let next = 1
+    return read.map((entry, index) => {
+      const label = accepted[index]
+      if (label !== undefined) return { label, inline: entry.inline }
+      while (taken.has(String(next))) next += 1
+      taken.add(String(next))
+      return { label: String(next), inline: entry.inline }
+    })
   }
 
   /**
