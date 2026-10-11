@@ -47,9 +47,13 @@ export function occupiedPrivateUse(root: unknown, includeKeys = false): Set<numb
       for (const item of node) stack.push(item)
       continue
     }
-    for (const [key, value] of Object.entries(node)) {
-      if (includeKeys) stack.push(key)
-      stack.push(value)
+    if (includeKeys) {
+      for (const key of Object.keys(node)) {
+        if (/[\ue001-\uf8ff]/.test(key)) stack.push(key)
+        stack.push((node as Record<string, unknown>)[key])
+      }
+    } else {
+      for (const value of Object.values(node)) stack.push(value)
     }
   }
 

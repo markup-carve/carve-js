@@ -1606,6 +1606,19 @@ function repeatedEmphasisNodes(ast: Document): WeakSet<object> {
       continue
     }
     if (path.has(value)) continue
+    let children: object[] | undefined
+    if (Array.isArray(value)) {
+      for (const child of value) if (child !== null && typeof child === 'object') (children ??= []).push(child)
+    } else if (value instanceof Map) {
+      for (const child of value.values()) if (child !== null && typeof child === 'object') (children ??= []).push(child)
+    } else {
+      for (const key of Object.keys(value)) {
+        if (key === 'attrs' || key === 'pos') continue
+        const child = (value as Record<string, unknown>)[key]
+        if (child !== null && typeof child === 'object') (children ??= []).push(child)
+      }
+    }
+    if (!children) continue
     path.add(value)
     const node = value as { type?: string; children?: unknown[] }
     const kind = node.type && EMPHASIS_KINDS.has(node.type) && Array.isArray(node.children) ? node.type : undefined
@@ -1617,22 +1630,7 @@ function repeatedEmphasisNodes(ast: Document): WeakSet<object> {
       active.set(kind, ancestors)
     }
     stack.push({ value, exit: true, kind })
-    if (Array.isArray(value)) {
-      for (let at = value.length - 1; at >= 0; at--) {
-        const child: unknown = value[at]
-        if (child !== null && typeof child === 'object') stack.push({ value: child })
-      }
-    } else if (value instanceof Map) {
-      for (const child of value.values()) {
-        if (child !== null && typeof child === 'object') stack.push({ value: child })
-      }
-    } else {
-      for (const key of Object.keys(value)) {
-        if (key === 'attrs' || key === 'pos') continue
-        const child = (value as Record<string, unknown>)[key]
-        if (child !== null && typeof child === 'object') stack.push({ value: child })
-      }
-    }
+    for (let at = children.length - 1; at >= 0; at--) stack.push({ value: children[at] })
   }
   return repeated
 }
