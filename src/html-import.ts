@@ -920,6 +920,7 @@ class Importer {
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
   private hasEmptyCodeSpans = false
   /** The element each inline node came from, for `unwrapUnspellable`. */
+  private readonly firstHeadings = new WeakMap<P5Node, P5Node | null>()
   private readonly headingOrigins = new WeakMap<BlockNode, P5Node>()
   private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** Fallback images of formulas that imported as math, dropped where they stand. */
@@ -2369,6 +2370,28 @@ class Importer {
     return this.blocks(domChildren(node) ?? [], path, depth)
   }
 
+  private firstHeadingWithin(root: P5Node): P5Node | undefined {
+    const pending: Array<[P5Node, boolean]> = [[root, false]]
+    while (pending.length > 0) {
+      const [node, visited] = pending.pop()!
+      if (this.firstHeadings.has(node)) continue
+      if (/^h[1-6]$/.test(domTag(node) ?? '')) {
+        this.firstHeadings.set(node, node)
+      } else if (!visited) {
+        pending.push([node, true])
+        const children = domChildren(node) ?? []
+        for (let index = children.length - 1; index >= 0; index--) {
+          const child = children[index]!
+          if (!this.firstHeadings.has(child)) pending.push([child, false])
+        }
+      } else {
+        const child = (domChildren(node) ?? []).find(child => this.firstHeadings.get(child) != null)
+        this.firstHeadings.set(node, child ? this.firstHeadings.get(child)! : null)
+      }
+    }
+    return this.firstHeadings.get(root) ?? undefined
+  }
+
   private block(node: P5Node, path: string, depth: number): BlockNode[] {
     this.enter(depth)
     const tag = domTag(node)!
@@ -2387,10 +2410,10 @@ class Importer {
       this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
-    if (/^h[1-6]$/.test(tag) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
+    if ((tag === 'section' || /^h[1-6]$/.test(tag)) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
       this.recordCarrier(node, 'explicit-id')
     }
-    let attrs = tag === 'section' ? undefined : this.attrs(node, path)
+    const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
       this.headingDepth++
       let raw: InlineNode[]
@@ -2730,15 +2753,15 @@ class Importer {
       // relative order because `element-unwrapped` is still added first.
       let hoistedChildren = children
       if (tag === 'section') {
-        const firstHeading = own.find(child => /^h[1-6]$/.test(domTag(child) ?? ''))
+        const firstHeading = this.attr(node, 'id') === undefined ? undefined : this.firstHeadingWithin(node)
         const heading = children[0]
         const mapped = heading?.type === 'heading' && firstHeading !== undefined &&
           this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
         if (!mapped) hoistedChildren = []
-        if (mapped && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
-          this.recordCarrier(node, 'explicit-id')
+        if (!mapped && this.carrierReads.get(node)?.names.delete('explicit-id')) {
+          const name = this.carrierName(node, 'explicit-id')!
+          this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(this.attr(node, name) ?? ''))
         }
-        attrs = this.attrs(node, path)
       }
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(

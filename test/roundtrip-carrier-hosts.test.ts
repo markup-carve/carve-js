@@ -73,6 +73,35 @@ describe('roundtrip carriers stay on their defined hosts', () => {
     }
   })
 
+  it.each(['header', 'div'])('preserves section IDs through an unwrapped %s', tag => {
+    for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+      for (const marker of ['', 'data-carve-explicit-id', 'data-djot-explicit-id']) {
+        const id = marker ? 'Setup' : 'install'
+        const result = htmlToCarve(`<section id="${id}" ${marker}><${tag}><h2>Setup</h2></${tag}></section>`, { mode })
+        expect(result.value).toContain(`#${id}`)
+        expect(result.report.diagnostics).not.toEqual(expect.arrayContaining([
+          expect.objectContaining({ message: expect.stringContaining('explicit-id') }),
+        ]))
+      }
+    }
+  })
+
+  it('preserves an hgroup ID on the heading when the wrapper unwraps', () => {
+    for (const mode of ['safe', 'semantic'] as const) {
+      const result = htmlToCarve('<section id="Setup" data-carve-explicit-id><hgroup><h2>Setup</h2></hgroup></section>', { mode })
+      expect(result.value).toContain('#Setup')
+    }
+    const raw = htmlToCarve('<section id="Setup" data-carve-explicit-id><hgroup><h2>Setup</h2></hgroup></section>', { mode: 'roundtrip' })
+    expect(raw.value).toContain('<hgroup><h2>Setup</h2></hgroup>')
+  })
+
+  it('keeps section refusal priority under the diagnostic cap', () => {
+    const result = htmlToAst('<section onclick="x()"><p bad="a">x</p><p bad="b">y</p></section>', { maxDiagnostics: 2 })
+    expect(result.report.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: expect.stringContaining('onclick') }),
+    ]))
+  })
+
   it('keeps a generated section ID generated', () => {
     const html = carveToHtml('# C\n', { roundtrip: true })
     expect(htmlToAst(html, { mode: 'roundtrip' }).value.children[0].attrs?.id).toBeUndefined()
