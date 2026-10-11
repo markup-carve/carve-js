@@ -126,17 +126,47 @@ describe('the writer reproduces the field', () => {
     expect(renderCarve({ type: 'document', children: [table] })).toBe('| a |\n|-|\n| 1 |\n')
   })
 
-  it('spells the cells that exist and no further', () => {
+  it('spells the ENTRIES that exist, padding to the header width and truncating to it alike', () => {
+    // THE FIELD DECIDES THE CELL COUNT ([CARVE-P11-066]). Measured as a defect
+    // first: this truncated `[3, 3, 3]` to the header's two cells, so the
+    // document re-parsed with `[3, 3]` - a `separatorWidths` the source never
+    // had, which is the PART 11 section 1 break the clause names. The padding
+    // direction is the same break read the other way.
     const wide = tableOf('|= a |= b |\n| 1 | 2 |\n')
-    wide.separatorWidths = [3, 3, 3, 3]
+    wide.separatorWidths = [3, 3, 3]
     expect(renderCarve({ type: 'document', children: [wide] })).toBe(
-      '| a | b |\n|---|---|\n| 1 | 2 |\n',
+      '| a | b |\n|---|---|---|\n| 1 | 2 |\n',
     )
     const narrow = tableOf('|= a |= b |\n| 1 | 2 |\n')
     narrow.separatorWidths = [4]
     expect(renderCarve({ type: 'document', children: [narrow] })).toBe(
       '| a | b |\n|----|\n| 1 | 2 |\n',
     )
+  })
+
+  it('takes no alignment for an entry past the last header cell', () => {
+    const table = tableOf('|= a |\n| 1 |\n')
+    table.rows[0]!.cells[0]!.align = 'center'
+    table.separatorWidths = [3, 3]
+    // The first entry has a cell to take a colon from; the second has none.
+    expect(renderCarve({ type: 'document', children: [table] })).toBe(
+      '| a |\n|:---:|---|\n| 1 |\n',
+    )
+  })
+
+  it.each([
+    ['| a | b |\n|---|\n| 1 | 2 |\n', [3]],
+    ['| a | b |\n|---|---|---|\n| 1 | 2 |\n', [3, 3, 3]],
+    ['| a | b | c |\n|:--|--:|\n| 1 | 2 | 3 |\n', [2, 2]],
+    ['| a |\n|---|---|\n| 1 |\n', [3, 3]],
+  ])('a RAGGED table re-parses to the same separatorWidths: %j', (src, widths) => {
+    // The invariant the bytes alone cannot see. A writer that padded or
+    // truncated to the header's width would still produce a plausible table -
+    // and `parse(fmt(x)) == parse(x)` is what catches it, over the FIELD and
+    // not only over the rendered line.
+    expect(tableOf(src).separatorWidths).toEqual(widths)
+    expect(tableOf(carveToCarve(src)).separatorWidths).toEqual(widths)
+    expect(carveToCarve(src)).toBe(src)
   })
 
   it('writes the native form where the first row is not all header cells', () => {

@@ -144,9 +144,19 @@ export function tableNeedsDelimiterHeader(table: Table): boolean {
  * [CARVE-P11-066]. Each entry is a run of that many `-`; the alignment colon is
  * not one of them and is written from the CELL's own alignment, so `[5, 3]` on
  * a left-and-right table comes back as `|:-----|---:|`. A width below 1 is
- * written as 1, since a separator cell needs a character, and an entry count
- * that disagrees with the row's cell count is spelled for the cells that exist
- * and no further.
+ * written as 1, since a separator cell needs a character.
+ *
+ * THE FIELD DECIDES THE CELL COUNT, and the writer never pads to the header's
+ * width NOR truncates to it. An entry count that disagrees with the header row
+ * is spelled for the ENTRIES that exist and no further, both ways round: a
+ * separator cell the author did not write is a cell, and dropping one the author
+ * did write loses an entry, so either breaks PART 11 §1 the same way - the
+ * document re-parses with a `separatorWidths` the source never had. A ragged
+ * table is exactly where this is observable, and it is the reason this is a
+ * count over `widths` and not over the row.
+ *
+ * An entry past the header's last cell therefore has no cell to take an
+ * alignment from, and takes none - a plain dash run.
  *
  * A first row that is not entirely header cells gets no separator: the row
  * after one is what PROMOTES it, so writing one there would say something the
@@ -155,14 +165,12 @@ export function tableNeedsDelimiterHeader(table: Table): boolean {
 export function authoredSeparator(table: Table): string | undefined {
   const widths = table.separatorWidths
   const first = table.rows[0]
-  if (widths === undefined || !first?.cells.length) return undefined
+  if (widths === undefined || widths.length < 1 || !first?.cells.length) return undefined
   if (!first.cells.every((cell) => cell.header)) return undefined
-  const count = Math.min(widths.length, first.cells.length)
-  if (count < 1) return undefined
-  const cells = Array.from({ length: count }, (_, i) => {
-    const width = Math.floor(widths[i]!)
+  const cells = widths.map((entry, i) => {
+    const width = Math.floor(entry)
     const dashes = '-'.repeat(Number.isFinite(width) && width > 1 ? width : 1)
-    const align = first.cells[i]!.align
+    const align = first.cells[i]?.align
     const left = align === 'left' || align === 'center' ? ':' : ''
     const right = align === 'right' || align === 'center' ? ':' : ''
     return `${left}${dashes}${right}`
