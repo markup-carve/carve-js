@@ -466,13 +466,13 @@ function writtenAsOneRun(previous: BlockNode, block: BlockNode): boolean {
 }
 
 function hostsCaption(block: BlockNode): boolean {
+  if (block.type === 'block_quote') return block.fenced === true || block.children.length > 0
   // A figure group's CLOSING fence hosts a caption (PART 9 §4c), so a literal
   // `^ …` paragraph written after one must have its caret escaped or it would
   // re-attach as the group caption on the way back (the F6 detached shape).
   if (
     block.type === 'table' ||
     block.type === 'code_block' ||
-    block.type === 'block_quote' ||
     block.type === 'image' ||
     block.type === 'figure_group'
   )
