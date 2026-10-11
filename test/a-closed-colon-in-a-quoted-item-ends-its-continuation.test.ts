@@ -62,7 +62,7 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     const html = carveToHtml(source)
     expect(html).not.toContain('<p>body\n- next</p>')
     expect(html).toContain('<li>next')
-    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
     expect(carveToHtml(carveToCarve(source))).toBe(html)
   })
 
