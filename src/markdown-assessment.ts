@@ -48,7 +48,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
   const emit = (construct: string, line: number, fidelity: MigrationDiagnostic['fidelity'] = 'preserved', code = `markdown-${construct}`): void => {
     diagnostics.push({ code, message: construct === 'ordered-task' ? ORDERED_TASK_ITEM_UNSPELLABLE : `Assessed Markdown ${construct}.`, severity: fidelity === 'dropped' ? 'warning' : 'info', fidelity, confidence: 'exact', path: `line:${line}` })
   }
-  const inline = (text: string, line: number): string => {
+  const inline = (text: string, line: number, linkLabel = false): string => {
     let result = ''
     for (let i = 0; i < text.length;) {
       const rest = text.slice(i)
@@ -69,13 +69,13 @@ export function assessMarkdown(source: string, value: string): Assessment {
         if (!/^(https?:\/\/|mailto:|[./#])/.test(href) && /^[A-Za-z][\w+.-]*:/.test(href)) complete = false
         emit(image ? 'image' : 'link', line)
         const title = match[4] === undefined ? '' : ` title="${escape(match[4])}"`
-        result += image ? `<img src="${escape(href)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(href)}"${title}>${inline(match[2]!, line)}</a>`
+        result += image ? `<img src="${escape(href)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(href)}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?/.exec(rest)) && definitions.has(labelKey(match[3] || match[2]!))) {
         const definition = definitions.get(labelKey(match[3] || match[2]!))!
         emit('reference-link', line, 'normalized')
         const title = definition.title === undefined ? '' : ` title="${escape(definition.title)}"`
-        result += match[1] === '!' ? `<img src="${escape(definition.destination)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(definition.destination)}"${title}>${inline(match[2]!, line)}</a>`
+        result += match[1] === '!' ? `<img src="${escape(definition.destination)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(definition.destination)}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
         emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') ? label : `mailto:${label}`
@@ -84,7 +84,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         const kind = match[1] === '~~' ? 'strikethrough' : match[1]!.length === 2 ? 'strong' : 'emphasis'
         if ((match[1]!.includes('_') && /[\p{L}\p{N}]/u.test(text[i - 1] ?? '')) || /^\s|\s$/.test(match[2]!)) complete = false
         emit(kind, line); const tag = kind === 'strong' ? 'strong' : kind === 'emphasis' ? 'em' : 's'
-        result += `<${tag}>${inline(match[2]!, line)}</${tag}>`; i += match[0].length
+        result += `<${tag}>${inline(match[2]!, line, linkLabel)}</${tag}>`; i += match[0].length
       } else if ((match = /^(?: {2,}|\\)\n/.exec(rest))) {
         emit('hard-break', line, 'normalized'); result += '<br>\n'; line++; i += match[0].length
       } else if (rest[0] === '\n') {
@@ -94,7 +94,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('raw-html', line, 'degraded', 'raw-preserved'); result += match[0]; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
       } else {
         const char = rest[0]!
-        if ('*_`[\\<'.includes(char) || rest.startsWith('~~') || rest.startsWith('https://') || rest.startsWith('http://') || rest.startsWith('www.') || ((i === 0 || !/[\w.+-]/.test(text[i - 1]!)) && /^[\w.+-]+@[\w.-]+\.[A-Za-z]/.test(rest))) { complete = false; return result + escape(rest) }
+        if ('*_`[\\<'.includes(char) || rest.startsWith('~~') || (!linkLabel && (i === 0 || !/[A-Za-z]/.test(text[i - 1]!)) && /^(?:https?|ftp):\/\//i.test(rest)) || rest.startsWith('www.') || ((i === 0 || !/[\w.+-]/.test(text[i - 1]!)) && /^[\w.+-]+@[\w.-]+\.[A-Za-z]/.test(rest))) { complete = false; return result + escape(rest) }
         result += escape(char); i++
       }
     }

@@ -95,3 +95,30 @@ describe('Markdown construct assessment', () => {
     expect(assessMarkdown('a  b', 'a b').complete).toBe(false)
   })
 })
+
+// Native cmark-gfm autolink output contains a link for every protocol spelling here.
+it.each(['ftp://example.test', 'FTP://example.test', 'Ftp://example.test', 'HTTP://example.test', 'HTTPS://example.test', 'see ftp://example.test/a', 'ftp://x'])(
+  'keeps an unsupported GFM protocol link unassessed: %s', source => {
+    expect(migrateMarkdown(source).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback',
+    }))
+  },
+)
+
+it.each(['`ftp://example.test`', '```\nftp://example.test\n```'])(
+  'preserves opaque code containing a GFM protocol: %s', source => {
+    expect(migrateMarkdown(source).report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(false)
+  },
+)
+
+it.each(['sftp://example.test', 'tftp://example.test', 'fooftp://example.test', '[ftp://example.test](https://target.test)', '[https://example.test](https://target.test)'])(
+  'preserves text without an unsupported nested GFM protocol link: %s', source => {
+    expect(rows(source).some(row => row.code === 'fidelity-unverified')).toBe(false)
+  },
+)
+
+it('retains incomplete assessment for changed emphasis inside a protocol link label', () => {
+  expect(rows('[*ftp://example.test*](https://target.test)')).toContainEqual(expect.objectContaining({
+    code: 'fidelity-unverified', confidence: 'fallback',
+  }))
+})
