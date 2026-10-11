@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { carveToMarkdown, carveToMarkdownWithReport, RenderLossError, parse, renderMarkdownWithReport, resolve } from '../src/index.js'
 import controls from './fixtures/markdown-image-alt-text.json'
 
-// Native Carve and cmark-gfm readback validate image attributes in these goldens.
+// These goldens were checked separately with Carve and cmark-gfm readers.
 it.each(controls)('keeps literal image alt text during Markdown export: $source', ({ source, markdown }) => {
   for (const result of [carveToMarkdownWithReport(source), renderMarkdownWithReport(resolve(parse(source)))]) {
     expect(result.value).toBe(markdown.js)
