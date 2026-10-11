@@ -49,6 +49,7 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBar
   const triggers = /https?:\/\/|ftp:\/\/|www\.|@/gi
   let contextAt = 0, bracketDepth = 0
   let chunkEnd = 0
+  let retry: { at: number; dots: number; resource: boolean; autoMailto: boolean } | undefined
   scan: for (let match = triggers.exec(text); match; match = triggers.exec(text)) {
     while (contextAt < match.index) {
       if (text[contextAt] === '\\' && /[!-/:-@\[-`{-~]/.test(text[contextAt + 1] ?? '')) { contextAt += 2; continue }
@@ -61,7 +62,10 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBar
     let prefix = ''
     if (match[0] === '@') {
       if (mode === 'url') continue
-      let resource = false
+      const carried = retry?.at === match.index ? retry : undefined
+      retry = undefined
+      let resource = carried?.resource ?? false
+      let autoMailto = carried?.autoMailto ?? true
       const floor = links.at(-1)?.end ?? 0
       while (start > floor) {
         if (/[A-Za-z0-9.+_-]/.test(text[start - 1]!)) { start--; continue }
@@ -70,21 +74,21 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBar
             const before = start - value.length
             return before >= floor && text.slice(before, start) === value && !/[A-Za-z0-9]/.test(text[before - 1] ?? '')
           })
-          if (scheme) { start--; prefix = scheme; resource ||= scheme === 'xmpp:'; continue }
+          if (scheme) { start--; autoMailto = false; resource ||= scheme === 'xmpp:'; continue }
         }
         break
       }
       if (start === match.index) continue
-      let dots = 0
+      let dots = carried?.dots ?? 0
       while (end < text.length) {
         const char = text[end]!
-        if (char === '@') { triggers.lastIndex = end; continue scan }
+        if (char === '@') { retry = { at: end, dots, resource, autoMailto }; triggers.lastIndex = end; continue scan }
         if (/[A-Za-z0-9_-]/.test(char) || (resource && char === '/')) { end++; continue }
         if (char === '.' && /[A-Za-z0-9]/.test(text[end + 1] ?? '')) { dots++; end++; continue }
         break
       }
       if (dots === 0 || !/[A-Za-z]/.test(text[end - 1] ?? '')) continue
-      prefix = prefix === '' ? 'mailto:' : ''
+      prefix = autoMailto ? 'mailto:' : ''
     } else {
       if (mode === 'email') continue
       const www = match[0] === 'www.'

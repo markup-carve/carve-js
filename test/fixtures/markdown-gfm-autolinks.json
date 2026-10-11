@@ -9954,5 +9954,25 @@
   {
     "source": "mailto:mailto:a@b.cd",
     "html": "<p><a href=\"mailto:mailto:a@b.cd\">mailto:mailto:a@b.cd</a></p>\n"
+  },
+  {
+    "source": "a@b.c@d",
+    "html": "<p>a@<a href=\"mailto:b.c@d\">b.c@d</a></p>\n"
+  },
+  {
+    "source": "mailto:a@b@c.de",
+    "html": "<p>mailto:a@<a href=\"b@c.de\">b@c.de</a></p>\n"
+  },
+  {
+    "source": "xmpp:a@b@c.de/r",
+    "html": "<p>xmpp:a@<a href=\"b@c.de/r\">b@c.de/r</a></p>\n"
+  },
+  {
+    "source": "a@b.c@d.e",
+    "html": "<p>a@<a href=\"mailto:b.c@d.e\">b.c@d.e</a></p>\n"
+  },
+  {
+    "source": "a... b@example.test",
+    "html": "<p>a... <a href=\"mailto:b@example.test\">b@example.test</a></p>\n"
   }
 ]
