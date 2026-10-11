@@ -110,27 +110,30 @@ function renderHtmlAttrs(attrs: Attrs | undefined): string {
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
   // Choose the escape carriers before anything is rendered, so every pass that
   // introduces one and every pass that resolves one agrees on them.
+  const budget = budgetForDocument(ast)
   const occupied = occupiedPrivateUse(ast, true)
   const run = pickSentinelRun(occupied, CARRIER_BASE, CARRIER_COUNT)
   if (run.some(marker => occupied.has(marker.charCodeAt(0)))) {
-    setCarriers(shortSentinelTokens(treeSentinelNonces(ast), CARRIER_COUNT))
+    const nonces = treeSentinelNonces(ast)
+    setCarriers(shortSentinelTokens(nonces, CARRIER_COUNT))
     hashesEmitted = 0
-    const probeNonce = new Set<number>()
-    collectSentinelNonces(ALL_CARRIERS[0]!, probeNonce)
+    collectSentinelNonces(ALL_CARRIERS[0]!, nonces)
     const probeOptions = { ...opts }
     delete probeOptions.onRenderLoss
-    const probe = renderMarkdownBody(ast, probeOptions, false)
-    const nonces = probeNonce
-    collectSentinelNonces(probe, nonces)
+    budget.recordDecisions()
+    collectSentinelNonces(renderMarkdownBody(ast, probeOptions, false, budget), nonces)
     setCarriers(shortSentinelTokens(nonces, CARRIER_COUNT))
+    budget.replayDecisions()
   } else {
     setCarriers(run)
   }
   hashesEmitted = 0
-  return renderMarkdownBody(ast, opts, true)
+  const output = renderMarkdownBody(ast, opts, true, budget)
+  budget.assertReplayComplete()
+  return output
 }
 
-function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normalizeOutput: boolean): string {
+function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normalizeOutput: boolean, budget: AbbrBudget): string {
   const smartTypography = normalizeSmartTypography(opts.smartTypography)
   // PART 11 section 11: GFM has no heading-id syntax, so a heading is linked by
   // the slug a GFM reader derives from its written text.
@@ -150,7 +153,7 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     renderedChildren: new WeakMap(),
     carryMarkers: markdownCarriersEnabled(opts),
     carrierDepth: 0,
-    abbrBudget: budgetForDocument(ast),
+    abbrBudget: budget,
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
@@ -1741,7 +1744,7 @@ function escapeText(text: string): string {
   // whose deciding neighbors run past the end of this text is left as a
   // carrier for `resolveContextEscapes`. Deciding everything else here keeps
   // the carriers rare, which matters on long runs of `!` or `&`.
-  const hash = `(?:#|${AUTHORED_SENTINEL['#']})`
+  const hash = MULTI_CHARACTER_CARRIERS ? `(?:#|${AUTHORED_SENTINEL['#']})` : `[#${AUTHORED_SENTINEL['#']}]`
   text = text
     .replace(/<(?=[A-Za-z/!?])/g, '\\<')
     .replace(new RegExp(`&(?=${hash}[0-9]{1,7};|${hash}[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]*;)`, 'g'), '\\&')
@@ -1788,7 +1791,9 @@ function protectParagraphListMarkers(text: string): string {
       line = line
         .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
         // A text `.` may still be a section 8i carrier; it opens a list all the same.
-        .replace(new RegExp(`^([ \\t]{0,3}\\d{1,9})([.)]|${CONTEXT_SENTINEL['.']})(?=[ \\t])`), (_, lead: string, mark: string) => `${lead}\\${sentinelCharacter(mark)}`)
+        .replace(new RegExp(MULTI_CHARACTER_CARRIERS
+          ? `^([ \\t]{0,3}\\d{1,9})([.)]|${CONTEXT_SENTINEL['.']})(?=[ \\t])`
+          : `^([ \\t]{0,3}\\d{1,9})([.)${CONTEXT_SENTINEL['.']}])(?=[ \\t])`), (_, lead: string, mark: string) => `${lead}\\${sentinelCharacter(mark)}`)
         .replace(/^([ \t]{0,3})>/, '$1\\>')
       line = protectBlockShapes(line, lineIndex === 0)
       lines[lineIndex] = line
@@ -2585,6 +2590,7 @@ const FLANK_SPACE = /[\p{White_Space}]/u
 const FLANK_PUNCT = /[\p{P}\p{S}]/u
 
 const lastCharacter = (s: string): string => {
+  if (s.charCodeAt(s.length - 1) < 128) return s.slice(-1)
   if (MULTI_CHARACTER_CARRIERS) {
     const marker = ALL_CARRIERS.find(marker => s.endsWith(marker))
     if (marker !== undefined) return marker
@@ -2593,6 +2599,7 @@ const lastCharacter = (s: string): string => {
 }
 
 const firstCharacter = (s: string): string => {
+  if (s.charCodeAt(0) < 128) return s.slice(0, 1)
   if (MULTI_CHARACTER_CARRIERS) {
     const marker = ALL_CARRIERS.find(marker => s.startsWith(marker))
     if (marker !== undefined) return marker

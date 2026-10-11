@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { carveToMarkdown, carveToMarkdownWithReport, parse, renderMarkdownWithReport, RenderLossError, resolve } from '../src/index.js'
+import { AbbrBudget } from '../src/abbr-budget.js'
 import controls from './fixtures/markdown-unicode-marker-exhaustion.json'
 
 const pool = Array.from({ length: 6400 }, (_, index) => String.fromCharCode(0xe000 + index)).join('')
@@ -123,4 +124,57 @@ it('charges cross-reference labels equally with character and string carriers', 
   expect(boundary).toBeGreaterThan(0)
   expect(fallback.value.slice(0, boundary) + '\n').toBe(ordinary.value)
   expect(fallback.totalLosses).toBe(ordinary.totalLosses)
+})
+
+
+it('keeps split authored tokens when the probe label would fit differently', () => {
+  const doc = parse('ordinary\n')
+  const paragraph = doc.children[0]!
+  if (paragraph.type !== 'paragraph') throw new Error('expected paragraph')
+  const target = '\ue009m1x0\ue00a'
+  const left = { type: 'text' as const, value: '\ue009m0' }
+  const right = { type: 'text' as const, value: 'x0\ue00a' }
+  paragraph.children = [{
+    type: 'heading_ref', target, href: '#absent',
+    resolvedText: Array.from({ length: 125_000 }, () => [left, right]).flat(),
+  }]
+  doc.children.push(...parse(`\`\`\`\n${pool}\n\`\`\`\n`).children)
+  doc.srcByteLength = 0
+  const result = renderMarkdownWithReport(doc)
+  expect(result.value.startsWith('\ue009m0x0\ue00a'.repeat(125_000) + '\n\n```\n')).toBe(true)
+  expect(result.value).not.toContain(target)
+  expect(result.totalLosses).toBe(0)
+})
+
+it('replays nested charges, rejected labels and cached skips without changing work', () => {
+  const budget = new AbbrBudget(0)
+  const display = [{}]
+  let calls = 0
+  const run = () => {
+    expect(budget.charge(999_995)).toBe(true)
+    expect(budget.chargeRenderedLabel(display, () => {
+      calls++
+      expect(budget.charge(4)).toBe(true)
+      return 'abcdef'
+    })).toBeUndefined()
+    expect(budget.charge(1)).toBe(true)
+    expect(budget.chargeRenderedLabel(display, () => {
+      throw new Error('cached label should not render')
+    })).toBeUndefined()
+  }
+  budget.recordDecisions()
+  run()
+  budget.replayDecisions()
+  run()
+  budget.assertReplayComplete()
+  expect(calls).toBe(2)
+})
+
+it('detects changed or incomplete charge sequences during replay', () => {
+  const budget = new AbbrBudget(0)
+  budget.recordDecisions()
+  expect(budget.charge(4)).toBe(true)
+  budget.replayDecisions()
+  expect(() => budget.assertReplayComplete()).toThrow('incomplete')
+  expect(() => budget.charge(5)).toThrow('charge replay diverged')
 })

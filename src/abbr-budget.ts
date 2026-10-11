@@ -134,6 +134,9 @@ export function expansionBudgetLength(ast: { srcByteLength?: number }): number {
  */
 export class AbbrBudget {
   private remaining: number
+  private readonly initial: number
+  private trace: Array<{ kind: 'charge' | 'label'; cost: number; fits: boolean; rendered: boolean }> | undefined
+  private replayIndex: number | undefined
 
   /**
    * What rendering one shared display-text clone costs, keyed by that clone.
@@ -147,6 +150,38 @@ export class AbbrBudget {
 
   constructor(srcByteLength: number | undefined) {
     this.remaining = abbrBudget(srcByteLength)
+    this.initial = this.remaining
+  }
+
+  // Replay keeps probe branches stable; final carrier-shaped labels can cost
+  // more bytes by the bounded carrier-width factor.
+  recordDecisions(): void {
+    this.trace = []
+    this.replayIndex = undefined
+  }
+
+  replayDecisions(): void {
+    if (this.trace === undefined) throw new Error('budget decisions were not recorded')
+    this.remaining = this.initial
+    this.replayIndex = 0
+  }
+
+  assertReplayComplete(): void {
+    if (this.replayIndex !== undefined && this.replayIndex !== this.trace?.length) {
+      throw new Error('budget decision replay is incomplete')
+    }
+  }
+
+  private nextDecision(kind: 'charge' | 'label') {
+    const decision = this.trace?.[this.replayIndex!++]
+    if (decision?.kind !== kind) throw new Error('budget decision replay diverged')
+    return decision
+  }
+
+  private spend(cost: number): boolean {
+    if (cost > this.remaining) return false
+    this.remaining -= cost
+    return true
   }
 
   /**
@@ -156,9 +191,15 @@ export class AbbrBudget {
    * occurrences share one expansion, this keeps the bound monotonic).
    */
   charge(cost: number): boolean {
-    if (cost > this.remaining) return false
-    this.remaining -= cost
-    return true
+    if (this.replayIndex !== undefined) {
+      const decision = this.nextDecision('charge')
+      if (decision.cost !== cost) throw new Error('budget charge replay diverged')
+      if (decision.fits) this.remaining -= decision.cost
+      return decision.fits
+    }
+    const fits = this.spend(cost)
+    this.trace?.push({ kind: 'charge', cost, fits, rendered: false })
+    return fits
   }
 
   /**
@@ -179,13 +220,23 @@ export class AbbrBudget {
     render: () => string,
     measure: (label: string) => number = utf8ByteLength,
   ): string | undefined {
+    if (this.replayIndex !== undefined) {
+      const decision = this.nextDecision('label')
+      if (!decision.rendered) return undefined
+      const label = render()
+      if (decision.fits) this.remaining -= decision.cost
+      return decision.fits ? label : undefined
+    }
+    const decision = this.trace === undefined ? undefined : { kind: 'label' as const, cost: 0, fits: false, rendered: false }
+    if (decision !== undefined) this.trace!.push(decision)
     const known = display === undefined ? undefined : this.labelCost.get(display)
     if (known !== undefined && known > this.remaining) return undefined
 
     const label = render()
     const cost = measure(label)
     if (display !== undefined) this.labelCost.set(display, cost)
-
-    return this.charge(cost) ? label : undefined
+    const fits = this.spend(cost)
+    if (decision !== undefined) Object.assign(decision, { cost, fits, rendered: true })
+    return fits ? label : undefined
   }
 }
