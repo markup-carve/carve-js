@@ -5792,13 +5792,27 @@ class Importer {
    * neither is read and the note keeps its number, reported rather than
    * guessed at.
    *
-   * A label that is not spellable as `[^label]`, and one a note already took,
-   * fall back to the number for the same reason `readsMarker` refuses a value
-   * outside its enumeration: a carrier that cannot be honored is not one.
+   * Invalid labels are reported and ignored before testing for a conflict.
+   * A label another note already took falls back to the assigned number.
    */
   private footnoteCarriers(definitions: Array<{ block: P5Node; refs: P5Node[] }>): Array<{ label: string; inline: boolean }> {
     const read = definitions.map((definition) => {
-      const label = this.carrierValue(definition.block, 'footnote-label')
+      const carriedLabel = this.carrierValue(definition.block, 'footnote-label')
+      // §13e validates values before testing for contradictory meanings.
+      const label = carriedLabel !== undefined
+        && !/[\r\n\u2028\u2029]/u.test(carriedLabel)
+        && RE_FOOTNOTE_DEF.exec(`[^${carriedLabel}]: x`)?.[1] === carriedLabel
+        ? carriedLabel
+        : undefined
+      if (carriedLabel !== undefined && label === undefined) {
+        this.report.add(
+          'attribute-dropped',
+          'Dropped a footnote label outside the footnote label grammar',
+          'warning',
+          'footnote',
+          definition.block,
+        )
+      }
       const inline = this.hasCarrier(definition.block, 'inline-footnote')
       if (label !== undefined && inline) {
         this.report.add(
@@ -5820,17 +5834,20 @@ class Importer {
     // authored `[^2]` because the second note would have been numbered 2 -
     // even where no note ended up wearing that number.
     const taken = new Set<string>()
-    const accepted = read.map((entry) => {
-      // THE PARSER'S OWN LINE SHAPE, not a hand-spelled "no whitespace" rule:
-      // that one rejected `[^my note]`, which the parser reads and the
-      // exporter writes.
-      // A LINE TERMINATOR IS NOT PART OF A LABEL. The definition pattern is
-      // not line-anchored, so its label class admits one, and the writer puts
-      // the label verbatim into the reference AND the definition - which let a
-      // carrier carry whole blocks into the generated source.
-      if (entry.label === undefined || /[\r\n\u2028\u2029]/u.test(entry.label)) return undefined
-      if (!RE_FOOTNOTE_DEF.test(`[^${entry.label}]: x`) || taken.has(entry.label)) return undefined
-      taken.add(entry.label)
+    const accepted = read.map((entry, index) => {
+      if (entry.label === undefined) return undefined
+      const key = normalizeRefLabel(entry.label)
+      if (taken.has(key)) {
+        this.report.add(
+          'attribute-dropped',
+          'Dropped a footnote label already used by another note',
+          'warning',
+          'footnote',
+          definitions[index]!.block,
+        )
+        return undefined
+      }
+      taken.add(key)
       return entry.label
     })
     let next = 1
