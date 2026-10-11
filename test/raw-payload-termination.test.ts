@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import vectors from './fixtures/raw-payload-termination.json'
 import sourceVectors from './fixtures/raw-payload-source-fixtures.json'
-import { parse, renderHtml, renderCarve, carveToHtml, Profile } from '../src/index.js'
+import { parse, renderHtml, renderCarve, carveToHtml, htmlToAst, Profile } from '../src/index.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
 import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
 import type { Document } from '../src/ast.js'
@@ -46,4 +46,25 @@ it.each(sourceVectors)('preserves source payload in $id', ({source, codeSource})
 
 it('retains the payload break before a closer', () => {
   expect(parse('```=html\nx\n```').children[0]).toMatchObject({type: 'raw_block', content: 'x\n'})
+})
+
+
+it.each([
+  ['> ```=html\n> ', '<blockquote>\n  \n</blockquote>'],
+  ['> ```=html\n> \n> ', '<blockquote>\n  \n\n</blockquote>'],
+  ['> ```=html\n> x\n> \n> ', '<blockquote>\n  x\n\n</blockquote>'],
+  ['- ```=html\n  \n  ', '<ul>\n  <li>\n    \n\n  </li>\n</ul>'],
+])('renders marker-only EOF from its literal payload: %j', (source, html) => {
+  expect(carveToHtml(source)).toBe(html)
+})
+
+it('retains imported raw HTML bytes without inventing a payload break', () => {
+  const html = '<form action="/x"><input name="a"></form>'
+  const doc = htmlToAst(html, {mode: 'roundtrip'}).value
+  expect(doc.children[0]).toMatchObject({type: 'raw_block', content: html})
+  expect(renderHtml(doc)).toBe(html)
+  const code = {type: 'document', srcByteLength: 0, children: [{type: 'code_block', lang: 'html', content: html}]} as Document
+  expect(renderHtml(doc, {allowRawHtml: false})).toBe(renderHtml(code))
+  const result = renderCarveWithConversionReport(doc, renderCarve)
+  expect(result.report.diagnostics).toContainEqual(expect.objectContaining({code: 'field-unspellable', field: 'content'}))
 })
