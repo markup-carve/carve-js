@@ -26,7 +26,7 @@ import { trimNonNbsp, trimEndSpaceTab, trimMatchingEdges, trimEndMatchingEdges }
 import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
+import { pickSentinelRun, pickSentinelTokens } from './sentinel-run.js'
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
@@ -1415,7 +1415,7 @@ function stripPayloadBlanks(text: string): string {
     let end = at
     while (end > from && (text.charCodeAt(end - 1) === 32 || text.charCodeAt(end - 1) === 9)) end--
     out += text.slice(from, end)
-    from = at + 1
+    from = at + PAYLOAD_BLANK.length
     at = text.indexOf(PAYLOAD_BLANK, from)
   }
 
@@ -1719,7 +1719,7 @@ function escapeText(text: string): string {
   // whose deciding neighbors run past the end of this text is left as a
   // carrier for `resolveContextEscapes`. Deciding everything else here keeps
   // the carriers rare, which matters on long runs of `!` or `&`.
-  const hash = `[#${AUTHORED_SENTINEL['#']}]`
+  const hash = `(?:#|${AUTHORED_SENTINEL['#']})`
   text = text
     .replace(/<(?=[A-Za-z/!?])/g, '\\<')
     .replace(new RegExp(`&(?=${hash}[0-9]{1,7};|${hash}[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]*;)`, 'g'), '\\&')
@@ -1766,7 +1766,7 @@ function protectParagraphListMarkers(text: string): string {
       line = line
         .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
         // A text `.` may still be a section 8i carrier; it opens a list all the same.
-        .replace(new RegExp(`^([ \\t]{0,3}\\d{1,9})([.)${CONTEXT_SENTINEL['.']}])(?=[ \\t])`), (_, lead: string, mark: string) => `${lead}\\${sentinelCharacter(mark)}`)
+        .replace(new RegExp(`^([ \\t]{0,3}\\d{1,9})([.)]|${CONTEXT_SENTINEL['.']})(?=[ \\t])`), (_, lead: string, mark: string) => `${lead}\\${sentinelCharacter(mark)}`)
         .replace(/^([ \t]{0,3})>/, '$1\\>')
       line = protectBlockShapes(line, lineIndex === 0)
       lines[lineIndex] = line
@@ -1806,7 +1806,10 @@ function protectBlockShapes(line: string, first: boolean): string {
   const content = view.slice(at)
   const thematic = /^([-_*])(?:[ \t]*\1){2,}[ \t]*$/.test(content)
   const setext = !first && /^(?:=+|-+)[ \t]*$/.test(content)
-  if (thematic || setext) return `${line.slice(0, at)}\\${sentinelCharacter(line[at]!)}${line.slice(at + 1)}`
+  if (thematic || setext) {
+    const marker = ALL_CARRIERS.find(marker => line.startsWith(marker, at)) ?? line[at]!
+    return `${line.slice(0, at)}\\${sentinelCharacter(marker)}${line.slice(at + marker.length)}`
+  }
   if (first) {
     const bare = /^(?:([-+])|\d{1,9}([.)]))[ \t]*$/.exec(content)
     if (bare) {
@@ -1948,11 +1951,8 @@ function positionalHash(): string {
  * sentinel would be re-read there and the quote marker would take the escape
  * straight back off (markup-carve/carve#1330). This one is inert to the pass.
  *
- * IT IS ONE UTF-16 UNIT, exactly like the undecided form and like the bare
- * character both stand for. The pass rewrites in place, so every offset in the
- * text is unchanged and M1b's view of the line is the view it had before -
- * spelling the decision as the two characters `\#` instead would shift every
- * later candidate on the line and change M1b's answers with it.
+ * Both marker forms have equal length. Positional passes use a character view
+ * and translate offsets when the document requires multi-character markers.
  */
 let AUTHORED_KEPT = ''
 let AUTHORED_CHARACTER: Record<string, string> = {}
@@ -1991,6 +1991,8 @@ let CONTEXT_CHARACTER: Record<string, string> = {}
 let RE_CONTEXT_SENTINEL = /(?!)/g
 let HAS_CONTEXT_SENTINEL = /(?!)/
 let RE_ANY_SENTINEL = /(?!)/g
+let ALL_CARRIERS: string[] = []
+let MULTI_CHARACTER_CARRIERS = false
 
 /**
  * A code fence's EMPTY payload line, held against `normalize`'s blank-run
@@ -2010,6 +2012,8 @@ const CARRIER_BASE = 0xe004
 const CARRIER_COUNT = 11
 
 function setCarriers(run: string[]): void {
+  ALL_CARRIERS = run
+  MULTI_CHARACTER_CARRIERS = run.some(marker => marker.length !== 1)
   const [underscore, bracket, undecidedHash, keptHash, lt, amp, bang, colon, dot, at, payloadBlank] = run as [
     string,
     string,
@@ -2026,24 +2030,24 @@ function setCarriers(run: string[]): void {
   PAYLOAD_BLANK = payloadBlank
   CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang, ':': colon, '.': dot, '@': at }
   CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!', [colon]: ':', [dot]: '.', [at]: '@' }
-  RE_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}${at}]`, 'g')
-  HAS_CONTEXT_SENTINEL = new RegExp(`[${lt}${amp}${bang}${colon}${dot}${at}]`)
-  RE_ANY_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`, 'g')
+  RE_CONTEXT_SENTINEL = new RegExp([lt, amp, bang, colon, dot, at].join('|'), 'g')
+  HAS_CONTEXT_SENTINEL = new RegExp([lt, amp, bang, colon, dot, at].join('|'))
+  RE_ANY_SENTINEL = new RegExp(run.join('|'), 'g')
 
   NARROWED_SENTINEL = { _: underscore, '[': bracket }
   NARROWED_CHARACTER = { [underscore]: '_', [bracket]: '[' }
   AUTHORED_SENTINEL = { '#': undecidedHash }
   AUTHORED_KEPT = keptHash
   AUTHORED_CHARACTER = { [undecidedHash]: '#', [keptHash]: '#' }
-  RE_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[3]}]`, 'g')
-  HAS_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[3]}]`)
+  RE_NARROWED_SENTINEL = new RegExp(run.slice(0, 4).join('|'), 'g')
+  HAS_NARROWED_SENTINEL = new RegExp(run.slice(0, 4).join('|'))
   RE_UNDECIDED_HASH = new RegExp(undecidedHash, 'g')
   HAS_UNDECIDED_HASH = new RegExp(undecidedHash)
 }
 
 /** Pick this document's carriers. Called once, before anything is rendered. */
 function chooseCarriers(ast: Document): void {
-  setCarriers(pickSentinelRun(occupiedPrivateUse(ast), CARRIER_BASE, CARRIER_COUNT))
+  setCarriers(pickSentinelTokens(ast, CARRIER_BASE, CARRIER_COUNT))
   hashesEmitted = 0
 }
 
@@ -2055,26 +2059,51 @@ function sentinelCharacter(s: string): string {
 }
 
 
+/** Map marker offsets to the character view used by positional escape checks. */
+function carrierView(text: string, pattern: RegExp): { line: string; offset: (position: number) => number } {
+  if (!MULTI_CHARACTER_CARRIERS) return { line: text.replace(pattern, sentinelCharacter), offset: position => position }
+  const shifts: Array<{ end: number; removed: number }> = []
+  let removed = 0
+  const line = text.replace(pattern, (marker: string, at: number) => {
+    const character = sentinelCharacter(marker)
+    removed += marker.length - character.length
+    shifts.push({ end: at + marker.length, removed })
+    return character
+  })
+  return { line, offset: position => {
+    let low = 0
+    let high = shifts.length
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2)
+      if (shifts[middle]!.end <= position) low = middle + 1
+      else high = middle
+    }
+    return position - (low === 0 ? 0 : shifts[low - 1]!.removed)
+  } }
+}
+
 const CHARACTER_REFERENCE = /^&(?:#[0-9]{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]*;)/
 
 function resolveContextEscapes(text: string): string {
   if (!HAS_CONTEXT_SENTINEL.test(text)) return text
-  const line = text.replace(RE_ANY_SENTINEL, sentinelCharacter)
+  const view = carrierView(text, RE_ANY_SENTINEL)
+  const line = view.line
 
   return text.replace(RE_CONTEXT_SENTINEL, (s, offset: number) => {
     const ch = CONTEXT_CHARACTER[s]!
+    const position = view.offset(offset)
     // Section 8i E1: the email form takes an empty comment, since both readers
     // link the address whether the `@` or the `.` carries a backslash. The
     // comment reaches the output; no other spelling in this section does.
     if (ch === '@') return opensEmailAutolink(line, offset) ? '<!---->@' : '@'
     let keep: boolean
-    if (ch === '<') keep = /[A-Za-z/!?]/.test(line[offset + 1] ?? '')
-    else if (ch === '&') keep = CHARACTER_REFERENCE.test(line.slice(offset, offset + 40))
-    else if (ch === ':') keep = opensSchemeAutolink(line, offset)
-    else if (ch === '.') keep = opensWwwAutolink(line, offset)
+    if (ch === '<') keep = /[A-Za-z/!?]/.test(line[position + 1] ?? '')
+    else if (ch === '&') keep = CHARACTER_REFERENCE.test(line.slice(position, position + 40))
+    else if (ch === ':') keep = opensSchemeAutolink(line, position)
+    else if (ch === '.') keep = opensWwwAutolink(line, position)
     // A `[` still standing in the output is markup: a text bracket is a carrier
     // here and an authored one is behind its backslash.
-    else keep = text[offset + 1] === '['
+    else keep = text[offset + s.length] === '['
 
     return keep ? `\\${ch}` : ch
   })
@@ -2385,11 +2414,13 @@ function adjacentToLiveDelimiter(line: string, i: number, ch: string): boolean {
 function resolveNarrowedEscapes(text: string): string {
   if (!HAS_NARROWED_SENTINEL.test(text)) return text
   const character = sentinelCharacter
-  const line = text.replace(RE_NARROWED_SENTINEL, character)
+  const view = carrierView(text, RE_NARROWED_SENTINEL)
+  const line = view.line
   const pairs = line.includes('_') ? pairableUnderscoresPerBlock(line) : null
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
     const ch = character(s)
+    const position = view.offset(offset)
     // TWO FAMILIES, TWO TESTS, AND A THIRD CASE THAT IS ALREADY SETTLED. M1b
     // asks whether a delimiter of the same character stands beside the
     // candidate. M2b asks WHERE ON THE LINE the candidate stands, and this is
@@ -2401,9 +2432,9 @@ function resolveNarrowedEscapes(text: string): string {
     const keep =
       s === AUTHORED_KEPT ||
       (s in AUTHORED_CHARACTER
-        ? opensAnAtxHeading(line, offset)
-        : adjacentToLiveDelimiter(line, offset, ch) ||
-          (ch === '_' && pairs !== null && pairs.has(offset)))
+        ? opensAnAtxHeading(line, position)
+        : adjacentToLiveDelimiter(line, position, ch) ||
+          (ch === '_' && pairs !== null && pairs.has(position)))
 
     return keep ? `\\${ch}` : ch
   })
@@ -2415,10 +2446,10 @@ function resolveNarrowedEscapes(text: string): string {
  */
 function decideAuthoredHashes(text: string): string {
   if (!HAS_UNDECIDED_HASH.test(text)) return text
-  const line = text.replace(RE_NARROWED_SENTINEL, sentinelCharacter)
+  const view = carrierView(text, RE_NARROWED_SENTINEL)
 
   return text.replace(RE_UNDECIDED_HASH, (_s, offset: number) =>
-    opensAnAtxHeading(line, offset) ? AUTHORED_KEPT : '#',
+    opensAnAtxHeading(view.line, view.offset(offset)) ? AUTHORED_KEPT : '#',
   )
 }
 
@@ -2430,12 +2461,12 @@ function decideAuthoredHashes(text: string): string {
 function escapeTrailingAtxRun(line: string): string {
   const undecided = AUTHORED_SENTINEL['#']!
   let i = line.length
-  while (i > 0 && (line[i - 1] === undecided || line[i - 1] === AUTHORED_KEPT)) i--
+  while (i > 0 && (line.endsWith(undecided, i) || line.endsWith(AUTHORED_KEPT, i))) i -= undecided.length
   if (i === line.length) return line
   const before = line[i - 1]
   if (before !== ' ' && before !== '\t') return line
 
-  return line.slice(0, i) + AUTHORED_KEPT + line.slice(i + 1)
+  return line.slice(0, i) + AUTHORED_KEPT + line.slice(i + undecided.length)
 }
 
 /**
