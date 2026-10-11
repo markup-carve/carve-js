@@ -1,4 +1,4 @@
-import { isDjotEscaped } from './djot-inline-boundaries.js'
+import { isDjotEscaped, djotContentStart } from './djot-inline-boundaries.js'
 export { isDjotEscaped, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-inline-boundaries.js'
 /*
  * Djot -> Carve migration warnings.
@@ -342,6 +342,20 @@ function codepointPrefix(src: string): Uint32Array | undefined {
   return before
 }
 
+function nestedDjotNoteFence(content: string): RegExpMatchArray | null {
+  if (!content.includes('[^') || (!content.includes('```') && !content.includes('~~~'))) return null
+  const at = djotContentStart(content)
+  const prefix = content.slice(0, at)
+  const headers = [...prefix.matchAll(/\[\^[^\]\n]+\]:[ \t]*/g)]
+  if (headers.length < 2 || prefix.replace(/\[\^[^\]\n]+\]:[ \t]*/g, '').includes('>')) return null
+  const open = trimEndSpaceTab(content.slice(at)).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/)
+  if (!open) return null
+  open[1] = /^[ \t]*/.exec(content)![0]
+  open[2] = prefix.slice(open[1].length)
+  open.groups = { noteColumn: String(headers.at(-1)!.index!), openingAt: String(at) }
+  return open
+}
+
 /**
  * Return a copy of `src` with every code character (fenced blocks and
  * inline code spans, including multi-line ones) replaced by spaces, and
@@ -471,12 +485,13 @@ export function maskDjotFences(
         )
       return blanks(line)
     }
-    const open = trimEndSpaceTab(content).match(
-      /^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/,
-    )
+    const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/) ?? nestedDjotNoteFence(content)
     if (open && !(open[2]?.startsWith(':') && !previousBlock) && (!strict || canNormalize || !!open[2])) {
-      const container = open[2] ? open[1]!.length + 1 : nested ? ownerIndent + 1 : null
-      const targetColumn = open[2]?.startsWith('[^')
+      const nestedNoteColumn = open.groups?.noteColumn === undefined ? -1 : Number(open.groups.noteColumn)
+      const nestedNote = nestedNoteColumn >= 0
+
+      const container = nestedNote ? nestedNoteColumn + 1 : open[2] ? open[1]!.length + 1 : nested ? ownerIndent + 1 : null
+      const targetColumn = nestedNote ? nestedNoteColumn + 2 : open[2]?.startsWith('[^')
         ? open[1]!.length + 2
         : open[2]
           ? open[1]!.length + open[2].replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length
@@ -500,7 +515,7 @@ export function maskDjotFences(
             (open[2] ? open[1]! + nativeMarker : fence.target) +
             content.slice(fence.dedent),
         )
-      const start = line.indexOf(open[3]!)
+      const start = nestedNote ? line.length - content.length + Number(open.groups!.openingAt) : line.indexOf(open[3]!)
       return line.slice(0, start) + blanks(line.slice(start))
     }
     const attributeStart = content.length - content.trimStart().length

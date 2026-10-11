@@ -272,7 +272,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         nestedFirstBody = true
         continue
       }
-      if (/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(childBody)) noteOwner.fenceColumn = noteOwner.content
+      if (/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(childBody)) noteOwner.fenceColumn = noteOwner.column + noteOwner.content
       const inlineQuote = itemQuotePrefix(childBody)
       const noteBodyStart = noteBodySourceAt + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length) + body.length - childBody.length
       const inlineOwners = inlineQuote.owners.map(owner => ({ ...owner, depth: quoteDepth + owner.depth, sourcePrefix: noteBodyStart + owner.sourceOffset }))
