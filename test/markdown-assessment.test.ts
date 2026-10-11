@@ -117,8 +117,8 @@ it.each(['sftp://example.test', 'tftp://example.test', 'fooftp://example.test', 
   },
 )
 
-it('retains incomplete assessment for changed emphasis inside a protocol link label', () => {
-  expect(rows('[*ftp://example.test*](https://target.test)')).toContainEqual(expect.objectContaining({
-    code: 'fidelity-unverified', confidence: 'fallback',
-  }))
+it('assesses preserved emphasis inside an explicit protocol link label', () => {
+  const diagnostics = rows('[*ftp://example.test*](https://target.test)')
+  expect(diagnostics).not.toContainEqual(expect.objectContaining({ code: 'fidelity-unverified' }))
+  expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'markdown-emphasis', fidelity: 'preserved', confidence: 'exact' }))
 })

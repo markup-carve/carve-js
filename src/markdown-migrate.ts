@@ -1,6 +1,6 @@
 import type { InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
-import { escapeInactiveMarkdownLinkBrackets, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
+import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
@@ -52,7 +52,7 @@ const isMarkdownFenceLine = (line: string): boolean => {
   return m !== null && columnWidth(m[1]!) <= 3 && fenceRunIsAFence(m[2]!, m[3]!)
 }
 
-type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
+type TagReplacer = string | ((match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string)
 
 /**
  * Build a replacer for a single-char inline marker (`^` super, `,` sub, `=`
@@ -64,15 +64,30 @@ type TagReplacer = string | ((match: string, body: string, offset: number, full:
  * form keeps the common, whitespace-separated case clean on a Markdown->Carve
  * round-trip (corpus 67-superscript-and-subscript).
  */
-function markerForm(marker: string): (match: string, body: string, offset: number, full: string) => string {
-  return (match, body, offset, full) => {
+function markerForm(marker: string): (match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string {
+  return (match, body, offset, full, spans = []) => {
     // Superscript and subscript have NO bare form in Carve - always braced.
     if (marker === '^' || marker === ',') return `{${marker}${body}${marker}}`
-    const before = full[offset - 1] ?? ''
+    let before = full[offset - 1] ?? ''
+    if (before === '\x00') {
+      const start = full.lastIndexOf('\x00', offset - 2)
+      const token = start < 0 ? null : /^\x00P(\d+)\x00$/.exec(full.slice(start, offset))
+      if (token) {
+        let index = Number(token[1])
+        let value = spans[index] ?? ''
+        for (;;) {
+          const nested = /\x00P(\d+)\x00$/.exec(value)
+          if (!nested || Number(nested[1]) >= index) break
+          index = Number(nested[1])
+          value = spans[index] ?? ''
+        }
+        before = value.at(-1) ?? before
+      }
+    }
     const after = full[offset + match.length] ?? ''
     const intraword = /[A-Za-z0-9]/.test(before) || /[A-Za-z0-9]/.test(after)
     const padded = /^\s|\s$/.test(body)
-    return intraword || padded ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
+    return intraword || padded || (marker === '/' && before === '/') ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
   }
 }
 
@@ -1846,21 +1861,18 @@ function convertInline(
   // Carve-native equivalent as explicit raw HTML before delimiter rewrites.
   line = convertInlineHtml(line, protect, protectedSpans)
 
-  // Bare/GFM autolink URLs in prose (https://example.com/api/_v1_/x): the
-  // path is literal, so protect it before the emphasis passes. Carve does not
-  // link a bare URL, so it is text, and a hyphen run in it is escaped like
-  // any other.
-  line = line.replace(/\bhttps?:\/\/[^\s<>`]+/g, (url) =>
-    protect(url.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))),
-  )
-
+  const referenceUrls = line.includes('http') ? plainMarkdownUrlRanges(line, protectedSpans) : []
+  let referenceUrlAt = 0
   const destinationOpeners = completeDestinationOpeners(line)
   line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
+    while (referenceUrlAt < referenceUrls.length && referenceUrls[referenceUrlAt]!.end <= offset) referenceUrlAt++
+    const url = referenceUrls[referenceUrlAt]
+    if (url && offset >= url.start && offset < url.end) return match
     if (destinationOpeners.has(offset + match.length)) return match
     const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
     if (following) {
       const protectedTail = protectedSpans[Number(following[1])] ?? ''
-      if (protectedTail.startsWith('(')) return match
+      if (protectedTail.startsWith('(') || protectedTail.startsWith('{title=')) return match
       const reference = /^\[([^\]]*)\]$/.exec(protectedTail)
       if (reference && (reference[1] !== '' || referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)) return match
     }
@@ -1871,8 +1883,47 @@ function convertInline(
     const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSources, table)
     if (destinationLabel === undefined) return table && label.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
     if (/[\[\]]/.test(destinationLabel)) return match
+    if (url && offset < url.start) {
+      const end = offset + match.length
+      for (let at = referenceUrlAt; at < referenceUrls.length && referenceUrls[at]!.start < end; at++) {
+        referenceUrls[at]!.end = Math.min(referenceUrls[at]!.end, end)
+      }
+    }
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
+
+  if (/\bhttps?:\/\//.test(line)) {
+    const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
+    activeLabelRanges.sort((a, b) => a.start - b.start)
+    const urlStart = /\bhttps?:\/\//g
+    const escapedToken = /\x00P(\d+)\x00/y
+    let activeLabelAt = 0
+    let cursor = 0
+    let protectedUrls = ''
+    for (let start = urlStart.exec(line); start; start = urlStart.exec(line)) {
+      const offset = start.index
+      while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
+      const label = activeLabelRanges[activeLabelAt]
+      if (label && offset >= label.start && offset < label.end) {
+        urlStart.lastIndex = label.end
+        continue
+      }
+      let end = urlStart.lastIndex
+      while (end < line.length && !/[\s<>`]/.test(line[end]!)) {
+        if (line[end] === '\x00') {
+          escapedToken.lastIndex = end
+          const token = escapedToken.exec(line)
+          if (!token || !isPlainMarkdownUrlToken(Number(token[1]), protectedSpans)) break
+          end += token[0].length
+        } else end++
+      }
+      protectedUrls += line.slice(cursor, offset) + protect(line.slice(offset, end).replace(/(?<!\\)-{2,}/g, run => run.replace(/-/g, '\\-')))
+      cursor = end
+      urlStart.lastIndex = end
+    }
+    line = protectedUrls + line.slice(cursor)
+  }
 
   // Math, converted and protected before the emphasis passes so a formula
   // body containing * _ ~ (e.g. $*x*$) is not rewritten as markup. Opt-in:
@@ -1953,9 +2004,27 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
+  const escapeLabelSlashes = (label: string): string => {
+    const opaqueEnd = opaqueHtmlScanner(label)
+    const tokenAt = /\x00P\d+\x00/y
+    let escaped = ''
+    for (let at = 0; at < label.length;) {
+      if (label[at] === '\\') { escaped += label.slice(at, at + 2); at += 2; continue }
+      if (label[at] === '\x00') {
+        tokenAt.lastIndex = at
+        const token = tokenAt.exec(label)
+        if (token) { escaped += token[0]; at += token[0].length; continue }
+      }
+      const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
+      if (tagEnd !== undefined) { escaped += label.slice(at, tagEnd); at = tagEnd; continue }
+      escaped += label[at] === '/' ? '\\/' : label[at]!
+      at++
+    }
+    return escaped
+  }
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
-    reportFlattenedEmphasis)
+    reportFlattenedEmphasis, escapeLabelSlashes)
   line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
@@ -1977,7 +2046,7 @@ function convertInline(
   // produce (e.g. <strong>a</strong> -> *a*) is not re-matched and turned into
   // /a/.
   for (const [re, repl] of HTML_TAG_RULES) {
-    line = typeof repl === 'string' ? line.replace(re, repl) : line.replace(re, repl)
+    line = typeof repl === 'string' ? line.replace(re, repl) : line.replace(re, (match, body: string, offset: number, full: string) => repl(match, body, offset, full, protectedSpans))
   }
 
   if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
@@ -6380,4 +6449,28 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
   }
   return output
+}
+
+function isPlainMarkdownUrlToken(index: number, spans: readonly string[]): boolean {
+  return /^\\[!-/:-@\[-`{-~]$/.test(spans[index] ?? '')
+}
+
+function plainMarkdownUrlRanges(line: string, spans: readonly string[]): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = []
+  const start = /\bhttps?:\/\//g
+  const protectedToken = /\x00P(\d+)\x00/y
+  for (let match = start.exec(line); match; match = start.exec(line)) {
+    let end = start.lastIndex
+    while (end < line.length && !/[\s<>`]/.test(line[end]!)) {
+      if (line[end] === '\x00') {
+        protectedToken.lastIndex = end
+        const token = protectedToken.exec(line)
+        if (!token || !isPlainMarkdownUrlToken(Number(token[1]), spans)) break
+        end += token[0].length
+      } else end++
+    }
+    ranges.push({ start: match.index, end })
+    start.lastIndex = end
+  }
+  return ranges
 }
