@@ -5551,10 +5551,79 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     | 'code'
     | 'raw_block'
     | 'text' = 'blank'
+  let footnoteEnd = -1
 
   for (let i = 0; i < lines.length; i++) {
     applyShift()
     inlineRunSourceLine = sourceLine(i)
+    if (i === footnoteEnd) {
+      listCols.length = 0
+      listMarkers.leave(0)
+      itemParagraph = false
+      itemQuote = null
+      footnoteEnd = -1
+    }
+    const footnote =
+      !inCode && (listCols.length === 0 || indentColumns(lines[i]!) < listCols[0]!)
+        ? /^ {0,3}(\[\^((?:[^\[\]\\]|\\.)+)\]:)[ \t]*(.*)$/.exec(lines[i]!)
+        : null
+    if (footnote !== null) {
+      let end = i + 1
+      let last = end
+      const interrupts = (text: string): boolean =>
+        isMarkdownFenceLine(text) || RE_MD_THEMATIC.test(text) || interruptingHtmlBlock(text) ||
+        /^ {0,3}(?:>|#{1,6}(?:[ \t]|$)|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|\[\^(?:[^\[\]\\]|\\.)+\]:)/.test(text)
+      let paragraph = footnote[3]!.trim() !== '' && !interrupts(footnote[3]!)
+      let fence: string | null = isMarkdownFenceLine(footnote[3]!) ? RE_MD_FENCE_LINE.exec(footnote[3]!)![2]! : null
+      let htmlEnd = -1
+      const htmlThrough = (body: string, at: number): number => {
+        if (!body.trimStart().startsWith('<')) return -1
+        const held = [body]
+        for (let next = at + 1; next < lines.length; next++) {
+          if (lines[next]!.trim() !== '' && indentColumns(lines[next]!) < 4) break
+          held.push(stripColumns(lines[next]!, 4))
+        }
+        const html = htmlBlockAt(held, 0)
+        return html === null ? -1 : at + html.end
+      }
+      if (fence === null) {
+        htmlEnd = htmlThrough(footnote[3]!, i)
+        if (htmlEnd >= i) paragraph = false
+      }
+      while (end < lines.length) {
+        const text = lines[end]!
+        if (text.trim() !== '') {
+          const indented = indentColumns(text) >= 4
+          const body = indented ? stripColumns(text, 4) : text
+          if (!indented && (!paragraph || interrupts(body))) break
+          const marker = RE_MD_FENCE_LINE.exec(body)
+          if (end <= htmlEnd) {
+            paragraph = false
+          } else if (fence !== null) {
+            if (marker && marker[2]![0] === fence[0] && marker[2]!.length >= fence.length && marker[3]!.trim() === '') fence = null
+            paragraph = false
+          } else if (isMarkdownFenceLine(body)) {
+            fence = marker![2]!
+            paragraph = false
+          } else {
+            htmlEnd = !paragraph || interruptingHtmlBlock(body) ? htmlThrough(body, end) : -1
+            paragraph = htmlEnd < end && !interrupts(body) && (paragraph || indentColumns(body) < 4)
+          }
+          last = end + 1
+        } else paragraph = false
+        end++
+      }
+      // Reuse the list container reader, rebasing Markdown's four columns to Carve's two.
+      lines[i] = `- ${footnote[3] || '+'}`
+      for (let at = i + 1; at < last; at++) {
+        if (lines[at]!.trim() !== '') lines[at] = '  ' + stripColumns(lines[at]!, Math.min(4, indentColumns(lines[at]!)))
+      }
+      footnoteEnd = last
+      listCols.length = 0
+      listMarkers.leave(0)
+      const bodyTables = gfmTableRowLines(lines.slice(i, last))
+      for (let at = i; at < last; at++) inGfmTable[at] = bodyTables[at - i]!
+    }
     let leftEmptyItem = false
     if (!inCode && emptyMarkerColumn !== null && lines[i]!.trim() !== '') {
       if (prevBlank && indentColumns(lines[i]!) > emptyMarkerColumn) {
@@ -6239,6 +6308,25 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       reportOrderedTask(line, sourceLine(i))
       const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
       const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
+      if (footnote !== null) {
+        const marker = convertInline(
+          footnote[1]!,
+          dialect,
+          false,
+          false,
+          undefined,
+          true,
+          false,
+          false,
+          undefined,
+          false,
+        )
+        const firstBody =
+          footnote[3] === ''
+            ? stripColumns(written.lines.splice(1, 1)[0] ?? '{empty}', 2)
+            : written.lines[0]!.replace(/^[-*+] /, '')
+        written.lines[0] = marker + ' ' + firstBody
+      }
       // A list under a quote an item holds is set apart from it, or Carve reads
       // the marker line as the quote's lazy continuation.
       if ((written.separate && prevType === 'list') || (lazyQuote !== null && indentColumns(line) >= lazyQuote.col)) out.push('')
