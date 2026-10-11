@@ -11,7 +11,7 @@ export function djotContentStart(line: string): number {
     while (at < line.length) {
       while (line[at] === ' ' || line[at] === '\t') at++
       if (line[at] === '>' && (at + 1 === line.length || line[at + 1] === ' ' || line[at + 1] === '\t')) { at++; continue }
-      const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+)/.exec(line.slice(at))
+      const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)|:)[ \t]+)/.exec(line.slice(at))
       if (!marker) break
       at += marker[0].length
       if (/^[-*+]/.test(marker[0])) {
@@ -23,22 +23,50 @@ export function djotContentStart(line: string): number {
   }
 
 export function djotTableRows(source: string, mask: string): boolean[] {
-  let offset = 0, previousRow = false, previousBlock = true, footnoteColumn = -1, noteContainerColumn = -1
+  let offset = 0, previousRow = false, previousBlock = true, footnoteColumn = -1, noteContainerColumn = -1, noteContainerDepth = 0, noteItemColumn = -1, noteItemDepth = 0, noteItemPrefix = 0
+  let inlineNote: { depth: number; column: number } | undefined
   return source.split('\n').map(line => {
     const at = djotContentStart(line), end = line.trimEnd().length - 1, content = line.slice(at)
     const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
     const closesNote = footnoteColumn >= 0 && at < footnoteColumn
     if (closesNote) { footnoteColumn = -1; noteContainerColumn = -1 }
-    const closesContainer = noteContainerColumn >= 0 && at <= noteContainerColumn && content.trim() !== ''
+    const physicalDepth = (/^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0].match(/>/g) ?? []).length
+    const closesContainer = noteContainerColumn >= 0 && content.trim() !== '' && (noteContainerDepth > 0 ? physicalDepth < noteContainerDepth : at <= noteContainerColumn)
+    const physicalPrefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
+    const itemColumn = physicalDepth > noteItemDepth ? (Array.from(physicalPrefix.matchAll(/>/g))[noteItemDepth]?.index ?? 0) - noteItemPrefix : /^[ \t]*/.exec(line.slice(physicalPrefix.length))![0].length + physicalPrefix.length - noteItemPrefix
+    const closesNoteItem = noteItemColumn >= 0 && content.startsWith('|') && (physicalDepth < noteItemDepth || itemColumn <= noteItemColumn)
+    if (closesNoteItem || closesNote) noteItemColumn = -1
     if (closesContainer) noteContainerColumn = -1
-    const allowed = previousBlock || previousRow || opensItem || closesNote || closesContainer
-    const note = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)*\[\^[^\]\n]+\]:/.exec(line)
-    if (note && allowed) {
-      footnoteColumn = note[0].indexOf('[^') + 2
-      const after = line.slice(note[0].length)
+    const closesInlineNote = inlineNote && content.trim() !== '' && (physicalDepth < inlineNote.depth || physicalDepth === inlineNote.depth && /^[ \t]*/.exec(line.slice(physicalPrefix.length))![0].length <= inlineNote.column)
+    if (closesInlineNote) inlineNote = undefined
+    const allowed = previousBlock || previousRow || opensItem || closesNote || closesContainer || closesNoteItem || !!closesInlineNote
+    const noteAt = line.slice(0, at).indexOf('[^')
+    const noteHead = noteAt >= 0 && mask[offset + noteAt] === '[' ? /^\[\^[^\]\n]+\]:/.exec(line.slice(noteAt)) : null
+    const note = noteHead ? line.slice(0, noteAt + noteHead[0].length) : undefined
+    if (note !== undefined && allowed) {
+      const nestedHeads = Array.from(line.slice(noteAt + noteHead![0].length, at).matchAll(/\[\^[^\]\n]+\]:/g))
+      const nestedHead = nestedHeads.at(-1)
+      if (nestedHead) {
+        const nestedAt = noteAt + noteHead![0].length + nestedHead.index!
+        const structural = line.slice(0, nestedAt).replace(/\[\^[^\]\n]+\]:[ \t]*/g, value => ' '.repeat(value.length))
+        const quotes = Array.from(structural.matchAll(/>[ \t]/g))
+        inlineNote = { depth: quotes.length, column: nestedAt - ((quotes.at(-1)?.index ?? -2) + 2) }
+      }
+      const notePrefix = line.slice(0, noteAt)
+      const noteDepth = (notePrefix.match(/>/g) ?? []).length
+      footnoteColumn = note.indexOf('[^') + 2
+      const after = line.slice(note.length)
       const padding = /^[ \t]*/.exec(after)![0].length
       const body = after.slice(padding)
-      if (/^(?:>(?:[ \t]|$)|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(body)) noteContainerColumn = note[0].length + padding
+      const firstItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(body)
+      noteItemColumn = firstItem ? note.length + padding - notePrefix.length : -1
+      noteItemDepth = noteDepth
+      noteItemPrefix = notePrefix.length
+      if (/^(?:>(?:[ \t]|$)|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(body)) {
+        noteContainerColumn = note.length + padding
+        const inlineDepth = (body.slice(0, djotContentStart(body)).replace(/\[\^[^\]\n]+\]:[ \t]*/g, '').match(/>/g) ?? []).length
+        noteContainerDepth = inlineDepth ? noteDepth + inlineDepth : 0
+      }
     }
     const row: boolean = allowed && line[at] === '|' && mask[offset + at] === '|' && line[end] === '|' && mask[offset + end] === '|' && line[end - 1] !== '\\'
     previousBlock = content.trim() === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]+\]:)/.test(content)

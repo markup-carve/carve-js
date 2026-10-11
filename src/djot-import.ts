@@ -198,9 +198,9 @@ function convertDjotBlockMarkers(source: string): string {
         lines[i] = lines[i]!.slice(0, container[1]!.length) + '\\' + lines[i]!.slice(container[1]!.length)
       }
     }
-    const enclosed = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)
+    const enclosed = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,}))\)([ \t]+\S.*)$/.exec(masked[i]!)
     if (enclosed) {
-      const authored = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(lines[i]!)
+      const authored = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)\(((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,}))\)([ \t]+\S.*)$/.exec(lines[i]!)
       if (authored)
         lines[i] = `${authored[1]}${enclosed[1] === '' && nested[i] ? authored[2] : ''}${authored[3]}.${authored[4]}`
       continue
@@ -588,7 +588,7 @@ function convertDjotDocument(djot: string): string {
     noteSourceWidths,
   )
   const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody, invalidAttributes.inherited)))
-  const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)), strippedDefinitions.isBoundary, noteSourceWidths)
+  const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)), strippedDefinitions.isBoundary, noteSourceWidths, emptyNote)
   const headingFolded = foldHeadingContinuations(dropLeadingDjotSeparators(escapeDjotNonTableRows(layout)))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
 
@@ -1032,19 +1032,30 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
     return name
   }
   const noteLines = source.split('\n')
+  const itemOwners: { depth: number, column: number }[] = []
   for (const [n, line] of noteLines.entries()) {
-    const prefix = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)*/.exec(line)![0]
+    const containerEnd = djotContentStart(line)
+    const noteAt = line.slice(0, containerEnd).indexOf('[^')
+    const prefix = noteAt >= 0 ? line.slice(0, noteAt) : /^[ \t]*(?:>[ \t]+|>$)*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)*/.exec(line)![0]
     const at = prefix.length
     lineHeads.add(offset + at)
     const previousLine = noteLines[n - 1] ?? ''
-    const previousPrefix = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)*/.exec(
+    const previousPrefix = /^[ \t]*(?:>[ \t]+|>$)*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)*/.exec(
       previousLine,
     )![0]
     const previous = previousLine.slice(previousPrefix.length).trim()
-    const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(prefix)
-    let boundary = isDefinitionBoundary(previousLine) || previous === '' || rows[n - 1] || item || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || at < previousPrefix.length && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousPrefix) || (prefix.match(/>/g)?.length ?? 0) < (previousPrefix.match(/>/g)?.length ?? 0) || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
+    const physicalPrefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
+    const itemDepth = (physicalPrefix.match(/>/g) ?? []).length
+    const itemColumn = /^[ \t]*/.exec(line.slice(physicalPrefix.length))![0].length
+    const actualItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(line.slice(physicalPrefix.length + itemColumn))
+    const siblingItem = actualItem && itemOwners.some(owner => owner.depth === itemDepth && itemColumn <= owner.column)
+    let boundary = isDefinitionBoundary(previousLine) || previous === '' || rows[n - 1] || siblingItem || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || at < previousPrefix.length && /(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+/.test(previousPrefix) || itemDepth < (/^(?:[ \t]*>(?:[ \t]|$))*/.exec(previousLine)![0].match(/>/g)?.length ?? 0) || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
     const previousNote = /^\[\^[^\]\n]+\]:[ \t]*(.+)$/.exec(previous)
     if (at > previousPrefix.length && previousNote && !/^(?:>(?:[ \t]|$)|[-*+][ \t]|#{1,6}(?:[ \t]|$)|[`~]{3,}|:{3,}|[|]|\{|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(previousNote[1]!)) boundary = false
+    if (line.trim() && (boundary || itemDepth < (itemOwners.at(-1)?.depth ?? 0))) {
+      while (itemOwners.length && (itemDepth < itemOwners.at(-1)!.depth || itemDepth === itemOwners.at(-1)!.depth && itemColumn <= itemOwners.at(-1)!.column)) itemOwners.pop()
+      if (actualItem) itemOwners.push({ depth: itemDepth, column: itemColumn })
+    }
     const head = /^\[\^([^\]\n]+)\]:(?:[ \t]|$)/.exec(line.slice(at))
     if (head && boundary && mask[offset + at] === '[') {
       const key = keyOf(head[1]!)
@@ -1052,6 +1063,24 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
       definitions.set(offset + at, { key, end: offset + at + 2 + head[1]!.length })
       if (unsupported(key)) alias(key)
       if (!line.slice(at + head[0].length).trim()) emptyDefinitions.add(offset + at)
+      const header = /^\[\^[^\]\n]+\]:[ \t]*/.exec(line.slice(at))![0]
+      const bodyAt = at + header.length
+      const body = line.slice(bodyAt)
+      const bodyPrefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(body)![0]
+      const bodyIndent = /^[ \t]*/.exec(body.slice(bodyPrefix.length))![0].length
+      if (/^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(body.slice(bodyPrefix.length + bodyIndent))) {
+        itemOwners.push({ depth: itemDepth + (bodyPrefix.match(/>/g) ?? []).length, column: bodyAt + bodyPrefix.length + bodyIndent - physicalPrefix.length })
+      }
+      for (const nested of line.slice(bodyAt, containerEnd).matchAll(/\[\^([^\]\n]+)\]:(?:[ \t]|$)/g)) {
+        const nestedAt = bodyAt + nested.index!
+        if (mask[offset + nestedAt] !== '[') continue
+        const nestedKey = keyOf(nested[1]!)
+        defined.add(nestedKey)
+        definitions.set(offset + nestedAt, { key: nestedKey, end: offset + nestedAt + 2 + nested[1]!.length })
+        lineHeads.add(offset + nestedAt)
+        if (unsupported(nestedKey)) alias(nestedKey)
+        if (!line.slice(nestedAt + nested[0].length).trim()) emptyDefinitions.add(offset + nestedAt)
+      }
     }
     offset += line.length + 1
   }
@@ -1093,7 +1122,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
   for (let i = 0; i < source.length; i++) {
     if (source[i] === '\n') {
       lineIndex++
-      if (/^\n[ \t]*(?:>[ \t]*)*\n/.test(source.slice(i))) stack.length = 0
+      if (/^\n[ \t]*(?:>[ \t]+)*>?\n/.test(source.slice(i))) stack.length = 0
     }
     if (source[i] === '\\') {
       i++
