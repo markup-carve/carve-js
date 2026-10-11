@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml, htmlToAst, htmlToCarve } from '../src/index.js'
 import type { HtmlImportMode } from '../src/html-import.js'
-import fixtures from './fixtures/footnote-carrier-recovery-fixtures.json'
+import fixtures from '../spec/resources/footnote-carrier-recovery-fixtures.json'
 
 function authoredAttributeNames(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(authoredAttributeNames)
