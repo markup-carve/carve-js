@@ -62,3 +62,66 @@ for (const depth of [1, 2]) for (const fence of ['%%%', '```']) {
     expect(carveToHtml(source)).toContain('[r]: /target')
   })
 }
+
+for (const [name, source, html] of [
+  ['mismatched literal run', '- ::: |\n  ::::\ntail\n', '<ul>\n  <li>\n    <div class="line-block">\n      <p>::::</p>\n    </div>\n  </li>\n</ul>\n<p>tail</p>'],
+  ['unclosed code payload', '> - ::: box\n>   ```\n- tail\n', '<blockquote>\n  <ul>\n    <li>\n      <div class="box">\n        <pre><code>- tail\n</code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>'],
+  ['below-column demoted opener', '1. ::: box\n  %% c\n  - tail\n', '<ol>\n  <li>::: box\n    - tail\n  </li>\n</ol>'],
+  ['nested mismatched widths', '- :::\n  :::: box\n  :::\n      :::\n   :::\n', '<ul>\n  <li>\n    <div>\n      <div class="box">\n        <div>\n          <p>:::\n:::</p>\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>'],
+] as const) it(`preserves published behavior for ${name}`, () => {
+  expect(carveToHtml(source)).toBe(html)
+})
+
+for (const depth of [1, 2]) for (const fence of ['%%%', '```', '~~~']) {
+  const quote = '> '.repeat(depth)
+  it(`retains the malformed paragraph after a closed ${fence} span at depth ${depth}`, () => {
+    const source = `${quote}- ::: |\n${quote}  ${fence}\n${quote}  :::\n${quote}  ${fence}\n${quote}  :::\n${quote}  :::bad\n${quote}  :::\n- tail\n`
+    expect(parse(source).children).toHaveLength(1)
+    expect(quotedList(source, depth).items).toHaveLength(1)
+    expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['line_block', 'paragraph'])
+    expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+  })
+  it(`leaves no lazy quote claim after a closed ${fence} span in verse at depth ${depth}`, () => {
+    const source = `${quote}- ::: |\n${quote}  ${fence}\n${quote}  :::\n${quote}  ${fence}\n${quote}  x\ntail\n`
+    const doc = parse(source)
+    expect(doc.children.map(node => node.type)).toEqual(['block_quote', 'paragraph'])
+    expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['line_block'])
+    expect(carveToHtml(source)).not.toContain('&nbsp;L&nbsp;')
+    expect(carveToHtml(source)).toContain('</blockquote>\n<p>tail</p>')
+  })
+}
+
+for (const mode of ['box', '|']) for (const closer of [2, 4]) for (const quote of ['', '> ', '> > ']) {
+  it(`restores malformed paragraph ownership after ${mode} at closer ${closer}, quote ${quote}`, () => {
+    const tail = quote === '' ? 'tail' : '- tail'
+    const source = `${quote}- a\n${quote}    ::: ${mode}\n${quote}    x\n${quote}${' '.repeat(closer)}:::\n${quote}  :::bad\n${quote}  :::\n${tail}\n`
+    expect(parse(source).children).toHaveLength(1)
+    expect(carveToHtml(source)).toContain(`:::bad\n:::\n${tail}`)
+  })
+}
+
+it('preserves a blank boundary after an unfinished line block', () => {
+  expect(parse('- ::: |\n  a\n\nb\n').children.map(node => node.type)).toEqual(['list', 'paragraph'])
+})
+
+it('preserves authored footnote definition handling under a marker-line div', () => {
+  expect(carveToHtml('- ::: box\n    [^r]: note\n  :::\n\n[t][^r]\n')).toBe('<ul>\n  <li>\n    <div class="box">\n\n    </div>\n  </li>\n</ul>\n<p>[t][^r]</p>')
+})
+
+for (const quote of ['> ', '> > ']) {
+  const depth = quote === '> ' ? 1 : 2
+  it(`does not pair literal comment payload across a sibling at depth ${depth}`, () => {
+    const source = `${quote}- ::: |\n${quote}  %%%\n${quote}  :::\n${quote}- b\n${quote}  %%%\n${quote}  para\nlazy\n`
+    const list = quotedList(source, depth)
+    expect(list.items).toHaveLength(2)
+    expect(list.items[0]!.children.map(node => node.type)).toEqual(['line_block'])
+    expect(carveToHtml(source)).toContain('para\nlazy')
+  })
+  it(`accepts a real code-span closer at the line-block host base, depth ${depth}`, () => {
+    const source = `${quote}- a\n${quote}    ::: |\n${quote}    \`\`\`\n${quote}    :::\n${quote}  \`\`\`\n${quote}  :::\n${quote}  para\nlazy\n`
+    const list = quotedList(source, depth)
+    expect(list.items).toHaveLength(1)
+    expect(list.items[0]!.children.map(node => node.type)).toEqual(['paragraph', 'line_block', 'paragraph'])
+    expect(carveToHtml(source)).toContain('para\nlazy')
+  })
+}
