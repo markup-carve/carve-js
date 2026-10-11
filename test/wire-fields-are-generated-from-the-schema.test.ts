@@ -109,4 +109,19 @@ describe("the generated wire-field map", () => {
     );
     expect([...reached].sort()).toEqual(Object.keys(WIRE_RECORD_FIELDS).sort());
   });
+  it("derives changed and newly added array bounds from the schema", () => {
+    const schema = JSON.parse(
+      readFileSync(resolve(root, "spec/resources/ast-schema.json"), "utf8"),
+    );
+    schema.$defs.ruby.properties.pairs.minItems = 2;
+    schema.$defs.line_block.properties.lines.items.minItems = 3;
+    schema.$defs.table.properties.separatorWidths = {
+      type: "array", minItems: 4, items: { type: "integer", minimum: 1 },
+    };
+    const generated = wireFieldsSource(schema);
+    expect(generated).toContain('"pairs": [{"depth":0,"minimum":2}]');
+    expect(generated).toContain('"lines": [{"depth":1,"minimum":3}]');
+    expect(generated).toContain('"separatorWidths": [{"depth":0,"minimum":4}]');
+  });
+
 });
