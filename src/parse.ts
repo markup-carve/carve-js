@@ -3433,6 +3433,7 @@ interface QuoteFenceHosts {
   columns: number[]
   markers: number[]
   kinds: ('item' | 'note')[]
+  colons?: Array<{ width: number; column: number; floor: number; awaitingBody: boolean; literal: boolean }>
   /**
    * The fence a list item or footnote inside this quote holds open. `column` is
    * where the opener sits and `floor` the host's own content column; the two
@@ -3464,13 +3465,27 @@ function trackQuoteHostFence(
   if (text === '') return false
   if (quotedLineText(content, terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []
+    host.colons = []
     return false
   }
   const paragraph = blockQuoteParagraphOpen(state)
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
-  while (host.columns.length > 1 && host.columns.at(-1)! > column) {
+  const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
+  // A marker below an ancestor's content column can remain paragraph text.
+  // Retain its existing fence host instead of inventing a sibling item.
+  const structuralMarker = host.markers.some((marker, i) => host.kinds[i] === 'item' &&
+    column <= marker && column >= host.columns[i]!)
+  const lazyMarker = paragraph && markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 &&
+    host.markers.length > 0 && column > host.markers[0]! &&
+    !structuralMarker && column < host.columns.at(-1)!
+  const lazyItem = paragraph && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
+    (lazyMarker || (bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)))
+  if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody)
+  while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) {
     host.columns.pop(); host.markers.pop(); host.kinds.pop()
   }
+  const colons = host.colons ??= []
+  while (colons.length > 0 && colons.at(-1)!.floor > host.columns.at(-1)!) colons.pop()
   const insideItem = host.kinds.at(-1) === 'item'
   let inner = text
   let at = column
@@ -3478,7 +3493,8 @@ function trackQuoteHostFence(
   for (;;) {
     const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
     if (width > 0) {
-      if (paragraph && !insideItem && !sibling) break
+      if (lazyMarker && lazyItem) break
+      if (paragraph && !insideItem && !sibling && !leftOfOutermost) break
       host.markers.push(at)
       const attrs = extractItemAttr(inner)
       const markerText = attrs?.stripped ?? inner
@@ -3491,12 +3507,49 @@ function trackQuoteHostFence(
       inner = tail.replace(/^[ \t]*/, '')
       continue
     }
-    if (RE_FOOTNOTE_DEF.test(inner)) {
+    const note = RE_FOOTNOTE_DEF.exec(inner)
+    if (note) {
       host.markers.push(at); host.columns.push(at + 2); host.kinds.push('note')
+      at += 2
+      inner = note[2]!
+      blockStart = true
     }
     break
   }
   const floor = host.columns.at(-1)!
+  if (blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
+  if (floor > 0) {
+    const bare = /^(:{3,})[ \t]*$/.exec(inner)
+    const open = colons.at(-1)
+    if (bare && open && bare[1]!.length === open.width &&
+        (at === open.column || at === open.floor)) {
+      colons.pop()
+      closeBlockQuoteParagraph(state)
+      return true
+    }
+    if (open) open.awaitingBody = false
+    if (open?.literal) {
+      closeBlockQuoteParagraph(state)
+      return true
+    }
+    const width = colonFenceOpenerLen(inner)
+    const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
+    if (absorbedBare || (width === null && /^:{3,}/.test(inner) &&
+        !(blockStart && host.kinds.at(-1) === 'note'))) {
+      state.mode = { kind: 'paragraph', absorbingFence: true }
+      return true
+    }
+    if (width !== null && !absorbedBare) {
+      colons.push({ width, column: at, floor, awaitingBody: blockStart,
+        literal: RE_LINE_BLOCK_OPEN.test(inner) })
+      // Keep marker-line candidates foldable until their closer arrives.
+      // An unprefixed lazy body can still demote that opener to prose.
+      if (!blockStart) {
+        closeBlockQuoteParagraph(state)
+        return true
+      }
+    }
+  }
   const code = RE_FENCE.exec(inner)
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
   const marker = code?.[2] ?? raw?.[1] ?? null
@@ -3549,6 +3602,17 @@ interface BlockQuoteLazyState {
   colonWidths: number[]
 }
 
+function demoteQuotedColonCandidates(state: BlockQuoteLazyState): void {
+  let level = state
+  for (;;) {
+    if (level.hosts?.colons?.some(open => open.awaitingBody)) {
+      level.hosts.colons = level.hosts.colons.filter(open => !open.awaitingBody)
+    }
+    if (level.mode.kind !== 'quote') return
+    level = level.mode.inner
+  }
+}
+
 /** Iterative for the reason `trackBlockQuoteLazyState` is: the chain is as deep as the document nests. */
 const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean => {
   let level = state
@@ -3587,6 +3651,7 @@ function trackBlockQuoteLazyState(
   prefixMemo?: Map<number, number>,
   atColumn = true,
 ): void {
+  if (!atColumn) demoteQuotedColonCandidates(state)
   let text = content
   let level = state
   const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
@@ -3678,7 +3743,6 @@ function classifyQuotedLine(
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
   // continue the same paragraph, exactly as `trackItemLazyState` does it.
-  const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
   // Carried the same way the absorption is, and for the same reason: every
   // other block ends the table, so only the two row branches re-arm it.
   const wasInTable = state.inTable
@@ -3698,6 +3762,7 @@ function classifyQuotedLine(
     return null
   }
   if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser, terminatorFree)) return null
+  const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
@@ -4497,6 +4562,8 @@ interface ItemLazyState {
    * has already measured for the line, so none of this re-scans a leading run.
    */
   ownedColumn: number
+  /** Marker column for a descendant item, in this frame's coordinates. */
+  ownedMarker?: number
   /**
    * Is `ownedColumn` an AUTHORED base rather than a nested marker's column?
    *
@@ -5223,6 +5290,7 @@ interface ItemLineFacts {
   terminatorFree: boolean
   whitespace?: number | undefined
   prefixMemo?: Map<number, number> | undefined
+  rebasedFrame?: boolean | undefined
   /**
    * May a line at or past a nested marker's content column be classified in
    * that DESCENDANT's frame (`CARVE-P0-009`, markup-carve/carve#2884)?
@@ -5452,6 +5520,15 @@ function trackItemLazyState(
   if (run !== undefined) {
     if (state.ownedColumn >= 0) {
       if (run < state.ownedColumn) {
+        const text = content.slice(run)
+        const marker = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0
+        if (facts?.rebasedFrame !== true && !state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
+            (marker
+              ? state.ownedMarker !== undefined && run > state.ownedMarker
+              : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) {
+          state.absorbingFence = wasAbsorbing
+          return
+        }
         state.ownedColumn = -1
         state.deepest = null
       } else if (state.ownedAuthored && run === state.ownedColumn) readFlush = true
@@ -5483,7 +5560,7 @@ function trackItemLazyState(
       // one a terminated span gives for Q1, because what follows the span is
       // what Q1 reads either way.
       () => false,
-      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true },
+      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true },
     )
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
@@ -5666,6 +5743,10 @@ function trackItemLazyState(
   const nestedBullet = nestedTask ? null
     : (orderedMatch(nestedMarker, facts?.terminatorFree) ?? unorderedMatch(nestedMarker, facts?.terminatorFree))
   if (nestedTask || nestedBullet) {
+    if (!atContentColumn && state.deepest != null && state.lazyFoldable) {
+      state.absorbingFence = wasAbsorbing
+      return
+    }
     state.absorbingFence = false
     // `markerContentColumn`'s arithmetic off the match already in hand, since
     // calling it would run the three matchers a second time per nesting level
@@ -5678,6 +5759,7 @@ function trackItemLazyState(
         : nestedMarker.length - leadingWhitespace(nestedMarker) -
           nestedBullet![nestedBullet!.length - 1]!.length
     state.ownedColumn = run !== undefined && nestedWidth > 0 ? run + nestedWidth : -1
+    state.ownedMarker = run ?? -1
     state.ownedAuthored = false
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
@@ -5720,6 +5802,7 @@ function trackItemLazyState(
       wasQuote,
       () => true,
       () => true,
+      undefined, undefined, false,
     )
     state.quoteInner = wasQuote
   }
@@ -6547,6 +6630,7 @@ function rebasedQuoteEnd(lines: string[], start: number, quote: Lexer): number {
     if (isBlankLine(next) || RE_CAPTION.test(next) ||
         colonFenceShapeEndsLazyContinuation(next) ||
         startsInterruptingBlock(quote, undefined, false) || !blockQuoteParagraphOpen(state)) break
+    demoteQuotedColonCandidates(state)
   }
   return quote.pos - 1
 }
@@ -6979,7 +7063,7 @@ function rebaseOverindentedBlocks(
           const marked = RE_BLOCKQUOTE.exec(local.replace(/^[ \t]+/, ''))
           if (marked) trackBlockQuoteLazyState(marked[1] ?? '', quoted, () => true, () => true)
           else if (!blockQuoteParagraphOpen(quoted)) break
-          else trackBlockQuoteLazyState(local, quoted, () => true, () => true)
+          else trackBlockQuoteLazyState(local, quoted, () => true, () => true, undefined, undefined, false)
         }
         end = j
       }
@@ -7203,6 +7287,8 @@ const ATTR_INERT_PREV = new Set([
   // block at render, the author's `{.k}` vanishing without trace.
   'substitution',
   'critic_comment',
+  // Braced comments also end the attribute run (carve#2929).
+  'comment',
 ])
 
 
