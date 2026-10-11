@@ -56,13 +56,18 @@ function continuesParagraph(source: string, start: number): boolean {
     const body = raw.slice(bodyAt)
     if (kind === 'fence') { if (body.startsWith(fence)) kind = undefined; continue }
     if (body.startsWith('{')) {
-      const attrs = readAttributes(source, from + bodyAt)
+      const attrs = readAttributes(source, from + bodyAt, false, false, false)
       if (attrs) { attributeEnd = attrs.end; kind = undefined; continue }
     }
     if (/^#{1,6}(?:[ \t]|$)/.test(body)) { kind = 'heading'; continue }
     const opened = /^(`{3,}|~{3,})/.exec(body)
     if (opened) { kind = 'fence'; fence = opened[1]!; continue }
     if (kind === 'heading') continue
+    if (/^:[ \t]/.test(body)) {
+      if (prefix.length <= bodyAt) return false
+      kind = body.slice(1).trim() ? 'paragraph' : undefined
+      continue
+    }
     const note = /^\[\^[^\]]+\]:[ \t]*(.*)$/.exec(body)
     if (note) {
       if (prefix.length < bodyAt + 2) return false
@@ -77,7 +82,7 @@ function continuesParagraph(source: string, start: number): boolean {
 
 export type DjotAttributeToken = { key: string; source: string; append: boolean }
 
-export function readAttributes(source: string, start: number, carve = false, table = false): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
+export function readAttributes(source: string, start: number, carve = false, table = false, paragraphContext = true): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
   const parts: string[] = []
   const tokens: DjotAttributeToken[] = []
   let i = start + 1
@@ -91,7 +96,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
       } else i++
     }
-    if (source[i] === '}' && source.slice(start, i + 1).includes('\n') && (parts.length > 0 || !continuesParagraph(source, start))) {
+    if (source[i] === '}' && source.slice(start, i + 1).includes('\n') && (parts.length > 0 || !paragraphContext || !continuesParagraph(source, start))) {
       const context = attributeContext(source, start)
       for (const raw of source.slice(start, i + 1).split('\n').slice(1)) {
         const line = attributeLine(raw, context.depth)
@@ -173,3 +178,8 @@ export function nativeAttributeReader(source: string): (start: number) => Return
   }
 }
 
+
+export function rejectedCommentStartsBlock(line: string): boolean {
+  const match = /^\\\{\0DJOTINVALIDATTR\0[0-9]+\0(%[^\n]*)/.exec(line)
+  return !!match && readAttributes('{' + match[1] + '}', 0) !== undefined
+}

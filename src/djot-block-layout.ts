@@ -1,6 +1,7 @@
 import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotInlineBoundaries } from './djot-migrate.js'
 import { trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { readAttributes } from './djot-word-attributes.js'
+import { rejectedCommentStartsBlock } from './djot-attributes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
@@ -272,7 +273,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     const outsideColumn = blank && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
     if (outsideColumn !== undefined) lists.length = 0
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
-    if (/^\\\{\0DJOTINVALIDATTR\0[0-9]+\0%/.test(visible)) {
+    if (rejectedCommentStartsBlock(visible)) {
       const outsideList = lists.length > 0 && indent <= lists[0]!.column
       if (headingMarker || outsideList) out.push(quote + ' '.repeat(indent))
       if (outsideList) { lists.length = 0; paragraph = false; blank = true }

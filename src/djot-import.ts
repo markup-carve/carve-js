@@ -5,7 +5,7 @@ import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords } from './djot-word-attributes.js'
-import { readAttributes } from './djot-attributes.js'
+import { readAttributes, rejectedCommentStartsBlock } from './djot-attributes.js'
 import { maskDjotOpaque } from './djot-opaque.js'
 import { djotBlockLayout, djotCodePadding, djotInlineLayout } from './djot-block-layout.js'
 import { djotReferenceLayout } from './djot-reference-layout.js'
@@ -432,7 +432,7 @@ function foldHeadingContinuations(source: string): string {
     while (i + 1 < lines.length && (line.length - trimEndMatchingEdges(line, (code) => code === 92).length) % 2 === 0) {
       if (column && /^[ \t]*/.exec(lines[i + 1]!)![0].length < column) break
       const next = lines[i + 1]!.replace(/^[ \t]+/, '')
-      if (/^\\\{\0DJOTINVALIDATTR\0[0-9]+\0%/.test(next)) break
+      if (rejectedCommentStartsBlock(next)) break
       let part: string
       if (marker.test(next)) {
         part = next.replace(marker, '')
