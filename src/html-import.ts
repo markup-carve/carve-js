@@ -5792,9 +5792,8 @@ class Importer {
    * neither is read and the note keeps its number, reported rather than
    * guessed at.
    *
-   * A label that is not spellable as `[^label]`, and one a note already took,
-   * fall back to the number for the same reason `readsMarker` refuses a value
-   * outside its enumeration: a carrier that cannot be honored is not one.
+   * Invalid labels are reported and ignored before testing for a conflict.
+   * A label another note already took falls back to the assigned number.
    */
   private footnoteCarriers(definitions: Array<{ block: P5Node; refs: P5Node[] }>): Array<{ label: string; inline: boolean }> {
     const read = definitions.map((definition) => {
@@ -5802,7 +5801,7 @@ class Importer {
       // §13e validates values before testing for contradictory meanings.
       const label = carriedLabel !== undefined
         && !/[\r\n\u2028\u2029]/u.test(carriedLabel)
-        && RE_FOOTNOTE_DEF.test(`[^${carriedLabel}]: x`)
+        && RE_FOOTNOTE_DEF.exec(`[^${carriedLabel}]: x`)?.[1] === carriedLabel
         ? carriedLabel
         : undefined
       if (carriedLabel !== undefined && label === undefined) {

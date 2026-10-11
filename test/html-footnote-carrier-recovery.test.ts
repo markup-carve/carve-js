@@ -49,7 +49,7 @@ describe('footnote carrier recovery (carve#2918)', () => {
   }
   for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
     for (const prefix of ['data-carve', 'data-djot']) {
-      for (const label of ['', 'bad]label', 'line&#10;label', 'line&#13;label', 'line&#x2028;label', 'line&#x2029;label']) {
+      for (const label of ['', 'bad]label', 'a]: body', 'a]: `<script>`{=html}', 'line&#10;label', 'line&#13;label', 'line&#x2028;label', 'line&#x2029;label']) {
         for (const inline of [false, true]) {
           it(`${mode} ${prefix} drops invalid label ${JSON.stringify(label)} with inline=${inline}`, () => {
             const html = '<p><a href="#fn1" role="doc-noteref">1</a></p>'
@@ -61,11 +61,37 @@ describe('footnote carrier recovery (carve#2918)', () => {
             }))).toEqual([{
               code: 'attribute-dropped', severity: 'warning', fidelity: 'dropped', confidence: 'exact',
             }])
-            expect(authoredAttributeNames(htmlToAst(html, { mode }).value)).not.toContain(`${prefix}-footnote-label`)
+            const attributes = authoredAttributeNames(htmlToAst(html, { mode }).value)
+            for (const name of fixtures[0]!.forbiddenAuthoredAttributes) expect(attributes).not.toContain(name)
           })
         }
       }
     }
+  }
+
+  for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+    for (const inline of [false, true]) {
+      it(`${mode} rejects an invalid canonical label before a legacy label, inline=${inline}`, () => {
+        const html = '<p><a href="#fn1" role="doc-noteref">1</a></p>'
+          + `<section role="doc-endnotes"><ol><li id="fn1" data-carve-footnote-label="bad]label" data-djot-footnote-label="named"${inline ? ' data-djot-inline-footnote="1"' : ''}><p>body</p></li></ol></section>`
+        const result = htmlToCarve(html, { mode })
+        expect(result.value).toBe(inline ? '^[body]\n' : '[^1]\n\n[^1]: body\n')
+        expect(result.report.diagnostics.map(({ code, severity, fidelity, confidence }) => ({
+          code, severity, fidelity, confidence,
+        }))).toEqual([{
+          code: 'attribute-dropped', severity: 'warning', fidelity: 'dropped', confidence: 'exact',
+        }])
+        const attributes = authoredAttributeNames(htmlToAst(html, { mode }).value)
+        for (const name of fixtures[0]!.forbiddenAuthoredAttributes) expect(attributes).not.toContain(name)
+      })
+    }
+    it(`${mode} retains both references to a note with an invalid label and an inline flag`, () => {
+      const html = '<p><a href="#fn1" role="doc-noteref">1</a> <a href="#fn1" role="doc-noteref">1</a></p>'
+        + '<section role="doc-endnotes"><ol><li id="fn1" data-carve-footnote-label="bad]label" data-carve-inline-footnote="1"><p>body</p></li></ol></section>'
+      const result = htmlToCarve(html, { mode })
+      expect(result.value).toBe('[^1] [^1]\n\n[^1]: body\n')
+      expect(result.report.diagnostics.map(({ code }) => code)).toEqual(['attribute-dropped'])
+    })
   }
 
 })
