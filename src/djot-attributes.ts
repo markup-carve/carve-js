@@ -2,8 +2,10 @@ import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 
 const quoteValue = (value: string, carve = false): string => `"${value.replace(carve ? /[!-\/:-@\[-`{-~]/g : /[\\"]/g, char => '\\' + char)}"`
 
-function attributeContext(source: string, start: number): { depth: number; indent: number | undefined; minimum: number } {
+export function attributeContext(source: string, start: number): { depth: number; indent: number | undefined; minimum: number } {
   let prefix = source.slice(source.lastIndexOf('\n', start - 1) + 1, start), depth = 0
+  const enclosingItem = /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+(?=>)/.exec(prefix)
+  if (enclosingItem) prefix = prefix.slice(enclosingItem[0].length)
   while (true) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(prefix); if (!quote) break; prefix = prefix.slice(quote[0].length); depth++ }
   const marker = /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.exec(prefix)
   return { depth, indent: /^(?:[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?[ \t]*$/.test(prefix) ? prefix.length : undefined, minimum: marker?.[0].length ?? 0 }
@@ -13,7 +15,21 @@ function attributeLine(line: string, depth: number): string | undefined {
   return line
 }
 
-function continuesParagraph(source: string, start: number): boolean {
+let paragraphSource = ''
+const paragraphStarts = new Map<number, { key: string; result: boolean }>()
+
+export function resetParagraphContext(): void { paragraphSource = ''; paragraphStarts.clear() }
+
+export function continuesParagraph(source: string, start: number): boolean {
+  if (paragraphSource !== source) { paragraphSource = source; paragraphStarts.clear() }
+  const context = attributeContext(source, start)
+  const key = `${context.depth}:${context.indent}:${context.minimum}`
+  const result = scanParagraph(source, start, key)
+  paragraphStarts.set(source.lastIndexOf('\n', start - 1) + 1, {key, result})
+  return result
+}
+
+function scanParagraph(source: string, start: number, key: string): boolean {
   const context = attributeContext(source, start)
   if (context.indent === undefined) return true
   const marker = /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)\))[ \t]+/
@@ -42,6 +58,15 @@ function continuesParagraph(source: string, start: number): boolean {
       }
       break
     }
+    const cached = paragraphStarts.get(from)
+    if (cached?.key === key) {
+      if (cached.result) return true
+      const attrs = readAttributes(source, from + djotStructuralPrefixEnd(raw), false, false, false)
+      if (attrs && attrs.end <= start) {
+        while (lines.length && lines.at(-1)!.from < attrs.end) lines.pop()
+        break
+      }
+    }
     lines.push({ raw, from })
     end = from - 1
   }
@@ -62,6 +87,7 @@ function continuesParagraph(source: string, start: number): boolean {
     if (/^#{1,6}(?:[ \t]|$)/.test(body)) { kind = 'heading'; continue }
     const opened = /^(`{3,}|~{3,})/.exec(body)
     if (opened) { kind = 'fence'; fence = opened[1]!; continue }
+    if (body.startsWith('{%') && readAttributes(body + '}', 0, false, false, false)) { kind = 'paragraph'; continue }
     if (kind === 'heading') continue
     if (/^:[ \t]/.test(body)) {
       if (prefix.length <= bodyAt) return false

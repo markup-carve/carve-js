@@ -40,7 +40,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
   for (let n = 0; n < lines.length; n++) {
     const original = lines[n]!,
       masked = mask[n]!
-    const quote = /^(?:[ \t]*>[ ]?)*/.exec(original)![0]
+    const quote = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(original)![0]
     const quoteDepth = (quote.match(/>/g) ?? []).length
     const raw = original.slice(quote.length),
       view = masked.slice(quote.length)
@@ -56,6 +56,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     }
     if (/^:[ \t]+\S/.test(visible) && (blank || definitionIndent >= 0)) definitionIndent = indent
     else if (definitionIndent >= 0 && blank && indent <= definitionIndent) definitionIndent = -1
+    if (definitionIndent >= 0 && indent <= definitionIndent && rejectedCommentStartsBlock(visible)) {
+      out.push(quote + ' '.repeat(indent))
+      definitionIndent = -1
+      paragraph = false
+      blank = true
+    }
     if (definitionIndent >= 0) {
       out.push(original)
       headingMarker = ''
@@ -75,8 +81,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         visible,
       )
     // A new block can end lazy continuation outside a quote or list item.
-    if (quoteDepth < depth && (blockStart || item)) {
+    if (quoteDepth < depth && (blockStart || item || rejectedCommentStartsBlock(visible))) {
       if (item && !blank) out.push(quote.trimEnd())
+      else if (rejectedCommentStartsBlock(visible) && !blank) out.push('')
       paragraph = false
       headingMarker = ''
       lists.length = 0

@@ -56,3 +56,14 @@ it('consumes a multiline comment in definition-list text', () => {
   expect(html.replace(/\s+/g, ' ')).toContain('<dt>def z</dt>')
   expect(html).not.toContain('{% x')
 })
+
+import boundaries from './fixtures/djot-comment-boundary-fixtures.json'
+const normalizeHtml = (html: string): string => html.replace(/>\s+</g, '><').replace(/\s+/g, ' ').replace(/ </g, '<').replace(/> /g, '>').trim()
+it.each(boundaries)('matches shared reference fixture $id', ({source, html}) => {
+  expect(normalizeHtml(carveToHtml(djotToCarve(source)))).toBe(normalizeHtml(html))
+})
+it('does not reuse paragraph context past blank lines or a new source', () => {
+  for (const source of ['a\n{% x\ny %}\n\n{% x\ny %}\n', '> a\n> {% x\n> y %}\n\n{% x\ny %}\n', '# a\n{% x\ny %}\n']) {
+    expect(normalizeHtml(carveToHtml(djotToCarve(source)))).toBe(normalizeHtml(renderHTML(parse(source))))
+  }
+})
