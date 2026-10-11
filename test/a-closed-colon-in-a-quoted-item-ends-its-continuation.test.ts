@@ -87,6 +87,7 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     expect(carveToHtml(source)).toContain('::: box\nlazy')
     expect(carveToHtml(source)).not.toContain('class="box"')
     expect(carveToHtml(source)).toContain('<div>')
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 
   it('absorbs bare fences after a malformed marker-line opener', () => {
@@ -121,6 +122,7 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     const source = '> - ::: box\nlazy\n>   :::\n>   :::bad\n>   :::\n- tail\n'
     expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
     expect(carveToHtml(source)).toContain('<div class="box">')
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
   })
 
   it('ends the quote at an unprefixed link definition', () => {
@@ -149,6 +151,15 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
       expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
       expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
       expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+    })
+  }
+
+  for (const fence of ['```', '```=html']) {
+    it(`keeps the quoted note's ${JSON.stringify(fence)} fence scoped to its host`, () => {
+      const source = ['> [^a]: ' + fence, '>   code', '>   ```', 'tail', '', 'ref[^a]', ''].join('\n')
+      expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'paragraph', 'paragraph'])
+      expect(carveToHtml(source)).toContain('</blockquote>\n<p>tail</p>')
+      expect(carveToHtml(source)).toContain('role="doc-endnotes"')
     })
   }
 })
