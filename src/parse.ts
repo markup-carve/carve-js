@@ -3581,6 +3581,7 @@ function trackQuoteHostFence(
       closeBlockQuoteParagraph(state)
       return true
     }
+    if (open && floor === open.floor && at > open.column) return false
     const width = colonFenceOpenerLen(inner)
     const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
     if (absorbedBare || (width === null && /^:{3,}/.test(inner) &&
@@ -3603,6 +3604,8 @@ function trackQuoteHostFence(
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
   const marker = code?.[2] ?? raw?.[1] ?? null
   if (marker && floor > 0) {
+    const colon = colons.at(-1)
+    if (colon && floor === colon.floor && at > colon.column) return false
     // AN OVER-INDENTED OPENER IS STILL THE HOST'S FENCE. §24 C3 asks a processor
     // to NAME a block opener past the item's canonical content column, not to
     // refuse it, so the host holds its payload exactly as it holds a canonical
@@ -5394,7 +5397,7 @@ function trackItemLazyState(
    */
   hasCommentCloser: (fence: number) => boolean = () => true,
   facts?: ItemLineFacts,
-  hasLiteralCommentCloser?: (width: number) => boolean,
+  hasLiteralCommentCloser?: (width: number, extraColumns?: number) => boolean,
 ): void {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does. Clearing it here and re-arming it only in the two branches
@@ -5640,7 +5643,7 @@ function trackItemLazyState(
   // through this same tracker - so a fenced body, a `:::` container and a quote
   // are read there exactly as they are here, rather than enumerated. An
   // enumeration of block kinds is how the three engines drifted apart.
-  if (readDescendant && state.divDepth === 0 && state.inDefList === false) {
+  if (readDescendant && state.inDefList === false) {
     const inner = (state.deepest ??= verbatimOnlyLazyState())
     const dedented = content.slice(run!)
     trackItemLazyState(
@@ -5657,6 +5660,7 @@ function trackItemLazyState(
       // what Q1 reads either way.
       () => false,
       { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true },
+      (width, extra = 0) => hasLiteralCommentCloser?.(width, run! + extra) ?? false,
     )
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
@@ -5883,6 +5887,12 @@ function trackItemLazyState(
       frame.lazyFoldable = nested.leavesParagraphOpen
       frame.inTable = nested.endsOnTableRow
       frame.quoteInner = nested.quote
+      const nestedContent = (nestedTask ?? nestedBullet)!.at(-1)!
+      const nestedColon = colonFenceOpenerLen(nestedContent)
+      if (nestedColon !== null) {
+        frame.divDepth = 1
+        if (RE_LINE_BLOCK_OPEN.test(nestedContent)) frame.literalColon = { width: nestedColon, column: 0 }
+      }
       state.deepest = frame
     } else {
       state.deepest = null
@@ -6802,6 +6812,7 @@ function rebasedColonGroupEnd(
   base: number,
   width: number,
   heldFoldedLines: Set<number>,
+  findCommentCloser: (width: number, index: number) => number,
   takenBelowColumn?: ReadonlySet<number>,
   onFenceBodyLine?: (index: number) => void,
 ): number {
@@ -6809,7 +6820,6 @@ function rebasedColonGroupEnd(
   const stack = [{ width, literal: RE_LINE_BLOCK_OPEN.test(groupLineContent(lines[start]!, base)) }]
   const holdsFoldedLines = base > 0 && takenBelowColumn !== undefined && takenBelowColumn.size > 0
   const closerMemo: GroupCloserMemo = { verbatim: new Map(), comment: new Map() }
-  let commentCloser: ((width: number, index: number) => number) | undefined
   // The opaque group open inside this container, if any. Only the hold below
   // consults it: a folded line inside a verbatim or comment payload is that
   // payload's, and its delimiter has to travel with the dedent.
@@ -6869,7 +6879,7 @@ function rebasedColonGroupEnd(
       //
       const group = opaqueGroupCloser(local)
       if (group !== null && (group.belowBaseCloses
-        ? (commentCloser ??= commentCloserLookup(lines, false))(group.run, j) > j
+        ? findCommentCloser(group.run, j) > j
         : opaqueGroupCloses(group, lines, j + 1, base, takenBelowColumn, closerMemo))) {
         opaque = group
       }
@@ -6924,6 +6934,7 @@ function rebaseOverindentedBlocks(
   const ownedBlanks = new Set<number>()
   // One index for the whole pass; a dedent only moves leading whitespace.
   let commentCloser: ((width: number, index: number) => number) | undefined
+  let colonCommentCloser: ((width: number, index: number) => number) | undefined
   const firstVisible = lines.find((line) => !isBlankLine(line))
   const firstMarkerColumn = firstVisible === undefined ? -1 : markerContentColumn(firstVisible)
   if (firstMarkerColumn >= 0) {
@@ -6954,7 +6965,7 @@ function rebaseOverindentedBlocks(
     if (eligible && !eligible.has(i)) continue
     const cap = ownedColumn >= 0 ? ownedColumn + 1 : Infinity
     const base = indentColumns(line, cap)
-    if (i <= markerColonEnd && base > 0 && RE_ADMONITION_CLOSE.test(line.trimStart())) continue
+    if (i <= markerColonEnd && RE_ADMONITION_CLOSE.test(line.trimStart())) continue
     // A deeper item owns this line. Its own collector will see the line after
     // the intervening marker/content columns have been removed and will apply
     // the authored-base rule in that coordinate system.
@@ -7101,7 +7112,9 @@ function rebaseOverindentedBlocks(
       }
     } else if (colon !== null) {
       end = rebasedColonGroupEnd(
-        lines, i, base, colon, heldFoldedLines, takenBelowColumn, onFenceBodyLine,
+        lines, i, base, colon, heldFoldedLines,
+        (width, index) => (colonCommentCloser ??= commentCloserLookup(lines, false))(width, index),
+        takenBelowColumn, onFenceBodyLine,
       )
       if (markerColonOwnsExtent && i === 0 && base === 0 && !RE_LINE_BLOCK_OPEN.test(opener)) {
         markerColonEnd = end
@@ -12568,8 +12581,9 @@ class ParseSession {
               descendantOpaque = null
             }
           }
-          const leadBodyCloses = leadColonAwaitingBody && RE_ADMONITION_CLOSE.exec(trackedContent)?.[1]?.length === leadColon
-          if (leadBodyCloses) lazyState.divDepth++
+          const leadBodyCloses = leadColonAwaitingBody && leadingWhitespace(trackedContent) === 0 && RE_ADMONITION_CLOSE.exec(trackedContent)?.[1]?.length === leadColon
+          const confirmsLeadBody = leadColonAwaitingBody && !opensCodeFence(trackedContent)
+          if (confirmsLeadBody) lazyState.divDepth++
           trackItemLazyState(
             trackedContent,
             lazyState,
@@ -12608,8 +12622,9 @@ class ParseSession {
             // facts, and the arm needs the measured run anyway, so a line with
             // no facts opts in to nothing.
             itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
-            (width) => literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol),
+            (width, extra = 0) => literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol + extra),
           )
+          if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.opaque === null) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && (leadBodyCloses || !RE_ADMONITION_CLOSE.test(trackedContent))) {
             if (!leadBodyCloses) lazyState.divDepth++
