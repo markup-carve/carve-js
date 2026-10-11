@@ -4074,6 +4074,8 @@ function isBlockImageLine(line: string): boolean {
   // where that tail reads it.
   return (
     m !== null &&
+    // Check the whole line because opaque spans can extend beyond the label.
+    buildBracketMap(line)(1) === 2 + m[1]!.length &&
     linkDestinationValue(m[2]!) !== null &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
@@ -7703,6 +7705,13 @@ export function rawBracketRunCloses(text: string): boolean {
   return buildBracketMap(`[${text}]`)(0) === text.length + 1
 }
 
+/** Image alt keeps delimited comments literal and editorial comments opaque. */
+export function rawImageBracketRunCloses(text: string): boolean {
+  const structural = new Set<number>()
+  const closes = buildBracketMap(`![${text}]`, false, structural)(1)
+  return closes === text.length + 2 && !structural.has(-1)
+}
+
 /** The start of the last maximal backtick run of each length. */
 function lastBacktickRunStarts(s: string): Map<number, number> {
   const last = new Map<number, number>()
@@ -7741,8 +7750,9 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
   let lastDelimitedCommentClose: number | undefined
   let lastEditorialCommentClose: number | undefined
-  const opaqueEnd = (j: number): number | undefined => {
+  const opaqueEnd = (j: number, inImageAlt: boolean): number | undefined => {
     if (s[j] !== '{' || (s[j + 1] !== '%' && s[j + 1] !== '#')) return undefined
+    if (inImageAlt && s[j + 1] === '%') return undefined
     const last = s[j + 1] === '%'
       ? (lastDelimitedCommentClose ??= s.lastIndexOf('%}'))
       : (lastEditorialCommentClose ??= s.lastIndexOf('#}'))
@@ -7754,6 +7764,8 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
   // Closed verbatim spans the pass skipped, as [content start, end].
   const spans: Array<[number, number]> = []
   const stack: number[] = []
+  const imageAlt: boolean[] = []
+  let lastBang = -1
   for (let j = 0; j < s.length; j++) {
     const ch = s[j]
     if (ch === '\\') {
@@ -7772,6 +7784,7 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       } else {
         structural?.add(-1)
         stack.length = 0
+        imageAlt.length = 0
         j += openLen - 1
       }
       continue
@@ -7779,24 +7792,36 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     // A delimited or editorial comment is opaque: its content is discarded or
     // literal, so a `]` inside cannot close a label (carve#403). An unclosed
     // opener is not a comment and is left alone.
-    const commentEnd = opaqueEnd(j)
-    if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || s[j + 1] === '%')) structural?.add(-1)
+    const inImageAlt = imageAlt[imageAlt.length - 1] ?? false
+    const commentEnd = opaqueEnd(j, inImageAlt)
+    if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
       continue
     }
+    if (ch === '!') lastBang = j
     if (ch === '[') {
       structural?.add(j)
       stack.push(j)
+      imageAlt.push(inImageAlt || (j > 0 && lastBang === j - 1))
     } else if (ch === ']') {
       structural?.add(j)
       const open = stack.pop()
+      imageAlt.pop()
       if (open !== undefined) map.set(open, j)
     }
   }
   let budget = BRACKET_RESCAN_BUDGET * s.length + 64
   const scanFrom = (open: number): number | undefined => {
-    let depth = 1
+    let bangEscapes = 0
+    if (s[open - 1] === '!') {
+      for (let k = open - 2; k >= 0 && s[k] === '\\'; k--) {
+        if (--budget < 0) return undefined
+        bangEscapes++
+      }
+    }
+    const imageDepth = [s[open - 1] === '!' && bangEscapes % 2 === 0]
+    let rescanBang = -1
     for (let j = open + 1; j < s.length; j++) {
       if (--budget < 0) return undefined
       const ch = s[j]
@@ -7813,14 +7838,19 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
         j = spanEnd - 1
         continue
       }
-      const commentEnd = opaqueEnd(j)
+      const inImageAlt = imageDepth[imageDepth.length - 1] ?? false
+      const commentEnd = opaqueEnd(j, inImageAlt)
       if (commentEnd !== undefined) {
         budget -= commentEnd - j
         j = commentEnd - 1
         continue
       }
-      if (ch === '[') depth++
-      else if (ch === ']' && --depth === 0) return j
+      if (ch === '!') rescanBang = j
+      if (ch === '[') imageDepth.push(inImageAlt || rescanBang === j - 1)
+      else if (ch === ']') {
+        imageDepth.pop()
+        if (imageDepth.length === 0) return j
+      }
     }
     return undefined
   }
