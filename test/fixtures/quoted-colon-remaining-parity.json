@@ -1023,5 +1023,10 @@
     "id": "unpaired-handoff-11",
     "source": "> - ::: |\n>   plain\n>   :::\n>   :::bad\n- tail\n>   %%%\n",
     "html": "<blockquote><ul><li><div class=\"line-block\"><p>plain</p></div>\n      :::bad\n- tail\n    </li></ul></blockquote>"
+  },
+  {
+    "id": "final-blank-marker",
+    "source": "> - a\n>\n>   - ::: box\n>     body\n> - next\n>     :::\n- tail\n",
+    "html": "<blockquote><ul><li>a\n      <ul><li><div class=\"box\"><p>body</p></div></li></ul></li><li>next\n      <div></div></li></ul></blockquote><ul><li>tail</li></ul>"
   }
 ]

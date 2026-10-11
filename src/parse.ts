@@ -3534,7 +3534,7 @@ function trackQuoteHostFence(
     closeBlockQuoteParagraph(state)
     return true
   }
-  if (text === '') { host.initialMarkerColumn = undefined; return false }
+  if (text === '') { if (host.markers.length === 0) host.initialMarkerColumn = undefined; return false }
   if (quotedLineText(content, terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []
     host.colons = []
