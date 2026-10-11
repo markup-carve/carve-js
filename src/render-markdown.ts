@@ -1404,7 +1404,7 @@ function markdownFenceInfo(
 }
 
 function escapeMarkdownLabel(text: string): string {
-  return neutralizeCharRefs(stripControls(text).replace(/[\\[\]]/g, '\\$&'))
+  return withinLink(() => escapeText(text))
 }
 
 function escapeMdTitle(title: string): string {
