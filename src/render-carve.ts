@@ -3876,7 +3876,7 @@ class CarveRenderSession {
     if (rawBody.split('\n').some((line) => line.replace(/^[ \t]*/, '').startsWith(this.sentinels[6]! + '>'))) {
       throw new SourceUnspellableError('code', 'a block-marker continuation cannot stay inside a footnote paragraph')
     }
-    const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
+    const body = trimNonNbsp(blocks.length === 1 && blocks[0]?.type === 'paragraph' ? rawBody.replace(/\n\n/g, '\n') : rawBody)
     if (body === '') {
       return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
     }
