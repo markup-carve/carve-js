@@ -67,3 +67,8 @@ it.each([
 ])('keeps literal path spelling for %s', (source, expected) => {
   expect(markdownToCarve(source)).toBe(expected)
 })
+
+it.each(['https://x.test/[r]\n\n[r]: /u\n', 'https://x.test/a\\_b/[r]\n\n[r]: /u\n'])('reports unverified fidelity for preserved bare URL spelling: %s', source => {
+  const rows = migrateMarkdown(source).report.diagnostics
+  expect(rows.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback' && row.fidelity === 'dropped')).toBe(true)
+})
