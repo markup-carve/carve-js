@@ -37,6 +37,8 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       const value = match ? protectedSpans[Number(match[1])] : undefined
       if (value !== undefined) return left ? Array.from(value.slice(-2)).at(-1) ?? '' : Array.from(value.slice(0, 2))[0] ?? ''
     }
+    const unit = source.charCodeAt(index)
+    if (unit < 0xd800 || unit > 0xdfff) return source[index]!
     return left ? Array.from(source.slice(Math.max(0, index - 1), index + 1)).at(-1) ?? '' : Array.from(source.slice(index, index + 2))[0] ?? ''
   }
   const punctuation = (s: string): boolean => /[\p{P}\p{S}]/u.test(s)
@@ -53,7 +55,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     runs.push({ start, end, scope: -1, char: m[0][0]!, open: left && (m[0][0] !== '_' || !right || punctuation(before)),
       close: right && (m[0][0] !== '_' || !left || punctuation(after)), left: 0, right: 0, active: true, previous: runs.length - 1, next: runs.length + 1 })
   }
-  if (strikethrough) {
+  if (strikethrough && source.includes('[')) {
     const brackets: number[] = []
     const boundaries = new Map<number, { scope: number; open: boolean }>()
     for (let i = 0; i < source.length; i++) {
