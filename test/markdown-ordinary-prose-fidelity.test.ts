@@ -61,7 +61,7 @@ const rows = [
   {
     "source": "www.example.com",
     "expected": {
-      "value": "www.example.com",
+      "value": "[www.example.com](http://www.example.com)",
       "losses": []
     }
   },
