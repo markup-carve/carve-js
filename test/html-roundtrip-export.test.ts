@@ -183,16 +183,52 @@ describe('the twelve carriers', () => {
     expect(html.indexOf('<template')).toBeLessThan(html.indexOf('role="doc-endnotes"'))
   })
 
-  it('data-carve-col-widths is NOT written, and the contract does not promise it', () => {
-    // The one carrier with no field behind it: §13 itself says a table's
-    // separator-row widths are a distinction "the AST does NOT record". Writing
-    // it needs a parse-to-render channel for the dash counts, which is its own
-    // decision - see the ticket this PR links. Measured: adding the field to
-    // `Table` turns 37 tests red across 9 files, because the writer emits a
-    // canonical `---` and every "parses to the same tree" comparison then sees
-    // a field the re-parse cannot reproduce.
-    expect(rt('| a | bb |\n|:-----|---:|\n| 1 | 2 |\n')).not.toContain('col-widths')
+  it('data-carve-col-widths carries the authored separator widths', () => {
+    // The carrier the inventory reserved before anything wrote it. It is
+    // written now because `table.separatorWidths` exists to restore it
+    // (markup-carve/carve#2894, PART 11 §6h [CARVE-P11-066]): the field
+    // answers all three of the measured causes at once - the wire field set,
+    // the closed reader schema, and the writer reproducing the row so a
+    // "parses to the same tree" comparison sees no new field.
+    expect(rt('| a | bb |\n|:-----|---:|\n| 1 | 2 |\n')).toContain(
+      '<table data-carve-col-widths="5,3">',
+    )
   })
+
+  it('writes no carrier for a table the author gave no separator row', () => {
+    // PRESENCE is the distinction. `|=` header cells and a separator row parse
+    // to the same rows and alignments, so the attribute's absence is what says
+    // which one was written.
+    expect(rt('|= a |= bb |\n| 1 | 2 |\n')).not.toContain('col-widths')
+  })
+
+  it('round-trips the separator row byte-identically', () => {
+    // Measured before this change: the same source came back as
+    // `|=< a |=> b |\n| 1 | 2 |\n`.
+    const src = '| a | b |\n|:-----|---:|\n| 1 | 2 |\n'
+    expect(htmlToCarve(rt(src)).value).toBe(src)
+  })
+
+  it('still comes back as the |= form with the option OFF', () => {
+    const src = '| a | b |\n|:-----|---:|\n| 1 | 2 |\n'
+    expect(htmlToCarve(carveToHtml(src)).value).toBe('|=< a |=> b |\n| 1 | 2 |\n')
+  })
+
+  it('imports the deprecated spelling of the carrier too', () => {
+    const html = '<table data-djot-col-widths="4,2">\n<tr><th>a</th><th>b</th></tr>\n'
+      + '<tr><td>1</td><td>2</td></tr>\n</table>'
+    expect(htmlToCarve(html).value).toBe('| a | b |\n|----|--|\n| 1 | 2 |\n')
+  })
+
+  it('restores nothing from a value that is not a list of positive integers', () => {
+    // The table still imports, in the `|=` header form, which is what the
+    // field's absence means.
+    for (const value of ['', '0', '2,x', '-1', '1.5']) {
+      const html = `<table data-carve-col-widths="${value}">\n<tr><th>a</th></tr>\n<tr><td>1</td></tr>\n</table>`
+      expect(htmlToCarve(html).value, value).toBe('|= a |\n| 1 |\n')
+    }
+  })
+
 })
 
 describe('an authored attribute colliding with a carrier', () => {

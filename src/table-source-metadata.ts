@@ -137,3 +137,35 @@ export function tableNeedsDelimiterHeader(table: Table): boolean {
   const firstSpan = first.cells.findIndex(cell => cell.span !== undefined)
   return firstSpan >= 0 && !(firstSpan >= 1 && first.cells.slice(firstSpan).every(cell => cell.span === 'colspan'))
 }
+
+/**
+ * The separator row the author wrote, or `undefined` for the native `|=` form.
+ *
+ * [CARVE-P11-066]. Each entry is a run of that many `-`; the alignment colon is
+ * not one of them and is written from the CELL's own alignment, so `[5, 3]` on
+ * a left-and-right table comes back as `|:-----|---:|`. A width below 1 is
+ * written as 1, since a separator cell needs a character, and an entry count
+ * that disagrees with the row's cell count is spelled for the cells that exist
+ * and no further.
+ *
+ * A first row that is not entirely header cells gets no separator: the row
+ * after one is what PROMOTES it, so writing one there would say something the
+ * tree does not.
+ */
+export function authoredSeparator(table: Table): string | undefined {
+  const widths = table.separatorWidths
+  const first = table.rows[0]
+  if (widths === undefined || !first?.cells.length) return undefined
+  if (!first.cells.every((cell) => cell.header)) return undefined
+  const count = Math.min(widths.length, first.cells.length)
+  if (count < 1) return undefined
+  const cells = Array.from({ length: count }, (_, i) => {
+    const width = Math.floor(widths[i]!)
+    const dashes = '-'.repeat(Number.isFinite(width) && width > 1 ? width : 1)
+    const align = first.cells[i]!.align
+    const left = align === 'left' || align === 'center' ? ':' : ''
+    const right = align === 'right' || align === 'center' ? ':' : ''
+    return `${left}${dashes}${right}`
+  })
+  return `|${cells.join('|')}|`
+}

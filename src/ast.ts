@@ -284,6 +284,17 @@ export interface Table extends BaseNode {
   rowGroups?: TableRowGroups
   /** Positional metadata for the corresponding table columns. */
   columns?: TableColumn[]
+  /**
+   * The dash runs of an AUTHORED separator row (PART 12 §3), one entry per
+   * separator cell, alignment colons excluded: `|:-----|---:|` records `[5, 3]`.
+   *
+   * PRESENCE is the larger half of the distinction. `|= a |= b |` and a plain
+   * row above `|---|---|` parse to the same rows and the same alignments, so
+   * absence is what says the author wrote no separator row. An author-choice
+   * field on the same terms as `list.bulletChar` and `thematic_break.marker`:
+   * the canonical writer reproduces it ([CARVE-P11-066]).
+   */
+  separatorWidths?: number[]
   rows: TableRow[]
 }
 

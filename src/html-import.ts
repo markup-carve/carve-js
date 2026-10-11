@@ -3898,7 +3898,29 @@ class Importer {
       })
       return listTableOf(kept, ownAlignment, caption, attrs, this.writing)
     }
-    return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+    const separatorWidths = this.separatorWidths(node)
+    return { type: 'table', rows, ...(separatorWidths ? { separatorWidths } : {}), ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+  }
+
+  /**
+   * `data-carve-col-widths` -> `table.separatorWidths` (PART 10 §13a).
+   *
+   * The attribute's PRESENCE is the distinction it restores, so an EMPTY array
+   * is not a value to keep: a separator row needs at least one cell, and a tree
+   * carrying `[]` would claim a row no source spells. A value that is not a
+   * comma-joined list of positive integers restores nothing - the table still
+   * imports, in the `|=` header form, which is what the field's absence means.
+   */
+  private separatorWidths(node: P5Node): number[] | undefined {
+    const raw = readCarrier((name) => this.attr(node, name), 'col-widths')
+    if (raw === undefined) return undefined
+    const widths = raw.split(',').map((part) => {
+      const trimmed = part.trim()
+      return /^[1-9][0-9]*$/.test(trimmed) ? Number(trimmed) : undefined
+    })
+    return widths.length > 0 && widths.every((width) => width !== undefined && Number.isSafeInteger(width))
+      ? (widths as number[])
+      : undefined
   }
 
   /**

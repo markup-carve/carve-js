@@ -1921,13 +1921,20 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const consumed = ['aligns', 'valigns', 'widths']
   const hasBodyMetadata = ['body-rows', 'body-header-rows', 'body-header-cols'].some(key => node.attrs?.keyValues?.[key] !== undefined)
   if (!hasBodyMetadata || tableRowGroupsFromAttrs(node.attrs, node.rows.length)) consumed.push('header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols')
-  const tableAttrs = node.attrs ? {
+  let tableAttrs: Attrs | undefined = node.attrs ? {
     ...node.attrs,
     keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !consumed.includes(key))),
     ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !consumed.includes(key)) } : {}),
   } : undefined
+  // PART 10 §13a: the authored separator-row widths, comma-joined. Its
+  // PRESENCE is the distinction, so a table with no separator row - no
+  // `separatorWidths` - writes no attribute at all.
+  const widthsAttr = roundtripExport(opts) && node.separatorWidths !== undefined
+    ? ` ${carrier('col-widths')}="${escapeAttr(node.separatorWidths.join(','))}"`
+    : ''
+  if (widthsAttr !== '') tableAttrs = dropCollidingAuthored(tableAttrs, [carrier('col-widths')], opts, node, 'block')
   const lines: string[] = [
-    `${pad}<table${renderAttrs(tableAttrs)}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
+    `${pad}<table${renderAttrs(tableAttrs)}${widthsAttr}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
   ]
   if (node.caption) {
     lines.push(`${pad}  <caption>${renderInlines(node.caption, opts)}</caption>`)

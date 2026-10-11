@@ -23,8 +23,8 @@ describe('toAstEnvelope (PART 12 §34)', () => {
   })
 
   it('emits the contract version, which is not the language version', () => {
-    expect(wrap('Hi\n').astVersion).toBe('1.0')
-    expect(AST_CONTRACT_VERSION).toBe('1.0')
+    expect(wrap('Hi\n').astVersion).toBe('1.1')
+    expect(AST_CONTRACT_VERSION).toBe('1.1')
   })
 
   it('leaves the tree exactly as toAstJson writes it', () => {
@@ -56,7 +56,7 @@ describe('toAstEnvelope (PART 12 §34)', () => {
   it('emits its own version rather than echoing what it read', () => {
     // §34: re-emitting an ingested `astVersion` republishes a claim the
     // producer cannot keep.
-    const incoming: AstEnvelope = { ...wrap('Hi\n'), astVersion: '1.7' }
+    const incoming: AstEnvelope = { ...wrap('Hi\n'), astVersion: '1.0' }
     expect(toAstEnvelope(fromAstEnvelope(incoming)).astVersion).toBe(AST_CONTRACT_VERSION)
   })
 })
@@ -77,23 +77,51 @@ describe('fromAstEnvelope (PART 12 §34)', () => {
     }
     expect(thrown).toBeInstanceOf(AstEnvelopeVersionError)
     expect((thrown as AstEnvelopeVersionError).found).toBe('2.0')
-    expect((thrown as AstEnvelopeVersionError).implemented).toBe('1.0')
+    expect((thrown as AstEnvelopeVersionError).implemented).toBe('1.1')
     expect((thrown as Error).message).toContain('2.0')
-    expect((thrown as Error).message).toContain('1.0')
+    expect((thrown as Error).message).toContain('1.1')
   })
 
-  it('accepts a higher minor when nothing required is missing', () => {
+  it('refuses a higher MINOR too, naming both versions', () => {
+    // §34(b), as rewritten by markup-carve/carve#2915. A minor adds a FIELD
+    // and the node schema below stays closed, so a reader handed a tree one
+    // minor up fails on the field itself - as a schema error naming no version.
+    // Accepting the envelope and then refusing its payload is the worse
+    // failure. The reader accepts its own version or lower.
     const envelope: AstEnvelope = { ...wrap('Hi\n'), astVersion: '1.9' }
-    expect(fromAstEnvelope(envelope).type).toBe('document')
+    let thrown: unknown
+    try {
+      fromAstEnvelope(envelope)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(AstEnvelopeVersionError)
+    expect((thrown as AstEnvelopeVersionError).found).toBe('1.9')
+    expect((thrown as AstEnvelopeVersionError).implemented).toBe('1.1')
   })
 
-  it('refuses a higher minor whose required extension it does not implement', () => {
-    const envelope: AstEnvelope = {
+  it('accepts its own version and a lower minor', () => {
+    for (const astVersion of ['1.1', '1.0']) {
+      expect(fromAstEnvelope({ ...wrap('Hi\n'), astVersion }).type).toBe('document')
+    }
+  })
+
+  it('reports the version before a required extension it does not implement', () => {
+    // The version check comes first: a 1.9 payload is refused as a version
+    // whatever its extensions say, and the extension error is what a payload
+    // at a readable version gets.
+    const higher: AstEnvelope = {
       ...wrap('Hi\n'),
       astVersion: '1.9',
       extensions: [{ id: 'https://example.org/ext/tables-2' }],
     }
-    expect(() => fromAstEnvelope(envelope)).toThrow(AstEnvelopeExtensionError)
+    expect(() => fromAstEnvelope(higher)).toThrow(AstEnvelopeVersionError)
+    const readable: AstEnvelope = {
+      ...wrap('Hi\n'),
+      astVersion: '1.0',
+      extensions: [{ id: 'https://example.org/ext/tables-2' }],
+    }
+    expect(() => fromAstEnvelope(readable)).toThrow(AstEnvelopeExtensionError)
   })
 
   it('names the required extension it does not implement', () => {
