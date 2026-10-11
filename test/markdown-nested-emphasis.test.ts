@@ -19,6 +19,14 @@ it('keeps complete ordered loss counts while repairing nested spans', () => {
   expect(report.losses.map(loss => [loss.code === 'raw-format-dropped' ? loss.format : undefined, loss.pos?.startColumn])).toEqual([['latex', 13], ['typst', 45]])
   expect(report.totalLosses).toBe(2)
   expect(carveToMarkdownWithReport(source, { maxRenderLosses: 0 })).toMatchObject({ losses: [], totalLosses: 2, truncated: true })
-  expect(() => carveToMarkdownWithReport(source, { strictLosses: true, maxRenderLosses: 1 })).toThrow(RenderLossError)
+  let strictError: unknown
+  try {
+    carveToMarkdownWithReport(source, { strictLosses: true, maxRenderLosses: 1 })
+  } catch (error) {
+    strictError = error
+  }
+  expect(strictError).toBeInstanceOf(RenderLossError)
+  expect(strictError).toMatchObject({ totalLosses: 2, truncated: true })
+  expect((strictError as RenderLossError).losses).toEqual(report.losses.slice(0, 1))
   expect(carveToMarkdownWithReport('/clean/').totalLosses).toBe(0)
 })
