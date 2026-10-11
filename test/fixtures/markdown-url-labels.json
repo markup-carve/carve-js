@@ -3650,5 +3650,21 @@
   {
     "source": "> [*/a/*](u)\n",
     "html": "<blockquote>\n<p><a href=\"u\"><em>/a/</em></a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "[https://x.test/a\\]b],[r]\n\n[https://x.test/a\\]b]: /one\n[r]: /two\n",
+    "html": "<p><a href=\"/one\">https://x.test/a]b</a>,<a href=\"/two\">r</a></p>\n"
+  },
+  {
+    "source": "a\\/<em>b</em>\n",
+    "html": "<p>a/<em>b</em></p>\n"
+  },
+  {
+    "source": "- a\\/<em>b</em>\n",
+    "html": "<ul>\n<li>a/<em>b</em></li>\n</ul>\n"
+  },
+  {
+    "source": "> a\\/<em>b</em>\n",
+    "html": "<blockquote>\n<p>a/<em>b</em></p>\n</blockquote>\n"
   }
 ]

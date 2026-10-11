@@ -72,7 +72,17 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
     if (before === '\x00') {
       const start = full.lastIndexOf('\x00', offset - 2)
       const token = start < 0 ? null : /^\x00P(\d+)\x00$/.exec(full.slice(start, offset))
-      if (token) before = spans[Number(token[1])]?.at(-1) ?? before
+      if (token) {
+        let index = Number(token[1])
+        let value = spans[index] ?? ''
+        for (;;) {
+          const nested = /\x00P(\d+)\x00$/.exec(value)
+          if (!nested || Number(nested[1]) >= index) break
+          index = Number(nested[1])
+          value = spans[index] ?? ''
+        }
+        before = value.at(-1) ?? before
+      }
     }
     const after = full[offset + match.length] ?? ''
     const intraword = /[A-Za-z0-9]/.test(before) || /[A-Za-z0-9]/.test(after)
@@ -1863,7 +1873,7 @@ function convertInline(
     const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
     if (following) {
       const protectedTail = protectedSpans[Number(following[1])] ?? ''
-      if (protectedTail.startsWith('(')) return match
+      if (protectedTail.startsWith('(') || protectedTail.startsWith('{title=')) return match
       const reference = /^\[([^\]]*)\]$/.exec(protectedTail)
       if (reference && (reference[1] !== '' || referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)) return match
     }

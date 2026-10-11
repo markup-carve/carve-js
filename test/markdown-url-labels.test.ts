@@ -72,3 +72,19 @@ it.each(['https://x.test/[r]\n\n[r]: /u\n', 'https://x.test/a\\_b/[r]\n\n[r]: /u
   const rows = migrateMarkdown(source).report.diagnostics
   expect(rows.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback' && row.fidelity === 'dropped')).toBe(true)
 })
+
+
+it.each([
+  ['[r](<> "t")\n\n[r]: /u\n', '[r]{title=t}\n\n[r]: /u\n'],
+  ['[https://x.test](<> "t")\n\n[https://x.test]: /u\n', '[https://x.test]{title=t}\n\n[https://x.test]: /u\n'],
+])('keeps titled empty destinations lossy without resolving another reference: %s', (source, expected) => {
+  const migration = migrateMarkdown(source)
+  expect(migration.value).toBe(expected)
+  expect(migration.report.diagnostics.some(row => row.code === 'structure-unspellable' && row.fidelity === 'dropped')).toBe(true)
+})
+
+it('braces HTML emphasis after an escaped URL slash and reports the remaining URL fidelity gap', () => {
+  const migration = migrateMarkdown('https://x.test/a\\/<em>b</em>\n')
+  expect(migration.value).toBe('https://x.test/a\\/{/b/}\n')
+  expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback')).toBe(true)
+})
