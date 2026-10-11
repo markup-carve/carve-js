@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'an-unterminated-raw-fence-keeps-literal-payload-termination',
   'a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run',
   'a-link-destination-is-opaque-to-the-bracket-scan',
   'an-ordered-list-carries-its-authored-delimiter',
