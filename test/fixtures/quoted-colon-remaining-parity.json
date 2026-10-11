@@ -1028,5 +1028,25 @@
     "id": "final-blank-marker",
     "source": "> - a\n>\n>   - ::: box\n>     body\n> - next\n>     :::\n- tail\n",
     "html": "<blockquote><ul><li>a\n      <ul><li><div class=\"box\"><p>body</p></div></li></ul></li><li>next\n      <div></div></li></ul></blockquote><ul><li>tail</li></ul>"
+  },
+  {
+    "id": "shift-nested-bare-2-False",
+    "source": ">   - a\n> - b\n>     - c\n>   :::\n1. lazy\n",
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
+  },
+  {
+    "id": "shift-nested-bare-2-True",
+    "source": ">   - a\n> - b\n>     - c\n>\n>   :::\n1. lazy\n",
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
+  },
+  {
+    "id": "shift-nested-bare-4-False",
+    "source": ">   - a\n> - b\n>     - c\n>     :::\n1. lazy\n",
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
+  },
+  {
+    "id": "shift-nested-bare-4-True",
+    "source": ">   - a\n> - b\n>     - c\n>\n>     :::\n1. lazy\n",
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
   }
 ]
