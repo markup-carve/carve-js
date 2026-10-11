@@ -5539,8 +5539,10 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
+  // Carry real CODE payload across boundaries without letting an interrupter claim a lazy tail.
   if (wasInlineFence && (wasInlineFenceBlock || bottomBlockLeavesParagraphOpen(content)) && !RE_COMMENT_LINE.test(content.trimStart()) && !RE_ADMONITION_CLOSE.test(content.trimStart()) && colonFenceOpenerLen(content) === null) {
-    state.lazyFoldable = true
+    state.lazyFoldable = !isBlankLine(content) &&
+      (bottomBlockLeavesParagraphOpen(content) || (wasInlineFenceBlock && leadingWhitespace(content) > 0))
     state.inlineFenceParagraph = true
     if (wasInlineFenceBlock) state.inlineFenceBlock = true
     state.inDefList = false

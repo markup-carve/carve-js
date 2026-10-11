@@ -138,5 +138,15 @@
     "id": "review10-inline-heading",
     "source": "- :::\n  - ::: |\n    x\n    :::\n  ```\n  # h\nTAIL\n",
     "html": "<ul>\n  <li>\n    <div>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n            <p>x</p>\n          </div>\n        </li>\n      </ul>\n      <pre><code># h\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAIL</p>"
+  },
+  {
+    "id": "review11-lead-heading",
+    "source": "- :::\n  ```\n  # h\nTAIL\n",
+    "html": "<ul>\n  <li>\n    <div>\n      <pre><code># h\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAIL</p>"
+  },
+  {
+    "id": "review11-lead-blank-heading",
+    "source": "- :::\n  ```\n\n  # h\nTAIL\n",
+    "html": "<ul>\n  <li>\n    <div>\n      <pre><code>\n# h\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAIL</p>"
   }
 ]
