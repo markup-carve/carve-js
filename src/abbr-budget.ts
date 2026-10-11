@@ -177,12 +177,13 @@ export class AbbrBudget {
   chargeRenderedLabel(
     display: readonly object[] | undefined,
     render: () => string,
+    measure: (label: string) => number = utf8ByteLength,
   ): string | undefined {
     const known = display === undefined ? undefined : this.labelCost.get(display)
     if (known !== undefined && known > this.remaining) return undefined
 
     const label = render()
-    const cost = utf8ByteLength(label)
+    const cost = measure(label)
     if (display !== undefined) this.labelCost.set(display, cost)
 
     return this.charge(cost) ? label : undefined

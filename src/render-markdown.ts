@@ -26,7 +26,7 @@ import { trimNonNbsp, trimEndSpaceTab, trimMatchingEdges, trimEndMatchingEdges }
 import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { pickSentinelRun, pickSentinelTokens } from './sentinel-run.js'
+import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
@@ -110,7 +110,27 @@ function renderHtmlAttrs(attrs: Attrs | undefined): string {
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
   // Choose the escape carriers before anything is rendered, so every pass that
   // introduces one and every pass that resolves one agrees on them.
-  chooseCarriers(ast)
+  const occupied = occupiedPrivateUse(ast, true)
+  const run = pickSentinelRun(occupied, CARRIER_BASE, CARRIER_COUNT)
+  if (run.some(marker => occupied.has(marker.charCodeAt(0)))) {
+    setCarriers(shortSentinelTokens(treeSentinelNonces(ast), CARRIER_COUNT))
+    hashesEmitted = 0
+    const probeNonce = new Set<number>()
+    collectSentinelNonces(ALL_CARRIERS[0]!, probeNonce)
+    const probeOptions = { ...opts }
+    delete probeOptions.onRenderLoss
+    const probe = renderMarkdownBody(ast, probeOptions, false)
+    const nonces = probeNonce
+    collectSentinelNonces(probe, nonces)
+    setCarriers(shortSentinelTokens(nonces, CARRIER_COUNT))
+  } else {
+    setCarriers(run)
+  }
+  hashesEmitted = 0
+  return renderMarkdownBody(ast, opts, true)
+}
+
+function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normalizeOutput: boolean): string {
   const smartTypography = normalizeSmartTypography(opts.smartTypography)
   // PART 11 section 11: GFM has no heading-id syntax, so a heading is linked by
   // the slug a GFM reader derives from its written text.
@@ -136,6 +156,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
+  if (!normalizeOutput) return `${out}${footnotes}`
   const body = normalize(`${out}${footnotes}`)
   const frontmatter = renderFrontmatter(ast.frontmatter)
   // A document that is only frontmatter has no body to separate it from, and
@@ -1226,6 +1247,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       const crossrefText =
         ctx.abbrBudget.chargeRenderedLabel(node.resolvedText, () =>
           withinLink(() => renderInlines(node.resolvedText ?? [], ctx), crossrefSlug !== undefined),
+          MULTI_CHARACTER_CARRIERS ? canonicalLabelCost : undefined,
         ) ?? withinLink(() => escapeText(node.target), crossrefSlug !== undefined)
       // Inside a link's text, and for a target this format cannot anchor: the
       // display text alone. Markdown can carry `{#id}` on a heading and
@@ -2030,28 +2052,30 @@ function setCarriers(run: string[]): void {
   PAYLOAD_BLANK = payloadBlank
   CONTEXT_SENTINEL = { '<': lt, '&': amp, '!': bang, ':': colon, '.': dot, '@': at }
   CONTEXT_CHARACTER = { [lt]: '<', [amp]: '&', [bang]: '!', [colon]: ':', [dot]: '.', [at]: '@' }
-  RE_CONTEXT_SENTINEL = new RegExp([lt, amp, bang, colon, dot, at].join('|'), 'g')
-  HAS_CONTEXT_SENTINEL = new RegExp([lt, amp, bang, colon, dot, at].join('|'))
-  RE_ANY_SENTINEL = new RegExp(run.join('|'), 'g')
+  const context = MULTI_CHARACTER_CARRIERS ? [lt, amp, bang, colon, dot, at].join('|') : `[${lt}${amp}${bang}${colon}${dot}${at}]`
+  RE_CONTEXT_SENTINEL = new RegExp(context, 'g')
+  HAS_CONTEXT_SENTINEL = new RegExp(context)
+  RE_ANY_SENTINEL = new RegExp(MULTI_CHARACTER_CARRIERS ? run.join('|') : `[${run[0]}-${run[CARRIER_COUNT - 1]}]`, 'g')
 
   NARROWED_SENTINEL = { _: underscore, '[': bracket }
   NARROWED_CHARACTER = { [underscore]: '_', [bracket]: '[' }
   AUTHORED_SENTINEL = { '#': undecidedHash }
   AUTHORED_KEPT = keptHash
   AUTHORED_CHARACTER = { [undecidedHash]: '#', [keptHash]: '#' }
-  RE_NARROWED_SENTINEL = new RegExp(run.slice(0, 4).join('|'), 'g')
-  HAS_NARROWED_SENTINEL = new RegExp(run.slice(0, 4).join('|'))
+  const narrowed = MULTI_CHARACTER_CARRIERS ? run.slice(0, 4).join('|') : `[${underscore}${bracket}${undecidedHash}${keptHash}]`
+  RE_NARROWED_SENTINEL = new RegExp(narrowed, 'g')
+  HAS_NARROWED_SENTINEL = new RegExp(narrowed)
   RE_UNDECIDED_HASH = new RegExp(undecidedHash, 'g')
   HAS_UNDECIDED_HASH = new RegExp(undecidedHash)
 }
 
-/** Pick this document's carriers. Called once, before anything is rendered. */
-function chooseCarriers(ast: Document): void {
-  setCarriers(pickSentinelTokens(ast, CARRIER_BASE, CARRIER_COUNT))
-  hashesEmitted = 0
-}
-
 setCarriers(pickSentinelRun(new Set(), CARRIER_BASE, CARRIER_COUNT))
+
+function canonicalLabelCost(label: string): number {
+  return utf8ByteLength(label.replace(RE_ANY_SENTINEL, marker =>
+    String.fromCharCode(CARRIER_BASE + ALL_CARRIERS.indexOf(marker)),
+  ))
+}
 
 /** The bare character a sentinel stands for, for every pass that builds a line view. */
 function sentinelCharacter(s: string): string {
@@ -2095,7 +2119,7 @@ function resolveContextEscapes(text: string): string {
     // Section 8i E1: the email form takes an empty comment, since both readers
     // link the address whether the `@` or the `.` carries a backslash. The
     // comment reaches the output; no other spelling in this section does.
-    if (ch === '@') return opensEmailAutolink(line, offset) ? '<!---->@' : '@'
+    if (ch === '@') return opensEmailAutolink(line, position) ? '<!---->@' : '@'
     let keep: boolean
     if (ch === '<') keep = /[A-Za-z/!?]/.test(line[position + 1] ?? '')
     else if (ch === '&') keep = CHARACTER_REFERENCE.test(line.slice(position, position + 40))
@@ -2560,11 +2584,21 @@ const FLANK_SPACE = /[\p{White_Space}]/u
  */
 const FLANK_PUNCT = /[\p{P}\p{S}]/u
 
-const lastCharacter = (s: string): string =>
-  /^[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s.slice(-2)) ? s.slice(-2) : s.slice(-1)
+const lastCharacter = (s: string): string => {
+  if (MULTI_CHARACTER_CARRIERS) {
+    const marker = ALL_CARRIERS.find(marker => s.endsWith(marker))
+    if (marker !== undefined) return marker
+  }
+  return /^[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s.slice(-2)) ? s.slice(-2) : s.slice(-1)
+}
 
-const firstCharacter = (s: string): string =>
-  /^[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s.slice(0, 2)) ? s.slice(0, 2) : s.slice(0, 1)
+const firstCharacter = (s: string): string => {
+  if (MULTI_CHARACTER_CARRIERS) {
+    const marker = ALL_CARRIERS.find(marker => s.startsWith(marker))
+    if (marker !== undefined) return marker
+  }
+  return /^[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s.slice(0, 2)) ? s.slice(0, 2) : s.slice(0, 1)
+}
 
 /**
  * A sentinel stands for `_`, `#` or `[`, all three of them punctuation, and it
