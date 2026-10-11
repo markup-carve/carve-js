@@ -1861,7 +1861,6 @@ function convertInline(
   // Carve-native equivalent as explicit raw HTML before delimiter rewrites.
   line = convertInlineHtml(line, protect, protectedSpans)
 
-
   const referenceUrls = line.includes('http') ? plainMarkdownUrlRanges(line, protectedSpans) : []
   let referenceUrlAt = 0
   const destinationOpeners = completeDestinationOpeners(line)
@@ -1893,7 +1892,6 @@ function convertInline(
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
-
   if (/\bhttps?:\/\//.test(line)) {
     const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
@@ -1916,8 +1914,7 @@ function convertInline(
         if (line[end] === '\x00') {
           escapedToken.lastIndex = end
           const token = escapedToken.exec(line)
-          const value = token ? protectedSpans[Number(token[1])] ?? '' : ''
-          if (!token || !/^\\[!-/:-@\[-`{-~]$/.test(value)) break
+          if (!token || !isPlainMarkdownUrlToken(Number(token[1]), protectedSpans)) break
           end += token[0].length
         } else end++
       }
@@ -6454,6 +6451,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   return output
 }
 
+function isPlainMarkdownUrlToken(index: number, spans: readonly string[]): boolean {
+  return /^\\[!-/:-@\[-`{-~]$/.test(spans[index] ?? '')
+}
+
 function plainMarkdownUrlRanges(line: string, spans: readonly string[]): { start: number; end: number }[] {
   const ranges: { start: number; end: number }[] = []
   const start = /\bhttps?:\/\//g
@@ -6464,7 +6465,7 @@ function plainMarkdownUrlRanges(line: string, spans: readonly string[]): { start
       if (line[end] === '\x00') {
         protectedToken.lastIndex = end
         const token = protectedToken.exec(line)
-        if (!token || !/^\\[!-/:-@\[-`{-~]$/.test(spans[Number(token[1])] ?? '')) break
+        if (!token || !isPlainMarkdownUrlToken(Number(token[1]), spans)) break
         end += token[0].length
       } else end++
     }

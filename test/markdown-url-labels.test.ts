@@ -88,3 +88,14 @@ it('braces HTML emphasis after an escaped URL slash and reports the remaining UR
   expect(migration.value).toBe('https://x.test/a\\/{/b/}\n')
   expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback')).toBe(true)
 })
+
+
+it.each([
+  ['https://x.test/?a=1&amp;b=_c_\n', 'https://x.test/?a=1&amp;b=_c_\n'],
+  ['https://x.test/?a=1&amp;b=*c*\n', 'https://x.test/?a=1&amp;b=*c*\n'],
+  ['https://x.test/?a=1&amp;[r]\n\n[r]: /u\n', 'https://x.test/?a=1&amp;[r]\n\n[r]: /u\n'],
+])('preserves unverified URL migration spelling across a character reference: %s', (source, expected) => {
+  const migration = migrateMarkdown(source)
+  expect(migration.value).toBe(expected)
+  expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback')).toBe(true)
+})
