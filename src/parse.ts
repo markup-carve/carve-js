@@ -12510,7 +12510,7 @@ class ParseSession {
           text: string,
           column: number,
           prefixMemo?: Map<number, number>,
-        ): DescendantOpaque | null => {
+        ): { close: RegExp | null; base: number } => {
           let memo = prefixMemo ? this.markerFenceMemos.get(prefixMemo) : undefined
           if (prefixMemo && !memo) {
             memo = new Map()
@@ -12554,7 +12554,7 @@ class ParseSession {
           for (const entry of path) {
             memo!.set(entry.length, { offset: at - entry.offset, column: base - entry.column, close })
           }
-          return close === null ? null : { close, base }
+          return { close, base }
         }
         const commentRuns: Array<number | undefined> = []
         const commentClosers = new Map<number, number>()
@@ -12567,8 +12567,10 @@ class ParseSession {
           if (run !== undefined) commentClosers.set(run, index)
         }
         const leadMemo = this.markerPrefixMemo(lexer, itemStartLineIndex)
-        let markerFence = markerFenceAt(content, 0, leadMemo)
-        let bodyFence: DescendantOpaque | null = null
+        const leadFrame = markerFenceAt(content, 0, leadMemo)
+        let frameBase: number | null = leadFrame.base
+        let markerFence: DescendantOpaque | null = leadFrame.close === null ? null : { close: leadFrame.close, base: leadFrame.base }
+        let bodyFence: (DescendantOpaque & { owner: number | null }) | null = null
         let commentOpen = commentFenceRun(markerLineBottomBlock(content, leadMemo))
         if (commentOpen !== undefined && !commentClosers.has(commentOpen)) commentOpen = undefined
         for (let bodyIndex = 0; bodyIndex < nested.length; bodyIndex++) {
@@ -12581,6 +12583,8 @@ class ParseSession {
             if (commentRun === commentOpen) commentOpen = undefined
             continue
           }
+          // A shallower line loses evidence of which descendant still owns the block.
+          if (frameBase !== null && column < frameBase) frameBase = null
           let markerCloser = false
           if (markerFence !== null) {
             if (column < markerFence.base) markerFence = null
@@ -12590,6 +12594,10 @@ class ParseSession {
             }
           }
           if (bodyFence !== null) {
+            if (bodyFence.owner !== null && column === bodyFence.owner && bodyFence.close.test(opener)) {
+              bodyFence = null
+              continue
+            }
             if (column < bodyFence.base) bodyFence = null
             else {
               if (column === bodyFence.base && bodyFence.close.test(opener)) bodyFence = null
@@ -12603,12 +12611,14 @@ class ParseSession {
             continue
           }
           if (markerFence === null && isListMarkerLine(bodyLine)) {
-            markerFence = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
+            const frame = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
+            frameBase = frame.base
+            markerFence = frame.close === null ? null : { close: frame.close, base: frame.base }
           }
           const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
           if (fence !== null) {
-            const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
-            bodyFence = { close: fenceCloseRe(marker), base: column }
+            const marker: string = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+            bodyFence = { close: fenceCloseRe(marker), base: column, owner: frameBase !== null && frameBase > 0 && frameBase <= column ? frameBase : null }
           }
         }
         trailingDescendantFence = bodyFence !== null
