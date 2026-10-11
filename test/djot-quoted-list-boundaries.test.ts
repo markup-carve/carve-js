@@ -19,3 +19,12 @@ test('reports the plain export loss for a multiline code fallback', () => {
 test.each(['> a `b\n> c` d\n', '- > a `b\n  > c` d\n'])('keeps container prefixes out of code-loss diagnostics: %s', source => {
   expect(djotToCarveWithLosses(source).losses).toEqual([])
 })
+
+test('keeps output growth linear for wide numeric list markers', () => {
+  for (const size of [64, 128, 256]) {
+    const source = '0'.repeat(size) + '1. > a\n' + ' > b\n'.repeat(size)
+    const result = djotToCarve(source)
+    expect(result.length).toBeLessThanOrEqual(source.length * 2)
+    expect(carveToHtml(result)).toBe(carveToHtml('1. > a\n' + '   > b\n'.repeat(size)))
+  }
+})

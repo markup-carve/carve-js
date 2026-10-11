@@ -4,6 +4,29 @@ import { readAttributes } from './djot-word-attributes.js'
 import { rejectedCommentStartsBlock } from './djot-attributes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 
+function compactDjotListPrefix(text: string): string {
+  if (!text.includes('0') && !text.includes('(')) return text
+  const parts: string[] = []
+  let at = 0
+  while (at < text.length) {
+    const indent = /^[ \t]*/.exec(text.slice(at))![0]
+    parts.push(indent)
+    at += indent.length
+    const quote = /^>(?:[ \t]|$)/.exec(text.slice(at))
+    if (quote) { parts.push(quote[0]); at += quote[0].length; continue }
+    const item = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(text.slice(at))
+    if (!item) break
+    parts.push(item[0].replace(/^(\(?)0+(?=[0-9])/, '$1').replace(/^\(([^)]+)\)/, '$1.'))
+    at += item[0].length
+    if (/^[-*+]/.test(item[0])) {
+      const task = /^\[[ xX]\][ \t]+/.exec(text.slice(at))
+      if (task) { parts.push(task[0]); at += task[0].length }
+    }
+  }
+  parts.push(text.slice(at))
+  return parts.join('')
+}
+
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
 export function djotBlockLayout(source: string, rows: readonly boolean[]): string {
   const hasDefinitionSyntax = source.includes('[^') || /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(source)
@@ -70,7 +93,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       }
       return parts.join('')
     }
-    const originalForCarve = (): string => quoteForCarve() + original.slice(quote.length)
+    let nativeRemainder = original.slice(quote.length)
+    const originalForCarve = (): string => quoteForCarve() + nativeRemainder
     const raw = original.slice(quote.length),
       view = masked.slice(quote.length)
     const indent = /^[ \t]*/.exec(raw)![0].length
@@ -179,14 +203,20 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     ) {
       quoteBoundary = quoteForCarve().trimEnd()
       depth = quoteDepth
-      if (item && (!paragraph || (embeddedListOwner?.depth === quoteDepth && indent <= embeddedListOwner.column))) embeddedListOwner = { depth: quoteDepth, column: indent, content: item[0].length - 1 }
+      if (item && (!paragraph || (embeddedListOwner?.depth === quoteDepth && indent <= embeddedListOwner.column))) {
+        nativeRemainder = raw.slice(0, indent) + compactDjotListPrefix(text)
+        embeddedListOwner = { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length }
+      }
       out.push(originalForCarve())
       paragraph = !(rows[n] || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || /^(?:[*-][ \t]*){3,}$/.test(visible) || /^\[[^\]\n]*\]:/.test(visible) || (!paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
       blank = false
       continue
     }
     if (fences[n] !== original || rows[n]) {
-      if (rows[n] && item) opaqueQuoteOwner = { depth: quoteDepth, column: indent, content: item[0].length - 1 }
+      if (rows[n] && item) {
+        nativeRemainder = raw.slice(0, indent) + compactDjotListPrefix(text)
+        opaqueQuoteOwner = { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length }
+      }
       out.push(originalForCarve())
       paragraph = false
       headingMarker = ''
@@ -284,7 +314,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         context = {
           depth: quoteDepth,
           column: indent,
-          content: item[0].length - 1,
+          content: compactDjotListPrefix(item[0].slice(0, -1)).length,
           target: nested ? parent.target + parent.content : 0,
           kind,
           bullet: item[1] === '*' ? '*' : '-',
@@ -300,7 +330,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       }
       if (parent && !nested && parent.loose && parent.continuation && out.at(-1)?.trim() !== '')
         out.push(quoteForCarve().trimEnd())
-      const written = item[1] ? context!.bullet + text.slice(1) : text
+      const compact = compactDjotListPrefix(text)
+      const written = item[1] ? context!.bullet + compact.slice(1) : compact
       context!.continuation = false
       headingMarker = ''
       out.push(quoteForCarve() + ' '.repeat(context!.target) + written)
@@ -601,9 +632,9 @@ function itemQuotePrefix(body: string): { depth: number; prefix: string; body: s
     if (!item) break
     let end = quote[0].length
     while (end > 0 && (quote[0][end - 1] === ' ' || quote[0][end - 1] === '\t')) end--
-    owner = { depth, column: Math.max(0, quote[0].length - end - 1), content: item[1]!.length }
+    owner = { depth, column: Math.max(0, quote[0].length - end - 1), content: compactDjotListPrefix(item[1]!).length }
     if (!/^>(?:[ \t]|$)/.test(rest.slice(item[0].length))) break
-    prefix += ' '.repeat(item[1]!.length)
+    prefix += ' '.repeat(compactDjotListPrefix(item[1]!).length)
     rest = rest.slice(item[0].length)
   }
   return { depth, prefix, body: rest, ...(owner ? { owner } : {}) }
