@@ -259,8 +259,9 @@ function collapseFalseListBoundaries(source: string): string {
 }
 
 function consumeOrphanDjotAttributes(source: string): { source: string; restore: (text: string, transform?: (chunk: string) => string) => string } {
+  if (!source.includes('{')) return { source, restore: (text, transform = chunk => chunk) => transform(text) }
   const masked = maskDjotCodeAndDestinations(source).replace(/\[\^[^\]\n]*\]/g, (value, at: number) => isDjotEscaped(source, at) ? value : ' '.repeat(value.length)).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length)).split('\n')
-  const item = String.raw`(?:[.#][A-Za-z0-9_][A-Za-z0-9_-]*|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
+  const item = String.raw`(?:[.#][A-Za-z0-9_:-]+|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
   const pattern = new RegExp(String.raw`\{[ \t]*${item}(?:[ \t]+${item})*[ \t]*\}`, 'g')
   const lines = source.split('\n')
   const dangling = new Set<number>()
@@ -270,7 +271,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
     const line = lines[index]!
     const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(line)![0].length
     const depth = (line.slice(0, first).match(/>/g) ?? []).length
-    if (line.slice(first).trim() === '') { followsBlank = true; nextDepth = depth || undefined; continue }
+    if (line.slice(first).trim() === '') continue
     if (masked[index]![first] === '{' && wholeAttribute.test(line.slice(first).trimEnd())) {
       if (nextDepth !== undefined && depth !== nextDepth) followsBlank = false
       if (followsBlank) dangling.add(index)
@@ -279,6 +280,42 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   }
   const prefix = djotPlaceholderPrefix(source, '\x00DJOTORPHAN\x00')
   const spaces: string[] = []
+  const nextBlock = new Int32Array(lines.length).fill(-1)
+  const moved = new Map<number, string[]>()
+  const blockAttributes = new Uint8Array(lines.length)
+  const quoteScopeChanges = new Uint8Array(lines.length)
+  const targetPrefixes: string[] = []
+  let previousDepth = 0, previousNonblankDepth = 0
+  for (let index = 0; index < lines.length; index++) {
+    const prefix = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(lines[index]!)![0]
+    const body = lines[index]!.slice(prefix.length).trimEnd()
+    const depth = (prefix.match(/>/g) ?? []).length
+    if (body.trim() === '') { previousDepth = Math.min(previousDepth, depth); continue }
+    const opens = depth > previousDepth
+    quoteScopeChanges[index] = Number(opens || depth !== previousNonblankDepth)
+    previousNonblankDepth = depth
+    let marker = -1
+    if (opens) for (let count = 0; count <= previousDepth; count++) marker = prefix.indexOf('>', marker + 1)
+    targetPrefixes[index] = opens ? prefix.slice(0, marker) : prefix
+    previousDepth = depth
+    if (masked[index]![prefix.length] !== '{' || !wholeAttribute.test(body)) continue
+    const previousLine = lines[index - 1] ?? ''
+    const previous = previousLine.replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
+    const previousStart = djotContentStart(previousLine)
+    const noteAt = previousLine.slice(0, previousStart).indexOf('[^')
+    const ownerStart = noteAt < 0 ? previousStart : noteAt + 1
+    const previousQuotes = /^(?:(?:[ \t]*>)+[ \t]*)?/.exec(previousLine)![0]
+    const outdented = depth < (previousQuotes.match(/>/g) ?? []).length || prefix.length < ownerStart && (noteAt >= 0 || /(?:[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(previousLine.slice(0, previousStart)))
+    blockAttributes[index] = Number(index === 0 || previous === '' || outdented || blockAttributes[index - 1] === 1 ||
+      /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[(?!\^)[^\]]+\]:|\[\^[^\]]+\]:[ \t]*$)/.test(previous))
+  }
+  let following = -1
+  for (let index = lines.length - 1; index >= 0; index--) {
+    nextBlock[index] = following
+    const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(lines[index]!)![0].length
+    const body = lines[index]!.slice(first).trimEnd()
+    if (body.trim() !== '' && (quoteScopeChanges[index] || !(masked[index]![first] === '{' && wholeAttribute.test(body)))) following = index
+  }
   const converted = lines.map((line, index) => {
     const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(line)![0].length
     const last = line.trimEnd().length
@@ -292,16 +329,38 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
       if (at !== orphanEnd && /[\]*_}^~]/.test(line[at - 1] ?? '') || (at > 0 && masked[index]![at - 1] === ' ' && line[at - 1] !== ' ')) return attrs
       if (markerOnly) return attrs
       const alone = at === first && at + attrs.length === last
-      const previous = (lines[index - 1] ?? '').replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
-      const block = index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous)
-      if (alone && block) { if (!dangling.has(index)) return attrs; dropLine = true }
+      const block = blockAttributes[index] === 1
+      if (alone && block) {
+        if (!dangling.has(index)) {
+          const target = nextBlock[index]!
+          if (target >= 0) {
+            const targetPrefix = targetPrefixes[target]!
+            if ((line.slice(0, first).match(/>/g) ?? []).length > (targetPrefix.match(/>/g) ?? []).length) {
+              const parts = moved.get(target) ?? []
+              if (targetPrefixes[index] === line.slice(0, first)) {
+                for (const pending of moved.get(index) ?? []) parts.push(pending)
+                moved.delete(index)
+              }
+              parts.push(attrs)
+              moved.set(target, parts)
+              dropLine = true
+              return ''
+            }
+          }
+          return attrs
+        }
+        dropLine = true
+        if (targetPrefixes[index] === line.slice(0, first)) moved.delete(index)
+      }
       orphanEnd = at + attrs.length
       return prefix + (at === first ? 'L' : 'I')
     }).replace(new RegExp(`${prefix}([LI])([ \t]*)`, 'g'), (_all, kind: string, space: string) => {
       spaces.push(kind === 'I' ? space : space === '' ? '{%%}' : `!\`${space}\``)
       return `${prefix}${spaces.length - 1}\x00`
     })
-    return dropLine ? (line.slice(0, first).includes('>') ? line.slice(0, first).trimEnd() : undefined) : written
+    const retained = dropLine ? (line.slice(0, first).includes('>') ? line.slice(0, first).trimEnd() : undefined) : written
+    const pending = moved.get(index)?.map(attrs => targetPrefixes[index] + attrs)
+    return pending ? [...pending, retained ?? ''].join('\n') : retained
   })
     .filter((line) => line !== undefined)
     .join('\n')
@@ -908,7 +967,10 @@ function foldDjotReferences(source: string): string {
       content = line.slice(at)
     const definition = /^\[(?!\^)([^\]\n]*)\]:(?:[ \t]+(\S*)[ \t]*|)$/.exec(content)
     const previousLine = lines[n - 1] ?? '', previousAt = djotContentStart(previousLine)
-    const boundary: boolean = previous === '' || previousAttributeBlock || rows[n - 1] || depth !== previousDepth || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || at < previousAt && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousLine.slice(0, previousAt)) || /^(?:#{1,6} |:{3,}|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
+    const previousNote = previousLine.slice(0, previousAt).indexOf('[^')
+    const previousOwner = previousNote < 0 ? previousAt : previousNote + 1
+    const outdented = at < previousOwner && (previousNote >= 0 || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousLine.slice(0, previousAt)))
+    const boundary: boolean = previous === '' || previousAttributeBlock || rows[n - 1] || depth !== previousDepth || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || outdented || /^(?:#{1,6} |:{3,}|[`~]{3,}|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
     const marker = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
     if (definition && mask[offset + at] === '[' && (boundary || marker)) {
       let target = definition[2] ?? '',
@@ -2200,7 +2262,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
     if (standalone && (boundary || pending.length > 0 || opensItem || opensQuote)) {
       pending.push({ line: n, end: attrs!.end, start: offset, wire: attrs!.source })
       consumedUntil = attrs!.end
-    } else {
+    } else if (content !== '') {
       if (pending.length && /^\[\^[^\]\n]+\]:(?:[ \t]|$)/.test(content) && mask[offset + prefix.length] === '[') {
         handledNote = true
         const quotePrefix = /^(?:[ \t]*>[ \t]?)*/.exec(prefix)![0]

@@ -86,31 +86,54 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     const start = contentStart(lines[n]!)
     const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(lines[n]!.slice(start))
     if (!definition || definitionMask[n]![start] !== '[') continue
-    let first = n
+    let first = n, cursor = n
     const attrs: string[] = []
-    while (first > 0) {
-      const precedingStart = contentStart(lines[first - 1]!)
-      const precedingPrefix = lines[first - 1]!.slice(0, precedingStart)
+    const attributeLines: number[] = []
+    while (cursor > 0) {
+      const precedingStart = contentStart(lines[cursor - 1]!)
+      const precedingPrefix = lines[cursor - 1]!.slice(0, precedingStart)
       const prefix = lines[n]!.slice(0, start)
       const quoteDepth = (value: string) => value.split('>').length - 1
       if (/[-*+.):]/.test(prefix) || quoteDepth(prefix) > quoteDepth(precedingPrefix)) break
-      const preceding = lines[first - 1]!.slice(precedingStart),
-        parsed = readAttributes(preceding, 0)
+      const preceding = lines[cursor - 1]!.slice(precedingStart)
+      if (preceding.trim() === '') { cursor--; continue }
+      const parsed = readAttributes(preceding, 0)
       if (parsed?.end !== preceding.length) break
       attrs.push(preceding)
-      first--
+      attributeLines.push(cursor - 1)
+      first = --cursor
     }
-    const previous = lines[first - 1] ?? ''
-    const previousContent = previous.slice(contentStart(previous)).trim()
-    if (
-      first > 0 &&
-      previousContent !== '' &&
-      !definitionLines.has(first - 1) &&
-      !/^(?:#{1,6}(?: |$)|:{3,}|\|)/.test(previousContent) &&
-      readAttributes(previousContent, 0)?.end !== previousContent.length
-    )
-      continue
-    for (let k = first; k < n; k++) removed.add(k)
+    const boundary = (at: number): boolean => {
+      const previous = lines[at - 1] ?? ''
+      const previousStart = contentStart(previous)
+      const previousContent = previous.slice(previousStart).trim()
+      const currentStart = contentStart(lines[at] ?? '')
+      const noteAt = previous.slice(0, previousStart).indexOf('[^')
+      const ownerStart = noteAt < 0 ? previousStart : noteAt + 1
+      const quoteDepth = (line: string): number => (/^(?:(?:[ \t]*>)+[ \t]*)?/.exec(line)![0].match(/>/g) ?? []).length
+      const outdented = quoteDepth(lines[at] ?? '') < quoteDepth(previous) || currentStart < ownerStart && (noteAt >= 0 || /(?:[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(previous.slice(0, previousStart)))
+      return at === 0 || previousContent === '' || outdented || definitionLines.has(at - 1) ||
+        /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\||(?:[-*][ \t]*){3,}$)/.test(previousContent) ||
+        readAttributes(previousContent, 0)?.end === previousContent.length
+    }
+    if (!boundary(first)) {
+      let tail = -1
+      for (const [index, at] of attributeLines.entries()) {
+        const previous = lines[at - 1] ?? ''
+        if (previous.slice(contentStart(previous)).trim() === '') tail = index
+      }
+      if (tail >= 0) {
+        first = attributeLines[tail]!
+        attrs.length = tail + 1
+        attributeLines.length = tail + 1
+      } else {
+        if (!boundary(n)) continue
+        first = n
+        attrs.length = 0
+        attributeLines.length = 0
+      }
+    }
+    for (const at of attributeLines) removed.add(at)
     const attributes = attrs.reverse().join('')
     definitions.set(definitionKey(definition[1]!), {
       target: definition[2]!,
@@ -278,7 +301,10 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       renamedLines.set(n, prefix + '{%%}')
       movedDefinitions.push(target)
     } else if (alias || attrs) {
-      renamedLines.set(n, prefix + target)
+      const first = definitions.get(key)!.first
+      const before = lines[first - 1] ?? ''
+      const separate = prefix === '' && attrs !== '' && before.slice(contentStart(before)).trim() !== '' && !definitionLines.has(first - 1)
+      renamedLines.set(n, (separate ? '\n' : '') + prefix + target)
     }
   }
   const edits: { at: number; end: number; text: string }[] = []
