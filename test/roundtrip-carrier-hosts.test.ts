@@ -53,6 +53,26 @@ describe('roundtrip carriers stay on their defined hosts', () => {
     }
   })
 
+  it.each(['safe', 'semantic', 'roundtrip'] as const)('maps the section carrier to the surviving heading in %s mode', mode => {
+    const kept = htmlToCarve('<section id="X" data-carve-explicit-id><script>x</script><h1>X</h1></section>', { mode })
+    expect(kept.value).toContain('{#X}')
+    expect(kept.report.diagnostics).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: expect.stringContaining('explicit-id') }),
+    ]))
+    const own = htmlToAst('<section id="X" data-carve-explicit-id><h1 id="Y">T</h1></section>', { mode })
+    expect(own.value.children[0]).toMatchObject({ type: 'heading', attrs: { id: 'Y' } })
+    expect(own.report.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: expect.stringContaining('explicit-id') }),
+    ]))
+    for (const later of ['h1', 'h2']) {
+      const dropped = htmlToAst(`<section id="X" data-carve-explicit-id><h1></h1><${later}>X</${later}></section>`, { mode })
+      expect(dropped.value.children[0].attrs?.id).toBeUndefined()
+      expect(dropped.report.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining('explicit-id') }),
+      ]))
+    }
+  })
+
   it('keeps a generated section ID generated', () => {
     const html = carveToHtml('# C\n', { roundtrip: true })
     expect(htmlToAst(html, { mode: 'roundtrip' }).value.children[0].attrs?.id).toBeUndefined()

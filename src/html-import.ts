@@ -920,6 +920,7 @@ class Importer {
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
   private hasEmptyCodeSpans = false
   /** The element each inline node came from, for `unwrapUnspellable`. */
+  private readonly headingOrigins = new WeakMap<BlockNode, P5Node>()
   private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** Fallback images of formulas that imported as math, dropped where they stand. */
   private readonly formulaImages = new Set<P5Node>()
@@ -2386,15 +2387,10 @@ class Importer {
       this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
-    const firstChild = tag === 'section'
-      ? (domChildren(node) ?? []).find(child => !isBlankOrComment(child))
-      : undefined
-    if (
-      this.hasCarrier(node, 'explicit-id') &&
-      this.attr(node, 'id') !== undefined &&
-      (/^h[1-6]$/.test(tag) || (firstChild !== undefined && /^h[1-6]$/.test(domTag(firstChild) ?? '')))
-    ) this.recordCarrier(node, 'explicit-id')
-    const attrs = this.attrs(node, path)
+    if (/^h[1-6]$/.test(tag) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
+      this.recordCarrier(node, 'explicit-id')
+    }
+    let attrs = tag === 'section' ? undefined : this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
       this.headingDepth++
       let raw: InlineNode[]
@@ -2452,7 +2448,9 @@ class Importer {
           held.order = slotOrderFromElement(node, held)
         }
       }
-      return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children, ...(held ? { attrs: held } : {}) }]
+      const heading: BlockNode = { type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children, ...(held ? { attrs: held } : {}) }
+      this.headingOrigins.set(heading, node)
+      return [heading]
     }
     if (tag === 'p') {
       /*
@@ -2730,10 +2728,22 @@ class Importer {
       // CONSTRUCTED in - which the sort keeps only as a tie-break between rows
       // at the same position, and the wrapper's own two rows keep their
       // relative order because `element-unwrapped` is still added first.
+      let hoistedChildren = children
+      if (tag === 'section') {
+        const firstHeading = own.find(child => /^h[1-6]$/.test(domTag(child) ?? ''))
+        const heading = children[0]
+        const mapped = heading?.type === 'heading' && firstHeading !== undefined &&
+          this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
+        if (!mapped) hoistedChildren = []
+        if (mapped && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
+          this.recordCarrier(node, 'explicit-id')
+        }
+        attrs = this.attrs(node, path)
+      }
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          restoreHoistedSectionId(tag, attrs, children, this.hasCarrier(node, 'explicit-id'), this.writing),
+          restoreHoistedSectionId(tag, attrs, hoistedChildren, this.hasCarrier(node, 'explicit-id'), this.writing),
           tag,
           path,
           unwrapped,
