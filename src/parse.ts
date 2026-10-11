@@ -987,6 +987,8 @@ class Lexer {
    * (markup-carve/carve-js#1606).
    */
   quoteLazyLines: Set<number>
+  /** Comment openers rejected by a marker-line literal owner, keyed by both source lines. */
+  literalCommentLineOpeners: Set<string>
   /** See `QuoteLazyHint`. Set by the enclosing quote, taken by the first quote parsed here. */
   quoteLazyHint: QuoteLazyHint | null = null
   /**
@@ -1100,6 +1102,7 @@ class Lexer {
     this.quoteLazyMarkerLines = inherited?.quoteLazyMarkerLines ?? new Set()
     this.itemLazyLines = inherited?.itemLazyLines ?? new Set()
     this.quoteLazyLines = inherited?.quoteLazyLines ?? new Set()
+    this.literalCommentLineOpeners = inherited?.literalCommentLineOpeners ?? new Set()
     this.declinedLinkDefLines = inherited?.declinedLinkDefLines ?? new Set()
     this.footnoteDefs = inherited?.footnoteDefs ?? new Map()
     this.footnoteDefPos = inherited?.footnoteDefPos ?? new Map()
@@ -3287,6 +3290,7 @@ function consumeOpaqueColonFenceBodySpan(
   lines: ColonFenceBodyLine[],
   lineIndex: number,
   text: string,
+  literalOwnerLine?: number,
 ): boolean {
   const rawOpen = RE_RAW_FENCE.exec(text)
   const codeOpen = rawOpen === null ? RE_FENCE.exec(text) : null
@@ -3317,7 +3321,9 @@ function consumeOpaqueColonFenceBodySpan(
   }
 
   const commentOpen = RE_COMMENT_BLOCK_ANY.exec(text)
-  if (commentOpen !== null && commentBlockHasCloser(lexer, commentOpen[1]!.length)) {
+  if (commentOpen !== null &&
+      !(literalOwnerLine !== undefined && lexer.literalCommentLineOpeners.has(`${literalOwnerLine}:${lexer.lineNumber(lineIndex)}`)) &&
+      commentBlockHasCloser(lexer, commentOpen[1]!.length)) {
     const fence = commentOpen[1]!.length
     lexer.consume()
     lines.push({ text, lineIndex })
@@ -3415,13 +3421,14 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
 }
 
 function collectLiteralColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {
+  const literalOwnerLine = lexer.lineNumber(opener.lineIndex)
   const lines: ColonFenceBodyLine[] = []
   let closed = false
 
   while (!lexer.eof()) {
     const lineIndex = lexer.pos
     const text = lexer.peek()!
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) continue
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, literalOwnerLine)) continue
     const close = RE_ADMONITION_CLOSE.exec(text)
     lexer.consume()
     if (close && close[1]!.length === opener.fenceWidth) {
@@ -4067,6 +4074,8 @@ function isBlockImageLine(line: string): boolean {
   // where that tail reads it.
   return (
     m !== null &&
+    // Check the whole line because opaque spans can extend beyond the label.
+    buildBracketMap(line)(1) === 2 + m[1]!.length &&
     linkDestinationValue(m[2]!) !== null &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
@@ -4626,12 +4635,13 @@ interface ItemLazyState {
   inlineFenceBlock?: boolean
   unrebasedColonBody?: { width: number }
   closedColonBody?: boolean
+  closedLiteralComment?: boolean
   // How many colon-fence containers the item's own content currently holds
   // open. A bare `:::` with one open is that container's CLOSER, not an opener
   // and not absorbable text - which is why a malformed fence INSIDE an open
   // container arms nothing: the closer below it still has a container to close.
   divDepth: number
-  literalColon?: { width: number; column: number; opaque?: OpaqueGroup; markerFrame?: ItemLazyState; absorbing?: boolean; belowComment?: number }
+  literalColon?: { width: number; column: number; sourceLine?: number; rejectedComment?: boolean; opaque?: OpaqueGroup; markerFrame?: ItemLazyState; absorbing?: boolean; belowComment?: number }
   authoredColon?: { width: number; column: number; depth: number; belowComment?: number }
   // The lines so far of a `{…}` block-attribute block that has not closed yet,
   // newline-joined, or null when the tracker is not inside one. §15 A5 lets the
@@ -5441,7 +5451,9 @@ function trackItemLazyState(
   const wasInlineFenceBlock = state.inlineFenceBlock === true
   delete state.inlineFenceBlock
   const wasClosedColon = state.closedColonBody === true
+  const wasClosedLiteralComment = state.closedLiteralComment === true
   delete state.closedColonBody
+  delete state.closedLiteralComment
   if (state.unrebasedColonBody && RE_ADMONITION_CLOSE.exec(content)?.[1]?.length === state.unrebasedColonBody.width) delete state.unrebasedColonBody
   // Carried the same way the absorption is, and for the same reason: every
   // other block ends the table, so only the two row branches re-arm it.
@@ -5516,6 +5528,7 @@ function trackItemLazyState(
     if (group && !group.belowBaseCloses && codeAtBase && !state.lazyFoldable && state.divDepth > 0) open.opaque = group
     const close = RE_ADMONITION_CLOSE.exec(text)
     if (close && close[1]!.length === open.width && (column === 0 || column === open.column)) {
+      if (open.rejectedComment) state.closedLiteralComment = true
       delete state.literalColon
       state.divDepth = Math.max(0, state.divDepth - 1)
       state.closedColonBody = true
@@ -5997,7 +6010,7 @@ function trackItemLazyState(
     // so arming here would swallow it and hold the paragraph open past the
     // block's end.
     state.absorbingFence = state.divDepth === 0 || state.authoredColon !== undefined
-    state.lazyFoldable = true
+    state.lazyFoldable = !(wasClosedColon && wasClosedLiteralComment)
     state.inDefList = false
     return
   }
@@ -7692,6 +7705,13 @@ export function rawBracketRunCloses(text: string): boolean {
   return buildBracketMap(`[${text}]`)(0) === text.length + 1
 }
 
+/** Image alt keeps delimited comments literal and editorial comments opaque. */
+export function rawImageBracketRunCloses(text: string): boolean {
+  const structural = new Set<number>()
+  const closes = buildBracketMap(`![${text}]`, false, structural)(1)
+  return closes === text.length + 2 && !structural.has(-1)
+}
+
 /** The start of the last maximal backtick run of each length. */
 function lastBacktickRunStarts(s: string): Map<number, number> {
   const last = new Map<number, number>()
@@ -7730,8 +7750,9 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
   let lastDelimitedCommentClose: number | undefined
   let lastEditorialCommentClose: number | undefined
-  const opaqueEnd = (j: number): number | undefined => {
+  const opaqueEnd = (j: number, inImageAlt: boolean): number | undefined => {
     if (s[j] !== '{' || (s[j + 1] !== '%' && s[j + 1] !== '#')) return undefined
+    if (inImageAlt && s[j + 1] === '%') return undefined
     const last = s[j + 1] === '%'
       ? (lastDelimitedCommentClose ??= s.lastIndexOf('%}'))
       : (lastEditorialCommentClose ??= s.lastIndexOf('#}'))
@@ -7743,6 +7764,8 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
   // Closed verbatim spans the pass skipped, as [content start, end].
   const spans: Array<[number, number]> = []
   const stack: number[] = []
+  const imageAlt: boolean[] = []
+  let lastBang = -1
   for (let j = 0; j < s.length; j++) {
     const ch = s[j]
     if (ch === '\\') {
@@ -7761,6 +7784,7 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       } else {
         structural?.add(-1)
         stack.length = 0
+        imageAlt.length = 0
         j += openLen - 1
       }
       continue
@@ -7768,24 +7792,36 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     // A delimited or editorial comment is opaque: its content is discarded or
     // literal, so a `]` inside cannot close a label (carve#403). An unclosed
     // opener is not a comment and is left alone.
-    const commentEnd = opaqueEnd(j)
-    if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || s[j + 1] === '%')) structural?.add(-1)
+    const inImageAlt = imageAlt[imageAlt.length - 1] ?? false
+    const commentEnd = opaqueEnd(j, inImageAlt)
+    if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
       continue
     }
+    if (ch === '!') lastBang = j
     if (ch === '[') {
       structural?.add(j)
       stack.push(j)
+      imageAlt.push(inImageAlt || (j > 0 && lastBang === j - 1))
     } else if (ch === ']') {
       structural?.add(j)
       const open = stack.pop()
+      imageAlt.pop()
       if (open !== undefined) map.set(open, j)
     }
   }
   let budget = BRACKET_RESCAN_BUDGET * s.length + 64
   const scanFrom = (open: number): number | undefined => {
-    let depth = 1
+    let bangEscapes = 0
+    if (s[open - 1] === '!') {
+      for (let k = open - 2; k >= 0 && s[k] === '\\'; k--) {
+        if (--budget < 0) return undefined
+        bangEscapes++
+      }
+    }
+    const imageDepth = [s[open - 1] === '!' && bangEscapes % 2 === 0]
+    let rescanBang = -1
     for (let j = open + 1; j < s.length; j++) {
       if (--budget < 0) return undefined
       const ch = s[j]
@@ -7802,14 +7838,19 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
         j = spanEnd - 1
         continue
       }
-      const commentEnd = opaqueEnd(j)
+      const inImageAlt = imageDepth[imageDepth.length - 1] ?? false
+      const commentEnd = opaqueEnd(j, inImageAlt)
       if (commentEnd !== undefined) {
         budget -= commentEnd - j
         j = commentEnd - 1
         continue
       }
-      if (ch === '[') depth++
-      else if (ch === ']' && --depth === 0) return j
+      if (ch === '!') rescanBang = j
+      if (ch === '[') imageDepth.push(inImageAlt || rescanBang === j - 1)
+      else if (ch === ']') {
+        imageDepth.pop()
+        if (imageDepth.length === 0) return j
+      }
     }
     return undefined
   }
@@ -12511,7 +12552,7 @@ class ParseSession {
         itemSpanScan.atBlockStart = false
       }
       const leadColon = colonFenceOpenerLen(content)
-      if (leadColon !== null && RE_LINE_BLOCK_OPEN.test(content)) lazyState.literalColon = {width: leadColon, column: 0}
+      if (leadColon !== null && RE_LINE_BLOCK_OPEN.test(content)) lazyState.literalColon = {width: leadColon, column: 0, sourceLine: lexer.lineNumber(itemStartLineIndex)}
       let leadColonAwaitingBody = leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)
       // The lead line may itself be the malformed fence (`- :::note`), and then
       // the paragraph it opens is already absorbing: the `:::` below it is text,
@@ -12827,7 +12868,19 @@ class ParseSession {
             // facts, and the arm needs the measured run anyway, so a line with
             // no facts opts in to nothing.
             itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
-            (width, extra = 0) => literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol + extra),
+            (width, extra = 0) => {
+              const closes = literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol + extra)
+              const owner = lazyState.literalColon?.sourceLine
+              if (extra === 0 && owner !== undefined) {
+                const key = `${owner}:${lexer.lineNumber(fenceLineIndex)}`
+                if (closes) lexer.literalCommentLineOpeners.delete(key)
+                else {
+                  lazyState.literalColon!.rejectedComment = true
+                  lexer.literalCommentLineOpeners.add(key)
+                }
+              }
+              return closes
+            },
           )
           if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.inlineFenceParagraph) lazyState.inlineFenceBlock = true

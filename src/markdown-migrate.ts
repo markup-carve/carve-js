@@ -12,6 +12,7 @@ import { markdownEmphasis } from './markdown-emphasis.js'
 
 import {
   escapeAttributeBlockOpener,
+  escapeUnclosedImageEditorialOpeners,
   escapePlainCarveInlineSyntax,
   escapeVerbatimDelimiter,
   HANDLED_MARKDOWN,
@@ -30,7 +31,7 @@ import {
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
 import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
-import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
+import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
@@ -1594,7 +1595,7 @@ function convertInline(
 
   const imageLabel = (label: string): string => {
     const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw)
-    return `![${rawBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : alt.replace(/[\\[\]`]/g, '\\$&')}]`
+    return `![${rawImageBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : escapeUnclosedImageEditorialOpeners(alt.replace(/[\\[\]`]/g, '\\$&'))}]`
   }
   const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
     const encoded = encodeDest(dest)

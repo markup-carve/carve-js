@@ -1,3 +1,4 @@
+import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
@@ -25,7 +26,7 @@ import {
   buildBracketMap,
   opensFrontmatter,
   parse,
-  rawBracketRunCloses,
+  rawImageBracketRunCloses,
   symbolOpensAt,
 } from './parse.js'
 import { isAttrValueEscapable } from './attribute-parser.js'
@@ -526,8 +527,13 @@ function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
  * rather than echoing what the author wrote. That is what makes a redundant
  * `{loose}` a no-op through a format pass as well as through a render.
  */
-function withLooseAttrs(node: List | DefinitionList, attrs: string, body: string): string {
-  if (!needsLooseKey(node, body)) return attrs ? `${attrs}\n${body}` : body
+function withLooseAttrs(
+  node: List | DefinitionList,
+  attrs: string,
+  body: string,
+  normalize: (body: string) => string,
+): string {
+  if (!needsLooseKey(node, body, normalize)) return attrs ? `${attrs}\n${body}` : body
   const withKey = renderAttrs({
     ...(node.attrs ?? {}),
     keyValues: { ...(node.attrs?.keyValues ?? {}), loose: '' },
@@ -540,7 +546,11 @@ function withLooseAttrs(node: List | DefinitionList, attrs: string, body: string
   return `${withKey}\n${body}`
 }
 
-function needsLooseKey(node: List | DefinitionList, body: string): boolean {
+function needsLooseKey(
+  node: List | DefinitionList,
+  body: string,
+  normalize: (body: string) => string,
+): boolean {
   if (node.type === 'list') {
     if (node.tight || node.items.length === 0) return false
     // A BLANK LINE BETWEEN ITEMS ALWAYS LOOSENS (§17 L2), and this writer emits
@@ -559,7 +569,9 @@ function needsLooseKey(node: List | DefinitionList, body: string): boolean {
     // common shape - a one-item list holding one paragraph - is answered
     // without a parse.
     if (!/\n[ \t]*\n/.test(body)) return true
-    const reparsed = treeOf(body) === null ? undefined : parse(body).children[0]
+    // Restore writer guards before testing whether the emitted fences close.
+    const source = normalize(body)
+    const reparsed = treeOf(source) === null ? undefined : parse(source).children[0]
     return reparsed === undefined || reparsed.type !== 'list' || reparsed.tight
   }
   return node.loose === true
@@ -1873,10 +1885,10 @@ function escapePlainLine(text: string): string {
  * An image's ALT TEXT, written between `![` and `]`.
  */
 function escapeImageAlt(text: string, inTable = false): string {
-  if (rawBracketRunCloses(text) && !/\\[!-/:-@\[-`{-~]/.test(text)) {
+  if (rawImageBracketRunCloses(text) && !/\\[!-/:-@\[-`{-~]/.test(text)) {
     return inTable ? text.replaceAll('|', '\\|') : text
   }
-  return text.replace(inTable ? /[\\[\]`|]/g : /[\\[\]`]/g, '\\$&')
+  return escapeUnclosedImageEditorialOpeners(text.replace(inTable ? /[\\[\]`|]/g : /[\\[\]`]/g, '\\$&'))
 }
 
 /**
@@ -3130,7 +3142,7 @@ class CarveRenderSession {
         return withAttrs(body)
       }
       case 'list':
-        return withLooseAttrs(node, attrs, this.renderList(node, ctx))
+        return withLooseAttrs(node, attrs, this.renderList(node, ctx), (body) => this.normalize(body))
       case 'thematic_break':
         return withAttrs(thematicBreakSpelling(node.marker, this.thematicBreakMarker))
       case 'table':
@@ -3200,7 +3212,7 @@ class CarveRenderSession {
         // minimum with the `::` line a column past it - a shape no author writes
         // and one the rebase then has to reconcile a line at a time.
         return atARaisedBase(
-          withLooseAttrs(node, attrs, this.renderDefinitionList(node.items, ctx)),
+          withLooseAttrs(node, attrs, this.renderDefinitionList(node.items, ctx), (body) => this.normalize(body)),
           atAnAuthoredBodyColumn,
         )
       case 'figure':
