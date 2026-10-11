@@ -3469,6 +3469,7 @@ type BlockQuoteLazyMode =
   | { kind: 'quote'; inner: BlockQuoteLazyState }
 
 interface QuoteFenceHosts {
+  initialMarkerColumn?: number | undefined
   columns: number[]
   markers: number[]
   kinds: ('item' | 'note')[]
@@ -3505,6 +3506,18 @@ function trackQuoteHostFence(
       return true
     }
   }
+  const heldColon = host.colons?.at(-1)
+  const commentRun = heldColon && RE_COMMENT_LINE.test(text) ? commentFenceRun(text) : undefined
+  if (heldColon && RE_COMMENT_LINE.test(text) && commentRun === undefined &&
+      (!heldColon.literal || column < heldColon.floor)) {
+    closeBlockQuoteParagraph(state)
+    return true
+  }
+  if (heldColon?.literal && column < heldColon.floor) {
+    host.colons!.pop()
+    closeBlockQuoteParagraph(state)
+    if (commentRun !== undefined && hasCommentCloser(commentRun, column)) return false
+  }
   const literal = host.colons?.at(-1)
   if (literal?.literal && column >= literal.floor) {
     if (literal.opaque) {
@@ -3521,10 +3534,11 @@ function trackQuoteHostFence(
     closeBlockQuoteParagraph(state)
     return true
   }
-  if (text === '') return false
+  if (text === '') { host.initialMarkerColumn = undefined; return false }
   if (quotedLineText(content, terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []
     host.colons = []
+    host.initialMarkerColumn = undefined
     return false
   }
   const paragraph = blockQuoteParagraphOpen(state)
@@ -3554,6 +3568,7 @@ function trackQuoteHostFence(
     if (width > 0) {
       if (lazyMarker && lazyItem) break
       if (paragraph && !insideItem && !sibling && !leftOfOutermost) break
+      host.initialMarkerColumn ??= at
       host.markers.push(at)
       const attrs = extractItemAttr(inner)
       const markerText = attrs?.stripped ?? inner
@@ -3617,6 +3632,8 @@ function trackQuoteHostFence(
       state.mode = { kind: 'paragraph', absorbingFence: true }
       return true
     }
+    if (bare && open === undefined && at > floor && host.initialMarkerColumn !== undefined &&
+        (host.markers.at(-1) ?? host.initialMarkerColumn) < host.initialMarkerColumn) return false
     if (width !== null && !absorbedBare) {
       colons.push({ width, column: at, floor, awaitingBody: blockStart,
         literal: RE_LINE_BLOCK_OPEN.test(inner) })
@@ -4019,7 +4036,7 @@ function classifyQuotedLine(
   // continue.
   const commentRun = commentFenceRun(content)
   if (commentRun !== undefined) {
-    if (hasCommentCloser(commentRun)) {
+    if (hasLiteralCommentCloser(commentRun, 0)) {
       state.mode = { kind: 'comment_fence', length: commentRun }
     } else {
       closeBlockQuoteParagraph(state)
@@ -5556,6 +5573,21 @@ function trackItemLazyState(
       (bottomBlockLeavesParagraphOpen(content) || (wasInlineFenceBlock && leadingWhitespace(content) > 0))
     state.inlineFenceParagraph = true
     if (wasInlineFenceBlock) state.inlineFenceBlock = true
+    state.inDefList = false
+    return
+  }
+  if (state.deepest?.literalColon && !state.ownedAuthored && state.ownedColumn >= 0 &&
+      indentColumns(content, state.ownedColumn) >= state.ownedColumn) {
+    const offset = state.ownedColumn
+    const inner = state.deepest
+    trackItemLazyState(
+      sliceColumns(content, offset, true), inner,
+      (marker, extra = 0) => hasFenceCloser(marker, offset + extra), true, () => false,
+      {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true},
+      (width, extra = 0) => hasLiteralCommentCloser?.(width, offset + extra) ?? false,
+    )
+    state.lazyFoldable = inner.lazyFoldable
+    state.inTable = inner.inTable
     state.inDefList = false
     return
   }
@@ -11752,7 +11784,7 @@ class ParseSession {
       // The shape-blind half of the same fact, for the consumers the two sets
       // above do not serve.
       lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
-      inner.push(ln)
+      inner.push(isListMarkerLine(ln) ? LAZY_FRAME + ln.replace(/^[ \t]+/, '') : ln)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
       if (!lazyLinkDef) trackLine(ln, lineIndex)
     }
@@ -12845,7 +12877,7 @@ class ParseSession {
                 const key = `${owner}:${lexer.lineNumber(fenceLineIndex)}`
                 if (closes) lexer.literalCommentLineOpeners.delete(key)
                 else {
-                  lazyState.literalColon!.rejectedComment = true
+                  if (commentBlockHasCloser(lexer, width, fenceLineIndex)) lazyState.literalColon!.rejectedComment = true
                   lexer.literalCommentLineOpeners.add(key)
                 }
               }
