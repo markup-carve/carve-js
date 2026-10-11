@@ -126,6 +126,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
+    delimiterAncestors: [],
     carryMarkers: markdownCarriersEnabled(opts),
     carrierDepth: 0,
     abbrBudget: budgetForDocument(ast),
@@ -165,6 +166,7 @@ interface MarkdownContext {
   listDepth: number
   blockDepth: number
   inlineDepth: number
+  delimiterAncestors: string[]
   /** PART 11 §10s: whether an element-less container is bracketed with a marker. */
   carryMarkers: boolean
   /**
@@ -952,7 +954,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   return out
 }
 
-function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
+function renderInlines(nodes: InlineNode[], ctx: MarkdownContext, parentDelimiter?: string): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
@@ -975,7 +977,7 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
       if (/[^ \t\r\n]/.test(part)) break
     }
 
-    return reflankRuns(nodes, parts)
+    return reflankRuns(nodes, parts, parentDelimiter, ctx.delimiterAncestors)
   } finally {
     ctx.inlineDepth--
   }
@@ -1014,7 +1016,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'strike': {
       const run = DELIMITER_RUN[node.type]!
 
-      return padOutside(renderInlines(node.children, ctx), run.delimiter, run.tag)
+      ctx.delimiterAncestors.push(run.delimiter)
+      try {
+        const body = renderInlines(node.children, ctx, run.delimiter)
+        return padOutside(body, run.delimiter, run.tag)
+      } finally {
+        ctx.delimiterAncestors.pop()
+      }
     }
     case 'underline':
       return `<u${renderHtmlAttrs(node.attrs)}>${renderInlines(node.children, ctx)}</u>`
@@ -2564,7 +2572,27 @@ function splitRun(part: string, delimiter: string): { lead: string; core: string
  * a run decided against an earlier neighbour can at worst take inline HTML it
  * would not have needed.
  */
-function reflankRuns(nodes: InlineNode[], parts: string[]): string {
+function reflankRuns(nodes: InlineNode[], parts: string[], parentDelimiter?: string, ancestors: string[] = []): string {
+  // A nested opening run must not close an enclosing delimiter of the same character.
+  for (let i = 0; i < parts.length; i++) {
+    const piece = delimiterPiece(nodes, parts, i)
+    if (!piece) continue
+    const edgeSeparatedByParent = parentDelimiter === '**' && ancestors.filter(run => run === '**').length === 1
+      && (neighbourBefore(parts, i) === '' || neighbourAfter(parts, i) === '')
+    if (piece.run.delimiter === '**' && edgeSeparatedByParent) continue
+    if (piece.run.delimiter === '**' && ancestors.includes('**')) {
+      parts[i] = spellAsHtml(piece)
+      continue
+    }
+    if (!parentDelimiter || piece.run.delimiter[0] !== parentDelimiter[0]) continue
+    const opening = piece.run.delimiter.length + runAtStart(piece.core, piece.run.delimiter[0]!)
+    if (parentDelimiter[0] === '*' && !ruleOfThreeAllows(parentDelimiter.length, opening)) continue
+    const before = piece.lead !== '' ? lastCharacter(piece.lead) : neighbourBefore(parts, i)
+    const inside = afterRunInCore(piece.core, piece.run.delimiter[0]!)
+    if (before !== '' && !FLANK_SPACE.test(flankCharacter(before)) && flanks(before, inside)) {
+      parts[i] = spellAsHtml(piece)
+    }
+  }
   // Three passes, because each one wants to see the parts the one before it
   // settled. A part re-spelled as inline HTML contributes a `<` or a `>` where
   // it used to contribute a delimiter, which can only make a later run MORE able
@@ -2705,9 +2733,9 @@ function edgeChildNests(piece: DelimiterPiece, node: InlineNode): boolean {
 
     return child?.delimiter[0] === '*' && child.delimiter.length !== piece.run.delimiter.length
   }
-  if (runAtStart(piece.core, '*') > 0 && !nests(kids[0])) return false
+  if (runAtStart(piece.core, '*') > 0 && (!nests(kids[0]) || runAtStart(piece.core, '*') !== DELIMITER_RUN[kids[0]!.type]!.delimiter.length)) return false
 
-  return runAtEnd(piece.core, '*') === 0 || nests(kids[kids.length - 1])
+  return runAtEnd(piece.core, '*') === 0 || (nests(kids[kids.length - 1]) && runAtEnd(piece.core, '*') === DELIMITER_RUN[kids[kids.length - 1]!.type]!.delimiter.length)
 }
 
 /**
