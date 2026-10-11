@@ -341,15 +341,23 @@ function protectRejectedCommentQuotes(source: string): string {
     let line = firstEnd
     while (line >= 0) {
       const quote = /^(?:[ \t]*>(?:[ \t]|$))+/.exec(source.slice(line + 1))?.[0]
-      if (enclosing && quote && quote.length - quote.trimStart().length < enclosing[0].length) break
-      if (quote && (quote.match(/>/g)?.length ?? 0) < context.depth) { edits.set(line + 1, quote.trimEnd() + '\n'); break }
-      if (!quote || quote.trimStart() !== openingQuote?.trimStart() || (quote.match(/>/g)?.length ?? 0) !== context.depth) break
-      const bodyAt = line + 1 + quote.length
+      const bodyAt = line + 1 + (quote?.length ?? 0)
       const end = source.indexOf('\n', bodyAt)
       const body = source.slice(bodyAt, end < 0 ? source.length : end)
+      if (enclosing && quote && quote.length - quote.trimStart().length < enclosing[0].length) {
+        if (quote.length - quote.trimStart().length > enclosing[0].length - enclosing[0].trimStart().length && quote.trimStart() === openingQuote?.trimStart() && (quote.match(/>/g)?.length ?? 0) === context.depth)
+          edits.set(line + 1 + quote.length, quote.trim().replace(/>/g, '\\>') + ' ')
+        break
+      }
+      if (quote && (quote.match(/>/g)?.length ?? 0) < context.depth) { edits.set(line + 1, quote.trimEnd() + '\n'); break }
+      if (!quote || quote.trimStart() !== openingQuote?.trimStart() || (quote.match(/>/g)?.length ?? 0) !== context.depth) break
       if (!body.trim()) break
       const indent = /^[ \t]*/.exec(body)![0].length
-      if (indent < context.minimum) break
+      if (indent < context.minimum) {
+        if (quote.length - quote.trimStart().length >= (openingQuote ? openingQuote.length - openingQuote.trimStart().length : 0) + context.minimum)
+          edits.set(bodyAt, quote.trim().replace(/>/g, '\\>') + ' ')
+        break
+      }
       if (indent <= context.indent) {
         edits.set(bodyAt, quote.trim().replace(/>/g, '\\>') + ' ')
         break
