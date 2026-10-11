@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { carveToMarkdownWithReport, parse, renderMarkdownWithReport, resolve } from '../src/index.js'
+import { carveToMarkdown, carveToMarkdownWithReport, RenderLossError, parse, renderMarkdownWithReport, resolve } from '../src/index.js'
 import controls from './fixtures/markdown-nested-emphasis.json'
 
 // Native Carve HTML and cmark-gfm readback validate these Markdown goldens.
@@ -10,4 +10,15 @@ it.each(controls)('keeps nested emphasis during Markdown export: $source', ({ so
     expect(result.totalLosses).toBe(0)
     expect(result.truncated).toBe(false)
   }
+})
+
+it('keeps complete ordered loss counts while repairing nested spans', () => {
+  const source = '{*a {/b {*x `omitted`{=latex}*} c/} d*} and `tail`{=typst}'
+  const report = carveToMarkdownWithReport(source)
+  expect(report.value).toBe(carveToMarkdown(source))
+  expect(report.losses.map(loss => [loss.code === 'raw-format-dropped' ? loss.format : undefined, loss.pos?.startColumn])).toEqual([['latex', 13], ['typst', 45]])
+  expect(report.totalLosses).toBe(2)
+  expect(carveToMarkdownWithReport(source, { maxRenderLosses: 0 })).toMatchObject({ losses: [], totalLosses: 2, truncated: true })
+  expect(() => carveToMarkdownWithReport(source, { strictLosses: true, maxRenderLosses: 1 })).toThrow(RenderLossError)
+  expect(carveToMarkdownWithReport('/clean/').totalLosses).toBe(0)
 })
