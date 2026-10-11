@@ -72,9 +72,8 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
     if (source[at] === '{') {
       const attrs = readAttributes(source, at)
       if (attrs && source[at + 1] === '%' && options.comments !== false && at < lastBrace) {
-        let end = at + 2
-        while (end < source.length && source[end] !== '}' && !(source[end] === '%' && source[end + 1] === '}')) end++
-        if (source[end] === '%') end++
+        const close = source.indexOf('}', at + 2)
+        const end = close < 0 ? source.length : close
         if (source[end] === '}') {
           options.onComment?.(at, end + 1)
           hide(at + 1, end)

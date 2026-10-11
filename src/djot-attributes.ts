@@ -1,9 +1,12 @@
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 
+const commentEnd = /[%}]/g
+
 const quoteValue = (value: string, carve = false): string => `"${value.replace(carve ? /[!-\/:-@\[-`{-~]/g : /[\\"]/g, char => '\\' + char)}"`
 
 export function attributeContext(source: string, start: number): { depth: number; indent: number | undefined; minimum: number } {
   let prefix = source.slice(source.lastIndexOf('\n', start - 1) + 1, start), depth = 0
+  if (!prefix) return { depth: 0, indent: 0, minimum: 0 }
   const enclosingItem = /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+(?=>)/.exec(prefix)
   if (enclosingItem) prefix = prefix.slice(enclosingItem[0].length)
   while (true) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(prefix); if (!quote) break; prefix = prefix.slice(quote[0].length); depth++ }
@@ -21,11 +24,15 @@ const paragraphStarts = new Map<number, { key: string; result: boolean }>()
 export function resetParagraphContext(): void { paragraphSource = ''; paragraphStarts.clear() }
 
 export function continuesParagraph(source: string, start: number): boolean {
-  if (paragraphSource !== source) { paragraphSource = source; paragraphStarts.clear() }
+  if (paragraphSource !== source) paragraphStarts.clear()
+  paragraphSource = source
   const context = attributeContext(source, start)
   const key = `${context.depth}:${context.indent}:${context.minimum}`
+  const from = source.lastIndexOf('\n', start - 1) + 1
+  const cached = paragraphStarts.get(from)
+  if (cached?.result && cached.key === key) return true
   const result = scanParagraph(source, start, key)
-  paragraphStarts.set(source.lastIndexOf('\n', start - 1) + 1, {key, result})
+  paragraphStarts.set(from, {key, result})
   return result
 }
 
@@ -122,14 +129,15 @@ export function readAttributes(source: string, start: number, carve = false, tab
         for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
       } else i++
     }
-    if (source[i] === '}' && source.slice(start, i + 1).includes('\n') && (parts.length > 0 || !paragraphContext || !continuesParagraph(source, start))) {
-      const context = attributeContext(source, start)
-      for (const raw of source.slice(start, i + 1).split('\n').slice(1)) {
-        const line = attributeLine(raw, context.depth)
-        if (context.indent !== undefined && line === undefined) return undefined
+    if (source[i] === '}' && source.slice(start, i + 1).includes('\n')) {
+      const heldContext = context ??= attributeContext(source, start)
+      const invalid = source.slice(start, i + 1).split('\n').slice(1).some(raw => {
+        const line = attributeLine(raw, heldContext.depth)
+        if (heldContext.indent !== undefined && line === undefined) return true
         const indent = /^[ \t]*/.exec(line ?? raw)![0].length
-        if (context.indent !== undefined && (indent < context.minimum || indent <= context.indent)) return undefined
-      }
+        return heldContext.indent !== undefined && (indent < heldContext.minimum || indent <= heldContext.indent)
+      })
+      if (invalid && (parts.length > 0 || !paragraphContext || !continuesParagraph(source, start))) return undefined
     }
     if (source[i] === '}') {
       if (carve && table) {
@@ -141,8 +149,8 @@ export function readAttributes(source: string, start: number, carve = false, tab
       return { end: i + 1, source: `{${parts.join(' ')}}`, tokens }
     }
     if (source[i] === '%') {
-      let end = i + 1
-      while (end < source.length && source[end] !== '%' && source[end] !== '}') end++
+      commentEnd.lastIndex = i + 1
+      const end = commentEnd.exec(source)?.index ?? source.length
       if (end === source.length || /\n[ \t]*\n/.test(source.slice(i, end))) return undefined
       i = source[end] === '%' ? end + 1 : end
       continue
