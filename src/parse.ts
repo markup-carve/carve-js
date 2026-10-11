@@ -5424,6 +5424,7 @@ function trackItemLazyState(
   // fence between the malformed fence and a later bare `:::` from leaving the
   // flag set: at the top level those end the paragraph and the later fence
   // opens a real div, and this tracker has to give the same answer.
+  const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
   const wasAbsorbing = state.absorbingFence
   state.absorbingFence = false
   const wasInlineFence = state.inlineFenceParagraph === true
@@ -5521,7 +5522,7 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
-  if (wasInlineFence && !RE_COMMENT_LINE.test(content.trimStart()) && !RE_ADMONITION_CLOSE.test(content.trimStart()) && colonFenceOpenerLen(content) === null) {
+  if (wasInlineFence && !isBlankLine(content) && !RE_COMMENT_LINE.test(content.trimStart()) && !RE_ADMONITION_CLOSE.test(content.trimStart()) && colonFenceOpenerLen(content) === null) {
     state.lazyFoldable = true
     state.inlineFenceParagraph = true
     state.inDefList = false
@@ -5795,10 +5796,12 @@ function trackItemLazyState(
         state.inDefList = false
         return
       }
-      state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: run! }
-      state.lazyFoldable = false
-      state.inDefList = false
-      return
+      if (facts?.descendantFrames === true && !wasDescendantColumn) {
+        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: run! }
+        state.lazyFoldable = false
+        state.inDefList = false
+        return
+      }
     }
     const colon = colonFenceOpenerLen(overIndented)
     if (colon !== null && !wasInlineFence && !wasAbsorbing && !wasClosedColon) {
@@ -7105,7 +7108,7 @@ function rebaseOverindentedBlocks(
     if (eligible && !eligible.has(i)) continue
     const cap = ownedColumn >= 0 ? ownedColumn + 1 : Infinity
     const base = indentColumns(line, cap)
-    if (i <= markerColonEnd) {
+    if (i <= markerColonEnd && !(ownedColumn >= 0 && base >= ownedColumn)) {
       const childColumn = markerContentColumn(line)
       if (childColumn >= 0) ownedColumn = childColumn
     }
