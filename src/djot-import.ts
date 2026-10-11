@@ -9,7 +9,7 @@ import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords } from './djot-word-attributes.js'
 import { readAttributes, rejectedCommentStartsBlock } from './djot-attributes.js'
 import { maskDjotOpaque } from './djot-opaque.js'
-import { djotBlockLayout, djotCodePadding, djotInlineLayout } from './djot-block-layout.js'
+import { djotBlockLayout, djotCodePadding, djotInlineLayout, djotCodeQuoteMarkers } from './djot-block-layout.js'
 import { djotReferenceLayout } from './djot-reference-layout.js'
 import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
@@ -1183,8 +1183,9 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
 }
 
 function normalizeDjotFences(source: string): string {
+  const quoteCode = djotCodeQuoteMarkers(source).length > 0
   if (!source.includes('```') && !source.includes('~~~'))
-    return source.includes('\\|') ? closeDjotTableCode(source) : source
+    return source.includes('\\|') || quoteCode ? closeDjotTableCode(source) : source
   const lines = source.split('\n')
   const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
   maskDjotCodeAndDestinations(
@@ -1198,7 +1199,7 @@ function normalizeDjotFences(source: string): string {
     rows,
   )
   const normalized = normalizeDjotParagraphFences(lines.join('\n'))
-  return source.includes('\\|') || source.split('\n').some((line) => /^[ \t]+`{3,}/.test(quoted(line)[1]))
+  return quoteCode || source.includes('\\|') || source.split('\n').some((line) => /^[ \t]+`{3,}/.test(quoted(line)[1]))
     ? closeDjotTableCode(normalized)
     : normalized
 }

@@ -1,3 +1,4 @@
+import { djotCodeQuoteMarkers } from './djot-block-layout.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
@@ -50,6 +51,7 @@ export function djotImportLosses(
       losses.push({ code: 'structure-unspellable', message, line })
     }
   }
+  for (const at of djotCodeQuoteMarkers(source)) report('Multiline inline code containing a quote marker uses raw HTML; plain-text export omits it.', lineAt(at))
   djotEmphasis(
     source,
     (text) => text,
