@@ -175,8 +175,8 @@ describe('ruby annotations', () => {
   it('numbers footnotes inside both sides', () => {
     const withNotes = structuredClone(document)
     const ruby = (withNotes.children[0] as { children: Array<{ pairs: Array<{ base: unknown[]; annotation: unknown[] }> }> }).children[0]!
-    ruby.pairs[0]!.base.push({ type: 'footnote_ref', id: 'base' })
-    ruby.pairs[0]!.annotation.push({ type: 'footnote_ref', id: 'note' })
+    ruby.pairs[0]!.base.push({ type: 'footnote_ref', label: 'base' })
+    ruby.pairs[0]!.annotation.push({ type: 'footnote_ref', label: 'note' })
     withNotes.footnoteDefs = {
       base: [{ type: 'paragraph', children: [{ type: 'text', value: 'Base note' }] }],
       note: [{ type: 'paragraph', children: [{ type: 'text', value: 'Annotation note' }] }],

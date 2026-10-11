@@ -1143,7 +1143,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
         const inline = node.inline
         return `^[${outsideLink(() => renderInlines(inline, ctx))}]`
       }
-      const id = stripControls(node.id ?? '')
+      const id = stripControls(node.label ?? '')
       // An UNRESOLVED reference did not form a footnote, so what is emitted is
       // ordinary text -- and its brackets are Markdown metacharacters, which
       // PART 11 section 8 M1 escapes UNCONDITIONALLY. Emitting them bare handed

@@ -478,7 +478,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
         const inline = node.inline
         return `(${outsideLink(() => renderInlines(inline, ctx))})`
       }
-      const id = stripControls(node.id ?? '')
+      const id = stripControls(node.label ?? '')
       // An UNRESOLVED reference stays literal, exactly as the HTML target
       // renders it: the construct did not form, so `[^a]` is ordinary text and
       // dropping the caret invented a reference the document does not have.
