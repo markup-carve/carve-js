@@ -36,6 +36,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
   let paragraph = false,
     blank = true,
     depth = 0
+  let quoteBoundary = ''
   let headingMarker = ''
   let definitionIndent = -1
   for (let n = 0; n < lines.length; n++) {
@@ -84,8 +85,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       while (original[blockAt] === ' ' || original[blockAt] === '\t') blockAt++
       blockIndent = blockAt - start
     }
+    const quoteList = lists.at(-1)
     const blockStart =
-      quoteDepth > depth ||
+      (quoteDepth > depth && (!paragraph || (quoteList && indentAfterQuotes(original, quoteList.depth) < quoteList.column + quoteList.content))) ||
       rows[n] ||
       fences[n] !== original ||
       /^(?:#{1,6}(?:[ \t]|$)|:{3,}|\|)/.test(visible) ||
@@ -97,15 +99,13 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     // A new block can end lazy continuation outside a quote or list item.
     if (quoteDepth < depth && (blockStart || item || rejectedCommentStartsBlock(visible))) {
       while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
-      if (item && !blank) {
-        const owner = lists.at(-1)
-        const column = owner ? owner.target + owner.content : 0
-        out.push((quote + ' '.repeat(column) + '> '.repeat(depth - quoteDepth)).trimEnd())
-      }
+      const owner = lists.at(-1)
+      if (item && !blank && paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) out.push(quoteBoundary)
       else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quote.trimEnd())
       paragraph = false
       headingMarker = ''
       depth = quoteDepth
+      quoteBoundary = quote.trimEnd()
     }
     while (divs.at(-1)?.itemColumn !== undefined) {
       const owned = divs.at(-1)!
@@ -134,14 +134,16 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       }
       if (blank) for (const list of lists) if (blockIndent > list.column) list.loose = true
     }
+    const quoteOwner = lists.at(-1)
     if (
-      quoteDepth > depth &&
-      lists.length &&
-      blockIndent >= lists.at(-1)!.column + lists.at(-1)!.content &&
-      !paragraph
+      quoteOwner && quoteDepth >= depth && quoteDepth > quoteOwner.depth &&
+      indentAfterQuotes(original, quoteOwner.depth) >= quoteOwner.column + quoteOwner.content &&
+      (!paragraph || quoteDepth === depth)
     ) {
+      quoteBoundary = quote.trimEnd()
       depth = quoteDepth
       out.push(original)
+      paragraph = !(rows[n] || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || /^(?:[*-][ \t]*){3,}$/.test(visible))
       blank = false
       continue
     }
@@ -175,7 +177,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     if (quoteDepth > depth && !paragraph) {
       lists.length = 0
       depth = quoteDepth
-    } else if (quoteDepth < depth && !paragraph && blank) {
+      quoteBoundary = quote.trimEnd()
+    } else if (quoteDepth < depth && !paragraph) {
       while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
       depth = quoteDepth
     }
@@ -279,9 +282,13 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
           depth: quoteDepth,
           start: lineOffsets[n]!,
         })
-      const itemQuote = /^(?:>[ \t]*)+/.exec(body)
-      if (itemQuote) depth = quoteDepth + (itemQuote[0].match(/>/g) ?? []).length
-      paragraph = !itemDiv && !itemHeading && !itemQuote
+      const itemQuote = body.startsWith('>') ? itemQuotePrefix(body) : undefined
+      if (itemQuote?.depth) {
+        depth = quoteDepth + itemQuote.depth
+        quoteBoundary = (quote + ' '.repeat(context!.target + context!.content) + itemQuote.prefix).trimEnd()
+      }
+      const quoteBody = itemQuote?.body ?? ''
+      paragraph = !itemDiv && !itemHeading && !(itemQuote?.depth && /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody))
       blank = !!itemDiv
       continue
     }
@@ -527,4 +534,32 @@ export function djotCodePadding(source: string): string {
     at = end - 1
   }
   return output + source.slice(copied)
+}
+
+function indentAfterQuotes(line: string, depth: number): number {
+  let at = 0
+  for (let level = 0; level < depth; level++) {
+    while (line[at] === ' ' || line[at] === '\t') at++
+    at++
+    if (line[at] === ' ' || line[at] === '\t') at++
+  }
+  const start = at
+  while (line[at] === ' ' || line[at] === '\t') at++
+  return at - start
+}
+
+function itemQuotePrefix(body: string): { depth: number; prefix: string; body: string } {
+  let rest = body, depth = 0, prefix = ''
+  while (true) {
+    const quote = /^(?:>(?:[ \t]+|$))+/.exec(rest)
+    if (!quote) break
+    depth += (quote[0].match(/>/g) ?? []).length
+    prefix += quote[0]
+    rest = rest.slice(quote[0].length)
+    const item = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?=>[ \t])/.exec(rest)
+    if (!item) break
+    prefix += ' '.repeat(item[0].length)
+    rest = rest.slice(item[0].length)
+  }
+  return { depth, prefix, body: rest }
 }
