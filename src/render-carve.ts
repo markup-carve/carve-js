@@ -3737,6 +3737,9 @@ class CarveRenderSession {
     // which `separatorWidths` is the record of. `tableNeedsDelimiterHeader` is
     // the other way in - a header row whose spans the native `|=` form cannot
     // spell - and it writes the canonical `---`.
+    if (node.separatorWidths?.length && first?.cells.length && !first.cells.every(cell => cell.header)) {
+      throw new SourceUnspellableError('table', 'separatorWidths would promote non-header cells', node)
+    }
     const authored = authoredSeparator(node)
     const needsDelimiter = authored !== undefined || tableNeedsDelimiterHeader(node)
 
@@ -3749,7 +3752,7 @@ class CarveRenderSession {
         // The authored separator spells the alignment in its own colons, so the
         // cell marker would be a second spelling of it and the bytes would not
         // be the ones the author wrote. Both re-parse to the same alignment.
-        const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < authored.length
+        const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < node.separatorWidths!.length
         cells.push(this.renderTableCell(cell, ctx, asHeader, colonSpelled))
       })
       // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
@@ -3768,7 +3771,12 @@ class CarveRenderSession {
     }
     const caption = node.caption === undefined ? undefined : this.captionRow(node.caption, ctx)
     if (caption !== undefined) rows.push(caption)
-    return rows.join('\n')
+    try {
+      return rows.join('\n')
+    } catch (error) {
+      if (!(error instanceof RangeError) || node.separatorWidths === undefined) throw error
+      throw new SourceUnspellableError('table', 'separatorWidths exceeds the string capacity', node)
+    }
   }
 
   private renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true, alignIsColonSpelled = false): string {

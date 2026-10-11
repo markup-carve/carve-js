@@ -3898,7 +3898,7 @@ class Importer {
       })
       return listTableOf(kept, ownAlignment, caption, attrs, this.writing)
     }
-    const separatorWidths = this.separatorWidths(node)
+    const separatorWidths = this.separatorWidths(node, path)
     return { type: 'table', rows, ...(separatorWidths ? { separatorWidths } : {}), ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
   }
 
@@ -3916,18 +3916,17 @@ class Importer {
    * other spelling - the `|=` header form, which is what the field's absence
    * means.
    */
-  private separatorWidths(node: P5Node): number[] | undefined {
+  private separatorWidths(node: P5Node, path: string): number[] | undefined {
     const raw = readCarrier((name) => this.attr(node, name), 'col-widths')
     if (raw === undefined) return undefined
     const widths = raw.split(',').map((part) => {
-      const trimmed = part.trim()
-      if (!/^[1-9][0-9]*$/.test(trimmed)) return undefined
-      const width = Number(trimmed)
-      return Number.isSafeInteger(width) && width <= MAX_CARRIED_SEPARATOR_WIDTH ? width : undefined
+      if (!/^[0-9]+$/.test(part)) return undefined
+      const width = Number(part)
+      return Number.isSafeInteger(width) && width >= 1 && width <= MAX_CARRIED_SEPARATOR_WIDTH ? width : undefined
     })
-    return widths.length > 0 && widths.every((width) => width !== undefined)
-      ? (widths as number[])
-      : undefined
+    if (widths.length > 0 && widths.every(width => width !== undefined)) return widths as number[]
+    this.report.add('attribute-dropped', 'Dropped invalid col-widths carrier on <table>', 'warning', path, node)
+    return undefined
   }
 
   /**

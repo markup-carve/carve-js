@@ -812,6 +812,13 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       }
     }
     refuseArrayMinimums(record, type as string, path)
+    if (type === 'table' && Array.isArray(record.separatorWidths)) {
+      record.separatorWidths.forEach((width, index) => {
+        if (!Number.isInteger(width) || width < 1) {
+          throw new AstJsonSchemaError('separatorWidths entries must be positive integers', `${path}.separatorWidths[${index}]`)
+        }
+      })
+    }
     if (type === 'line_block' && Array.isArray(record.lines)) {
       const stanzas = record.children as unknown[]
       if (record.lines.length !== stanzas.length) {

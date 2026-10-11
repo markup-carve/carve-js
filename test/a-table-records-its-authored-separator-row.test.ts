@@ -97,6 +97,18 @@ describe('the field is published on the wire', () => {
     expect(() => fromAstJson(payload)).toThrow(/at least one item/)
   })
 
+  it.each([0, -1, 1.5, '3', null])('refuses a non-positive-integer width: %j', width => {
+    const payload = JSON.parse(JSON.stringify(toAstJson(parse('| a |\n|---|\n| 1 |\n'))))
+    payload.children[0].separatorWidths = [width]
+    expect(() => fromAstJson(payload)).toThrow(/positive integers/)
+  })
+
+  it('reports a typed refusal when a width exceeds string capacity', () => {
+    const table = tableOf('|= a |\n| 1 |\n')
+    table.separatorWidths = [Number.MAX_SAFE_INTEGER]
+    expect(() => renderCarve({ type: 'document', children: [table] })).toThrow(/string capacity/)
+  })
+
   it('the parser cannot produce an empty array either', () => {
     // Both halves of the same rule: a row with no separator cells is not a
     // delimiter row, so it never promotes and the field is never recorded.
@@ -141,10 +153,10 @@ describe('the writer reproduces the field', () => {
     )
   })
 
-  it('writes 1 for a width below 1', () => {
+  it('omits invalid widths in an unvalidated tree', () => {
     const table = tableOf('|= a |\n| 1 |\n')
     table.separatorWidths = [0]
-    expect(renderCarve({ type: 'document', children: [table] })).toBe('| a |\n|-|\n| 1 |\n')
+    expect(renderCarve({ type: 'document', children: [table] })).toBe('|= a |\n| 1 |\n')
   })
 
   it('spells the ENTRIES that exist, padding to the header width and truncating to it alike', () => {
@@ -163,6 +175,15 @@ describe('the writer reproduces the field', () => {
     expect(renderCarve({ type: 'document', children: [narrow] })).toBe(
       '| a | b |\n|----|\n| 1 | 2 |\n',
     )
+  })
+
+  it('keeps native alignment beyond the authored separator entries', () => {
+    const table = tableOf('|= a |= b |\n| 1 | 2 |\n')
+    table.separatorWidths = [3]
+    table.rows[0]!.cells[1]!.align = 'right'
+    const output = renderCarve({ type: 'document', children: [table] })
+    expect(tableOf(output).rows[0]!.cells[1]!.align).toBe('right')
+    expect(tableOf(output).separatorWidths).toEqual([3])
   })
 
   it('takes no alignment for an entry past the last header cell', () => {
@@ -195,6 +216,6 @@ describe('the writer reproduces the field', () => {
     // say something the tree does not.
     const table = tableOf('| a | b |\n| 1 | 2 |\n')
     table.separatorWidths = [3, 3]
-    expect(renderCarve({ type: 'document', children: [table] })).toBe('| a | b |\n| 1 | 2 |\n')
+    expect(() => renderCarve({ type: 'document', children: [table] })).toThrow(/separatorWidths would promote/)
   })
 })

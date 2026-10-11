@@ -383,6 +383,7 @@ export const WIRE_ARRAY_MIN_ITEMS: Readonly<Record<string, Readonly<Record<strin
   "line_block": { "lines": [{"depth":1,"minimum":1}] },
   "ruby": { "pairs": [{"depth":0,"minimum":1}] },
   "rubyPair": { "base": [{"depth":0,"minimum":1}] },
+  "table": { "separatorWidths": [{"depth":0,"minimum":1}] },
 }
 
 /**

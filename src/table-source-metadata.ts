@@ -1,3 +1,4 @@
+import { SourceUnspellableError } from './source-unspellable-error.js'
 import type { Attrs, Table, TableColumn, TableRowGroups } from './ast.js'
 
 function shiftDecimal(value: string, places: number): string | undefined {
@@ -167,13 +168,26 @@ export function authoredSeparator(table: Table): string | undefined {
   const first = table.rows[0]
   if (widths === undefined || widths.length < 1 || !first?.cells.length) return undefined
   if (!first.cells.every((cell) => cell.header)) return undefined
-  const cells = widths.map((entry, i) => {
-    const width = Math.floor(entry)
-    const dashes = '-'.repeat(Number.isFinite(width) && width > 1 ? width : 1)
+  if (!widths.every(width => Number.isInteger(width) && width > 0)) return undefined
+  let length = widths.length + 1
+  for (const [i, width] of widths.entries()) {
     const align = first.cells[i]?.align
-    const left = align === 'left' || align === 'center' ? ':' : ''
-    const right = align === 'right' || align === 'center' ? ':' : ''
-    return `${left}${dashes}${right}`
-  })
-  return `|${cells.join('|')}|`
+    length += width + (align === 'center' ? 2 : align === 'left' || align === 'right' ? 1 : 0)
+    if (!Number.isSafeInteger(length)) {
+      throw new SourceUnspellableError('table', 'separatorWidths exceeds the string capacity', table)
+    }
+  }
+  try {
+    const cells = widths.map((width, i) => {
+      const dashes = '-'.repeat(width)
+      const align = first.cells[i]?.align
+      const left = align === 'left' || align === 'center' ? ':' : ''
+      const right = align === 'right' || align === 'center' ? ':' : ''
+      return `${left}${dashes}${right}`
+    })
+    return `|${cells.join('|')}|`
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    throw new SourceUnspellableError('table', 'separatorWidths exceeds the string capacity', table)
+  }
 }

@@ -1936,7 +1936,8 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   // promise this renderer cannot keep. The FIELD is unbounded and keeps its
   // value - only the carrier is withheld.
   const carriable = node.separatorWidths !== undefined
-    && node.separatorWidths.every((width) => width <= MAX_CARRIED_SEPARATOR_WIDTH)
+    && node.separatorWidths.length > 0
+    && node.separatorWidths.every((width) => Number.isInteger(width) && width >= 1 && width <= MAX_CARRIED_SEPARATOR_WIDTH)
   const widthsAttr = roundtripExport(opts) && carriable
     ? ` ${carrier('col-widths')}="${escapeAttr(node.separatorWidths!.join(','))}"`
     : ''

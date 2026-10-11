@@ -253,9 +253,11 @@ describe('the twelve carriers', () => {
     // field's absence means. One bad entry refuses the whole attribute rather
     // than keeping the entries around it: a partial read would put a separator
     // row on the page whose widths nobody wrote.
-    for (const value of ['', '0', '2,x', '-1', '1.5', '3,', '+3', ' ']) {
+    for (const value of ['', '0', '2,x', '-1', '1.5', '3,', '+3', ' ', ' 3', '3 ', '2, 3']) {
       const html = `<table data-carve-col-widths="${value}">\n<tr><th>a</th></tr>\n<tr><td>1</td></tr>\n</table>`
-      expect(htmlToCarve(html).value, value).toBe('|= a |\n| 1 |\n')
+      const result = htmlToCarve(html)
+      expect(result.value, value).toBe('|= a |\n| 1 |\n')
+      expect(result.report.diagnostics.map(item => item.code), value).toContain('attribute-dropped')
     }
   })
 
