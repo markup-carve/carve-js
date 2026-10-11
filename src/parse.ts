@@ -3362,6 +3362,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
 
     lexer.consume()
     lines.push({ text, lineIndex })
+    if (stack.at(-1)!.kind === 'line block') continue
     const openerLen = colonFenceOpenerLen(text)
     if (openerLen !== null) {
       stack.push({
@@ -3462,6 +3463,13 @@ function trackQuoteHostFence(
       return true
     }
   }
+  const literal = host.colons?.at(-1)
+  if (literal?.literal && column >= literal.floor) {
+    const close = /^(:{3,})[ \t]*$/.exec(text)
+    if (close && close[1]!.length === literal.width && (column === literal.floor || column === literal.column)) host.colons!.pop()
+    closeBlockQuoteParagraph(state)
+    return true
+  }
   if (text === '') return false
   if (quotedLineText(content, terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []
@@ -3527,6 +3535,7 @@ function trackQuoteHostFence(
       closeBlockQuoteParagraph(state)
       return true
     }
+    if (bare && open && at !== open.column && at !== open.floor) return false
     if (open) open.awaitingBody = false
     if (open?.literal) {
       closeBlockQuoteParagraph(state)
@@ -4543,6 +4552,7 @@ interface ItemLazyState {
   // and not absorbable text - which is why a malformed fence INSIDE an open
   // container arms nothing: the closer below it still has a container to close.
   divDepth: number
+  literalColon?: { width: number; column: number }
   // The lines so far of a `{…}` block-attribute block that has not closed yet,
   // newline-joined, or null when the tracker is not inside one. §15 A5 lets the
   // block WRAP, so the tracker has to hold it open the way it holds a fence
@@ -5379,6 +5389,20 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
+  if (state.literalColon !== undefined && atContentColumn) {
+    const open = state.literalColon
+    const close = RE_ADMONITION_CLOSE.exec(content)
+    const column = indentColumns(content)
+    if (close && close[1]!.length === open.width && (column === 0 || column === open.column)) {
+      delete state.literalColon
+      state.divDepth--
+      state.lazyFoldable = false
+    } else {
+      state.lazyFoldable = !isBlankLine(content)
+    }
+    state.inDefList = false
+    return
+  }
   if (state.opaque?.kind === 'comment') {
     const comment = state.opaque
     // A CLOSER IS NOT A BARE RUN. This said it was - "so this test stays
@@ -5708,6 +5732,7 @@ function trackItemLazyState(
       return
     }
     state.divDepth++
+    if (RE_LINE_BLOCK_OPEN.test(content)) state.literalColon = {width: colonFenceOpenerLen(content)!, column: indentColumns(content)}
     // A valid opener ENDS the absorbing paragraph, so the bare fence that
     // closes the block it opens is that block's closer rather than more
     // absorbed text - and a closed block leaves no open paragraph.
@@ -12184,6 +12209,11 @@ class ParseSession {
         itemSpanScan.opaque = { comment: true, char: '%', run: leadComment }
         itemSpanScan.atBlockStart = false
       }
+      const leadColon = colonFenceOpenerLen(content)
+      if (leadColon !== null) {
+        lazyState.divDepth = 1
+        if (RE_LINE_BLOCK_OPEN.test(content)) lazyState.literalColon = {width: leadColon, column: indentColumns(content)}
+      }
       // The lead line may itself be the malformed fence (`- :::note`), and then
       // the paragraph it opens is already absorbing: the `:::` below it is text,
       // not a closer for a block nothing opened (PART 9 §12, carve#891).
@@ -12822,7 +12852,7 @@ class ParseSession {
         taskMatch(content, terminatorFree) !== null ||
         extractItemAttr(content, terminatorFree) !== null
       // Include marker-line containers whose continuation keeps its own extent.
-      const leadOwnsExtent = RE_DEFLIST_TERM.test(content) ||
+      const leadOwnsExtent = leadColon !== null || RE_DEFLIST_TERM.test(content) ||
         (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&
           blockQuoteParagraphOpen(markerLineQuoteState(content)!))
       const rebaseLines = leadOwnsExtent ? [content, ...nested] : nested
