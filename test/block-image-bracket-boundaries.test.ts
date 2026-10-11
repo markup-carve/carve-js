@@ -1,7 +1,7 @@
 import { parseFragment, type DefaultTreeAdapterTypes } from 'parse5'
 import { expect, it } from 'vitest'
 import { carveToHtml, parse, renderHtml, renderCarveWithReport, resolve, markdownToCarve, htmlToCarve } from '../src/index.js'
-import { buildBracketMap } from '../src/parse.js'
+import { buildBracketMap, rawImageBracketRunCloses } from '../src/parse.js'
 import controls from './fixtures/block-image-bracket-boundaries.json'
 
 function htmlTree(html: string): unknown {
@@ -45,9 +45,10 @@ it('restores ordinary link comment context after a nested image', () => {
   expect(carveToHtml('[![x](/i) {% ] %} c](/u)').trim()).toBe('<p><a href="/u"><img src="/i" alt="x">  c</a></p>')
 })
 
-it('keeps an editorial opener in imported image alt from consuming its title', () => {
-  const html = '<img src="/image" alt="{# x" title="t #}">'
-  const markdown = '![{# x](/image "t #}")'
+it.each(['{# x', '{#}', '{#} {# x', '{#{#}', '{#}{#}', '{# x #}{#}'])(
+  'keeps editorial-shaped image alt from consuming its title: %s', alt => {
+  const html = `<img src="/image" alt="${alt}" title="t #}">`
+  const markdown = `![${alt}](/image "t #}")`
   expect(htmlTree(carveToHtml(markdownToCarve(markdown)))).toEqual(htmlTree(html))
   const imported = htmlToCarve(html)
   expect(imported.report.diagnostics).toEqual([])
@@ -63,4 +64,10 @@ it('uses escape-aware image context when rescanning openers inside a closed span
   expect(buildBracketMap(link)(linkOpen)).toBe(link.indexOf('](`v)'))
   const nested = '`[a ![b {% ] %} c](i) d]`'
   expect(buildBracketMap(nested)(1)).toBe(nested.indexOf('](i)'))
+})
+
+it('keeps editorial openers inside closed code spans opaque to bracket checks', () => {
+  expect(rawImageBracketRunCloses('`{#`')).toBe(true)
+  expect(rawImageBracketRunCloses('{#}')).toBe(false)
+  expect(rawImageBracketRunCloses('{#{#}')).toBe(true)
 })

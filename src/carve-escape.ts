@@ -380,10 +380,22 @@ function escapeBracedPairs(line: string, delimiters: string): string {
   return insertEscapes(line, offsets)
 }
 
+/** Find the first editorial opener whose non-overlapping closer is absent. */
+export function unclosedImageEditorialOpener(text: string): number {
+  let from = 0
+  while (from < text.length) {
+    const open = text.indexOf('{#', from)
+    if (open < 0) return -1
+    const close = text.indexOf('#}', open + 2)
+    if (close < 0) return open
+    from = close + 2
+  }
+  return -1
+}
+
 /** Keep an unclosed editorial opener in image alt from consuming a later title. */
 export function escapeUnclosedImageEditorialOpeners(text: string): string {
-  const close = text.lastIndexOf('#}')
-  if (text.lastIndexOf('{#') <= close) return text
-  const tail = close < 0 ? 0 : close + 2
-  return text.slice(0, tail) + text.slice(tail).replace(/\{(?=#)/g, '\\{')
+  const open = unclosedImageEditorialOpener(text)
+  if (open < 0) return text
+  return text.slice(0, open) + text.slice(open).replace(/\{(?=#)/g, '\\{')
 }

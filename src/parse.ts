@@ -7369,9 +7369,11 @@ export function rawBracketRunCloses(text: string): boolean {
   return buildBracketMap(`[${text}]`)(0) === text.length + 1
 }
 
+/** Image alt keeps delimited comments literal and editorial comments opaque. */
 export function rawImageBracketRunCloses(text: string): boolean {
-  return text.lastIndexOf('{#') <= text.lastIndexOf('#}')
-    && buildBracketMap(`![${text}]`)(1) === text.length + 2
+  const structural = new Set<number>()
+  const closes = buildBracketMap(`![${text}]`, false, structural)(1)
+  return closes === text.length + 2 && !structural.has(-1)
 }
 
 /** The start of the last maximal backtick run of each length. */
