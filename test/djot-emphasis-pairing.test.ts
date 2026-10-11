@@ -2,6 +2,11 @@ import { expect, test } from 'vitest'
 import { djotToCarve, carveToHtml } from '../src/index.js'
 
 test.each([
+  ['> a\n- *x*', '<blockquote><p>a</p></blockquote>\n<ul>\n  <li><strong>x</strong></li>\n</ul>'],
+  ['> a\n> > b', '<blockquote><p>a\n&gt; b</p></blockquote>'],
+  ['> > a\n> - *x*', '<blockquote>\n  <blockquote><p>a</p></blockquote>\n  <ul>\n    <li><strong>x</strong></li>\n  </ul>\n</blockquote>'],
+  ['> > a\n>  - *x*', '<blockquote>\n  <blockquote><p>a</p></blockquote>\n  <ul>\n    <li><strong>x</strong></li>\n  </ul>\n</blockquote>'],
+  ['> > a\n> b\n> > c', '<blockquote>\n  <blockquote><p>a\nb\nc</p></blockquote>\n</blockquote>'],
   ['_(_foo_)_', '<p><em>(</em>foo<em>)</em></p>'],
   ['_({_foo_})_', '<p><em>(<em>foo</em>)</em></p>'],
   ['{_ x_ _} _x_}', '<p><em> x_ </em> _x_}</p>'],

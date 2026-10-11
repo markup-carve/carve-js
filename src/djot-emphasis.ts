@@ -13,6 +13,7 @@ type Pair = {
   forced: boolean
   children: Pair[]
   kinds: Set<string>
+  hostDepth?: number
 }
 type Opener = { start: number; end: number; kind: string; forced: boolean }
 
@@ -266,6 +267,11 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     for (const pair of pairs) paired.set(pair.openEnd - 1, pair.end)
     return source
   }
+  for (const start of validBraces) {
+    if (source[start + 1] !== '=') continue
+    const close = braceEnds.get(start)!
+    pairs.push({ start, openEnd: start + 2, close, end: close + 2, kind: '=', forced: true, children: [], kinds: new Set(['=']) })
+  }
   pairs.sort((a, b) => a.start - b.start || b.end - a.end)
   const roots: Pair[] = []
   const stack: Pair[] = []
@@ -337,6 +343,27 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     return text
   }
+  const hostChanges = new Map<number, number>()
+  for (const start of validBraces) {
+    if (starts.has(start)) continue
+    const end = braceEnds.get(start)!
+    hostChanges.set(start + 2, (hostChanges.get(start + 2) ?? 0) + 1)
+    hostChanges.set(end, (hostChanges.get(end) ?? 0) - 1)
+  }
+  for (const [start, end] of bracketPairs) {
+    if (literalBrackets.has(start) || literalBrackets.has(end)) continue
+    if (!'([{'.includes(source[end + 1] ?? '\0') && source[start - 1] !== '^') continue
+    hostChanges.set(start + 1, (hostChanges.get(start + 1) ?? 0) + 1)
+    hostChanges.set(end, (hostChanges.get(end) ?? 0) - 1)
+  }
+  if (hostChanges.size) {
+    let hostDepth = 0
+    for (let at = 0; at < source.length; at++) {
+      hostDepth += hostChanges.get(at) ?? 0
+      const pair = starts.get(at)
+      if (pair) pair.hostDepth = hostDepth
+    }
+  }
   const rendered = new Map<Pair, string>()
   const body = (start: number, end: number, children: Pair[], _outer: Set<string>): string => {
     let text = '',
@@ -348,7 +375,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     return text + plain(cursor, end)
   }
   const render = (pair: Pair, outer: Set<string>, depth: number): string => {
-    if (depth >= MAX_NESTING_DEPTH - 1) {
+    if (depth + (pair.hostDepth ?? 0) >= MAX_NESTING_DEPTH - 1) {
       flattened?.(pair.start)
       return body(pair.openEnd, pair.close, pair.children, outer)
     }
@@ -359,7 +386,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       pair.children,
       new Set([...outer, pair.kind]),
     )
-    const delimiter = pair.kind === '_' ? '/' : pair.kind === '~' ? ',' : pair.kind ==='^' ? '^' : '*'
+    const delimiter = pair.kind === '=' ? '=' : pair.kind === '_' ? '/' : pair.kind === '~' ? ',' : pair.kind ==='^' ? '^' : '*'
     const emptyBoundary =
       (mask[pair.end] === '{' && source.startsWith('{}', pair.end)) ||
       (mask[pair.start - 2] === '{' && source.slice(Math.max(0, pair.start - 2), pair.start) === '{}')

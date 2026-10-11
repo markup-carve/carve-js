@@ -1,4 +1,4 @@
-import { markdownEmphasis } from './markdown-emphasis.js'
+import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 
 export function protectMarkdownLinkLabels(
   source: string,
@@ -40,10 +40,13 @@ export function protectMarkdownLinkLabels(
           // literal-pair escaper reads this output back as text and backslashes
           // an opener it generated (markup-carve/carve#2877 made such a nested
           // opener reachable in the first place).
-          const converted = markdownEmphasis(label, () => { flattened = true }, undefined, spans, false, false, 1)
+          let depth = 0
+          const converted = markdownEmphasis(label, () => { flattened = true }, undefined, spans, false, false, 1, peak => { depth = peak })
             .replace(/[*_]/g, char => protect(char))
             .replace(/\{(?=\x00P\d+\x00)|(?<=\x00P\d+\x00)\}/g, char => protect(char))
-          output.splice(opener.slot, output.length - opener.slot, '[', converted, ']', token[0])
+          const depthToken = protect('')
+          recordMarkdownProtectedDepth(spans, depthToken, depth + 1)
+          output.splice(opener.slot, output.length - opener.slot, '[', depthToken, converted, ']', token[0])
           generation++
         } else return source
         i += token[0].length

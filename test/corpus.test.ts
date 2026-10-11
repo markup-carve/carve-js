@@ -421,6 +421,7 @@ const IMPLEMENTED = new Set([
   // green; the eighth, `a-list-marker-at-the-content-column-inside-an-open-fence`,
   // is the rule this bump implements.
   'a-below-column-marker-after-a-comment-where-no-paragraph-is-open',
+  'a-below-column-line-continues-a-paragraph-only-where-one-is-open',
   'a-collapsed-reference-reaches-a-heading-by-the-heading-s-rendered-text',
   'a-fence-opened-on-a-list-marker-line-body-below-the-content-column',
   'a-list-marker-at-the-content-column-inside-an-open-fence',
@@ -808,7 +809,7 @@ const IMPLEMENTED = new Set([
   'the-round-trip-comparison-normalizes-a-named-list',
   'an-empty-link-destination-is-not-a-link',
   'a-quote-is-an-ordinary-link-destination-character',
-  'a-forced-opener-of-an-open-kind-is-literal',
+  'braced-emphasis-can-nest-its-own-kind',
   'substitution-content-is-inline-and-only-a-top-level-arrow-splits-it',
   'a-run-of-asterisks-inside-a-combined-token-is-content',
   'glued-attribute-blocks-on-an-inline-element-merge',
@@ -968,17 +969,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-// CARVE-P9-043 lets a braced emphasis hold a braced child of its own kind
-// (markup-carve/carve#2877). markup-carve/carve#2882 renames the `471-a-forced-
-// opener-of-an-open-kind-is-literal` category to `471-braced-emphasis-can-nest-
-// its-own-kind` and records exactly the values below, so the pin bump that
-// lands it orphans those three entries and the guard above deletes them.
-const nested = 'CARVE-P9-043 nests a braced child of the same kind (markup-carve/carve#2877); the pinned corpus still reads the inner opener as literal'
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['471-a-forced-opener-of-an-open-kind-is-literal', { reason: nested, html: '<p>a<strong><strong>x</strong></strong>b</p>' }],
-  ['471-a-forced-opener-of-an-open-kind-is-literal-2', { reason: nested, html: '<p><strong>a <strong>b</strong> c</strong></p>' }],
-  ['471-a-forced-opener-of-an-open-kind-is-literal-4', { reason: nested, html: '<p><em>a <strong>b <em>c</em></strong></em></p>' }],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
