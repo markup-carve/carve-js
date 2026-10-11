@@ -186,6 +186,20 @@ describe('the writer reproduces the field', () => {
     expect(tableOf(output).separatorWidths).toEqual([3])
   })
 
+  it.each(['left', 'right', 'center'] as const)('keeps %s alignment with vertical alignment', align => {
+    for (const valign of ['top', 'middle', 'bottom'] as const) {
+      const table = tableOf('|= a |\n| 1 |\n')
+      table.separatorWidths = [3]
+      const cell = table.rows[0]!.cells[0]!
+      cell.align = align
+      cell.valign = valign
+      const output = renderCarve({ type: 'document', children: [table] })
+      const back = tableOf(output).rows[0]!.cells[0]!
+      expect(back.align, output).toBe(align)
+      expect(back.valign, output).toBe(valign)
+    }
+  })
+
   it('takes no alignment for an entry past the last header cell', () => {
     const table = tableOf('|= a |\n| 1 |\n')
     table.rows[0]!.cells[0]!.align = 'center'
@@ -211,7 +225,7 @@ describe('the writer reproduces the field', () => {
     expect(carveToCarve(src)).toBe(src)
   })
 
-  it('writes the native form where the first row is not all header cells', () => {
+  it('refuses widths that would promote non-header cells', () => {
     // The row AFTER a separator is what promotes it, so writing one there would
     // say something the tree does not.
     const table = tableOf('| a | b |\n| 1 | 2 |\n')
