@@ -142,7 +142,11 @@ describe('Markdown import list and reference boundaries', () => {
     const source = '<http://a.b/[x]>\n\n[t](/p[x]q "see [x]")\n\n<span title="[x]">ok</span>\n\n[x]: /u'
     const imported = markdownToCarve(source)
     expect(imported).toContain('<http://a.b/[x]>')
-    expect(imported).toContain('/p%5Bx%5Dq')
+    // carve#2865: the destination holds the bracket literally now. What this
+    // case is about is that the label is not rewritten as a reference, which
+    // the rendered href states directly.
+    expect(imported).toContain('/p[x]q')
+    expect(carveToHtml(imported)).toContain('href="/p[x]q"')
     expect(imported).toContain('see [x]')
     expect(imported).toContain('title="[x]"')
     expect(imported).not.toContain('[x][]q')
