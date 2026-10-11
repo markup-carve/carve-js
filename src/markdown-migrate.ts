@@ -52,7 +52,7 @@ const isMarkdownFenceLine = (line: string): boolean => {
   return m !== null && columnWidth(m[1]!) <= 3 && fenceRunIsAFence(m[2]!, m[3]!)
 }
 
-type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
+type TagReplacer = string | ((match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string)
 
 /**
  * Build a replacer for a single-char inline marker (`^` super, `,` sub, `=`
@@ -64,11 +64,16 @@ type TagReplacer = string | ((match: string, body: string, offset: number, full:
  * form keeps the common, whitespace-separated case clean on a Markdown->Carve
  * round-trip (corpus 67-superscript-and-subscript).
  */
-function markerForm(marker: string): (match: string, body: string, offset: number, full: string) => string {
-  return (match, body, offset, full) => {
+function markerForm(marker: string): (match: string, body: string, offset: number, full: string, spans?: readonly string[]) => string {
+  return (match, body, offset, full, spans = []) => {
     // Superscript and subscript have NO bare form in Carve - always braced.
     if (marker === '^' || marker === ',') return `{${marker}${body}${marker}}`
-    const before = full[offset - 1] ?? ''
+    let before = full[offset - 1] ?? ''
+    if (before === '\x00') {
+      const start = full.lastIndexOf('\x00', offset - 2)
+      const token = start < 0 ? null : /^\x00P(\d+)\x00$/.exec(full.slice(start, offset))
+      if (token) before = spans[Number(token[1])]?.at(-1) ?? before
+    }
     const after = full[offset + match.length] ?? ''
     const intraword = /[A-Za-z0-9]/.test(before) || /[A-Za-z0-9]/.test(after)
     const padded = /^\s|\s$/.test(body)
@@ -1988,11 +1993,13 @@ function convertInline(
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
   const escapeLabelSlashes = (label: string): string => {
     const opaqueEnd = opaqueHtmlScanner(label)
+    const tokenAt = /\x00P\d+\x00/y
     let escaped = ''
     for (let at = 0; at < label.length;) {
       if (label[at] === '\\') { escaped += label.slice(at, at + 2); at += 2; continue }
       if (label[at] === '\x00') {
-        const token = /^\x00P\d+\x00/.exec(label.slice(at))
+        tokenAt.lastIndex = at
+        const token = tokenAt.exec(label)
         if (token) { escaped += token[0]; at += token[0].length; continue }
       }
       const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
@@ -2026,7 +2033,7 @@ function convertInline(
   // produce (e.g. <strong>a</strong> -> *a*) is not re-matched and turned into
   // /a/.
   for (const [re, repl] of HTML_TAG_RULES) {
-    line = typeof repl === 'string' ? line.replace(re, repl) : line.replace(re, repl)
+    line = typeof repl === 'string' ? line.replace(re, repl) : line.replace(re, (match, body: string, offset: number, full: string) => repl(match, body, offset, full, protectedSpans))
   }
 
   if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
