@@ -36,6 +36,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
   let paragraph = false,
     blank = true,
     depth = 0
+  let embeddedListOwner: { depth: number; column: number; content: number } | undefined
   let quoteBoundary = ''
   let headingMarker = ''
   let definitionIndent = -1
@@ -49,7 +50,24 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     const indent = /^[ \t]*/.exec(raw)![0].length
     const text = raw.slice(indent),
       visible = view.slice(indent)
+    const quoteColumns = quoteDepth > 0 ? indentColumnsAfterQuotes(original, quoteDepth) : []
+    const blockIndent = quoteDepth > depth ? (quoteColumns[depth] ?? indent) : indent
+    const ordinaryQuoteList = lists.at(-1)
+    const quoteList = embeddedListOwner && embeddedListOwner.depth < quoteDepth && (!ordinaryQuoteList || embeddedListOwner.depth > ordinaryQuoteList.depth) ? embeddedListOwner : ordinaryQuoteList
+    const outsideQuoteItem = quoteDepth >= depth && quoteList && quoteDepth > quoteList.depth && (quoteColumns[quoteList.depth] ?? indent) < quoteList.column + quoteList.content
     if (text === '') {
+      if (outsideQuoteItem) {
+        lists.length = 0
+        embeddedListOwner = undefined
+        depth = quoteDepth
+        quoteBoundary = quote.trimEnd()
+      }
+      if (paragraph && quoteDepth > depth && !outsideQuoteItem) {
+        const markerAt = closedQuoteBoundary(quote, depth).length - 1
+        out.push(original.slice(0, markerAt) + '\\' + original.slice(markerAt))
+        blank = false
+        continue
+      }
       out.push(original)
       paragraph = false
       headingMarker = ''
@@ -71,23 +89,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       blank = false
       continue
     }
-    let blockAt = 0
-    if (quoteDepth > depth) {
-      for (let level = 0; level < depth; level++) {
-        while (original[blockAt] === ' ' || original[blockAt] === '\t') blockAt++
-        blockAt++
-        if (original[blockAt] === ' ') blockAt++
-      }
-    }
-    let blockIndent = indent
-    if (quoteDepth > depth) {
-      const start = blockAt
-      while (original[blockAt] === ' ' || original[blockAt] === '\t') blockAt++
-      blockIndent = blockAt - start
-    }
-    const quoteList = lists.at(-1)
     const blockStart =
-      (quoteDepth > depth && (!paragraph || (quoteList && indentAfterQuotes(original, quoteList.depth) < quoteList.column + quoteList.content))) ||
+      outsideQuoteItem || (quoteDepth > depth && !paragraph) ||
       rows[n] ||
       fences[n] !== original ||
       /^(?:#{1,6}(?:[ \t]|$)|:{3,}|\|)/.test(visible) ||
@@ -96,11 +99,17 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       /^(?:([-*+])|((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)))[ \t]+\S/.exec(
         visible,
       )
+    if (outsideQuoteItem) {
+      paragraph = false
+      quoteBoundary = quote.trimEnd()
+    }
+    if (embeddedListOwner && quoteDepth > embeddedListOwner.depth && quoteDepth >= depth && (quoteColumns[embeddedListOwner.depth] ?? indent) < embeddedListOwner.column + embeddedListOwner.content) embeddedListOwner = undefined
     // A new block can end lazy continuation outside a quote or list item.
     if (quoteDepth < depth && (blockStart || item || rejectedCommentStartsBlock(visible))) {
       while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
+      if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) embeddedListOwner = undefined
       const owner = lists.at(-1)
-      if (item && !blank && paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) out.push(quoteBoundary)
+      if (item && !blank && paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) out.push(closedQuoteBoundary(quoteBoundary, quoteDepth))
       else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quote.trimEnd())
       paragraph = false
       headingMarker = ''
@@ -124,8 +133,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       // A block outside the nested item's content column belongs to its parent.
       while (
         lists.length &&
-        (blockIndent <= lists.at(-1)!.column ||
-          (lists.length > 1 && blockIndent < lists.at(-1)!.column + lists.at(-1)!.content))
+        ((quoteDepth > lists.at(-1)!.depth ? (quoteColumns[lists.at(-1)!.depth] ?? indent) : blockIndent) <= lists.at(-1)!.column ||
+          (lists.length > 1 && (quoteDepth > lists.at(-1)!.depth ? (quoteColumns[lists.at(-1)!.depth] ?? indent) : blockIndent) < lists.at(-1)!.column + lists.at(-1)!.content))
       ) {
         lists.pop()
         paragraph = false
@@ -133,15 +142,17 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         if (lists.length) lists.at(-1)!.loose = true
       }
       if (blank) for (const list of lists) if (blockIndent > list.column) list.loose = true
+      if (!lists.length) embeddedListOwner = undefined
     }
     const quoteOwner = lists.at(-1)
     if (
       quoteOwner && quoteDepth >= depth && quoteDepth > quoteOwner.depth &&
-      indentAfterQuotes(original, quoteOwner.depth) >= quoteOwner.column + quoteOwner.content &&
+      (quoteColumns[quoteOwner.depth] ?? indent) >= quoteOwner.column + quoteOwner.content &&
       (!paragraph || quoteDepth === depth)
     ) {
       quoteBoundary = quote.trimEnd()
       depth = quoteDepth
+      if (item && (!paragraph || (embeddedListOwner?.depth === quoteDepth && indent <= embeddedListOwner.column))) embeddedListOwner = { depth: quoteDepth, column: indent, content: item[0].length - 1 }
       out.push(original)
       paragraph = !(rows[n] || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || /^(?:[*-][ \t]*){3,}$/.test(visible))
       blank = false
@@ -161,26 +172,21 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       continue
     }
     if (paragraph && quoteDepth > depth) {
-      let held = '',
-        rest = original
-      for (let level = 0; level < depth; level++) {
-        const marker = /^[ \t]*>[ ]?/.exec(rest)
-        if (!marker) break
-        held += marker[0]
-        rest = rest.slice(marker[0].length)
-      }
-      const prefix = /^[ \t]*/.exec(rest)![0]
-      out.push(held + prefix + '\\' + rest.slice(prefix.length))
+      const markerAt = closedQuoteBoundary(quote, depth).length - 1
+      out.push(original.slice(0, markerAt) + '\\' + original.slice(markerAt))
       blank = false
       continue
     }
     if (quoteDepth > depth && !paragraph) {
       lists.length = 0
+      embeddedListOwner = undefined
       depth = quoteDepth
       quoteBoundary = quote.trimEnd()
     } else if (quoteDepth < depth && !paragraph) {
       while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
+      if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) embeddedListOwner = undefined
       depth = quoteDepth
+      quoteBoundary = quote.trimEnd()
     }
     const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(visible)
     const top = divs.at(-1)
@@ -282,7 +288,10 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
           depth: quoteDepth,
           start: lineOffsets[n]!,
         })
-      const itemQuote = body.startsWith('>') ? itemQuotePrefix(body) : undefined
+      const task = body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
+      const itemBody = task ? body.slice(task[0].length) : body
+      const itemQuote = itemBody.startsWith('>') ? itemQuotePrefix(itemBody) : undefined
+      embeddedListOwner = itemQuote?.owner ? { ...itemQuote.owner, depth: quoteDepth + itemQuote.owner.depth } : undefined
       if (itemQuote?.depth) {
         depth = quoteDepth + itemQuote.depth
         quoteBoundary = (quote + ' '.repeat(context!.target + context!.content) + itemQuote.prefix).trimEnd()
@@ -310,7 +319,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     const attrs = visible.startsWith('{') ? readAttributes(raw, indent) : undefined
     const attributeLine = attrs?.end === raw.length
     const outsideColumn = blank && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
-    if (outsideColumn !== undefined) lists.length = 0
+    if (outsideColumn !== undefined) { lists.length = 0; embeddedListOwner = undefined }
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
     if (rejectedCommentStartsBlock(visible)) {
       const outsideList = lists.length > 0 && indent <= lists[0]!.column
@@ -382,7 +391,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       quoteDepth > depth
     )
     if (!paragraph && quoteDepth > depth) depth = quoteDepth
-    if (blank && !item && !parentContains(lists, indent) && !attributeLine) lists.length = 0
+    if (blank && !item && !parentContains(lists, indent) && !attributeLine) { lists.length = 0; embeddedListOwner = undefined }
     blank = false
   }
   const newline = out.at(-1) === ''
@@ -536,30 +545,46 @@ export function djotCodePadding(source: string): string {
   return output + source.slice(copied)
 }
 
-function indentAfterQuotes(line: string, depth: number): number {
+function indentColumnsAfterQuotes(line: string, depth: number): number[] {
   let at = 0
-  for (let level = 0; level < depth; level++) {
+  const columns: number[] = []
+  for (let level = 0; level <= depth; level++) {
+    const start = at
     while (line[at] === ' ' || line[at] === '\t') at++
-    at++
-    if (line[at] === ' ' || line[at] === '\t') at++
+    columns.push(at - start)
+    if (level < depth) {
+      at++
+      if (line[at] === ' ' || line[at] === '\t') at++
+    }
   }
-  const start = at
-  while (line[at] === ' ' || line[at] === '\t') at++
-  return at - start
+  return columns
 }
 
-function itemQuotePrefix(body: string): { depth: number; prefix: string; body: string } {
+function itemQuotePrefix(body: string): { depth: number; prefix: string; body: string; owner?: { depth: number; column: number; content: number } } {
   let rest = body, depth = 0, prefix = ''
+  let owner: { depth: number; column: number; content: number } | undefined
   while (true) {
     const quote = /^(?:>(?:[ \t]+|$))+/.exec(rest)
     if (!quote) break
     depth += (quote[0].match(/>/g) ?? []).length
     prefix += quote[0]
     rest = rest.slice(quote[0].length)
-    const item = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?=>[ \t])/.exec(rest)
+    const item = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?:\[[ xX]\][ \t]+)?(?=\S)/.exec(rest)
     if (!item) break
-    prefix += ' '.repeat(item[0].length)
+    owner = { depth, column: Math.max(0, (/[ \t]+$/.exec(quote[0])?.[0].length ?? 0) - 1), content: item[1]!.length }
+    if (!/^>(?:[ \t]|$)/.test(rest.slice(item[0].length))) break
+    prefix += ' '.repeat(item[1]!.length)
     rest = rest.slice(item[0].length)
   }
-  return { depth, prefix, body: rest }
+  return { depth, prefix, body: rest, ...(owner ? { owner } : {}) }
+}
+
+function closedQuoteBoundary(prefix: string, retainedDepth: number): string {
+  let at = -1
+  for (let level = 0; level <= retainedDepth; level++) {
+    const next = prefix.indexOf('>', at + 1)
+    if (next < 0) return prefix
+    at = next
+  }
+  return prefix.slice(0, at + 1)
 }
