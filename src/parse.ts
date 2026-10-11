@@ -14737,7 +14737,7 @@ class ParseSession {
           const mfn = inFootnote || !footnoteStops || text[footnoteStops[i + 2]!] !== ']' ? null : RE_FOOTNOTE_REF.exec(rest)
           if (mfn) {
             flush()
-            out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
+            out.push(this.withPos({ type: 'footnote_ref', label: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
             i += mfn[0].length
             continue
           }
@@ -14802,7 +14802,7 @@ class ParseSession {
         const mfn = inFootnote || !footnoteStops || text[footnoteStops[i + 2]!] !== ']' ? null : RE_FOOTNOTE_REF.exec(rest)
         if (mfn) {
           flush()
-          out.push(this.withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
+          out.push(this.withPos({ type: 'footnote_ref', label: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
           i += mfn[0].length
           continue
         }

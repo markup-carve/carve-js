@@ -300,8 +300,8 @@ function collectUnresolvedRefLinks(
 function collectFootnoteRefs(doc: Document): Array<{ id: string; node: Positioned }> {
   const found: Array<{ id: string; node: Positioned }> = []
   walkDocument(doc, (node) => {
-    if ((node.type === 'footnote_ref' || node.type === 'inline_footnote') && typeof node.id === 'string') {
-      found.push({ id: node.id, node: node as Positioned })
+    if ((node.type === 'footnote_ref' || node.type === 'inline_footnote') && typeof node.label === 'string') {
+      found.push({ id: node.label, node: node as Positioned })
     }
   })
   return found
