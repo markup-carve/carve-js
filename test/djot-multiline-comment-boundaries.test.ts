@@ -92,5 +92,14 @@ it.each(['> para {% a\n> %}\n', '{% a\r\n\r\nb %}\n'])('keeps closing lines and 
 })
 
 it('keeps a one-space list continuation after a rejected quoted comment', () => {
-  expect(djotToCarve('- > {% a\n > b %}\n')).toBe('- > \\{% a\n > b %}\n')
+  expect(djotToCarve('- > {% a\n > b %}\n')).toBe('- > \\{% a\n  > \\> b %}\n')
+})
+
+it('preserves quote ownership when rejected comments are indented', () => {
+  const source = '> - {% a\n> b %}\n'
+  const expected = djotToCarve(source)
+  for (const width of [1, 2, 4, 8]) {
+    const indented = source.split('\n').map(line => line ? ' '.repeat(width) + line : line).join('\n')
+    expect(djotToCarve(indented)).toBe(expected)
+  }
 })

@@ -76,12 +76,15 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (slashes % 2) continue
     let attrs = readNative(i)
     if (!attrs) continue
+    const attributeSources = attrs.source === '{}' ? [] : [attrs.source]
     while (source[attrs.end] === '{') {
       const next = readNative(attrs.end)
       if (!next) break
-      attrs = { tokens: [...attrs.tokens, ...next.tokens], end: next.end, source: (attrs.source === '{}' ? '' : attrs.source) + (next.source === '{}' ? '' : next.source) || '{}' }
+      attrs = next
+      if (attrs.source !== '{}') attributeSources.push(attrs.source)
     }
-    if (attrs.source === '{}') { i = attrs.end - 1; continue }
+    const attributeSource = attributeSources.join('') || '{}'
+    if (attributeSource === '{}') { i = attrs.end - 1; continue }
     let word = i
     if (i > 0 && masked[i - 1] === source[i - 1] && (!/[`*_~^\]}>]/.test(source[i - 1]!) || literalBraces.has(i - 1) || wordAtoms.has(i))) {
       while (word > cursor && masked[word - 1] === source[word - 1]) {
@@ -102,7 +105,7 @@ export function attributedDjotWords(source: string, masked: string, convert: (bo
     if (word < i) {
       let body = convert('x ' + source.slice(word, i)).slice(2).replace(/^\^/, '\\^')
       if (source[i - 1] === ']' && escapedBraceCloses.has(i - 1) && literalBraces.get(i - 1) !== i - 2) body = body.slice(0, -1) + '\\]'
-      output += source.slice(cursor, word) + protect(`${source[word - 1] === ']' || source[word - 1] === '^' || source[word - 1] === '!' ? '{%%}' : ''}[${body}]${attrs.source}`)
+      output += source.slice(cursor, word) + protect(`${source[word - 1] === ']' || source[word - 1] === '^' || source[word - 1] === '!' ? '{%%}' : ''}[${body}]${attributeSource}`)
       cursor = attrs.end
     }
     i = attrs.end - 1
