@@ -2,12 +2,37 @@ import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 
 describe('closed colon fences in quoted items (carve#2925)', () => {
+  it('tracks a closed fence after a sibling dedents left of the old marker', () => {
+    const source = '>  - a\n> - next\n>   ::: b\n>   x\n>   :::\ntail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'paragraph'])
+    const html = carveToHtml(source)
+    expect(html.indexOf('<p>tail</p>')).toBeGreaterThan(html.lastIndexOf('</blockquote>'))
+    expect(carveToHtml(carveToCarve(source))).toBe(html)
+  })
+
+  it('retains a descendant fence across lazy markers in an unquoted item', () => {
+    const source = '- a\n  - ::: box\n    body\n - next\n    :::\ntail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['list', 'paragraph'])
+    const html = carveToHtml(source)
+    expect(html).toContain('<p>body\n- next</p>')
+    expect(html.indexOf('<p>tail</p>')).toBeGreaterThan(html.lastIndexOf('</ul>'))
+    expect(carveToHtml(carveToCarve(source))).toBe(html)
+  })
+
+  it('keeps a later marker structural after the folded marker box closes', () => {
+    const source = '> - a\n>   - ::: box\n>     body\n>  - next\n>     :::\n>  - again\n>     :::\ntail\n'
+    const html = carveToHtml(source)
+    expect(html).not.toContain('<li>again\n:::')
+    expect(html.indexOf('<p>tail</p>')).toBeGreaterThan(html.lastIndexOf('</blockquote>'))
+    expect(carveToHtml(carveToCarve(source))).toBe(html)
+  })
+
   it('keeps a marker left of the outermost item structural', () => {
     const source = '>  - a\n>    - ::: box\n>      body\n> - next\n>      :::\n- tail\n'
     const html = carveToHtml(source)
     expect(html).not.toContain('<p>body\n- next</p>')
     expect(html).toContain('<li>next')
-    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
     expect(carveToHtml(carveToCarve(source))).toBe(html)
   })
 

@@ -3467,6 +3467,7 @@ function trackQuoteHostFence(
   }
   const paragraph = blockQuoteParagraphOpen(state)
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
+  const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
   // A marker below an ancestor's content column can remain paragraph text.
   // Retain its existing fence host instead of inventing a sibling item.
   const lazyMarker = paragraph && markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 &&
@@ -3489,7 +3490,7 @@ function trackQuoteHostFence(
     const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
     if (width > 0) {
       if (lazyMarker && lazyItem) break
-      if (paragraph && !insideItem && !sibling) break
+      if (paragraph && !insideItem && !sibling && !leftOfOutermost) break
       host.markers.push(at)
       const attrs = extractItemAttr(inner)
       const markerText = attrs?.stripped ?? inner
@@ -5726,6 +5727,10 @@ function trackItemLazyState(
   const nestedBullet = nestedTask ? null
     : (orderedMatch(nestedMarker, facts?.terminatorFree) ?? unorderedMatch(nestedMarker, facts?.terminatorFree))
   if (nestedTask || nestedBullet) {
+    if (!atContentColumn && state.deepest != null && state.lazyFoldable) {
+      state.absorbingFence = wasAbsorbing
+      return
+    }
     state.absorbingFence = false
     // `markerContentColumn`'s arithmetic off the match already in hand, since
     // calling it would run the three matchers a second time per nesting level
