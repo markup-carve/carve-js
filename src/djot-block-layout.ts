@@ -550,7 +550,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         quoteBoundary = (quoteForCarve() + ' '.repeat(context!.target + context!.content) + itemQuote.prefix).trimEnd()
       }
       const quoteBody = itemQuote?.body ?? ''
-      paragraph = !itemDiv && !itemHeading && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
+      const itemAttributes = itemBody.startsWith('{') ? readAttributes(itemBody, 0) : undefined
+      paragraph = !itemDiv && !itemHeading && itemAttributes?.end !== itemBody.length && !/^\[(?!\^)[^\[\]\n]+\]:/.test(itemBody) && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
       blank = !!itemDiv
       continue
     }

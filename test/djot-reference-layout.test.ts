@@ -92,7 +92,22 @@ it.each(['escaped', 'styled', 'attributes'])('keeps long destinations shared for
 })
 
 it('keeps nonbreaking label whitespace distinct from definition whitespace', () => {
-  const result = migrateDjot('[a b]: /x\n\n[a\\ b][]\n')
-  expect(carveToHtml(result.value)).not.toContain('href="/x"')
-  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toHaveLength(1)
+  for (const label of ['a b', 'a\u00a0b']) {
+    const result = migrateDjot(`[${label}]: /x\n\n[a\\ b][]\n`)
+    expect(carveToHtml(result.value)).not.toContain('href="/x"')
+    expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toHaveLength(1)
+  }
+})
+
+it('keeps pipes in nested attributes as table cell boundaries', () => {
+  const source = '{.c}\n[x]: /u\n\n| h |\n|---|\n| [a{k="a|b"}][x] |\n'
+  const normalized = djotReferenceLayout(source, () => 0)
+  expect(normalized).toContain('[a{k="a|b"}][x]')
+  expect(normalized).not.toContain('[x]{.c}')
+})
+
+it('keeps a sibling item attribute off its reference definition', () => {
+  const source = '- {.t}\n- [a]: /x\n\n[l][a]\n'
+  const normalized = djotReferenceLayout(source, line => /^- /.test(line) ? 2 : 0)
+  expect(normalized).toBe(source)
 })

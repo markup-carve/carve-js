@@ -3,7 +3,7 @@ import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { parseRefLabelInlines } from './parse.js'
-import { inlineText } from './heading-ids.js'
+import { djotReferenceText } from './djot-reference-label.js'
 
 export type DjotImportLoss = {
   code: 'structure-unspellable'
@@ -130,7 +130,7 @@ export function djotImportLosses(
         }
         headingLines.add(next)
       }
-      const label = inlineText(parseRefLabelInlines(djotEmphasis(text, (text) => text)), false)
+      const label = djotReferenceText(parseRefLabelInlines(djotEmphasis(text, (text) => text)))
       const key = definitionKey(label)
       if (!definitions.has(key)) definitions.set(key, '#' + key)
     }
@@ -238,7 +238,7 @@ export function djotImportLosses(
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
       const key = explicit ? referenceKey(explicit) : definitionKey(
-        definitions.size === 0 ? '' : inlineText(parseRefLabelInlines(djotEmphasis(label, (text) => text)), false),
+        definitions.size === 0 ? '' : djotReferenceText(parseRefLabelInlines(djotEmphasis(label, (text) => text))),
       )
       destination = definitions.get(key)
       end++
