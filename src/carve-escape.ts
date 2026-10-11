@@ -379,3 +379,11 @@ function escapeBracedPairs(line: string, delimiters: string): string {
 
   return insertEscapes(line, offsets)
 }
+
+/** Keep an unclosed editorial opener in image alt from consuming a later title. */
+export function escapeUnclosedImageEditorialOpeners(text: string): string {
+  const close = text.lastIndexOf('#}')
+  if (text.lastIndexOf('{#') <= close) return text
+  const tail = close < 0 ? 0 : close + 2
+  return text.slice(0, tail) + text.slice(tail).replace(/\{(?=#)/g, '\\{')
+}
