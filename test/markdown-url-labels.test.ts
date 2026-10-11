@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
-import { carveToCarve, carveToHtml, markdownToCarve, parse, renderHtml, resolve } from '../src/index.js'
+import { carveToCarve, carveToHtml, markdownToCarve, migrateMarkdown, parse, renderHtml, resolve } from '../src/index.js'
 import controls from './fixtures/markdown-url-labels.json'
 
 type HtmlNode = DefaultTreeAdapterMap['node']
@@ -24,9 +24,40 @@ const htmlTree = (html: string): unknown => {
 // Native HTML comes from cmark-gfm with unsafe HTML and the GFM extensions enabled.
 it.each(controls)('preserves Markdown URL label text and emphasis: $source', ({ source: markdown, html }) => {
   const source = markdownToCarve(markdown)
+  const migration = migrateMarkdown(markdown)
+  expect(migration.value).toBe(source)
+  for (const row of migration.report.diagnostics) {
+    expect(row.confidence === 'exact' && row.fidelity === 'dropped').toBe(false)
+    if (row.code === 'fidelity-unverified') {
+      expect(row).toMatchObject({ severity: 'warning', fidelity: 'dropped', confidence: 'fallback' })
+    }
+  }
   const expected = htmlTree(html)
   expect(htmlTree(carveToHtml(source))).toEqual(expected)
   expect(htmlTree(renderHtml(resolve(parse(source))))).toEqual(expected)
   expect(htmlTree(carveToHtml(carveToCarve(source)))).toEqual(expected)
 })
 
+it.each([
+  '[https://e.test](x)\n',
+  '[*https://e.test*](x)\n',
+  '[https://x.test/_a_](x)\n',
+  '[a/b](x)\n',
+  '[src/index.ts](x)\n',
+  '[*https://example.test/a/_v1_/x*](u)\n',
+])('verifies supported URL labels exactly: %s', source => {
+  const diagnostics = migrateMarkdown(source).report.diagnostics
+  expect(diagnostics.some(row => row.code === 'markdown-link')).toBe(true)
+  expect(diagnostics.every(row => row.confidence === 'exact')).toBe(true)
+  expect(diagnostics.some(row => row.fidelity === 'dropped')).toBe(false)
+})
+
+
+it.each([
+  ['[a/b](x)\n', '[a/b](x)\n'],
+  ['[src/index.ts](x)\n', '[src/index.ts](x)\n'],
+  ['[https://e.test](https://e.test)\n', '[https://e.test](https://e.test)\n'],
+  ['see https://x.test/a\\_b/_c_\n', 'see https://x.test/a\\_b/_c_\n'],
+])('keeps literal path spelling for %s', (source, expected) => {
+  expect(markdownToCarve(source)).toBe(expected)
+})
