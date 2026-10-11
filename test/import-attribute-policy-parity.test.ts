@@ -37,3 +37,11 @@ it.each(['semantic', 'roundtrip'] as const)('reports CSS precedence in either at
     expect(result.value).toContain('align=left')
   }
 })
+
+it.each(['safe', 'semantic', 'roundtrip'] as const)('consumes reserved code source attributes in %s mode', (mode) => {
+  for (const name of ['data-carve-src', 'data-djot-src']) {
+    const result = htmlToCarve(`<pre ${name}="stored"><code class="language-js">x\n</code></pre>`, { mode })
+    expect(result.value).toBe('```js\nx\n```\n')
+    expect(result.value).not.toContain(name)
+  }
+})

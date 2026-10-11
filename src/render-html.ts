@@ -51,7 +51,6 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
-import { renderCarve } from './render-carve.js'
 import {
   CARRIER_CHAR,
   CARRIER_MARKER,
@@ -247,8 +246,6 @@ export interface RenderOptions extends RenderLossSinkOptions {
    * byte-identical source. It is an EXPORT option only: §13b keeps it out of
    * the importer, so it never widens an import mode, enables a trusted import
    * or relaxes a destination check.
-   *
-   * `carryMarkers` is a Markdown-only option and is not redefined here (§13c).
    */
   roundtrip?: boolean
 }
@@ -1588,16 +1585,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       return `${pad}<hr${charAttr}${renderAttrs(hrAttrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
     }
     case 'code_block': {
-      // The opener "header" is resolved to a `title` attribute at parse time
-      // (see parseBlocks), so it renders here AND wherever else a code block is
-      // emitted (e.g. inside a code-group).
-      //
-      // §13a's `data-carve-src` rides the `<pre>` and holds the construct's
-      // Carve source. `<pre><code class="language-x">` loses the fence width,
-      // the info-string spelling and any attribute line, and none of that is a
-      // field on the node, so the source is written back out by the canonical
-      // writer rather than read off the tree.
-      return renderCodeBlockCore(node, opts, pad, codeBlockSourceAttr(node, opts))
+      // The opener header becomes a title attribute at parse time, including in code groups.
+      return renderCodeBlockCore(node, opts, pad)
     }
     case 'block_quote':
       return renderBlockQuote(node, opts, level)
@@ -1734,20 +1723,10 @@ function renderCodeBlockCore(
   node: Pick<CodeBlock, 'lang' | 'content' | 'attrs' | 'pos'>,
   opts: RenderOptions,
   pad: string,
-  srcAttr = '',
 ): string {
   const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
   const escaped = escapeHtml(node.content)
-  const attrs = srcAttr === ''
-    ? node.attrs
-    : dropCollidingAuthored(node.attrs, [carrier('src')], opts, { type: 'code_block', ...(node.pos ? { pos: node.pos } : {}) }, 'block')
-  return `${pad}<pre${srcAttr}${renderAttrs(attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
-}
-
-/** §13a's `data-carve-src` for a code block, empty unless roundtrip is on. */
-function codeBlockSourceAttr(node: CodeBlock, opts: RenderOptions): string {
-  if (!roundtripExport(opts)) return ''
-  return ` ${carrier('src')}="${escapeAttr(renderCarve({ type: 'document', children: [node] }))}"`
+  return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
 }
 
 /**
@@ -1791,14 +1770,10 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
     ? ` start="${node.start}"`
     : ''
   const delimAttr = node.ordered && node.delim === ')' ? ` data-delim="${escapeAttr(node.delim)}"` : ''
-  // PART 10 §13a: the AUTHORED marker, written only where it is not the
-  // default - `-` for a bullet list, `.` for an ordered one. An ordered list's
-  // marker is its delimiter, so `1)` carries `)` here beside §12's own
-  // `data-delim`: one is the spelling the author used, the other is the
-  // distinction every render publishes.
-  const authoredMarker = node.ordered
-    ? (node.delim !== undefined && node.delim !== '.' ? node.delim : undefined)
-    : (node.bulletChar !== undefined && node.bulletChar !== '-' ? node.bulletChar : undefined)
+  // Ordered lists carry their delimiter through data-delim.
+  const authoredMarker = !node.ordered && node.bulletChar !== undefined && node.bulletChar !== '-'
+    ? node.bulletChar
+    : undefined
   const markerAttr = roundtripExport(opts) && authoredMarker !== undefined
     ? ` ${CARRIER_MARKER}="${escapeAttr(authoredMarker)}"`
     : ''
