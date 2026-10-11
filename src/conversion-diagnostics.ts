@@ -89,7 +89,7 @@ export function renderCarveWithConversionReport(
     // A canonical fence needs a break before its closer, so a payload that ends
     // mid-line gains one on the way out (CARVE-P12-064).
     if (type === 'code_block' && typeof node.content === 'string' && !codeTerminated(node.content)) report('field-unspellable', 'Carve source cannot spell a code payload without a final line break', 'content')
-    if (type === 'raw_block' && node.contentTerminated === false) report('field-unspellable', 'Carve source cannot preserve raw payload termination before a closing fence', 'contentTerminated')
+    if (type === 'raw_block' && typeof node.content === 'string' && !codeTerminated(node.content)) report('field-unspellable', 'Carve source cannot spell a raw payload without a final line break', 'content')
     if (type === 'math' && node.label !== undefined) report('field-unspellable', 'Carve source cannot spell an equation label', 'label')
     if (type === 'math' && node.number !== undefined) report('field-unspellable', 'Carve source cannot spell an equation number', 'number')
     for (const [key, child] of Object.entries(node)) {

@@ -7,7 +7,7 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
-import { codeLines } from './verbatim-payload.js'
+import { codeLines, rawSource } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
@@ -253,7 +253,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       // following block is not glued to it, matching carve-php / carve-rs.
       return `${renderImage(node)}\n\n`
     case 'raw_block':
-      return `${style(`[raw:${node.format}] ${stripControls(node.content)}`, DIM)}\n\n`
+      return `${style(`[raw:${node.format}] ${stripControls(rawSource(node.content))}`, DIM)}\n\n`
     case 'abbreviation_def':
       // PART 11 §10f: this target DROPS a definition whose own expansion it
       // emits, because the words would otherwise appear twice - once as this

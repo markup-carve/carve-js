@@ -84,7 +84,7 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp, trimEndSpaceTab, trimEndNonNbsp } from './trim-non-nbsp.js'
 import { ownValue, setOwn } from './own-property.js'
-import { codeContent, verbatimContent } from './verbatim-payload.js'
+import { codeContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
 import { completeDestinationOpeners, linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
@@ -2554,7 +2554,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
     lines.push(stripLazyFrame(ln))
   }
   const terminated = !lexer.documentLacksFinalBreak || lastPayloadLineIndex < 0 || lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
-  return { type: 'raw_block', format, content: verbatimContent(lines), ...(!terminated ? { contentTerminated: false } : {}) }
+  return { type: 'raw_block', format, content: codeContent(lines, terminated) }
 }
 
 // A closer of each fence shape, spelled PERMISSIVELY: a leading indentation run

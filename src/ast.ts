@@ -571,8 +571,6 @@ export interface RawBlock extends BaseNode {
   type: 'raw_block'
   format: string
   content: string
-  /** False when the final collected payload line reaches EOF without a break. */
-  contentTerminated?: boolean
 }
 
 export interface Comment extends BaseNode {

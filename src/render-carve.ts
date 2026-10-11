@@ -37,7 +37,7 @@ export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
-import { codeSource, payloadTerminated } from './verbatim-payload.js'
+import { codeSource, codeTerminated } from './verbatim-payload.js'
 import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
@@ -3205,12 +3205,7 @@ class CarveRenderSession {
       case 'raw_block': {
         const fence = safeFence(node.content, 3)
         const content = this.protectVerbatim(node.content)
-        // Empty content means zero payload lines, while an all-newline content
-        // value records exactly that many blank payload lines. In both cases an
-        // extra separator before the closer would change the AST on every
-        // format pass. Non-blank content still needs the ordinary closing-line
-        // separator (including content with a trailing blank line).
-        const closerSeparator = payloadTerminated(node.content) ? '' : '\n'
+        const closerSeparator = codeTerminated(node.content) ? '' : '\n'
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':
