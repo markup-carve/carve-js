@@ -36,15 +36,14 @@ describe('append-only nested lead closer', () => {
     for (const gap of ['', '\n']) {
       expect(carveToHtml(':: t\n: - %%%\n' + gap + '    %%%\nx\n')).toMatch(/<\/dl>\s*<p>x<\/p>/)
       const code = carveToHtml(':: t\n: - ```\n' + gap + '    ```\n~~~\n')
-      expect(code).toContain('    <p>~~~</p>\n  </dd>')
+      expect(code).toMatch(/<\/dl>\s*<pre><code>/)
     }
   })
 
-  it('keeps long unclosed comment and code leads within their description', () => {
+  it('leaves comment-only leads outside and keeps unfinished code content', () => {
     const body = 'x\n'.repeat(200)
     const comment = carveToHtml(':: t\n: - %%%\n' + body)
-    expect(comment).toContain('    <p>' + body.trimEnd() + '</p>\n  </dd>')
-    expect(comment).not.toMatch(/<\/dl>\s*<p>/)
+    expect(comment).toContain('</dl>\n<p>' + body.trimEnd() + '</p>')
     const output = carveToHtml(':: t\n: - ```\n' + '~~~\n'.repeat(200))
     expect(output).toContain('<pre><code>')
     expect(output).toContain('~~~\n'.repeat(200))
