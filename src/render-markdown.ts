@@ -980,8 +980,11 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext, parentDelimite
     }
 
     const result = reflankRuns(nodes, parts, ctx, parentDelimiter)
-    for (const node of nodes) ctx.renderedChildren.delete(node)
-    if (owner) ctx.renderedChildren.set(owner, parts)
+    const hasDelimiterChild = nodes.some(node => DELIMITER_RUN[node.type] !== undefined)
+    if (hasDelimiterChild) {
+      for (const node of nodes) ctx.renderedChildren.delete(node)
+      if (owner) ctx.renderedChildren.set(owner, parts)
+    }
     return result
   } finally {
     ctx.inlineDepth--
@@ -2595,7 +2598,7 @@ function reflankRuns(nodes: InlineNode[], parts: string[], ctx: MarkdownContext,
   const directParentDelimiter = parentDelimiter
   parentDelimiter ??= ancestors.at(-1)
   // A nested opening run must not close an enclosing delimiter of the same character.
-  for (let i = 0; i < parts.length; i++) {
+  for (let i = 0; ancestors.length > 0 && i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
     if (!piece) continue
     const edgeSeparatedByParent = directParentDelimiter === parentDelimiter && piece.run.delimiter === parentDelimiter && ancestors.filter(run => run === parentDelimiter).length === 1
