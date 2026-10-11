@@ -72,7 +72,7 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
     const after = full[offset + match.length] ?? ''
     const intraword = /[A-Za-z0-9]/.test(before) || /[A-Za-z0-9]/.test(after)
     const padded = /^\s|\s$/.test(body)
-    return intraword || padded ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
+    return intraword || padded || (marker === '/' && before === '/') ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
   }
 }
 
@@ -1847,7 +1847,7 @@ function convertInline(
   line = convertInlineHtml(line, protect, protectedSpans)
 
 
-  const referenceUrls = plainMarkdownUrlRanges(line, protectedSpans)
+  const referenceUrls = line.includes('http') ? plainMarkdownUrlRanges(line, protectedSpans) : []
   let referenceUrlAt = 0
   const destinationOpeners = completeDestinationOpeners(line)
   line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
@@ -1873,37 +1873,39 @@ function convertInline(
   })
 
 
-  const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
-    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
-  activeLabelRanges.sort((a, b) => a.start - b.start)
-  const urlStart = /\bhttps?:\/\//g
-  const escapedToken = /\x00P(\d+)\x00/y
-  let activeLabelAt = 0
-  let cursor = 0
-  let protectedUrls = ''
-  for (let start = urlStart.exec(line); start; start = urlStart.exec(line)) {
-    const offset = start.index
-    while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
-    const label = activeLabelRanges[activeLabelAt]
-    if (label && offset >= label.start && offset < label.end) {
-      urlStart.lastIndex = label.end
-      continue
+  if (/\bhttps?:\/\//.test(line)) {
+    const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
+    activeLabelRanges.sort((a, b) => a.start - b.start)
+    const urlStart = /\bhttps?:\/\//g
+    const escapedToken = /\x00P(\d+)\x00/y
+    let activeLabelAt = 0
+    let cursor = 0
+    let protectedUrls = ''
+    for (let start = urlStart.exec(line); start; start = urlStart.exec(line)) {
+      const offset = start.index
+      while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
+      const label = activeLabelRanges[activeLabelAt]
+      if (label && offset >= label.start && offset < label.end) {
+        urlStart.lastIndex = label.end
+        continue
+      }
+      let end = urlStart.lastIndex
+      while (end < line.length && !/[\s<>`]/.test(line[end]!)) {
+        if (line[end] === '\x00') {
+          escapedToken.lastIndex = end
+          const token = escapedToken.exec(line)
+          const value = token ? protectedSpans[Number(token[1])] ?? '' : ''
+          if (!token || !/^\\[!-/:-@\[-`{-~]$/.test(value)) break
+          end += token[0].length
+        } else end++
+      }
+      protectedUrls += line.slice(cursor, offset) + protect(line.slice(offset, end).replace(/(?<!\\)-{2,}/g, run => run.replace(/-/g, '\\-')))
+      cursor = end
+      urlStart.lastIndex = end
     }
-    let end = urlStart.lastIndex
-    while (end < line.length && !/[\s<>`]/.test(line[end]!)) {
-      if (line[end] === '\x00') {
-        escapedToken.lastIndex = end
-        const token = escapedToken.exec(line)
-        const value = token ? protectedSpans[Number(token[1])] ?? '' : ''
-        if (!token || !/^\\[!-/:-@\[-`{-~]$/.test(value)) break
-        end += token[0].length
-      } else end++
-    }
-    protectedUrls += line.slice(cursor, offset) + protect(line.slice(offset, end).replace(/(?<!\\)-{2,}/g, run => run.replace(/-/g, '\\-')))
-    cursor = end
-    urlStart.lastIndex = end
+    line = protectedUrls + line.slice(cursor)
   }
-  line = protectedUrls + line.slice(cursor)
 
   // Math, converted and protected before the emphasis passes so a formula
   // body containing * _ ~ (e.g. $*x*$) is not rewritten as markup. Opt-in:
