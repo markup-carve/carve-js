@@ -2621,6 +2621,15 @@ function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
     while (before >= 0 && blank(items[before]!)) before--
     const above = before >= 0 ? items[before]!.kind : undefined
     const below = end < items.length ? items[end]!.kind : undefined
+    // Top-level placeholders can leave a leading separator or duplicate
+    // separators after a closer. Keep one separator between surviving blocks,
+    // or the final empty line that supplies the trailing newline.
+    if (before < 0 && below === 'open' && items[end]!.lead === '') {
+      for (let dropAt = at; dropAt < end; dropAt++) hugged.add(dropAt)
+    }
+    if ((above === 'close' || above === 'caption') && items[before]!.lead === '') {
+      for (let dropAt = at + 1; dropAt < end; dropAt++) hugged.add(dropAt)
+    }
     // A blank above a closer and one below an opener are both inside the
     // container, where the canonical writer puts none. A caption line hugs the
     // closer above it the same way, because its slot hangs on that fence.
@@ -2721,9 +2730,8 @@ function restoreDefinitionBodies(items: CarrierLine[]): CarrierLine[] {
       continue
     } else if (closing) {
       lists.pop()
-      let lead = item.lead
-      for (const list of lists.filter(list => list.active).reverse()) lead = lead.slice(0, list.lead.length) + '  ' + lead.slice(list.lead.length)
-      out.push({ lead, text: '', kind: undefined })
+      // The list closer carries no Carve text; its surrounding separator is
+      // already retained by separateCarrierLines.
       continue
     }
     const active = lists.filter(list => list.active)

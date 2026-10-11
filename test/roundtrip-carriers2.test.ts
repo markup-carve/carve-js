@@ -17,6 +17,13 @@ function projection(tree: unknown, expected: Record<string, unknown>[]) {
 }
 
 describe('new roundtrip carriers', () => {
+  it.each([
+    '{.c}\n:: Carve\n: A markup language.\n',
+    ...fixtures.markdownExportImport.filter((row: { id: string }) => ['definition-list', 'heading-attribute-line', 'quote-caption'].includes(row.id)).map((row: { source: string }) => row.source),
+    'Before.\n\n{.c}\n:: Carve\n: A markup language.\n\nAfter.\n',
+  ])('restores canonical spacing %j', source => {
+    expect(migrateMarkdown(carveToMarkdown(source, { roundtrip: true })).value).toBe(source)
+  })
   for (const row of fixtures.markdownExportImport) it(row.id, () => {
     projection(parse(row.source), row.expectedNodes)
     expect(carveToMarkdown(row.source, { roundtrip: false })).toBe(carveToMarkdown(row.source))
