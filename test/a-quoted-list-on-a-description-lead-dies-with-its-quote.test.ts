@@ -3,25 +3,7 @@ import { carveToHtml } from '../src/index.js'
 
 const html = (s: string) => carveToHtml(s).trim()
 
-/**
- * A QUOTED LIST ON A DESCRIPTION LEAD DIES WITH ITS QUOTE
- * (markup-carve/carve-js#2540).
- *
- * The container a description body has open is advanced only by the lines the
- * body takes AT its own column, because a line below that column is a lazy
- * continuation and opens nothing. #2538 made one more kind of line the body's
- * OWN block: an over-indented one below a quote that has stopped collecting.
- * Such a line replaces the container too, and the tracker did not hear about
- * it, so a list the quote held stayed open and the flush-left line below folded
- * into a body the oracle has already ended.
- *
- * THE NESTING ORDER IS THE WHOLE QUESTION. The list in `> - ` is the quote's and
- * dies with it; the list in `- > ` is the outer container and outlives the quote
- * it holds. Reading only "the run holds both kinds" moved all 30 of the `- > `
- * shapes off the oracle, and reading `bodyReadsFlush` alone moved 212, because a
- * plain list lead keeps its over-indented block INSIDE the item.
- */
-
+/** A nested table leaves no paragraph for a below-column line to continue. */
 describe('a quoted list on a description lead dies with its quote', () => {
   const bodyTable = [
     '    <table>',
@@ -56,13 +38,13 @@ describe('a quoted list on a description lead dies with its quote', () => {
     })
   }
 
-  it('keeps the body open while the quoted list has taken no body block', () => {
+  it('ends the body when the quoted list holds only a table', () => {
     expect(html(':: t\n: > - | a |\nx\n')).toBe(
-      ['<dl>', '  <dt>t</dt>', '  <dd>', ...quoted('ul'), '    <p>x</p>', '  </dd>', '</dl>'].join('\n'),
+      ['<dl>', '  <dt>t</dt>', '  <dd>', ...quoted('ul'), '  </dd>', '</dl>', '<p>x</p>'].join('\n'),
     )
   })
 
-  it('keeps a PLAIN list lead collecting, over-indented block and all', () => {
+  it('ends the body after an over-indented table in a plain list', () => {
     expect(html(':: t\n: - q\n    | - |\n    | b |\nx\n')).toBe(
       [
         '<dl>',
@@ -78,9 +60,9 @@ describe('a quoted list on a description lead dies with its quote', () => {
         '        </table>',
         '      </li>',
         '    </ul>',
-        '    <p>x</p>',
         '  </dd>',
         '</dl>',
+        '<p>x</p>',
       ].join('\n'),
     )
   })
@@ -102,12 +84,6 @@ describe('a quoted list on a description lead dies with its quote', () => {
   })
 
   it('ends the item in the opposite nesting order too', () => {
-    // `- > ` puts the list outside, so it outlives the quote: the over-indented
-    // table has to end the ITEM and leave the list standing, which puts the
-    // follower in the body beside the `<ul>`. This was pinned as a divergence
-    // and attributed to the nesting order; the order was incidental. It is the
-    // over-indented leaf block that leaves no open paragraph, and carve-js#2542
-    // fixed that at the item host, which reaches this shape as well.
     expect(html(':: t\n: - > | a |\n      | - |\n      | b |\nx\n')).toBe(
       [
         '<dl>',
@@ -130,9 +106,9 @@ describe('a quoted list on a description lead dies with its quote', () => {
         '        </table>',
         '      </li>',
         '    </ul>',
-        '    <p>x</p>',
         '  </dd>',
         '</dl>',
+        '<p>x</p>',
       ].join('\n'),
     )
   })

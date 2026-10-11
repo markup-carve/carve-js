@@ -92,7 +92,7 @@ describe('interchange sections and block-content cells', () => {
     const doc = {
       type: 'document', children: [{ type: 'table', rows: [{ type: 'table_row', cells: [{
         type: 'table_cell', header: false, blocks: [{ type: 'paragraph', children: [
-          { type: 'text', value: 'See ' }, { type: 'footnote_ref', id: 'm' },
+          { type: 'text', value: 'See ' }, { type: 'footnote_ref', label: 'm' },
         ] }],
       }] }] }],
       footnoteDefs: { m: [{ type: 'paragraph', children: [{ type: 'text', value: 'Note' }] }] },

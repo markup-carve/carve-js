@@ -3,39 +3,15 @@ import { carveToHtml } from '../src/index.js'
 
 const html = (s: string) => carveToHtml(s).trim()
 
-/**
- * A DESCRIPTION BODY FOLDS PAST ITS NESTED LEAD'S BLOCK KIND
- * (markup-carve/carve-js#2531, the twin of markup-carve/carve-php#2904).
- *
- * PART 9 §17's lazy branch for this host asks whether a CONTAINER the body
- * opened is still collecting, not whether a paragraph is open. The engine asked
- * the paragraph's question, so a nested item whose lead ends in a heading, a
- * `%%` comment line, a table or a break reported nothing to fold into and the
- * flush-left line below fell to the document - while the same lead ending in a
- * closed code fence folded, because that shape happens to leave the paragraph
- * flag set. One rule with two answers, decided by the lead's bottom block.
- *
- * The three narrowings are the rule's real shape, each measured against the
- * executable spec rather than against this engine:
- *
- *   - CONTAINER KIND. A nested list takes the line; a QUOTE on the lead ends the
- *     body on every one of those kinds, and a fence a quote holds is the quote's
- *     rather than the list's at either nesting order.
- *   - A DEFINITION ENDS THE BODY with a container open - a term, a reference
- *     definition, a footnote definition - and so does a column-0 opener. The
- *     interruption veto in front of the gate is what keeps those.
- *   - A CLOSED `%%%` RUN is a finished invisible block and ends the body, where
- *     the `%%` LINE form is only a line and the body folds on past it.
- */
-
-describe("a description body folds past its nested lead's block kind", () => {
-  describe('the kinds a nested list folds', () => {
+/** The deepest open paragraph decides continuation (CARVE-P0-009). */
+describe("a description follows its deepest paragraph state", () => {
+  describe('finished nested blocks end the description', () => {
     for (const [label, lead, inner] of [
       ['a heading', '# h', '<h1 id="h">h</h1>'],
       ['a break', '---', '<hr>'],
       ['an attribute block', '{.k}', ''],
     ] as const) {
-      it('keeps the flush-left line in the body after ' + label, () => {
+      it('publishes the flush-left line after ' + label, () => {
         expect(html(':: t\n: - ' + lead + '\nx\n')).toBe(
           [
             '<dl>',
@@ -44,15 +20,15 @@ describe("a description body folds past its nested lead's block kind", () => {
             '    <ul>',
             '      <li>' + (inner === '' ? '' : '\n        ' + inner + '\n      ') + '</li>',
             '    </ul>',
-            '    <p>x</p>',
             '  </dd>',
             '</dl>',
+            '<p>x</p>',
           ].join('\n'),
         )
       })
     }
 
-    it('keeps the flush-left line in the body after a `%%` comment line', () => {
+    it('publishes the flush-left line after a `%%` comment line', () => {
       expect(html(':: t\n: - %% c\nx\n')).toBe(
         [
           '<dl>',
@@ -61,30 +37,25 @@ describe("a description body folds past its nested lead's block kind", () => {
           '    <ul>',
           '      <li></li>',
           '    </ul>',
-          '    <p>x</p>',
           '  </dd>',
           '</dl>',
+          '<p>x</p>',
         ].join('\n'),
       )
     })
 
-    it('keeps the flush-left line in the body after a table', () => {
+    it('publishes the flush-left line after a table', () => {
       const out = html(':: t\n: - | a |\n    | - |\n    | b |\nx\n')
-      expect(out).toContain('    <p>x</p>\n  </dd>')
-      expect(out).not.toMatch(/<\/dl>\s*<p>x<\/p>/)
+      expect(out).toMatch(/<\/dl>\s*<p>x<\/p>/)
     })
 
-    /*
-     * ALREADY FOLDED, and the row that made the split visible: the flag the gate
-     * read is left set by a closed code fence and by nothing else in this band.
-     */
-    it('still keeps it after a closed code fence', () => {
-      expect(html(':: t\n: - ```\n    c\n    ```\nx\n')).toContain('    <p>x</p>\n  </dd>')
+    it('publishes the follower after a closed code fence', () => {
+      expect(html(':: t\n: - ```\n    c\n    ```\nx\n')).toMatch(/<\/dl>\s*<p>x<\/p>/)
     })
 
     it('reads an ordered marker, a deeper list and a list over a quote alike', () => {
       for (const lead of [': 1. # h', ': - - # h', ': - > # h', ': > - # h']) {
-        expect(html(':: t\n' + lead + '\nx\n'), lead).toContain('<p>x</p>\n  </dd>')
+        expect(html(':: t\n' + lead + '\nx\n'), lead).toMatch(/<\/dl>\s*<p>x<\/p>/)
       }
     })
   })
@@ -129,13 +100,8 @@ describe("a description body folds past its nested lead's block kind", () => {
       expect(html(':: t\n: - %%%\n    c\n    %%%\nx\n')).toMatch(/<\/dl>\s*<p>x<\/p>/)
     })
 
-    /*
-     * The run has to be the CLOSED one: an unterminated `%%%` is still
-     * collecting, so the body folds on past it. A fix keyed on the `%%%` line
-     * alone would move this row.
-     */
-    it('keeps the follower in the body below an UNTERMINATED comment fence', () => {
-      expect(html(':: t\n: - %%%\nx\n')).toContain('<p>x</p>\n  </dd>')
+    it('publishes the follower after an unterminated comment opener', () => {
+      expect(html(':: t\n: - %%%\nx\n')).toMatch(/<\/dl>\s*<p>x<\/p>/)
     })
   })
 

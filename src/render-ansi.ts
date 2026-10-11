@@ -644,7 +644,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
         const inline = node.inline
         return `(${outsideLink(() => renderInlines(inline, ctx))})`
       }
-      const id = stripControls(node.id ?? '')
+      const id = stripControls(node.label ?? '')
       // An UNRESOLVED reference stays literal and UNSTYLED, exactly as the HTML
       // target renders it: the construct did not form, so `[^a]` is ordinary
       // text. Styling it cyan-bold and dropping the caret announced a footnote

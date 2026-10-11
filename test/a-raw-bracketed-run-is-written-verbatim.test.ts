@@ -93,12 +93,12 @@ describe('a flat raw bracketed run is written verbatim too', () => {
   // a backslash, and every one of these grew one per format pass.
   //
   // The third assertion reads the VALUE back out of the tree rather than
-  // comparing HTML. A footnote id and a code-fence label are not rendered, so
+  // comparing HTML. A footnote label and a code-fence label are not rendered, so
   // `toHtml(fmt(x)) == toHtml(x)` holds for them however mangled the label
   // gets - it is an assertion that cannot fail, and the two constructs whose
   // drift is invisible are exactly the ones that need a check that can.
   const flat: Array<[string, string, (src: string) => unknown]> = [
-    ['a footnote label', 'a[^n\\m]\n\n[^n\\m]: body\n', (s) => labelsIn(s, 'id')],
+    ['a footnote label', 'a[^n\\m]\n\n[^n\\m]: body\n', (s) => labelsIn(s, 'label')],
     ['an admonition label', '::: note [a\\b]\nx\n:::\n', (s) => labelsIn(s, 'label')],
     ['a div label', '::: [a\\b]\nx\n:::\n', (s) => labelsIn(s, 'label')],
     ['a code-fence label', '```js [a\\b]\nx\n```\n', (s) => labelsIn(s, 'label')],

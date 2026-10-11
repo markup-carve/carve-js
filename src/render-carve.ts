@@ -466,13 +466,13 @@ function writtenAsOneRun(previous: BlockNode, block: BlockNode): boolean {
 }
 
 function hostsCaption(block: BlockNode): boolean {
+  if (block.type === 'block_quote') return block.fenced === true || block.children.length > 0
   // A figure group's CLOSING fence hosts a caption (PART 9 §4c), so a literal
   // `^ …` paragraph written after one must have its caret escaped or it would
   // re-attach as the group caption on the way back (the F6 detached shape).
   if (
     block.type === 'table' ||
     block.type === 'code_block' ||
-    block.type === 'block_quote' ||
     block.type === 'image' ||
     block.type === 'figure_group'
   )
@@ -1220,7 +1220,8 @@ function renderEmphasis(
  * of the content survives whole-document normalization and the block layer.
  */
 function codeSpanFence(content: string): string {
-  if (/^[\r\n]/.test(content)) {
+  // A short absent run keeps multiline inline code below block-fence width.
+  if (/[\r\n]/.test(content)) {
     const widths = new Set(Array.from(content.matchAll(/`+/g), match => match[0].length))
     for (const width of [1, 2]) if (!widths.has(width)) return '`'.repeat(width)
   }
@@ -1518,7 +1519,7 @@ function dropTrailingWs(line: string): string {
  * does not contain.
  */
 const SENTINEL_BASE = 0xe001
-const SENTINEL_COUNT = 7
+const SENTINEL_COUNT = 8
 
 function trimNonNbsp(text: string): string {
   return trimEndNonNbsp(trimStartNonNbsp(text))
@@ -3861,7 +3862,9 @@ class CarveRenderSession {
    */
 
   private renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
+    // Footnote continuations need their body indentation to remain owned.
     const rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
+      .replace(new RegExp(`${this.sentinels[6]}(?=\\[)`, 'g'), this.sentinels[7]!)
     if (rawBody.split('\n').some((line) => line.replace(/^[ \t]*/, '').startsWith(this.sentinels[6]! + '>'))) {
       throw new SourceUnspellableError('code', 'a block-marker continuation cannot stay inside a footnote paragraph')
     }
@@ -4269,7 +4272,7 @@ class CarveRenderSession {
       // An empty code span is written as an unclosed run, which swallows a bare
       // closer; only the braced one ends it.
       const last = children[children.length - 1]
-      return (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
+      return content.endsWith(renderSession.sentinels[3]!) || (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
         ? renderForcedEmphasis(delim, content)
         : renderEmphasis(delim, content, prevChar, nextChar)
     }
@@ -4399,7 +4402,7 @@ class CarveRenderSession {
       case 'inline_footnote':
         return withAttrs(node.inline
           ? `^[${renderSession.renderAttributeBracket(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
-          : `[^${writeFlatBracketRun(node.id ?? '')}]`)
+          : `[^${writeFlatBracketRun(node.label ?? '')}]`)
       case 'non_breaking_space':
         return renderSession.inlineAttrs(node.attrs, node) ? `[${renderSession.sentinels[3]}]${renderSession.inlineAttrs(node.attrs, node)}` : renderSession.sentinels[3]!
       case 'soft_break':
@@ -4689,8 +4692,10 @@ class CarveRenderSession {
   private restoreVerbatim(text: string): string {
     return (
       text
+        .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
+        .replaceAll(this.sentinels[7]!, '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[6]}([>\\[])`, 'gm'), (_match, prefix: string, marker: string) =>
-          (marker === '[' ? prefix + ' ' : prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
+          (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
         .replaceAll(this.sentinels[6]!, '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[2]}$`, 'gm'), (_match, prefix: string) =>

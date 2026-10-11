@@ -378,6 +378,13 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "underline": { "attrs": "object", "children": "array", "pos": "object" },
 }
 
+/** Array length bounds from the schema; depth counts nested array levels. */
+export const WIRE_ARRAY_MIN_ITEMS: Readonly<Record<string, Readonly<Record<string, readonly { depth: number; minimum: number }[]>>>> = {
+  "line_block": { "lines": [{"depth":1,"minimum":1}] },
+  "ruby": { "pairs": [{"depth":0,"minimum":1}] },
+  "rubyPair": { "base": [{"depth":0,"minimum":1}] },
+}
+
 /**
  * Which node TYPES each position admits, keyed `<owning type>.<field>`.
  *

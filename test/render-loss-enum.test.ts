@@ -8,8 +8,8 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
 
 /**
  * `CARVE-P2-024`'s `code` enum holds `raw-format-dropped`, `ruby-flattened`,
- * `destination-denied` and `editorial-comment-flattened` (PART 11 §1d, carve#2252
- * restored by carve#2344, third code ruled in carve#2681, fourth in carve#2793). Each names something one selected renderer dropped
+ * `destination-denied`, `editorial-comment-flattened`, and `carrier-attribute-dropped`
+ * (PART 11 §1d and PART 10 §13a). Each names something one selected renderer dropped
  * or blanked. A dropped FIELD, and a structure no Carve source spells, go to
  * the conversion-diagnostics channel
  * instead: `CARVE-P12-034` (table section attributes), `CARVE-P12-049`

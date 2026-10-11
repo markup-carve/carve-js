@@ -40,6 +40,7 @@ import {
   NODE_FIELDS,
   NODE_POSITION_KIND,
   NODE_POSITION_TYPES,
+  WIRE_ARRAY_MIN_ITEMS,
   WIRE_FIELDS,
   WIRE_NESTED_RECORDS,
   WIRE_RECORD_FIELDS,
@@ -278,14 +279,6 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
-  // A footnote reference's target is `label` on the wire, the name its
-  // definition already uses (PART 12 §25, carve#2193). The runtime field stays
-  // `id`, which is what the parser and the renderers carry.
-  if ((out ?? record)['type'] === 'footnote_ref' && (out ?? record)['id'] !== undefined) {
-    const { id: label, ...rest } = out ?? record
-    out = { ...rest, label }
-  }
-
   if ((out ?? record)['type'] === 'list' && (out ?? record)['start'] === 1) {
     const { start: _start, ...rest } = out ?? record
     out = rest
@@ -338,17 +331,6 @@ function definitionListsFromWire<T>(node: T): T {
   }
   for (const field of OWNED_SINGLE_CHILD_FIELDS) {
     if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
-  }
-
-  // The wire spells a footnote reference's target `label`; the runtime carries
-  // it as `id` (PART 12 §25). `id` on the wire is REFUSED rather than accepted
-  // as an alias - §11's narrow exception is a MAY, and this engine already
-  // refuses `footnote.id` on the definition half of the same pair (carve#743).
-  // Tolerating the old spelling on one half and not the other is the two-ways-
-  // to-say-it that §3 exists to stop.
-  if (record['type'] === 'footnote_ref' && record['label'] !== undefined) {
-    const { label, ...rest } = record
-    return definitionListsFromWire({ ...rest, id: label } as unknown as T)
   }
 
   // Not read either, so an ingested reference does not arrive already carrying a
@@ -829,18 +811,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
     }
-    if (type === 'ruby' && Array.isArray(record.pairs) && record.pairs.length === 0) {
-      throw new AstJsonSchemaError('property "pairs" must contain at least one item', path)
-    }
-    // The schema's `minItems: 1`. An EMPTY array is a presence claim no writer
-    // can spell: the field's presence says the author wrote a separator row,
-    // the cell count IS the entry count ([CARVE-P11-066]), and a delimiter row
-    // needs at least one cell. Accepting it would leave the tree asserting a
-    // row that cannot be written and that this engine would publish again on
-    // the way out.
-    if (type === 'table' && Array.isArray(record.separatorWidths) && record.separatorWidths.length === 0) {
-      throw new AstJsonSchemaError('property "separatorWidths" must contain at least one item', path)
-    }
+    refuseArrayMinimums(record, type as string, path)
     if (type === 'line_block' && Array.isArray(record.lines)) {
       const stanzas = record.children as unknown[]
       if (record.lines.length !== stanzas.length) {
@@ -848,7 +819,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       }
       record.lines.forEach((line, index) => {
         const at = `${path}.lines[${index}]`
-        if (!Array.isArray(line) || line.length === 0 || line.at(-1) !== '/children/-') {
+        if (!Array.isArray(line) || line.at(-1) !== '/children/-') {
           throw new AstJsonSchemaError('a stanza must end at /children/-', at)
         }
         const boundaries = new Map(lineBlockBoundaryPointers(stanzas[index] as Record<string, unknown>).map((pointer, offset) => [pointer, offset]))
@@ -1037,6 +1008,22 @@ function refuseAdditionalSpecConstraints(record: Record<string, unknown>, path: 
   }
 }
 
+/** Enforce schema array bounds at the field and any nested array levels. */
+function refuseArrayMinimums(record: Record<string, unknown>, owner: string, path: string): void {
+  const fields = ownValue(WIRE_ARRAY_MIN_ITEMS, owner) ?? {}
+  for (const [field, bounds] of Object.entries(fields)) {
+    const check = (value: unknown, depth: number, minimum: number, at: string): void => {
+      if (!Array.isArray(value)) return
+      if (depth > 0) {
+        value.forEach((item, index) => check(item, depth - 1, minimum, `${at}[${index}]`))
+      } else if (value.length < minimum) {
+        throw new AstJsonSchemaError(`array must contain at least ${minimum === 1 ? 'one' : minimum} item${minimum === 1 ? '' : 's'}`, at)
+      }
+    }
+    for (const { depth, minimum } of bounds) check(record[field], depth, minimum, `${path}.${field}`)
+  }
+}
+
 /** The required fields and value shapes of one closed record. */
 function refuseRecordShape(value: unknown, name: string, path: string): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -1060,9 +1047,7 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
       throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
     }
   }
-  if (name === 'rubyPair' && Array.isArray(item.base) && item.base.length === 0) {
-    throw new AstJsonSchemaError('property "base" must contain at least one item', path)
-  }
+  refuseArrayMinimums(item, name, path)
   for (const [field, value] of Object.entries(item)) {
     if (!NODE_FIELDS.includes(field)) continue
     const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
@@ -1727,9 +1712,9 @@ function clearUnbackedFootnoteNumbers(
       continue
     }
     if (cur === null || typeof cur !== 'object') continue
-    const node = cur as { type?: string; id?: string; number?: number }
+    const node = cur as { type?: string; label?: string; number?: number }
     if (node.type === 'footnote_ref' && node.number !== undefined) {
-      if (node.id === undefined || ownValue(defs, node.id) === undefined) delete node.number
+      if (node.label === undefined || ownValue(defs, node.label) === undefined) delete node.number
     }
     for (const value of Object.values(cur)) {
       if (value !== null && typeof value === 'object') stack.push(value)

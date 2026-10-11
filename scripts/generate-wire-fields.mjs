@@ -316,6 +316,14 @@ export function wireFieldsSource(schema) {
     }
     return undefined;
   };
+  const arrayMinimums = (property, depth = 0) => {
+    if (property?.type !== "array") return [];
+    const bounds = Number.isInteger(property.minItems)
+      ? [{ depth, minimum: property.minItems }]
+      : [];
+    return [...bounds, ...arrayMinimums(property.items, depth + 1)];
+  };
+  const minimums = new Map();
   const required = new Map();
   const kinds = new Map();
   const collect = (name, def) => {
@@ -330,6 +338,12 @@ export function wireFieldsSource(schema) {
       if (kind !== undefined) perProperty[property] = kind;
     }
     kinds.set(name, perProperty);
+    const perMinimum = {};
+    for (const [field, property] of Object.entries(def.properties)) {
+      const bounds = arrayMinimums(property);
+      if (bounds.length > 0) perMinimum[field] = bounds;
+    }
+    if (Object.keys(perMinimum).length > 0) minimums.set(name, perMinimum);
   };
   for (const def of Object.values(defs)) {
     const type = def?.properties?.type?.const;
@@ -515,6 +529,21 @@ export function wireFieldsSource(schema) {
           .join(", ")} },`,
     )
     .join("\n");
+  const minimumsDoc = [
+    "}",
+    "",
+    "/** Array length bounds from the schema; depth counts nested array levels. */",
+    "export const WIRE_ARRAY_MIN_ITEMS: Readonly<Record<string, Readonly<Record<string, readonly { depth: number; minimum: number }[]>>>> = {",
+  ].join("\n");
+  const minimumsList = [...minimums.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([owner, fields]) =>
+      `  ${JSON.stringify(owner)}: { ${Object.entries(fields)
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([field, bounds]) => `${JSON.stringify(field)}: ${JSON.stringify(bounds)}`)
+        .join(", ")} },`,
+    )
+    .join("\n");
   const typesDoc = [
     "}",
     "",
@@ -580,7 +609,7 @@ export function wireFieldsSource(schema) {
           .join(", ")} },`,
     )
     .join("\n");
-  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(recordFields)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n${schemaDoc}\n${requiredList}\n${kindsDoc}\n${kindsList}\n${typesDoc}\n${typesList}\n${nestedDoc}\n${nestedList}\n}\n`;
+  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(recordFields)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n${schemaDoc}\n${requiredList}\n${kindsDoc}\n${kindsList}\n${minimumsDoc}\n${minimumsList}\n${typesDoc}\n${typesList}\n${nestedDoc}\n${nestedList}\n}\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

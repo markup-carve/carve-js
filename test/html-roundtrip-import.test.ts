@@ -68,7 +68,7 @@ function distinctions(doc: Document): string[] {
       case 'autolink':
         return [`autolink ${String(node.href)}`]
       case 'footnote_ref':
-        return [`footnote_ref ${String(node.id)}`]
+        return [`footnote_ref ${String(node.label)}`]
       case 'inline_footnote':
         return ['inline_footnote']
       case 'raw_inline':
@@ -185,7 +185,7 @@ describe('each carrier reconstructs its own node', () => {
 
   it('data-carve-footnote-label restores the authored label', () => {
     expect(back('x[^lbl]\n\n[^lbl]: note\n')).toBe('x[^lbl]\n\n[^lbl]: note\n')
-    // The field carve-js spells is `footnote_ref.id`, whatever §13 calls it.
+    // The reference retains its authored label.
     expect(distinctions(imported('x[^lbl]\n\n[^lbl]: note\n'))).toContain('footnote_ref lbl')
   })
 

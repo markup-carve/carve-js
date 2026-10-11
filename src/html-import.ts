@@ -4696,7 +4696,7 @@ class Importer {
       const label = this.attr(node, 'label') ?? ''
       const inline = this.inlineFootnoteBodies.get(label)
       if (inline !== undefined) return [{ type: 'inline_footnote', inline }]
-      return [{ type: 'footnote_ref', id: label }]
+      return [{ type: 'footnote_ref', label }]
     }
     if (tag === 'abbr') {
       // A use of an abbreviation the document DEFINED is prose: the expansion
@@ -5731,7 +5731,7 @@ class Importer {
       }
       if (typeof node !== 'object' || node === null) return
       const record = node as Record<string, unknown>
-      if (record.type === 'footnote_ref' && typeof record.id === 'string') referenced.add(record.id)
+      if (record.type === 'footnote_ref' && typeof record.label === 'string') referenced.add(record.label)
       for (const value of Object.values(record)) if (typeof value === 'object') visit(value)
     }
     visit(children)

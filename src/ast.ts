@@ -920,7 +920,7 @@ export interface Abbreviation extends BaseNode {
 export interface FootnoteRef extends BaseNode {
   type: 'footnote_ref'
   /** Reference label (`[^label]`); resolved against Document.footnoteDefs. */
-  id?: string
+  label?: string
   /**
    * Never present - a reference has no body of its own, it points at a
    * definition. Declared so code that handles BOTH footnote forms can test
@@ -941,7 +941,7 @@ export interface InlineFootnote extends BaseNode {
    * Never present - an inline footnote carries its body, not a label pointing
    * at one. The mirror of `FootnoteRef.inline`, for the same reason.
    */
-  id?: undefined
+  label?: undefined
   /** Renderer-assigned 1-based number, by document reference order. */
   number?: number
   /** Renderer-assigned unique id for this reference (a backlink target). */

@@ -950,6 +950,7 @@ const IMPLEMENTED = new Set([
   // parser already did.
   'a-braced-comment-does-not-decide-a-quote',
   'a-below-column-line-continues-a-paragraph-only-where-one-is-open',
+  'a-caption-scope-resets-at-a-structural-only-line',
 ])
 
 /**
@@ -969,8 +970,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
-
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
