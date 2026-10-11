@@ -3430,7 +3430,7 @@ interface QuoteFenceHosts {
   columns: number[]
   markers: number[]
   kinds: ('item' | 'note')[]
-  colons?: Array<{ width: number; column: number; floor: number; awaitingBody: boolean }>
+  colons?: Array<{ width: number; column: number; floor: number; awaitingBody: boolean; literal: boolean }>
   /**
    * The fence a list item or footnote inside this quote holds open. `column` is
    * where the opener sits and `floor` the host's own content column; the two
@@ -3467,7 +3467,10 @@ function trackQuoteHostFence(
   }
   const paragraph = blockQuoteParagraphOpen(state)
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
-  while (host.columns.length > 1 && host.columns.at(-1)! > column) {
+  const lazyItem = paragraph && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
+    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
+  if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody)
+  while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) {
     host.columns.pop(); host.markers.pop(); host.kinds.pop()
   }
   const colons = host.colons ??= []
@@ -3513,6 +3516,10 @@ function trackQuoteHostFence(
       return true
     }
     if (open) open.awaitingBody = false
+    if (open?.literal) {
+      closeBlockQuoteParagraph(state)
+      return true
+    }
     const width = colonFenceOpenerLen(inner)
     const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
     if (absorbedBare || (width === null && /^:{3,}/.test(inner) &&
@@ -3521,7 +3528,8 @@ function trackQuoteHostFence(
       return true
     }
     if (width !== null && !absorbedBare) {
-      colons.push({ width, column: at, floor, awaitingBody: blockStart })
+      colons.push({ width, column: at, floor, awaitingBody: blockStart,
+        literal: RE_LINE_BLOCK_OPEN.test(inner) })
       // Keep marker-line candidates foldable until their closer arrives.
       // An unprefixed lazy body can still demote that opener to prose.
       if (!blockStart) {

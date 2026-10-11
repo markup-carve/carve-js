@@ -134,4 +134,21 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     expect(parse(source).children.map(node => node.type)).toEqual(['list', 'paragraph'])
     expect(carveToHtml(source)).toContain('</ul>\n<p>tail</p>')
   })
+
+  it('keeps the item column for a quoted dedented lazy paragraph', () => {
+    const source = '> - ::: box\n> lazy\n>   :::\n- tail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    expect(carveToHtml(source)).not.toContain('class="box"')
+    expect(carveToHtml(source)).toContain('::: box\nlazy')
+    expect(carveToHtml(source)).toContain('<div>')
+  })
+
+  for (const opener of ['|']) {
+    it(`keeps colon-shaped literal ${JSON.stringify(opener)} payload out of the candidate stack`, () => {
+      const source = `> - ::: ${opener}\n>   :::: box\n>   :::\n>   :::bad\n>   :::\n- tail\n`
+      expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
+      expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+      expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+    })
+  }
 })
