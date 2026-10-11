@@ -141,7 +141,7 @@ describe('an element-less container is carried in a comment', () => {
   })
 
   it('a document with no element-less container gains no comment either way', () => {
-    for (const out of [carveToMarkdown(PLAIN), carveToMarkdown(PLAIN, { carryMarkers: true })]) {
+    for (const out of [carveToMarkdown(PLAIN), carveToMarkdown(PLAIN, { roundtrip: true })]) {
       expect(out).not.toContain('<!-- carve:')
       expect(out).toBe(PLAIN_MARKDOWN)
     }
@@ -149,7 +149,7 @@ describe('an element-less container is carried in a comment', () => {
 
   for (const [name, carve, carrier] of CARRIED) {
     it(`the carrier mode writes the opener verbatim for ${name}`, () => {
-      expect(carveToMarkdown(carve, { carryMarkers: true })).toBe(carrier)
+      expect(carveToMarkdown(carve, { roundtrip: true })).toBe(carrier)
     })
 
     it(`the carrier mode round-trips ${name}`, () => {
@@ -193,7 +193,7 @@ describe('an element-less container is carried in a comment', () => {
     ['a list table', '{header-rows=1}\n::: list-table\n- - A\n  - B\n- - one\n  - x\n:::\n'],
   ] as const) {
     it(`${name} takes no marker`, () => {
-      expect(carveToMarkdown(carve, { carryMarkers: true })).not.toContain('<!-- carve:')
+      expect(carveToMarkdown(carve, { roundtrip: true })).not.toContain('<!-- carve:')
     })
   }
 
@@ -251,7 +251,7 @@ describe('an element-less container is carried in a comment', () => {
 
   for (const [name, carve, carrier] of CAPTIONS) {
     it(`the carrier mode writes the caption line verbatim for ${name}`, () => {
-      expect(carveToMarkdown(carve, { carryMarkers: true })).toBe(carrier)
+      expect(carveToMarkdown(carve, { roundtrip: true })).toBe(carrier)
     })
 
     it(`the carrier mode round-trips ${name} into its own slot`, () => {
@@ -315,7 +315,7 @@ describe('an element-less container is carried in a comment', () => {
   it('a caption line inside the container stays literal', () => {
     const carve = '::: figure\n:::: panel\n![a](x.png)\n::::\n^ Group caption\n:::\n'
     expect(carveToHtml(carve)).toContain('<p>^ Group caption</p>')
-    const carrier = carveToMarkdown(carve, { carryMarkers: true })
+    const carrier = carveToMarkdown(carve, { roundtrip: true })
     expect(carrier).not.toContain('<!-- carve: ^')
     expect(carrier).toContain('^ Group caption')
     expect(carveToHtml(markdownToCarve(carrier))).not.toContain('<figcaption>')
@@ -434,7 +434,7 @@ describe('an element-less container is carried in a comment', () => {
 
   for (const [name, carve, carrier] of PREFIXED) {
     it(`a container ${name} takes a marker at its host's column`, () => {
-      expect(carveToMarkdown(carve, { carryMarkers: true })).toBe(carrier)
+      expect(carveToMarkdown(carve, { roundtrip: true })).toBe(carrier)
     })
 
     it(`a container ${name} comes back`, () => {
@@ -479,7 +479,7 @@ describe('an element-less container is carried in a comment', () => {
   it('a container in a table cell takes no marker either way', () => {
     const source = '{header-rows=1}\n::: list-table\n- - A\n  - B\n' +
       '- - cell one\n  - ::: note\n    Body.\n    :::\n:::\n'
-    const on = carveToMarkdown(source, { carryMarkers: true })
+    const on = carveToMarkdown(source, { roundtrip: true })
     expect(on).not.toContain('<!-- carve:')
     expect(on).toBe(carveToMarkdown(source))
     expect(on).toContain('| cell one | Body. |')

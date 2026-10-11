@@ -19,10 +19,9 @@ echo '# Hello' | carve           # render from stdin
 `carve render --ansi`). `--roundtrip` adds the preservation
 metadata an export needs to be imported back without losing a distinction the
 serialization has no spelling for - see
-[Roundtrip export](rendering.md#roundtrip-export). `--carry-markers` is its
-Markdown-only predecessor and still works: it brackets every container Markdown
-drops with an HTML comment holding its Carve opener, so
-`carve migrate --from markdown` returns the container - see
+[Roundtrip export](rendering.md#roundtrip-export). On Markdown output,
+`--roundtrip` brackets each flattened container with comments holding its Carve
+opener and closer, so `carve migrate --from markdown` returns the container. See
 [Carrying a container through a Markdown round trip](rendering.md#carrying-a-container-through-a-markdown-round-trip).
 For anything you did not author, add `--safe` and optionally `--profile` - see
 [Untrusted input](#untrusted-input). Three more subcommands round out the

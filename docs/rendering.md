@@ -135,9 +135,8 @@ It is **off by default** on every surface, and enabling it neither removes nor
 reorders an attribute the default output writes.
 
 **The target decides the carrier.** HTML writes the named attributes PART 10
-§13a lists; Markdown selects the container carrier comments below, which it
-already wrote under `--carry-markers`. A Markdown export carries containers and
-no more, and is not a claim to preserve what the HTML inventory lists.
+§13a lists; Markdown writes the container carrier comments below. A Markdown
+export carries containers and no more.
 
 What it guarantees is **recovery of the named distinctions, not byte-identical
 source**.
@@ -146,7 +145,7 @@ source**.
 
 | Attribute | Rides | Holds |
 | --- | --- | --- |
-| `data-marker` | `<ul>`, `<ol>` | the authored list marker, only where it is not the default (`-` for a bullet list, `.` for an ordered one) |
+| `data-marker` | `<ul>` | the authored bullet marker, only where it is not `-` |
 | `data-char` | `<hr>` | the authored thematic-break character, only where it is not `-` |
 | `data-carve-explicit-id` | `<section>`, `<h1>`-`<h6>` | presence: the identifier was authored, not generated |
 | `data-carve-ref` | `<a>`, `<img>` | the reference label the link or image resolved by |
@@ -223,14 +222,6 @@ carrier in a document is not a reason to trust that document. Enabling the
 export option never enables a trusted import, never widens an importer's mode
 and never relaxes a destination check.
 
-### The Markdown alias
-
-`carryMarkers` / `--carry-markers` keep working with their current
-Markdown-only scope. Where both can be supplied, **either enabled option
-enables preservation**, in either order: a default never overrides an alias the
-caller enabled, so `{ roundtrip: true, carryMarkers: false }` still carries
-containers.
-
 ## Carrying a container through a Markdown round trip
 
 Flattening keeps the words and loses the container. On the Markdown target that
@@ -244,7 +235,7 @@ the visible fallback exactly as it is and brackets each of those containers with
 an HTML comment holding the Carve opener and closer verbatim:
 
 ```bash
-carve render --markdown --carry-markers note.crv
+carve render --markdown --roundtrip note.crv
 ```
 
 ```markdown
@@ -257,7 +248,7 @@ An admonition body.
 ```
 
 `carve migrate --from markdown` reads those markers back and returns the
-container. Programmatically the mode is the `carryMarkers` option on
+container. Programmatically the mode is the `roundtrip` option on
 `carveToMarkdown` and `renderMarkdown`.
 
 The mode is **off by default**, and the default output is unchanged: a renderer
