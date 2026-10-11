@@ -220,10 +220,12 @@ describe('the twelve carriers', () => {
     expect(htmlToCarve(html).value).toBe('| a | b |\n|----|--|\n| 1 | 2 |\n')
   })
 
-  it('restores nothing from a value that is not a list of positive integers', () => {
+  it('refuses the WHOLE carrier where an entry is not a run of digits', () => {
     // The table still imports, in the `|=` header form, which is what the
-    // field's absence means.
-    for (const value of ['', '0', '2,x', '-1', '1.5']) {
+    // field's absence means. One bad entry refuses the whole attribute rather
+    // than keeping the entries around it: a partial read would put a separator
+    // row on the page whose widths nobody wrote.
+    for (const value of ['', '0', '2,x', '-1', '1.5', '3,', '+3', ' ']) {
       const html = `<table data-carve-col-widths="${value}">\n<tr><th>a</th></tr>\n<tr><td>1</td></tr>\n</table>`
       expect(htmlToCarve(html).value, value).toBe('|= a |\n| 1 |\n')
     }

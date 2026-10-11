@@ -62,17 +62,41 @@ const namedLosses = () => ({
   ],
 })
 
-const collect = (render: (ast: never, opts: never) => string, wire: unknown): RenderLoss[] => {
+const collect = (
+  render: (ast: never, opts: never) => string,
+  wire: unknown,
+  opts: Record<string, unknown> = {},
+): RenderLoss[] => {
   const losses: RenderLoss[] = []
-  render(resolve(fromAstJson(wire as never)) as never, { onRenderLoss: (loss: RenderLoss) => losses.push(loss) } as never)
+  render(resolve(fromAstJson(wire as never)) as never, { ...opts, onRenderLoss: (loss: RenderLoss) => losses.push(loss) } as never)
   return losses
 }
+
+/*
+ * An authored attribute under a name PART 10 §13a reserves for a roundtrip
+ * carrier. It is DROPPED and the drop reported, which is the fifth code - and
+ * the only one that needs an export option on to be reachable, so the sweep
+ * below renders this one with `roundtrip` enabled.
+ */
+const collidesWithCarrier = (): unknown => ({
+  type: 'document',
+  srcByteLength: 0,
+  children: [
+    { type: 'thematic_break', marker: '*', attrs: { keyValues: { 'data-char': 'Z' } } },
+  ],
+})
 
 const targets = { carve: renderCarve, markdown: renderMarkdown, plain: renderPlainText, ansi: renderAnsi, html: renderHtml }
 
 describe('the render-loss code enum', () => {
-  it('names four codes in the pinned schema', () => {
-    expect(schemaCodes()).toEqual(['raw-format-dropped', 'ruby-flattened', 'destination-denied', 'editorial-comment-flattened'])
+  it('names five codes in the pinned schema', () => {
+    expect(schemaCodes()).toEqual([
+      'raw-format-dropped',
+      'ruby-flattened',
+      'destination-denied',
+      'editorial-comment-flattened',
+      'carrier-attribute-dropped',
+    ])
   })
 
   it('names no interchange-only shape on any target', () => {
@@ -84,7 +108,11 @@ describe('the render-loss code enum', () => {
   it('emits only codes the schema permits, and emits every one of them', () => {
     const seen = new Set<string>()
     for (const [target, render] of Object.entries(targets)) {
-      for (const loss of [...collect(render as never, interchangeOnly()), ...collect(render as never, namedLosses())]) {
+      for (const loss of [
+        ...collect(render as never, interchangeOnly()),
+        ...collect(render as never, namedLosses()),
+        ...collect(render as never, collidesWithCarrier(), { roundtrip: true }),
+      ]) {
         expect(schemaCodes(), `${target} emitted ${loss.code}`).toContain(loss.code)
         seen.add(loss.code)
       }
