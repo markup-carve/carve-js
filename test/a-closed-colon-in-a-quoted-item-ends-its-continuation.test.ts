@@ -2,6 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 
 describe('closed colon fences in quoted items (carve#2925)', () => {
+  it('keeps a marker left of the outermost item structural', () => {
+    const source = '>  - a\n>    - ::: box\n>      body\n> - next\n>      :::\n- tail\n'
+    const html = carveToHtml(source)
+    expect(html).not.toContain('<p>body\n- next</p>')
+    expect(html).toContain('<li>next')
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    expect(carveToHtml(carveToCarve(source))).toBe(html)
+  })
+
+  it('retains a fence three list levels deep across a lazy marker', () => {
+    const source = '> - a\n>   - b\n>     - ::: box\n>       body\n>    - next\n>       :::\n- tail\n'
+    const html = carveToHtml(source)
+    expect(html).toContain('<p>body\n- next</p>')
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    expect(html.indexOf('<li>tail</li>')).toBeGreaterThan(html.lastIndexOf('</blockquote>'))
+    expect(carveToHtml(carveToCarve(source))).toBe(html)
+  })
+
   for (const depth of [1, 2]) {
     for (const width of [3, 4]) {
       for (const column of [0, 1, 2, 3, 4]) {
