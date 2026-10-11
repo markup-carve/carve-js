@@ -61,6 +61,26 @@ export interface MarkdownRenderOptions extends RenderLossSinkOptions {
    * ones this target emits today.
    */
   carryMarkers?: boolean
+  /**
+   * The canonical roundtrip export option (PART 10 §13). On this target it
+   * SELECTS the carrier comments `carryMarkers` already writes rather than
+   * redefining them, so a Markdown export carries containers and no more.
+   *
+   * §13c: EITHER ENABLED OPTION ENABLES PRESERVATION, in either order, and a
+   * default never overrides an alias the caller enabled. `carryMarkers` keeps
+   * its Markdown-only scope as a compatibility alias.
+   */
+  roundtrip?: boolean
+}
+
+/**
+ * §13c's alias rule, in one place: preservation is on when EITHER option is
+ * enabled. Written as two `=== true` tests rather than a precedence chain,
+ * because a precedence chain is how `{ roundtrip: true, carryMarkers: false }`
+ * turns an enabled option back off.
+ */
+export function markdownCarriersEnabled(opts: { carryMarkers?: boolean; roundtrip?: boolean }): boolean {
+  return opts.carryMarkers === true || opts.roundtrip === true
 }
 
 function renderHtmlAttrs(attrs: Attrs | undefined): string {
@@ -106,7 +126,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
-    carryMarkers: opts.carryMarkers === true,
+    carryMarkers: markdownCarriersEnabled(opts),
     carrierDepth: 0,
     abbrBudget: budgetForDocument(ast),
     smartTypography,

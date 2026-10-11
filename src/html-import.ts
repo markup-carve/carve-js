@@ -42,6 +42,7 @@ import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
+import { RESERVED_CARRIER_ATTRIBUTES } from './roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -647,12 +648,20 @@ function fallbackImage(math: P5Node): P5Node | undefined {
 /**
  * The `data-` names that are A SERIALIZER'S PROTOCOL, not an author's content.
  *
- * Everything else the source carries is kept, so these need naming: a
- * round-trip marker carries the stored Carve source for the element it sits on,
- * and re-emitting it as `{data-carve-src=…}` would make the importer's output
- * claim a provenance it does not have.
+ * Everything else the source carries is kept, so these need naming:
+ * `RESERVED_CARRIER_ATTRIBUTES` is PART 10 §13a's whole inventory, under both
+ * the canonical `data-carve-` spelling and the deprecated `data-djot-` one that
+ * released carve-php versions wrote. Re-emitting one as an authored attribute
+ * is what markup-carve/carve#2902 ruling 5 stops: a `<hr data-char="_">` came
+ * back as `{data-char=_}` plus `---`, and a reference link as
+ * `[text](/u){data-carve-ref=lbl}`, so the importer's own output claimed a
+ * protocol name it had no business writing - and the next render then read that
+ * authored attribute as a carrier.
+ *
+ * REFUSING IS NOT A TRUST DECISION and does not depend on the import mode
+ * (ruling 5): the names are refused in `safe` exactly as in `roundtrip`.
  */
-const ROUND_TRIP_MARKER_ATTRIBUTES = new Set(['data-djot-src', 'data-carve-src'])
+const ROUND_TRIP_MARKER_ATTRIBUTES = RESERVED_CARRIER_ATTRIBUTES
 
 /**
  * Does this URL attribute name no destination at all?

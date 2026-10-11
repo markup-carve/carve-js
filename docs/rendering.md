@@ -111,6 +111,84 @@ construct and is still emitted. The option is HTML-only - no other target emits
 
 [Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
 
+## Roundtrip export
+
+A render writes the bytes the serialization has a spelling for. A document also
+holds distinctions it does not - which bullet character an author used, whether
+an identifier was written or generated, which reference label a link resolved
+by - and once a render drops one, no import can recover it.
+
+`roundtrip` is one opt-in that adds the preservation metadata for those, and
+changes nothing else:
+
+```bash
+carve render --html --roundtrip note.crv
+carve render --markdown --roundtrip note.crv
+```
+
+```js
+carveToHtml(src, { roundtrip: true })
+renderMarkdown(doc, { roundtrip: true })
+```
+
+It is **off by default** on every surface, and enabling it neither removes nor
+reorders an attribute the default output writes.
+
+**The target decides the carrier.** HTML writes the named attributes PART 10
+§13a lists; Markdown selects the container carrier comments below, which it
+already wrote under `--carry-markers`. A Markdown export carries containers and
+no more, and is not a claim to preserve what the HTML inventory lists.
+
+What it guarantees is **recovery of the named distinctions, not byte-identical
+source**.
+
+### The HTML carriers
+
+| Attribute | Rides | Holds |
+| --- | --- | --- |
+| `data-marker` | `<ul>`, `<ol>` | the authored list marker, only where it is not the default (`-` for a bullet list, `.` for an ordered one) |
+| `data-char` | `<hr>` | the authored thematic-break character, only where it is not `-` |
+| `data-carve-explicit-id` | `<section>`, `<h1>`-`<h6>` | presence: the identifier was authored, not generated |
+| `data-carve-ref` | `<a>`, `<img>` | the reference label the link or image resolved by |
+| `data-carve-autolink` | `<a>` | presence: the link was authored as an autolink |
+| `data-carve-footnote-label` | `<a>`, `<li>` | the authored footnote label, on the reference and on the endnote item |
+| `data-carve-inline-footnote` | `<li>` | presence: the endnote came from an inline footnote |
+| `data-carve-raw` | `<span>` | the raw inline's format; the span holds its content |
+| `data-carve-escaped` | `<span>` | presence; the span holds one escaped character |
+| `data-carve-src` | `<pre>` | the construct's Carve source |
+| `data-carve-abbreviations` | `<template>` | the document's abbreviation definitions, one per line |
+
+Two names in the inventory are **not written by this engine**:
+`data-carve-col-widths` needs a table's separator-row dash widths, which this
+parser does not keep, and raw blocks have no carrier at all - the contract does
+not promise them.
+
+An **authored attribute that collides** with a carrier is dropped and the drop
+is reported as a `carrier-attribute-dropped` render loss naming it. The carrier
+wins because it is structural; emitting both would be invalid HTML.
+
+`data-carve-*` is the serializer's protocol, not an author's content. An import
+**consumes** these names and never writes one back out as an authored
+attribute, in `safe` mode exactly as in `roundtrip`; the deprecated
+`data-djot-*` spelling that earlier releases wrote is read too, so a document
+exported before the rename still imports.
+
+### Export is not an import mode
+
+`roundtrip` adds information to **output**. HTML import's `mode: 'roundtrip'`
+decides reconstruction and raw-HTML preservation of **input**, and finding a
+carrier in a document is not a reason to trust that document. Enabling the
+export option never enables a trusted import, never widens an importer's mode
+and never relaxes a destination check.
+
+### The Markdown alias
+
+`carryMarkers` / `--carry-markers` keep working with their current
+Markdown-only scope. Where both can be supplied, **either enabled option
+enables preservation**, in either order: a default never overrides an alias the
+caller enabled, so `{ roundtrip: true, carryMarkers: false }` still carries
+containers.
+
 ## Carrying a container through a Markdown round trip
 
 Flattening keeps the words and loses the container. On the Markdown target that
