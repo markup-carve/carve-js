@@ -40,6 +40,7 @@ import {
   NODE_FIELDS,
   NODE_POSITION_KIND,
   NODE_POSITION_TYPES,
+  WIRE_ARRAY_MIN_ITEMS,
   WIRE_FIELDS,
   WIRE_NESTED_RECORDS,
   WIRE_RECORD_FIELDS,
@@ -810,9 +811,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
         throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
     }
-    if (type === 'ruby' && Array.isArray(record.pairs) && record.pairs.length === 0) {
-      throw new AstJsonSchemaError('property "pairs" must contain at least one item', path)
-    }
+    refuseArrayMinimums(record, type as string, path)
     if (type === 'line_block' && Array.isArray(record.lines)) {
       const stanzas = record.children as unknown[]
       if (record.lines.length !== stanzas.length) {
@@ -820,7 +819,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       }
       record.lines.forEach((line, index) => {
         const at = `${path}.lines[${index}]`
-        if (!Array.isArray(line) || line.length === 0 || line.at(-1) !== '/children/-') {
+        if (!Array.isArray(line) || line.at(-1) !== '/children/-') {
           throw new AstJsonSchemaError('a stanza must end at /children/-', at)
         }
         const boundaries = new Map(lineBlockBoundaryPointers(stanzas[index] as Record<string, unknown>).map((pointer, offset) => [pointer, offset]))
@@ -1009,6 +1008,22 @@ function refuseAdditionalSpecConstraints(record: Record<string, unknown>, path: 
   }
 }
 
+/** Enforce schema array bounds at the field and any nested array levels. */
+function refuseArrayMinimums(record: Record<string, unknown>, owner: string, path: string): void {
+  const fields = ownValue(WIRE_ARRAY_MIN_ITEMS, owner) ?? {}
+  for (const [field, bounds] of Object.entries(fields)) {
+    const check = (value: unknown, depth: number, minimum: number, at: string): void => {
+      if (!Array.isArray(value)) return
+      if (depth > 0) {
+        value.forEach((item, index) => check(item, depth - 1, minimum, `${at}[${index}]`))
+      } else if (value.length < minimum) {
+        throw new AstJsonSchemaError(`array must contain at least ${minimum === 1 ? 'one' : minimum} item${minimum === 1 ? '' : 's'}`, at)
+      }
+    }
+    for (const { depth, minimum } of bounds) check(record[field], depth, minimum, `${path}.${field}`)
+  }
+}
+
 /** The required fields and value shapes of one closed record. */
 function refuseRecordShape(value: unknown, name: string, path: string): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -1032,9 +1047,7 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
       throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
     }
   }
-  if (name === 'rubyPair' && Array.isArray(item.base) && item.base.length === 0) {
-    throw new AstJsonSchemaError('property "base" must contain at least one item', path)
-  }
+  refuseArrayMinimums(item, name, path)
   for (const [field, value] of Object.entries(item)) {
     if (!NODE_FIELDS.includes(field)) continue
     const admitted = NODE_POSITION_TYPES[`${name}.${field}`]
