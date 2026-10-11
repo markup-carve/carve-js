@@ -1493,6 +1493,10 @@ function renameDjotPipeFootnotes(source: string): string {
 
 function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): string {
   if (!source.includes('`')) return source
+  const blockAttributes = (value: string): boolean => {
+    const attrs = value.startsWith('{') ? readAttributes(value, 0) : undefined
+    return attrs !== undefined && /^[ \t]*$/.test(value.slice(attrs.end))
+  }
   const mask = maskDjotOpaque(maskDjotFences(source), false, { code: false })
   const runs = new Map<number, number[]>()
   for (const run of source.matchAll(/`+/g)) {
@@ -1612,7 +1616,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       const itemPrefix = marker.exec(content)
       if (!itemPrefix) break
       prefixAt += itemPrefix[0].length
-      if (!itemPrefix[0].startsWith('[^')) {
+      if (/^[-*+]/.test(itemPrefix[0])) {
         const task = /^\[[ xX]\][ \t]+/.exec(line.slice(prefixAt))
         if (task) prefixAt += task[0].length
       }
@@ -1663,7 +1667,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
     }
     if (offset >= consumed) {
       if (item) {
-        itemColumn = indent + (item[0].startsWith('[^') ? 2 : item[0].length)
+        itemColumn = indent + 1
         itemQuote = depth
         itemKind = item[0]
           .replace(/^[0-9]+/, '1')
@@ -1674,7 +1678,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
         (depth < itemQuote ||
           (depth === itemQuote &&
             indent < itemColumn &&
-            (block.test(trimmed) || (trimmed.startsWith('{') && readAttributes(trimmed, 0)))))
+            (block.test(trimmed) || blockAttributes(trimmed))))
       )
         itemColumn = 0
       const div = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(at))
@@ -1786,7 +1790,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
           nextIndent <= owner.column + 3 &&
           /^:{3,}[ \t]*$/.test(nextTrimmed) &&
           nextTrimmed.trim().length >= owner.width
-        const attributes = nextTrimmed.startsWith('{') && readAttributes(nextTrimmed, 0)
+        const attributes = blockAttributes(nextTrimmed)
         if (closesDiv || (outside && (block.test(nextTrimmed) || (itemColumn > 0 && ownerIndent < itemColumn && block.test(trimStartNonNbsp(ownerContent))) || attributes))) {
           limit = next - 1
           const nextItem = marker
@@ -1804,8 +1808,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       const closed = candidate <= limit && candidate < source.length
       const end = closed ? candidate : limit
       let payload = source
-        .slice(i + width, end)
-        .replace(/\n$/, '')
+        .slice(i + width, !closed && source[end - 1] === '\n' ? end - 1 : end)
         .replace(/^ `/, '`')
         .replace(/` $/, '`')
       const normalized = payload.split('\n').map((value, n) => {
@@ -1825,11 +1828,6 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
               (block.test(value) || value.startsWith('{')) && (!/^\|[ \t:|-]*\|$/.test(value) || line[at] !== '|'),
           ) ||
         (itemKind.startsWith('[^') && normalized.length > 1)
-      if (closed && codeDepth > depth && !rawCode) {
-        i = end + width
-        consumed = i
-        continue
-      }
       if (codeDepth > 0 && !rawCode) payload = normalized.join('\n')
       if (rawCode) {
         onRawCode?.(i)
@@ -1855,7 +1853,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       consumed <= lineEnd &&
       (trimmed === '' ||
         /^(?:#{1,6} |:{3,}|\[[^\]]+\]:)/.test(trimmed) ||
-        (trimmed.startsWith('{') && readAttributes(trimmed, 0) !== undefined) ||
+        blockAttributes(trimmed) ||
         (line[at] === '|' && line.trimEnd().endsWith('|') && !line.trimEnd().endsWith('\\|')))
     offset = lineEnd + 1
   }

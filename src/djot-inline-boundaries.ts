@@ -10,10 +10,14 @@ export function djotContentStart(line: string): number {
     let at = 0
     while (at < line.length) {
       while (line[at] === ' ' || line[at] === '\t') at++
-      if (line[at] === '>') { at++; continue }
+      if (line[at] === '>' && (at + 1 === line.length || line[at + 1] === ' ' || line[at + 1] === '\t')) { at++; continue }
       const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+)/.exec(line.slice(at))
       if (!marker) break
       at += marker[0].length
+      if (/^[-*+]/.test(marker[0])) {
+        const task = /^\[[ xX]\][ \t]+/.exec(line.slice(at))
+        if (task) at += task[0].length
+      }
     }
     return at
   }
