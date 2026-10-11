@@ -3565,6 +3565,7 @@ function trackQuoteHostFence(
     break
   }
   const floor = host.columns.at(-1)!
+  const pendingColonBody = colons.at(-1)?.awaitingBody === true
   if (blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
   if (floor > 0) {
     const bare = /^(:{3,})[ \t]*$/.exec(inner)
@@ -3613,7 +3614,8 @@ function trackQuoteHostFence(
     // continuation instead, it put a document-level line inside the fence
     // (carve-js#2350). Its closer may sit at its own column or at the host's.
     const overIndented = at !== floor
-    if (blockStart || !paragraph || hasCloser(marker, floor) || (overIndented && hasCloser(marker, at))) {
+    if (blockStart || !paragraph || (pendingColonBody && colon && (at === colon.floor || at === colon.column)) ||
+      hasCloser(marker, floor) || (overIndented && hasCloser(marker, at))) {
       host.fence = { marker, column: at, floor }
       closeBlockQuoteParagraph(state)
       return true
@@ -4598,6 +4600,7 @@ interface ItemLazyState {
   // the item, where PART 1 S4 folds the following flush-left line into the
   // paragraph that was never interrupted (carve#891).
   absorbingFence: boolean
+  inlineFenceParagraph?: boolean
   // How many colon-fence containers the item's own content currently holds
   // open. A bare `:::` with one open is that container's CLOSER, not an opener
   // and not absorbable text - which is why a malformed fence INSIDE an open
@@ -5407,6 +5410,8 @@ function trackItemLazyState(
   // opens a real div, and this tracker has to give the same answer.
   const wasAbsorbing = state.absorbingFence
   state.absorbingFence = false
+  const wasInlineFence = state.inlineFenceParagraph === true
+  delete state.inlineFenceParagraph
   // Carried the same way the absorption is, and for the same reason: every
   // other block ends the table, so only the two row branches re-arm it.
   const wasInTable = state.inTable
@@ -5461,7 +5466,9 @@ function trackItemLazyState(
       state.divDepth = Math.max(0, state.divDepth - 1)
       state.lazyFoldable = false
     } else {
-      state.lazyFoldable = !isBlankLine(content) && close === null && open.opaque === undefined
+      state.lazyFoldable = open.opaque === undefined &&
+        (close === null || column > open.column) &&
+        (opensCodeFence(content) ? state.lazyFoldable : !lineOpensBlock(content) && bottomBlockLeavesParagraphOpen(content))
     }
     state.inDefList = false
     return
@@ -5568,6 +5575,7 @@ function trackItemLazyState(
     // it sits in stays open. Fall through to the bottom rather than returning,
     // which is where ordinary paragraph text lands.
     state.lazyFoldable = true
+    state.inlineFenceParagraph = true
     state.inDefList = false
     return
   }
@@ -5680,7 +5688,7 @@ function trackItemLazyState(
   ) {
     const overIndented = content.slice(run!)
     const colon = colonFenceOpenerLen(overIndented)
-    if (colon !== null) {
+    if (colon !== null && !wasInlineFence && !(wasAbsorbing && RE_ADMONITION_CLOSE.test(overIndented))) {
       state.divDepth++
       if (RE_LINE_BLOCK_OPEN.test(overIndented)) state.literalColon = { width: colon, column: run! }
       else state.authoredColon = { width: colon, column: run!, depth: state.divDepth }
@@ -5905,6 +5913,7 @@ function trackItemLazyState(
   // absorption already under way survives it.
   state.absorbingFence = wasAbsorbing
   state.lazyFoldable = true
+  if (wasInlineFence) state.inlineFenceParagraph = true
   // A QUOTE SURVIVES ITS OWN LAZY LINE. Prose here is the quote's lazy text,
   // not a line that ended it, so dropping `quoteInner` told the collector one
   // line later that no quote was open and the marker below opened an item at
@@ -6965,7 +6974,8 @@ function rebaseOverindentedBlocks(
     if (eligible && !eligible.has(i)) continue
     const cap = ownedColumn >= 0 ? ownedColumn + 1 : Infinity
     const base = indentColumns(line, cap)
-    if (i <= markerColonEnd && RE_ADMONITION_CLOSE.test(line.trimStart())) continue
+    if (i <= markerColonEnd && (RE_ADMONITION_CLOSE.test(line.trimStart()) ||
+      (base > 0 && !RE_FOOTNOTE_DEF.test(line.trimStart()) && !RE_LINK_DEF.test(line.trimStart())))) continue
     // A deeper item owns this line. Its own collector will see the line after
     // the intervening marker/content columns have been removed and will apply
     // the authored-base rule in that coordinate system.
@@ -12520,7 +12530,7 @@ class ParseSession {
           // and is not in `nested`), dedented it to column 0, and parseFence then
           // closed the fence there, losing the rest of its body
           // (markup-carve/carve-js#1636). carve-rs keeps it as body already.
-          if (lazyState.opaque?.kind !== 'code') {
+          if (lazyState.opaque?.kind !== 'code' && (lazyState.literalColon === undefined || leadingWhitespace(dedented) === 0)) {
             authoredBaseEligible.add(nested.length)
             if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
             if (firstBodyMarkerColumn === undefined) {
@@ -12581,7 +12591,7 @@ class ParseSession {
               descendantOpaque = null
             }
           }
-          const leadBodyCloses = leadColonAwaitingBody && leadingWhitespace(trackedContent) === 0 && RE_ADMONITION_CLOSE.exec(trackedContent)?.[1]?.length === leadColon
+          if (leadColonAwaitingBody && /^:{3,}/.test(trackedContent) && colonFenceOpenerLen(trackedContent) === null) leadColonAwaitingBody = false
           const confirmsLeadBody = leadColonAwaitingBody && !opensCodeFence(trackedContent)
           if (confirmsLeadBody) lazyState.divDepth++
           trackItemLazyState(
@@ -12626,8 +12636,8 @@ class ParseSession {
           )
           if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.opaque === null) leadColonAwaitingBody = false
-          if (leadColonAwaitingBody && (leadBodyCloses || !RE_ADMONITION_CLOSE.test(trackedContent))) {
-            if (!leadBodyCloses) lazyState.divDepth++
+          if (leadColonAwaitingBody && !RE_ADMONITION_CLOSE.test(trackedContent)) {
+            lazyState.divDepth++
             leadColonAwaitingBody = false
           }
           // The item holds no paragraph a below-column line can continue while a
@@ -12963,7 +12973,7 @@ class ParseSession {
         taskMatch(content, terminatorFree) !== null ||
         extractItemAttr(content, terminatorFree) !== null
       // Include marker-line containers whose continuation keeps its own extent.
-      const leadOwnsExtent = leadColon !== null || RE_DEFLIST_TERM.test(content) ||
+      const leadOwnsExtent = (leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)) || RE_DEFLIST_TERM.test(content) ||
         (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&
           blockQuoteParagraphOpen(markerLineQuoteState(content)!))
       const rebaseLines = leadOwnsExtent ? [content, ...nested] : nested

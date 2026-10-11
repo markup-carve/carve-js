@@ -1,0 +1,272 @@
+[
+  {
+    "name": "reader scope 1, quote depth 0",
+    "source": "- ::: |\n  # h\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p># h</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 1, quote depth 1",
+    "source": "> - ::: |\n>   # h\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p># h</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 1, quote depth 2",
+    "source": "> > - ::: |\n> >   # h\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p># h</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 2, quote depth 0",
+    "source": "- ::: |\n  %%%\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 2, quote depth 1",
+    "source": "> - ::: |\n>   %%%\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p></p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 2, quote depth 2",
+    "source": "> > - ::: |\n> >   %%%\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 3, quote depth 0",
+    "source": "- ::: |\n  %% c\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 3, quote depth 1",
+    "source": "> - ::: |\n>   %% c\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p></p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 3, quote depth 2",
+    "source": "> > - ::: |\n> >   %% c\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 4, quote depth 0",
+    "source": "- ::: |\n  ::: box\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::: box</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 4, quote depth 1",
+    "source": "> - ::: |\n>   ::: box\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>::: box</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 4, quote depth 2",
+    "source": "> > - ::: |\n> >   ::: box\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>::: box</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 5, quote depth 0",
+    "source": "- ::: |\n  ::: |\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::: |</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 5, quote depth 1",
+    "source": "> - ::: |\n>   ::: |\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>::: |</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 5, quote depth 2",
+    "source": "> > - ::: |\n> >   ::: |\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>::: |</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 6, quote depth 0",
+    "source": "- a\n  ::: |\n    :::\nTAILX\n",
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;:::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 6, quote depth 1",
+    "source": "> - a\n>   ::: |\n>     :::\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <div class=\"line-block\">\n        <p>&nbsp;&nbsp;:::</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 6, quote depth 2",
+    "source": "> > - a\n> >   ::: |\n> >     :::\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <div class=\"line-block\">\n          <p>&nbsp;&nbsp;:::</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 7, quote depth 0",
+    "source": "- a\n  ~~~\n    :::\n    - m\n",
+    "html": "<ul>\n  <li>a\n~~~\n:::\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 7, quote depth 1",
+    "source": "> - a\n>   ~~~\n>     :::\n>     - m\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n~~~\n:::\n      <ul>\n        <li>m</li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 7, quote depth 2",
+    "source": "> > - a\n> >   ~~~\n> >     :::\n> >     - m\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n~~~\n:::\n        <ul>\n          <li>m</li>\n        </ul>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 8, quote depth 0",
+    "source": "- a\n  ```\n    ::: box\nTAILX\n",
+    "html": "<ul>\n  <li>a\n<code>\n::: box\nTAILX</code></li>\n</ul>"
+  },
+  {
+    "name": "reader scope 8, quote depth 1",
+    "source": "> - a\n>   ```\n>     ::: box\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n<code>\n::: box</code></li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 8, quote depth 2",
+    "source": "> > - a\n> >   ```\n> >     ::: box\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n<code>\n::: box</code></li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 9, quote depth 0",
+    "source": "- :::: box\n  ```\n    :::\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>  :::\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 9, quote depth 1",
+    "source": "> - :::: box\n>   ```\n>     :::\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <pre><code>  :::\n</code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 9, quote depth 2",
+    "source": "> > - :::: box\n> >   ```\n> >     :::\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <pre><code>  :::\n</code></pre>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 10, quote depth 0",
+    "source": "- a\n  :::bad\n   :::\nTAILX\n",
+    "html": "<ul>\n  <li>a\n:::bad\n:::\nTAILX</li>\n</ul>"
+  },
+  {
+    "name": "reader scope 10, quote depth 1",
+    "source": "> - a\n>   :::bad\n>    :::\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n:::bad\n:::\nTAILX</li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 10, quote depth 2",
+    "source": "> > - a\n> >   :::bad\n> >    :::\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n:::bad\n:::\nTAILX</li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 11, quote depth 0",
+    "source": "- :::: box\n  :::\n    ```\n",
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p><code></code></p>\n      </div>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 11, quote depth 1",
+    "source": "> - :::: box\n>   :::\n>     ```\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div>\n          <p><code></code></p>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 11, quote depth 2",
+    "source": "> > - :::: box\n> >   :::\n> >     ```\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div>\n            <p><code></code></p>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 12, quote depth 0",
+    "source": "- :::: box\n  :::\n    ::: box\n",
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>::: box</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 12, quote depth 1",
+    "source": "> - :::: box\n>   :::\n>     ::: box\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div>\n          <p>::: box</p>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 12, quote depth 2",
+    "source": "> > - :::: box\n> >   :::\n> >     ::: box\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div>\n            <p>::: box</p>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 13, quote depth 0",
+    "source": "- ::::: o\n  ::::\n    ::: in\n",
+    "html": "<ul>\n  <li>\n    <div class=\"o\">\n      <div>\n        <p>::: in</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 13, quote depth 1",
+    "source": "> - ::::: o\n>   ::::\n>     ::: in\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"o\">\n        <div>\n          <p>::: in</p>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 13, quote depth 2",
+    "source": "> > - ::::: o\n> >   ::::\n> >     ::: in\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"o\">\n          <div>\n            <p>::: in</p>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 14, quote depth 0",
+    "source": "- ::: box\n  - ::: in\n  # h\n    ::: |\n",
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <div class=\"in\">\n\n          </div>\n        </li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n      <p>::: |</p>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 14, quote depth 1",
+    "source": "> - ::: box\n>   - ::: in\n>   # h\n>     ::: |\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>\n            <div class=\"in\">\n\n            </div>\n          </li>\n        </ul>\n        <h1 id=\"h\">h</h1>\n        <p>::: |</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 14, quote depth 2",
+    "source": "> > - ::: box\n> >   - ::: in\n> >   # h\n> >     ::: |\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <ul>\n            <li>\n              <div class=\"in\">\n\n              </div>\n            </li>\n          </ul>\n          <h1 id=\"h\">h</h1>\n          <p>::: |</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 15, quote depth 0",
+    "source": "- ::: box\n  :::bad\n  :::\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>:::bad</p>\n    </div>\n    TAILX\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 15, quote depth 1",
+    "source": "> - ::: box\n>   :::bad\n>   :::\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::bad</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 15, quote depth 2",
+    "source": "> > - ::: box\n> >   :::bad\n> >   :::\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>:::bad</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+  },
+  {
+    "name": "reader scope 16, quote depth 0",
+    "source": "- ::: box\n  :::bad\n  ::::\nTAILX\n",
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>:::bad\n::::\nTAILX</p>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 16, quote depth 1",
+    "source": "> - ::: box\n>   :::bad\n>   ::::\nTAILX\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::bad\n::::\nTAILX</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 16, quote depth 2",
+    "source": "> > - ::: box\n> >   :::bad\n> >   ::::\nTAILX\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>:::bad\n::::\nTAILX</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 17, quote depth 0",
+    "source": "- ::: |\n  ::::\n  :::\n    :::\n",
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::</p>\n    </div>\n    :::\n  </li>\n</ul>"
+  },
+  {
+    "name": "reader scope 17, quote depth 1",
+    "source": "> - ::: |\n>   ::::\n>   :::\n>     :::\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>::::</p>\n      </div>\n      :::\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 17, quote depth 2",
+    "source": "> > - ::: |\n> >   ::::\n> >   :::\n> >     :::\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>::::</p>\n        </div>\n        :::\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+  },
+  {
+    "name": "reader scope 18, quote depth 0",
+    "source": "- :::: box\n  ```\n    :::\n- tail\n",
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>  :::\n</code></pre>\n    </div>\n  </li>\n  <li>tail</li>\n</ul>"
+  },
+  {
+    "name": "reader scope 18, quote depth 1",
+    "source": "> - :::: box\n>   ```\n>     :::\n- tail\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <pre><code>  :::\n</code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+  },
+  {
+    "name": "reader scope 18, quote depth 2",
+    "source": "> > - :::: box\n> >   ```\n> >     :::\n- tail\n",
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <pre><code>  :::\n</code></pre>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+  }
+]

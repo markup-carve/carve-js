@@ -1,6 +1,12 @@
 import {expect, it} from 'vitest'
 import {parse, carveToHtml} from '../src/index.js'
 import type {BlockNode, List} from '../src/ast.js'
+import readerScopeFixtures from './fixtures/hosted-colon-reader-scope.json'
+
+// Expected HTML comes from native reader 83fa84fcba4f5d7bddc923219927f8122af1a341.
+for (const fixture of readerScopeFixtures) it(fixture.name, () => {
+  expect(carveToHtml(fixture.source)).toBe(fixture.html)
+})
 
 for (const quote of ['', '> ', '> > ']) for (const type of ['in', '|']) {
   it(`leaves no lazy claim after a descendant ${type} closes in an outer div, quote ${quote}`, () => {
@@ -121,10 +127,10 @@ for (const depth of [1, 2]) for (const fence of ['%%%', '```']) {
 
 for (const [name, source, html] of [
   ['mismatched literal run', '- ::: |\n  ::::\ntail\n', '<ul>\n  <li>\n    <div class="line-block">\n      <p>::::</p>\n    </div>\n  </li>\n</ul>\n<p>tail</p>'],
-  ['unclosed code payload', '> - ::: box\n>   ```\n- tail\n', '<blockquote>\n  <ul>\n    <li>\n      <div class="box">\n        <pre><code>- tail\n</code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>'],
+  ['unclosed code payload', '> - ::: box\n>   ```\n- tail\n', '<blockquote>\n  <ul>\n    <li>\n      <div class="box">\n        <pre><code></code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>'],
   ['below-column demoted opener', '1. ::: box\n  %% c\n  - tail\n', '<ol>\n  <li>::: box\n    - tail\n  </li>\n</ol>'],
   ['nested mismatched widths', '- :::\n  :::: box\n  :::\n      :::\n   :::\n', '<ul>\n  <li>\n    <div>\n      <div class="box">\n        <div>\n          <p>:::\n:::</p>\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>'],
-] as const) it(`preserves published behavior for ${name}`, () => {
+] as const) it(`preserves reader behavior for ${name}`, () => {
   expect(carveToHtml(source)).toBe(html)
 })
 
