@@ -170,12 +170,6 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       blank = false
       continue
     }
-    if (view.trim() === '') {
-      out.push(original)
-      paragraph = !headingMarker && !/^(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?\[[^\]\n]+\]:/.test(text)
-      blank = false
-      continue
-    }
     if (paragraph && quoteDepth > depth) {
       const markerAt = closedQuoteBoundary(quote, depth).length - 1
       out.push(original.slice(0, markerAt) + '\\' + original.slice(markerAt))
@@ -192,6 +186,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) embeddedListOwner = undefined
       depth = quoteDepth
       quoteBoundary = quote.trimEnd()
+    }
+    if (view.trim() === '') {
+      out.push(original)
+      paragraph = !headingMarker && !/^(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?\[[^\]\n]+\]:/.test(text)
+      blank = false
+      continue
     }
     const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(visible)
     const top = divs.at(-1)
@@ -596,11 +596,7 @@ function closedQuoteBoundary(prefix: string, retainedDepth: number): string {
   return prefix.slice(0, at + 1)
 }
 
-export function djotCodeQuoteMarkers(source: string): number[] {
-  if (!source.includes('`')) return []
-  const markers = [...source.matchAll(/\n[ \t]*>/g)].map(match => match.index! + match[0].length - 1)
-  if (!markers.length) return []
-  const masked = maskDjotCodeAndDestinations(source, false)
-  const exposed = maskDjotCodeAndDestinations(source, false, true, true, undefined, [], { code: false })
-  return markers.filter(at => masked[at] !== '>' && exposed[at] === '>')
+export function hasDjotCodeLayoutCandidates(source: string): boolean {
+  return source.includes('\\|') || (source.includes('`') && /\n[ \t]*>/.test(source)) ||
+    (source.includes('```') && /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]+`{3,}/.test(source))
 }

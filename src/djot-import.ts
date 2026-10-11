@@ -2,14 +2,14 @@ import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { attributeContext, continuesParagraph, resetParagraphContext } from './djot-attributes.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
-import { trimEndMatchingEdges, trimNonNbsp, trimEndNonNbsp } from './trim-non-nbsp.js'
+import { trimEndMatchingEdges, trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords } from './djot-word-attributes.js'
 import { readAttributes, rejectedCommentStartsBlock } from './djot-attributes.js'
 import { maskDjotOpaque } from './djot-opaque.js'
-import { djotBlockLayout, djotCodePadding, djotInlineLayout, djotCodeQuoteMarkers } from './djot-block-layout.js'
+import { djotBlockLayout, djotCodePadding, djotInlineLayout, hasDjotCodeLayoutCandidates } from './djot-block-layout.js'
 import { djotReferenceLayout } from './djot-reference-layout.js'
 import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
@@ -544,9 +544,9 @@ function convertDjotDocument(djot: string): string {
   const normalizedBody = normalizeDjotFootnotes(
     djotReferenceLayout(
       foldDjotReferences(
-        normalizeDjotFences(
-          normalizeDjotAttributeLines(djotCodePadding(djotInlineLayout(normalizeDjotAttributeLines(invalidAttributes.source)))),
-        ),
+        djotCodePadding(normalizeDjotFences(
+          normalizeDjotAttributeLines(djotInlineLayout(normalizeDjotAttributeLines(invalidAttributes.source))),
+        )),
       ),
       djotContentStart,
     ),
@@ -604,7 +604,7 @@ export function djotToCarveWithLosses(djot: string): { value: string; losses: Dj
   const source = (frontmatter + separator).replace(/[^\n]/g, ' ') + body
   const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
   const rawCode: number[] = []
-  if (djotCodeQuoteMarkers(source).length) closeDjotTableCode(source, at => rawCode.push(at))
+  if (hasDjotCodeLayoutCandidates(source)) closeDjotTableCode(source, at => rawCode.push(at))
   return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode) }
 }
 
@@ -1185,7 +1185,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
 }
 
 function normalizeDjotFences(source: string): string {
-  const quoteCode = djotCodeQuoteMarkers(source).length > 0
+  const quoteCode = hasDjotCodeLayoutCandidates(source)
   if (!source.includes('```') && !source.includes('~~~'))
     return source.includes('\\|') || quoteCode ? closeDjotTableCode(source) : source
   const lines = source.split('\n')
@@ -1201,9 +1201,7 @@ function normalizeDjotFences(source: string): string {
     rows,
   )
   const normalized = normalizeDjotParagraphFences(lines.join('\n'))
-  return quoteCode || source.includes('\\|') || source.split('\n').some((line) => /^[ \t]+`{3,}/.test(quoted(line)[1]))
-    ? closeDjotTableCode(normalized)
-    : normalized
+  return quoteCode ? closeDjotTableCode(normalized) : normalized
 }
 
 function normalizeDjotAutolinks(source: string): string {
@@ -1495,8 +1493,7 @@ function renameDjotPipeFootnotes(source: string): string {
 
 function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): string {
   if (!source.includes('`')) return source
-  const mask = maskDjotOpaque(source, false, { code: false })
-  const paragraphEnds = Array.from(source.matchAll(/\n[ \t]*(?:>[ \t]*)*\n/g), (match) => match.index!)
+  const mask = maskDjotOpaque(maskDjotFences(source), false, { code: false })
   const runs = new Map<number, number[]>()
   for (const run of source.matchAll(/`+/g)) {
     const positions = runs.get(run[0].length) ?? []
@@ -1586,14 +1583,14 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
     else if (source[at] === ']' && bracketStack.length) labels.set(bracketStack.pop()!, at)
   }
   const block =
-    /^(?:[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|>|\||\^ |\[[^\]]+\]:)/
+    /^(?:[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|>(?:[ \t]|$)|\||\^ |\[[^\]]+\]:)/
   const marker =
     /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)/
   const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
-  let paragraph = 0,
-    offset = 0,
+  let offset = 0,
     cursor = 0,
     consumed = 0,
+    codeHostDepth = 0,
     itemColumn = 0,
     itemQuote = 0,
     previousQuote = 0
@@ -1605,15 +1602,32 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
   for (const line of source.split('\n')) {
     const at = djotContentStart(line),
       lineEnd = offset + line.length
-    let codeDepth = 0
-    for (let p = 0; p < at; p++) if (line[p] === '>' && (p + 1 === line.length || line[p + 1] === ' ' || line[p + 1] === '\t')) codeDepth++
-    const [depth, content] = quoted(line),
-      trimmed = content.trimStart()
+    let codeDepth = 0, prefixAt = 0
+    while (prefixAt < line.length) {
+      const rest = line.slice(prefixAt), space = /^[ \t]*/.exec(rest)![0].length
+      prefixAt += space
+      const content = line.slice(prefixAt)
+      const quote = /^>(?:[ \t]|$)/.exec(content)
+      if (quote) { codeDepth++; prefixAt += quote[0].length; continue }
+      const itemPrefix = marker.exec(content)
+      if (!itemPrefix) break
+      prefixAt += itemPrefix[0].length
+      if (!itemPrefix[0].startsWith('[^')) {
+        const task = /^\[[ xX]\][ \t]+/.exec(line.slice(prefixAt))
+        if (task) prefixAt += task[0].length
+      }
+    }
+    const [parsedDepth, content] = quoted(line),
+      trimmed = trimStartNonNbsp(content)
     const indent = content.length - trimmed.length,
       item = marker.exec(trimmed)
     const oldColumn = itemColumn,
       oldQuote = itemQuote
     const beganInside = offset < consumed
+    const depth = beganInside ? codeHostDepth : parsedDepth
+    if (beganInside) codeDepth = codeHostDepth
+    else if (!previousBlock && parsedDepth < previousQuote && trimmed && !block.test(trimmed))
+      codeDepth = Math.max(codeDepth, previousQuote)
     if (!beganInside) {
       if (fenced && trimmed && (depth < fenced.depth || (depth === fenced.depth && indent < fenced.item)))
         fenced = undefined
@@ -1674,7 +1688,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
         output.push(source.slice(cursor, offset), '\n')
         cursor = offset
       }
-      previousQuote = depth
+      previousQuote = Math.max(depth, codeDepth)
     }
     let i = Math.max(offset + at, consumed)
     const pending: number[] = [],
@@ -1735,33 +1749,45 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       }
       let width = 1
       while (source[i + width] === '`') width++
+      codeHostDepth = codeDepth
       const candidate = closeRun(i, width)
       if (candidate + width <= lineEnd) {
         i = candidate + width
         consumed = i
         continue
       }
-      while ((paragraphEnds[paragraph] ?? source.length) <= i) paragraph++
-      let limit = Math.min(candidate, paragraphEnds[paragraph] ?? source.length),
-        separate = false
+      let limit = Math.min(candidate, source.length),
+        separate = false,
+        separateDepth = 0
       for (let next = lineEnd + 1; next < limit;) {
         const newline = source.indexOf('\n', next),
           end = newline < 0 ? source.length : newline
         const following = source.slice(next, end),
           [nextDepth, nextContent] = quoted(following),
-          nextTrimmed = nextContent.trimStart()
-        const nextIndent = nextContent.length - nextTrimmed.length,
-          owner = divs.at(-1)
+          nextTrimmed = trimStartNonNbsp(nextContent)
+        const nextIndent = nextContent.length - nextTrimmed.length
+        let ownerContent = following
+        for (let q = 0; q < itemQuote; q++) {
+          const prefix = /^[ \t]*>(?:[ \t]|$)/.exec(ownerContent)
+          if (!prefix) break
+          ownerContent = ownerContent.slice(prefix[0].length)
+        }
+        const ownerIndent = ownerContent.length - trimStartNonNbsp(ownerContent).length
+        const outside =
+          (codeDepth > 0 && nextDepth < codeDepth) || (itemColumn > 0 && ownerIndent < itemColumn)
+        if ((nextDepth <= codeDepth || outside) && trimNonNbsp(nextContent) === '') {
+          limit = next - 1
+          break
+        }
+        const owner = divs.at(-1)
         const closesDiv =
           owner &&
           nextDepth === owner.depth &&
           nextIndent <= owner.column + 3 &&
           /^:{3,}[ \t]*$/.test(nextTrimmed) &&
           nextTrimmed.trim().length >= owner.width
-        const outside =
-          (depth > 0 && nextDepth < depth) || (itemColumn > 0 && nextDepth <= itemQuote && nextIndent < itemColumn)
         const attributes = nextTrimmed.startsWith('{') && readAttributes(nextTrimmed, 0)
-        if (closesDiv || (outside && (block.test(nextTrimmed) || attributes))) {
+        if (closesDiv || (outside && (block.test(nextTrimmed) || (itemColumn > 0 && ownerIndent < itemColumn && block.test(trimStartNonNbsp(ownerContent))) || attributes))) {
           limit = next - 1
           const nextItem = marker
             .exec(nextTrimmed)?.[0]
@@ -1769,6 +1795,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
             .replace(/^[A-Za-z]+/, 'a')
             .trim()
           separate = outside && (nextDepth < depth || nextItem !== itemKind)
+          separateDepth = Math.min(depth, nextDepth)
           break
         }
         if (newline < 0) break
@@ -1782,13 +1809,13 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
         .replace(/^ `/, '`')
         .replace(/` $/, '`')
       const normalized = payload.split('\n').map((value, n) => {
-        if (n === 0) return trimEndNonNbsp(value)
+        if (n === 0) return value
         for (let q = 0; q < codeDepth; q++) {
-          const prefix = /^[ \t]*>[ ]?/.exec(value)
+          const prefix = /^[ \t]*>(?:[ \t]|$)/.exec(value)
           if (!prefix) break
           value = value.slice(prefix[0].length)
         }
-        return trimNonNbsp(value)
+        return trimStartNonNbsp(value)
       })
       const rawCode =
         normalized
@@ -1803,6 +1830,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
         consumed = i
         continue
       }
+      if (codeDepth > 0 && !rawCode) payload = normalized.join('\n')
       if (rawCode) {
         onRawCode?.(i)
         payload =
@@ -1810,22 +1838,16 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       }
       let fenceWidth = 1
       for (const run of payload.matchAll(/`+/g)) fenceWidth = Math.max(fenceWidth, run[0].length + 1)
-      const fence = '`'.repeat(fenceWidth),
-        pad =
-          payload.startsWith('`') ||
-          payload.endsWith('`') ||
-          (payload.startsWith(' ') && payload.endsWith(' ') && payload.trim())
-            ? ' '
-            : ''
+      const fence = '`'.repeat(fenceWidth)
       const escapes = [...pending.filter((k) => source[k - 1] === ']'), ...footnotes].sort((a, b) => a - b)
       for (const escape of escapes) {
         output.push(source.slice(cursor, escape), '\\')
         cursor = escape
       }
-      output.push(source.slice(cursor, i), fence + pad + payload + pad + fence + (rawCode ? '{=html}' : ''))
+      output.push(source.slice(cursor, i), fence + payload + fence + (rawCode ? '{=html}' : ''))
       cursor = closed ? end + width : end
       consumed = cursor
-      if (separate && !closed) output.push('\n')
+      if (separate && !closed) output.push('\n' + '> '.repeat(separateDepth).trimEnd())
       i = consumed
     }
     previousBlock =
