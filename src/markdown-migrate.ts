@@ -2737,6 +2737,10 @@ function restoreDefinitionBodies(items: CarrierLine[]): CarrierLine[] {
     const active = lists.filter(list => list.active)
     const current = active.at(-1)
     if (current?.first && item.text === '') continue
+    if (item.text === '' && item.lead.trim() === '') {
+      out.push(item)
+      continue
+    }
     let lead = item.lead
     for (const list of [...active].reverse()) {
       const insertion = list.first ? ': ' : '  '

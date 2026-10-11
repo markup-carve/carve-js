@@ -17,6 +17,11 @@ function projection(tree: unknown, expected: Record<string, unknown>[]) {
 }
 
 describe('new roundtrip carriers', () => {
+  it('leaves blank lines empty when restoring a definition body', () => {
+    const source = ':: Carve\n: A markup language.\n  :: inner\n  : def\n'
+    expect(migrateMarkdown(carveToMarkdown(source, { roundtrip: true })).value)
+      .toBe(':: Carve\n: A markup language.\n\n  *inner*\n\n  def\n')
+  })
   it.each([
     '{.c}\n:: Carve\n: A markup language.\n',
     ...fixtures.markdownExportImport.filter((row: { id: string }) => ['definition-list', 'heading-attribute-line', 'quote-caption'].includes(row.id)).map((row: { source: string }) => row.source),
