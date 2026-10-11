@@ -88,4 +88,50 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     expect(carveToHtml(source)).not.toContain('class="box"')
     expect(carveToHtml(source)).toContain('<div>')
   })
+
+  it('absorbs bare fences after a malformed marker-line opener', () => {
+    const source = '> - :::bad\n>   :::\n- tail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
+    expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
+  })
+
+  for (const prefix of ['> - next\n>   ', '>   - next\n>     ']) {
+    it(`ends malformed absorption at a new item: ${JSON.stringify(prefix)}`, () => {
+      const source = '> - prose\n>   :::bad\n' + prefix + ':::\n- tail\n'
+      expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+      expect(carveToHtml(source)).toContain('<div>')
+    })
+  }
+
+  it('tracks a colon opener on a quoted footnote definition line', () => {
+    const source = '> [^a]: ::: box\n>   :::bad\n>   :::\ntail\n\nref[^a]\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'paragraph', 'paragraph'])
+    const html = carveToHtml(source)
+    expect(html).toContain('</blockquote>\n<p>tail</p>')
+    expect(html).toContain('<div class="box">')
+  })
+
+  it('keeps a malformed note body from creating a quoted paragraph claim', () => {
+    const source = '> [^a]: :::bad\n>   :::\ntail\n\nref[^a]\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'paragraph', 'paragraph'])
+    expect(carveToHtml(source)).toContain('</blockquote>\n<p>tail</p>')
+  })
+
+  it('ends ownership after a lazy body and later marked colon boundaries', () => {
+    const source = '> - ::: box\nlazy\n>   :::\n>   :::bad\n>   :::\n- tail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+    expect(carveToHtml(source)).toContain('<div class="box">')
+  })
+
+  it('ends the quote at an unprefixed link definition', () => {
+    const source = '> - ::: box\n[x]: /u\n>   :::\n>   :::bad\n>   :::\n- tail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'block_quote', 'link_reference_definition'])
+    expect(carveToHtml(source)).toContain('</blockquote>\n<blockquote>')
+  })
+
+  it('demotes an item-hosted quote candidate for an indented unmarked line', () => {
+    const source = '- > - ::: box\n      lazy\n  >   :::\n  >   :::bad\n  >   :::\ntail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['list', 'paragraph'])
+    expect(carveToHtml(source)).toContain('</ul>\n<p>tail</p>')
+  })
 })

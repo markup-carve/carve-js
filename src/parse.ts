@@ -3492,12 +3492,17 @@ function trackQuoteHostFence(
       inner = tail.replace(/^[ \t]*/, '')
       continue
     }
-    if (RE_FOOTNOTE_DEF.test(inner)) {
+    const note = RE_FOOTNOTE_DEF.exec(inner)
+    if (note) {
       host.markers.push(at); host.columns.push(at + 2); host.kinds.push('note')
+      at += 2
+      inner = note[2]!
+      blockStart = true
     }
     break
   }
   const floor = host.columns.at(-1)!
+  if (blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
   if (floor > 0) {
     const bare = /^(:{3,})[ \t]*$/.exec(inner)
     const open = colons.at(-1)
@@ -3510,7 +3515,8 @@ function trackQuoteHostFence(
     if (open) open.awaitingBody = false
     const width = colonFenceOpenerLen(inner)
     const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
-    if (!blockStart && (absorbedBare || (width === null && /^:{3,}/.test(inner)))) {
+    if (absorbedBare || (width === null && /^:{3,}/.test(inner) &&
+        !(blockStart && host.kinds.at(-1) === 'note'))) {
       state.mode = { kind: 'paragraph', absorbingFence: true }
       return true
     }
@@ -3576,6 +3582,17 @@ interface BlockQuoteLazyState {
   colonWidths: number[]
 }
 
+function demoteQuotedColonCandidates(state: BlockQuoteLazyState): void {
+  let level = state
+  for (;;) {
+    if (level.hosts?.colons?.some(open => open.awaitingBody)) {
+      level.hosts.colons = level.hosts.colons.filter(open => !open.awaitingBody)
+    }
+    if (level.mode.kind !== 'quote') return
+    level = level.mode.inner
+  }
+}
+
 /** Iterative for the reason `trackBlockQuoteLazyState` is: the chain is as deep as the document nests. */
 const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean => {
   let level = state
@@ -3614,6 +3631,7 @@ function trackBlockQuoteLazyState(
   prefixMemo?: Map<number, number>,
   atColumn = true,
 ): void {
+  if (!atColumn) demoteQuotedColonCandidates(state)
   let text = content
   let level = state
   const terminatorFree = !/[\n\r\u2028\u2029]/.test(content)
@@ -3702,13 +3720,9 @@ function classifyQuotedLine(
   prefixMemo?: Map<number, number>,
   atColumn = true,
 ): { text: string; state: BlockQuoteLazyState } | null {
-  if (!atColumn && state.hosts?.colons?.some(open => open.awaitingBody)) {
-    state.hosts.colons = state.hosts.colons.filter(open => !open.awaitingBody)
-  }
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
   // continue the same paragraph, exactly as `trackItemLazyState` does it.
-  const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
   // Carried the same way the absorption is, and for the same reason: every
   // other block ends the table, so only the two row branches re-arm it.
   const wasInTable = state.inTable
@@ -3728,6 +3742,7 @@ function classifyQuotedLine(
     return null
   }
   if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser, terminatorFree)) return null
+  const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
@@ -5750,6 +5765,7 @@ function trackItemLazyState(
       wasQuote,
       () => true,
       () => true,
+      undefined, undefined, false,
     )
     state.quoteInner = wasQuote
   }
@@ -6577,6 +6593,7 @@ function rebasedQuoteEnd(lines: string[], start: number, quote: Lexer): number {
     if (isBlankLine(next) || RE_CAPTION.test(next) ||
         colonFenceShapeEndsLazyContinuation(next) ||
         startsInterruptingBlock(quote, undefined, false) || !blockQuoteParagraphOpen(state)) break
+    demoteQuotedColonCandidates(state)
   }
   return quote.pos - 1
 }
@@ -7009,7 +7026,7 @@ function rebaseOverindentedBlocks(
           const marked = RE_BLOCKQUOTE.exec(local.replace(/^[ \t]+/, ''))
           if (marked) trackBlockQuoteLazyState(marked[1] ?? '', quoted, () => true, () => true)
           else if (!blockQuoteParagraphOpen(quoted)) break
-          else trackBlockQuoteLazyState(local, quoted, () => true, () => true)
+          else trackBlockQuoteLazyState(local, quoted, () => true, () => true, undefined, undefined, false)
         }
         end = j
       }
