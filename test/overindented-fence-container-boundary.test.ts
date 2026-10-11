@@ -87,7 +87,7 @@ describe('over-indented fence boundary controls', () => {
   })
   it('nested closed fence', () => {
     expect(carveToHtml('- outer\n  - head\n  lazy\n\n    ```\n    a\n    ```\ntext\n')).toBe(
-      '<ul>\n  <li>outer\n    <ul>\n      <li>head\nlazy\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n    text\n  </li>\n</ul>',
+      '<ul>\n  <li>outer\n    <ul>\n      <li>head\nlazy\n        <pre><code>a\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('nested paragraph continuation', () => {

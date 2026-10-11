@@ -3467,8 +3467,16 @@ function trackQuoteHostFence(
   }
   const paragraph = blockQuoteParagraphOpen(state)
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
+  const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
+  // A marker below an ancestor's content column can remain paragraph text.
+  // Retain its existing fence host instead of inventing a sibling item.
+  const structuralMarker = host.markers.some((marker, i) => host.kinds[i] === 'item' &&
+    column <= marker && column >= host.columns[i]!)
+  const lazyMarker = paragraph && markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 &&
+    host.markers.length > 0 && column > host.markers[0]! &&
+    !structuralMarker && column < host.columns.at(-1)!
   const lazyItem = paragraph && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
-    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
+    (lazyMarker || (bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)))
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody)
   while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) {
     host.columns.pop(); host.markers.pop(); host.kinds.pop()
@@ -3482,7 +3490,8 @@ function trackQuoteHostFence(
   for (;;) {
     const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
     if (width > 0) {
-      if (paragraph && !insideItem && !sibling) break
+      if (lazyMarker && lazyItem) break
+      if (paragraph && !insideItem && !sibling && !leftOfOutermost) break
       host.markers.push(at)
       const attrs = extractItemAttr(inner)
       const markerText = attrs?.stripped ?? inner
@@ -4550,6 +4559,8 @@ interface ItemLazyState {
    * has already measured for the line, so none of this re-scans a leading run.
    */
   ownedColumn: number
+  /** Marker column for a descendant item, in this frame's coordinates. */
+  ownedMarker?: number
   /**
    * Is `ownedColumn` an AUTHORED base rather than a nested marker's column?
    *
@@ -5276,6 +5287,7 @@ interface ItemLineFacts {
   terminatorFree: boolean
   whitespace?: number | undefined
   prefixMemo?: Map<number, number> | undefined
+  rebasedFrame?: boolean | undefined
   /**
    * May a line at or past a nested marker's content column be classified in
    * that DESCENDANT's frame (`CARVE-P0-009`, markup-carve/carve#2884)?
@@ -5505,6 +5517,15 @@ function trackItemLazyState(
   if (run !== undefined) {
     if (state.ownedColumn >= 0) {
       if (run < state.ownedColumn) {
+        const text = content.slice(run)
+        const marker = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0
+        if (facts?.rebasedFrame !== true && !state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
+            (marker
+              ? state.ownedMarker !== undefined && run > state.ownedMarker
+              : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) {
+          state.absorbingFence = wasAbsorbing
+          return
+        }
         state.ownedColumn = -1
         state.deepest = null
       } else if (state.ownedAuthored && run === state.ownedColumn) readFlush = true
@@ -5536,7 +5557,7 @@ function trackItemLazyState(
       // one a terminated span gives for Q1, because what follows the span is
       // what Q1 reads either way.
       () => false,
-      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true },
+      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true },
     )
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
@@ -5719,6 +5740,10 @@ function trackItemLazyState(
   const nestedBullet = nestedTask ? null
     : (orderedMatch(nestedMarker, facts?.terminatorFree) ?? unorderedMatch(nestedMarker, facts?.terminatorFree))
   if (nestedTask || nestedBullet) {
+    if (!atContentColumn && state.deepest != null && state.lazyFoldable) {
+      state.absorbingFence = wasAbsorbing
+      return
+    }
     state.absorbingFence = false
     // `markerContentColumn`'s arithmetic off the match already in hand, since
     // calling it would run the three matchers a second time per nesting level
@@ -5731,6 +5756,7 @@ function trackItemLazyState(
         : nestedMarker.length - leadingWhitespace(nestedMarker) -
           nestedBullet![nestedBullet!.length - 1]!.length
     state.ownedColumn = run !== undefined && nestedWidth > 0 ? run + nestedWidth : -1
+    state.ownedMarker = run ?? -1
     state.ownedAuthored = false
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
