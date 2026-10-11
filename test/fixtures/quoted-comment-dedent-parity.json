@@ -1,0 +1,67 @@
+[
+  {
+    "id": "review-A",
+    "source": "> - ::: |\n>   %%%\n>   hidden\n>   %%%\n>   :::\n> c\n",
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p><br>\nhidden<br></p></div></li></ul><p>c</p></blockquote>"
+  },
+  {
+    "id": "review-B",
+    "source": "> - ::: |\n>   %%%\n>   %%%%\n>   y\n>   %%%%\n>   :::\n> c\n> %%%\n",
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p><br><br>\ny<br></p></div></li></ul><p>c</p></blockquote>"
+  },
+  {
+    "id": "review-C",
+    "source": "::: |\n- ::: |\n  %%%\n  :::\n%%%\n:::\n",
+    "html": "<div class=\"line-block\"><p>- ::: |<br>\n&nbsp;&nbsp;%%%<br>\n&nbsp;&nbsp;:::<br></p></div>"
+  },
+  {
+    "id": "review-D",
+    "source": "> > - ::: |\n> >   %%%\n> >   :::\n> c\n> %%%\n",
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"><p></p></div></li></ul></blockquote><p>c</p></blockquote>"
+  },
+  {
+    "id": "review-E",
+    "source": "> - ::: |\n>   %%%\n>   :::\nc\n> %%%\n",
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p></p></div></li></ul></blockquote><p>c</p><blockquote></blockquote>"
+  },
+  {
+    "id": "review-F",
+    "source": "- ::: |\n  %%%\n  :::\n  :::bad\nc\n%%%\n- tail\n",
+    "html": "<ul><li><div class=\"line-block\"><p></p></div>\n    :::bad\n  </li></ul><p>c</p><ul><li>tail</li></ul>"
+  },
+  {
+    "id": "review-G",
+    "source": "- ::: a\n  x\n  :::\n  ::: b\n  y\nlazy\n",
+    "html": "<ul><li><div class=\"a\"><p>x</p></div><div class=\"b\"><p>y\nlazy</p></div></li></ul>"
+  },
+  {
+    "id": "review-H",
+    "source": "- ::: |\n  a\n  :::\n\n  :::bad\nlazy\n",
+    "html": "<ul><li><div class=\"line-block\"><p>a</p></div><p>:::bad\nlazy</p></li></ul>"
+  },
+  {
+    "id": "review-I",
+    "source": "- ::: |\n  a\n  :::\n      :::bad\nlazy\n",
+    "html": "<ul><li><div class=\"line-block\"><p>a</p></div>\n    :::bad\nlazy\n  </li></ul>"
+  },
+  {
+    "id": "comment-dedent-tail",
+    "source": "> - ::: |\n>   %%%\n>   :::\n>   :::bad\n> c\n> %%%\n- tail\n",
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p></p></div>\n      :::bad\n    </li></ul><p>c</p></blockquote><ul><li>tail</li></ul>"
+  },
+  {
+    "id": "review3-0",
+    "source": "- item\n  ::: |\n  %%% unclosed\n  :::\n",
+    "html": "<ul><li>item\n    <div class=\"line-block\"><p></p></div></li></ul>"
+  },
+  {
+    "id": "review3-1",
+    "source": "> - ::: |\n>   a\n>   :::\n>   :::bad\n> c\n- tail\n",
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p>a</p></div>\n      :::bad\nc\n- tail\n    </li></ul></blockquote>"
+  },
+  {
+    "id": "review3-2",
+    "source": "> > - ::: |\n> >   %%%\n> >   :::\n> >   :::bad\n> > c\n> > %%%\n- tail\n",
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"><p></p></div>\n        :::bad\n      </li></ul><p>c</p></blockquote></blockquote><ul><li>tail</li></ul>"
+  }
+]
