@@ -73,7 +73,7 @@ export function djotImportLosses(
     const at = contentStart(line),
       content = line.slice(at),
       contentMask = visible.slice(at)
-    const definition = /^\[(?!\^)([^\[\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(content)
+    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(content)
     const previous = lines[n - 1] ?? ''
     const previousContent = previous.slice(contentStart(previous)).trim()
     const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(line.slice(0, at))

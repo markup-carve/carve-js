@@ -146,3 +146,37 @@ it('preserves interior blank lines while trimming removed attribute lines', () =
   expect(result).toContain('```\n' + blanks + 'x\n```')
   expect(result.endsWith('[x][r]\n')).toBe(true)
 })
+
+it.each([
+  ['[a[b]: /u\n\n[`a[b`][]', '<p><a href="/u"><code>a[b</code></a></p>'],
+  ['[a[b]: /u\n\n[x][a\\[b]', '<p><a href="/u">x</a></p>'],
+])('resolves opening brackets in definition labels: %s', (source, expected) => {
+  const result = migrateDjot(source)
+  expect(carveToHtml(result.value).trim()).toBe(expected)
+  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toEqual([])
+})
+
+it.each([
+  '[a[b]: /u\n\n| [x][a\\[b] |',
+  '[a[b]: /u\n\n> [x][a\\[b]',
+  '[a[b]: /u\n\n- [x][a\\[b]',
+  '{title=base}\n[a[b]: /u\n\n[x][a\\[b]',
+  '[carve-djot-reference-1]: /other\n[a[b]: /u\n\n[x][a\\[b] [y][carve-djot-reference-1]',
+  '[a[b]: /old\n[a[b]: /u\n\n[x][a\\[b]',
+  '[a[b]: /u\n[b]: /v\n\n[a\\[b][]',
+  '[a[b|c]: /u\n\n| [x][a\\[b\\|c] |',
+])('keeps opening-bracket references in their source contexts: %s', (source) => {
+  const links = (html: string) => [...html.matchAll(/<a\b[^>]*>.*?<\/a>/gs)].map(match => match[0])
+  expect(links(carveToHtml(djotToCarve(source)))).toEqual(links(renderHTML(parse(source))))
+})
+
+it.each([
+  ['{.a .md:flex}\n[r]: /u\n\n[x][r]', 'a md:flex'],
+  ['{.a\n  .md:flex}\n[r]: /u\n\n[x][r]', 'a md:flex'],
+  ['[r]: /u\n\n[x][r]{.a .md:flex}', 'a md:flex'],
+  ['{.a class=b .md:flex}\n[r]: /u\n\n[x][r]', 'b md:flex'],
+])('keeps shorthand class append semantics on references: %s', (source, classes) => {
+  const expected = `<p><a href="/u" class="${classes}">x</a></p>`
+  expect(renderHTML(parse(source)).trim()).toBe(expected)
+  expect(carveToHtml(djotToCarve(source)).trim()).toBe(expected)
+})

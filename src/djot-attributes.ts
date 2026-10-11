@@ -145,9 +145,10 @@ export function plainCommentEnd(source: string, start: number): number | undefin
 
 export type DjotAttributeToken = { key: string; source: string; append: boolean }
 
-export function readAttributes(source: string, start: number, carve = false, table = false, paragraphContext = true): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
+export function readAttributes(source: string, start: number, carve = false, table = false, paragraphContext = true, preserveShorthand = false): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
   const parts: string[] = []
   const tokens: DjotAttributeToken[] = []
+  let lastClassAssignment = -1
   let i = start + 1
   let context: ReturnType<typeof attributeContext> | undefined
   while (i < source.length) {
@@ -167,7 +168,8 @@ export function readAttributes(source: string, start: number, carve = false, tab
           else if (source[at] === '|') return undefined
         }
       }
-      return { end: i + 1, source: `{${parts.join(' ')}}`, tokens }
+      const nativeParts = carve && lastClassAssignment >= 0 ? parts.filter((_part, index) => index >= lastClassAssignment || tokens[index]!.key !== 'class') : parts
+      return { end: i + 1, source: `{${nativeParts.join(' ')}}`, tokens }
     }
     if (source[i] === '%') {
       commentEnd.lastIndex = i + 1
@@ -188,7 +190,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
       if (i === from) return undefined
       const value = source.slice(from, i)
       if (kind === '#' ? /[\]\[~!@#$%^&*(){}`,.<>\\|=+/?\s]/u.test(value) : !/^[A-Za-z0-9_:-]+$/.test(value)) return undefined
-      parts.push(/^[A-Za-z0-9_][\w-]*$/.test(value) ? kind + value : `${kind === '#' ? 'id' : 'class'}=${quoteValue(value, carve)}`)
+      parts.push(preserveShorthand && !carve && kind === '.' || /^[A-Za-z0-9_][\w-]*$/.test(value) ? kind + value : `${kind === '#' ? 'id' : 'class'}=${quoteValue(value, carve)}`)
       tokens.push({ key: kind === '#' ? 'id' : 'class', source: parts.at(-1)!, append: kind === '.' })
     } else {
       const tokenStart = i
@@ -217,6 +219,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         if (i === from) return undefined
         parts.push(key[0] + quoteValue(source.slice(from, i), carve))
       }
+      if (key[0] === 'class=') lastClassAssignment = parts.length - 1
       tokens.push({ key: key[0].slice(0, -1), source: source[tokenStart + key[0].length] === '"' || source.slice(tokenStart, i).includes('\n') ? parts.at(-1)! : source.slice(tokenStart, i), append: false })
     }
     if (i < source.length && !/[\s}%]/u.test(source[i]!)) return undefined

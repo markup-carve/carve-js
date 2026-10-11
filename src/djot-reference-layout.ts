@@ -67,7 +67,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   mask = referenceMask(source)
   const labels = new Set(
     source.split('\n').flatMap((line) => {
-      const definition = /^\[(?!\^)([^\[\]\n]+)\]:/.exec(line.slice(contentStart(line)))
+      const definition = /^\[(?!\^)([^\]\n]+)\]:/.exec(line.slice(contentStart(line)))
       return definition ? [definitionKey(definition[1]!)] : []
     }),
   )
@@ -84,7 +84,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   const tableRows = source.includes('|') ? djotTableRows(source, pipeMask.join('\n')) : []
   for (let n = 0; n < lines.length; n++) {
     const start = contentStart(lines[n]!)
-    const definition = /^\[(?!\^)([^\[\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(lines[n]!.slice(start))
+    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(lines[n]!.slice(start))
     if (!definition || definitionMask[n]![start] !== '[') continue
     let first = n
     const attrs: string[] = []
@@ -229,8 +229,8 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     return alias
   }
   const aliases = new Map<string, string>()
-  if (source.includes('\\') || source.includes('|')) {
-    const aliasKeys = new Set([...definitions.keys()].filter(key => key.includes('\\') || key.includes('|')))
+  if (source.includes('\\') || source.includes('|') || source.includes('[')) {
+    const aliasKeys = new Set([...definitions.keys()].filter(key => key.includes('\\') || key.includes('|') || key.includes('[')))
     for (const uses of references) for (const use of uses)
       if (use.rawKey !== use.key && definitions.has(use.key)) aliasKeys.add(use.key)
     if (aliasKeys.size) {
@@ -263,7 +263,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   for (const n of definitionLines) {
     const line = lines[n]!, start = contentStart(line)
-    const definition = /^\[(?!\^)([^\[\]\n]+)\]:/.exec(line.slice(start))
+    const definition = /^\[(?!\^)([^\]\n]+)\]:/.exec(line.slice(start))
     if (!definition) continue
     const key = definitionKey(definition[1]!), alias = aliases.get(key)
     const close = line.indexOf(']:', start), prefix = line.slice(0, start)

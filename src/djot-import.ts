@@ -871,7 +871,7 @@ function normalizeDjotAttributeLines(source: string): string {
   let copied = 0
   for (let i = 0; i < source.length; i++) {
     if (mask[i] !== '{' || isDjotEscaped(source, i)) continue
-    const attrs = readAttributes(source, i)
+    const attrs = readAttributes(source, i, false, false, true, true)
     if (!attrs) {
       const end = closes.get(i)
       if (end !== undefined && /^[A-Za-z][A-Za-z0-9_-]*=/.test(source.slice(i + 1))) {
