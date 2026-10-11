@@ -654,7 +654,8 @@ function fallbackImage(math: P5Node): P5Node | undefined {
  * Everything else the source carries is kept, so these need naming:
  * `RESERVED_CARRIER_ATTRIBUTES` is PART 10 §13a's whole inventory, under both
  * the canonical `data-carve-` spelling and the deprecated `data-djot-` one that
- * released carve-php versions wrote. Re-emitting one as an authored attribute
+ * released carve-php versions wrote, plus the verbatim-source names §13a
+ * excludes from export. Re-emitting one as an authored attribute
  * is what markup-carve/carve#2902 ruling 5 stops: a `<hr data-char="_">` came
  * back as `{data-char=_}` plus `---`, and a reference link as
  * `[text](/u){data-carve-ref=lbl}`, so the importer's own output claimed a
@@ -861,6 +862,8 @@ function restoreHoistedSectionId(
   tag: string,
   attrs: Attrs | undefined,
   blocks: BlockNode[],
+  explicitId: boolean,
+  writing: boolean,
 ): Attrs | undefined {
   if (tag !== 'section' || attrs?.id === undefined) return attrs
   // The heading the wrapper was built around is its FIRST block. Anything else
@@ -877,8 +880,15 @@ function restoreHoistedSectionId(
   // and nothing is what `reportUnwrappedAttributes` reads as "no row" - an
   // empty object would write a row naming no attribute at all.
   const kept = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
-  if (isGeneratedHeadingId(id, inlineText(heading.children))) return kept
+  if (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children))) return kept
   heading.attrs = { ...(heading.attrs ?? {}), id }
+  if (writing) {
+    const slots = heading.attrs.order ?? [
+      ...(heading.attrs.classes?.length ? ['.class'] : []),
+      ...Object.keys(heading.attrs.keyValues ?? {}),
+    ]
+    heading.attrs.order = ['#id', ...slots.filter(slot => slot !== '#id')]
+  }
   return kept
 }
 
@@ -911,6 +921,8 @@ class Importer {
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
   private hasEmptyCodeSpans = false
   /** The element each inline node came from, for `unwrapUnspellable`. */
+  private readonly firstHeadings = new WeakMap<P5Node, P5Node | null>()
+  private readonly headingOrigins = new WeakMap<BlockNode, P5Node>()
   private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** Fallback images of formulas that imported as math, dropped where they stand. */
   private readonly formulaImages = new Set<P5Node>()
@@ -2359,6 +2371,28 @@ class Importer {
     return this.blocks(domChildren(node) ?? [], path, depth)
   }
 
+  private firstHeadingWithin(root: P5Node): P5Node | undefined {
+    const pending: Array<[P5Node, boolean]> = [[root, false]]
+    while (pending.length > 0) {
+      const [node, visited] = pending.pop()!
+      if (this.firstHeadings.has(node)) continue
+      if (/^h[1-6]$/.test(domTag(node) ?? '')) {
+        this.firstHeadings.set(node, node)
+      } else if (!visited) {
+        pending.push([node, true])
+        const children = domChildren(node) ?? []
+        for (let index = children.length - 1; index >= 0; index--) {
+          const child = children[index]!
+          if (!this.firstHeadings.has(child)) pending.push([child, false])
+        }
+      } else {
+        const child = (domChildren(node) ?? []).find(child => this.firstHeadings.get(child) != null)
+        this.firstHeadings.set(node, child ? this.firstHeadings.get(child)! : null)
+      }
+    }
+    return this.firstHeadings.get(root) ?? undefined
+  }
+
   private block(node: P5Node, path: string, depth: number): BlockNode[] {
     this.enter(depth)
     const tag = domTag(node)!
@@ -2376,6 +2410,9 @@ class Importer {
     if (ACTIVE.has(tag)) {
       this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
+    }
+    if ((tag === 'section' || /^h[1-6]$/.test(tag)) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
+      this.recordCarrier(node, 'explicit-id')
     }
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
@@ -2413,6 +2450,7 @@ class Importer {
          */
         if (
           this.mode === 'roundtrip' &&
+          !this.hasCarrier(node, 'explicit-id') &&
           idInGeneratedPosition(node) &&
           isGeneratedHeadingId(held.id, inlineText(children))
         ) {
@@ -2434,7 +2472,9 @@ class Importer {
           held.order = slotOrderFromElement(node, held)
         }
       }
-      return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children, ...(held ? { attrs: held } : {}) }]
+      const heading: BlockNode = { type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children, ...(held ? { attrs: held } : {}) }
+      this.headingOrigins.set(heading, node)
+      return [heading]
     }
     if (tag === 'p') {
       /*
@@ -2712,10 +2752,22 @@ class Importer {
       // CONSTRUCTED in - which the sort keeps only as a tie-break between rows
       // at the same position, and the wrapper's own two rows keep their
       // relative order because `element-unwrapped` is still added first.
+      let hoistedChildren = children
+      if (tag === 'section') {
+        const firstHeading = this.attr(node, 'id') === undefined ? undefined : this.firstHeadingWithin(node)
+        const heading = children[0]
+        const mapped = heading?.type === 'heading' && firstHeading !== undefined &&
+          this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
+        if (!mapped) hoistedChildren = []
+        if (!mapped && this.carrierReads.get(node)?.names.delete('explicit-id')) {
+          const name = this.carrierName(node, 'explicit-id')!
+          this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(this.attr(node, name) ?? ''))
+        }
+      }
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          restoreHoistedSectionId(tag, attrs, children),
+          restoreHoistedSectionId(tag, attrs, hoistedChildren, this.hasCarrier(node, 'explicit-id'), this.writing),
           tag,
           path,
           unwrapped,

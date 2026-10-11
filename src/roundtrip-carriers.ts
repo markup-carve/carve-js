@@ -38,7 +38,7 @@ export const MAX_CARRIED_SEPARATOR_WIDTH = 1000
 export const CARRIER_MARKER = 'data-marker'
 export const CARRIER_CHAR = 'data-char'
 
-/** The carriers under the reserved prefix, without it. */
+/** The carriers a writer can emit under the reserved prefix, without it. */
 const PREFIXED = [
   'explicit-id',
   'ref',
@@ -48,7 +48,6 @@ const PREFIXED = [
   'col-widths',
   'raw',
   'escaped',
-  'src',
   'abbreviations',
 ] as const
 
@@ -61,7 +60,7 @@ export const carrier = (name: PrefixedCarrier): string => `data-carve-${name}`
 export const legacyCarrier = (name: PrefixedCarrier): string => `data-djot-${name}`
 
 /**
- * Every name the inventory reserves, canonical and deprecated, lowercase.
+ * Every name reserved on import, canonical and deprecated, lowercase.
  *
  * An importer tests membership here to decide that a name is the serializer's
  * protocol rather than the author's content: ruling 5 says `safe` import
@@ -73,6 +72,9 @@ export const RESERVED_CARRIER_ATTRIBUTES: ReadonlySet<string> = new Set<string>(
   CARRIER_CHAR,
   ...PREFIXED.map(carrier),
   ...PREFIXED.map(legacyCarrier),
+  // Verbatim-source names remain reserved on import but are excluded from §13a export.
+  'data-carve-src',
+  'data-djot-src',
 ])
 
 /**
@@ -89,14 +91,6 @@ export function readCarrier(
   return get(carrier(name)) ?? get(legacyCarrier(name))
 }
 
-/**
- * Is the roundtrip export option on?
- *
- * `carryMarkers` is NOT consulted here: §13c keeps it Markdown-only and
- * explicitly declines to redefine it as an HTML option. The alias rule it does
- * state - either enabled option enables preservation - lives on the Markdown
- * side, where both spellings mean the same thing.
- */
 export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.roundtrip === true
 
 /**
