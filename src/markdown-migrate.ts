@@ -5551,10 +5551,43 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     | 'code'
     | 'raw_block'
     | 'text' = 'blank'
+  let footnoteEnd = -1
 
   for (let i = 0; i < lines.length; i++) {
     applyShift()
     inlineRunSourceLine = sourceLine(i)
+    if (i === footnoteEnd) {
+      listCols.length = 0
+      listMarkers.leave(0)
+      itemParagraph = false
+      itemQuote = null
+      footnoteEnd = -1
+    }
+    const footnote =
+      !inCode && (listCols.length === 0 || indentColumns(lines[i]!) < listCols[0]!)
+        ? /^ {0,3}(\[\^((?:[^\[\]\\]|\\.)+)\]:)[ \t]*(.*)$/.exec(lines[i]!)
+        : null
+    if (footnote !== null) {
+      let end = i + 1
+      let last = end
+      while (end < lines.length) {
+        if (lines[end]!.trim() !== '') {
+          if (indentColumns(lines[end]!) < 4) break
+          last = end + 1
+        }
+        end++
+      }
+      // Reuse the list container reader, rebasing Markdown's four columns to Carve's two.
+      lines[i] = `- ${footnote[3] || '+'}`
+      for (let at = i + 1; at < last; at++) {
+        if (lines[at]!.trim() !== '') lines[at] = '  ' + stripColumns(lines[at]!, 4)
+      }
+      footnoteEnd = last
+      listCols.length = 0
+      listMarkers.leave(0)
+      const bodyTables = gfmTableRowLines(lines.slice(i, last))
+      for (let at = i; at < last; at++) inGfmTable[at] = bodyTables[at - i]!
+    }
     let leftEmptyItem = false
     if (!inCode && emptyMarkerColumn !== null && lines[i]!.trim() !== '') {
       if (prevBlank && indentColumns(lines[i]!) > emptyMarkerColumn) {
@@ -6239,6 +6272,25 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       reportOrderedTask(line, sourceLine(i))
       const run = collectListInlineRun(lines, i, dialect, emptyMarkerLines.has(i))
       const written = writeItemRun(run, listMarkers, paddingIsFree(lines, i, run.end))
+      if (footnote !== null) {
+        const marker = convertInline(
+          footnote[1]!,
+          dialect,
+          false,
+          false,
+          undefined,
+          true,
+          false,
+          false,
+          undefined,
+          false,
+        )
+        const firstBody =
+          footnote[3] === ''
+            ? stripColumns(written.lines.splice(1, 1)[0] ?? '{empty}', 2)
+            : written.lines[0]!.replace(/^[-*+] /, '')
+        written.lines[0] = marker + ' ' + firstBody
+      }
       // A list under a quote an item holds is set apart from it, or Carve reads
       // the marker line as the quote's lazy continuation.
       if ((written.separate && prevType === 'list') || (lazyQuote !== null && indentColumns(line) >= lazyQuote.col)) out.push('')

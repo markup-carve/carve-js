@@ -38,7 +38,7 @@ describe('a hoisted footnote definition degrades in source order', () => {
   })
 
   it('degrades to Markdown with outer above inner', () => {
-    expect(carveToMarkdown(nested)).toBe('see[^outer]\n\n[^outer]: intro\n\nsee[^inner]\n[^inner]: note\n')
+    expect(carveToMarkdown(nested)).toBe('see[^outer]\n\n[^outer]: intro\n\n    see[^inner]\n[^inner]: note\n')
   })
 
   it('degrades to plain text with outer above inner', () => {

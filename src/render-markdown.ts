@@ -318,6 +318,14 @@ function withMarker(marker: string, content: string): string {
   return trimEndMatchingEdges(marker, (code) => code === 32)
 }
 
+function withContinuation(marker: string, content: string, pad: number): string {
+  const lines = content.split('\n')
+  let out = `${withMarker(marker, lines.shift() ?? '')}\n`
+  const continuation = ' '.repeat(pad)
+  for (const line of lines) out += `${line === '' ? '' : continuation + line}\n`
+  return out
+}
+
 /**
  * The marker payloads a container takes, or undefined when the mode is off or
  * the container is not element-less on this target.
@@ -560,7 +568,6 @@ function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
       pad = prefix.length
     }
     const content = containerContent(() => inOwnContainer(ctx, () => renderListItem(item, node.tight, ctx)))
-    const lines = content.split('\n')
     // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
     // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
     // the same lines again by its marker width, so every level was indented
@@ -571,12 +578,10 @@ function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
     // own content-column model is lenient enough to read it back as a list,
     // which is why this was invisible from inside the engine and only pandoc
     // showed it (carve#1069, carve-php#1142).
-    out += `${withMarker(prefix, lines.shift() ?? '')}\n`
-    const continuation = ' '.repeat(pad)
     // A line with no content takes no pad: PART 11 section 7 emits such a line
     // empty, and trailing whitespace is what editors and `git apply
     // --whitespace=fix` rewrite behind the writer.
-    for (const line of lines) out += `${line === '' ? '' : continuation + line}\n`
+    out += withContinuation(prefix, content, pad)
   }
   ctx.listDepth--
   return out + (ctx.listDepth === 0 ? '\n' : '')
@@ -947,7 +952,8 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   for (const [label, blocks] of footnoteDefsInSourceOrder(ast)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
-    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(() => inOwnContainer(ctx, () => outsideLink(() => renderBlocks(blocks, ctx)))))}\n`
+    const content = containerContent(() => inOwnContainer(ctx, () => outsideLink(() => renderBlocks(blocks, ctx))))
+    out += withContinuation(`[^${escapeMdHtml(stripControls(label))}]: `, content, 4)
   }
   return out
 }
