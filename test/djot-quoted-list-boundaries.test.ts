@@ -48,3 +48,13 @@ test('bounds output growth for nested notes with a lazy continuation', () => {
     expect(html.match(/role="doc-noteref"/g)).toHaveLength(size)
   }
 })
+
+
+test('bounds output growth for deep inline lists with lazy quoted text', () => {
+  for (const size of [16, 32, 64]) {
+    const source = '- > '.repeat(size) + 'a\n' + ' > lazy\n'.repeat(1024)
+    const result = djotToCarve(source)
+    expect(result.length).toBeLessThanOrEqual(source.length * 2)
+    expect(carveToHtml(result).match(/lazy/g)).toHaveLength(1024)
+  }
+})
