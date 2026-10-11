@@ -1,3 +1,4 @@
+import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { attributeContext, continuesParagraph, resetParagraphContext } from './djot-attributes.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
@@ -334,10 +335,13 @@ function protectRejectedCommentQuotes(source: string): string {
     if (!context.depth || context.indent === undefined || continuesParagraph(source, at)) continue
     const firstEnd = source.indexOf('\n', at)
     if (firstEnd < 0 || !readAttributes(source.slice(at, firstEnd) + '}', 0)) continue
-    const openingQuote = /^(?:[ \t]*>(?:[ \t]|$))+/.exec(source.slice(source.lastIndexOf('\n', at - 1) + 1, at).replace(/^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+(?=>)/, ''))?.[0]
+    const linePrefix = source.slice(source.lastIndexOf('\n', at - 1) + 1, at)
+    const enclosing = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+(?=>)/.exec(linePrefix)
+    const openingQuote = /^(?:[ \t]*>(?:[ \t]|$))+/.exec(enclosing ? linePrefix.slice(enclosing[0].length) : linePrefix)?.[0]
     let line = firstEnd
     while (line >= 0) {
       const quote = /^(?:[ \t]*>(?:[ \t]|$))+/.exec(source.slice(line + 1))?.[0]
+      if (enclosing && quote && quote.length - quote.trimStart().length < enclosing[0].length) break
       if (quote && (quote.match(/>/g)?.length ?? 0) < context.depth) { edits.set(line + 1, quote.trimEnd() + '\n'); break }
       if (!quote || quote.trimStart() !== openingQuote?.trimStart() || (quote.match(/>/g)?.length ?? 0) !== context.depth) break
       const bodyAt = line + 1 + quote.length
@@ -378,6 +382,11 @@ function escapeInvalidDjotAttributes(source: string): { source: string; inherite
         if (source[inner] === '{' && masked[inner] === '{' && !readAttributes(source, inner)) escapes.push(inner)
       if (source[i + 1] === '%' && continuesParagraph(source, i)) {
         for (let inner = Math.max(i + 2, escapes.at(-1)! + 1); inner < source.length && source[inner] !== '%' && source[inner] !== '}'; inner++) {
+          if (source[inner] === '\n') {
+            const nextEnd = source.indexOf('\n', inner + 1)
+            const nextLine = source.slice(inner + 1, nextEnd < 0 ? source.length : nextEnd)
+            if (!nextLine.slice(djotStructuralPrefixEnd(nextLine)).trim()) break
+          }
           if (source[inner] === '{' && masked[inner] === '{') escapes.push(inner)
         }
       }

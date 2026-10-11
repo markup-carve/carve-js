@@ -83,7 +83,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     // A new block can end lazy continuation outside a quote or list item.
     if (quoteDepth < depth && (blockStart || item || rejectedCommentStartsBlock(visible))) {
       if (item && !blank) out.push(quote.trimEnd())
-      else if (rejectedCommentStartsBlock(visible) && !blank) out.push('')
+      else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quote.trimEnd())
       paragraph = false
       headingMarker = ''
       lists.length = 0

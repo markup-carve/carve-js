@@ -7,11 +7,11 @@ const quoteValue = (value: string, carve = false): string => `"${value.replace(c
 export function attributeContext(source: string, start: number): { depth: number; indent: number | undefined; minimum: number } {
   let prefix = source.slice(source.lastIndexOf('\n', start - 1) + 1, start), depth = 0
   if (!prefix) return { depth: 0, indent: 0, minimum: 0 }
-  const enclosingItem = /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+(?=>)/.exec(prefix)
+  const enclosingItem = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+(?=>)/.exec(prefix)
   if (enclosingItem) prefix = prefix.slice(enclosingItem[0].length)
   while (true) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(prefix); if (!quote) break; prefix = prefix.slice(quote[0].length); depth++ }
-  const marker = /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.exec(prefix)
-  return { depth, indent: /^(?:[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?[ \t]*$/.test(prefix) ? prefix.length : undefined, minimum: marker?.[0].length ?? 0 }
+  const marker = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+/.exec(prefix)
+  return { depth, indent: /^(?:[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+)?[ \t]*$/.test(prefix) ? prefix.length : undefined, minimum: marker?.[0].length ?? 0 }
 }
 function attributeLine(line: string, depth: number): string | undefined {
   for (let n = 0; n < depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(line); if (!quote) return undefined; line = line.slice(quote[0].length) }
@@ -37,7 +37,7 @@ export function continuesParagraph(source: string, start: number, context = attr
 }
 
 function scanParagraph(source: string, start: number, key: string, context: ReturnType<typeof attributeContext>): boolean {
-  const marker = /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdmIVXLCDM]+)\))[ \t]+/
+  const marker = /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+/
   let end = source.lastIndexOf('\n', start - 1)
   const prefix = source.slice(end + 1, start)
   if (marker.test(prefix)) return false
@@ -48,6 +48,7 @@ function scanParagraph(source: string, start: number, key: string, context: Retu
     const depth = raw.match(/^[ \t]*(?:>[ \t]*)+/)?.[0].match(/>/g)?.length ?? 0
     if (depth !== context.depth) return false
     if (!raw.slice(djotStructuralPrefixEnd(raw)).trim()) {
+      if (lines.length === 0) break
       let parentEnd = from - 1
       while (parentEnd >= 0) {
         const parentFrom = source.lastIndexOf('\n', parentEnd - 1) + 1
@@ -133,7 +134,11 @@ const plainComment = /\{%[^%}]*(?:%[ \t\r]*)?\}/y
 export function plainCommentEnd(source: string, start: number): number | undefined {
   plainComment.lastIndex = start
   const comment = plainComment.exec(source)?.[0]
-  if (comment === undefined || /\n[ \t]*\n/.test(comment)) return undefined
+  if (comment === undefined || /\n[ \t]*\r?\n/.test(comment)) return undefined
+  if (comment.includes('>') && comment.includes('\n')) {
+    const depth = attributeContext(source, start).depth
+    if (depth > 0 && comment.split('\n').slice(1).some(raw => attributeLine(raw, depth)?.trim() === '')) return undefined
+  }
   const end = start + comment.length
   return validAttributeLines(source, start, end, true) ? end : undefined
 }
@@ -154,7 +159,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
       } else i++
     }
-    if (source[i] === '}' && !validAttributeLines(source, start, i + 1, paragraphContext && parts.length === 0, context)) return undefined
+    if (source[i] === '}' && source.lastIndexOf('\n', i) > start && !validAttributeLines(source, start, i + 1, paragraphContext && parts.length === 0, context)) return undefined
     if (source[i] === '}') {
       if (carve && table) {
         for (let at = start; at <= i; at++) {
@@ -167,7 +172,12 @@ export function readAttributes(source: string, start: number, carve = false, tab
     if (source[i] === '%') {
       commentEnd.lastIndex = i + 1
       const end = commentEnd.exec(source)?.index ?? source.length
-      if (end === source.length || /\n[ \t]*\n/.test(source.slice(i, end))) return undefined
+      const comment = source.slice(i, end)
+      if (end === source.length || /\n[ \t]*\r?\n/.test(comment)) return undefined
+      if (comment.includes('>') && comment.includes('\n')) {
+        const depth = (context ??= attributeContext(source, start)).depth
+        if (depth > 0 && comment.split('\n').slice(1, -1).some(raw => attributeLine(raw, depth)?.trim() === '')) return undefined
+      }
       i = source[end] === '%' ? end + 1 : end
       continue
     }

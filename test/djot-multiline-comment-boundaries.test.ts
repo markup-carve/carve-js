@@ -24,7 +24,7 @@ it('keeps the rejected run and following heading marker in the same paragraph', 
   expect(djotToCarve('# a\n{% x\ny %}\n# b\n')).toBe('# a\n\n\\{% x\ny %}\n\\# b\n')
 })
 
-it.each(['- a\n{% 50% off %}\n', '# a\n{% 50% off %}\n', '- a\n {% x\n y %}\n', 'para\n# not a heading\n{% x\ny %}\n', 'para\n- not an item\n{% x\ny %}\n', 'p\n\na\n{% x\ny %} z\n', '- a\n\n  b\n  {% x\n  y %} z\n', '> p\n>\n> a\n> {% x\n> y %} z\n', 'Hi. there\n{% x\ny %} z\n', 'a\n{% x\ny %} z\n', '- a\n  {% x\n  y %} z\n', '# a\n{x y}\n'])('retains paragraph continuation and same-line brace failures: %j', source => {
+it.each(['- a\n{% 50% off %}\n', '# a\n{% 50% off %}\n', '- a\n {% x\n y %}\n', 'para\n# not a heading\n{% x\ny %}\n', 'para\n- not an item\n{% x\ny %}\n', 'p\n\na\n{% x\ny %} z\n', '- a\n\n  b\n  {% x\n  y %} z\n', '> p\n>\n> a\n> {% x\n> y %} z\n', 'Hi. there\n{% x\ny %} z\n', 'Iv. lead\n{% x\ny %} z\n', 'a\n{% x\ny %} z\n', '- a\n  {% x\n  y %} z\n', '# a\n{x y}\n'])('retains paragraph continuation and same-line brace failures: %j', source => {
   expect(carveToHtml(djotToCarve(source)).replace(/>\s+</g, '><').replace(/\s+/g, ' ').replace(/ </g, '<').replace(/> /g, '>').trim()).toBe(renderHTML(parse(source)).replace(/>\s+</g, '><').replace(/\s+/g, ' ').replace(/ </g, '<').replace(/> /g, '>').trim())
 })
 
@@ -66,4 +66,31 @@ it('does not reuse paragraph context past blank lines or a new source', () => {
   for (const source of ['a\n{% x\ny %}\n\n{% x\ny %}\n', '> a\n> {% x\n> y %}\n\n{% x\ny %}\n', '# a\n{% x\ny %}\n']) {
     expect(normalizeHtml(carveToHtml(djotToCarve(source)))).toBe(normalizeHtml(renderHTML(parse(source))))
   }
+})
+
+it.each([
+  '> > inner\n> {% c %\n> tail\n',
+  'para {% open\n\n# Title {#keep}\n',
+  'Done. > {% c %\n> next\n',
+])('preserves boundaries after a rejected comment: %j', source => {
+  const normalize = (html: string): string => html.replace(/<section[^>]*>|<\/section>/g, '').replace(/ id="[^"]*"/g, '').replace(/>\s+</g, '><').replace(/\s+/g, ' ').replace(/ </g, '<').replace(/> /g, '>').trim()
+  expect(normalize(carveToHtml(djotToCarve(source)))).toBe(normalize(renderHTML(parse(source))))
+})
+
+it.each([
+  ['> text {% open\n>\n> next {#id}\n', '> text \\{% open\n>\n> next \n'],
+  ['Iv. > {% c %\n> next\n', 'Iv. > \\{% c %\n\\> next\n'],
+  ['did. > {% c %\n> next\n', 'did. > \\{% c %\n> next\n'],
+])('keeps quoted paragraph and list boundaries: %j', (source, expected) => {
+  expect(djotToCarve(source)).toBe(expected)
+})
+
+it.each(['> para {% a\n> %}\n', '{% a\r\n\r\nb %}\n'])('keeps closing lines and CRLF paragraph boundaries: %j', source => {
+  const html = carveToHtml(djotToCarve(source))
+  if (source.startsWith('>')) expect(html).not.toContain('{%')
+  else { expect(html).toContain('a'); expect(html).toContain('b') }
+})
+
+it('keeps a one-space list continuation after a rejected quoted comment', () => {
+  expect(djotToCarve('- > {% a\n > b %}\n')).toBe('- > \\{% a\n > b %}\n')
 })
