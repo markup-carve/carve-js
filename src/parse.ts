@@ -3430,6 +3430,7 @@ interface QuoteFenceHosts {
   columns: number[]
   markers: number[]
   kinds: ('item' | 'note')[]
+  colons?: Array<{ width: number; column: number; floor: number; awaitingBody: boolean }>
   /**
    * The fence a list item or footnote inside this quote holds open. `column` is
    * where the opener sits and `floor` the host's own content column; the two
@@ -3461,6 +3462,7 @@ function trackQuoteHostFence(
   if (text === '') return false
   if (quotedLineText(content, terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []
+    host.colons = []
     return false
   }
   const paragraph = blockQuoteParagraphOpen(state)
@@ -3468,6 +3470,8 @@ function trackQuoteHostFence(
   while (host.columns.length > 1 && host.columns.at(-1)! > column) {
     host.columns.pop(); host.markers.pop(); host.kinds.pop()
   }
+  const colons = host.colons ??= []
+  while (colons.length > 0 && colons.at(-1)!.floor > host.columns.at(-1)!) colons.pop()
   const insideItem = host.kinds.at(-1) === 'item'
   let inner = text
   let at = column
@@ -3494,6 +3498,32 @@ function trackQuoteHostFence(
     break
   }
   const floor = host.columns.at(-1)!
+  if (floor > 0) {
+    const bare = /^(:{3,})[ \t]*$/.exec(inner)
+    const open = colons.at(-1)
+    if (bare && open && bare[1]!.length === open.width &&
+        (at === open.column || at === open.floor)) {
+      colons.pop()
+      closeBlockQuoteParagraph(state)
+      return true
+    }
+    if (open) open.awaitingBody = false
+    const width = colonFenceOpenerLen(inner)
+    const absorbedBare = bare !== null && state.mode.kind === 'paragraph' && state.mode.absorbingFence
+    if (!blockStart && (absorbedBare || (width === null && /^:{3,}/.test(inner)))) {
+      state.mode = { kind: 'paragraph', absorbingFence: true }
+      return true
+    }
+    if (width !== null && !absorbedBare) {
+      colons.push({ width, column: at, floor, awaitingBody: blockStart })
+      // Keep marker-line candidates foldable until their closer arrives.
+      // An unprefixed lazy body can still demote that opener to prose.
+      if (!blockStart) {
+        closeBlockQuoteParagraph(state)
+        return true
+      }
+    }
+  }
   const code = RE_FENCE.exec(inner)
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
   const marker = code?.[2] ?? raw?.[1] ?? null
@@ -3672,6 +3702,9 @@ function classifyQuotedLine(
   prefixMemo?: Map<number, number>,
   atColumn = true,
 ): { text: string; state: BlockQuoteLazyState } | null {
+  if (!atColumn && state.hosts?.colons?.some(open => open.awaitingBody)) {
+    state.hosts.colons = state.hosts.colons.filter(open => !open.awaitingBody)
+  }
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
   // continue the same paragraph, exactly as `trackItemLazyState` does it.
