@@ -111,8 +111,14 @@ it.each(['`ftp://example.test`', '```\nftp://example.test\n```'])(
   },
 )
 
-it.each(['sftp://example.test', 'tftp://example.test', 'fooftp://example.test', '[ftp://example.test](https://target.test)', '[*ftp://example.test*](https://target.test)', '[https://example.test](https://target.test)'])(
+it.each(['sftp://example.test', 'tftp://example.test', 'fooftp://example.test', '[ftp://example.test](https://target.test)', '[https://example.test](https://target.test)'])(
   'preserves text without an unsupported nested GFM protocol link: %s', source => {
     expect(rows(source).some(row => row.code === 'fidelity-unverified')).toBe(false)
   },
 )
+
+it('retains incomplete assessment for changed emphasis inside a protocol link label', () => {
+  expect(rows('[*ftp://example.test*](https://target.test)')).toContainEqual(expect.objectContaining({
+    code: 'fidelity-unverified', confidence: 'fallback',
+  }))
+})
