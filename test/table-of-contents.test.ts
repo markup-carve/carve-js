@@ -220,7 +220,7 @@ describe('a bottom TOC stays at document level under a profile', () => {
         '&lt;ul&gt;\n' +
         '&lt;li&gt;&lt;a href="#A"&gt;A&lt;/a&gt;&lt;/li&gt;\n' +
         '&lt;/ul&gt;\n' +
-        '&lt;/nav&gt;\n</code></pre>',
+        '&lt;/nav&gt;</code></pre>',
     )
   })
 

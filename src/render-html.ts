@@ -8,6 +8,7 @@ import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypograp
  * indented children for readability.
  */
 
+import { rawSource } from './verbatim-payload.js'
 import { tableWidthPercentage, tableRowGroupsFromAttrs } from './table-source-metadata.js'
 import type {
   Admonition,
@@ -46,7 +47,6 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue, setOwn } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
-import { codeContent, verbatimLines } from './verbatim-payload.js'
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
@@ -1702,14 +1702,14 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
         ? renderCodeBlockCore(
             {
               lang: node.format,
-              content: codeContent(verbatimLines(node.content), true),
+              content: node.content,
               ...(node.attrs ? { attrs: node.attrs } : {}),
               ...(node.pos ? { pos: node.pos } : {}),
             },
             opts,
             pad,
           )
-        : `${pad}${node.content}`
+        : `${pad}${rawSource(node.content)}`
     case 'comment':
       // Comments are not rendered (§4.13).
       return ''

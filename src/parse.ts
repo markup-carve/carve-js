@@ -84,7 +84,7 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp, trimEndSpaceTab, trimEndNonNbsp } from './trim-non-nbsp.js'
 import { ownValue, setOwn } from './own-property.js'
-import { codeContent, verbatimContent } from './verbatim-payload.js'
+import { codeContent } from './verbatim-payload.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
 import { completeDestinationOpeners, linkDestinationValue, scanDestination, RE_LINK_REST } from './link-destination.js'
@@ -2535,6 +2535,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
   const format = m[2]!
   const closeRe = fenceCloseRe(marker)
   const lines: string[] = []
+  let lastPayloadLineIndex = -1
   while (!lexer.eof()) {
     if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
     const ln = lexer.peek()!
@@ -2542,6 +2543,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
       lexer.consume()
       break
     }
+    lastPayloadLineIndex = lexer.pos
     lexer.consume()
     // SAME AS `parseFence`, and for the same reason: the frame did its work in
     // the closer test above, keeping a closing run the CONTAINER folded in from
@@ -2551,7 +2553,8 @@ function parseRawBlock(lexer: Lexer): RawBlock {
     // collector frames its folded lines exactly as it does a code fence's.
     lines.push(stripLazyFrame(ln))
   }
-  return { type: 'raw_block', format, content: verbatimContent(lines) }
+  const terminated = !lexer.documentLacksFinalBreak || lastPayloadLineIndex < 0 || lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
+  return { type: 'raw_block', format, content: codeContent(lines, terminated) }
 }
 
 // A closer of each fence shape, spelled PERMISSIVELY: a leading indentation run
