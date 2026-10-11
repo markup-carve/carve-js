@@ -6,7 +6,7 @@ import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
-import { markdownBareLinks } from './markdown-gfm-autolinks.js'
+import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
  * Markdown -> Carve converter.
@@ -496,7 +496,7 @@ function writeMarkdownDestination(url: string, protectedSpans: readonly string[]
   // carries it literally, balanced or not, so encoding changed the address the
   // Markdown writer had emitted verbatim. Same ruling as the Djot side,
   // carve#2854.
-  return decoded.replace(/[^\x21-\x7e]|["<>\\`{|}]/gu, (char) => {
+  return decoded.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, (char) => {
     const point = char.codePointAt(0)!
     return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
   }).replace(/[()]/g, '\\$&')
@@ -1273,19 +1273,38 @@ function convertInline(
     protectedSources.push(source)
     return `\x00P${protectedSpans.length - 1}\x00`
   }
+  const codeTokens = new Map<string, string>()
+  const protectCode = (value: string, source = value): string => {
+    const token = protect(value, source)
+    codeTokens.set(token, source)
+    return token
+  }
   let codeCursor = 0, codeLine = 0
-  let line = protectCodeSpans(input, (span, offset) => {
+  const writeCodeSpan = (span: string, offset: number, trackLines = true): string => {
     const fence = /^`+/.exec(span)?.[0] ?? ''
-    if (fence.length > 2 || !span.includes('\n')) return protect(span)
-    if (joinedLines) {
+    if (fence.length > 2 || !span.includes('\n')) return protectCode(span)
+    if (joinedLines && trackLines) {
       while (codeCursor < offset) if (input[codeCursor++] === '\n') codeLine++
       while (codeCursor < offset + span.length) if (input[codeCursor++] === '\n') joinedLines.add(++codeLine)
     }
     let value = span.slice(fence.length, -fence.length).replace(/\n[ \t]*/g, ' ')
     if (value.startsWith(' ') && value.endsWith(' ') && /[^ ]/.test(value)) value = value.slice(1, -1)
     const rendered = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
-    return protect(rendered.replace(/\n$/, ''), span)
-  })
+    return protectCode(rendered.replace(/\n$/, ''), span)
+  }
+  let rawLine = input
+  const rawDefinition = /^\s*\[([^^\]][^\]]*)\]:/.exec(input)
+  const isReferenceDefinition = rawDefinition !== null && referenceDestinationLabel(rawDefinition[1]!, decodeHtmlEntitiesRaw, [], table) !== undefined
+  if (!holdsFenceBody && !isReferenceDefinition && (input.includes(':') || input.includes('www.'))) {
+    let cursor = 0
+    let captured = ''
+    for (const link of markdownRawBareLinks(input)) {
+      captured += input.slice(cursor, link.start) + protect(writeLiteralAutolink(input.slice(link.start, link.end), link.prefix, true), input.slice(link.start, link.end))
+      cursor = link.end
+    }
+    rawLine = captured + input.slice(cursor)
+  }
+  let line = protectCodeSpans(rawLine, writeCodeSpan)
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
   // Keep empty and multiline values in HTML where a source slot may fold them.
   let unchangedHtmlCode: Set<number> | undefined
@@ -1420,14 +1439,14 @@ function convertInline(
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
-  const writeLiteralAutolink = (body: string, hrefPrefix = '', bare = false): string => {
+  function writeLiteralAutolink(body: string, hrefPrefix = '', bare = false): string {
     for (let pass = 0; pass < protectedSpans.length; pass++) {
       const restored = body.replace(/\x00P(\d+)\x00/g, (_token, index: string) => protectedSpans[Number(index)] ?? _token)
       if (restored === body) break
       body = restored
     }
     let href = hrefPrefix + body.replace(table ? /[\\[\]`|]/g : /[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
-    if (bare) href = href.replace(/[^\x21-\x7e]|["<>`{|}]/gu, char => {
+    if (bare) href = href.replace(/[^\x21-\x7e]|["<>`^{|}]/gu, char => {
       const point = char.codePointAt(0)!
       return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
     })
@@ -1925,9 +1944,10 @@ function convertInline(
     let activeLabelAt = 0
     let cursor = 0
     let protectedUrls = ''
+    let reparseCode = false
     for (const link of markdownBareLinks(line, token => {
       const index = Number(token.slice(2, -1))
-      return isPlainMarkdownUrlToken(index, protectedSpans) ? protectedSources[index] : undefined
+      return markdownUrlTokenSource(index, protectedSpans, protectedSources)
     }, 'url')) {
       const offset = link.start
       while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
@@ -1935,10 +1955,15 @@ function convertInline(
       if (label && offset >= label.start && offset < label.end) {
         continue
       }
+      if (/\x00P\d+\x00/g.test(line.slice(offset, link.end)) && [...line.slice(offset, link.end).matchAll(/\x00P\d+\x00/g)].some(token => codeTokens.has(token[0]))) reparseCode = true
       protectedUrls += line.slice(cursor, offset) + protect(writeLiteralAutolink(link.body ?? line.slice(offset, link.end), link.prefix, true)) + (link.tail ?? '')
       cursor = link.end
     }
     line = protectedUrls + line.slice(cursor)
+    if (reparseCode) {
+      line = line.replace(/\x00P\d+\x00/g, token => codeTokens.get(token) ?? token)
+      line = protectCodeSpans(line, (span, offset) => writeCodeSpan(span, offset, false))
+    }
   }
 
   // Math, converted and protected before the emphasis passes so a formula
@@ -6547,13 +6572,17 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   return output
 }
 
-function isPlainMarkdownUrlToken(index: number, spans: readonly string[]): boolean {
-  return /^\\[!-/:-@\[-`{-~]$/.test(spans[index] ?? '')
+function markdownUrlTokenSource(index: number, spans: readonly string[], sources: readonly string[]): string | { source: string; opaque: boolean } | undefined {
+  const span = spans[index] ?? ''
+  const source = sources[index] ?? span
+  if (/^\\[!-/:-@\[-`{-~]$/.test(span) || span === '\\') return source
+  if (/^!?`/.test(span) || span.startsWith('(') || span.startsWith('![') || span.startsWith('[')) return { source, opaque: true }
+  return undefined
 }
 
 function plainMarkdownUrlRanges(line: string, spans: readonly string[], sources: readonly string[]): { start: number; end: number }[] {
   return markdownBareLinks(line, token => {
     const index = Number(token.slice(2, -1))
-    return isPlainMarkdownUrlToken(index, spans) ? sources[index] : undefined
+    return markdownUrlTokenSource(index, spans, sources)
   }, 'url')
 }
