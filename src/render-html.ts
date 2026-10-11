@@ -1702,7 +1702,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
         ? renderCodeBlockCore(
             {
               lang: node.format,
-              content: codeContent(verbatimLines(node.content), true),
+              content: codeContent(verbatimLines(node.content), node.contentTerminated !== false),
               ...(node.attrs ? { attrs: node.attrs } : {}),
               ...(node.pos ? { pos: node.pos } : {}),
             },

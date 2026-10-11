@@ -503,7 +503,7 @@ class ProfileFilter {
           this.replaceAt(slot, {
             type: 'code_block',
             lang: raw.format,
-            content: codeContent(verbatimLines(raw.content), true),
+            content: codeContent(verbatimLines(raw.content), raw.contentTerminated !== false),
             ...(raw.attrs ? { attrs: raw.attrs } : {}),
             ...(raw.pos ? { pos: raw.pos } : {}),
           } as unknown as NodeLike)
