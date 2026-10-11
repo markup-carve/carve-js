@@ -6,6 +6,7 @@ import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
+import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 /*
  * Markdown -> Carve converter.
  */
@@ -1251,7 +1252,7 @@ function convertInline(
     code: 'structure-unspellable',
     message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
   })
-  if (/^[A-Za-z0-9 *_.,;?!'"-]+$/.test(input)) {
+  if (!input.includes('www.') && /^[A-Za-z0-9 *_.,;?!'"-]+$/.test(input)) {
     let line = escapeCarveOnlyMarker(input)
     if (!holdsFenceBody) line = escapeTypographicDashes(line)
     line = markdownEmphasis(line, reportFlattenedEmphasis)
@@ -1893,35 +1894,22 @@ function convertInline(
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
-  if (/\bhttps?:\/\//.test(line)) {
+  if (/https?:\/\/|ftp:\/\/|www\.|@/i.test(line)) {
     const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
     activeLabelRanges.sort((a, b) => a.start - b.start)
-    const urlStart = /\bhttps?:\/\//g
-    const escapedToken = /\x00P(\d+)\x00/y
     let activeLabelAt = 0
     let cursor = 0
     let protectedUrls = ''
-    for (let start = urlStart.exec(line); start; start = urlStart.exec(line)) {
-      const offset = start.index
+    for (const link of markdownBareLinks(line)) {
+      const offset = link.start
       while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
       const label = activeLabelRanges[activeLabelAt]
       if (label && offset >= label.start && offset < label.end) {
-        urlStart.lastIndex = label.end
         continue
       }
-      let end = urlStart.lastIndex
-      while (end < line.length && !/[\s<>`]/.test(line[end]!)) {
-        if (line[end] === '\x00') {
-          escapedToken.lastIndex = end
-          const token = escapedToken.exec(line)
-          if (!token || !isPlainMarkdownUrlToken(Number(token[1]), protectedSpans)) break
-          end += token[0].length
-        } else end++
-      }
-      protectedUrls += line.slice(cursor, offset) + protect(line.slice(offset, end).replace(/(?<!\\)-{2,}/g, run => run.replace(/-/g, '\\-')))
-      cursor = end
-      urlStart.lastIndex = end
+      protectedUrls += line.slice(cursor, offset) + protect(writeLiteralAutolink(line.slice(offset, link.end), link.prefix))
+      cursor = link.end
     }
     line = protectedUrls + line.slice(cursor)
   }
