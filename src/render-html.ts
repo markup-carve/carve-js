@@ -2559,7 +2559,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
           : ''
       }
       const rawBody = opts.allowRawHtml === false ? escapeHtml(node.content) : node.content
-      return roundtripExport(opts) ? `<span ${carrier('raw')}="html">${rawBody}</span>` : rawBody
+      return roundtripExport(opts) ? `<span ${carrier('raw')}="html">${node.content.replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)}</span>` : rawBody
     case 'literal_inline': {
       // §27: content is escaped and ALWAYS emitted (never target-routed like
       // raw passthrough), with the `<code>` wrapper dropped. An element is
