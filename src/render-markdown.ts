@@ -23,7 +23,7 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp, trimEndSpaceTab, trimMatchingEdges, trimEndMatchingEdges } from './trim-non-nbsp.js'
-import { codeSource } from './verbatim-payload.js'
+import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
@@ -488,7 +488,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
         rawFormatDropped(ctx.options, node, 'markdown')
         return ''
       }
-      return `${escapeMdHtml(stripControls(node.content))}\n\n`
+      return `${escapeMdHtml(stripControls(rawSource(node.content)))}\n\n`
     case 'abbreviation_def':
       // PART 11 §10a: a definition NOTHING references still reaches this
       // target. HTML drops it because it has nowhere to put one; Markdown,

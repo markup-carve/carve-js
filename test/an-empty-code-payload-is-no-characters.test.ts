@@ -86,9 +86,8 @@ describe('the AST carries the count', () => {
     expect(codeOf('```\na\n\n```\n').content).toBe('a\n\n')
   })
 
-  it('gives the code payload a literal encoding the raw one still lacks', () => {
-    // CARVE-P12-064: a code payload keeps the break before its closer, which
-    // the raw encoding leaves implied. The blank-line payloads still agree.
+  it('uses the same literal encoding for code and raw payloads', () => {
+    // The raw EOF ruling retains payload line breaks in both node types.
     const raw = (source: string): string => {
       const block = parse(source).children[0]
       if (block?.type !== 'raw_block') throw new Error(`not a raw block: ${block?.type}`)
@@ -101,7 +100,7 @@ describe('the AST carries the count', () => {
     }
     for (const payload of ['a\n', 'a\nb\n']) {
       expect(codeOf(`\`\`\`\n${payload}\`\`\`\n`).content, JSON.stringify(payload)).toBe(payload)
-      expect(raw(`\`\`\`=html\n${payload}\`\`\`\n`), JSON.stringify(payload)).toBe(payload.slice(0, -1))
+      expect(raw(`\`\`\`=html\n${payload}\`\`\`\n`), JSON.stringify(payload)).toBe(payload)
     }
   })
 })

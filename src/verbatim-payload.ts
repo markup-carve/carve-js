@@ -1,41 +1,12 @@
 /**
  * The encoding of a verbatim payload - a code fence's or raw block's `content`.
  *
- * A CODE BLOCK holds literal payload text (CARVE-P12-064): every payload line
+ * Code and raw blocks hold literal payload text: every payload line
  * carries its own break, so `""`, `"\n"`, `"a\n"` and `"a\n\n"` are four
  * different payloads, and only a payload whose last line reaches the end of a
  * source with no final break omits that break. Nothing is added back on the way
  * out - `<pre><code>` holds the value as it stands.
- *
- * A RAW BLOCK keeps the older encoding, where the last line's break is implied
- * and an all-blank payload is written as one newline per line: `join('\n')`
- * alone collapses a payload of no lines and one of a single blank line to the
- * same empty string, and PART 9 section 28 forbids the two encoding alike.
  */
-
-/** Whether `content` encodes a raw payload of nothing but blank lines. */
-const allBlank = (content: string): boolean => /^\n+$/.test(content)
-
-/** The `content` for a RAW block's collected `lines`. */
-export function verbatimContent(lines: readonly string[]): string {
-  return lines.length > 0 && lines.every((line) => line === '')
-    ? '\n'.repeat(lines.length)
-    : lines.join('\n')
-}
-
-/**
- * Whether a RAW `content` already ends its last payload line, so a writer owes
- * no separator before the closing delimiter.
- */
-export const payloadTerminated = (content: string): boolean => content === '' || allBlank(content)
-
-/** The payload lines a RAW `content` stands for. Inverse of `verbatimContent`. */
-export function verbatimLines(content: string): string[] {
-  if (content === '') return []
-  if (allBlank(content)) return Array.from({ length: content.length }, () => '')
-
-  return content.split('\n')
-}
 
 /**
  * The `content` for a CODE fence's collected `lines`.
@@ -67,4 +38,9 @@ export function codeLines(content: string): string[] {
  */
 export function codeSource(content: string): string {
   return content.endsWith('\n') ? content.slice(0, -1) : content
+}
+
+/** Matching raw output excludes the final line separator, preserving blank payloads. */
+export function rawSource(content: string): string {
+  return content.endsWith('\n') && !/^\n+$/.test(content) ? content.slice(0, -1) : content
 }

@@ -37,7 +37,7 @@ export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
-import { codeSource, payloadTerminated } from './verbatim-payload.js'
+import { codeSource, codeTerminated } from './verbatim-payload.js'
 import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
@@ -1606,6 +1606,21 @@ function repeatedEmphasisNodes(ast: Document): WeakSet<object> {
       continue
     }
     if (path.has(value)) continue
+    const type = (value as { type?: string }).type
+    if (type === 'text' || type === 'escaped_text' || type === 'soft_break' || type === 'hard_break') continue
+    let children: object[] | undefined
+    if (Array.isArray(value)) {
+      for (const child of value) if (child !== null && typeof child === 'object') (children ??= []).push(child)
+    } else if (value instanceof Map) {
+      for (const child of value.values()) if (child !== null && typeof child === 'object') (children ??= []).push(child)
+    } else {
+      for (const key of Object.keys(value)) {
+        if (key === 'attrs' || key === 'pos') continue
+        const child = (value as Record<string, unknown>)[key]
+        if (child !== null && typeof child === 'object') (children ??= []).push(child)
+      }
+    }
+    if (!children) continue
     path.add(value)
     const node = value as { type?: string; children?: unknown[] }
     const kind = node.type && EMPHASIS_KINDS.has(node.type) && Array.isArray(node.children) ? node.type : undefined
@@ -1617,22 +1632,7 @@ function repeatedEmphasisNodes(ast: Document): WeakSet<object> {
       active.set(kind, ancestors)
     }
     stack.push({ value, exit: true, kind })
-    if (Array.isArray(value)) {
-      for (let at = value.length - 1; at >= 0; at--) {
-        const child: unknown = value[at]
-        if (child !== null && typeof child === 'object') stack.push({ value: child })
-      }
-    } else if (value instanceof Map) {
-      for (const child of value.values()) {
-        if (child !== null && typeof child === 'object') stack.push({ value: child })
-      }
-    } else {
-      for (const key of Object.keys(value)) {
-        if (key === 'attrs' || key === 'pos') continue
-        const child = (value as Record<string, unknown>)[key]
-        if (child !== null && typeof child === 'object') stack.push({ value: child })
-      }
-    }
+    for (let at = children.length - 1; at >= 0; at--) stack.push({ value: children[at] })
   }
   return repeated
 }
@@ -2124,8 +2124,10 @@ export function withTextAsOneRun(ast: Document): Document {
         for (const item of value) stack.push(item)
         continue
       }
-      for (const [key, child] of Object.entries(value)) {
-        if (key !== 'attrs' && key !== 'pos') stack.push(child)
+      for (const key in value) {
+        if (key === 'attrs' || key === 'pos' || !Object.prototype.hasOwnProperty.call(value, key)) continue
+        const child = (value as Record<string, unknown>)[key]
+        if (child !== null && typeof child === 'object') stack.push(child)
       }
     }
   }
@@ -2171,7 +2173,11 @@ function withCellHardBreaksFlattened(ast: Document): Document {
       if (holdsHardBreak((node as TableCell).children ?? [])) cells.push(node as TableCell)
       continue
     }
-    for (const value of Object.values(node)) stack.push(value)
+    if (Array.isArray(node)) {
+      for (const value of node) if (value !== null && typeof value === 'object') stack.push(value)
+    } else {
+      for (const value of Object.values(node)) if (value !== null && typeof value === 'object') stack.push(value)
+    }
   }
   if (cells.length === 0) return ast
   const copy = structuredClone(ast)
@@ -2183,7 +2189,11 @@ function withCellHardBreaksFlattened(ast: Document): Document {
       flattenHardBreaks((node as TableCell).children ?? [])
       continue
     }
-    for (const value of Object.values(node)) stack.push(value)
+    if (Array.isArray(node)) {
+      for (const value of node) if (value !== null && typeof value === 'object') stack.push(value)
+    } else {
+      for (const value of Object.values(node)) if (value !== null && typeof value === 'object') stack.push(value)
+    }
   }
   return copy
 }
@@ -2421,6 +2431,7 @@ class CarveRenderSession {
   }
 
   renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+    this.repeatedScopes = new WeakMap()
     this.destinationParensByUnit = new WeakMap()
     this.crossingBracketsByUnit = new WeakMap()
     reportRubyLosses(ast, opts)
@@ -2857,7 +2868,12 @@ class CarveRenderSession {
     this.writtenBraced = new WeakSet()
     this.openEmphasisKinds = new Set()
     this.labelKinds = new Set()
-    this.bracedForScope = repeatedEmphasisNodes(ast)
+    let repeated = this.repeatedScopes.get(ast)
+    if (!repeated) {
+      repeated = repeatedEmphasisNodes(ast)
+      this.repeatedScopes.set(ast, repeated)
+    }
+    this.bracedForScope = repeated
     this.attributeEnclosures = []
     this.attributeBracketDepth = 0
     this.expandedBoldItalic = new WeakSet()
@@ -3205,12 +3221,7 @@ class CarveRenderSession {
       case 'raw_block': {
         const fence = safeFence(node.content, 3)
         const content = this.protectVerbatim(node.content)
-        // Empty content means zero payload lines, while an all-newline content
-        // value records exactly that many blank payload lines. In both cases an
-        // extra separator before the closer would change the AST on every
-        // format pass. Non-blank content still needs the ordinary closing-line
-        // separator (including content with a trailing blank line).
-        const closerSeparator = payloadTerminated(node.content) ? '' : '\n'
+        const closerSeparator = codeTerminated(node.content) ? '' : '\n'
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':
@@ -4313,7 +4324,6 @@ class CarveRenderSession {
       renderSession.labelKinds.delete(node.type)
       const outer = renderSession.openEmphasisKinds
       const scoped = node.type === 'superscript' || node.type === 'subscript' || renderSession.bracedForScope.has(node)
-      if (scoped) renderSession.bracedForScope.add(node)
       renderSession.openEmphasisKinds = scoped ? new Set([node.type]) : new Set([...outer, node.type])
       renderSession.attributeEnclosures.push(node)
       try {
@@ -4944,6 +4954,8 @@ class CarveRenderSession {
 
   /** Outer kinds a link label may open once more. */
   private labelKinds = new Set<string>()
+
+  private repeatedScopes = new WeakMap<Document, WeakSet<object>>()
 
   /** Spans written braced so their content starts a scope of its own. */
   private bracedForScope = new WeakSet<object>()

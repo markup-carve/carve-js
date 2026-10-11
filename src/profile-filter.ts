@@ -18,7 +18,7 @@
  * `replaceChildNode()` semantics.
  */
 
-import { codeContent, codeLines, codeTerminated, verbatimLines } from './verbatim-payload.js'
+import { codeLines, codeTerminated, rawSource } from './verbatim-payload.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import type {
@@ -503,7 +503,7 @@ class ProfileFilter {
           this.replaceAt(slot, {
             type: 'code_block',
             lang: raw.format,
-            content: codeContent(verbatimLines(raw.content), true),
+            content: raw.content,
             ...(raw.attrs ? { attrs: raw.attrs } : {}),
             ...(raw.pos ? { pos: raw.pos } : {}),
           } as unknown as NodeLike)
@@ -972,6 +972,7 @@ function extractTextContent(node: NodeLike): string {
     case 'math':
       return (node['content'] as string) ?? ''
     case 'raw_block':
+      return rawSource((node['content'] as string) ?? '')
     case 'raw_inline':
     case 'literal_inline':
       return (node['content'] as string) ?? ''
