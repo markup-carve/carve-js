@@ -63,8 +63,8 @@ export function protectMarkdownLinkLabels(
           // an opener it generated (markup-carve/carve#2877 made such a nested
           // opener reachable in the first place).
           let depth = 0
-          const preview = markdownEmphasis(label, () => {}, undefined, spans, false, false, 1)
-          const italic = (preview.match(/\//g)?.length ?? 0) > (label.match(/\//g)?.length ?? 0) || /<(?:em|i)(?:\s|>)/i.test(label)
+          const preview = label.includes('/') ? markdownEmphasis(label, () => {}, undefined, spans, false, false, 1) : label
+          const italic = label.includes('/') && ((preview.match(/\//g)?.length ?? 0) > (label.match(/\//g)?.length ?? 0) || /<(?:em|i)(?:\s|>)/i.test(label))
           const converted = markdownEmphasis(italic ? prepareLabel(label) : label, () => { flattened = true }, undefined, spans, false, false, 1, peak => { depth = peak }, true)
             .replace(/[*_]/g, char => protect(char))
             .replace(/\{(?=\x00P\d+\x00)|(?<=\x00P\d+\x00)\}/g, char => protect(char))
