@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
-import { carveToCarve, carveToHtml, parse, renderHtml, resolve } from '../src/index.js'
+import { carveToCarve, carveToHtml, parse, renderCarve, renderHtml, resolve } from '../src/index.js'
 import controls from './fixtures/multiline-inline-code.json'
 
 type HtmlNode = DefaultTreeAdapterMap['node']
@@ -21,10 +21,22 @@ const htmlTree = (html: string): unknown => {
   return visit(parseFragment(html.replace(/(<br\b[^>]*>)[ \t\r]*\n[ \t]*/gi, '$1')))
 }
 
-// Native HTML comes from layout.mjs and html.mjs at spec 57b6622788efcace06fea2fbcb6e01b8cde04288.
+// Native HTML comes from layout.mjs and html.mjs at spec 3bf1fc98d56012d2a5096c7ff9ee2544028aad34.
 it.each(controls)('preserves multiline verbatim payloads across render and format paths: $source', ({ source, html }) => {
   const expected = htmlTree(html)
   expect(htmlTree(carveToHtml(source))).toEqual(expected)
   expect(htmlTree(renderHtml(resolve(parse(source))))).toEqual(expected)
   expect(htmlTree(carveToHtml(carveToCarve(source)))).toEqual(expected)
+})
+
+it.each(['a\rb`` end', 'a\r\nb`` end', 'a\rb\r\nc``` end', '\ue001\ue002\ue003\ue004\ue005\ue006\ue007\ue008\n[r]: /url'])('preserves a constructed Code value after line-ending normalization: %j', (value) => {
+  const written = renderCarve({
+    type: 'document',
+    children: [{ type: 'paragraph', children: [{ type: 'code', value }] }],
+  })
+  const paragraph = parse(written).children[0]
+  expect(paragraph?.type).toBe('paragraph')
+  if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
+  expect(paragraph.children).toHaveLength(1)
+  expect(paragraph.children[0]).toMatchObject({ type: 'code', value: value.replace(/\r\n?/g, '\n') })
 })
