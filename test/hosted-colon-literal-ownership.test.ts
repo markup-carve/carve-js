@@ -1,11 +1,12 @@
 import {expect, it} from 'vitest'
-import {parse, carveToHtml} from '../src/index.js'
+import {parse, carveToHtml, renderHtml} from '../src/index.js'
 import type {BlockNode, List} from '../src/ast.js'
 import readerScopeFixtures from './fixtures/hosted-colon-reader-scope.json'
 import neighborScopeFixtures from './fixtures/hosted-colon-neighbor-scope.json'
 import review7ScopeFixtures from './fixtures/hosted-colon-review7-scope.json'
 import review8ScopeFixtures from './fixtures/hosted-colon-review8-scope.json'
 import review9ScopeFixtures from './fixtures/hosted-colon-review9-scope.json'
+import commentDedentFixtures from './fixtures/quoted-comment-dedent-parity.json'
 
 // Expected HTML comes from native reader 83fa84fcba4f5d7bddc923219927f8122af1a341.
 for (const fixture of readerScopeFixtures) it(fixture.name, () => {
@@ -203,3 +204,9 @@ for (const quote of ['> ', '> > ']) {
     expect(carveToHtml(source)).toContain('para\nlazy')
   })
 }
+
+for (const fixture of commentDedentFixtures) it(`quoted comment dedent ${fixture.id}`, () => {
+  for (const actual of [carveToHtml(fixture.source), renderHtml(parse(fixture.source))]) {
+    expect(actual.replace(/>\s+</g, '><').trim()).toBe(fixture.html)
+  }
+})

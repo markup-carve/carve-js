@@ -987,6 +987,8 @@ class Lexer {
    * (markup-carve/carve-js#1606).
    */
   quoteLazyLines: Set<number>
+  /** Comment openers rejected by a marker-line literal owner, keyed by both source lines. */
+  literalCommentLineOpeners: Set<string>
   /** See `QuoteLazyHint`. Set by the enclosing quote, taken by the first quote parsed here. */
   quoteLazyHint: QuoteLazyHint | null = null
   /**
@@ -1100,6 +1102,7 @@ class Lexer {
     this.quoteLazyMarkerLines = inherited?.quoteLazyMarkerLines ?? new Set()
     this.itemLazyLines = inherited?.itemLazyLines ?? new Set()
     this.quoteLazyLines = inherited?.quoteLazyLines ?? new Set()
+    this.literalCommentLineOpeners = inherited?.literalCommentLineOpeners ?? new Set()
     this.declinedLinkDefLines = inherited?.declinedLinkDefLines ?? new Set()
     this.footnoteDefs = inherited?.footnoteDefs ?? new Map()
     this.footnoteDefPos = inherited?.footnoteDefPos ?? new Map()
@@ -3287,6 +3290,7 @@ function consumeOpaqueColonFenceBodySpan(
   lines: ColonFenceBodyLine[],
   lineIndex: number,
   text: string,
+  literalOwnerLine?: number,
 ): boolean {
   const rawOpen = RE_RAW_FENCE.exec(text)
   const codeOpen = rawOpen === null ? RE_FENCE.exec(text) : null
@@ -3317,7 +3321,9 @@ function consumeOpaqueColonFenceBodySpan(
   }
 
   const commentOpen = RE_COMMENT_BLOCK_ANY.exec(text)
-  if (commentOpen !== null && commentBlockHasCloser(lexer, commentOpen[1]!.length)) {
+  if (commentOpen !== null &&
+      !(literalOwnerLine !== undefined && lexer.literalCommentLineOpeners.has(`${literalOwnerLine}:${lexer.lineNumber(lineIndex)}`)) &&
+      commentBlockHasCloser(lexer, commentOpen[1]!.length)) {
     const fence = commentOpen[1]!.length
     lexer.consume()
     lines.push({ text, lineIndex })
@@ -3415,13 +3421,14 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
 }
 
 function collectLiteralColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {
+  const literalOwnerLine = lexer.lineNumber(opener.lineIndex)
   const lines: ColonFenceBodyLine[] = []
   let closed = false
 
   while (!lexer.eof()) {
     const lineIndex = lexer.pos
     const text = lexer.peek()!
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) continue
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, literalOwnerLine)) continue
     const close = RE_ADMONITION_CLOSE.exec(text)
     lexer.consume()
     if (close && close[1]!.length === opener.fenceWidth) {
@@ -4626,12 +4633,13 @@ interface ItemLazyState {
   inlineFenceBlock?: boolean
   unrebasedColonBody?: { width: number }
   closedColonBody?: boolean
+  closedLiteralComment?: boolean
   // How many colon-fence containers the item's own content currently holds
   // open. A bare `:::` with one open is that container's CLOSER, not an opener
   // and not absorbable text - which is why a malformed fence INSIDE an open
   // container arms nothing: the closer below it still has a container to close.
   divDepth: number
-  literalColon?: { width: number; column: number; opaque?: OpaqueGroup; markerFrame?: ItemLazyState; absorbing?: boolean; belowComment?: number }
+  literalColon?: { width: number; column: number; sourceLine?: number; rejectedComment?: boolean; opaque?: OpaqueGroup; markerFrame?: ItemLazyState; absorbing?: boolean; belowComment?: number }
   authoredColon?: { width: number; column: number; depth: number; belowComment?: number }
   // The lines so far of a `{…}` block-attribute block that has not closed yet,
   // newline-joined, or null when the tracker is not inside one. §15 A5 lets the
@@ -5441,7 +5449,9 @@ function trackItemLazyState(
   const wasInlineFenceBlock = state.inlineFenceBlock === true
   delete state.inlineFenceBlock
   const wasClosedColon = state.closedColonBody === true
+  const wasClosedLiteralComment = state.closedLiteralComment === true
   delete state.closedColonBody
+  delete state.closedLiteralComment
   if (state.unrebasedColonBody && RE_ADMONITION_CLOSE.exec(content)?.[1]?.length === state.unrebasedColonBody.width) delete state.unrebasedColonBody
   // Carried the same way the absorption is, and for the same reason: every
   // other block ends the table, so only the two row branches re-arm it.
@@ -5516,6 +5526,7 @@ function trackItemLazyState(
     if (group && !group.belowBaseCloses && codeAtBase && !state.lazyFoldable && state.divDepth > 0) open.opaque = group
     const close = RE_ADMONITION_CLOSE.exec(text)
     if (close && close[1]!.length === open.width && (column === 0 || column === open.column)) {
+      if (open.rejectedComment) state.closedLiteralComment = true
       delete state.literalColon
       state.divDepth = Math.max(0, state.divDepth - 1)
       state.closedColonBody = true
@@ -5997,7 +6008,7 @@ function trackItemLazyState(
     // so arming here would swallow it and hold the paragraph open past the
     // block's end.
     state.absorbingFence = state.divDepth === 0 || state.authoredColon !== undefined
-    state.lazyFoldable = true
+    state.lazyFoldable = !(wasClosedColon && wasClosedLiteralComment)
     state.inDefList = false
     return
   }
@@ -12511,7 +12522,7 @@ class ParseSession {
         itemSpanScan.atBlockStart = false
       }
       const leadColon = colonFenceOpenerLen(content)
-      if (leadColon !== null && RE_LINE_BLOCK_OPEN.test(content)) lazyState.literalColon = {width: leadColon, column: 0}
+      if (leadColon !== null && RE_LINE_BLOCK_OPEN.test(content)) lazyState.literalColon = {width: leadColon, column: 0, sourceLine: lexer.lineNumber(itemStartLineIndex)}
       let leadColonAwaitingBody = leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)
       // The lead line may itself be the malformed fence (`- :::note`), and then
       // the paragraph it opens is already absorbing: the `:::` below it is text,
@@ -12827,7 +12838,19 @@ class ParseSession {
             // facts, and the arm needs the measured run anyway, so a line with
             // no facts opts in to nothing.
             itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
-            (width, extra = 0) => literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol + extra),
+            (width, extra = 0) => {
+              const closes = literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol + extra)
+              const owner = lazyState.literalColon?.sourceLine
+              if (extra === 0 && owner !== undefined) {
+                const key = `${owner}:${lexer.lineNumber(fenceLineIndex)}`
+                if (closes) lexer.literalCommentLineOpeners.delete(key)
+                else {
+                  lazyState.literalColon!.rejectedComment = true
+                  lexer.literalCommentLineOpeners.add(key)
+                }
+              }
+              return closes
+            },
           )
           if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.inlineFenceParagraph) lazyState.inlineFenceBlock = true
