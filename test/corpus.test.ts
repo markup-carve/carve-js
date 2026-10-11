@@ -950,6 +950,7 @@ const IMPLEMENTED = new Set([
   // parser already did.
   'a-braced-comment-does-not-decide-a-quote',
   'a-below-column-line-continues-a-paragraph-only-where-one-is-open',
+  'a-caption-scope-resets-at-a-structural-only-line',
 ])
 
 /**
