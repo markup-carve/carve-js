@@ -3984,6 +3984,8 @@ function isBlockImageLine(line: string): boolean {
   // where that tail reads it.
   return (
     m !== null &&
+    // An unclosed verbatim span hides the image label's closing bracket.
+    rawBracketRunCloses(m[1]!) &&
     linkDestinationValue(m[2]!) !== null &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
