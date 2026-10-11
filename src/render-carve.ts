@@ -1,3 +1,4 @@
+import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
@@ -25,7 +26,7 @@ import {
   buildBracketMap,
   opensFrontmatter,
   parse,
-  rawBracketRunCloses,
+  rawImageBracketRunCloses,
   symbolOpensAt,
 } from './parse.js'
 import { isAttrValueEscapable } from './attribute-parser.js'
@@ -1873,10 +1874,10 @@ function escapePlainLine(text: string): string {
  * An image's ALT TEXT, written between `![` and `]`.
  */
 function escapeImageAlt(text: string, inTable = false): string {
-  if (rawBracketRunCloses(text) && !/\\[!-/:-@\[-`{-~]/.test(text)) {
+  if (rawImageBracketRunCloses(text) && !/\\[!-/:-@\[-`{-~]/.test(text)) {
     return inTable ? text.replaceAll('|', '\\|') : text
   }
-  return text.replace(inTable ? /[\\[\]`|]/g : /[\\[\]`]/g, '\\$&')
+  return escapeUnclosedImageEditorialOpeners(text.replace(inTable ? /[\\[\]`|]/g : /[\\[\]`]/g, '\\$&'))
 }
 
 /**
