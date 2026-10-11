@@ -7,6 +7,7 @@ export function protectMarkdownLinkLabels(
   isReference: (label: string) => boolean,
   onFlatten: () => void = () => {},
 ): string {
+  if (!source.includes('[')) return source
   const output: string[] = []
   const opens: { slot: number; generation: number }[] = []
   let generation = 0
@@ -66,6 +67,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   opaqueEnd: (offset: number) => number | undefined,
   onActiveLink: (opener: number, closer: number) => void = () => {},
 ): string {
+  if (!source.includes('[')) return source
   const opaque = new Map<number, number>()
   const parens = new Map<number, number>()
   const parenStack: number[] = []
