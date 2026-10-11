@@ -1874,6 +1874,12 @@ function convertInline(
     const destinationLabel = referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSources, table)
     if (destinationLabel === undefined) return table && label.includes('|') ? match.replace(/[\[\]]/g, '\\$&') : match
     if (/[\[\]]/.test(destinationLabel)) return match
+    if (url && offset < url.start) {
+      const end = offset + match.length
+      for (let at = referenceUrlAt; at < referenceUrls.length && referenceUrls[at]!.start < end; at++) {
+        referenceUrls[at]!.end = Math.min(referenceUrls[at]!.end, end)
+      }
+    }
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
