@@ -27,7 +27,7 @@ const PRIVATE_USE_END = 0xf8ff
  * it. An explicit stack has no such limit. Shared objects and arrays are visited
  * once: resolved references can share a long display-text subtree.
  */
-export function occupiedPrivateUse(root: unknown): Set<number> {
+export function occupiedPrivateUse(root: unknown, includeKeys = false): Set<number> {
   const occupied = new Set<number>()
   const visited = new WeakSet<object>()
   const stack: unknown[] = [root]
@@ -47,7 +47,10 @@ export function occupiedPrivateUse(root: unknown): Set<number> {
       for (const item of node) stack.push(item)
       continue
     }
-    for (const value of Object.values(node)) stack.push(value)
+    for (const [key, value] of Object.entries(node)) {
+      if (includeKeys) stack.push(key)
+      stack.push(value)
+    }
   }
 
   return occupied
@@ -95,4 +98,32 @@ export function pickSentinelRun(occupied: Set<number>, base: number, length: num
   }
 
   return runFrom(base, length)
+}
+
+export function collectSentinelNonces(text: string, nonces: Set<number>): void {
+  for (const match of text.matchAll(/\ue009m([0-9]{1,16})x[0-9]+\ue00a/g)) {
+    const nonce = Number(match[1])
+    if (Number.isSafeInteger(nonce)) nonces.add(nonce)
+  }
+}
+
+export function shortSentinelTokens(nonces: Set<number>, length: number): string[] {
+  let nonce = 0
+  while (nonces.has(nonce)) nonce++
+  return Array.from({ length }, (_, slot) => `\ue009m${nonce}x${slot}\ue00a`)
+}
+
+export function treeSentinelNonces(root: unknown): Set<number> {
+  const nonces = new Set<number>()
+  const seen = new WeakSet<object>()
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (typeof value === 'string') collectSentinelNonces(value, nonces)
+    else if (value !== null && typeof value === 'object' && !seen.has(value)) {
+      seen.add(value)
+      for (const [key, child] of Object.entries(value)) stack.push(key, child)
+    }
+  }
+  return nonces
 }
