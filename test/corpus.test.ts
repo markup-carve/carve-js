@@ -970,7 +970,22 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    "547-an-info-string-does-not-change-how-a-flush-left-fence-folds-into-a-description-body",
+    {
+      "reason": "CARVE-P0-009 and carve#2895; corrected by spec PR #2922.",
+      "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<pre><code class=\"language-rust\"></code></pre>"
+    }
+  ],
+  [
+    "547-an-info-string-does-not-change-how-a-flush-left-fence-folds-into-a-description-body-2",
+    {
+      "reason": "CARVE-P0-009 and carve#2895; corrected by spec PR #2922.",
+      "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<pre><code></code></pre>"
+    }
+  ]
+])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

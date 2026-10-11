@@ -4997,47 +4997,9 @@ function markerLineBottomBlock(content: string, memo?: Map<number, number>): str
 }
 
 /**
- * Everything a marker line's seeding needs, from one walk.
- *
- * `endsOnTableRow` is FALSE for a quoted line: the table is the quote's, and
- * `quote` carries it there. Claiming it at this level as well would let a
- * continuation row written outside the quote join a table that is not there.
- */
-/**
- * Which container kinds a marker line's run holds.
- *
- * The description body folds a flush-left line while a container it opened is
- * still collecting, and PART 9 §17 draws that line at the container KIND: a
- * nested list takes the line as the body's next block, where a quote ends the
- * body on the same lead (markup-carve/carve-js#2531). Both facts come off ONE
- * walk, the walk `markerLineBottomBlock` makes - `markerLineState`'s own `quote`
- * answers only for a run that STARTS with one, so it cannot see the quote in
- * `- > `, and a fence a quote holds is not the list's at either nesting order.
- */
-function markerRunContainers(content: string): { list: boolean; quote: boolean } {
-  const bound = prefixWalkBound(content)
-  let at = 0
-  let list = false
-  let quote = false
-  for (;;) {
-    const quoted = quotePrefixLength(content, at, bound)
-    if (quoted > 0) {
-      quote = true
-      at += quoted
-      continue
-    }
-    const marker = markerPrefixLength(content, at, bound)
-    if (marker === 0) return { list, quote }
-    list = true
-    at += marker
-  }
-}
-
-/**
  * Is the first LIST in this marker line's run nested INSIDE a quote?
  *
- * `markerRunContainers` reports which kinds a run holds, not their order, and
- * the order is the whole question here: the list in `> - ` is the quote's and
+ * Prefix order matters: the list in `> - ` is the quote's and
  * dies with it, where the list in `- > ` is the outer container and outlives the
  * quote it holds (markup-carve/carve-js#2540). Asking only "both kinds present"
  * moved all 30 of the `- > ` shapes off the oracle.
@@ -5061,36 +5023,54 @@ function markerRunListIsQuoteHeld(content: string): boolean {
 }
 
 /**
- * Does this marker line leave a LIST collecting for the description body below
- * it?
- *
- * The one spelling both call sites ask in - the body's lead and every later line
- * the body takes AT its own column - so a list opened on the lead and a list
- * opened three lines down are read alike (markup-carve/carve-js#2531).
- */
-function leadLeavesListCollecting(content: string, memo?: Map<number, number>): boolean {
-  const run = markerRunContainers(content)
-  if (!run.list) return false
-  if (!run.quote) return true
-  const bottom = markerLineBottomBlock(content, memo)
-
-  return !(RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) || colonFenceShapeEndsLazyContinuation(bottom))
-}
-
-/**
  * Track the first closer of the description body's nested lead, reading only
- * lines appended since the previous query. A closed comment ends the body;
- * an open code fence keeps flush-left fence lines as content.
+ * lines appended since the previous query. A closed nested fence leaves no
+ * paragraph until a following block opens one.
  */
-function descriptionLeadFenceScans(lead: string): { code: AppendOnlyCloser; comment: AppendOnlyCloser } {
+function descriptionLeadFenceScans(lead: string): {
+  code: AppendOnlyCloser
+  paragraphOpen: (lines: readonly string[], fallback: boolean, hasCloser: (marker: string, extraColumns?: number) => boolean, atContentColumn: boolean) => boolean
+} {
   const bottom = markerLineBottomBlock(lead)
   const nested = bottom !== lead
   const fence = nested ? RE_FENCE.exec(bottom) ?? RE_RAW_FENCE.exec(bottom) : null
   const close = fence ? fenceCloseRe(RE_FENCE.test(bottom) ? fence[2]! : fence[1]!) : undefined
-  const run = nested ? commentFenceRun(bottom) : undefined
+  const bound = prefixWalkBound(lead)
+  let at = 0
+  let column = 0
+  for (;;) {
+    const prefix = markerPrefixLength(lead, at, bound)
+    if (prefix === 0) break
+    column += markerContentColumn(lead.slice(at, at + prefix) + 'x')
+    at += prefix
+  }
+  const ownFence = at > 0 ? RE_FENCE.exec(lead.slice(at)) ?? RE_RAW_FENCE.exec(lead.slice(at)) : null
+  const ownClose = ownFence ? fenceCloseRe(RE_FENCE.test(lead.slice(at)) ? ownFence[2]! : ownFence[1]!) : undefined
+  let next = 1
+  let closed = false
+  let ownsBody = true
+  const trailing = verbatimOnlyLazyState()
+
   return {
     code: new AppendOnlyCloser(close ? line => close.test(line.replace(/^[ \t]+/, '')) : undefined),
-    comment: new AppendOnlyCloser(run === undefined ? undefined : line => commentFenceRun(line.replace(/^[ \t]+/, '')) === run),
+    paragraphOpen: (lines, fallback, hasCloser, atContentColumn) => {
+      if (ownClose === undefined || !ownsBody) return fallback
+      for (; next < lines.length; next++) {
+        const line = lines[next]!
+        if (!closed) {
+          const indent = indentColumns(line)
+          if (atContentColumn && !isBlankLine(line) && indent < column) {
+            ownsBody = false
+            return fallback
+          }
+          if (indent === column && ownClose.test(line.trimStart())) closed = true
+          continue
+        }
+        trackItemLazyState(sliceColumns(line, column), trailing, hasCloser)
+      }
+
+      return closed ? trailing.lazyFoldable : true
+    },
   }
 }
 
@@ -10465,22 +10445,13 @@ class ParseSession {
       }
       let defFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       /**
-       * Is a LIST this body opened still collecting at the body's own column 0?
-       *
-       * Seeded off the lead and advanced only by the lines the body takes AT its
-       * column: a line below it is a lazy continuation and opens nothing, so it
-       * leaves the container where it found it.
-       */
-      let nestedListStillOpen = false
-      /**
        * The CONTENT COLUMN of the nested item this body currently has open, in
        * the body's own coordinates, or -1 for none.
        *
        * A line the body takes BELOW that column reaches the body but not the
        * item, so it is the item's LAZY CONTINUATION and opens nothing
-       * (markup-carve/carve-js#2535). Carried beside `nestedListStillOpen` and
-       * advanced by the same lines, for the same reason: only a line AT the
-       * body's column replaces the container standing there.
+       * (markup-carve/carve-js#2535). Only a line AT the body's column replaces
+       * the container standing there.
        */
       let nestedItemColumn = -1
       /** Is the list the lead opened held by a QUOTE, and so the quote's to lose? */
@@ -10493,6 +10464,7 @@ class ParseSession {
         RE_DEFLIST_TERM.test(line) ||
         RE_DEFLIST_DEF.test(line) ||
         (afterBlank && (isBlankLine(line) || indentColumns(line, contentCol) < contentCol))
+      let nestedLeadScans: ReturnType<typeof descriptionLeadFenceScans> | undefined
       let commentPayloadState: ItemLazyState | null = null
       /**
        * Feed one collected body line to the S4 tracker.
@@ -10552,6 +10524,9 @@ class ParseSession {
           lazyState.lazyFoldable = commentPayloadState.lazyFoldable
         } else {
           commentPayloadState = null
+        }
+        if (nestedLeadScans !== undefined) {
+          lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, hasFenceCloser, atContentColumn)
         }
       }
       // Lines admitted by REACHING the body's content column, mirroring the list
@@ -10624,20 +10599,6 @@ class ParseSession {
         const firstState = markerLineState(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
         const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
         lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
-        // A LIST THE LEAD OPENED IS STILL COLLECTING, whatever block sits at its
-        // bottom (markup-carve/carve-js#2531). `leavesParagraphOpen` answers only
-        // for the paragraph, so a lead ending in a heading, a comment line, a
-        // table or a break reported nothing to fold into and the body ended on
-        // the line below - while the same lead ending in a closed fence folded,
-        // because that shape happens to leave the flag set. The container is the
-        // question §17 asks here, and it is not the paragraph's.
-        // A FENCE A QUOTE HOLDS IS NOT THE LIST'S, which is the one arm
-        // `markerLineState` already withholds a paragraph for: the flush-left
-        // line below `:  > - ```` is outside the quote and so outside the item,
-        // and the oracle ends the body on it.
-        nestedListStillOpen =
-          !firstIsColonContainer &&
-          leadLeavesListCollecting(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
         nestedItemColumn = markerContentColumn(first)
         leadListIsQuoteHeld = markerRunListIsQuoteHeld(first)
         nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(
@@ -10662,7 +10623,7 @@ class ParseSession {
           lazyState.lazyFoldable = false
         }
       }
-      const leadFenceScans = descriptionLeadFenceScans(first)
+      const leadFenceScans = nestedLeadScans = descriptionLeadFenceScans(first)
       // A definition continues like a list item (PART 9 \u00a717):
       //  - form A: a deeper-indented line (>= the content column) folds in, and a
       //    blank line is tolerated when a later line still continues the body, so
@@ -10844,7 +10805,6 @@ class ParseSession {
             bodyReadsFlush ? contentCol + residual : contentCol,
           )
           if (!wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
-            nestedListStillOpen = leadLeavesListCollecting(flush)
             nestedItemColumn = markerContentColumn(flush)
             nestedItemParagraphOpen = nestedItemHoldsOpenParagraph(flush)
           }
@@ -10923,21 +10883,9 @@ class ParseSession {
           atDocumentColumn &&
           opensCodeFence(ln) &&
           !leadFenceScans.code.closedIn(bodyLines) && leadFenceScans.code.active
-        // ...OR A CONTAINER THIS BODY OPENED IS STILL COLLECTING
-        // (markup-carve/carve-js#2531). `lazyFoldable` is the paragraph's
-        // question, and §17 asks the container's: a nested list takes the line
-        // as the body's next block whether its bottom block left a paragraph or
-        // not. The interruption veto stays in front of it, which is what keeps a
-        // definition, a `%%%` fence at the body's column and a column-0 opener
-        // ending the body as they already did.
-        // A CLOSED `%%%` RUN ON THE LEAD IS A FINISHED BLOCK, and a description
-        // body ends at an invisible block however deep the container above it is.
-        // Asked here rather than at the seed because the closer is one of the
-        // body's own lines.
-        const leadHoldsOpenContainer =
-          nestedListStillOpen && !leadFenceScans.comment.closedIn(bodyLines)
+        // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
-          (lazyState.lazyFoldable || leadHoldsOpenContainer) &&
+          lazyState.lazyFoldable &&
           (!startsInterruptingBlock(lexer, below, true, false, atDocumentColumn) ||
             nestedFenceOwnsLine)
         ) {
