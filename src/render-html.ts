@@ -1720,13 +1720,16 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
 }
 
 function renderCodeBlockCore(
-  node: Pick<CodeBlock, 'lang' | 'content' | 'attrs' | 'pos'>,
+  node: Pick<CodeBlock, 'lang' | 'content' | 'attrs' | 'pos' | 'label'>,
   opts: RenderOptions,
   pad: string,
 ): string {
   const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
   const escaped = escapeHtml(node.content)
-  return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
+  const labelAttr = roundtripExport(opts) && node.label !== undefined
+    ? ` ${carrier('label')}="${escapeAttr(node.label)}"` : ''
+  const attrs = labelAttr === '' ? node.attrs : dropCollidingAuthored(node.attrs, [carrier('label')], opts, { type: 'code_block', ...(node.pos ? { pos: node.pos } : {}) }, 'block')
+  return `${pad}<pre${labelAttr}${renderAttrs(attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
 }
 
 /**

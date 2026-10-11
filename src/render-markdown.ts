@@ -31,6 +31,7 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
+import { renderCarve } from './render-carve.js'
 import { carrierLine, spellCarrierMarkers } from './carrier-markers.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -125,6 +126,7 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     renderedChildren: new WeakMap(),
     roundtrip: opts.roundtrip === true,
     carrierDepth: 0,
+    definitionListDepth: 0,
     abbrBudget: budget,
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
@@ -172,6 +174,7 @@ interface MarkdownContext {
    * decides the colon-fence width a marker payload carries.
    */
   carrierDepth: number
+  definitionListDepth: number
   /** Inside a block quote, whose every line this target prefixes with `> `. */
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
@@ -262,7 +265,7 @@ function renderTracked(block: BlockNode, ctx: MarkdownContext): string {
   }
   const rendered = renderList(block, ctx, mark)
   if (rendered !== '') ctx.lastList = { ordered: block.ordered, mark }
-  return rendered
+  return attributeMarker(block, ctx) + rendered
 }
 
 /** Render inside a container that prefixes its lines, which starts a fresh run of lists. */
@@ -373,7 +376,32 @@ function carried(markers: CarrierMarkers | undefined, body: string): string {
   return `${head}${body}${tail}`
 }
 
+function canonicalInline(nodes: InlineNode[]): string {
+  return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: nodes }] }).replace(/\n+$/, '')
+}
+
+function captionMarker(nodes: InlineNode[], ctx: MarkdownContext): string {
+  return ctx.roundtrip ? `${carrierLine(`^ ${canonicalInline(nodes)}`)}\n` : ''
+}
+
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
+  const body = renderBlockBody(node, ctx)
+  if (!ctx.roundtrip || !node.attrs || ['section', 'div', 'admonition', 'directive', 'line_block', 'figure_group'].includes(node.type)) return body
+  return attributeMarker(node, ctx) + body
+}
+
+function attributeMarker(node: BlockNode, ctx: MarkdownContext): string {
+  if (!ctx.roundtrip || !node.attrs || (node.type === 'definition_list' && ctx.definitionListDepth > 0)) return ''
+  let attrs = node.attrs
+  if (node.type === 'heading' && !attrs.order?.includes('#id')) {
+    const { id: _generated, ...authored } = attrs
+    attrs = authored
+  }
+  const line = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [], attrs }] }).split('\n')[0]!
+  return line.startsWith('{') ? `${carrierLine(line)}\n` : ''
+}
+
+function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'section':
       return renderBlocks(node.children, ctx)
@@ -455,8 +483,10 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
 
       return carried(markers, node.label ? `${wrapperLine(escapeText(node.label), '**', 'strong')}${body}` : body)
     }
-    case 'line_block':
-      return renderBlocks(node.children, ctx)
+    case 'line_block': {
+      const markers = carrierMarkers(node, ctx)
+      return carried(markers, carriedChildren(node.children, markers, ctx))
+    }
     case 'definition_list':
       return renderDefinitionList(node.items, ctx)
     case 'figure':
@@ -708,13 +738,24 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
  * section 10p).
  */
 function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): string {
+  const carried = ctx.roundtrip && ctx.definitionListDepth === 0
   let out = ''
-  for (const item of items) {
-    for (const term of item.terms) {
-      out += renderWrappedInlines(term, ctx, '**', 'strong')
-      ctx.lastList = undefined
+  ctx.definitionListDepth++
+  try {
+    for (const item of items) {
+      for (const term of item.terms) {
+        if (carried) out += `${carrierLine(`:: ${canonicalInline(term)}`)}\n`
+        out += renderWrappedInlines(term, ctx, '**', 'strong')
+        ctx.lastList = undefined
+      }
+      for (const def of item.definitions) {
+        if (carried) out += `${carrierLine(':')}\n`
+        out += renderBlocks(def, ctx)
+      }
     }
-    for (const def of item.definitions) out += renderBlocks(def, ctx)
+    if (carried) out += `${carrierLine('')}\n\n`
+  } finally {
+    ctx.definitionListDepth--
   }
   return out
 }
@@ -870,7 +911,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   // adjacent block is - the move a caption cannot make on this target, whatever
   // it could make on another.
   if (node.caption && node.caption.length > 0) {
-    out += `\n${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
+    out += `\n${captionMarker(node.caption, ctx)}${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
   }
   return `${out}\n`
 }
@@ -921,7 +962,7 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
     node.target.type === 'block_quote' || node.target.type === 'table' ? '\n\n' : '\n'
   // End with the block separator so a following block is not glued to the
   // caption (matching every other block renderer and carve-php).
-  return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
+  return `${target}${sep}${captionMarker(node.caption, ctx)}${renderInlines(node.caption, ctx)}\n\n`
 }
 
 /**
@@ -935,7 +976,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
   // example). The single-newline glue is the standalone figure's shape, not
   // the panel's.
-  return `${target}\n\n${renderWrappedInlines(node.caption, ctx, '*', 'em')}`
+  return `${target}\n\n${captionMarker(node.caption, ctx)}${renderWrappedInlines(node.caption, ctx, '*', 'em')}`
 }
 
 function renderFigureTarget(node: Figure, ctx: MarkdownContext): string {

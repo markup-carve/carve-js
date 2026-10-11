@@ -1,4 +1,4 @@
-import type { InlineNode } from './ast.js'
+import type { BlockNode, Document, InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
@@ -2347,7 +2347,7 @@ export type MarkdownImportLoss = {
  * PART 11 §10s: the carrier payloads this conversion lifted out of the source,
  * in the order their marker lines appeared.
  */
-let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean }> = []
+let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string }> = []
 
 /** The placeholder a lifted marker line stands in as, unique in the source. */
 let carrierToken = ''
@@ -2386,35 +2386,106 @@ function carrierFallbackLines(payload: string): number {
  */
 function carrierSetBalances(payloads: readonly string[]): boolean {
   const open: number[] = []
-  let prelude = false
-  let closed = false
   for (const payload of payloads) {
-    if (carrierIsCaption(payload)) {
-      // A caption line belongs to the container the marker before it closed,
-      // so one standing anywhere else records nothing.
-      if (prelude || !closed) return false
-      closed = false
+    if (/^::[ \t]/.test(payload) || payload === ':' || payload === '') continue
+    if (carrierIsCaption(payload)) continue
+    if (/^\{.*\}$/.test(payload)) {
+      if (!isValidAttrPayload(payload.slice(1, -1))) return false
       continue
     }
     const width = carrierFenceWidth(payload)
-    if (width === 0) {
-      // An attribute line belongs to the opener on the next marker.
-      prelude = true
-      closed = false
-      continue
-    }
+    if (width === 0) return false
     if (carrierIsCloser(payload)) {
-      if (prelude || open.length === 0 || open.pop() !== width) return false
-      closed = true
-      continue
+      if (open.length === 0 || open.pop() !== width) return false
+    } else {
+      if (open.length > 0 && width <= open[open.length - 1]!) return false
+      open.push(width)
     }
-    prelude = false
-    closed = false
-    if (open.length > 0 && width <= open[open.length - 1]!) return false
-    open.push(width)
   }
+  return open.length === 0
+}
 
-  return !prelude && open.length === 0
+function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, string>, hosts: ReadonlyMap<number, string>): boolean {
+  let token = 'CARVEPROBE'
+  while (lines.some(line => line.includes(token))) token += 'X'
+  const probe = lines.map((line, at) => {
+    if (!payloads.has(at)) return line
+    const host = hosts.get(at)!
+    const continuation = host.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+    const before = host === continuation ? `${continuation.trimEnd()}\n` : ''
+    return `${before}${host}${token}${at}Z\n${continuation.trimEnd()}`
+  }).join('\n')
+  const openers: Array<{ payload: string; host: string }> = []
+  let hostsValid = true
+  const captionClosers = new Set<number>()
+  for (const [at, payload] of payloads) {
+    if (carrierFenceWidth(payload) === 0) continue
+    if (carrierIsCloser(payload)) {
+      const opener = openers.pop()
+      if (opener?.host !== hosts.get(at)) hostsValid = false
+      if (/^:{3,}[ \t]+figure(?:[ \t]|$)/.test(opener?.payload ?? '')) captionClosers.add(at)
+    } else openers.push({ payload, host: hosts.get(at)!.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ') })
+  }
+  const savedLosses = importLosses
+  importLosses = []
+  let tree: Document
+  try { tree = parse(convertMarkdown(probe, COMMONMARK_GFM)) } finally { importLosses = savedLosses }
+  const found = new Set<number>()
+  let valid = true
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      const definitions: Array<{ depth: number; defined: boolean }> = []
+      let depth = 0
+      for (let i = 0; i < value.length; i++) {
+        const node = value[i] as BlockNode
+        if (node?.type === 'paragraph') {
+          const text = node.children.map(child => child.type === 'text' ? child.value : '').join('')
+          const match = new RegExp(`^${token}(\\d+)Z$`).exec(text)
+          if (match) {
+            const at = Number(match[1])
+            found.add(at)
+            const payload = payloads.get(at)!
+            if (carrierFenceWidth(payload) > 0) depth += carrierIsCloser(payload) ? -1 : 1
+            if (/^::[ \t]/.test(payload)) {
+              const last = definitions.at(-1)
+              if (!last || last.depth !== depth) definitions.push({ depth, defined: false })
+              else last.defined = false
+            } else if (payload === ':') {
+              const last = definitions.at(-1)
+              if (!last || last.depth !== depth) valid = false
+              else last.defined = true
+            } else if (payload === '') {
+              const last = definitions.pop()
+              if (!last?.defined || last.depth !== depth) valid = false
+            }
+            const next = value[i + 1] as BlockNode | undefined
+            const previous = value[i - 1] as BlockNode | undefined
+            const following = withoutCarrierHost(lines[at + 1] ?? '', hosts.get(at)!)
+            if (/^\{.*\}$/.test(payload)) {
+              const nextPayload = payloads.get(at + 1)
+              const listPrelude = nextPayload !== undefined && /^::[ \t]/.test(nextPayload) && definitions.length === 0
+              if (!following || !next || (nextPayload !== undefined && !listPrelude && (carrierFenceWidth(nextPayload) === 0 || carrierIsCloser(nextPayload)))) valid = false
+            }
+            if (carrierIsCaption(payload) || /^::[ \t]/.test(payload)) {
+              if (!following || next?.type !== 'paragraph' || payloads.has(at + 1)) valid = false
+            }
+            if (carrierIsCaption(payload)) {
+              let before = at - 1
+              while (before >= 0 && withoutCarrierHost(lines[before]!, hosts.get(at)!) === '') before--
+              const equation = /^\$\$[^$]+\$\$$/.test(carrierEquationContent(lines[before] ?? '', hosts.get(at)!))
+              const captionable = previous && (['block_quote', 'table', 'image', 'code_block'].includes(previous.type) || (previous.type === 'paragraph' && equation))
+              if (!captionable && !captionClosers.has(before)) valid = false
+            }
+          }
+        }
+        visit(value[i])
+      }
+      if (definitions.length > 0) valid = false
+    } else for (const child of Object.values(value)) visit(child)
+  }
+  visit(tree.children)
+  return valid && hostsValid && found.size === payloads.size
 }
 
 /**
@@ -2448,7 +2519,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     }
   }
   if (payloads.size === 0) return markdown
-  if (!carrierSetBalances([...payloads.values()])) {
+  if (!carrierSetBalances([...payloads.values()]) || !carrierPlacementsValid(lines, payloads, hosts)) {
     importLosses.push({
       code: 'carrier-markers-damaged',
       message: CARRIER_MARKERS_DAMAGED,
@@ -2491,9 +2562,19 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     host = hosts.get(at)!
     // The placeholder keeps the host prefix, so a marker inside a list item or
     // a block quote stays in that host when the lifted source is read.
+    const continuation = host.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+    const replaces = carrierIsCaption(payload) || /^::[ \t]/.test(payload)
+    const fallback = withoutCarrierHost(lines[at + 1] ?? '', host)
+    const afterFallback = withoutCarrierHost(lines[at + 2] ?? '', host)
+    const droppedBold = replaces && /^\*\*.+\*\*$/.test(fallback) && (afterFallback === '' || payloads.has(at + 2))
+    if (!droppedBold && carrierIsCaption(payload) && at > 0 && withoutCarrierHost(lines[at - 1]!, host) !== '' && !payloads.has(at - 1)) out.push(continuation.trimEnd())
+    if (host === continuation) out.push(continuation.trimEnd())
     out.push(`${host}${token}${carrierSlots.length}Z`)
-    carrierSlots.push({ payload, closer: carrierIsCloser(payload), caption: carrierIsCaption(payload) })
-    drop = carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
+    out.push(continuation.trimEnd())
+    const equationLine = carrierEquationContent(lines[at - 1] ?? '', host)
+    const equation = carrierIsCaption(payload) && /^\$\$[^$]+\$\$$/.test(equationLine) ? equationLine : undefined
+    carrierSlots.push({ payload, closer: carrierIsCloser(payload) || payload === '', caption: carrierIsCaption(payload), replaceParagraph: replaces && !droppedBold, ...(equation !== undefined ? { equation } : {}) })
+    drop = droppedBold ? 1 : carrierIsCaption(payload) || carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
   }
 
   return out.join('\n')
@@ -2518,6 +2599,10 @@ function withoutCarrierHost(line: string, host: string): string {
   if (host === '') return line
   if (line.startsWith(host)) return line.slice(host.length)
   return line.replace(/^[ \t>]+/, '')
+}
+
+function carrierEquationContent(line: string, host: string): string {
+  return withoutCarrierHost(line, host).replace(/^(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/, '')
 }
 
 /**
@@ -2546,7 +2631,7 @@ function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
     // to a marker standing at column 0 belongs to a block quote of its own.
     if (marker !== undefined) {
       for (let dropAt = at; dropAt < end; dropAt++) {
-        if (items[dropAt]!.lead.trimEnd() !== marker.lead.trimEnd()) {
+        if (items[dropAt]!.lead.trimEnd() !== marker.lead.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ').trimEnd()) {
           marker = undefined
           break
         }
@@ -2614,6 +2699,47 @@ function anchorCarrierClosers(items: CarrierLine[]): CarrierLine[] {
   return items
 }
 
+function restoreDefinitionBodies(items: CarrierLine[]): CarrierLine[] {
+  const lists: Array<{ lead: string; active: boolean; first: boolean }> = []
+  const out: CarrierLine[] = []
+  for (const item of items) {
+    const term = item.kind === 'open' && /^::[ \t]/.test(item.text)
+    const definition = item.kind === 'open' && item.text === ':'
+    const closing = item.kind === 'close' && item.text === ''
+    const last = lists.at(-1)
+    const normalizedLead = item.lead.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+    if ((term || definition || closing) && last?.first && last.lead === normalizedLead) {
+      out.push({ lead: last.lead, text: ': {empty}', kind: 'open' })
+      last.first = false
+    }
+    if (term) {
+      if (last?.lead === normalizedLead) { last.active = false; last.first = false }
+      else lists.push({ lead: normalizedLead, active: false, first: false })
+    } else if (definition && last) {
+      last.active = true
+      last.first = true
+      continue
+    } else if (closing) {
+      lists.pop()
+      let lead = item.lead
+      for (const list of lists.filter(list => list.active).reverse()) lead = lead.slice(0, list.lead.length) + '  ' + lead.slice(list.lead.length)
+      out.push({ lead, text: '', kind: undefined })
+      continue
+    }
+    const active = lists.filter(list => list.active)
+    const current = active.at(-1)
+    if (current?.first && item.text === '') continue
+    let lead = item.lead
+    for (const list of [...active].reverse()) {
+      const insertion = list.first ? ': ' : '  '
+      lead = lead.slice(0, list.lead.length) + insertion + lead.slice(list.lead.length)
+      if (item.text !== '') list.first = false
+    }
+    out.push({ ...item, lead })
+  }
+  return out
+}
+
 /** Write every lifted payload back as the Carve line it is. */
 function restoreCarrierMarkers(carve: string): string {
   if (carrierSlots.length === 0) return carve
@@ -2626,7 +2752,46 @@ function restoreCarrierMarkers(carve: string): string {
   // `-`, and leaving the token in the output would be corruption rather than a
   // missed restore. It is taken off the CARVE line, because the Markdown host
   // the placeholder was lifted from spells its prefix differently.
-  const items: CarrierLine[] = carve.split('\n').map((line) => {
+  const sourceLines = carve.split('\n')
+  const removed = new Set<number>()
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (let at = 0; at < value.length; at++) {
+        const node = value[at] as BlockNode
+        if (node?.type === 'paragraph') {
+          const text = node.children.map(child => child.type === 'text' ? child.value : '').join('')
+          const slots = [...text.matchAll(new RegExp(`${carrierToken}(\\d+)Z`, 'g'))].map(match => carrierSlots[Number(match[1])])
+          const equation = slots.find(slot => slot?.equation !== undefined)?.equation
+          const previous = value[at - 1] as BlockNode | undefined
+          if (equation !== undefined && previous?.type === 'paragraph' && previous.pos) {
+            const savedLosses = importLosses
+            importLosses = []
+            let restored: string
+            try { restored = convertMarkdown(equation, { math: true }).replace(/\n+$/, '') } finally { importLosses = savedLosses }
+            for (let line = previous.pos.startLine - 1; line < previous.pos.endLine; line++) {
+              const source = sourceLines[line]!
+              if (!source.includes(carrierToken) && /\$\$[^$]+\$\$/.test(source)) {
+                sourceLines[line] = source.replace(/\$\$[^$]+\$\$/, () => restored)
+                break
+              }
+            }
+          }
+          if (slots.some(slot => slot?.replaceParagraph)) {
+            const paragraph = value[at + 1] as BlockNode | undefined
+            if (paragraph?.type === 'paragraph' && paragraph.pos) {
+              for (let line = (node.pos?.endLine ?? paragraph.pos.startLine) + 1; line <= paragraph.pos.endLine; line++) removed.add(line - 1)
+              const after = paragraph.pos.endLine
+              if (after < sourceLines.length - 1 && /^[ \t>]*$/.test(sourceLines[after]!)) removed.add(after)
+            }
+          }
+        }
+        visit(value[at])
+      }
+    } else for (const child of Object.values(value)) visit(child)
+  }
+  visit(parse(carve).children)
+  const items: CarrierLine[] = sourceLines.filter((_line, at) => !removed.has(at)).map((line) => {
     const at = line.indexOf(carrierToken)
     const match = at === -1 ? null : pattern.exec(line.slice(at).trimEnd())
     if (match === null) {
@@ -2639,7 +2804,7 @@ function restoreCarrierMarkers(carve: string): string {
     return { lead: line.slice(0, at), text: slot.payload, kind }
   })
 
-  return separateCarrierLines(anchorCarrierClosers(items)).map((item) => item.lead + item.text).join('\n')
+  return restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items))).map((item) => item.lead + item.text).join('\n')
 }
 
 let importLosses: MarkdownImportLoss[] = []
