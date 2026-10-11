@@ -3507,7 +3507,8 @@ function trackQuoteHostFence(
     }
     const group = opaqueGroupCloser(text)
     if (group && (group.belowBaseCloses ? hasCommentCloser(group.run, literal.floor) :
-      hasCloser(group.char.repeat(group.run), literal.column) || hasCloser(group.char.repeat(group.run), literal.floor))) literal.opaque = group
+      (column === literal.column || column === literal.floor) &&
+      (hasCloser(group.char.repeat(group.run), literal.column) || hasCloser(group.char.repeat(group.run), literal.floor)))) literal.opaque = group
     const close = /^(:{3,})[ \t]*$/.exec(text)
     if (close && close[1]!.length === literal.width && (column === literal.floor || column === literal.column)) host.colons!.pop()
     closeBlockQuoteParagraph(state)
@@ -5693,7 +5694,6 @@ function trackItemLazyState(
     // which is where ordinary paragraph text lands.
     state.lazyFoldable = true
     state.inlineFenceParagraph = true
-    if (followsClosedChild) state.inlineFenceBlock = true
     state.inDefList = false
     return
   }
@@ -6979,6 +6979,7 @@ function rebasedColonGroupEnd(
   width: number,
   heldFoldedLines: Set<number>,
   findCommentCloser: (width: number, index: number) => number,
+  closerMemo: GroupCloserMemo,
   takenBelowColumn?: ReadonlySet<number>,
   onFenceBodyLine?: (index: number) => void,
   nestedBodyLines?: Set<number>,
@@ -6986,7 +6987,6 @@ function rebasedColonGroupEnd(
   let end = start
   const stack = [{ width, literal: RE_LINE_BLOCK_OPEN.test(groupLineContent(lines[start]!, base)) }]
   const holdsFoldedLines = base > 0 && takenBelowColumn !== undefined && takenBelowColumn.size > 0
-  const closerMemo: GroupCloserMemo = { verbatim: new Map(), comment: new Map() }
   // The opaque group open inside this container, if any. Only the hold below
   // consults it: a folded line inside a verbatim or comment payload is that
   // payload's, and its delimiter has to travel with the dedent.
@@ -7100,6 +7100,7 @@ function rebaseOverindentedBlocks(
   markerColonOwnsExtent = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
+  const groupCloserMemos = new Map<number, GroupCloserMemo>()
   // One index for the whole pass; a dedent only moves leading whitespace.
   let commentCloser: ((width: number, index: number) => number) | undefined
   let colonCommentCloser: ((width: number, index: number) => number) | undefined
@@ -7300,9 +7301,15 @@ function rebaseOverindentedBlocks(
         if (j < closeAt) heldFoldedLines.add(j)
       }
     } else if (colon !== null) {
+      let closerMemo = groupCloserMemos.get(base)
+      if (closerMemo === undefined) {
+        closerMemo = { verbatim: new Map(), comment: new Map() }
+        groupCloserMemos.set(base, closerMemo)
+      }
       end = rebasedColonGroupEnd(
         lines, i, base, colon, heldFoldedLines,
         (width, index) => (colonCommentCloser ??= commentCloserLookup(lines, false))(width, index),
+        closerMemo,
         takenBelowColumn, onFenceBodyLine,
         markerColonOwnsExtent && i === 0 && base === 0 ? markerColonNestedBody : undefined,
       )

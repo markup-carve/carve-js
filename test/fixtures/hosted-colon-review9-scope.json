@@ -123,5 +123,20 @@
     "id": "review9-g10",
     "source": "- :::\n  - ::: in\n\n  ```\n%%%\n",
     "html": "<ul>\n  <li>\n    <div>\n      <ul>\n        <li>\n          <div class=\"in\">\n\n          </div>\n        </li>\n      </ul>\n      <pre><code></code></pre>\n    </div>\n  </li>\n</ul>"
+  },
+  {
+    "id": "review10-quote-column",
+    "source": "> - ::: |\n>     ```\n>   :::\n>   ```\n>   ```\n>   para\nTAIL\n",
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>&nbsp;&nbsp;<code></code></p>\n      </div>\n      <pre><code></code></pre>\n      para\nTAIL\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "review10-inline-blank",
+    "source": "- :::\n  - ::: |\n    x\n    :::\n  ```\n\n  # h\nTAIL\n",
+    "html": "<ul>\n  <li>\n    <div>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n            <p>x</p>\n          </div>\n        </li>\n      </ul>\n      <pre><code>\n# h\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAIL</p>"
+  },
+  {
+    "id": "review10-inline-heading",
+    "source": "- :::\n  - ::: |\n    x\n    :::\n  ```\n  # h\nTAIL\n",
+    "html": "<ul>\n  <li>\n    <div>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n            <p>x</p>\n          </div>\n        </li>\n      </ul>\n      <pre><code># h\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAIL</p>"
   }
 ]
