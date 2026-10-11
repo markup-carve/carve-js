@@ -6,7 +6,7 @@ const fallback: CarveExtension = { name: 'word-fallback', matchInline: () => nul
 describe('short inline words preserve parser behavior', () => {
   const words = ['x', 'HTML', 'a'.repeat(64), 'a'.repeat(65), 'é', 'a b', 'a\\*b']
   for (const word of words) {
-    for (const marker of ['*', '/', '_', '-', '+', '^', '~', '=']) {
+    for (const marker of ['*', '/', '_', '-', '+', '^', ',', '~', '=']) {
       for (const source of [
         `${marker}${word}${marker}`,
         `{${marker}${word}${marker}}{k="*}"}`,
