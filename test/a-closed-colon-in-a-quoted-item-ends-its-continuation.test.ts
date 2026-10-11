@@ -2,6 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 
 describe('closed colon fences in quoted items (carve#2925)', () => {
+  for (const depth of [1, 2]) {
+    for (const width of [3, 4]) {
+      for (const column of [0, 1, 2, 3, 4]) {
+        it(`keeps the actual marker owner at depth ${depth}, width ${width}, column ${column}`, () => {
+          const prefix = '> '.repeat(depth)
+          const fence = ':'.repeat(width)
+          const source = `${prefix}- a\n${prefix}  - ${fence} box\n${prefix}    body\n`
+            + `${prefix}${' '.repeat(column)}- next\n${prefix}    ${fence}\n- tail\n`
+          expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list'])
+          const html = carveToHtml(source)
+          if ([1, 3, 4].includes(column)) expect(html).toContain('<p>body\n- next</p>')
+          else expect(html).not.toContain('<p>body\n- next</p>')
+          expect(html.indexOf('<li>tail</li>')).toBeGreaterThan(html.lastIndexOf('</blockquote>'))
+          const canonical = carveToCarve(source)
+          expect(carveToHtml(canonical)).toBe(html)
+          expect(carveToCarve(canonical)).toBe(canonical)
+        })
+      }
+    }
+  }
+
   for (const depth of [1, 2, 3]) {
     for (const width of [3, 4]) {
       for (const body of [false, true]) {

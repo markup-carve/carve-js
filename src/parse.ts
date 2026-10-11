@@ -3467,8 +3467,13 @@ function trackQuoteHostFence(
   }
   const paragraph = blockQuoteParagraphOpen(state)
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
+  // A marker below an ancestor's content column can remain paragraph text.
+  // Retain its existing fence host instead of inventing a sibling item.
+  const lazyMarker = paragraph && markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 &&
+    !host.markers.includes(column) &&
+    host.columns.some((floor, i) => i < host.columns.length - 1 && column < floor)
   const lazyItem = paragraph && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
-    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
+    (lazyMarker || (bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)))
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody)
   while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) {
     host.columns.pop(); host.markers.pop(); host.kinds.pop()
@@ -3482,6 +3487,7 @@ function trackQuoteHostFence(
   for (;;) {
     const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
     if (width > 0) {
+      if (lazyMarker) break
       if (paragraph && !insideItem && !sibling) break
       host.markers.push(at)
       const attrs = extractItemAttr(inner)
