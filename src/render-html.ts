@@ -2680,13 +2680,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'inline_footnote':
       // number is assigned by collectFootnotes for refs with a matching
       // definition; an unresolved ref falls back to literal source.
-      if (node.number === undefined) return escapeHtml(`[^${node.id ?? ''}]`)
+      if (node.number === undefined) return escapeHtml(`[^${node.label ?? ''}]`)
       else {
         // §13a: the AUTHORED label, on the reference and on the endnote item.
         // The rendered `<sup>1</sup>` publishes the NUMBER, assigned by
         // reference order, so the label the author wrote has no other home.
-        const labelAttr = roundtripExport(opts) && node.id !== undefined
-          ? ` ${carrier('footnote-label')}="${escapeAttr(node.id)}"`
+        const labelAttr = roundtripExport(opts) && node.label !== undefined
+          ? ` ${carrier('footnote-label')}="${escapeAttr(node.label)}"`
           : ''
         const refAttrs = labelAttr === ''
           ? node.attrs

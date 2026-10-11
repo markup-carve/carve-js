@@ -1349,8 +1349,8 @@ function mergeFootnotes(
   }
   if (!rename.size) return
   walkNodes(child, (node) => {
-    if (node['type'] !== 'footnote_ref' || typeof node['id'] !== 'string') return
-    node['id'] = rename.get(node['id']) ?? node['id']
+    if (node['type'] !== 'footnote_ref' || typeof node['label'] !== 'string') return
+    node['label'] = rename.get(node['label']) ?? node['label']
   })
 }
 

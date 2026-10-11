@@ -187,10 +187,10 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       return
     }
     // Reference footnote (`[^label]`): numbered at first resolved reference.
-    const definitionLabel = n.id && !/[\r\n]/.test(n.id)
-      ? definitionByKey.get(normalizeRefLabel(n.id))
+    const definitionLabel = n.label && !/[\r\n]/.test(n.label)
+      ? definitionByKey.get(normalizeRefLabel(n.label))
       : undefined
-    if (!n.id || definitionLabel === undefined) {
+    if (!n.label || definitionLabel === undefined) {
       // DELETE rather than skip. Re-running this pass is a no-op only while
       // `defs` is unchanged; the profile filter can take a definition away
       // AFTER the document was numbered, and a skip would leave the number of
@@ -198,7 +198,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       delete n.number
       return
     }
-    const key = normalizeRefLabel(n.id)
+    const key = normalizeRefLabel(n.label)
     let idx = labelIndexes.get(key)
     if (idx === undefined) {
       const entry: FootnoteOrderEntry = { label: definitionLabel }

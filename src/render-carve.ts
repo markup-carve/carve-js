@@ -4393,7 +4393,7 @@ class CarveRenderSession {
       case 'inline_footnote':
         return withAttrs(node.inline
           ? `^[${renderSession.renderAttributeBracket(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
-          : `[^${writeFlatBracketRun(node.id ?? '')}]`)
+          : `[^${writeFlatBracketRun(node.label ?? '')}]`)
       case 'non_breaking_space':
         return renderSession.inlineAttrs(node.attrs, node) ? `[${renderSession.sentinels[3]}]${renderSession.inlineAttrs(node.attrs, node)}` : renderSession.sentinels[3]!
       case 'soft_break':

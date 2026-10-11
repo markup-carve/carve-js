@@ -9,11 +9,13 @@ export function normalizeLegacyInline(node: InlineNode): InlineNode {
 
   // The split encodes in the type what 0.1.2 encoded in the shape: a body means
   // the note was written inline, a label means it points at a definition.
-  const legacy = node as unknown as { inline?: unknown }
+  const legacy = node as unknown as { inline?: unknown; id?: string }
 
+  const { id, ...rest } = legacy
   return {
-    ...(node as object),
+    ...rest,
     type: Array.isArray(legacy.inline) ? 'inline_footnote' : 'footnote_ref',
+    ...(!Array.isArray(legacy.inline) && id !== undefined ? { label: id } : {}),
   } as InlineNode
 }
 

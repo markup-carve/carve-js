@@ -953,9 +953,9 @@ function extractTextContent(node: NodeLike): string {
       return ':' + (node['name'] as string) + ':'
     case 'footnote_ref':
     case 'inline_footnote': {
-      // Reference: `[^id]`; carve-php FootnoteRef renders `[^label]`.
+      // A reference names its definition label.
       if (node['inline'] === undefined) {
-        return '[^' + ((node['id'] as string | undefined) ?? '') + ']'
+        return '[^' + ((node['label'] as string | undefined) ?? '') + ']'
       }
       // Inline footnote: join its inline content.
       let t = ''

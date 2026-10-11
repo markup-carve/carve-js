@@ -13,7 +13,7 @@ describe('a tree carrying block footnote definitions', () => {
     ({
       type: 'document',
       children: [
-        { type: 'paragraph', children: [{ type: 'text', value: 'a' }, { type: 'footnote_ref', id: 'r' }] },
+        { type: 'paragraph', children: [{ type: 'text', value: 'a' }, { type: 'footnote_ref', label: 'r' }] },
         { type: 'footnote', label: 'r', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'def' }] }] },
       ],
       srcByteLength: 0,
