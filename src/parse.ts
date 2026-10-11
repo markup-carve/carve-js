@@ -3535,7 +3535,27 @@ function trackQuoteHostFence(
     return true
   }
   if (RE_COMMENT_LINE.test(text)) {
-    if (heldColon === undefined || column <= heldColon.column) host.commentBoundary = true
+    let low = 0
+    let high = host.columns.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (host.columns[middle]! <= column) low = middle + 1
+      else high = middle
+    }
+    const level = Math.max(0, low - 1)
+    const floor = host.columns[level]!
+    const colons = host.colons ?? []
+    low = 0
+    high = colons.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (colons[middle]!.floor <= floor) low = middle + 1
+      else high = middle
+    }
+    const open = colons[low - 1]
+    if (!(host.kinds[level - 1] === 'item' && open && floor === open.floor && column > open.column)) {
+      host.commentBoundary = true
+    }
     return false
   }
   if (text === '') { if (host.markers.length === 0) host.initialMarkerColumn = undefined; return false }
