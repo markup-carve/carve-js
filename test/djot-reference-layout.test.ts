@@ -131,3 +131,18 @@ it('keeps a sibling item attribute off its reference definition', () => {
   const normalized = djotReferenceLayout(source, line => /^- /.test(line) ? 2 : 0)
   expect(normalized).toBe(source)
 })
+
+it('keeps a malformed label from hiding later reference overrides', () => {
+  const source = 'm[i][j\nthen [x][r] and [y][r]{title=own}\n\n{title=base}\n[r]: /u\n'
+  const normalized = djotReferenceLayout(source, () => 0)
+  expect(normalized).toContain('[r]: /u {title=base}')
+  expect(normalized).toContain('[y][r]{title=own}')
+})
+
+it('preserves interior blank lines while trimming removed attribute lines', () => {
+  const blanks = '\n'.repeat(32768)
+  const source = '{title=base}\n[r]: /u\n\n```\n' + blanks + 'x\n```\n\n[x][r]\n\n'
+  const result = djotReferenceLayout(source, () => 0)
+  expect(result).toContain('```\n' + blanks + 'x\n```')
+  expect(result.endsWith('[x][r]\n')).toBe(true)
+})

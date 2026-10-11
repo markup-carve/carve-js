@@ -92,3 +92,11 @@ it.each([
 ])('preserves Djot word attributes: %s', (source, expected) => {
   expect(carveToHtml(djotToCarve(source))).toBe(expected)
 })
+
+it('preserves every class in a long run of consecutive attribute groups', () => {
+  const count = 1024
+  const classes = Array.from({ length: count }, (_,index) => `c${index}`)
+  const source = 'word' + classes.map(value => `{.${value}}{}`).join('')
+  const html = carveToHtml(djotToCarve(source))
+  expect(html).toBe(`<p><span class="${classes.join(' ')}">word</span></p>`)
+})

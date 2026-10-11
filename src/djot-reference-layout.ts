@@ -160,7 +160,8 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     const nextPipe = source.includes('|') ? new Int32Array(referenceSource.length + 1).fill(-1) : undefined
     let pipe = -1, next = -1
     for (let at = referenceSource.length - 1; at >= 0; at--) {
-      if (referenceSource[at] === ']' && !escaped[at]) next = at
+      if (referenceSource[at] === '[' && referenceMaskText[at] === '[' && !escaped[at]) next = -1
+      else if (referenceSource[at] === ']' && !escaped[at]) next = at
       nextCloser[at] = next
       if (nextPipe) {
         if (tableRows[rowAt[at]!] && referenceSource[at] === '|' && pipeMaskText[at] === '|' && !escaped[at]) pipe = at
@@ -318,7 +319,10 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   body += source.slice(copied)
   if (removed.size) {
-    body = body.replace(/^\n+/, '').replace(/\n{2,}$/, '\n')
+    let start = 0, end = body.length
+    while (body[start] === '\n') start++
+    while (end > start && body[end - 1] === '\n') end--
+    body = body.slice(start, end) + (end < body.length ? '\n' : '')
   }
   return movedDefinitions.length ? movedDefinitions.join('\n') + '\n\n' + body : body
 }

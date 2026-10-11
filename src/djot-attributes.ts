@@ -159,7 +159,7 @@ export function readAttributes(source: string, start: number, carve = false, tab
         for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
       } else i++
     }
-    if (source[i] === '}' && source.lastIndexOf('\n', i) > start && !validAttributeLines(source, start, i + 1, paragraphContext && parts.length === 0, context)) return undefined
+    if (source[i] === '}' && source.slice(start + 1, i).includes('\n') && !validAttributeLines(source, start, i + 1, paragraphContext && parts.length === 0, context)) return undefined
     if (source[i] === '}') {
       if (carve && table) {
         for (let at = start; at <= i; at++) {
