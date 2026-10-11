@@ -4307,11 +4307,11 @@ class CarveRenderSession {
         // the documented form was being rewritten into an undocumented one
         // (carve#375). `boldItalic` carries the answer (PART 11 section 6).
         const inner = node.children[0]
-        if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis' && !renderSession.bracedForScope.has(node)) {
+        if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis') {
           const content = renderSession.renderInlines(inner.children, ctx)
           // `/*` needs content that hugs it: `/* x*/` or `/**/` reparses as an
           // emphasis holding literal stars, so fall back to the nested spelling.
-          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content) && !renderSession.bracedForAttributes.has(node)) {
+          if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content)) {
             return withAttrs(`/*${content}*/`)
           }
         }

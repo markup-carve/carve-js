@@ -177,6 +177,33 @@ it('bounds distant editorial-closer scans for many attached IDs', () => {
   }
 });
 
+it('shares native pair tables across deeply nested content', () => {
+  const source = '{*'.repeat(32) + 'a {#i#} '.repeat(1024) + '*}'.repeat(32);
+  const original = Int32Array.prototype.fill;
+  let filled = 0;
+  const spy = vi.spyOn(Int32Array.prototype, 'fill').mockImplementation(function (this: Int32Array, value: number, start?: number, end?: number) {
+    if (value === -1) filled += this.length;
+    return original.call(this, value, start, end);
+  });
+  try {
+    expect(renderHtml(parse(source)).match(/<strong>/g)).toHaveLength(32);
+    expect(filled).toBeLessThan(source.length * 16);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+it.each([
+  '/*a {*b*} c*/ x',
+  '/*a {/b/} c*/ x',
+  '/*a {*b*}{.c} c*/ x',
+  '/*a {/b/}{.c} c*/ x',
+  '{*a /*b*/ c*}',
+  '/*a {*b*} c*/{.p}',
+])('keeps combined emphasis around forced children: %s', source => {
+  expect(renderCarve(parse(source)).trim()).toBe(source);
+});
+
 it('fits Markdown emphasis inside a link label with an explicit loss diagnostic', () => {
   const source = '[' + '**a _a '.repeat(MAX_NESTING_DEPTH / 2) + 'x' + ' b_ b**'.repeat(MAX_NESTING_DEPTH / 2) + '](/u)';
   const result = migrateMarkdown(source);

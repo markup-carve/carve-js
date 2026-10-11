@@ -7637,6 +7637,13 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
 }
 
 const PAIR_MARKERS = '/*_^,~=+-'
+
+interface InlinePairView {
+  tables: Array<Int32Array | undefined>
+  attributeTails: Map<number, number>
+  barePairs: Map<number, { close: number; end: number }>
+  offset: number
+}
 const FORCED_TYPE: Record<string, Emphasis['type']> = {
   '/': 'emphasis',
   '*': 'strong',
@@ -7912,14 +7919,12 @@ function anchorRangeAt(ranges: readonly AnchorRange[], offset: number): AnchorRa
 }
 
 /**
- * The emphasis kinds open around the run being scanned.
+ * The emphasis kinds held against bare openers in the current inline scope.
  *
- * E3 pushes no second level of a kind while one is open, and PART 9 section 9
- * puts the forced `{X X}` forms on the same stack as the bare ones, so an
- * opener of an open kind is content either way (markup-carve/carve#2078). A
- * bare span passes the set on; a braced span starts a scope holding only its
- * own kind (markup-carve/carve#2091), and a link label or a table cell starts
- * from nothing.
+ * A bare span inherits the enclosing kinds. A braced native span starts a
+ * scope holding its own kind against bare openers; a further braced native
+ * child can nest that kind (CARVE-P9-043). A link label or table cell starts
+ * with no held kinds.
  */
 const NO_OPEN_KINDS: ReadonlySet<string> = new Set()
 
@@ -13759,6 +13764,7 @@ class ParseSession {
   private pairEndText: string | undefined
 
   private pairEndTable: Array<Int32Array | undefined> = []
+  private pairEndOffset = 0
 
   private pairAttributeTails = new Map<number, number>()
   private bareAttributePairs = new Map<number, { close: number; end: number }>()
@@ -13778,6 +13784,7 @@ class ParseSession {
     this.pairEndCache.set(text, { tables, bytes, attributeTails, barePairs })
     this.pairEndCacheBytes += bytes
     this.pairEndText = text
+    this.pairEndOffset = 0
     this.pairEndTable = tables
     this.pairAttributeTails = attributeTails
     this.bareAttributePairs = barePairs
@@ -13797,6 +13804,7 @@ class ParseSession {
       this.pairEndCache.delete(text)
       this.pairEndCache.set(text, cached)
       this.pairEndText = text
+      this.pairEndOffset = 0
       this.pairEndTable = cached.tables
       this.pairAttributeTails = cached.attributeTails
       this.bareAttributePairs = cached.barePairs
@@ -13934,9 +13942,30 @@ class ParseSession {
 
   /** Where a braced inline opened at `open` closes (exclusive), or -1. */
   private bracedPairEnd(text: string, open: number, closer: string): number {
-    const stop = this.pairEndTables(text)[PAIR_MARKERS.indexOf(closer[0]!)]?.[open + 2] ?? -1
+    const stop = this.pairCloser(text, open + 2, closer[0]!)
 
     return stop === -1 || stop === open + 2 ? -1 : stop + closer.length
+  }
+
+  private pairCloser(text: string, at: number, marker: string): number {
+    const table = this.pairEndTables(text)[PAIR_MARKERS.indexOf(marker)]
+    const stop = table?.[at + this.pairEndOffset] ?? -1
+    return stop < this.pairEndOffset || stop + 2 > this.pairEndOffset + text.length ? -1 : stop - this.pairEndOffset
+  }
+
+  private pairAttributeEnd(text: string, end: number): number {
+    const tail = this.pairAttributeTails.get(end + this.pairEndOffset)
+    return tail === undefined || tail > this.pairEndOffset + text.length ? end : tail - this.pairEndOffset
+  }
+
+  private pairBareAttributes(text: string, open: number): { close: number; end: number } | undefined {
+    const pair = this.bareAttributePairs.get(open + this.pairEndOffset)
+    return pair === undefined || pair.end > this.pairEndOffset + text.length ? undefined
+      : { close: pair.close - this.pairEndOffset, end: pair.end - this.pairEndOffset }
+  }
+
+  private pairView(offset: number): InlinePairView {
+    return { tables: this.pairEndTable, attributeTails: this.pairAttributeTails, barePairs: this.bareAttributePairs, offset: this.pairEndOffset + offset }
   }
 
   /**
@@ -14088,6 +14117,7 @@ class ParseSession {
     kinds: ReadonlySet<string> = NO_OPEN_KINDS,
     opensHostRun = false,
     separateQuoteScope = false,
+    pairs?: InlinePairView,
   ): InlineNode[] {
     if (inlineDepth >= MAX_NESTING_DEPTH) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
@@ -14107,11 +14137,19 @@ class ParseSession {
     this.inlinePairFrameDepth++
     if (quoteRoot) this.quoteScopeDepth = this.inlinePairFrameDepth
     const outerPairText = this.pairEndText
+    const outerPair = this.pairView(0)
     const outerSubstitutions = this.substitutionScans
     this.substitutionScans = undefined
     const outer = this.openKinds
     this.openKinds = kinds
     try {
+      if (pairs !== undefined) {
+        this.pairEndText = text
+        this.pairEndTable = pairs.tables
+        this.pairEndOffset = pairs.offset
+        this.pairAttributeTails = pairs.attributeTails
+        this.bareAttributePairs = pairs.barePairs
+      }
       return this.scanInlineInner(
         text, source, inFootnote, captionContext, opensHostRun || inlineDepth === 1,
       )
@@ -14125,11 +14163,11 @@ class ParseSession {
         this.singleQuoteSpan = outerQuoteSpan
         this.quoteScopeDepth = outerQuoteScopeDepth
       }
-      const outerPair = outerPairText === undefined ? undefined : this.pairEndCache.get(outerPairText)
-      this.pairEndText = outerPair === undefined ? undefined : outerPairText
-      this.pairEndTable = outerPair?.tables ?? []
-      this.pairAttributeTails = outerPair?.attributeTails ?? new Map()
-      this.bareAttributePairs = outerPair?.barePairs ?? new Map()
+      this.pairEndText = outerPairText
+      this.pairEndTable = outerPair.tables
+      this.pairEndOffset = outerPair.offset
+      this.pairAttributeTails = outerPair.attributeTails
+      this.bareAttributePairs = outerPair.barePairs
       this.substitutionScans = outerSubstitutions
       this.openKinds = outer
       inlineDepth--
@@ -14979,7 +15017,8 @@ class ParseSession {
             i = forced
             continue
           }
-          out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!])) } as Emphasis, source, text, i, forced))
+          const pairs = this.pairEndText === text ? this.pairView(i + 2) : undefined
+          out.push(this.withPos({ type: FORCED_TYPE[delim!]!, children: this.scanInline(text.slice(i + 2, forced - 2), this.shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!]), false, false, pairs) } as Emphasis, source, text, i, forced))
           i = forced
           continue
         }
@@ -15442,7 +15481,7 @@ class ParseSession {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!
-      const child = ch !== delim && !this.openKinds.has(ch) ? this.bareAttributePairs.get(j) : undefined
+      const child = ch !== delim && !this.openKinds.has(ch) ? this.pairBareAttributes(text, j) : undefined
       if (child) attached?.set(child.close + 1, child.end)
       const attachedEnd = attached?.get(j)
       if (attachedEnd !== undefined) { j = attachedEnd - 1; continue }
@@ -15456,7 +15495,7 @@ class ParseSession {
       if (ch === '`') {
         const span = verbatimSpanEnd(text, j)
         if (!span.closed) return -1
-        j = (this.pairAttributeTails.get(span.end) ?? span.end) - 1
+        j = this.pairAttributeEnd(text, span.end) - 1
         continue
       }
       // An unbounded comment consumes the rest of its line before the delimiter
@@ -15486,7 +15525,7 @@ class ParseSession {
         RE_RAW_INLINE_STICKY.lastIndex = j
         const m = RE_RAW_INLINE_STICKY.exec(text)
         if (m) {
-          j = (this.pairAttributeTails.get(j + m[0].length) ?? j + m[0].length) - 1
+          j = this.pairAttributeEnd(text, j + m[0].length) - 1
           continue
         }
       }
@@ -15494,7 +15533,7 @@ class ParseSession {
       if (ch === '{') {
         const end = this.bracedInlineEnd(text, j, memo)
         if (end !== -1) {
-          j = (this.pairAttributeTails.get(end + 1) ?? end + 1) - 1
+          j = this.pairAttributeEnd(text, end + 1) - 1
           continue
         }
       }
@@ -15512,7 +15551,7 @@ class ParseSession {
       if (ch === '[') {
         const close = emphasisBrackets(text, memo)(j)
         if (close !== undefined) {
-          j = (this.pairAttributeTails.get(close + 1) ?? close + 1) - 1
+          j = this.pairAttributeEnd(text, close + 1) - 1
           continue
         }
       }
@@ -15521,7 +15560,7 @@ class ParseSession {
       if (ch === '(' && text[j - 1] === ']') {
         const end = linkDestinations(text, memo).get(j)
         if (end !== undefined) {
-          j = (this.pairAttributeTails.get(end + 1) ?? end + 1) - 1
+          j = this.pairAttributeEnd(text, end + 1) - 1
           continue
         }
       }
@@ -15529,7 +15568,7 @@ class ParseSession {
         RE_AUTOLINK_STICKY.lastIndex = j
         const m = RE_AUTOLINK_STICKY.exec(text)
         if (m) {
-          j = (this.pairAttributeTails.get(j + m[0].length) ?? j + m[0].length) - 1
+          j = this.pairAttributeEnd(text, j + m[0].length) - 1
           continue
         }
       }
@@ -15555,8 +15594,8 @@ class ParseSession {
     // the same question here, so the scan hides the region the parser builds.
     const marker = text[open + 1]
     if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-')) {
-      const stop = this.pairEndTables(text)[PAIR_MARKERS.indexOf(marker)]?.[open + 2] ?? -1
-      if (stop !== -1) return (this.pairAttributeTails.get(stop + 2) ?? stop + 2) - 1
+      const stop = this.pairCloser(text, open + 2, marker)
+      if (stop !== -1) return this.pairAttributeEnd(text, stop + 2) - 1
     }
     if (marker === '#') {
       memo.lastCritic ??= text.lastIndexOf('#}')
