@@ -4263,7 +4263,7 @@ class CarveRenderSession {
       // An empty code span is written as an unclosed run, which swallows a bare
       // closer; only the braced one ends it.
       const last = children[children.length - 1]
-      return (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
+      return content.endsWith(renderSession.sentinels[3]!) || (last?.type === 'code' && codeNeedsOpenRun(last.value)) || holdsUnboundedComment(children) || renderSession.bracedForScope.has(node) || renderSession.bracedForAttributes.has(node)
         ? renderForcedEmphasis(delim, content)
         : renderEmphasis(delim, content, prevChar, nextChar)
     }
