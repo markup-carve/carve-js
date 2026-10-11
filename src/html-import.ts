@@ -5361,7 +5361,7 @@ class Importer {
   }
 
   unwrapUnspellable(document: Document, target: object, targets: readonly object[] = [target]): boolean {
-    const wanted = new Set(targets.filter(node => this.inlineOrigins.has(node)))
+    const wanted = new Set(targets.filter(node => this.inlineOrigins.has(node) && Array.isArray((node as { children?: unknown }).children)))
     const removed = new Set<object>()
     const stack: unknown[] = [document]
     while (stack.length > 0) {
