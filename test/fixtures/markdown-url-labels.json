@@ -3262,5 +3262,41 @@
   {
     "source": "> [*https://x.test*](x) [*https://y.test/_a_*](y)\n",
     "html": "<blockquote>\n<p><a href=\"x\"><em>https://x.test</em></a> <a href=\"y\"><em>https://y.test/<em>a</em></em></a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "[https://x.test/~u/a=b?q=1&r=2#frag](x)\n",
+    "html": "<p><a href=\"x\">https://x.test/~u/a=b?q=1&amp;r=2#frag</a></p>\n"
+  },
+  {
+    "source": "- [https://x.test/~u/a=b?q=1&r=2#frag](x)\n",
+    "html": "<ul>\n<li><a href=\"x\">https://x.test/~u/a=b?q=1&amp;r=2#frag</a></li>\n</ul>\n"
+  },
+  {
+    "source": "> [https://x.test/~u/a=b?q=1&r=2#frag](x)\n",
+    "html": "<blockquote>\n<p><a href=\"x\">https://x.test/~u/a=b?q=1&amp;r=2#frag</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "[*https://x.test/a--b^c{d}*](x)\n",
+    "html": "<p><a href=\"x\"><em>https://x.test/a--b^c{d}</em></a></p>\n"
+  },
+  {
+    "source": "- [*https://x.test/a--b^c{d}*](x)\n",
+    "html": "<ul>\n<li><a href=\"x\"><em>https://x.test/a--b^c{d}</em></a></li>\n</ul>\n"
+  },
+  {
+    "source": "> [*https://x.test/a--b^c{d}*](x)\n",
+    "html": "<blockquote>\n<p><a href=\"x\"><em>https://x.test/a--b^c{d}</em></a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "[*a* https://x.test/b](y)\n",
+    "html": "<p><a href=\"y\"><em>a</em> https://x.test/b</a></p>\n"
+  },
+  {
+    "source": "- [*a* https://x.test/b](y)\n",
+    "html": "<ul>\n<li><a href=\"y\"><em>a</em> https://x.test/b</a></li>\n</ul>\n"
+  },
+  {
+    "source": "> [*a* https://x.test/b](y)\n",
+    "html": "<blockquote>\n<p><a href=\"y\"><em>a</em> https://x.test/b</a></p>\n</blockquote>\n"
   }
 ]
