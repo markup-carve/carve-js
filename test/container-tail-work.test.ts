@@ -20,6 +20,21 @@ function work(source: string) {
   finally { RegExp.prototype.exec = exec; String.prototype.endsWith = endsWith }
 }
 
+it('indexes comment spans once across sibling authored colon groups', () => {
+  const rows = [64, 128].map(count => {
+    const source = '- a\n' + '    ::: box\n    %%%\n    x\n    %%%\n    :::\n'.repeat(count)
+    const row = work(source)
+    expect(row.ast).toEqual(parse(source))
+    return row
+  })
+  expect(rows[1]!.matched).toBeLessThanOrEqual(rows[0]!.matched * 2.5)
+})
+
+it('shares failed CODE closer scans across sibling authored colon groups', () => {
+  const rows = [64, 128].map(count => work('- a\n' + '    ::: box\n    x\n    ``` js\n    :::\n'.repeat(count)))
+  expect(rows[1]!.matched).toBeLessThanOrEqual(rows[0]!.matched * 2.5)
+})
+
 for (const marker of ['> ', '- ', '> - ', '- > ', '1. ', '. ', 'iv) ', '- [ ] ', '* [x] ', '-{.x} ', '1.{title="😀"} ', '-{.x} [ ] ']) {
   it(`bounds successful regex spans and suffix checks for ${JSON.stringify(marker)}`, () => {
     const rows = [32, 64].map(depth => {
