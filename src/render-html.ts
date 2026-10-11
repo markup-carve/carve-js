@@ -57,6 +57,7 @@ import {
   CARRIER_MARKER,
   carrier,
   dropCollidingAuthored,
+  MAX_CARRIED_SEPARATOR_WIDTH,
   roundtripExport,
 } from './roundtrip-carriers.js'
 
@@ -1929,8 +1930,15 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   // PART 10 §13a: the authored separator-row widths, comma-joined. Its
   // PRESENCE is the distinction, so a table with no separator row - no
   // `separatorWidths` - writes no attribute at all.
-  const widthsAttr = roundtripExport(opts) && node.separatorWidths !== undefined
-    ? ` ${carrier('col-widths')}="${escapeAttr(node.separatorWidths.join(','))}"`
+  //
+  // AND NO CARRIER AT ALL past the bound ([CARVE-P10-016]): a conforming reader
+  // refuses the whole attribute there, so writing one would be a round-trip
+  // promise this renderer cannot keep. The FIELD is unbounded and keeps its
+  // value - only the carrier is withheld.
+  const carriable = node.separatorWidths !== undefined
+    && node.separatorWidths.every((width) => width <= MAX_CARRIED_SEPARATOR_WIDTH)
+  const widthsAttr = roundtripExport(opts) && carriable
+    ? ` ${carrier('col-widths')}="${escapeAttr(node.separatorWidths!.join(','))}"`
     : ''
   if (widthsAttr !== '') tableAttrs = dropCollidingAuthored(tableAttrs, [carrier('col-widths')], opts, node, 'block')
   const lines: string[] = [

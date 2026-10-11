@@ -220,6 +220,34 @@ describe('the twelve carriers', () => {
     expect(htmlToCarve(html).value).toBe('| a | b |\n|----|--|\n| 1 | 2 |\n')
   })
 
+  it('refuses the WHOLE carrier where an entry exceeds the bound', () => {
+    // [CARVE-P10-016]. The widths arrive in an attribute read off untrusted
+    // HTML and the writer spells one `-` per unit, so the bound is what stops
+    // six characters of attribute buying a megabyte of separator row. REFUSED,
+    // not clamped: a clamp keeps a separator row whose widths nobody wrote.
+    const at = (value: string): string =>
+      `<table data-carve-col-widths="${value}">\n<tr><th>a</th></tr>\n<tr><td>1</td></tr>\n</table>`
+    expect(htmlToCarve(at('1001')).value).toBe('|= a |\n| 1 |\n')
+    // One bad entry refuses the whole carrier, not just its own cell.
+    expect(htmlToCarve(at('3,1001')).value).toBe('|= a |\n| 1 |\n')
+    // The bound itself is carried.
+    expect(htmlToCarve(at('1000')).value).toBe(`| a |\n|${'-'.repeat(1000)}|\n| 1 |\n`)
+  })
+
+  it('writes no carrier where the FIELD holds an entry above the bound', () => {
+    // The other side of the same rule: a carrier a conforming reader will
+    // refuse is a round-trip promise the writer cannot keep. The field itself
+    // has no upper bound - a parse records what the author typed - so the
+    // table still renders and still carries the widths in the tree.
+    const table = parse(`| a |\n|${'-'.repeat(1001)}|\n| 1 |\n`).children[0]
+    if (table?.type !== 'table') throw new Error('no table')
+    expect(table.separatorWidths).toEqual([1001])
+    const html = renderHtml({ type: 'document', children: [table] }, { roundtrip: true })
+    expect(html).not.toContain('col-widths')
+    expect(html).toContain('<table>')
+    expect(rt(`| a |\n|${'-'.repeat(1000)}|\n| 1 |\n`)).toContain('col-widths')
+  })
+
   it('refuses the WHOLE carrier where an entry is not a run of digits', () => {
     // The table still imports, in the `|=` header form, which is what the
     // field's absence means. One bad entry refuses the whole attribute rather
