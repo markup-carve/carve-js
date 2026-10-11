@@ -4375,7 +4375,7 @@ class CarveRenderSession {
         return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderSession.inlineAttrs(node.attrs, node)}` : content
       }
       case 'math':
-        return withAttrs(renderSession.renderMath(node.display, node.content))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderMath(node.display, node.content), ctx, 'math'))
       case 'raw_inline':
         if (node.content === '') {
           throw new SourceUnspellableError(
@@ -4383,12 +4383,12 @@ class CarveRenderSession {
             'an empty raw inline has no Carve source spelling',
           )
         }
-        return `${renderSession.renderCode(node.content, false, 'raw_inline')}{=${escapeFormat(node.format)}}`
+        return `${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'raw_inline'), ctx, 'raw_inline')}{=${escapeFormat(node.format)}}`
       case 'literal_inline':
         // §27: `!` prefix on a verbatim span. A trailing attribute block is the
         // ordinary inline attribute block (same as a code span carries).
         // renderCode widens the backtick fence when the content holds backticks.
-        return `!${renderSession.renderCode(node.content, false, 'literal_inline')}${renderSession.inlineAttrs(node.attrs, node)}`
+        return `!${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'literal_inline'), ctx, 'literal_inline')}${renderSession.inlineAttrs(node.attrs, node)}`
       case 'symbol':
         return withAttrs(`:${escapeSymbolName(node.name)}:`)
       case 'autolink':
@@ -4565,10 +4565,10 @@ class CarveRenderSession {
     return undefined
   }
 
-  private guardCodeLines(written: string, ctx: CarveContext): string {
+  private guardCodeLines(written: string, ctx: CarveContext, nodeType = 'code'): string {
     const marker = /\n(?=>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/g
     if (this.termKeepsLineIndent && marker.test(written)) {
-      throw new SourceUnspellableError('code', 'a block marker on a continuation line ends the definition term')
+      throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term')
     }
     if (ctx.lineBlockDepth > 0) return written
     return written.replace(marker, `\n${this.sentinels[6]}`)
