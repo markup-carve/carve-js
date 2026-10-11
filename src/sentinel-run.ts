@@ -29,6 +29,7 @@ const PRIVATE_USE_END = 0xf8ff
  */
 export function occupiedPrivateUse(root: unknown, includeKeys = false): Set<number> {
   const occupied = new Set<number>()
+  const seenKeys = includeKeys ? new Set<string>() : undefined
   const visited = new WeakSet<object>()
   const stack: unknown[] = [root]
   while (stack.length > 0) {
@@ -49,7 +50,10 @@ export function occupiedPrivateUse(root: unknown, includeKeys = false): Set<numb
     }
     for (const key in node) {
       if (!Object.prototype.hasOwnProperty.call(node, key)) continue
-      if (includeKeys && /[\ue001-\uf8ff]/.test(key)) stack.push(key)
+      if (seenKeys !== undefined && !seenKeys.has(key)) {
+        seenKeys.add(key)
+        if (/[\ue001-\uf8ff]/.test(key)) stack.push(key)
+      }
       stack.push((node as Record<string, unknown>)[key])
     }
   }
@@ -123,7 +127,11 @@ export function treeSentinelNonces(root: unknown): Set<number> {
     if (typeof value === 'string') collectSentinelNonces(value, nonces)
     else if (value !== null && typeof value === 'object' && !seen.has(value)) {
       seen.add(value)
-      for (const [key, child] of Object.entries(value)) stack.push(key, child)
+      if (Array.isArray(value)) {
+        for (const child of value) stack.push(child)
+      } else {
+        for (const [key, child] of Object.entries(value)) stack.push(key, child)
+      }
     }
   }
   return nonces
