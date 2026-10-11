@@ -29,9 +29,9 @@ function compactDjotListPrefix(text: string): string {
 
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
 export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map()): string {
-  const hasDefinitionSyntax = /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(source)
   const lines = source.split('\n')
   const maskedSource = maskDjotCodeAndDestinations(source)
+  const hasDefinitionSyntax = /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(maskedSource)
   const mask = maskedSource.split('\n')
   const divClosers = new Map<number, number[]>()
   if (source.includes(':::')) djotInlineBoundaries(source, maskedSource, true, divClosers)
@@ -373,6 +373,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       depth = quoteDepth
       quoteBoundary = quoteForCarve().trimEnd()
     } else if (quoteDepth < depth && !paragraph) {
+      if (blank) out.push(quoteForCarve().trimEnd())
       while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
       if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) trimEmbedded(quoteDepth)
       depth = quoteDepth
@@ -820,6 +821,6 @@ function closedQuoteBoundary(prefix: string, retainedDepth: number): string {
 }
 
 export function hasDjotCodeLayoutCandidates(source: string): boolean {
-  return source.includes('\\|') || (source.includes('`') && /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*\[\^[^\]\n]+\]:/.test(source)) || (source.includes('`') && /(?:^|\n)[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?|\[\^[^\]\n]+\]:[ \t]*)*>/.test(source)) ||
+  return source.includes('\\|') || (source.includes('`') && /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*\[\^[^\]\n]+\]:/.test(source)) || (source.includes('`') && /(?:^|\n)[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]+)[.)]|\((?:[0-9]+|[A-Za-z]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?|\[\^[^\]\n]+\]:[ \t]*)*>/.test(source)) ||
     (source.includes('```') && /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]+`{3,}/.test(source))
 }

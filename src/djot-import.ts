@@ -472,36 +472,67 @@ function foldHeadingContinuations(source: string): string {
   const lines = source.split('\n')
   const masked = maskDjotCodeAndDestinations(source).split('\n')
   const block =
-    /^(?:[#>|{]|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|:[ \t]|:{2,}|\([0-9a-zA-Z]+\)[ \t]|[`~]{3,}|\^[ \t]|%{3,}|\[[^\]\n]*\]:|(?:\*[ \t]*){3,}$|(?:-[ \t]*){3,}$)/
+    /^(?:[#>|{]|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|:[ \t]|:{2,}|\([0-9a-zA-Z]+\)[ \t]|[`~]{3,}|\^[ \t]|\[[^\]\n]*\]:|(?:\*[ \t]*){3,}$|(?:-[ \t]*){3,}$)/
+  const container = /([ \t]*)(>(?:[ \t]|$)|\[\^[^\]\n]+\]:[ \t]*|[-*+][ \t]+|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]+|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]+)/y
+  const task = /\[[ xX]\][ \t]+/y
+  const quotePrefix = /^(?:[ \t]*>(?:[ \t]|$))*/
+  const trimRight = (text: string): string => trimEndMatchingEdges(text, code => code === 32 || code === 9)
   const result: string[] = []
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]!
-    const heading =
-      /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)?)(#{1,6})(?: +\S|[ \t]*$)/.exec(
-        line,
-      )
-    if (!heading || masked[i]![heading[1]!.length] !== '#') {
+    const line = lines[i]!
+    if (!line.includes('#')) { result.push(line); continue }
+    let at = 0, depth = 0, column = 0
+    while (true) {
+      container.lastIndex = at
+      const token = container.exec(line)
+      if (!token) break
+      at = container.lastIndex
+      if (token[2]!.startsWith('>')) { depth++; column = 0 }
+      else if (token[2]!.startsWith('[^')) column = token[1]!.length + 2
+      else {
+        column += token[0].length
+        if (/^[-*+]/.test(token[2]!)) {
+          task.lastIndex = at
+          if (task.exec(line)) at = task.lastIndex
+        }
+      }
+    }
+    const heading = /^([ \t]*)(#{1,6})(?:[ \t]+\S|[ \t]*$)/.exec(line.slice(at))
+    if (!heading || masked[i]![at + heading[1]!.length] !== '#') {
       result.push(line)
       continue
     }
-    const marker = new RegExp(`^${heading[2]} +`)
-    const column = heading[1]!.length
-    while (i + 1 < lines.length && (line.length - trimEndMatchingEdges(line, (code) => code === 92).length) % 2 === 0) {
-      if (column && /^[ \t]*/.exec(lines[i + 1]!)![0].length < column) break
-      const next = lines[i + 1]!.replace(/^[ \t]+/, '')
+    const quoteHeading = depth > 0 && column === 0
+    const firstLine = quoteHeading ? line.slice(0, at) + line.slice(at + heading[1]!.length) : line
+    if (!quoteHeading) column += heading[1]!.length
+    const marker = new RegExp(`^${heading[2]}[ \\t]+`)
+    const parts = [trimRight(firstLine)]
+    let tail = line
+    while (i + 1 < lines.length) {
+      let slashes = 0
+      for (let end = tail.length - 1; end >= 0 && tail.charCodeAt(end) === 92; end--) slashes++
+      if (slashes % 2) break
+      const candidate = lines[i + 1]!
+      const prefix = quotePrefix.exec(candidate)![0]
+      if ((prefix.match(/>/g)?.length ?? 0) !== depth) break
+      const remainder = candidate.slice(prefix.length)
+      const indent = /^[ \t]*/.exec(remainder)![0].length
+      if (indent < column) break
+      const next = remainder.slice(indent)
       if (rejectedCommentStartsBlock(next)) break
       let part: string
       if (marker.test(next)) {
         part = next.replace(marker, '')
-        if (!part.trim()) break
+        if (!trimNonNbsp(part)) break
       } else {
-        if (!next.trim() || block.test(next)) break
+        if (!trimNonNbsp(next) || block.test(next)) break
         part = next
       }
-      line = line.trimEnd() + ` ${part}`
+      parts.push(trimRight(part))
+      tail = part
       i++
     }
-    result.push(line)
+    result.push(parts.length === 1 ? firstLine : parts.join(' '))
   }
   return result.join('\n')
 }
@@ -1854,7 +1885,8 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
         output.push(source.slice(cursor, escape), '\\')
         cursor = escape
       }
-      output.push(source.slice(cursor, i), fence + payload + fence + (rawCode ? '{=html}' : ''))
+      const pad = payload.startsWith('`') || payload.endsWith('`') ? ' ' : ''
+      output.push(source.slice(cursor, i), fence + pad + payload + pad + fence + (rawCode ? '{=html}' : ''))
       cursor = closed ? end + width : end
       consumed = cursor
       if (separate && !closed) output.push('\n' + '> '.repeat(separateDepth).trimEnd())
