@@ -3534,6 +3534,10 @@ function trackQuoteHostFence(
     closeBlockQuoteParagraph(state)
     return true
   }
+  if (RE_COMMENT_LINE.test(text)) {
+    host.commentBoundary = true
+    return false
+  }
   if (text === '') { if (host.markers.length === 0) host.initialMarkerColumn = undefined; return false }
   if (quotedLineText(content, terminatorFree) !== null) {
     host.columns = [0]; host.markers = []; host.kinds = []
@@ -3665,7 +3669,6 @@ function trackQuoteHostFence(
       return true
     }
   }
-  if (RE_COMMENT_LINE.test(text)) host.commentBoundary = true
   return false
 }
 
