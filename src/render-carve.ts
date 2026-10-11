@@ -1220,7 +1220,8 @@ function renderEmphasis(
  * of the content survives whole-document normalization and the block layer.
  */
 function codeSpanFence(content: string): string {
-  if (/^[\r\n]/.test(content)) {
+  // A short absent run keeps multiline inline code below block-fence width.
+  if (/[\r\n]/.test(content)) {
     const widths = new Set(Array.from(content.matchAll(/`+/g), match => match[0].length))
     for (const width of [1, 2]) if (!widths.has(width)) return '`'.repeat(width)
   }
@@ -1518,7 +1519,7 @@ function dropTrailingWs(line: string): string {
  * does not contain.
  */
 const SENTINEL_BASE = 0xe001
-const SENTINEL_COUNT = 7
+const SENTINEL_COUNT = 8
 
 function trimNonNbsp(text: string): string {
   return trimEndNonNbsp(trimStartNonNbsp(text))
@@ -3852,7 +3853,9 @@ class CarveRenderSession {
    */
 
   private renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
+    // Footnote continuations need their body indentation to remain owned.
     const rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
+      .replace(new RegExp(`${this.sentinels[6]}(?=\\[)`, 'g'), this.sentinels[7]!)
     if (rawBody.split('\n').some((line) => line.replace(/^[ \t]*/, '').startsWith(this.sentinels[6]! + '>'))) {
       throw new SourceUnspellableError('code', 'a block-marker continuation cannot stay inside a footnote paragraph')
     }
@@ -4680,8 +4683,10 @@ class CarveRenderSession {
   private restoreVerbatim(text: string): string {
     return (
       text
+        .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
+        .replaceAll(this.sentinels[7]!, '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[6]}([>\\[])`, 'gm'), (_match, prefix: string, marker: string) =>
-          (marker === '[' ? prefix + ' ' : prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
+          (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
         .replaceAll(this.sentinels[6]!, '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
