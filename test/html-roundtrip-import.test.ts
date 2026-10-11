@@ -213,9 +213,9 @@ describe('each carrier reconstructs its own node', () => {
     // one in `safe` would hand the document back what the import just
     // filtered. `roundtrip` already preserves input markup wholesale.
     const html = carveToHtml('`<b>x</b>`{=html}\n', { roundtrip: true })
-    expect(html).toBe('<p><span data-carve-raw="html"><b>x</b></span></p>')
+    expect(html).toBe('<p><span data-carve-raw="html">&lt;b&gt;x&lt;/b&gt;</span></p>')
     expect(htmlToCarve(html, { mode: 'roundtrip' }).value).toBe('`<b>x</b>`{=html}\n')
-    expect(htmlToCarve(html, { mode: 'safe' }).value).toBe('*x*\n')
+    expect(carveToHtml(htmlToCarve(html, { mode: 'safe' }).value)).toBe('<p>&lt;b&gt;x&lt;/b&gt;</p>')
   })
 
   it.each([

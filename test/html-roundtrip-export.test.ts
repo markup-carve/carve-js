@@ -129,7 +129,7 @@ describe('the HTML carriers', () => {
   })
 
   it('data-carve-raw: the format, with the span holding the content', () => {
-    expect(rt('`<b>x</b>`{=html}\n')).toBe('<p><span data-carve-raw="html"><b>x</b></span></p>')
+    expect(rt('`<b>x</b>`{=html}\n')).toBe('<p><span data-carve-raw="html">&lt;b&gt;x&lt;/b&gt;</span></p>')
     expect(rt('`\\x`{=tex}\n')).toBe('<p><span data-carve-raw="tex">\\x</span></p>')
   })
 
