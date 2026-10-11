@@ -180,6 +180,26 @@
       "name": "nested-colon-depth2-colon",
       "source": "> > - ::: box\n> >   - ::: inner\n> >     owned\n> >    %%%\n> >    hidden\n> >    %%%\n> >    ::: note\n> >    code\n- tail\n",
       "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <ul>\n            <li>\n              <div class=\"inner\">\n                <p>owned</p>\n                <p>::: note\ncode\n- tail</p>\n              </div>\n            </li>\n          </ul>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    },
+    {
+      "name": "marker-candidate-comment-depth1-column3",
+      "source": "> - ::: box\n>   %%%\n>   hidden\n>   %%%\n>    :::\nlazy\n>   :::\n- tail\n",
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::\nlazy</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    },
+    {
+      "name": "marker-candidate-comment-depth1-column4",
+      "source": "> - ::: box\n>   %%%\n>   hidden\n>   %%%\n>     :::\nlazy\n>   :::\n- tail\n",
+      "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>:::\nlazy</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    },
+    {
+      "name": "marker-candidate-comment-depth2-column3",
+      "source": "> > - ::: box\n> >   %%%\n> >   hidden\n> >   %%%\n> >    :::\nlazy\n> >   :::\n- tail\n",
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>:::\nlazy</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    },
+    {
+      "name": "marker-candidate-comment-depth2-column4",
+      "source": "> > - ::: box\n> >   %%%\n> >   hidden\n> >   %%%\n> >     :::\nlazy\n> >   :::\n- tail\n",
+      "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <p>:::\nlazy</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     }
   ]
 }
