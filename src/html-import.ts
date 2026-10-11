@@ -5798,7 +5798,22 @@ class Importer {
    */
   private footnoteCarriers(definitions: Array<{ block: P5Node; refs: P5Node[] }>): Array<{ label: string; inline: boolean }> {
     const read = definitions.map((definition) => {
-      const label = this.carrierValue(definition.block, 'footnote-label')
+      const carriedLabel = this.carrierValue(definition.block, 'footnote-label')
+      // §13e validates values before testing for contradictory meanings.
+      const label = carriedLabel !== undefined
+        && !/[\r\n\u2028\u2029]/u.test(carriedLabel)
+        && RE_FOOTNOTE_DEF.test(`[^${carriedLabel}]: x`)
+        ? carriedLabel
+        : undefined
+      if (carriedLabel !== undefined && label === undefined) {
+        this.report.add(
+          'attribute-dropped',
+          'Dropped a footnote label outside the footnote label grammar',
+          'warning',
+          'footnote',
+          definition.block,
+        )
+      }
       const inline = this.hasCarrier(definition.block, 'inline-footnote')
       if (label !== undefined && inline) {
         this.report.add(
@@ -5821,15 +5836,7 @@ class Importer {
     // even where no note ended up wearing that number.
     const taken = new Set<string>()
     const accepted = read.map((entry) => {
-      // THE PARSER'S OWN LINE SHAPE, not a hand-spelled "no whitespace" rule:
-      // that one rejected `[^my note]`, which the parser reads and the
-      // exporter writes.
-      // A LINE TERMINATOR IS NOT PART OF A LABEL. The definition pattern is
-      // not line-anchored, so its label class admits one, and the writer puts
-      // the label verbatim into the reference AND the definition - which let a
-      // carrier carry whole blocks into the generated source.
-      if (entry.label === undefined || /[\r\n\u2028\u2029]/u.test(entry.label)) return undefined
-      if (!RE_FOOTNOTE_DEF.test(`[^${entry.label}]: x`) || taken.has(entry.label)) return undefined
+      if (entry.label === undefined || taken.has(entry.label)) return undefined
       taken.add(entry.label)
       return entry.label
     })
