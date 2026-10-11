@@ -6,6 +6,7 @@ export type RenderLossCode =
   | 'ruby-flattened'
   | 'destination-denied'
   | 'editorial-comment-flattened'
+  | 'carrier-attribute-dropped'
 
 interface RenderLossBase {
   target: RenderTarget
@@ -19,6 +20,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'ruby-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'destination-denied'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'editorial-comment-flattened'; nodeType: 'inline' })
+  | (RenderLossBase & { code: 'carrier-attribute-dropped'; attribute: string })
 
 export interface RenderResult<T = string> {
   value: T

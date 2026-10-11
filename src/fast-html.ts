@@ -136,7 +136,13 @@ function tryFastHtmlAttempt(source: string, opts: Options, out: HtmlOutput, stat
   // rendered `<a href="">x</a>` and reported nothing. Corpus 536 hid it by
   // holding an image, which bails below on `![`.
   if ((opts as RenderLossSinkOptions).onRenderLoss !== undefined) return undefined
+  // ROUNDTRIP EXPORT GOES TO THE AUTHORITATIVE PIPELINE. The borrowed layout
+  // writes none of PART 10 §13a's carriers, and the documents it accepts are
+  // exactly the ones that carry most of them - a `*` bullet list, a `***`
+  // break, a reference link, a code fence. Without this the option was
+  // silently ignored for every ASCII document simple enough to reach here.
   if (
+    (opts as RenderOptions & { roundtrip?: unknown }).roundtrip === true ||
     opts.extensions?.length || opts.profile !== undefined || opts.sourceLine ||
     (opts as RenderOptions & { mode?: unknown }).mode !== undefined ||
     opts.sections === false || opts.smartTypography === false || opts.smartTypography === 'source' || typeof opts.smartTypography === 'object' ||

@@ -51,6 +51,14 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
 import { parseContainerLabelInlines } from './parse.js'
+import { renderCarve } from './render-carve.js'
+import {
+  CARRIER_CHAR,
+  CARRIER_MARKER,
+  carrier,
+  dropCollidingAuthored,
+  roundtripExport,
+} from './roundtrip-carriers.js'
 
 export type SocialLinkKind = 'mention' | 'tag'
 
@@ -229,6 +237,19 @@ export interface RenderOptions extends RenderLossSinkOptions {
    * formats are unaffected.
    */
   allowRawHtml?: boolean
+  /**
+   * Add the HTML preservation carriers PART 10 §13a names (`roundtrip: true`,
+   * `--roundtrip` on the CLI). OFF by default, and enabling it neither removes
+   * nor reorders an attribute §1 to §12 write.
+   *
+   * What it guarantees is RECOVERY OF THE NAMED DISTINCTIONS, not
+   * byte-identical source. It is an EXPORT option only: §13b keeps it out of
+   * the importer, so it never widens an import mode, enables a trusted import
+   * or relaxes a destination check.
+   *
+   * `carryMarkers` is a Markdown-only option and is not redefined here (§13c).
+   */
+  roundtrip?: boolean
 }
 
 /**
@@ -728,6 +749,14 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     if (node.type === 'heading') {
       closeTo(node.level)
       const depth = sectionStack.length
+      // §13a: presence says the id was AUTHORED rather than generated. The
+      // distinction is `attrs.order` carrying the `#id` slot: a generated slug
+      // is assigned onto `attrs` without a source-order slot, so the recorded
+      // order is the only place the authored-ness survives. It rides the
+      // element that carries the id - the `<section>` here, the `<h*>` below.
+      const explicitId = roundtripExport(opts) && authoredId(node.attrs)
+        ? ` ${carrier('explicit-id')}="1"`
+        : ''
       if (wrapSections) {
         // The id moves to <section>; any other heading attrs (classes,
         // key-values) stay on the <h*>.
@@ -735,7 +764,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
         // <section> (it already suppressed the auto-slug in resolveHeadingIds).
         const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
-        out.push(`${indent(depth)}<section${sectionId}>`)
+        out.push(`${indent(depth)}<section${sectionId}${explicitId}>`)
         sectionStack.push(node.level)
       }
       // Where the <h*> sits: one level in when a wrapper opened above it,
@@ -751,10 +780,18 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         continue
       }
       const headingAttrs = wrapSections ? stripId(node.attrs) : node.attrs
+      const explicit = explicitIdAttr(node.attrs, headingAttrs, opts)
+      // The carrier wins the collision wherever it is written, and on a wrapped
+      // heading it is written on the `<section>` while the authored attribute
+      // sits on the `<h*>` - so the drop has to happen on the heading's own
+      // attributes either way.
+      const ownAttrs = explicit === '' && explicitId === ''
+        ? headingAttrs
+        : dropCollidingAuthored(headingAttrs, [carrier('explicit-id')], opts, node, 'block')
       const inner = renderInlines(node.children, opts)
-      const slAttr = sourceLineAttr(opts, node.pos?.startLine, headingAttrs)
+      const slAttr = sourceLineAttr(opts, node.pos?.startLine, ownAttrs)
       out.push(
-        `${indent(headingLevel)}<h${node.level}${renderAttrs(headingAttrs, `h${node.level}`)}${slAttr}>${inner}</h${node.level}>`,
+        `${indent(headingLevel)}<h${node.level}${renderAttrs(ownAttrs, `h${node.level}`)}${explicit}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
@@ -762,6 +799,8 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     if (rendered !== '' || owesALine(node)) out.push(rendered)
   }
   closeTo(1) // close any sections still open at end of document
+  const abbrTemplate = renderAbbreviationTemplate(ast, opts)
+  if (abbrTemplate !== '') out.push(abbrTemplate)
   if (footnotes.order.length && !footnotesPlaced) out.push(renderFootnoteSection(ast, footnotes, opts))
   // AFTER the endnotes, which are themselves a `<section>` - so "after the last
   // section" means after that one too. carve-php reaches the same place from
@@ -773,6 +812,51 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     if (rendered !== '' || owesALine(node)) out.push(rendered)
   }
   return out.join('\n')
+}
+
+/**
+ * Was this node's `id` AUTHORED?
+ *
+ * `attrs.order` records the slots the SOURCE wrote, so `#id` in it means the
+ * author spelled an id (either `{#x}` or `{id=x}`, which share the slot). A
+ * generated heading slug is assigned straight onto `attrs` by
+ * `resolveHeadingIds`, which never adds the slot, so the two are separable at
+ * render time without a second field.
+ */
+function authoredId(attrs: Attrs | undefined): boolean {
+  return attrs?.id !== undefined && attrs.order?.includes('#id') === true
+}
+
+/**
+ * §13a's `data-carve-explicit-id` RIDES THE ELEMENT THAT CARRIES THE ID: the
+ * `<section>` where PART 9 §13 wraps one, the heading where it does not. So it
+ * is emitted here only when the id stayed on the `<h*>`.
+ */
+function explicitIdAttr(
+  nodeAttrs: Attrs | undefined,
+  renderedAttrs: Attrs | undefined,
+  opts: RenderOptions,
+): string {
+  if (!roundtripExport(opts)) return ''
+  if (renderedAttrs?.id === undefined) return ''
+  return authoredId(nodeAttrs) ? ` ${carrier('explicit-id')}="1"` : ''
+}
+
+/**
+ * §13a's abbreviation carrier: the document's definitions, one per line, in a
+ * `<template>`. The definitions are the one construct the HTML body drops
+ * entirely - an `<abbr title>` publishes the expansion at each USE and says
+ * nothing about the `*[ABBR]: …` line that declared it.
+ */
+function renderAbbreviationTemplate(ast: Document, opts: RenderOptions): string {
+  if (!roundtripExport(opts)) return ''
+  const defs = new Map<string, string>()
+  for (const node of ast.children) {
+    if (node.type === 'abbreviation_def') defs.set(node.abbr, node.expansion)
+  }
+  if (defs.size === 0) return ''
+  const lines = [...defs].map(([abbr, expansion]) => `*[${abbr}]: ${expansion}`)
+  return `<template ${carrier('abbreviations')}>${escapeHtml(lines.join('\n'))}</template>`
 }
 
 /** A `::: footnotes` placement directive (CARVE-P12-057, kind `footnotes`):
@@ -992,7 +1076,7 @@ function renderFootnoteSectionInner(
     lines.push(
       // The endnote item carries the definition's source line so editor
       // integrations can map the rendered footnote back to its source.
-      `${indent(2)}<li id="fn${number}"${sourceLineAttr(opts, entry.sourceLine)}>`,
+      `${indent(2)}<li id="fn${number}"${endnoteCarrier(entry, opts)}${sourceLineAttr(opts, entry.sourceLine)}>`,
       ...body,
       `${indent(2)}</li>`,
     )
@@ -1479,19 +1563,40 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     }
     case 'heading': {
       const inner = renderInlines(node.children, opts)
-      return `${pad}<h${node.level}${renderAttrs(node.attrs, `h${node.level}`)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
+      const explicit = explicitIdAttr(node.attrs, node.attrs, opts)
+      const attrs = explicit === ''
+        ? node.attrs
+        : dropCollidingAuthored(node.attrs, [carrier('explicit-id')], opts, node, 'block')
+      return `${pad}<h${node.level}${renderAttrs(attrs, `h${node.level}`)}${explicit}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
     }
     case 'paragraph': {
       const inner = renderInlines(node.children, opts)
       return `${pad}<p${renderAttrs(node.attrs, 'p')}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</p>`
     }
-    case 'thematic_break':
-      return `${pad}<hr${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+    case 'thematic_break': {
+      // §13a: the authored break character, written only where it is not `-`.
+      // It is structural, so it LEADS the authored attributes (§1) - which is
+      // where `data-marker` already sits, and where carve-php puts `data-char`
+      // only when the break carries no authored attributes of its own.
+      const charAttr = roundtripExport(opts) && node.marker !== undefined && node.marker !== '-'
+        ? ` ${CARRIER_CHAR}="${escapeAttr(node.marker)}"`
+        : ''
+      const hrAttrs = charAttr === ''
+        ? node.attrs
+        : dropCollidingAuthored(node.attrs, [CARRIER_CHAR], opts, node, 'block')
+      return `${pad}<hr${charAttr}${renderAttrs(hrAttrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+    }
     case 'code_block': {
       // The opener "header" is resolved to a `title` attribute at parse time
       // (see parseBlocks), so it renders here AND wherever else a code block is
       // emitted (e.g. inside a code-group).
-      return renderCodeBlockCore(node, opts, pad)
+      //
+      // §13a's `data-carve-src` rides the `<pre>` and holds the construct's
+      // Carve source. `<pre><code class="language-x">` loses the fence width,
+      // the info-string spelling and any attribute line, and none of that is a
+      // field on the node, so the source is written back out by the canonical
+      // writer rather than read off the tree.
+      return renderCodeBlockCore(node, opts, pad, codeBlockSourceAttr(node, opts))
     }
     case 'block_quote':
       return renderBlockQuote(node, opts, level)
@@ -1628,10 +1733,31 @@ function renderCodeBlockCore(
   node: Pick<CodeBlock, 'lang' | 'content' | 'attrs' | 'pos'>,
   opts: RenderOptions,
   pad: string,
+  srcAttr = '',
 ): string {
   const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
   const escaped = escapeHtml(node.content)
-  return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
+  const attrs = srcAttr === ''
+    ? node.attrs
+    : dropCollidingAuthored(node.attrs, [carrier('src')], opts, { type: 'code_block', ...(node.pos ? { pos: node.pos } : {}) }, 'block')
+  return `${pad}<pre${srcAttr}${renderAttrs(attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
+}
+
+/** §13a's `data-carve-src` for a code block, empty unless roundtrip is on. */
+function codeBlockSourceAttr(node: CodeBlock, opts: RenderOptions): string {
+  if (!roundtripExport(opts)) return ''
+  return ` ${carrier('src')}="${escapeAttr(renderCarve({ type: 'document', children: [node] }))}"`
+}
+
+/**
+ * §13a's two endnote carriers: the authored label, or presence for a note whose
+ * body was written at the point of use. An inline note HAS no label, so the two
+ * are exclusive, and carve-php picks the same way.
+ */
+function endnoteCarrier(entry: FootnoteEntry, opts: RenderOptions): string {
+  if (!roundtripExport(opts)) return ''
+  if (entry.inline !== undefined) return ` ${carrier('inline-footnote')}="1"`
+  return entry.label === undefined ? '' : ` ${carrier('footnote-label')}="${escapeAttr(entry.label)}"`
 }
 
 function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number): string {
@@ -1664,13 +1790,27 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
     ? ` start="${node.start}"`
     : ''
   const delimAttr = node.ordered && node.delim === ')' ? ` data-delim="${escapeAttr(node.delim)}"` : ''
+  // PART 10 §13a: the AUTHORED marker, written only where it is not the
+  // default - `-` for a bullet list, `.` for an ordered one. An ordered list's
+  // marker is its delimiter, so `1)` carries `)` here beside §12's own
+  // `data-delim`: one is the spelling the author used, the other is the
+  // distinction every render publishes.
+  const authoredMarker = node.ordered
+    ? (node.delim !== undefined && node.delim !== '.' ? node.delim : undefined)
+    : (node.bulletChar !== undefined && node.bulletChar !== '-' ? node.bulletChar : undefined)
+  const markerAttr = roundtripExport(opts) && authoredMarker !== undefined
+    ? ` ${CARRIER_MARKER}="${escapeAttr(authoredMarker)}"`
+    : ''
+  const listOwnAttrs = markerAttr === ''
+    ? node.attrs
+    : dropCollidingAuthored(node.attrs, [CARRIER_MARKER], opts, node, 'block')
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
   // PART 19 §1: a task list's mandatory base class leads the authored ones.
   const isTaskList = !node.ordered && node.items.length > 0 && node.items.every((it) => it.checked !== undefined)
-  const listAttrs = isTaskList ? renderAttrs2(node.attrs, { baseClass: 'task-list' }) : renderAttrs(node.attrs)
-  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
+  const listAttrs = isTaskList ? renderAttrs2(listOwnAttrs, { baseClass: 'task-list' }) : renderAttrs(listOwnAttrs)
+  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${markerAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(
@@ -2203,9 +2343,14 @@ function renderImage(img: Image, opts: RenderOptions): string {
   // leaves an HTML parser to choose which value survives. Keep title= when the
   // destination has no title, because then it is the only authored value.
   if (img.title !== undefined) attrs = stripKeyValue(attrs, 'title')
+  // §13a, as on a link: the reference label the image resolved by.
+  const refAttr = roundtripExport(opts) && img.ref !== undefined
+    ? ` ${carrier('ref')}="${escapeAttr(img.ref)}"`
+    : ''
+  if (refAttr !== '') attrs = dropCollidingAuthored(attrs, [carrier('ref')], opts, img, 'inline')
   // The sanitized structural src wins; never re-emit an author-supplied
   // `src` from an attribute block, which would bypass sanitization.
-  return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${renderAttrs(attrs)}>`
+  return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${refAttr}${renderAttrs(attrs)}>`
 }
 
 // ============================================================================
@@ -2323,8 +2468,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'text':
       return escapeHtml(node.value)
     case 'escaped_text':
-      // The backslash is authoring syntax; the reader sees the character.
-      return escapeHtml(node.value)
+      // The backslash is authoring syntax; the reader sees the character. §13a
+      // carries ONE escape per element (ruling 4): a multi-character value
+      // imported back as `\a\b\c`, which is not valid Carve, so a run of
+      // escapes is a run of spans.
+      return roundtripExport(opts)
+        ? `<span ${carrier('escaped')}>${escapeHtml(node.value)}</span>`
+        : escapeHtml(node.value)
     case 'emphasis':
       return `<em${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</em>`
     case 'strong':
@@ -2364,7 +2514,14 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       const label = withinLink(() => renderInlines(node.children, opts))
       let attrs = stripKeyValue(node.attrs, 'href')
       if (node.title !== undefined) attrs = stripKeyValue(attrs, 'title')
-      return `<a href="${href}"${titleAttr}${renderAttrs(attrs)}>${label}</a>`
+      // §13a: the reference label the link resolved by. PART 12 §3a keeps it on
+      // a RESOLVED reference, so the carrier reads the tree rather than
+      // guessing from the destination.
+      const refAttr = roundtripExport(opts) && node.ref !== undefined
+        ? ` ${carrier('ref')}="${escapeAttr(node.ref)}"`
+        : ''
+      if (refAttr !== '') attrs = dropCollidingAuthored(attrs, [carrier('ref')], opts, node, 'inline')
+      return `<a href="${href}"${titleAttr}${refAttr}${renderAttrs(attrs)}>${label}</a>`
     }
     case 'image':
       return renderImage(node, opts)
@@ -2398,11 +2555,20 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'raw_inline':
       // Verbatim only when the format matches this output; else dropped.
       // Escape it instead when raw HTML is disabled (untrusted input).
+      // §13a wraps it in a `<span data-carve-raw="{format}">`; the span holds
+      // the content. A format this target does not emit is STILL REPORTED as
+      // dropped under roundtrip - the carrier preserves the bytes, but the
+      // document no longer renders what the author asked for, and a
+      // preservation mode that silences the diagnostic is the one mode that
+      // loses a raw inline quietly (markup-carve/carve#2902 ruling 7).
       if (node.format !== 'html') {
         rawFormatDropped(opts, node, 'html')
-        return ''
+        return roundtripExport(opts)
+          ? `<span ${carrier('raw')}="${escapeAttr(node.format)}">${escapeHtml(node.content)}</span>`
+          : ''
       }
-      return opts.allowRawHtml === false ? escapeHtml(node.content) : node.content
+      const rawBody = opts.allowRawHtml === false ? escapeHtml(node.content) : node.content
+      return roundtripExport(opts) ? `<span ${carrier('raw')}="html">${rawBody}</span>` : rawBody
     case 'literal_inline': {
       // §27: content is escaped and ALWAYS emitted (never target-routed like
       // raw passthrough), with the `<code>` wrapper dropped. An element is
@@ -2455,7 +2621,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       const sanitizedAutolink = sanitizeUrl(node.href, opts)
       destinationDenied(opts, 'autolink', 'html', node.href, sanitizedAutolink, node.pos)
       const href = escapeAttr(sanitizedAutolink)
-      return `<a href="${href}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${escapeHtml(display)}</a>`
+      // §13a presence carrier: HTML has no spelling that distinguishes
+      // `<https://e>` from `[https://e](https://e)`, and the AST does - the
+      // autolink is its own node type.
+      const autoAttr = roundtripExport(opts) ? ` ${carrier('autolink')}="1"` : ''
+      let autoAttrs = stripKeyValue(node.attrs, 'href')
+      if (autoAttr !== '') autoAttrs = dropCollidingAuthored(autoAttrs, [carrier('autolink')], opts, node, 'inline')
+      return `<a href="${href}"${autoAttr}${renderAttrs(autoAttrs)}>${escapeHtml(display)}</a>`
     }
     case 'mention': {
       const text = `@${escapeHtml(node.user)}`
@@ -2508,9 +2680,19 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'inline_footnote':
       // number is assigned by collectFootnotes for refs with a matching
       // definition; an unresolved ref falls back to literal source.
-      return node.number === undefined
-        ? escapeHtml(`[^${node.id ?? ''}]`)
-        : `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
+      if (node.number === undefined) return escapeHtml(`[^${node.id ?? ''}]`)
+      else {
+        // §13a: the AUTHORED label, on the reference and on the endnote item.
+        // The rendered `<sup>1</sup>` publishes the NUMBER, assigned by
+        // reference order, so the label the author wrote has no other home.
+        const labelAttr = roundtripExport(opts) && node.id !== undefined
+          ? ` ${carrier('footnote-label')}="${escapeAttr(node.id)}"`
+          : ''
+        const refAttrs = labelAttr === ''
+          ? node.attrs
+          : dropCollidingAuthored(node.attrs, [carrier('footnote-label')], opts, node, 'inline')
+        return `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(refAttrs, { dropId: true })}><sup>${node.number}</sup></a>`
+      }
     case 'non_breaking_space':
       return node.attrs ? `<span${renderAttrs(node.attrs)}>&nbsp;</span>` : '&nbsp;'
     case 'soft_break':

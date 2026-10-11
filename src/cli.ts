@@ -135,6 +135,12 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                    Write the JSON include-dependency list (use - for stderr).
 
   rendering:
+    --roundtrip    add the preservation carriers PART 10 section 13a names, so
+                   an export can be imported back without losing a distinction
+                   the serialization has no spelling for. HTML writes the named
+                   attributes; Markdown selects the container carrier comments
+                   --carry-markers writes. Off by default, and an EXPORT option
+                   only: it never widens an import mode or relaxes a URL check.
     --carry-markers
                    Markdown only: bracket every container Markdown drops with
                    an HTML comment holding its Carve opener, so
@@ -653,6 +659,7 @@ function renderDocumentTarget(
       // and profile configuration, which the caller already applied.
       return renderHtmlWithReport(doc, {
         ...(opts.allowRawHtml === false ? { allowRawHtml: false } : {}),
+        ...(lossOptions.roundtrip === true ? { roundtrip: true } : {}),
         maxRenderLosses: lossOptions.maxRenderLosses,
       })
     case 'markdown':
@@ -771,6 +778,8 @@ interface RenderCliLossOptions {
   maxRenderLosses: number
   /** PART 11 §10s, Markdown output only. */
   carryMarkers?: boolean
+  /** PART 10 §13, HTML output only; the Markdown half folds into carryMarkers. */
+  roundtrip?: boolean
 }
 
 function finishRender(result: RenderResult, file: string, opts: RenderCliLossOptions, io: CliIO): number {
@@ -852,6 +861,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     'no-includes'?: boolean
     'report-includes'?: string
     'carry-markers'?: boolean
+    roundtrip?: boolean
     help?: boolean
   }
   let positionals: string[]
@@ -883,6 +893,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         'no-includes': { type: 'boolean' },
         'report-includes': { type: 'string' },
         'carry-markers': { type: 'boolean' },
+        roundtrip: { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -937,7 +948,16 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     io.writeErr('carve render: --carry-markers applies to --markdown output only\n')
     return 2
   }
-  const carryMarkers = values['carry-markers'] === true
+  const roundtrip = values.roundtrip === true
+  // The canonical option is valid on both targets that have a carrier; every
+  // other target has nothing to add, so naming it there is a mistake rather
+  // than a no-op.
+  if (roundtrip && target !== 'markdown' && target !== 'html') {
+    io.writeErr('carve render: --roundtrip applies to --html and --markdown output only\n')
+    return 2
+  }
+  // Section 13c: either enabled option enables preservation.
+  const carryMarkers = values['carry-markers'] === true || (roundtrip && target === 'markdown')
 
   const opts: ProfileOptions & { allowRawHtml?: false } = {}
   if (values['no-raw-html'] || values.safe) opts.allowRawHtml = false
@@ -966,7 +986,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened']
+  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped']
   const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
     io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected ${knownLosses.join(', ')})\n`)
@@ -984,6 +1004,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     allowedLosses: new Set(allowedLosses as RenderLossCode[]),
     maxRenderLosses,
     carryMarkers,
+    roundtrip,
     ...(values['report-losses'] !== undefined ? { reportLosses: values['report-losses'] } : {}),
   }
 
@@ -1114,7 +1135,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         result = { value: JSON.stringify(carveToAstJson(src, opts), null, 2), losses: [], totalLosses: 0, truncated: false }
         break
       case 'html':
-        result = carveToHtmlWithReport(src, { ...opts, maxRenderLosses })
+        result = carveToHtmlWithReport(src, { ...opts, maxRenderLosses, ...(roundtrip ? { roundtrip: true } : {}) })
         break
       case 'markdown':
         result = carveToMarkdownWithReport(src, { ...opts, maxRenderLosses, carryMarkers })
