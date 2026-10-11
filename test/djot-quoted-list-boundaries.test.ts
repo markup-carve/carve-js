@@ -16,7 +16,7 @@ test('reports the plain export loss for a multiline code fallback', () => {
   })
 })
 
-test.each(['> a `b\n> c` d\n', '- > a `b\n  > c` d\n'])('keeps container prefixes out of code-loss diagnostics: %s', source => {
+test.each(['> a `b\n> c` d\n', '- > a `b\n  > c` d\n', 'ref[^n]\n\n[^n]: a\n\np `b\nc` d\n', 'ref[^n]\n\n[^n]: a\n> p `b\n> c` d\n'])('keeps container prefixes out of code-loss diagnostics: %s', source => {
   expect(djotToCarveWithLosses(source).losses).toEqual([])
 })
 
@@ -27,4 +27,13 @@ test('keeps output growth linear for wide numeric list markers', () => {
     expect(result.length).toBeLessThanOrEqual(source.length * 2)
     expect(carveToHtml(result)).toBe(carveToHtml('1. > a\n' + '   > b\n'.repeat(size)))
   }
+})
+
+test('reports multiline footnote code loss at its original opener', () => {
+  const result = djotToCarveWithLosses('ref[^n]\n\n[^n]: a `b\nc` d\n')
+  expect(result.losses).toContainEqual({
+    code: 'structure-unspellable',
+    message: 'Multiline inline code uses raw HTML; plain-text export omits it.',
+    line: 3,
+  })
 })

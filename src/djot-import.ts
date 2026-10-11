@@ -1623,8 +1623,9 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
     }
     const [parsedDepth, content] = quoted(line),
       trimmed = trimStartNonNbsp(content)
-    const indent = content.length - trimmed.length,
-      item = marker.exec(trimmed)
+    const indent = content.length - trimmed.length
+    let item = marker.exec(trimmed)
+    if (item?.[0].startsWith('[^') && !previousBlock && parsedDepth >= previousQuote && !(itemColumn > 0 && parsedDepth === itemQuote && indent < itemColumn)) item = null
     const oldColumn = itemColumn,
       oldQuote = itemQuote
     const beganInside = offset < consumed
@@ -1673,14 +1674,20 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
           .replace(/^[0-9]+/, '1')
           .replace(/^[A-Za-z]+/, 'a')
           .trim()
-      } else if (
-        trimmed &&
-        (depth < itemQuote ||
-          (depth === itemQuote &&
-            indent < itemColumn &&
-            (block.test(trimmed) || blockAttributes(trimmed))))
-      )
-        itemColumn = 0
+      } else if (trimmed && itemColumn > 0) {
+        let ownerContent = line
+        for (let q = 0; q < itemQuote; q++) {
+          const prefix = /^[ \t]*>(?:[ \t]|$)/.exec(ownerContent)
+          if (!prefix) break
+          ownerContent = ownerContent.slice(prefix[0].length)
+        }
+        const ownerText = trimStartNonNbsp(ownerContent)
+        const ownerIndent = ownerContent.length - ownerText.length
+        if (depth < itemQuote || (ownerIndent < itemColumn && (previousBlock || block.test(ownerText) || blockAttributes(ownerText)))) {
+          itemColumn = 0
+          itemKind = ''
+        }
+      }
       const div = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(at))
       if (div) {
         const owner = divs.at(-1)
@@ -1827,7 +1834,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
             (value) =>
               (block.test(value) || value.startsWith('{')) && (!/^\|[ \t:|-]*\|$/.test(value) || line[at] !== '|'),
           ) ||
-        (itemKind.startsWith('[^') && normalized.length > 1)
+        (itemColumn > 0 && itemKind.startsWith('[^') && normalized.length > 1)
       if (codeDepth > 0 && !rawCode) payload = normalized.join('\n')
       if (rawCode) {
         onRawCode?.(i)
