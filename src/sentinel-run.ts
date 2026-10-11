@@ -27,7 +27,7 @@ const PRIVATE_USE_END = 0xf8ff
  * it. An explicit stack has no such limit. Shared objects and arrays are visited
  * once: resolved references can share a long display-text subtree.
  */
-export function occupiedPrivateUse(root: unknown): Set<number> {
+export function occupiedPrivateUse(root: unknown, includeKeys = false): Set<number> {
   const occupied = new Set<number>()
   const visited = new WeakSet<object>()
   const stack: unknown[] = [root]
@@ -47,7 +47,10 @@ export function occupiedPrivateUse(root: unknown): Set<number> {
       for (const item of node) stack.push(item)
       continue
     }
-    for (const value of Object.values(node)) stack.push(value)
+    for (const [key, value] of Object.entries(node)) {
+      if (includeKeys) stack.push(key)
+      stack.push(value)
+    }
   }
 
   return occupied
@@ -99,7 +102,7 @@ export function pickSentinelRun(occupied: Set<number>, base: number, length: num
 
 /** Source markers remain distinct when every single-character slot is occupied. */
 export function pickSourceSentinels(root: unknown, base: number, length: number): string[] {
-  const occupied = occupiedPrivateUse(root)
+  const occupied = occupiedPrivateUse(root, true)
   const preferred = pickSentinelRun(occupied, base, length)
   if (preferred.every(marker => !occupied.has(marker.charCodeAt(0)))) return preferred
 
@@ -119,7 +122,9 @@ export function pickSourceSentinels(root: unknown, base: number, length: number)
       } else if (!ancestors.has(value)) {
         ancestors.add(value)
         stack.push({ value, leave: true })
-        for (const child of Object.values(value)) stack.push({ value: child })
+        for (const [key, child] of Object.entries(value)) {
+          stack.push({ value: key }, { value: child })
+        }
       }
     }
   }

@@ -13,9 +13,19 @@ const sources = [
   `| a${payload}\n| b\n`,
   `> a${payload}\n> b\n`,
   `- a${payload}\n  b\n`,
+  `a${payload}b\n\n[^\ue009\ue008\ue008\ue010\ue00a]: definition\n`,
 ]
 
 describe('Source formatting with an occupied marker pool', () => {
+  it('preserves an authored footnote map key that could spell a fallback marker', () => {
+    const label = '\ue009\ue008\ue008\ue010\ue00a'
+    const source = `a${pool}b\n\n[^${label}]: definition\n`
+    const result = carveToCarveWithReport(source)
+    expect(result.value).toContain(`[^${label}]:`)
+    expect(result.value).toContain(pool)
+    expect(result.totalLosses).toBe(0)
+    expect(carveToHtml(result.value)).toBe(carveToHtml(source))
+  })
   for (const [index, source] of sources.entries()) {
     it(`preserves literal Unicode and reports for context ${index}`, () => {
       const expected = carveToHtml(source)
