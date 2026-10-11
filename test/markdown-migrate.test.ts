@@ -161,7 +161,7 @@ describe('markdownToCarve — inline construct mapping', () => {
 
   it('does not rewrite delimiters inside a bare URL', () => {
     expect(conv('see https://example.com/api/_v1_/index here')).toBe(
-      'see https://example.com/api/_v1_/index here',
+      'see [https://example.com/api/_v1_/index](https://example.com/api/_v1_/index) here',
     )
   })
 
@@ -958,7 +958,6 @@ describe('markdownToCarve — Carve-only inline syntax is literal in Markdown', 
     'a 50% of b',
     'k {a=b} v',
     'c {.cls} d',
-    'ftp://x/',
     '//host/path',
     'file:///etc/hosts',
     'a //b// c',

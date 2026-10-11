@@ -7,6 +7,7 @@ import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
 import { markdownBareLinks } from './markdown-gfm-autolinks.js'
+import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
  * Markdown -> Carve converter.
  */
@@ -1883,10 +1884,10 @@ function convertInline(
     }
     return escaped
   }
-  if (/[*_]|<em\b/i.test(line)) line = escapeLabelSlashes(line, true)
+  if (line.includes('/') && /[*_]|<(?:em|i)\b/i.test(line)) line = escapeLabelSlashes(line, true)
   line = convertInlineHtml(line, protect, protectedSpans)
 
-  const referenceUrls = line.includes('http') ? plainMarkdownUrlRanges(line, protectedSpans) : []
+  const referenceUrls = plainMarkdownUrlRanges(line, protectedSpans, protectedSources)
   let referenceUrlAt = 0
   const destinationOpeners = completeDestinationOpeners(line)
   line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
@@ -1927,7 +1928,7 @@ function convertInline(
     for (const link of markdownBareLinks(line, token => {
       const index = Number(token.slice(2, -1))
       return isPlainMarkdownUrlToken(index, protectedSpans) ? protectedSources[index] : undefined
-    })) {
+    }, 'url')) {
       const offset = link.start
       while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
       const label = activeLabelRanges[activeLabelAt]
@@ -5010,7 +5011,12 @@ export function markdownToCarveWithLosses(
     // raw HTML.
     const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
 
-    return { value: restoreCarrierMarkers(convertMarkdown(prepared, dialect)), losses }
+    let value = restoreCarrierMarkers(convertMarkdown(prepared, dialect))
+    if (value.includes('@')) {
+      const document = parse(value)
+      if (linkMarkdownEmailText(document)) value = renderCarve(document)
+    }
+    return { value, losses }
   } finally {
     carrierSlots = []
     carrierToken = ''
@@ -6453,22 +6459,9 @@ function isPlainMarkdownUrlToken(index: number, spans: readonly string[]): boole
   return /^\\[!-/:-@\[-`{-~]$/.test(spans[index] ?? '')
 }
 
-function plainMarkdownUrlRanges(line: string, spans: readonly string[]): { start: number; end: number }[] {
-  const ranges: { start: number; end: number }[] = []
-  const start = /\bhttps?:\/\//g
-  const protectedToken = /\x00P(\d+)\x00/y
-  for (let match = start.exec(line); match; match = start.exec(line)) {
-    let end = start.lastIndex
-    while (end < line.length && !/[\s<>`]/.test(line[end]!)) {
-      if (line[end] === '\x00') {
-        protectedToken.lastIndex = end
-        const token = protectedToken.exec(line)
-        if (!token || !isPlainMarkdownUrlToken(Number(token[1]), spans)) break
-        end += token[0].length
-      } else end++
-    }
-    ranges.push({ start: match.index, end })
-    start.lastIndex = end
-  }
-  return ranges
+function plainMarkdownUrlRanges(line: string, spans: readonly string[], sources: readonly string[]): { start: number; end: number }[] {
+  return markdownBareLinks(line, token => {
+    const index = Number(token.slice(2, -1))
+    return isPlainMarkdownUrlToken(index, spans) ? sources[index] : undefined
+  }, 'url')
 }

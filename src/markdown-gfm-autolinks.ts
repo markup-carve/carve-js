@@ -10,10 +10,12 @@ const hostCharacter = (value: string): boolean => !/[\s\p{P}]/u.test(value) && !
 
 function domainAllowed(text: string, start: number, end: number, short: boolean): boolean {
   if (start >= end || !hostCharacter(text[start]!)) return false
+  if ((text.codePointAt(start) ?? 0) > 0x7f) return short
   let dots = 0, previousUnderscores = 0, underscores = 0
   for (let i = start + 1; i < end - 1; i++) {
+    if (text[i] === '\\' && i < end - 2) i++
     const char = text[i]!
-    if (char === '\\' && i + 1 < end) { i++; continue }
+    if (char.charCodeAt(0) > 0x7f) break
     if (char === '_') underscores++
     else if (char === '.') { dots++; previousUnderscores = underscores; underscores = 0 }
     else if (char !== '-' && !hostCharacter(char)) break
@@ -42,13 +44,14 @@ function trimmedEnd(text: string, start: number, end: number): number {
   return end
 }
 
-function scanBareLinks(text: string): MarkdownBareLink[] {
+function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBareLink[] {
   const links: MarkdownBareLink[] = []
   const triggers = /https?:\/\/|ftp:\/\/|www\.|@/gi
   let contextAt = 0, bracketDepth = 0
   let chunkEnd = 0
-  for (let match = triggers.exec(text); match; match = triggers.exec(text)) {
+  scan: for (let match = triggers.exec(text); match; match = triggers.exec(text)) {
     while (contextAt < match.index) {
+      if (text[contextAt] === '\\' && /[!-/:-@\[-`{-~]/.test(text[contextAt + 1] ?? '')) { contextAt += 2; continue }
       if (text[contextAt] === '[') bracketDepth++
       else if (text[contextAt] === ']' && bracketDepth > 0) bracketDepth--
       contextAt++
@@ -57,21 +60,29 @@ function scanBareLinks(text: string): MarkdownBareLink[] {
     let start = match.index, end = triggers.lastIndex
     let prefix = ''
     if (match[0] === '@') {
+      if (mode === 'url') continue
       let resource = false
-      while (start > 0 && /[A-Za-z0-9.+_-]/.test(text[start - 1]!)) start--
+      const floor = links.at(-1)?.end ?? 0
+      while (start > floor && /[A-Za-z0-9.+_-]/.test(text[start - 1]!)) start--
       if (start === match.index) continue
-      for (const scheme of ['mailto:', 'xmpp:']) {
-        const before = start - scheme.length
-        if (before >= 0 && text.slice(before, start) === scheme && !/[A-Za-z0-9]/.test(text[before - 1] ?? '')) {
-          start = before
-          prefix = scheme
-          resource = scheme === 'xmpp:'
-          break
+      while (true) {
+        let found = false
+        for (const scheme of ['mailto:', 'xmpp:']) {
+          const before = start - scheme.length
+          if (before >= floor && text.slice(before, start) === scheme && !/[A-Za-z0-9]/.test(text[before - 1] ?? '')) {
+            start = before
+            prefix = scheme
+            resource ||= scheme === 'xmpp:'
+            found = true
+            break
+          }
         }
+        if (!found) break
       }
       let dots = 0
       while (end < text.length) {
         const char = text[end]!
+        if (char === '@') { triggers.lastIndex = end; continue scan }
         if (/[A-Za-z0-9_-]/.test(char) || (resource && char === '/')) { end++; continue }
         if (char === '.' && /[A-Za-z0-9]/.test(text[end + 1] ?? '')) { dots++; end++; continue }
         break
@@ -79,14 +90,15 @@ function scanBareLinks(text: string): MarkdownBareLink[] {
       if (dots === 0 || !/[A-Za-z]/.test(text[end - 1] ?? '')) continue
       prefix = prefix === '' ? 'mailto:' : ''
     } else {
+      if (mode === 'email') continue
       const www = match[0] === 'www.'
-      if (www && start > 0 && !/[\s*_~(]/.test(text[start - 1]!)) continue
+      if (www && start > 0 && !/[ \t\r\n\f\v*_~(]/.test(text[start - 1]!)) continue
       if (!www && /[A-Za-z]/.test(text[start - 1] ?? '')) continue
       if (end >= chunkEnd) {
         chunkEnd = end
-        while (chunkEnd < text.length && !/[\s<\x00]/.test(text[chunkEnd]!)) chunkEnd++
+        while (chunkEnd < text.length && !/[ \t\r\n\f\v<\x00]/.test(text[chunkEnd]!)) chunkEnd++
       }
-      if (!domainAllowed(text, www ? start : triggers.lastIndex, chunkEnd, !www)) continue
+      if (!domainAllowed(text, www ? start : triggers.lastIndex, text.length, !www)) continue
       end = chunkEnd
       end = trimmedEnd(text, start, end)
       if (www) prefix = 'http://'
@@ -101,8 +113,9 @@ function scanBareLinks(text: string): MarkdownBareLink[] {
 export function markdownBareLinks(
   text: string,
   escapedSource?: (token: string) => string | undefined,
+  mode: 'all' | 'url' | 'email' = 'all',
 ): MarkdownBareLink[] {
-  if (!escapedSource || !text.includes('\x00')) return scanBareLinks(text)
+  if (!escapedSource || !text.includes('\x00')) return scanBareLinks(text, mode)
   const pieces: { value: string; start: number; end: number; offset: number; escaped: boolean }[] = []
   let cursor = 0, offset = 0
   const append = (value: string, start: number, end: number, escaped = false): void => {
@@ -122,7 +135,7 @@ export function markdownBareLinks(
     while (pieceAt + 1 < pieces.length && position >= pieces[pieceAt]!.offset + pieces[pieceAt]!.value.length) pieceAt++
     return pieces[pieceAt]!
   }
-  return scanBareLinks(expanded).map(link => {
+  return scanBareLinks(expanded, mode).map(link => {
     const first = locate(link.start)
     const start = first.escaped ? first.start : first.start + link.start - first.offset
     const last = locate(link.end)

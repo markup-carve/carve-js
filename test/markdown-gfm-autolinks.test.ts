@@ -4,7 +4,7 @@ import { carveToCarve, carveToHtml, markdownToCarve, migrateMarkdown, parse, ren
 import controls from './fixtures/markdown-gfm-autolinks.json'
 
 type HtmlNode = DefaultTreeAdapterMap['node']
-const containers = new Set(['blockquote', 'ul', 'ol', 'dl', 'table', 'tbody', 'tr'])
+const containers = new Set(['blockquote', 'ul', 'ol', 'dl', 'table', 'thead', 'tbody', 'tr'])
 
 const htmlTree = (html: string): unknown => {
   const visit = (node: HtmlNode, literal = false): unknown => {
@@ -15,8 +15,8 @@ const htmlTree = (html: string): unknown => {
     const children = 'childNodes' in node ? node.childNodes
       .filter(child => !(parentContainer && 'value' in child && /^[\t\n\r\f ]*$/.test(child.value)))
       .map(child => visit(child, literal)).filter(child => child !== null) : []
-    const attributes = 'attrs' in node ? node.attrs.map(attr => [attr.name, attr.value]).sort() : []
-    const name = node.nodeName === 'del' ? 's' : node.nodeName
+    const attributes = 'attrs' in node ? node.attrs.filter(attr => !(node.nodeName === 'th' && attr.name === 'scope' && attr.value === 'col')).map(attr => [attr.name, attr.value]).sort() : []
+    const name = node.nodeName === 'del' ? 's' : node.nodeName === 'i' ? 'em' : node.nodeName
     if (name === 'p' && children.length === 1 && 'childNodes' in node && node.childNodes.length === 1 && node.childNodes[0]!.nodeName === 'img') return children[0]
     return [name, attributes, children]
   }

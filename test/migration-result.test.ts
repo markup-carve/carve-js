@@ -68,7 +68,7 @@ describe('shared migration result', () => {
   })
 
   it('does not mistake byte equality or whitespace rewrites for verified fidelity', () => {
-    for (const source of ['https://example.org', '[^note]\n\n[^note]: note']) {
+    for (const source of ['<code>http://example.org</code>', '[^note]\n\n[^note]: note']) {
       expect(migrateMarkdown(source).report.diagnostics).toContainEqual(
         expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }),
       )
@@ -83,7 +83,7 @@ describe('shared migration result', () => {
       expect.objectContaining({ code: 'structure-unspellable', confidence: 'exact', path: 'line:2' }),
     ])
     expect(result.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(false)
-    const incomplete = migrateMarkdown('https://example.org\n\n1. [x] done\n')
+    const incomplete = migrateMarkdown('<code>http://example.org</code>\n\n1. [x] done\n')
     expect(incomplete.report.diagnostics.map(row => row.code)).toEqual(['fidelity-unverified', 'structure-unspellable'])
   })
 })

@@ -9686,5 +9686,241 @@
   {
     "source": "https://x.test/?a=1&amp;[r]\n\n[r]: /u\n",
     "html": "<p><a href=\"https://x.test/?a=1&amp;amp;%5Br%5D\">https://x.test/?a=1&amp;amp;[r]</a></p>\n"
+  },
+  {
+    "source": "a&#64;example.test",
+    "html": "<p><a href=\"mailto:a@example.test\">a@example.test</a></p>\n"
+  },
+  {
+    "source": "*a&#64;example.test*",
+    "html": "<p><em><a href=\"mailto:a@example.test\">a@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label a&#64;example.test](target)",
+    "html": "<p><a href=\"target\">label a@example.test</a></p>\n"
+  },
+  {
+    "source": "a&commat;example.test",
+    "html": "<p><a href=\"mailto:a@example.test\">a@example.test</a></p>\n"
+  },
+  {
+    "source": "*a&commat;example.test*",
+    "html": "<p><em><a href=\"mailto:a@example.test\">a@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label a&commat;example.test](target)",
+    "html": "<p><a href=\"target\">label a@example.test</a></p>\n"
+  },
+  {
+    "source": "a\\_b@example.test",
+    "html": "<p><a href=\"mailto:a_b@example.test\">a_b@example.test</a></p>\n"
+  },
+  {
+    "source": "*a\\_b@example.test*",
+    "html": "<p><em><a href=\"mailto:a_b@example.test\">a_b@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label a\\_b@example.test](target)",
+    "html": "<p><a href=\"target\">label a_b@example.test</a></p>\n"
+  },
+  {
+    "source": "a@b\\.test",
+    "html": "<p><a href=\"mailto:a@b.test\">a@b.test</a></p>\n"
+  },
+  {
+    "source": "*a@b\\.test*",
+    "html": "<p><em><a href=\"mailto:a@b.test\">a@b.test</a></em></p>\n"
+  },
+  {
+    "source": "[label a@b\\.test](target)",
+    "html": "<p><a href=\"target\">label a@b.test</a></p>\n"
+  },
+  {
+    "source": "a&#46;b@example.test",
+    "html": "<p><a href=\"mailto:a.b@example.test\">a.b@example.test</a></p>\n"
+  },
+  {
+    "source": "*a&#46;b@example.test*",
+    "html": "<p><em><a href=\"mailto:a.b@example.test\">a.b@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label a&#46;b@example.test](target)",
+    "html": "<p><a href=\"target\">label a.b@example.test</a></p>\n"
+  },
+  {
+    "source": "a@example&#46;test",
+    "html": "<p><a href=\"mailto:a@example.test\">a@example.test</a></p>\n"
+  },
+  {
+    "source": "*a@example&#46;test*",
+    "html": "<p><em><a href=\"mailto:a@example.test\">a@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label a@example&#46;test](target)",
+    "html": "<p><a href=\"target\">label a@example.test</a></p>\n"
+  },
+  {
+    "source": "mailto:a&#64;example.test",
+    "html": "<p><a href=\"mailto:a@example.test\">mailto:a@example.test</a></p>\n"
+  },
+  {
+    "source": "*mailto:a&#64;example.test*",
+    "html": "<p><em><a href=\"mailto:a@example.test\">mailto:a@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label mailto:a&#64;example.test](target)",
+    "html": "<p><a href=\"target\">label mailto:a@example.test</a></p>\n"
+  },
+  {
+    "source": "x\\.y@example.test",
+    "html": "<p><a href=\"mailto:x.y@example.test\">x.y@example.test</a></p>\n"
+  },
+  {
+    "source": "*x\\.y@example.test*",
+    "html": "<p><em><a href=\"mailto:x.y@example.test\">x.y@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label x\\.y@example.test](target)",
+    "html": "<p><a href=\"target\">label x.y@example.test</a></p>\n"
+  },
+  {
+    "source": "a&#95;b@example.test",
+    "html": "<p><a href=\"mailto:a_b@example.test\">a_b@example.test</a></p>\n"
+  },
+  {
+    "source": "*a&#95;b@example.test*",
+    "html": "<p><em><a href=\"mailto:a_b@example.test\">a_b@example.test</a></em></p>\n"
+  },
+  {
+    "source": "[label a&#95;b@example.test](target)",
+    "html": "<p><a href=\"target\">label a_b@example.test</a></p>\n"
+  },
+  {
+    "source": "http://例_名.test",
+    "html": "<p><a href=\"http://%E4%BE%8B_%E5%90%8D.test\">http://例_名.test</a></p>\n"
+  },
+  {
+    "source": "*http://例_名.test*",
+    "html": "<p><em><a href=\"http://%E4%BE%8B_%E5%90%8D.test\">http://例_名.test</a></em></p>\n"
+  },
+  {
+    "source": "[label http://例_名.test](target)",
+    "html": "<p><a href=\"target\">label http://例_名.test</a></p>\n"
+  },
+  {
+    "source": "http://x.例_名.test",
+    "html": "<p><a href=\"http://x.%E4%BE%8B_%E5%90%8D.test\">http://x.例_名.test</a></p>\n"
+  },
+  {
+    "source": "*http://x.例_名.test*",
+    "html": "<p><em><a href=\"http://x.%E4%BE%8B_%E5%90%8D.test\">http://x.例_名.test</a></em></p>\n"
+  },
+  {
+    "source": "[label http://x.例_名.test](target)",
+    "html": "<p><a href=\"target\">label http://x.例_名.test</a></p>\n"
+  },
+  {
+    "source": "http://x.𐄀name.test",
+    "html": "<p><a href=\"http://x.%F0%90%84%80name.test\">http://x.𐄀name.test</a></p>\n"
+  },
+  {
+    "source": "*http://x.𐄀name.test*",
+    "html": "<p><em><a href=\"http://x.%F0%90%84%80name.test\">http://x.𐄀name.test</a></em></p>\n"
+  },
+  {
+    "source": "[label http://x.𐄀name.test](target)",
+    "html": "<p><a href=\"target\">label http://x.𐄀name.test</a></p>\n"
+  },
+  {
+    "source": "a@b.cd@e.fg",
+    "html": "<p>a@<a href=\"mailto:b.cd@e.fg\">b.cd@e.fg</a></p>\n"
+  },
+  {
+    "source": "*x* https://x.test/[r]\n\n[r]: /u",
+    "html": "<p><em>x</em> <a href=\"https://x.test/%5Br%5D\">https://x.test/[r]</a></p>\n"
+  },
+  {
+    "source": "www.example.test_ b",
+    "html": "<p>www.example.test_ b</p>\n"
+  },
+  {
+    "source": "http://a\\_b.test",
+    "html": "<p>http://a_b.test</p>\n"
+  },
+  {
+    "source": "\\[ http://x.test",
+    "html": "<p>[ <a href=\"http://x.test\">http://x.test</a></p>\n"
+  },
+  {
+    "source": "[a \\] http://x.test",
+    "html": "<p>[a ] http://x.test</p>\n"
+  },
+  {
+    "source": "https://x.test/a b",
+    "html": "<p><a href=\"https://x.test/a%C2%A0b\">https://x.test/a b</a></p>\n"
+  },
+  {
+    "source": "*x/y*",
+    "html": "<p><em>x/y</em></p>\n"
+  },
+  {
+    "source": "<i>x/y</i>",
+    "html": "<p><i>x/y</i></p>\n"
+  },
+  {
+    "source": "mailto:mailto:a@example.test",
+    "html": "<p><a href=\"mailto:mailto:a@example.test\">mailto:mailto:a@example.test</a></p>\n"
+  },
+  {
+    "source": "<foo\\+@bar.example.com>",
+    "html": "<p>&lt;<a href=\"mailto:foo+@bar.example.com\">foo+@bar.example.com</a>&gt;</p>\n"
+  },
+  {
+    "source": "| \\<a\\|b@x.com> | z |\n|---|---|\n\n",
+    "html": "<table>\n<thead>\n<tr>\n<th>&lt;a|<a href=\"mailto:b@x.com\">b@x.com</a>&gt;</th>\n<th>z</th>\n</tr>\n</thead>\n</table>\n"
+  },
+  {
+    "source": "| [a][&lt;a@x.com&gt;\\|z] | c |\n|---|---|\n",
+    "html": "<table>\n<thead>\n<tr>\n<th>[a][&lt;<a href=\"mailto:a@x.com\">a@x.com</a>&gt;|z]</th>\n<th>c</th>\n</tr>\n</thead>\n</table>\n"
+  },
+  {
+    "source": "| [a\\|&lt;x@y.io&gt;][ref] | c |\n|---|---|\n",
+    "html": "<table>\n<thead>\n<tr>\n<th>[a|&lt;<a href=\"mailto:x@y.io\">x@y.io</a>&gt;][ref]</th>\n<th>c</th>\n</tr>\n</thead>\n</table>\n"
+  },
+  {
+    "source": "FTP://example.test",
+    "html": "<p><a href=\"FTP://example.test\">FTP://example.test</a></p>\n"
+  },
+  {
+    "source": "Ftp://example.test",
+    "html": "<p><a href=\"Ftp://example.test\">Ftp://example.test</a></p>\n"
+  },
+  {
+    "source": "HTTP://example.test",
+    "html": "<p><a href=\"HTTP://example.test\">HTTP://example.test</a></p>\n"
+  },
+  {
+    "source": "HTTPS://example.test",
+    "html": "<p><a href=\"HTTPS://example.test\">HTTPS://example.test</a></p>\n"
+  },
+  {
+    "source": "see ftp://example.test/a",
+    "html": "<p>see <a href=\"ftp://example.test/a\">ftp://example.test/a</a></p>\n"
+  },
+  {
+    "source": "ftp://x",
+    "html": "<p><a href=\"ftp://x\">ftp://x</a></p>\n"
+  },
+  {
+    "source": "see http://e.com/a--b\n",
+    "html": "<p>see <a href=\"http://e.com/a--b\">http://e.com/a--b</a></p>\n"
+  },
+  {
+    "source": "see https://example.com/api/_v1_/index here",
+    "html": "<p>see <a href=\"https://example.com/api/_v1_/index\">https://example.com/api/_v1_/index</a> here</p>\n"
+  },
+  {
+    "source": "www.example.com",
+    "html": "<p><a href=\"http://www.example.com\">www.example.com</a></p>\n"
   }
 ]

@@ -3,7 +3,7 @@ import { carveToHtml, markdownToCarve } from '../src/index.js'
 
 it.each([
   ['<https://example.com/\\[\\>', '<p><a href="https://example.com/%5C%5B%5C">https://example.com/\\[\\</a></p>'],
-  ['<foo\\+@bar.example.com>', '<p>&lt;foo+@bar.example.com&gt;</p>'],
+  ['<foo\\+@bar.example.com>', '<p>&lt;<a href="mailto:foo+@bar.example.com">foo+@bar.example.com</a>&gt;</p>'],
   ['<foo+@bar.example.com>', '<p><a href="mailto:foo+@bar.example.com">foo+@bar.example.com</a></p>'],
 ])('keeps Markdown autolink escape semantics: %s', (source, expected) => {
   expect(carveToHtml(markdownToCarve(source))).toBe(expected)
