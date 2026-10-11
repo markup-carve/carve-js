@@ -4230,5 +4230,69 @@
   {
     "source": ":: term\n: body\n+\n::: invalid\n[r]: /opaque\n:::\n [r]: /url\n [r]: /again\n\nSee [r][], [r\\]][], and [^n].\n",
     "html": "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>body</p>\n    <div class=\"invalid\">\n\n    </div>\n  </dd>\n</dl>\n<p>[r]: /url\n[r]: /again</p>\n<p>See <a href=\"/opaque\">r</a>, [r\\]][], and [^n].</p>"
+  },
+  {
+    "source": "- a\n+\n:: t\n| a |\n   [r]: /u\n\n[r][]\n",
+    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": "- a\n+\n:: t\n{.c}\n   [r]: /u\n\n[r][]\n",
+    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<p class=\"c\">[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": "- a\n+\n:: t\n![i](x)\n   [r]: /u\n\n[r][]\n",
+    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>t\n<img src=\"x\" alt=\"i\">\n   [r]: /u</dt>\n    </dl>\n  </li>\n</ul>\n<p>[r][]</p>"
+  },
+  {
+    "source": "- a\n+\n:: t\n::: note\n   [r]: /u\n\n[r][]\n",
+    "html": "<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n    </dl>\n  </li>\n</ul>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <p>[r]: /u</p>\n  <p>[r][]</p>\n</aside>"
+  },
+  {
+    "source": "> a\n+\n:: t\n| a |\n   [r]: /u\n\n[r][]\n",
+    "html": "<blockquote>\n  <p>a</p>\n  <dl>\n    <dt>t</dt>\n  </dl>\n</blockquote>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": "> a\n+\n:: t\n{.c}\n   [r]: /u\n\n[r][]\n",
+    "html": "<blockquote>\n  <p>a</p>\n  <dl>\n    <dt>t</dt>\n  </dl>\n</blockquote>\n<p class=\"c\">[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": "> a\n+\n:: t\n![i](x)\n   [r]: /u\n\n[r][]\n",
+    "html": "<blockquote>\n  <p>a</p>\n  <dl>\n    <dt>t\n<img src=\"x\" alt=\"i\">\n   [r]: /u</dt>\n  </dl>\n</blockquote>\n<p>[r][]</p>"
+  },
+  {
+    "source": "> a\n+\n:: t\n::: note\n   [r]: /u\n\n[r][]\n",
+    "html": "<blockquote>\n  <p>a</p>\n  <dl>\n    <dt>t</dt>\n  </dl>\n</blockquote>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <p>[r]: /u</p>\n  <p>[r][]</p>\n</aside>"
+  },
+  {
+    "source": "[^n]: a\n+\n:: t\n| a |\n   [r]: /u\n\n[r][]\n",
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": "[^n]: a\n+\n:: t\n{.c}\n   [r]: /u\n\n[r][]\n",
+    "html": "<p class=\"c\">[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": "[^n]: a\n+\n:: t\n![i](x)\n   [r]: /u\n\n[r][]\n",
+    "html": "<p>[r][]</p>"
+  },
+  {
+    "source": "[^n]: a\n+\n:: t\n::: note\n   [r]: /u\n\n[r][]\n",
+    "html": "<aside class=\"admonition note\" aria-label=\"Note\">\n  <p>[r]: /u</p>\n  <p>[r][]</p>\n</aside>"
+  },
+  {
+    "source": ":: term\n: body\n+\n:: t\n| a |\n   [r]: /u\n\n[r][]\n",
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body</dd>\n  <dt>t</dt>\n</dl>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": ":: term\n: body\n+\n:: t\n{.c}\n   [r]: /u\n\n[r][]\n",
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body</dd>\n  <dt>t</dt>\n</dl>\n<p class=\"c\">[r]: /u</p>\n<p>[r][]</p>"
+  },
+  {
+    "source": ":: term\n: body\n+\n:: t\n![i](x)\n   [r]: /u\n\n[r][]\n",
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body</dd>\n  <dt>t\n<img src=\"x\" alt=\"i\">\n   [r]: /u</dt>\n</dl>\n<p>[r][]</p>"
+  },
+  {
+    "source": ":: term\n: body\n+\n:: t\n::: note\n   [r]: /u\n\n[r][]\n",
+    "html": "<dl>\n  <dt>term</dt>\n  <dd>body</dd>\n  <dt>t</dt>\n</dl>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <p>[r]: /u</p>\n  <p>[r][]</p>\n</aside>"
   }
 ]

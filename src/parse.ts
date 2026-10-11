@@ -11408,7 +11408,12 @@ class ParseSession {
           if (folded?.char === '%' && commentClose(folded.run, index) !== -1) opaque = folded
           continue
         }
-        if (lineOpensItemBlock(text) || RE_CAPTION.test(text) || RE_COMMENT_LINE.test(text) || /^::? /.test(text)) {
+        if (
+          RE_HEADING.test(text) || RE_HR.test(text) || RE_BLOCKQUOTE.test(text) ||
+          this.isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text) || markerContentColumn(text) >= 0 ||
+          RE_FENCE.test(text) || RE_RAW_FENCE.test(text) || RE_CAPTION.test(text) ||
+          RE_COMMENT_LINE.test(text) || /^::? /.test(text)
+        ) {
           termColumn = null
         }
       }
