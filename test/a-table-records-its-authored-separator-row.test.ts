@@ -83,6 +83,27 @@ describe('the field is published on the wire', () => {
     expect(renderCarve(fromAstJson(payload))).toBe('| a | b |\n|:-----|---:|\n| 1 | 2 |\n')
   })
 
+  it('refuses an EMPTY array, which is a presence claim no writer can spell', () => {
+    // The schema's `minItems: 1`. The field's presence says the author wrote a
+    // separator row and the cell count IS the entry count, so `[]` asserts a
+    // row with no cells - unspellable, and this engine would publish it again
+    // on the way out. Measured as a gap first: the reader accepted it and the
+    // writer degraded to the `|=` form, leaving the tree claiming a row the
+    // bytes never had.
+    const payload = JSON.parse(JSON.stringify(toAstJson(parse('| a |\n|---|\n| 1 |\n')))) as {
+      children: Record<string, unknown>[]
+    }
+    payload.children[0]!['separatorWidths'] = []
+    expect(() => fromAstJson(payload)).toThrow(/at least one item/)
+  })
+
+  it('the parser cannot produce an empty array either', () => {
+    // Both halves of the same rule: a row with no separator cells is not a
+    // delimiter row, so it never promotes and the field is never recorded.
+    expect(tableOf('| a |\n||\n| 1 |\n').separatorWidths).toBeUndefined()
+    expect(tableOf('| a |\n|\n| 1 |\n').separatorWidths).toBeUndefined()
+  })
+
   it('the schema stays CLOSED beside it', () => {
     // The field is published, not a licence to pass anything through: the
     // answer §11 ruled cannot be right is still not taken.

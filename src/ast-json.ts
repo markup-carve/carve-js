@@ -832,6 +832,15 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     if (type === 'ruby' && Array.isArray(record.pairs) && record.pairs.length === 0) {
       throw new AstJsonSchemaError('property "pairs" must contain at least one item', path)
     }
+    // The schema's `minItems: 1`. An EMPTY array is a presence claim no writer
+    // can spell: the field's presence says the author wrote a separator row,
+    // the cell count IS the entry count ([CARVE-P11-066]), and a delimiter row
+    // needs at least one cell. Accepting it would leave the tree asserting a
+    // row that cannot be written and that this engine would publish again on
+    // the way out.
+    if (type === 'table' && Array.isArray(record.separatorWidths) && record.separatorWidths.length === 0) {
+      throw new AstJsonSchemaError('property "separatorWidths" must contain at least one item', path)
+    }
     if (type === 'line_block' && Array.isArray(record.lines)) {
       const stanzas = record.children as unknown[]
       if (record.lines.length !== stanzas.length) {
