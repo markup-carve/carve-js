@@ -51,3 +51,21 @@ it.each(['http://example.test', 'https://example.test/a', 'FTP://example.test/a'
     expect(diagnostics.every(row => row.confidence === 'exact' && row.fidelity !== 'dropped')).toBe(true)
   },
 )
+
+it.each(['', '\n', '\n\n'])(
+  'keeps the importer trailing-newline convention for email text: %j', ending => {
+    const source = markdownToCarve(`a@example.test${ending}`)
+    expect(source.endsWith('\n')).toBe(ending !== '')
+    expect(htmlTree(carveToHtml(source))).toEqual(htmlTree('<p><a href="mailto:a@example.test">a@example.test</a></p>'))
+  },
+)
+
+it.each(['a@example.test', 'a\\_b@example.test', 'a+-b@example.test'])(
+  'links email text inside a footnote definition: %s', email => {
+    const result = migrateMarkdown(`note[^n]\n\n[^n]: ${email}\n`)
+    const address = email.replace(/\\/g, '')
+    expect(carveToHtml(result.value)).toContain(`<a href="mailto:${address}">${address}</a>`)
+    expect(carveToHtml(carveToCarve(result.value))).toContain(`<a href="mailto:${address}">${address}</a>`)
+    expect(result.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(true)
+  },
+)

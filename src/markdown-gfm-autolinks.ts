@@ -63,22 +63,18 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBar
       if (mode === 'url') continue
       let resource = false
       const floor = links.at(-1)?.end ?? 0
-      while (start > floor && /[A-Za-z0-9.+_-]/.test(text[start - 1]!)) start--
-      if (start === match.index) continue
-      while (true) {
-        let found = false
-        for (const scheme of ['mailto:', 'xmpp:']) {
-          const before = start - scheme.length
-          if (before >= floor && text.slice(before, start) === scheme && !/[A-Za-z0-9]/.test(text[before - 1] ?? '')) {
-            start = before
-            prefix = scheme
-            resource ||= scheme === 'xmpp:'
-            found = true
-            break
-          }
+      while (start > floor) {
+        if (/[A-Za-z0-9.+_-]/.test(text[start - 1]!)) { start--; continue }
+        if (text[start - 1] === ':') {
+          const scheme = ['mailto:', 'xmpp:'].find(value => {
+            const before = start - value.length
+            return before >= floor && text.slice(before, start) === value && !/[A-Za-z0-9]/.test(text[before - 1] ?? '')
+          })
+          if (scheme) { start--; prefix = scheme; resource ||= scheme === 'xmpp:'; continue }
         }
-        if (!found) break
+        break
       }
+      if (start === match.index) continue
       let dots = 0
       while (end < text.length) {
         const char = text[end]!

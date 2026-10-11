@@ -1918,7 +1918,7 @@ function convertInline(
     return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
-  if (line.includes(':') || line.includes('www.') || line.includes('@')) {
+  if (line.includes(':') || line.includes('www.')) {
     const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
     activeLabelRanges.sort((a, b) => a.start - b.start)
@@ -5014,7 +5014,11 @@ export function markdownToCarveWithLosses(
     let value = restoreCarrierMarkers(convertMarkdown(prepared, dialect))
     if (value.includes('@')) {
       const document = parse(value)
-      if (linkMarkdownEmailText(document)) value = renderCarve(document)
+      if (linkMarkdownEmailText(document)) {
+        const trailingNewline = value.endsWith('\n')
+        value = renderCarve(document, { onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }) })
+        if (!trailingNewline) value = value.replace(/\n$/, '')
+      }
     }
     return { value, losses }
   } finally {

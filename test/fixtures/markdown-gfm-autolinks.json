@@ -9922,5 +9922,37 @@
   {
     "source": "www.example.com",
     "html": "<p><a href=\"http://www.example.com\">www.example.com</a></p>\n"
+  },
+  {
+    "source": "a+-b@c.de",
+    "html": "<p><a href=\"mailto:a+-b@c.de\">a+-b@c.de</a></p>\n"
+  },
+  {
+    "source": "a...b@c.de",
+    "html": "<p><a href=\"mailto:a...b@c.de\">a...b@c.de</a></p>\n"
+  },
+  {
+    "source": "x.mailto:a@b.cd",
+    "html": "<p><a href=\"x.mailto:a@b.cd\">x.mailto:a@b.cd</a></p>\n"
+  },
+  {
+    "source": "x.xmpp:a@b.cd/r",
+    "html": "<p><a href=\"x.xmpp:a@b.cd/r\">x.xmpp:a@b.cd/r</a></p>\n"
+  },
+  {
+    "source": "www.example.test_\nmore",
+    "html": "<p>www.example.test_\nmore</p>\n"
+  },
+  {
+    "source": "- www.example.test_\n  more",
+    "html": "<ul>\n<li>www.example.test_\nmore</li>\n</ul>\n"
+  },
+  {
+    "source": "> www.example.test_\n> more",
+    "html": "<blockquote>\n<p>www.example.test_\nmore</p>\n</blockquote>\n"
+  },
+  {
+    "source": "mailto:mailto:a@b.cd",
+    "html": "<p><a href=\"mailto:mailto:a@b.cd\">mailto:mailto:a@b.cd</a></p>\n"
   }
 ]

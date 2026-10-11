@@ -6,7 +6,7 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 export function linkMarkdownEmailText(document: Document): boolean {
-  const pending: unknown[] = [document]
+  const pending: unknown[] = [document, ...Object.values(document.footnoteDefs ?? {})]
   const seen = new Set<object>()
   let changed = false
   while (pending.length > 0) {
@@ -19,14 +19,14 @@ export function linkMarkdownEmailText(document: Document): boolean {
       let rewrite = false
       for (let at = 0; at < nodes.length; at++) {
         const child = nodes[at]
-        if (record(child) && (child['type'] === 'text' || child['type'] === 'escaped_text') && typeof child['value'] === 'string') {
+        if (record(child) && (child['type'] === 'text' || child['type'] === 'escaped_text' || child['type'] === 'smart_punctuation') && typeof child['value'] === 'string') {
           const original = child as unknown as Text
           let last = at
           const values = [original.value]
           if (!original.attrs) {
             while (last + 1 < nodes.length) {
               const next = nodes[last + 1]
-              if (!record(next) || (next['type'] !== 'text' && next['type'] !== 'escaped_text') || typeof next['value'] !== 'string' || next['attrs'] !== undefined) break
+              if (!record(next) || (next['type'] !== 'text' && next['type'] !== 'escaped_text' && next['type'] !== 'smart_punctuation') || typeof next['value'] !== 'string' || next['attrs'] !== undefined) break
               values.push(next['value'])
               last++
             }
