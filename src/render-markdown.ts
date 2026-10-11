@@ -51,36 +51,8 @@ export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOptio
 export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   /** Defaults to `'glyph'`. */
   smartTypography?: SmartTypographyOption
-  /**
-   * Carry an element-less container through a Markdown round trip in an HTML
-   * comment holding its Carve opener verbatim (PART 11 §10s). OFF by default,
-   * because a Markdown renderer with raw HTML turned off shows the comment as
-   * text.
-   *
-   * The mode only ADDS comment lines: with it off the emitted bytes are the
-   * ones this target emits today.
-   */
-  carryMarkers?: boolean
-  /**
-   * The canonical roundtrip export option (PART 10 §13). On this target it
-   * SELECTS the carrier comments `carryMarkers` already writes rather than
-   * redefining them, so a Markdown export carries containers and no more.
-   *
-   * §13c: EITHER ENABLED OPTION ENABLES PRESERVATION, in either order, and a
-   * default never overrides an alias the caller enabled. `carryMarkers` keeps
-   * its Markdown-only scope as a compatibility alias.
-   */
+  /** Markdown renderers with raw HTML disabled show carrier comments as text. */
   roundtrip?: boolean
-}
-
-/**
- * §13c's alias rule, in one place: preservation is on when EITHER option is
- * enabled. Written as two `=== true` tests rather than a precedence chain,
- * because a precedence chain is how `{ roundtrip: true, carryMarkers: false }`
- * turns an enabled option back off.
- */
-export function markdownCarriersEnabled(opts: { carryMarkers?: boolean; roundtrip?: boolean }): boolean {
-  return opts.carryMarkers === true || opts.roundtrip === true
 }
 
 function renderHtmlAttrs(attrs: Attrs | undefined): string {
@@ -151,7 +123,7 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     inlineDepth: 0,
     delimiterAncestors: [],
     renderedChildren: new WeakMap(),
-    carryMarkers: markdownCarriersEnabled(opts),
+    roundtrip: opts.roundtrip === true,
     carrierDepth: 0,
     abbrBudget: budget,
     smartTypography,
@@ -194,7 +166,7 @@ interface MarkdownContext {
   delimiterAncestors: string[]
   renderedChildren: WeakMap<InlineNode, string[]>
   /** PART 11 §10s: whether an element-less container is bracketed with a marker. */
-  carryMarkers: boolean
+  roundtrip: boolean
   /**
    * How many carried containers enclose the block being written, which is what
    * decides the colon-fence width a marker payload carries.
@@ -354,7 +326,7 @@ function withMarker(marker: string, content: string): string {
  * takes no marker - its arm returns before this is reached.
  */
 function carrierMarkers(node: BlockNode, ctx: MarkdownContext): CarrierMarkers | undefined {
-  if (!ctx.carryMarkers) return undefined
+  if (!ctx.roundtrip) return undefined
   // A TABLE CELL never reaches this writer's block arms at all, and could not
   // carry anyway: a cell is flattened to a single line and the container's body
   // with it (markup-carve/carve#2856). A list item and a block quote prefix

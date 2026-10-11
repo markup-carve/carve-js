@@ -247,8 +247,6 @@ export interface RenderOptions extends RenderLossSinkOptions {
    * byte-identical source. It is an EXPORT option only: §13b keeps it out of
    * the importer, so it never widens an import mode, enables a trusted import
    * or relaxes a destination check.
-   *
-   * `carryMarkers` is a Markdown-only option and is not redefined here (§13c).
    */
   roundtrip?: boolean
 }

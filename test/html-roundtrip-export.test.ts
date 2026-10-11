@@ -368,28 +368,7 @@ describe('export does not select an import mode (§13b)', () => {
   })
 })
 
-describe('§13c: an alias never turns preservation off', () => {
-  const container = '::: note\ntext\n:::\n'
-  const carried = (opts: { carryMarkers?: boolean; roundtrip?: boolean }): boolean =>
-    renderMarkdown(parse(container), opts).includes('<!--')
-
-  it.each([
-    [{}, false],
-    [{ carryMarkers: true }, true],
-    [{ roundtrip: true }, true],
-    [{ carryMarkers: true, roundtrip: true }, true],
-    [{ carryMarkers: false, roundtrip: true }, true],
-    [{ carryMarkers: true, roundtrip: false }, true],
-    [{ carryMarkers: false, roundtrip: false }, false],
-  ])('%j carries containers: %s', (opts, expected) => {
-    expect(carried(opts)).toBe(expected)
-  })
-
-  it('does not redefine carryMarkers as an HTML option', () => {
-    expect(carveToHtml('* a\n', { carryMarkers: true } as Record<string, unknown>))
-      .toBe('<ul>\n  <li>a</li>\n</ul>')
-  })
-
+describe('Markdown roundtrip export', () => {
   it('carries containers and no more on the Markdown target', () => {
     // §13: "A Markdown export carries containers and no more, and is not a
     // claim to preserve what §13a lists."

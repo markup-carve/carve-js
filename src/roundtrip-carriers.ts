@@ -89,14 +89,6 @@ export function readCarrier(
   return get(carrier(name)) ?? get(legacyCarrier(name))
 }
 
-/**
- * Is the roundtrip export option on?
- *
- * `carryMarkers` is NOT consulted here: §13c keeps it Markdown-only and
- * explicitly declines to redefine it as an HTML option. The alias rule it does
- * state - either enabled option enables preservation - lives on the Markdown
- * side, where both spellings mean the same thing.
- */
 export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.roundtrip === true
 
 /**

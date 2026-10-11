@@ -30,34 +30,30 @@ describe('carve render --roundtrip (PART 10 §13)', () => {
   it('selects the Markdown container carriers', async () => {
     const io = makeIO('::: note\ntext\n:::\n')
     expect(await run(['render', '--markdown', '--roundtrip'], io.io)).toBe(0)
-    expect(io.out).toContain('<!--')
+    expect(io.out).toContain('<!-- carve: ::: note -->')
+  })
+
+  it('writes Markdown container carriers from an encoded AST', async () => {
+    const encode = makeIO('::: note\ntext\n:::\n')
+    expect(await run(['render', '--json'], encode.io)).toBe(0)
+    const decode = makeIO(encode.out)
+    expect(await run(['render', '--from-json', '--markdown', '--roundtrip'], decode.io)).toBe(0)
+    expect(decode.out).toContain('<!-- carve: ::: note -->')
   })
 
   it('refuses a target with no carrier', async () => {
-    for (const target of ['--plain', '--ansi', '--carve']) {
+    for (const target of ['--plain', '--ansi', '--carve', '--json']) {
       const io = makeIO('* a\n')
       expect(await run(['render', target, '--roundtrip'], io.io)).toBe(2)
       expect(io.err).toContain('--roundtrip applies to --html and --markdown output only')
     }
   })
 
-  it('keeps --carry-markers Markdown-only', async () => {
-    const io = makeIO('* a\n')
-    expect(await run(['render', '--html', '--carry-markers'], io.io)).toBe(2)
-    expect(io.err).toContain('--carry-markers applies to --markdown output only')
-  })
-
-  it('§13c: either flag enables the Markdown carriers, in either order', async () => {
-    for (const args of [
-      ['--carry-markers'],
-      ['--roundtrip'],
-      ['--carry-markers', '--roundtrip'],
-      ['--roundtrip', '--carry-markers'],
-    ]) {
-      const io = makeIO('::: note\ntext\n:::\n')
-      expect(await run(['render', '--markdown', ...args], io.io)).toBe(0)
-      expect(io.out, args.join(' ')).toContain('<!--')
-    }
+  it('rejects the removed Markdown carrier flag as unknown', async () => {
+    const io = makeIO('::: note\ntext\n:::\n')
+    const flag = '--carry-markers'
+    expect(await run(['render', '--markdown', flag], io.io)).toBe(2)
+    expect(io.err).toContain(`Unknown option '${flag}'`)
   })
 
   it('names the flag in the help text', async () => {
