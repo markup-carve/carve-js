@@ -1231,6 +1231,16 @@ function convertInline(
   unwrapEmptyLinks = true,
   nativeCode = false,
 ): string {
+  const reportFlattenedEmphasis = () => importLosses.push({
+    code: 'structure-unspellable',
+    message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
+  })
+  if (/^[A-Za-z0-9 *_.,;?!'"-]+$/.test(input)) {
+    let line = escapeCarveOnlyMarker(input)
+    if (!holdsFenceBody) line = escapeTypographicDashes(line)
+    line = markdownEmphasis(line, reportFlattenedEmphasis)
+    return holdsFenceBody ? line : line.replace(/["']/g, '\\$&')
+  }
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
   // mistaken for one. NUL cannot occur in the text this sees because
@@ -1943,10 +1953,6 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
-  const reportFlattenedEmphasis = () => importLosses.push({
-    code: 'structure-unspellable',
-    message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
-  })
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis)
