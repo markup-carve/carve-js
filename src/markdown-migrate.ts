@@ -3342,10 +3342,10 @@ function paragraphLine(part: PrefixedInlineLine, text: string): { lead: string; 
   // shaped like, and the markers on it are text rather than markers. Asking the
   // tests below anyway refused a heading marker and a link reference outright,
   // and peeled an item marker off the text (carve-js#2008).
-  if (part.continued) return text.trim() === '' ? null : { lead: '', body: text.trim() }
+  if (part.continued) return text.trim() === '' ? null : { lead: '', body: headingLine(text, true) }
   const marker = RE_ITEM_LEAD.exec(text)![0]
   const opens = RE_ITEM_LINE.test(text)
-  const body = (opens ? text.slice(marker.length) : text).trim()
+  const body = headingLine(opens ? text.slice(marker.length) : text, true)
   if (body === '' || /^#{1,6}([ \t]|$)/.test(body)) return null
   // No link-reference test, though a definition opening a paragraph must not
   // become a heading: the definition prepass lifts every definition out of a
@@ -3364,11 +3364,11 @@ function paragraphLine(part: PrefixedInlineLine, text: string): { lead: string; 
  * trimmed, and without the hard break it may end in.
  */
 function headingLine(line: string, last = false): string {
-  if (last) return line.trim()
-  const trimmed = line.trim()
+  const trimmed = trimEndSpaceTab(line.replace(/^[ \t]+/, ''))
+  if (last) return trimmed
   let backslashes = 0
   while (trimmed[trimmed.length - backslashes - 1] === '\\') backslashes++
-  return (backslashes % 2 === 1 ? trimmed.slice(0, -1) : trimmed).trimEnd()
+  return trimEndSpaceTab(backslashes % 2 === 1 ? trimmed.slice(0, -1) : trimmed)
 }
 
 /** The indent and item markers a line opens with (`- - `, `  1. `). */
@@ -6050,7 +6050,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     ) {
       if (prevType !== 'blank' && prevType !== 'heading') out.push('')
       out.push(
-        containerPad + convertInline(`${underline[0] === '=' ? '#' : '##'} ${headingLine(trimmed, true)}`, dialect),
+        containerPad + convertInline(`${underline[0] === '=' ? '#' : '##'} ${headingLine(line, true)}`, dialect),
       )
       i++ // consume the underline line
       if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
