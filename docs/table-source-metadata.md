@@ -26,3 +26,18 @@ row-group attributes remain ordinary HTML attributes.
 Canonical export adds missing metadata attributes. It retains authored values
 and diagnoses conflicts as `field-unspellable` for `rowGroups`. Table section
 attributes and block cell content still have separate source limitations.
+
+An authored separator row records its dash counts in `table.separatorWidths`.
+For example, `|:-----|---:|` records `[5, 3]`; alignment remains on the header
+cells. The array must contain at least one positive integer. Its entry count
+controls the separator cell count, including ragged rows.
+
+AST envelopes use contract version `1.1`, independently of package releases.
+Readers accept supported older contracts and refuse higher minor versions.
+Canonical output reproduces the recorded separator. Widths that would promote
+non-header cells, or exceed native string capacity, produce a typed source
+refusal.
+
+HTML round-trip export uses `data-carve-col-widths` for decimal widths from
+1 through 1000. Invalid carriers are dropped with a diagnostic. Larger AST
+widths remain valid and are omitted from this HTML carrier.
