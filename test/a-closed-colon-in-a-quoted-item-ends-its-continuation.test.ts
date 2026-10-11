@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 
 describe('closed colon fences in quoted items (carve#2925)', () => {
+  it('keeps malformed descendant fences in their absorbing paragraph', () => {
+    const source = '- a\n  - b\n    - c\n      :::note\n      :::\ntail\n'
+    expect(parse(source).children.map(node => node.type)).toEqual(['list'])
+    expect(carveToHtml(source)).toContain('c\n:::note\n:::\ntail</li>')
+  })
   for (const tail of ['tail', '- tail']) {
     it(`retains a single item's fence across a lazy marker before ${tail}`, () => {
       const source = `> - ::: box\n>   body\n>  - next\n>   :::\n${tail}\n`

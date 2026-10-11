@@ -5287,6 +5287,7 @@ interface ItemLineFacts {
   terminatorFree: boolean
   whitespace?: number | undefined
   prefixMemo?: Map<number, number> | undefined
+  rebasedFrame?: boolean | undefined
   /**
    * May a line at or past a nested marker's content column be classified in
    * that DESCENDANT's frame (`CARVE-P0-009`, markup-carve/carve#2884)?
@@ -5518,7 +5519,7 @@ function trackItemLazyState(
       if (run < state.ownedColumn) {
         const text = content.slice(run)
         const marker = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0
-        if (!state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
+        if (facts?.rebasedFrame !== true && !state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
             (marker
               ? state.ownedMarker !== undefined && run > state.ownedMarker
               : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) {
@@ -5556,7 +5557,7 @@ function trackItemLazyState(
       // one a terminated span gives for Q1, because what follows the span is
       // what Q1 reads either way.
       () => false,
-      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true },
+      { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true },
     )
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
