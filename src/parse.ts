@@ -3535,7 +3535,7 @@ function trackQuoteHostFence(
     return true
   }
   if (RE_COMMENT_LINE.test(text)) {
-    host.commentBoundary = true
+    if (heldColon === undefined || column <= heldColon.column) host.commentBoundary = true
     return false
   }
   if (text === '') { if (host.markers.length === 0) host.initialMarkerColumn = undefined; return false }
