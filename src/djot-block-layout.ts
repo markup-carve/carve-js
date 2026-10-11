@@ -22,6 +22,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     start: number
   }[] = []
   const lists: {
+    depth: number
     column: number
     content: number
     target: number
@@ -69,7 +70,20 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       blank = false
       continue
     }
-    const blockIndent = quoteDepth > depth ? /^[ \t]*/.exec(original)![0].length : indent
+    let blockAt = 0
+    if (quoteDepth > depth) {
+      for (let level = 0; level < depth; level++) {
+        while (original[blockAt] === ' ' || original[blockAt] === '\t') blockAt++
+        blockAt++
+        if (original[blockAt] === ' ') blockAt++
+      }
+    }
+    let blockIndent = indent
+    if (quoteDepth > depth) {
+      const start = blockAt
+      while (original[blockAt] === ' ' || original[blockAt] === '\t') blockAt++
+      blockIndent = blockAt - start
+    }
     const blockStart =
       quoteDepth > depth ||
       rows[n] ||
@@ -82,11 +96,15 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       )
     // A new block can end lazy continuation outside a quote or list item.
     if (quoteDepth < depth && (blockStart || item || rejectedCommentStartsBlock(visible))) {
-      if (item && !blank) out.push(quote.trimEnd())
+      while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
+      if (item && !blank) {
+        const owner = lists.at(-1)
+        const column = owner ? owner.target + owner.content : 0
+        out.push((quote + ' '.repeat(column) + '> '.repeat(depth - quoteDepth)).trimEnd())
+      }
       else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quote.trimEnd())
       paragraph = false
       headingMarker = ''
-      lists.length = 0
       depth = quoteDepth
     }
     while (divs.at(-1)?.itemColumn !== undefined) {
@@ -122,6 +140,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       blockIndent >= lists.at(-1)!.column + lists.at(-1)!.content &&
       !paragraph
     ) {
+      depth = quoteDepth
       out.push(original)
       blank = false
       continue
@@ -153,8 +172,11 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       blank = false
       continue
     }
-    if (quoteDepth !== depth && !paragraph) {
+    if (quoteDepth > depth && !paragraph) {
       lists.length = 0
+      depth = quoteDepth
+    } else if (quoteDepth < depth && !paragraph && blank) {
+      while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
       depth = quoteDepth
     }
     const div = /^(:{3,})(?:[ \t]+.*)?$/.exec(visible)
@@ -223,6 +245,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       const nested = parent && indent > parent.column
       if (!parent || nested) {
         context = {
+          depth: quoteDepth,
           column: indent,
           content: item[0].length - 1,
           target: nested ? parent.target + parent.content : 0,
@@ -256,7 +279,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
           depth: quoteDepth,
           start: lineOffsets[n]!,
         })
-      paragraph = !itemDiv && !itemHeading && !body.startsWith('>')
+      const itemQuote = /^(?:>[ \t]*)+/.exec(body)
+      if (itemQuote) depth = quoteDepth + (itemQuote[0].match(/>/g) ?? []).length
+      paragraph = !itemDiv && !itemHeading && !itemQuote
       blank = !!itemDiv
       continue
     }
