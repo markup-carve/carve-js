@@ -173,6 +173,48 @@ attribute, in `safe` mode exactly as in `roundtrip`; the deprecated
 `data-djot-*` spelling that earlier releases wrote is read too, so a document
 exported before the rename still imports.
 
+### What the import rebuilds
+
+An import does not merely consume the names, it **rebuilds what they hold**:
+the authored bullet and ordered delimiter, the thematic-break character, an
+authored identifier, a link's or image's reference label (with the
+`[label]: /url` definition written beside it), an `autolink` node, a footnote's
+authored label, an inline footnote, an `escaped_text` node, a `raw_inline` with
+its own format, and the abbreviation definitions - so a use of a defined
+abbreviation comes back as prose rather than as `[HTML]{abbr="..."}` on every
+occurrence.
+
+```js
+htmlToCarve(carveToHtml('`\\x`{=tex}\n', { roundtrip: true })).value
+// => '`\\x`{=tex}\n'
+```
+
+A carrier that cannot be honored is **not** a carrier: a value outside its
+enumeration, a reference label no Carve source could spell, an escape longer
+than one character, an autolink whose text is not its own destination, or a
+label and an inline-note carrier contradicting each other on one endnote.
+Those are dropped and reported, not guessed at, and the reserved name is still
+never written back out.
+
+One carrier's answer depends on the import mode. A raw inline of format `html`
+is markup every HTML render emits verbatim, so rebuilding one would hand the
+document back the markup `safe` and `semantic` just filtered out - whether the
+carrier span held it as elements or as entity-escaped text, which is the same
+payload. Only `mode: 'roundtrip'`, which already preserves input markup
+wholesale, rebuilds it; everywhere else the span's children take the ordinary
+filtered path and only the format is lost. Every other format is inert in this
+target and rebuilds in every mode.
+
+One distinction is not recovered. A collapsed reference `[r][]` and the full
+`[r][r]` render identical bytes, carrier included, so the import writes the
+full form. The label, the destination and the rendering survive; the spelling
+is not in the HTML to read.
+
+`data-carve-src` is HTML-level provenance and is not read back: a code block's
+language, content and fence width already reach the tree through the ordinary
+import, so reconstructing from the attribute would be a second route to a
+distinction already carried.
+
 ### Export is not an import mode
 
 `roundtrip` adds information to **output**. HTML import's `mode: 'roundtrip'`

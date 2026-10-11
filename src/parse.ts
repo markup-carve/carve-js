@@ -491,7 +491,15 @@ function deflistContentCol(separator: string): number {
 
 /** The separator run on a description line, wherever it is indented. */
 const RE_DEFLIST_SEPARATOR = /^[ \t]*:( +)/
-const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
+/**
+ * `*[ABBR]: expansion`, the only shape a definition line has.
+ *
+ * Exported because the HTML importer rebuilds these from PART 10 §13a's
+ * `data-carve-abbreviations` carrier: a line this does not match is not a
+ * definition, and emitting one as an `abbreviation_def` would put a visible
+ * paragraph into the document instead.
+ */
+export const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
 /**
  * A link reference definition, as PART 9R's `linkDefs` symbol table describes
  * it: `label -> (url, title?, attrs?)`. `attrs` come from a TRAILING attribute
@@ -500,6 +508,17 @@ const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
  */
 
 export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\p{Cf}\\p{Cc}'
+
+/**
+ * The ASCII punctuation a backslash escapes into an `escaped_text` node
+ * (grammar `ascii_punctuation`, the full set including `& : ; ?`).
+ *
+ * Exported because the HTML importer rebuilds an `escaped_text` from PART 10
+ * §13a's `data-carve-escaped` carrier and has to ask the question this parser
+ * asks: a character outside the set spells no escape, and writing one back
+ * emits a literal backslash the source never held.
+ */
+export const RE_ESCAPABLE_PUNCTUATION = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/
 
 /**
  * `reference_definition`, whole: label, destination, optional title, optional
@@ -548,7 +567,16 @@ function matchLinkDef(line: string): LinkDefMatch | null {
 function isLinkDefLine(line: string): boolean {
   return matchLinkDef(line) !== null
 }
-const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +([^]+)$/
+/**
+ * `[^label]: body`, the footnote definition line.
+ *
+ * Exported because the HTML importer rebuilds an authored label from PART 10
+ * §13a's `data-carve-footnote-label` carrier and has to ask the question this
+ * parser asks. A hand-spelled "no whitespace" rule was stricter than the
+ * grammar and rejected `[^my note]`, which the parser reads and the exporter
+ * writes.
+ */
+export const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +([^]+)$/
 
 // A footnote body's own column: the indent §16 requires of a continuation line.
 // The body is dedented by exactly this much, never by the first continuation
@@ -7110,6 +7138,15 @@ const RE_FOOTNOTE_REF = /^\[\^([^\]\r\n]+)\]/
 // (grammar.ebnf:968-969,1122) -- a lone `_` is a valid extension name.
 const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\]/
 // Raw inline passthrough tag, follows a verbatim span: `` `…`{=html} ``.
+/**
+ * The format a raw inline's `{=format}` tail can name.
+ *
+ * Exported because the HTML importer rebuilds a raw inline from PART 10 §13a's
+ * `data-carve-raw` carrier: a value this does not match is not a format, and
+ * the writer NORMALIZES what it is given, so `h t m l` would be written back
+ * as `{=html}` - which is how a carrier smuggled markup past the mode gate.
+ */
+export const RE_RAW_INLINE_FORMAT = /^[a-zA-Z][\w-]*$/
 const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
 // Symbol shortcode `:name:` (after extension, which needs `[`).
 // The first name char is a letter, digit, `+` or `-` (so `:+1:` / `:-1:`
@@ -7137,7 +7174,7 @@ export function symbolOpensAt(text: string, offset: number): boolean {
   if (offset > 0 && /[A-Za-z0-9_]/.test(text[offset - 1]!)) return false
   return RE_SYMBOL.test(text.slice(offset))
 }
-const RE_AUTOLINK = new RegExp(
+export const RE_AUTOLINK = new RegExp(
   '^<([a-zA-Z][a-zA-Z0-9+.\\-]*:[^>' +
     AUTOLINK_BODY_EXCLUDED +
     '<"\\\\`{}|^]+|[A-Za-z0-9._+\\-]+@[A-Za-z0-9._+\\-]+\\.[A-Za-z]+)>',
@@ -14380,7 +14417,7 @@ class ParseSession {
       // `& : ; ?`).
       if (c === '\\' && i + 1 < text.length) {
         const nxt = text[i + 1]!
-        if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/.test(nxt)) {
+        if (RE_ESCAPABLE_PUNCTUATION.test(nxt)) {
           // The escape is its own node: the backslash carries intent the literal
           // character does not. `\-\-` was written precisely so a downstream
           // processor would not read an en dash, and flattening it into text lost
