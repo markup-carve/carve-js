@@ -31,14 +31,18 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     expect(carveToHtml(carveToCarve(source))).toBe(html)
   })
 
-  it('retains a descendant fence across lazy markers in an unquoted item', () => {
-    const source = '- a\n  - ::: box\n    body\n - next\n    :::\ntail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(['list', 'paragraph'])
-    const html = carveToHtml(source)
-    expect(html).toContain('<p>body\n- next</p>')
-    expect(html.indexOf('<p>tail</p>')).toBeGreaterThan(html.lastIndexOf('</ul>'))
-    expect(carveToHtml(carveToCarve(source))).toBe(html)
-  })
+  for (const column of [1, 3, 4]) {
+    for (const text of ['- next', 'more']) {
+      it(`retains a descendant fence across lazy text at column ${column}: ${text}`, () => {
+        const source = `- a\n  - ::: box\n    body\n${' '.repeat(column)}${text}\n    :::\ntail\n`
+        expect(parse(source).children.map(node => node.type)).toEqual(['list', 'paragraph'])
+        const html = carveToHtml(source)
+        expect(html).toContain(`<p>body\n${text}</p>`)
+        expect(html.indexOf('<p>tail</p>')).toBeGreaterThan(html.lastIndexOf('</ul>'))
+        expect(carveToHtml(carveToCarve(source))).toBe(html)
+      })
+    }
+  }
 
   it('keeps a later marker structural after the folded marker box closes', () => {
     const source = '> - a\n>   - ::: box\n>     body\n>  - next\n>     :::\n>  - again\n>     :::\ntail\n'

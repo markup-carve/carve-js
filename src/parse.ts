@@ -4559,6 +4559,8 @@ interface ItemLazyState {
    * has already measured for the line, so none of this re-scans a leading run.
    */
   ownedColumn: number
+  /** Marker column for a descendant item, in this frame's coordinates. */
+  ownedMarker?: number
   /**
    * Is `ownedColumn` an AUTHORED base rather than a nested marker's column?
    *
@@ -5514,6 +5516,15 @@ function trackItemLazyState(
   if (run !== undefined) {
     if (state.ownedColumn >= 0) {
       if (run < state.ownedColumn) {
+        const text = content.slice(run)
+        const marker = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0
+        if (!state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
+            (marker
+              ? state.ownedMarker !== undefined && run > state.ownedMarker
+              : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) {
+          state.absorbingFence = wasAbsorbing
+          return
+        }
         state.ownedColumn = -1
         state.deepest = null
       } else if (state.ownedAuthored && run === state.ownedColumn) readFlush = true
@@ -5744,6 +5755,7 @@ function trackItemLazyState(
         : nestedMarker.length - leadingWhitespace(nestedMarker) -
           nestedBullet![nestedBullet!.length - 1]!.length
     state.ownedColumn = run !== undefined && nestedWidth > 0 ? run + nestedWidth : -1
+    state.ownedMarker = run ?? -1
     state.ownedAuthored = false
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
