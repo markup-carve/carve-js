@@ -9974,5 +9974,21 @@
   {
     "source": "a... b@example.test",
     "html": "<p>a... <a href=\"mailto:b@example.test\">b@example.test</a></p>\n"
+  },
+  {
+    "source": "a@b+c@d.ef",
+    "html": "<p>a@b<a href=\"mailto:+c@d.ef\">+c@d.ef</a></p>\n"
+  },
+  {
+    "source": "a@1.2+b@c.de",
+    "html": "<p>a@1.2<a href=\"mailto:+b@c.de\">+b@c.de</a></p>\n"
+  },
+  {
+    "source": "a@b.-c@d.ef",
+    "html": "<p>a@b<a href=\"mailto:.-c@d.ef\">.-c@d.ef</a></p>\n"
+  },
+  {
+    "source": "a@mailto:b@c.de",
+    "html": "<p>a@mailto:<a href=\"mailto:b@c.de\">b@c.de</a></p>\n"
   }
 ]

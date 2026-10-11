@@ -49,6 +49,7 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBar
   const triggers = /https?:\/\/|ftp:\/\/|www\.|@/gi
   let contextAt = 0, bracketDepth = 0
   let chunkEnd = 0
+  let emailFloor = 0
   let retry: { at: number; dots: number; resource: boolean; autoMailto: boolean } | undefined
   scan: for (let match = triggers.exec(text); match; match = triggers.exec(text)) {
     while (contextAt < match.index) {
@@ -66,7 +67,7 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBar
       retry = undefined
       let resource = carried?.resource ?? false
       let autoMailto = carried?.autoMailto ?? true
-      const floor = links.at(-1)?.end ?? 0
+      const floor = Math.max(links.at(-1)?.end ?? 0, emailFloor)
       while (start > floor) {
         if (/[A-Za-z0-9.+_-]/.test(text[start - 1]!)) { start--; continue }
         if (text[start - 1] === ':') {
@@ -87,7 +88,7 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email'): MarkdownBar
         if (char === '.' && /[A-Za-z0-9]/.test(text[end + 1] ?? '')) { dots++; end++; continue }
         break
       }
-      if (dots === 0 || !/[A-Za-z]/.test(text[end - 1] ?? '')) continue
+      if (dots === 0 || !/[A-Za-z]/.test(text[end - 1] ?? '')) { emailFloor = end; triggers.lastIndex = end; continue }
       prefix = autoMailto ? 'mailto:' : ''
     } else {
       if (mode === 'email') continue
