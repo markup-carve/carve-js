@@ -57,7 +57,7 @@ describe('roundtrip export is off by default', () => {
   })
 })
 
-describe('the twelve carriers', () => {
+describe('the HTML carriers', () => {
   it('data-marker: the authored bullet, only where it is not the default', () => {
     expect(rt('* a\n')).toBe('<ul data-marker="*">\n  <li>a</li>\n</ul>')
     expect(rt('- a\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
@@ -85,7 +85,7 @@ describe('the twelve carriers', () => {
     // `<hr class="c" id="i" data-char="*">`; #2902 question 1 measured that its
     // carrier precedence is inconsistent per carrier - `data-marker` already
     // leads - and §1 puts a structural attribute ahead of the authored ones.
-    // One rule for all twelve beats mirroring the inconsistency.
+    // Apply the same rule to every carrier.
     expect(rt('{.c #i}\n***\n')).toBe('<hr data-char="*" class="c" id="i">')
   })
 
@@ -151,23 +151,13 @@ describe('the twelve carriers', () => {
     )
   })
 
-  it('data-carve-src: the code block’s Carve source on the <pre>', () => {
-    expect(rt('``` php\n$x = 1;\n```\n')).toBe(
-      '<pre data-carve-src="```php\n$x = 1;\n```\n"><code class="language-php">$x = 1;\n</code></pre>',
-    )
-  })
-
-  it('data-carve-src widens the fence past a payload that holds one', () => {
-    expect(rt('```` txt\n```\n````\n')).toContain('data-carve-src="````txt\n```\n````\n"')
-  })
-
-  it('data-carve-src writes the canonical no-space info string', () => {
-    // A DELIBERATE BYTE DIVERGENCE. carve-php reconstructs ``` php with a
-    // space; PART 9's `fenced_code_block` calls the no-space form canonical and
-    // the one the converters emit, and this value is written by carve-js's own
-    // canonical writer rather than by a second spelling of it. Both re-parse to
-    // the same tree, so the recovered distinction is identical.
-    expect(rt('``` php [Lbl]\nx\n```\n')).toContain('data-carve-src="```php [Lbl]\nx\n```\n"')
+  it.each([
+    ['``` php\n$x = 1;\n```\n', '<pre><code class="language-php">$x = 1;\n</code></pre>'],
+    ['```` txt\n```\n````\n', '<pre><code class="language-txt">```\n</code></pre>'],
+  ])('roundtrip code blocks omit the source carrier: %s', (source, expected) => {
+    const html = rt(source)
+    expect(html).toBe(expected)
+    expect(html).not.toContain('data-carve-src')
   })
 
   it('data-carve-abbreviations: the definitions, one per line, at document end', () => {

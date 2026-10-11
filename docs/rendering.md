@@ -155,7 +155,6 @@ source**.
 | `data-carve-inline-footnote` | `<li>` | presence: the endnote came from an inline footnote |
 | `data-carve-raw` | `<span>` | the raw inline's format; the span holds its content |
 | `data-carve-escaped` | `<span>` | presence; the span holds one escaped character |
-| `data-carve-src` | `<pre>` | the construct's Carve source |
 | `data-carve-abbreviations` | `<template>` | the document's abbreviation definitions, one per line |
 
 Two names in the inventory are **not written by this engine**:
@@ -209,11 +208,6 @@ One distinction is not recovered. A collapsed reference `[r][]` and the full
 `[r][r]` render identical bytes, carrier included, so the import writes the
 full form. The label, the destination and the rendering survive; the spelling
 is not in the HTML to read.
-
-`data-carve-src` is HTML-level provenance and is not read back: a code block's
-language, content and fence width already reach the tree through the ordinary
-import, so reconstructing from the attribute would be a second route to a
-distinction already carried.
 
 ### Export is not an import mode
 
