@@ -11377,6 +11377,59 @@ class ParseSession {
     return img
   }
 
+  private foldedAttachedDefinitionEnd(lines: readonly string[], end: number, probe: Lexer): number {
+    // The verse ownership probe omits registration, so its empty table cannot establish a boundary.
+    if (this.definitionRegionLines || !lines.slice(0, end).some(line => /^[ \t]+\[/.test(line))) return end
+    const ownership = subLexer(lines.slice(0, end), probe.parseOptions, 0)
+    ownership.nested = true
+    ownership.suppressPositions = true
+    ownership.depth = probe.depth
+    this.collectLinkDefs(ownership)
+    const notes = new Set([...probe.footnoteDefs.keys()].map(normalizeRefLabel))
+    const claimed = new Set<string>()
+    const commentClose = commentCloserLookup(lines)
+    let opaque: OpaqueGroup | null = null
+    let termColumn: number | null = null
+    for (let index = 0; index < end; index++) {
+      const line = lines[index]!
+      if (isBlankLine(line)) {
+        if (opaque === null) termColumn = null
+        continue
+      }
+      const column = indentColumns(line)
+      const text = sliceColumns(line, column, true)
+      if (opaque !== null) {
+        if (opaque.closes(text)) opaque = null
+        continue
+      }
+      if (termColumn !== null) {
+        if (column > termColumn && markerContentColumn(text) < 0) {
+          const folded = opaqueGroupCloser(text)
+          if (folded?.char === '%' && commentClose(folded.run, index) !== -1) opaque = folded
+          continue
+        }
+        if (lineOpensItemBlock(text) || RE_CAPTION.test(text) || RE_COMMENT_LINE.test(text) || /^::? /.test(text)) {
+          termColumn = null
+        }
+      }
+      if (RE_DEFLIST_TERM.test(text)) termColumn = column
+      const group = opaqueGroupCloser(text)
+      if (group !== null && (group.char !== '%' || commentClose(group.run, index) !== -1)) {
+        opaque = group
+        continue
+      }
+      const footnote = RE_FOOTNOTE_DEF.exec(text)
+      const link = this.matchLinkDef(text)
+      if (footnote === null && link === null) continue
+      const key = normalizeRefLabel(footnote?.[1] ?? link!.label)
+      const kind = footnote !== null ? 'f' : 'l'
+      const registered = footnote !== null ? notes.has(key) : ownership.linkDefs.has(key)
+      if (column > 0 && (claimed.has(kind + key) || !registered)) return index
+      claimed.add(kind + key)
+    }
+    return end
+  }
+
   /**
    * Collect the ONE flush-left block a `+` continuation marker attaches
    * (PART 9 §17 L3/L4).
@@ -11398,6 +11451,7 @@ class ParseSession {
     lexer: Lexer,
     limit: number,
     transform?: (line: string) => string,
+    endAtFoldedDefinition = true,
   ): number {
     if (limit <= 1) return limit
     const lines: string[] = []
@@ -11439,17 +11493,18 @@ class ParseSession {
           node === null || node.type === 'abbreviation_def' || node.type === 'comment'
         if (!invisible || probe.eof()) break
       }
+      const end = Math.min(Math.max(probe.pos, 1), limit)
+      return endAtFoldedDefinition ? Math.max(1, this.foldedAttachedDefinitionEnd(lines, end, probe)) : end
     } finally {
       this.activeMatchers = matchers
     }
-
-    return Math.min(Math.max(probe.pos, 1), limit)
   }
 
   private collectAttachedBlock(
     lexer: Lexer,
     isBoundary: (line: string) => boolean,
     contentColumn = 0,
+    endAtFoldedDefinition = true,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // AND FLUSH-LEFT MEANS COLUMN 0 IS ASKED HERE, ONCE, FOR EVERY CONTAINER
@@ -11502,7 +11557,7 @@ class ParseSession {
       take = fenced + 1
     } else {
       while (lexer.peek(take) !== undefined && !isBoundary(lexer.peek(take)!)) take++
-      const measured = this.attachedBlockExtent(lexer, take, transform)
+      const measured = this.attachedBlockExtent(lexer, take, transform, endAtFoldedDefinition)
       if (measured < take) take = measured
     }
     const startLineIndex = lexer.pos
@@ -11672,7 +11727,7 @@ class ParseSession {
           lines: attached,
           lineNumbers: attachedLineNumbers,
           startLineIndex: attachedStartLineIndex,
-        } = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent)
+        } = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent, false)
         // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
         // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
         // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
@@ -11687,7 +11742,7 @@ class ParseSession {
         while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
           const plusLineIndex = lexer.pos
           lexer.consume()
-          const more = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent)
+          const more = this.collectAttachedBlock(lexer, isItemAttachBoundary, baseIndent, false)
           // An empty result is the column gate's refusal as well as an exhausted
           // boundary set, and a second marker that attaches nothing ends the run
           // either way (markup-carve/carve#1814).
@@ -12073,6 +12128,16 @@ class ParseSession {
             // dedented line folds.
             trackItemLazyState(attachedLines[k]!, lazyState)
             if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
+          }
+          if (
+            lazyState.opaque === null && lexer.peek() !== undefined &&
+            !isBlankLine(lexer.peek()!) && !isItemAttachBoundary(lexer.peek()!)
+          ) {
+            plusSeparators.add(nested.length)
+            nested.push('')
+            nestedSourceLines.push(undefined)
+            nestedLineNumbers.push(attachedLineNumbers.at(-1) ?? plusLineNumber)
+            trackItemLazyState('', lazyState)
           }
           continue
         }
