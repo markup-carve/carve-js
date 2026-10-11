@@ -126,6 +126,8 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
+    delimiterAncestors: [],
+    renderedChildren: new WeakMap(),
     carryMarkers: markdownCarriersEnabled(opts),
     carrierDepth: 0,
     abbrBudget: budgetForDocument(ast),
@@ -165,6 +167,8 @@ interface MarkdownContext {
   listDepth: number
   blockDepth: number
   inlineDepth: number
+  delimiterAncestors: string[]
+  renderedChildren: WeakMap<InlineNode, string[]>
   /** PART 11 §10s: whether an element-less container is bracketed with a marker. */
   carryMarkers: boolean
   /**
@@ -474,7 +478,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // slot hangs on the closing fence - so its fallback follows the closer,
       // directly under the caption marker that restores it.
       if (node.caption !== undefined) {
-        out += wrapperLine(renderInlines(node.caption, ctx), '**', 'strong')
+        out += renderWrappedInlines(node.caption, ctx, '**', 'strong')
       }
       return out
     }
@@ -706,7 +710,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): st
   let out = ''
   for (const item of items) {
     for (const term of item.terms) {
-      out += wrapperLine(renderInlines(term, ctx), '**', 'strong')
+      out += renderWrappedInlines(term, ctx, '**', 'strong')
       ctx.lastList = undefined
     }
     for (const def of item.definitions) out += renderBlocks(def, ctx)
@@ -930,7 +934,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
   // example). The single-newline glue is the standalone figure's shape, not
   // the panel's.
-  return `${target}\n\n${wrapperLine(renderInlines(node.caption, ctx), '*', 'em')}`
+  return `${target}\n\n${renderWrappedInlines(node.caption, ctx, '*', 'em')}`
 }
 
 function renderFigureTarget(node: Figure, ctx: MarkdownContext): string {
@@ -952,7 +956,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   return out
 }
 
-function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
+function renderInlines(nodes: InlineNode[], ctx: MarkdownContext, parentDelimiter?: string, owner?: InlineNode): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
@@ -975,7 +979,13 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
       if (/[^ \t\r\n]/.test(part)) break
     }
 
-    return reflankRuns(nodes, parts)
+    const result = reflankRuns(nodes, parts, ctx, parentDelimiter)
+    const hasDelimiterChild = nodes.some(node => DELIMITER_RUN[node.type] !== undefined)
+    if (hasDelimiterChild) {
+      for (const node of nodes) ctx.renderedChildren.delete(node)
+      if (owner) ctx.renderedChildren.set(owner, parts)
+    }
+    return result
   } finally {
     ctx.inlineDepth--
   }
@@ -984,6 +994,7 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
 function renderInline(node: InlineNode, ctx: MarkdownContext): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
+  const originalNode = node
   node = normalizeLegacyInline(node)
 
   switch (node.type) {
@@ -1013,8 +1024,18 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'strong':
     case 'strike': {
       const run = DELIMITER_RUN[node.type]!
+      const attrs = node.attrs === undefined ? '' : renderHtmlAttrs(node.attrs)
+      if (attrs !== '') return `<${run.tag}${attrs}>${renderInlines(node.children, ctx)}</${run.tag}>`
 
-      return padOutside(renderInlines(node.children, ctx), run.delimiter, run.tag)
+      const combined = node.type === 'strong' && node.children.length === 1
+        && normalizeLegacyInline(node.children[0]!).type === 'emphasis'
+      ctx.delimiterAncestors.push(combined ? '***' : run.delimiter)
+      try {
+        const body = renderInlines(node.children, ctx, run.delimiter, originalNode)
+        return padOutside(body, run.delimiter, run.tag)
+      } finally {
+        ctx.delimiterAncestors.pop()
+      }
     }
     case 'underline':
       return `<u${renderHtmlAttrs(node.attrs)}>${renderInlines(node.children, ctx)}</u>`
@@ -1301,7 +1322,15 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   // orders losses by document position. A denied image in the label used to
   // report first, which also kept the wrong row under `maxRenderLosses: 1`.
   destinationDenied(ctx.options, 'link', 'markdown', deniedProbeInput(node.href), destination, node.pos)
-  const text = withinLink(() => renderInlines(node.children, ctx))
+  const text = withinLink(() => {
+    const ancestors = ctx.delimiterAncestors
+    ctx.delimiterAncestors = []
+    try {
+      return renderInlines(node.children, ctx)
+    } finally {
+      ctx.delimiterAncestors = ancestors
+    }
+  })
   const title = node.title ?? node.attrs?.keyValues?.title
   return title === undefined
     ? `[${text}](${destination})`
@@ -2564,7 +2593,36 @@ function splitRun(part: string, delimiter: string): { lead: string; core: string
  * a run decided against an earlier neighbour can at worst take inline HTML it
  * would not have needed.
  */
-function reflankRuns(nodes: InlineNode[], parts: string[]): string {
+function reflankRuns(nodes: InlineNode[], parts: string[], ctx: MarkdownContext, parentDelimiter?: string): string {
+  const ancestors = ctx.delimiterAncestors
+  const directParentDelimiter = parentDelimiter
+  parentDelimiter ??= ancestors.at(-1)
+  // A nested opening run must not close an enclosing delimiter of the same character.
+  for (let i = 0; ancestors.length > 0 && i < parts.length; i++) {
+    const piece = delimiterPiece(nodes, parts, i)
+    if (!piece) continue
+    const edgeSeparatedByParent = directParentDelimiter === parentDelimiter && piece.run.delimiter === parentDelimiter && ancestors.filter(run => run === parentDelimiter).length === 1
+      && !ancestors.includes('***')
+      && (neighbourBefore(parts, i) === '' || neighbourAfter(parts, i) === '')
+    if (edgeSeparatedByParent) continue
+    if (piece.run.delimiter === '**' && (parentDelimiter === '**' || ancestors.includes('***'))) {
+      parts[i] = spellAsHtml(piece, ctx, nodes[i])
+      continue
+    }
+    const before = piece.lead !== '' ? lastCharacter(piece.lead) : neighbourBefore(parts, i)
+    const inside = afterRunInCore(piece.core, piece.run.delimiter[0]!)
+    const closes = before !== '' && !FLANK_SPACE.test(flankCharacter(before)) && flanks(before, inside)
+    if (closes && ancestors.some(run => run[0] === piece.run.delimiter[0] && (run[0] === '~' || ruleOfThreeAllows(run.length, piece.run.delimiter.length + runAtStart(piece.core, '*'))))) {
+      parts[i] = spellAsHtml(piece, ctx, nodes[i])
+      continue
+    }
+    if (!parentDelimiter || piece.run.delimiter[0] !== parentDelimiter[0]) continue
+    const opening = piece.run.delimiter.length + runAtStart(piece.core, piece.run.delimiter[0]!)
+    if (parentDelimiter[0] === '*' && !ruleOfThreeAllows(parentDelimiter.length, opening)) continue
+    if (closes) {
+      parts[i] = spellAsHtml(piece, ctx, nodes[i])
+    }
+  }
   // Three passes, because each one wants to see the parts the one before it
   // settled. A part re-spelled as inline HTML contributes a `<` or a `>` where
   // it used to contribute a delimiter, which can only make a later run MORE able
@@ -2572,7 +2630,7 @@ function reflankRuns(nodes: InlineNode[], parts: string[]): string {
   // later pass never undoes an earlier one.
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
-    if (piece && contentGrowsRun(piece, nodes[i]!)) parts[i] = spellAsHtml(piece)
+    if (piece && contentGrowsRun(piece, nodes[i]!, ctx)) parts[i] = spellAsHtml(piece, ctx, nodes[i])
   }
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
@@ -2585,7 +2643,7 @@ function reflankRuns(nodes: InlineNode[], parts: string[]): string {
     // lexes, not content beside it, so reading it as the inside character calls
     // `a***x***b` unable to flank when it flanks perfectly well.
     if (flanks(afterRunInCore(piece.core, ch), before) && flanks(beforeRunInCore(piece.core, ch), after)) continue
-    parts[i] = spellAsHtml(piece)
+    parts[i] = spellAsHtml(piece, ctx, nodes[i])
   }
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
@@ -2596,8 +2654,8 @@ function reflankRuns(nodes: InlineNode[], parts: string[]): string {
     // which looks right only, moves its fallback across.
     const j = piece.run.delimiter[0] === '~' ? -1 : nextRendered(parts, i)
     const next = j < 0 ? null : delimiterPiece(nodes, parts, j)
-    if (next && next.run.delimiter[0] === piece.run.delimiter[0]) parts[j] = spellAsHtml(next)
-    else parts[i] = spellAsHtml(piece)
+    if (next && next.run.delimiter[0] === piece.run.delimiter[0]) parts[j] = spellAsHtml(next, ctx, nodes[j])
+    else parts[i] = spellAsHtml(piece, ctx, nodes[i])
   }
 
   return parts.join('')
@@ -2618,8 +2676,26 @@ function delimiterPiece(nodes: InlineNode[], parts: string[], i: number): Delimi
   return piece ? { run, ...piece } : null
 }
 
-const spellAsHtml = (piece: DelimiterPiece): string =>
-  `${piece.lead}<${piece.run.tag}>${piece.core}</${piece.run.tag}>${piece.trail}`
+function spellAsHtml(piece: DelimiterPiece, ctx: MarkdownContext, node?: InlineNode): string {
+  let core = piece.core
+  const parent = ctx.delimiterAncestors.at(-1)
+  const parts = node ? ctx.renderedChildren.get(node) : undefined
+  const body = parts ? PAD_SPACE.exec(parts.join('')) : null
+  if ((parent === '**' || parent === '***') && node && 'children' in node && parts && body?.[2] === core) {
+    const repaired = parts.map((part, i) => {
+      const child = normalizeLegacyInline(node.children[i]!)
+      const nested = child.type === 'strong' ? splitRun(part, '**') : null
+      return nested && child.type === 'strong'
+        ? `${nested.lead}<strong${renderHtmlAttrs(child.attrs)}>${nested.core}</strong>${nested.trail}`
+        : part
+    }).join('')
+    const lead = body[1]!.length
+    const trail = body[3]!.length
+    core = repaired.slice(lead, repaired.length - trail)
+  }
+  const attrs = node && 'attrs' in node ? renderHtmlAttrs(node.attrs) : ''
+  return `${piece.lead}<${piece.run.tag}${attrs}>${core}</${piece.run.tag}>${piece.trail}`
+}
 
 const runAtStart = (s: string, ch: string): number => {
   let n = 0
@@ -2671,11 +2747,24 @@ function ruleOfThreeAllows(open: number, close: number): boolean {
  * at the edge reaches nothing, because a backslash breaks a run rather than
  * lengthening it.
  */
-function contentGrowsRun(piece: DelimiterPiece, node: InlineNode): boolean {
+function contentGrowsRun(piece: DelimiterPiece, node: InlineNode, ctx: MarkdownContext): boolean {
   const ch = piece.run.delimiter[0]!
   if (runAtStart(piece.core, ch) === 0 && runAtEnd(piece.core, ch) === 0) return false
 
-  return !edgeChildNests(piece, node)
+  if (!edgeChildNests(piece, node)) return true
+  const parts = ctx.renderedChildren.get(node)
+  const children = 'children' in node ? node.children : []
+  if (!parts || runAtEnd(piece.core, ch) === 0) return false
+  const i = previousRendered(parts, parts.length)
+  if (i < 0) return false
+  const child = delimiterPiece(children, parts, i)
+  if (!child || child.run.delimiter[0] !== ch) return false
+  const before = child.lead !== '' ? lastCharacter(child.lead) : neighbourBefore(parts, i)
+  const inside = afterRunInCore(child.core, ch)
+  const canClose = before !== '' && !FLANK_SPACE.test(flankCharacter(before)) && flanks(before, inside)
+  const opening = child.run.delimiter.length + runAtStart(child.core, ch)
+  const closing = piece.run.delimiter.length + runAtEnd(piece.core, ch)
+  return canClose && !ruleOfThreeAllows(opening, closing)
 }
 
 /**
@@ -2705,7 +2794,7 @@ function edgeChildNests(piece: DelimiterPiece, node: InlineNode): boolean {
 
     return child?.delimiter[0] === '*' && child.delimiter.length !== piece.run.delimiter.length
   }
-  if (runAtStart(piece.core, '*') > 0 && !nests(kids[0])) return false
+  if (runAtStart(piece.core, '*') > 0 && (!nests(kids[0]) || runAtStart(piece.core, '*') !== DELIMITER_RUN[kids[0]!.type]!.delimiter.length)) return false
 
   return runAtEnd(piece.core, '*') === 0 || nests(kids[kids.length - 1])
 }
@@ -2831,6 +2920,27 @@ function neighbourAfter(parts: string[], i: number): string {
  * went out as `** **`: a THEMATIC BREAK in the reader, with the title gone
  * (carve-js#1688). An empty run emits nothing rather than a bare separator.
  */
+function renderWrappedInlines(nodes: InlineNode[], ctx: MarkdownContext, delimiter: string, tag: string): string {
+  const owner: InlineNode = { type: delimiter === '**' ? 'strong' : 'emphasis', children: nodes }
+  let inner: string
+  ctx.delimiterAncestors.push(delimiter)
+  try {
+    inner = renderInlines(nodes, ctx, delimiter, owner)
+  } finally {
+    ctx.delimiterAncestors.pop()
+  }
+  try {
+    const rendered = trimNonNbsp(padOutside(inner, delimiter, tag))
+    const split = splitRun(rendered, delimiter)
+    const piece = split ? { run: { delimiter, tag }, ...split } : null
+    const repaired = piece && contentGrowsRun(piece, owner, ctx) ? spellAsHtml(piece, ctx, owner) : rendered
+
+    return repaired === '' ? '' : `${repaired}\n\n`
+  } finally {
+    ctx.renderedChildren.delete(owner)
+  }
+}
+
 function wrapperLine(inner: string, delimiter: string, tag: string, suffix = '\n\n'): string {
   const run = trimNonNbsp(padOutside(inner, delimiter, tag))
 
