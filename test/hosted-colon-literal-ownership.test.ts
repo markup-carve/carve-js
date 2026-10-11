@@ -5,6 +5,7 @@ import readerScopeFixtures from './fixtures/hosted-colon-reader-scope.json'
 import neighborScopeFixtures from './fixtures/hosted-colon-neighbor-scope.json'
 import review7ScopeFixtures from './fixtures/hosted-colon-review7-scope.json'
 import review8ScopeFixtures from './fixtures/hosted-colon-review8-scope.json'
+import review9ScopeFixtures from './fixtures/hosted-colon-review9-scope.json'
 
 // Expected HTML comes from native reader 83fa84fcba4f5d7bddc923219927f8122af1a341.
 for (const fixture of readerScopeFixtures) it(fixture.name, () => {
@@ -17,6 +18,9 @@ for (const fixture of review7ScopeFixtures) it(fixture.id, () => {
   expect(carveToHtml(fixture.source)).toBe(fixture.html)
 })
 for (const fixture of review8ScopeFixtures) it(fixture.id, () => {
+  expect(carveToHtml(fixture.source)).toBe(fixture.html)
+})
+for (const fixture of review9ScopeFixtures) it(fixture.id, () => {
   expect(carveToHtml(fixture.source)).toBe(fixture.html)
 })
 
