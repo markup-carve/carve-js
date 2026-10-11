@@ -1,6 +1,6 @@
 import type { InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
-import { escapeInactiveMarkdownLinkBrackets, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
+import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
@@ -1850,9 +1850,17 @@ function convertInline(
   // path is literal, so protect it before the emphasis passes. Carve does not
   // link a bare URL, so it is text, and a hyphen run in it is escaped like
   // any other.
-  line = line.replace(/\bhttps?:\/\/[^\s<>`]+/g, (url) =>
-    protect(url.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-'))),
-  )
+  const activeLabelRanges = markdownActiveLinkLabelRanges(line, protectedSpans,
+    label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined)
+  activeLabelRanges.sort((a, b) => a.start - b.start)
+  let activeLabelAt = 0
+  line = line.replace(/\bhttps?:\/\/[^\s<>`\x00]+/g, (url, offset: number) => {
+    while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
+    const label = activeLabelRanges[activeLabelAt]
+    return label && offset >= label.start && offset < label.end
+      ? url
+      : protect(url.replace(/(?<!\\)-{2,}/g, (run) => run.replace(/-/g, '\\-')))
+  })
 
   const destinationOpeners = completeDestinationOpeners(line)
   line = line.replace(/(?<![!\\\]])\[([^[\]\n]+)\](?!\[)/g, (match, label: string, offset: number, source: string) => {
@@ -1953,9 +1961,25 @@ function convertInline(
     /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
   const wrap = (open: string, body: string, close: string, braced: boolean): string =>
     braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
+  const escapeLabelSlashes = (label: string): string => {
+    const opaqueEnd = opaqueHtmlScanner(label)
+    let escaped = ''
+    for (let at = 0; at < label.length;) {
+      if (label[at] === '\\') { escaped += label.slice(at, at + 2); at += 2; continue }
+      if (label[at] === '\x00') {
+        const token = /^\x00P\d+\x00/.exec(label.slice(at))
+        if (token) { escaped += token[0]; at += token[0].length; continue }
+      }
+      const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
+      if (tagEnd !== undefined) { escaped += label.slice(at, tagEnd); at = tagEnd; continue }
+      escaped += label[at] === '/' ? '\\/' : label[at]!
+      at++
+    }
+    return escaped
+  }
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
-    reportFlattenedEmphasis)
+    reportFlattenedEmphasis, escapeLabelSlashes)
   line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no

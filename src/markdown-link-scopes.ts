@@ -1,15 +1,29 @@
 import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 
+export function markdownActiveLinkLabelRanges(
+  source: string,
+  spans: readonly string[],
+  isReference: (label: string) => boolean,
+): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = []
+  protectMarkdownLinkLabels(source, spans, value => value, isReference, () => {}, value => value,
+    (start, end) => { ranges.push({ start, end }) }, true)
+  return ranges
+}
+
 export function protectMarkdownLinkLabels(
   source: string,
   spans: readonly string[],
   protect: (value: string) => string,
   isReference: (label: string) => boolean,
   onFlatten: () => void = () => {},
+  prepareLabel: (label: string) => string = value => value,
+  onActiveLabel?: (start: number, end: number) => void,
+  rangesOnly = false,
 ): string {
   if (!source.includes('[')) return source
   const output: string[] = []
-  const opens: { slot: number; generation: number }[] = []
+  const opens: { slot: number; at: number; generation: number }[] = []
   let generation = 0
   let flattened = false
   const tokenAt = /\x00P(\d+)\x00/y
@@ -23,7 +37,7 @@ export function protectMarkdownLinkLabels(
     if (char === '\\' && i + 1 < source.length) {
       output.push(source.slice(i, i + 2)); i++; continue
     }
-    if (char === '[') opens.push({ slot: output.length, generation })
+    if (char === '[') opens.push({ slot: output.length, at: i, generation })
     if (char === ']' && opens.length) {
       const opener = opens.pop()!
       tokenAt.lastIndex = i + 1
@@ -36,13 +50,20 @@ export function protectMarkdownLinkLabels(
       const valid = tail.startsWith('(') || reference !== null && isReference(reference[1] || label)
       if (valid && token) {
         if (active) {
+          onActiveLabel?.(opener.at + 1, i)
+          if (rangesOnly) {
+            output.push(char, token[0])
+            generation++
+            i += token[0].length
+            continue
+          }
           // The braces the conversion wrote are markup, not label text, so they
           // are protected with their delimiters: unprotected, the line's own
           // literal-pair escaper reads this output back as text and backslashes
           // an opener it generated (markup-carve/carve#2877 made such a nested
           // opener reachable in the first place).
           let depth = 0
-          const converted = markdownEmphasis(label, () => { flattened = true }, undefined, spans, false, false, 1, peak => { depth = peak })
+          const converted = markdownEmphasis(prepareLabel(label), () => { flattened = true }, undefined, spans, false, false, 1, peak => { depth = peak })
             .replace(/[*_]/g, char => protect(char))
             .replace(/\{(?=\x00P\d+\x00)|(?<=\x00P\d+\x00)\}/g, char => protect(char))
           const depthToken = protect('')
