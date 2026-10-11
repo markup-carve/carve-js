@@ -158,8 +158,14 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
     it(`keeps the quoted note's ${JSON.stringify(fence)} fence scoped to its host`, () => {
       const source = ['> [^a]: ' + fence, '>   code', '>   ```', 'tail', '', 'ref[^a]', ''].join('\n')
       expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'paragraph', 'paragraph'])
-      expect(carveToHtml(source)).toContain('</blockquote>\n<p>tail</p>')
-      expect(carveToHtml(source)).toContain('role="doc-endnotes"')
+      const html = carveToHtml(source)
+      expect(html).toContain('</blockquote>\n<p>tail</p>')
+      const note = html.slice(html.indexOf('<section role="doc-endnotes"'))
+      expect(note).toContain('code')
+      if (fence === '```') expect(note).toContain('<pre><code>code\n</code></pre>')
+      else expect(note).not.toContain('<pre>')
+      expect(note).not.toContain('```')
+      expect(carveToHtml(carveToCarve(source))).toBe(html)
     })
   }
 })
