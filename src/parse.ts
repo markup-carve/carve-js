@@ -7258,6 +7258,8 @@ const ATTR_INERT_PREV = new Set([
   // block at render, the author's `{.k}` vanishing without trace.
   'substitution',
   'critic_comment',
+  // Braced comments also end the attribute run (carve#2929).
+  'comment',
 ])
 
 
