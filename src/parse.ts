@@ -11320,6 +11320,12 @@ class ParseSession {
     const children = this.parseBlocks(subLexer, 0)
     const bq: BlockQuote = { type: 'block_quote', children }
     const quoteEndIndex = lexer.pos
+    // §4d: a quote built out of nothing but structural-only `>` lines is not a
+    // captionable host. It holds nothing the caption could be about, and taking
+    // one binds the caption across the container change that opened the quote -
+    // which is how `| a |` / blank / `>` / blank / `^ cap` captioned an empty
+    // quote nobody wrote the caption under (markup-carve/carve#2892).
+    if (children.length === 0) return bq
     // Optional caption with ^
     // Allow one blank line between
     let lookahead = 0
