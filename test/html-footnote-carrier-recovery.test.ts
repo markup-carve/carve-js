@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { htmlToAst, htmlToCarve } from '../src/index.js'
+import { carveToHtml, htmlToAst, htmlToCarve } from '../src/index.js'
 import type { HtmlImportMode } from '../src/html-import.js'
 import fixtures from './fixtures/footnote-carrier-recovery-fixtures.json'
 
@@ -92,6 +92,29 @@ describe('footnote carrier recovery (carve#2918)', () => {
       expect(result.value).toBe('[^1] [^1]\n\n[^1]: body\n')
       expect(result.report.diagnostics.map(({ code }) => code)).toEqual(['attribute-dropped'])
     })
+  }
+
+  for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+    for (const prefix of ['data-carve', 'data-djot']) {
+      for (const labels of [['a b', 'a  b'], ['1 ', undefined]]) {
+        it(`${mode} ${prefix} preserves both bodies with normalized labels ${JSON.stringify(labels)}`, () => {
+          const html = '<p><a href="#fn1" role="doc-noteref">1</a> <a href="#fn2" role="doc-noteref">2</a></p>'
+            + '<section role="doc-endnotes"><ol>'
+            + labels.map((label, index) => `<li id="fn${index + 1}"${label === undefined ? '' : ` ${prefix}-footnote-label="${label}"`}><p>${index === 0 ? 'one' : 'two'}</p></li>`).join('')
+            + '</ol></section>'
+          const result = htmlToCarve(html, { mode })
+          const rendered = carveToHtml(result.value)
+          expect(rendered).toContain('<p>one')
+          expect(rendered).toContain('<p>two')
+          expect(rendered).toContain('href="#fn1"')
+          expect(rendered).toContain('href="#fn2"')
+          expect(result.report.diagnostics.map(({ code }) => code))
+            .toEqual(labels[1] === undefined ? [] : ['attribute-dropped'])
+          const attributes = authoredAttributeNames(htmlToAst(html, { mode }).value)
+          for (const name of fixtures[0]!.forbiddenAuthoredAttributes) expect(attributes).not.toContain(name)
+        })
+      }
+    }
   }
 
 })

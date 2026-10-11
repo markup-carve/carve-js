@@ -5834,9 +5834,20 @@ class Importer {
     // authored `[^2]` because the second note would have been numbered 2 -
     // even where no note ended up wearing that number.
     const taken = new Set<string>()
-    const accepted = read.map((entry) => {
-      if (entry.label === undefined || taken.has(entry.label)) return undefined
-      taken.add(entry.label)
+    const accepted = read.map((entry, index) => {
+      if (entry.label === undefined) return undefined
+      const key = normalizeRefLabel(entry.label)
+      if (taken.has(key)) {
+        this.report.add(
+          'attribute-dropped',
+          'Dropped a footnote label already used by another note',
+          'warning',
+          'footnote',
+          definitions[index]!.block,
+        )
+        return undefined
+      }
+      taken.add(key)
       return entry.label
     })
     let next = 1
