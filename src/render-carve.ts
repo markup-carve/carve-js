@@ -2839,6 +2839,7 @@ class CarveRenderSession {
     let rendered = ''
     const previous = this.escapeMode
     this.escapeMode = mode
+    this.verbatimLineGuardNodes = []
     this.writtenBraced = new WeakSet()
     this.openEmphasisKinds = new Set()
     this.labelKinds = new Set()
@@ -3872,11 +3873,15 @@ class CarveRenderSession {
   private renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
     // Footnote continuations need their body indentation to remain owned.
     const rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
-      .replace(new RegExp(`${this.sentinels[6]}(?=\\[)`, 'g'), this.sentinels[7]!)
-    if (rawBody.split('\n').some((line) => line.replace(/^[ \t]*/, '').startsWith(this.sentinels[6]! + '>'))) {
-      throw new SourceUnspellableError('code', 'a block-marker continuation cannot stay inside a footnote paragraph')
+      .replace(new RegExp(`${this.verbatimLineGuardPattern()}(?=\\[)`, 'g'), this.sentinels[7]!)
+    for (const line of rawBody.split('\n')) {
+      const match = new RegExp(`^${this.sentinels[6]}g(\\d+)${this.sentinels[6]}>`).exec(line.replace(/^[ \t]*/, ''))
+      if (match) {
+        const node = this.verbatimLineGuardNodes[Number(match[1])]
+        throw new SourceUnspellableError(node?.type ?? 'code', 'a block-marker continuation cannot stay inside a footnote paragraph', node)
+      }
     }
-    const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
+    const body = trimNonNbsp(blocks.length === 1 && blocks[0]?.type === 'paragraph' ? rawBody.replace(/\n\n/g, '\n') : rawBody)
     if (body === '') {
       return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
     }
@@ -4360,7 +4365,7 @@ class CarveRenderSession {
         // span. An attribute block is written after it, so a code span carrying
         // one keeps the closed form (and `raw_inline` and `literal_inline`, which
         // both append to `renderCode`, never ask for it).
-        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === ''), ctx))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === ''), ctx, 'code', node))
       case 'link':
         return renderSession.renderLink(node, ctx)
       case 'image':
@@ -4375,7 +4380,7 @@ class CarveRenderSession {
         return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderSession.inlineAttrs(node.attrs, node)}` : content
       }
       case 'math':
-        return withAttrs(renderSession.renderMath(node.display, node.content))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderMath(node.display, node.content), ctx, 'math', node))
       case 'raw_inline':
         if (node.content === '') {
           throw new SourceUnspellableError(
@@ -4383,12 +4388,12 @@ class CarveRenderSession {
             'an empty raw inline has no Carve source spelling',
           )
         }
-        return `${renderSession.renderCode(node.content, false, 'raw_inline')}{=${escapeFormat(node.format)}}`
+        return `${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'raw_inline'), ctx, 'raw_inline', node)}{=${escapeFormat(node.format)}}`
       case 'literal_inline':
         // §27: `!` prefix on a verbatim span. A trailing attribute block is the
         // ordinary inline attribute block (same as a code span carries).
         // renderCode widens the backtick fence when the content holds backticks.
-        return `!${renderSession.renderCode(node.content, false, 'literal_inline')}${renderSession.inlineAttrs(node.attrs, node)}`
+        return `!${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'literal_inline'), ctx, 'literal_inline', node)}${renderSession.inlineAttrs(node.attrs, node)}`
       case 'symbol':
         return withAttrs(`:${escapeSymbolName(node.name)}:`)
       case 'autolink':
@@ -4565,13 +4570,21 @@ class CarveRenderSession {
     return undefined
   }
 
-  private guardCodeLines(written: string, ctx: CarveContext): string {
+  private verbatimLineGuardNodes: InlineNode[] = []
+
+  private verbatimLineGuardPattern(): string {
+    return `${this.sentinels[6]}(?:g[0-9]+${this.sentinels[6]})?`
+  }
+
+  private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
     const marker = /\n(?=>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/g
     if (this.termKeepsLineIndent && marker.test(written)) {
-      throw new SourceUnspellableError('code', 'a block marker on a continuation line ends the definition term')
+      throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }
-    if (ctx.lineBlockDepth > 0) return written
-    return written.replace(marker, `\n${this.sentinels[6]}`)
+    if (ctx.lineBlockDepth > 0 || !written.includes('\n') || !marker.test(written)) return written
+    marker.lastIndex = 0
+    const guard = `${this.sentinels[6]}g${this.verbatimLineGuardNodes.push(node) - 1}${this.sentinels[6]}`
+    return written.replace(marker, `\n${guard}`)
   }
 
   private renderCode(content: string, allowUnclosed = false, nodeType = 'code'): string {
@@ -4702,10 +4715,10 @@ class CarveRenderSession {
       text
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
         .replaceAll(this.sentinels[7]!, '')
-        .replace(new RegExp(`^([ \\t>]*)${this.sentinels[6]}([>\\[])`, 'gm'), (_match, prefix: string, marker: string) =>
+        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>\\[])`, 'gm'), (_match, prefix: string, marker: string) =>
           (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
-        .replaceAll(this.sentinels[6]!, '')
+        .replace(new RegExp(this.verbatimLineGuardPattern(), 'g'), '')
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
           dropTrailingWs(prefix),
         )
