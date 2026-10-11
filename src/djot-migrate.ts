@@ -382,8 +382,8 @@ export function maskDjotFences(
     let content = line,
       depth = 0
     const views = [line]
-    while (true) {
-      const quote = /^[ \t]*>[ ]?/.exec(content)
+    while (!fence || depth < fence.depth) {
+      const quote = /^[ \t]*>(?:[ \t]|$)/.exec(content)
       if (!quote) break
       content = content.slice(quote[0].length)
       depth++

@@ -23,15 +23,23 @@ export function djotContentStart(line: string): number {
   }
 
 export function djotTableRows(source: string, mask: string): boolean[] {
-  let offset = 0, previousRow = false, previousBlock = true, footnoteColumn = -1
+  let offset = 0, previousRow = false, previousBlock = true, footnoteColumn = -1, noteContainerColumn = -1
   return source.split('\n').map(line => {
     const at = djotContentStart(line), end = line.trimEnd().length - 1, content = line.slice(at)
     const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
     const closesNote = footnoteColumn >= 0 && at < footnoteColumn
-    if (closesNote) footnoteColumn = -1
-    const allowed = previousBlock || previousRow || opensItem || closesNote
+    if (closesNote) { footnoteColumn = -1; noteContainerColumn = -1 }
+    const closesContainer = noteContainerColumn >= 0 && at <= noteContainerColumn && content.trim() !== ''
+    if (closesContainer) noteContainerColumn = -1
+    const allowed = previousBlock || previousRow || opensItem || closesNote || closesContainer
     const note = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)*\[\^[^\]\n]+\]:/.exec(line)
-    if (note && allowed) footnoteColumn = note[0].indexOf('[^') + 2
+    if (note && allowed) {
+      footnoteColumn = note[0].indexOf('[^') + 2
+      const after = line.slice(note[0].length)
+      const padding = /^[ \t]*/.exec(after)![0].length
+      const body = after.slice(padding)
+      if (/^(?:>(?:[ \t]|$)|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(body)) noteContainerColumn = note[0].length + padding
+    }
     const row: boolean = allowed && line[at] === '|' && mask[offset + at] === '|' && line[end] === '|' && mask[offset + end] === '|' && line[end - 1] !== '\\'
     previousBlock = content.trim() === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]+\]:)/.test(content)
     previousRow = row

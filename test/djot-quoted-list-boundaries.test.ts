@@ -37,3 +37,14 @@ test('reports multiline footnote code loss at its original opener', () => {
     line: 3,
   })
 })
+
+test('bounds output growth for nested notes with a lazy continuation', () => {
+  for (const size of [16, 32, 64]) {
+    const source = Array.from({ length: size }, (_, n) => ' '.repeat(n) + `[^n${n}]: a`).join('\n\n') + '\n' + 'lazy\n'.repeat(4096) + '\n' + Array.from({ length: size }, (_, n) => `[^n${n}]`).join(' ') + '\n'
+    const result = djotToCarve(source)
+    expect(result.length).toBeLessThanOrEqual(source.length * 2)
+    const html = carveToHtml(result)
+    expect(html.match(/lazy/g)).toHaveLength(4096)
+    expect(html.match(/role="doc-noteref"/g)).toHaveLength(size)
+  }
+})

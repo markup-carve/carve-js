@@ -541,6 +541,7 @@ function convertDjotDocument(djot: string): string {
   // comment. It travels as a NUL token so the text escaper cannot reach it and
   // turn the comment into a literal `%%%%` the reader was never shown.
   const emptyNote = djotPlaceholderPrefix(body, '\x00DJOTEMPTYNOTE\x00')
+  const noteSourceWidths = new Map<string, number>()
   const normalizedBody = normalizeDjotFootnotes(
     djotReferenceLayout(
       foldDjotReferences(
@@ -553,9 +554,10 @@ function convertDjotDocument(djot: string): string {
     strippedDefinitions.isBoundary,
     invalidAttributes.inherited,
     emptyNote,
+    noteSourceWidths,
   )
   const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody, invalidAttributes.inherited)))
-  const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)))
+  const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)), strippedDefinitions.isBoundary, noteSourceWidths)
   const headingFolded = foldHeadingContinuations(dropLeadingDjotSeparators(escapeDjotNonTableRows(layout)))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
 
@@ -967,7 +969,7 @@ function normalizeDjotParagraphFences(source: string): string {
   return output.join('')
 }
 
-function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false, inherited: ReadonlySet<string> = new Set(), emptyNote = '%%%%'): string {
+function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: string) => boolean = () => false, inherited: ReadonlySet<string> = new Set(), emptyNote = '%%%%', sourceWidths?: Map<string, number>): string {
   if (!source.includes('[^')) return source
   const mask = maskDjotCodeAndDestinations(source, false, true, false)
   const rows = djotTableRows(source, mask)
@@ -1009,7 +1011,9 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
     )![0]
     const previous = previousLine.slice(previousPrefix.length).trim()
     const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(prefix)
-    const boundary = isDefinitionBoundary(previousLine) || previous === '' || rows[n - 1] || item || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || at < previousPrefix.length && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousPrefix) || (prefix.match(/>/g)?.length ?? 0) < (previousPrefix.match(/>/g)?.length ?? 0) || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
+    let boundary = isDefinitionBoundary(previousLine) || previous === '' || rows[n - 1] || item || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || at < previousPrefix.length && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousPrefix) || (prefix.match(/>/g)?.length ?? 0) < (previousPrefix.match(/>/g)?.length ?? 0) || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
+    const previousNote = /^\[\^[^\]\n]+\]:[ \t]*(.+)$/.exec(previous)
+    if (at > previousPrefix.length && previousNote && !/^(?:>(?:[ \t]|$)|[-*+][ \t]|#{1,6}(?:[ \t]|$)|[`~]{3,}|:{3,}|[|]|\{|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(previousNote[1]!)) boundary = false
     const head = /^\[\^([^\]\n]+)\]:(?:[ \t]|$)/.exec(line.slice(at))
     if (head && boundary && mask[offset + at] === '[') {
       const key = keyOf(head[1]!)
@@ -1163,6 +1167,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
         const rename = labels.has(key) || unsupported(key) || !defined.has(key)
         const name = rename ? alias(key) : key
         const at = i
+        if (definition && sourceWidths) sourceWidths.set(name, end - i + 1 + /^:[ \t]*/.exec(source.slice(end + 1))![0].length)
         if (!definition) used.add(key)
         output.push(rename || key !== source.slice(i + 2, end) ? `[^${name}]` : source.slice(i, end + 1))
         i = end + 1
@@ -1696,7 +1701,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
         else if (mask[offset + at] !== ' ') divs.push({ width: div[1]!.length, depth, column: at })
       }
       if (line[at] === '|' && ((oldColumn > 0 && depth <= oldQuote && indent < oldColumn) || depth < previousQuote)) {
-        output.push(source.slice(cursor, offset), '\n')
+        output.push(source.slice(cursor, offset), /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0].trimEnd(), '\n')
         cursor = offset
       }
       previousQuote = Math.max(depth, codeDepth)

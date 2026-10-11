@@ -28,8 +28,8 @@ function compactDjotListPrefix(text: string): string {
 }
 
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
-export function djotBlockLayout(source: string, rows: readonly boolean[]): string {
-  const hasDefinitionSyntax = source.includes('[^') || /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(source)
+export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map()): string {
+  const hasDefinitionSyntax = /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(source)
   const lines = source.split('\n')
   const maskedSource = maskDjotCodeAndDestinations(source)
   const mask = maskedSource.split('\n')
@@ -38,14 +38,14 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
   let lineOffset = 0
   const lineOffsets = lines.map(line => { const at = lineOffset; lineOffset += line.length + 1; return at })
   const fences = maskDjotFences(source).split('\n')
-  const divs: {
+  let divs: {
     width: number
     prefix: string
     itemColumn?: number
     depth: number
     start: number
   }[] = []
-  const lists: {
+  let lists: {
     depth: number
     column: number
     content: number
@@ -56,11 +56,36 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     start: number
     continuation: boolean
   }[] = []
-  const out: string[] = []
+  const mainOut: string[] = []
+  let out = mainOut
   let paragraph = false,
     blank = true,
     depth = 0
   let embeddedListOwner: { depth: number; column: number; content: number } | undefined
+  type NoteOwner = { depth: number; column: number; target: number; content: number; listBase: number; parentOut: string[]; parentLists: typeof lists; parentDivs: typeof divs; parentDepth: number; parentBoundary: string; parentEmbedded: typeof embeddedListOwner; parentOpaque: typeof opaqueQuoteOwner; parentDefinition: number; placement: number | undefined; fenceColumn?: number }
+  let noteOwner: NoteOwner | undefined
+  const notes: NoteOwner[] = []
+  const completedNotes: { body: string[]; placement: number | undefined; fenceColumn?: number }[] = []
+  const endNote = (): void => {
+    const ended = notes.pop()!
+    if (divs.length) dropOrphanAttributeLine(out)
+    while (divs.length) {
+      const div = divs.pop()!
+      if (!div.prefix.includes('>')) out.push(div.prefix + ':'.repeat(div.width))
+    }
+    completedNotes.push({ body: out, placement: ended.placement })
+    out = ended.parentOut
+    lists = ended.parentLists
+    divs = ended.parentDivs
+    depth = ended.parentDepth
+    quoteBoundary = ended.parentBoundary
+    embeddedListOwner = ended.parentEmbedded
+    opaqueQuoteOwner = ended.parentOpaque
+    definitionIndent = ended.parentDefinition
+    noteOwner = notes.at(-1)
+    paragraph = false
+    headingMarker = ''
+  }
   let opaqueQuoteOwner: { depth: number; column: number; content: number } | undefined
   let quoteBoundary = ''
   let headingMarker = ''
@@ -76,17 +101,21 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       continue
     }
     const quoteForCarve = (): string => {
-      if (!quoteDepth || definitionIndent >= 0 || hasDefinitionSyntax || fences[n] !== original || masked[quote.indexOf('>')] !== '>') return quote
+      const baseDepth = noteOwner?.depth ?? 0
+      const retainedQuote = baseDepth ? quote.slice(closedQuoteBoundary(quote, baseDepth - 1).length).replace(/^[ \t]/, '') : quote
+      if (!quoteDepth || definitionIndent >= 0 || hasDefinitionSyntax || fences[n] !== original || masked[quote.indexOf('>')] !== '>') return baseDepth ? retainedQuote : quote
       const owner = lists.at(-1)
       const contexts: { depth: number; column: number; content: number; target: number }[] = []
       if (owner) contexts.push(owner)
       if (embeddedListOwner) contexts.push({ ...embeddedListOwner, target: 0 })
+      if (noteOwner) contexts.push(noteOwner)
       if (opaqueQuoteOwner) contexts.push({ ...opaqueQuoteOwner, target: opaqueQuoteOwner.column })
       const firstOwned = Math.min(...contexts.map(value => value!.depth))
       const lastOwned = Math.max(...contexts.map(value => value!.depth))
       const parts: string[] = []
-      for (let level = 0; level < quoteDepth; level++) {
-        const held = contexts.find(value => value!.depth === level && (quoteColumns[level] ?? 0) > value!.column)
+      for (let level = baseDepth; level < quoteDepth; level++) {
+        let held: typeof contexts[number] | undefined
+        for (const candidate of contexts) if (candidate.depth === level && (quoteColumns[level] ?? 0) > candidate.column && (!held || candidate.column >= held.column)) held = candidate
         const column = held ? held.target + held.content : level > firstOwned && level < lastOwned ? (quoteColumns[level] ?? 0) : 0
         parts.push(' '.repeat(column), '>')
         if (level + 1 < quoteDepth || !quote.endsWith('>')) parts.push(' ')
@@ -94,18 +123,76 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       return parts.join('')
     }
     let nativeRemainder = original.slice(quote.length)
-    const originalForCarve = (): string => quoteForCarve() + nativeRemainder
+    const originalForCarve = (): string => quoteForCarve() + (noteOwner && text !== '' && quoteDepth === noteOwner.depth && !noteHead ? fences[n] === original ? ' '.repeat(noteOwner.content) + text : nativeRemainder.slice(Math.min(indent, noteOwner.column)) : nativeRemainder)
     const raw = original.slice(quote.length),
       view = masked.slice(quote.length)
     const indent = /^[ \t]*/.exec(raw)![0].length
     const text = raw.slice(indent),
       visible = view.slice(indent)
     const quoteColumns = quoteDepth > 0 ? indentColumnsAfterQuotes(original, quoteDepth) : []
+    const noteHead = visible.startsWith('[^') ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(text) : null
+    while (noteOwner && fences[n] === original && (text || quoteDepth > noteOwner.depth)) {
+      const ownerColumn = quoteDepth > noteOwner.depth ? quoteColumns[noteOwner.depth] ?? 0 : indent
+      const outside = quoteDepth < noteOwner.depth || ownerColumn <= noteOwner.column
+      const block = isBoundary(original) || noteHead || quoteDepth > noteOwner.depth || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[|]|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|\[[^\]\n]+\]:)/.test(visible) || (visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length)
+      if (outside && !(paragraph && !blank && !block && quoteDepth <= noteOwner.depth)) {
+        endNote()
+      } else break
+    }
+    if (noteOwner && fences[n] !== original) {
+      const host = noteOwner.depth ? closedQuoteBoundary(original, noteOwner.depth - 1).length : 0
+      const payload = original.slice(host).replace(noteOwner.depth ? /^[ \t]/ : /$^/, '')
+      const payloadIndent = /^[ \t]*/.exec(payload)![0].length
+      if (noteOwner.fenceColumn === undefined && payloadIndent <= noteOwner.column && /^(`{3,}|~{3,})/.test(payload.slice(payloadIndent))) {
+        while (noteOwner && payloadIndent <= noteOwner.column) endNote()
+      }
+      if (noteOwner) {
+        noteOwner.fenceColumn ??= payloadIndent
+        out.push(' '.repeat(noteOwner.content) + payload.slice(Math.min(payloadIndent, noteOwner.fenceColumn)))
+        paragraph = false
+        headingMarker = ''
+        blank = false
+        continue
+      }
+    } else if (noteOwner) delete noteOwner.fenceColumn
     if (opaqueQuoteOwner && text && (quoteDepth < opaqueQuoteOwner.depth || (quoteDepth === opaqueQuoteOwner.depth ? indent : quoteColumns[opaqueQuoteOwner.depth] ?? 0) < opaqueQuoteOwner.column + 1)) opaqueQuoteOwner = undefined
     const blockIndent = quoteDepth > depth ? (quoteColumns[depth] ?? indent) : indent
     const ordinaryQuoteList = lists.at(-1)
     const quoteList = embeddedListOwner && embeddedListOwner.depth < quoteDepth && (!ordinaryQuoteList || embeddedListOwner.depth > ordinaryQuoteList.depth) ? embeddedListOwner : ordinaryQuoteList
     const outsideQuoteItem = quoteList && quoteDepth > quoteList.depth && (quoteColumns[quoteList.depth] ?? indent) < quoteList.column + 1
+    if (noteHead) {
+      while (lists.length && (lists.at(-1)!.depth > quoteDepth || (lists.at(-1)!.depth === quoteDepth && indent <= lists.at(-1)!.column))) lists.pop()
+      if (quoteDepth > 0 || (!lists.length && out.length && out.at(-1)?.trim() !== '')) out.push(quoteForCarve().trimEnd())
+      noteOwner = { depth: quoteDepth, column: indent, target: 0, content: 2, listBase: 0, parentOut: out, parentLists: lists, parentDivs: divs, parentDepth: depth, parentBoundary: quoteBoundary, parentEmbedded: embeddedListOwner, parentOpaque: opaqueQuoteOwner, parentDefinition: definitionIndent, placement: !noteOwner && quoteDepth === 0 && indent === 0 && !lists.length ? out.length : undefined }
+      notes.push(noteOwner)
+      out = []
+      lists = []
+      divs = []
+      embeddedListOwner = undefined
+      opaqueQuoteOwner = undefined
+      definitionIndent = -1
+      const body = noteHead[2]!
+      const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
+      let childBody = body
+      if (child) {
+        lists.push({ depth: quoteDepth, column: indent + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(noteHead[1]!)![1]!) ?? noteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: child[1]!.trim().replace(/[0-9A-Za-z]+/, '1'), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
+        childBody = body.slice(child[1]!.length)
+        if (/^[-*+]/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\][ \t]+/, '')
+      }
+      if (/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(childBody)) noteOwner.fenceColumn = noteOwner.content
+      const inlineQuote = itemQuotePrefix(childBody)
+      depth = quoteDepth + inlineQuote.depth
+      const context = child ? lists.at(-1)! : noteOwner
+      quoteBoundary = (quoteForCarve() + ' '.repeat(context.target + context.content) + inlineQuote.prefix).trimEnd()
+      out.push(noteHead[1] + compactDjotListPrefix(body))
+      const content = inlineQuote.body
+      const inlineDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(content)
+      if (inlineDiv) divs.push({ width: inlineDiv[1]!.length, prefix: ' '.repeat(context.target + context.content) + inlineQuote.prefix, depth, start: lineOffsets[n]!, ...(child ? { itemColumn: context.column + 1 } : {}) })
+      paragraph = !rows[n] && content !== '' && !content.startsWith('\0DJOTEMPTYNOTE\0') && !/^(?:#{1,6}(?:[ \t]|$)|:{3,}|\[[^\]\n]*\]:|(?:[*-][ \t]*){3,}$)/.test(content) && !/^(`{3,}|~{3,})[ \t]*[a-zA-Z0-9_+#.-]*$/.test(content)
+      headingMarker = /^(#{1,6})(?:[ \t]|$)/.exec(content)?.[1] ?? ''
+      blank = !paragraph
+      continue
+    }
     if (text === '') {
       if (outsideQuoteItem) {
         while (lists.length && quoteDepth > lists.at(-1)!.depth && (quoteColumns[lists.at(-1)!.depth] ?? indent) < lists.at(-1)!.column + 1) lists.pop()
@@ -114,8 +201,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         quoteBoundary = quoteForCarve().trimEnd()
       }
       if (paragraph && quoteDepth > depth && !outsideQuoteItem) {
-        const markerAt = closedQuoteBoundary(quote, depth).length - 1
-        out.push(original.slice(0, markerAt) + '\\' + original.slice(markerAt))
+        const markerAt = closedQuoteBoundary(quoteForCarve(), Math.max(0, depth - (noteOwner?.depth ?? 0))).length - 1
+        const written = originalForCarve()
+        out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
         blank = false
         continue
       }
@@ -140,9 +228,10 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       blank = false
       continue
     }
+    const row: boolean = (rows[n] ?? false) && !(noteOwner && paragraph && quoteDepth >= depth && !(lists.at(-1) && indent <= lists.at(-1)!.column))
     const blockStart =
       outsideQuoteItem || (quoteDepth > depth && !paragraph) ||
-      rows[n] ||
+      row ||
       fences[n] !== original ||
       /^(?:#{1,6}(?:[ \t]|$)|:{3,}|\|)/.test(visible) ||
       /^(?:[*-][ \t]*){3,}$/.test(visible)
@@ -160,7 +249,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       while (lists.length && lists.at(-1)!.depth > quoteDepth) lists.pop()
       if (embeddedListOwner && embeddedListOwner.depth > quoteDepth) embeddedListOwner = undefined
       const owner = lists.at(-1)
-      if (item && !blank && paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) out.push(closedQuoteBoundary(quoteBoundary, quoteDepth))
+      if (item && !blank && paragraph && (!owner || owner.depth !== quoteDepth || indent > owner.column)) out.push(closedQuoteBoundary(quoteBoundary, Math.max(0, quoteDepth - (noteOwner?.depth ?? 0))))
       else if (rejectedCommentStartsBlock(visible) && !blank) out.push(quote.trimEnd())
       paragraph = false
       headingMarker = ''
@@ -208,24 +297,25 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         embeddedListOwner = { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length }
       }
       out.push(originalForCarve())
-      paragraph = !(rows[n] || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || /^(?:[*-][ \t]*){3,}$/.test(visible) || /^\[[^\]\n]*\]:/.test(visible) || (!paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
+      paragraph = !(row || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || /^(?:[*-][ \t]*){3,}$/.test(visible) || /^\[[^\]\n]*\]:/.test(visible) || (!paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
       blank = false
       continue
     }
-    if (fences[n] !== original || rows[n]) {
-      if (rows[n] && item) {
+    if (fences[n] !== original || row) {
+      if (row && item) {
         nativeRemainder = raw.slice(0, indent) + compactDjotListPrefix(text)
         opaqueQuoteOwner = { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length }
       }
-      out.push(originalForCarve())
+      out.push(row && !item && !noteOwner && !lists.length && !embeddedListOwner && !opaqueQuoteOwner && definitionIndent < 0 ? quoteForCarve() + text : originalForCarve())
       paragraph = false
       headingMarker = ''
       blank = false
       continue
     }
     if (paragraph && quoteDepth > depth) {
-      const markerAt = closedQuoteBoundary(quote, depth).length - 1
-      out.push(original.slice(0, markerAt) + '\\' + original.slice(markerAt))
+      const markerAt = closedQuoteBoundary(quoteForCarve(), Math.max(0, depth - (noteOwner?.depth ?? 0))).length - 1
+      const written = originalForCarve()
+      out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
       blank = false
       continue
     }
@@ -279,7 +369,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         headingMarker = ''
         blank = true
       } else {
-        out.push(quoteForCarve() + ' '.repeat(indent) + '\\' + text)
+        out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent) + '\\' + text)
         paragraph = true
         blank = false
       }
@@ -300,7 +390,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
         if (!parent.continuation && out[previousList.start - 1]?.trim() === '') out.splice(previousList.start - 1, 1)
       } else if (parent && blank && indent === parent.column) parent.loose = true
       if (((parent && indent > parent.column) || !parent) && paragraph && !blank) {
-        const target = parent?.target !== undefined ? parent.target + parent.content : indent
+        const target = parent?.target !== undefined ? parent.target + parent.content : noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent
         const literal = item[1] ? '\\' + text : parent ? text.replace(/[.)]/, '\\$&') : text
         out.push(quoteForCarve() + ' '.repeat(target) + literal)
         if (parent) parent.continuation = true
@@ -315,7 +405,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
           depth: quoteDepth,
           column: indent,
           content: compactDjotListPrefix(item[0].slice(0, -1)).length,
-          target: nested ? parent.target + parent.content : 0,
+          target: nested ? parent.target + parent.content : noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0,
           kind,
           bullet: item[1] === '*' ? '*' : '-',
           loose: false,
@@ -364,7 +454,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       const parent = lists.at(-1)
       divs.push({
         width: div[1]!.length,
-        prefix: quoteForCarve() + ' '.repeat(indent),
+        prefix: quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.content : indent),
         depth: quoteDepth,
         start: lineOffsets[n]!,
         ...(parent && indent > parent.column ? { itemColumn: parent.column + 1 } : {}),
@@ -387,7 +477,6 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       headingMarker = ''
     }
     const reference = /^\[[^\]\n]*\]:/.test(visible)
-    const row = rows[n] ?? false
     if (row) {
       out.push(originalForCarve())
       paragraph = false
@@ -405,13 +494,13 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
       for (const list of lists) if (indent > list.column) list.loose = true
     }
     if (paragraph && block) {
-      out.push(quoteForCarve() + ' '.repeat(indent) + '\\' + text)
+      out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent) + '\\' + text)
       blank = false
       continue
     }
     if (!paragraph && /^\|`+\|$/.test(text) && !row) {
       while (out[0] === '') out.shift()
-      out.push(quoteForCarve() + ' '.repeat(indent) + '\\' + text)
+      out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : indent) + '\\' + text)
       paragraph = true
       blank = false
       continue
@@ -420,12 +509,13 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     if (heading && !lists.length) {
       out.push(
         quoteForCarve() +
+          ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0) +
           heading[1] +
           // Carve whitespace does not include a vertical tab or a form feed, so
           // `String.prototype.trim` would eat heading content (carve-js#2681).
           (trimNonNbsp(text.slice(heading[1]!.length)) ? ' ' + trimStartNonNbsp(text.slice(heading[1]!.length)) : ''),
       )
-    } else if (rule && !lists.length && !paragraph) out.push(quoteForCarve() + '***')
+    } else if (rule && !lists.length && !paragraph) out.push(quoteForCarve() + ' '.repeat(noteOwner && quoteDepth === noteOwner.depth ? noteOwner.target + noteOwner.content : 0) + '***')
     else {
       const parent = lists.at(-1)
       if (parent && indent > parent.column)
@@ -434,7 +524,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
             ' '.repeat(parent.target + parent.content + Math.max(0, indent - parent.column - parent.content)) +
             text,
         )
-      else out.push(outsideColumn === undefined ? originalForCarve() : quoteForCarve() + ' '.repeat(Math.max(0, indent - outsideColumn)) + text)
+      else out.push(outsideColumn === undefined || noteOwner ? originalForCarve() : quoteForCarve() + ' '.repeat(Math.max(0, indent - outsideColumn)) + text)
     }
     // Masked code ends a paragraph only when it is a block fence.
     const fence = /^[`~]{3,}/.test(text) && visible.trim() === ''
@@ -453,6 +543,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     if (blank && !item && !parentContains(lists, indent) && !attributeLine) { lists.length = 0; embeddedListOwner = undefined }
     blank = false
   }
+  while (notes.length) endNote()
   const newline = out.at(-1) === ''
   if (divs.length && newline) out.pop()
   if (divs.length) dropOrphanAttributeLine(out)
@@ -461,7 +552,26 @@ export function djotBlockLayout(source: string, rows: readonly boolean[]): strin
     if (!div.prefix.includes('>')) out.push(div.prefix + ':'.repeat(div.width))
   }
   if (newline && out.at(-1) !== '') out.push('')
-  return out.join('\n')
+  const rendered: string[] = []
+  const placedNotes = new Map<number, string[][]>()
+  const appendNote = (body: string[]): void => {
+    for (const line of body) rendered.push(line)
+    if (rendered.at(-1) !== '') rendered.push('')
+  }
+  for (const { body, placement } of completedNotes) {
+    if (placement === undefined) appendNote(body)
+    else {
+      const held = placedNotes.get(placement) ?? []
+      held.push(body)
+      placedNotes.set(placement, held)
+    }
+  }
+  for (let i = 0; i <= out.length; i++) {
+    for (const body of placedNotes.get(i) ?? []) appendNote(body)
+    if (i < out.length) rendered.push(out[i]!)
+  }
+  if (!source.endsWith('\n') && rendered.at(-1) === '') rendered.pop()
+  return rendered.join('\n')
 }
 
 /** Djot attaches an attribute line with no block after it to nothing, so drop it. */
