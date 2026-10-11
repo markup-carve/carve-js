@@ -1,6 +1,30 @@
 import { expect, it } from 'vitest'
 import { carveToMarkdown, markdownToCarve, parse, resolve } from '../src/index.js'
 
+it('keeps a reference definition as lazy footnote paragraph text', () => {
+  expect(markdownToCarve('See [r] and[^a].\n\n[^a]: Two words\n[r]: /u\n'))
+    .toBe('See [r] and[^a].\n\n[^a]: Two words\n  \\[r]: /u\n')
+})
+
+it('keeps lazy text and an indented paragraph inside the footnote', () => {
+  expect(markdownToCarve('See[^a].\n\n[^a]: one\nlazy two\n\n    indented para\n\nafter\n'))
+    .toBe('See[^a].\n\nafter\n\n[^a]: one\n  lazy two\n\n  indented para\n')
+})
+
+for (const opener of ['# heading', '```\ncode\n```', '- item', '> quote', '---', '<div>\nhtml\n</div>', '[^b]: other']) {
+  it(`ends lazy footnote continuation before ${opener.split('\n')[0]}`, () => {
+    const written = markdownToCarve(`See[^a].\n\n[^a]: one\n${opener}\n`)
+    expect(written).toMatch(/\[\^a\]: one\n(?:\n|$)/)
+  })
+}
+
+for (const block of ['```\n    code\n    ```', '<div>\n    html\n    </div>']) {
+  it(`does not lazily continue after an indented ${block.split('\n')[0]} block`, () => {
+    const written = markdownToCarve(`See[^a].\n\n[^a]: one\n\n    ${block}\nafter\n`)
+    expect(written).toMatch(/^See\[\^a\]\.\n\nafter\n\n\[\^a\]: one\n/)
+  })
+}
+
 it('indents a second footnote paragraph and imports both blocks', () => {
   const source = 'see[^a]\n\n[^a]: note\n\n  second para\n'
   const markdown = 'see[^a]\n\n[^a]: note\n\n    second para\n'
