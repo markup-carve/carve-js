@@ -1,3 +1,5 @@
+import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
+import { attributeContext, continuesParagraph, resetParagraphContext } from './djot-attributes.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { trimEndMatchingEdges } from './trim-non-nbsp.js'
@@ -5,7 +7,7 @@ import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse
 import { renderPlainText } from './render-plain.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords } from './djot-word-attributes.js'
-import { readAttributes } from './djot-attributes.js'
+import { readAttributes, rejectedCommentStartsBlock } from './djot-attributes.js'
 import { maskDjotOpaque } from './djot-opaque.js'
 import { djotBlockLayout, djotCodePadding, djotInlineLayout } from './djot-block-layout.js'
 import { djotReferenceLayout } from './djot-reference-layout.js'
@@ -125,7 +127,12 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
     }
     if (!stack.length) continue
     if (lines[i]!.trim() === '') {
-      stack.at(-1)!.ready = true
+      const context = stack.at(-1)!
+      if (!context.body && rejectedCommentStartsBlock(lines[i + 1]?.trimStart() ?? '')) {
+        lines[i] = `${' '.repeat(context.target)}:  ${emptyTerm}\n`
+        context.body = true
+      }
+      context.ready = true
       continue
     }
     if (!stack.at(-1)!.ready) {
@@ -317,7 +324,47 @@ function removeInheritedAttributeMarkers(source: string, inherited: ReadonlySet<
   return source.replace(/\0DJOTINVALIDATTR\x00\d+\0/g, value => inherited.has(value) ? '' : value)
 }
 
+function protectRejectedCommentQuotes(source: string): string {
+  if (!source.includes('{%') || !source.includes('>')) return source
+  const edits = new Map<number, string>()
+  const mask = maskDjotCodeAndDestinations(source)
+  for (const match of source.matchAll(/\{%/g)) {
+    const at = match.index!
+    if (mask[at] !== '{' || readAttributes(source, at)) continue
+    const context = attributeContext(source, at)
+    if (!context.depth || context.indent === undefined || continuesParagraph(source, at)) continue
+    const firstEnd = source.indexOf('\n', at)
+    if (firstEnd < 0 || !readAttributes(source.slice(at, firstEnd) + '}', 0)) continue
+    const linePrefix = source.slice(source.lastIndexOf('\n', at - 1) + 1, at)
+    const enclosing = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+(?=>)/.exec(linePrefix)
+    const openingQuote = /^(?:[ \t]*>(?:[ \t]|$))+/.exec(enclosing ? linePrefix.slice(enclosing[0].length) : linePrefix)?.[0]
+    let line = firstEnd
+    while (line >= 0) {
+      const quote = /^(?:[ \t]*>(?:[ \t]|$))+/.exec(source.slice(line + 1))?.[0]
+      if (enclosing && quote && quote.length - quote.trimStart().length < enclosing[0].length) break
+      if (quote && (quote.match(/>/g)?.length ?? 0) < context.depth) { edits.set(line + 1, quote.trimEnd() + '\n'); break }
+      if (!quote || quote.trimStart() !== openingQuote?.trimStart() || (quote.match(/>/g)?.length ?? 0) !== context.depth) break
+      const bodyAt = line + 1 + quote.length
+      const end = source.indexOf('\n', bodyAt)
+      const body = source.slice(bodyAt, end < 0 ? source.length : end)
+      if (!body.trim()) break
+      const indent = /^[ \t]*/.exec(body)![0].length
+      if (indent < context.minimum) break
+      if (indent <= context.indent) {
+        edits.set(bodyAt, quote.trim().replace(/>/g, '\\>') + ' ')
+        break
+      }
+      if (/[}%]/.test(body)) break
+      line = end
+    }
+  }
+  let output = '', cursor = 0
+  for (const [at, text] of [...edits].sort((a, b) => a[0] - b[0])) { output += source.slice(cursor, at) + text; cursor = at }
+  return output + source.slice(cursor)
+}
+
 function escapeInvalidDjotAttributes(source: string): { source: string; inherited: Set<string>; restore: (text: string) => string } {
+  source = protectRejectedCommentQuotes(source)
   const masked = maskDjotCodeAndDestinations(source).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length))
   const escapes: number[] = []
   for (let i = 0; i < source.length; i++) {
@@ -333,6 +380,16 @@ function escapeInvalidDjotAttributes(source: string): { source: string; inherite
       // pass must not read one as a forced quote and swallow it.
       for (let inner = i + 1; inner < source.length && source[inner] !== '\n' && source[inner] !== '}'; inner++)
         if (source[inner] === '{' && masked[inner] === '{' && !readAttributes(source, inner)) escapes.push(inner)
+      if (source[i + 1] === '%' && continuesParagraph(source, i)) {
+        for (let inner = Math.max(i + 2, escapes.at(-1)! + 1); inner < source.length && source[inner] !== '%' && source[inner] !== '}'; inner++) {
+          if (source[inner] === '\n') {
+            const nextEnd = source.indexOf('\n', inner + 1)
+            const nextLine = source.slice(inner + 1, nextEnd < 0 ? source.length : nextEnd)
+            if (!nextLine.slice(djotStructuralPrefixEnd(nextLine)).trim()) break
+          }
+          if (source[inner] === '{' && masked[inner] === '{') escapes.push(inner)
+        }
+      }
       i = escapes.at(-1)!
       continue
     }
@@ -432,6 +489,7 @@ function foldHeadingContinuations(source: string): string {
     while (i + 1 < lines.length && (line.length - trimEndMatchingEdges(line, (code) => code === 92).length) % 2 === 0) {
       if (column && /^[ \t]*/.exec(lines[i + 1]!)![0].length < column) break
       const next = lines[i + 1]!.replace(/^[ \t]+/, '')
+      if (rejectedCommentStartsBlock(next)) break
       let part: string
       if (marker.test(next)) {
         part = next.replace(marker, '')
@@ -450,6 +508,11 @@ function foldHeadingContinuations(source: string): string {
 
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
+  resetParagraphContext()
+  try { return convertDjotInput(djot) } finally { resetParagraphContext() }
+}
+
+function convertDjotInput(djot: string): string {
   if (!djot.includes('\0')) return convertDjotDocument(djot)
   const token = '\0U\0'
   return convertDjotDocument(djot.replaceAll('\0', token)).replaceAll(token, '\0')

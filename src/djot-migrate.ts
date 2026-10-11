@@ -410,6 +410,12 @@ export function maskDjotFences(
         const view = views[level]!
         const stack = ancestors[level] ?? (ancestors[level] = [])
         const indent = /^[ \t]*/.exec(view)![0].length
+        const lead = view[indent] ?? '', next = view[indent + 1] ?? ''
+        const code = lead.charCodeAt(0)
+        const markerLead = '[-*+:('.includes(lead) && lead !== '' || (code >= 48 && code <= 57) ||
+          (((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) &&
+            (next === '.' || next === ')' || /[ivxlcdmIVXLCDM]/.test(lead) && /[ivxlcdmIVXLCDM]/.test(next)))
+        if (stack.length === 0 && !markerLead) continue
         while (stack.length && stack[stack.length - 1]!.indent >= indent) {
           if (level === depth && stack.at(-1)!.column > 0 && indent <= stack.at(-1)!.ownerIndent) canNormalize = true
           stack.pop()
@@ -444,7 +450,7 @@ export function maskDjotFences(
             column: prefix.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length,
             ownerIndent: indent,
           })
-        stack.push({ indent: footnote ? footnote[1]!.length : indent, column, ownerIndent: owningIndent })
+        if (column > 0) stack.push({ indent: footnote ? footnote[1]!.length : indent, column, ownerIndent: owningIndent })
       }
     }
 

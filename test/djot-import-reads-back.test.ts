@@ -61,7 +61,7 @@ it.each(['#  a\n', '#\ta\n', '# a\n'])('still trims a space or a tab from a head
 // starts a new block there, so the collapsed comment never belongs to the
 // heading line. The importer lifts the brace run to a NUL-delimited placeholder
 // before the fold scan runs, so the guard has to test the byte.
-it.each(['# a\n{% c %}\n', '# a\n{% x\ny %}\n', '## a\n{% x\ny %}\n'])(
+it.each(['# a\n{% c %}\n', '# a\n{% x\n  y %}\n', '## a\n{% x\n  y %}\n'])(
   'puts a collapsed comment after a heading on its own line: %j',
   (source) => {
     const converted = djotToCarve(source)
@@ -71,9 +71,9 @@ it.each(['# a\n{% c %}\n', '# a\n{% x\ny %}\n', '## a\n{% x\ny %}\n'])(
 )
 
 it('does not swallow the block after a collapsed comment into the heading', () => {
-  expect(djotToCarve('# a\n{% x\ny %}\nhi\n')).toBe('# a\n{%%}\nhi\n')
-  expect(djotToCarve('# a\n{% x\ny %}\n# b\n')).toBe('# a\n{%%}\n# b\n')
-  expect(carveHeadingText('# a\n{%%}\n# b\n')).toBe(djotHeadingText('# a\n{% x\ny %}\n# b\n'))
+  expect(djotToCarve('# a\n{% x\n  y %}\nhi\n')).toBe('# a\n{%%}\nhi\n')
+  expect(djotToCarve('# a\n{% x\n  y %}\n# b\n')).toBe('# a\n{%%}\n# b\n')
+  expect(carveHeadingText('# a\n{%%}\n# b\n')).toBe(djotHeadingText('# a\n{% x\n  y %}\n# b\n'))
 })
 
 it('keeps a real attribute line off the heading line too', () => {

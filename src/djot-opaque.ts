@@ -1,3 +1,4 @@
+import { plainCommentEnd } from './djot-attributes.js'
 import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries } from './djot-inline-boundaries.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-word-attributes.js'
@@ -70,10 +71,19 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       }
     }
     if (source[at] === '{') {
-      if (source[at + 1] === '%' && options.comments !== false && at < lastBrace) {
-        let end = at + 2
-        while (end < source.length && source[end] !== '}' && !(source[end] === '%' && source[end + 1] === '}')) end++
-        if (source[end] === '%') end++
+      if (source[at + 1] === '%' && options.comments !== false) {
+        const end = plainCommentEnd(source, at)
+        if (end !== undefined) {
+          options.onComment?.(at, end)
+          hide(at + 1, end - 1)
+          at = end - 1
+          continue
+        }
+      }
+      const attrs = readAttributes(source, at)
+      if (attrs && source[at + 1] === '%' && options.comments !== false && at < lastBrace) {
+        const close = source.indexOf('}', at + 2)
+        const end = close < 0 ? source.length : close
         if (source[end] === '}') {
           options.onComment?.(at, end + 1)
           hide(at + 1, end)
@@ -81,7 +91,6 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
           continue
         }
       }
-      const attrs = readAttributes(source, at)
       if (attrs) {
         for (const value of source.slice(at, attrs.end).matchAll(/=\s*("(?:\\.|[^"\\])*"|[^\s{}%]+)/g)) {
           const start = at + value.index! + value[0].indexOf(value[1]!)
