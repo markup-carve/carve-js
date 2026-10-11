@@ -1,6 +1,6 @@
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
-import { tableSourceAttrs, tableNeedsDelimiterHeader } from './table-source-metadata.js'
+import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table-source-metadata.js'
 import type {
   Attrs,
   BlockNode,
@@ -3733,16 +3733,28 @@ class CarveRenderSession {
   private renderTable(node: Table, ctx: CarveContext): string {
     const rows: string[] = []
     const first = node.rows[0]
-    const needsDelimiter = tableNeedsDelimiterHeader(node)
+    // [CARVE-P11-066]: a separator row is written where the AUTHOR wrote one,
+    // which `separatorWidths` is the record of. `tableNeedsDelimiterHeader` is
+    // the other way in - a header row whose spans the native `|=` form cannot
+    // spell - and it writes the canonical `---`.
+    if (node.separatorWidths?.length && first?.cells.length && !first.cells.every(cell => cell.header)) {
+      throw new SourceUnspellableError('table', 'separatorWidths would promote non-header cells', node)
+    }
+    const authored = authoredSeparator(node)
+    const needsDelimiter = authored !== undefined || tableNeedsDelimiterHeader(node)
 
     node.rows.forEach((row, rowIndex) => {
       const cells: string[] = []
-      for (const cell of row.cells) {
+      row.cells.forEach((cell, cellIndex) => {
         // In the delimiter form the promoted row is written as ordinary data
         // cells - the row after it is what makes them headers.
         const asHeader = !(needsDelimiter && rowIndex === 0)
-        cells.push(this.renderTableCell(cell, ctx, asHeader))
-      }
+        // The authored separator spells the alignment in its own colons, so the
+        // cell marker would be a second spelling of it and the bytes would not
+        // be the ones the author wrote. Both re-parse to the same alignment.
+        const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < node.separatorWidths!.length
+        cells.push(this.renderTableCell(cell, ctx, asHeader, colonSpelled))
+      })
       // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
       // so no source spells one and the writer refuses the tree (carve-js#1822).
       if (cells.every((cell) => cell === ' ' || cell === '= ')) {
@@ -3755,14 +3767,19 @@ class CarveRenderSession {
     // A table losing every row also loses its caption on import.
     if (rows.length === 0 && node.rows.length > 0) return ''
     if (needsDelimiter) {
-      rows.splice(1, 0, `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
+      rows.splice(1, 0, authored ?? `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
     }
     const caption = node.caption === undefined ? undefined : this.captionRow(node.caption, ctx)
     if (caption !== undefined) rows.push(caption)
-    return rows.join('\n')
+    try {
+      return rows.join('\n')
+    } catch (error) {
+      if (!(error instanceof RangeError) || node.separatorWidths === undefined) throw error
+      throw new SourceUnspellableError('table', 'separatorWidths exceeds the string capacity', node)
+    }
   }
 
-  private renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): string {
+  private renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true, alignIsColonSpelled = false): string {
     const attrs = renderAttrs(cell.attrs)
     // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
     // is also the left-alignment sigil, and the two readings differ: the
@@ -3779,7 +3796,7 @@ class CarveRenderSession {
     if (cell.span === 'rowspan' || cell.span === 'colspan') {
       return padCell(attrs, spanMarker)
     }
-    const align = alignMarker(cell.align)
+    const align = alignIsColonSpelled ? '' : alignMarker(cell.align)
     const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
     const inheritedHorizontal = !align && valign ? '?' : ''
     // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes

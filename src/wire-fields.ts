@@ -67,7 +67,7 @@ export const WIRE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "substitution": ["attrs", "new", "old", "pos", "type"],
   "superscript": ["attrs", "children", "pos", "type"],
   "symbol": ["attrs", "name", "pos", "type"],
-  "table": ["attrs", "caption", "columns", "pos", "rowGroups", "rows", "shortCaption", "type"],
+  "table": ["attrs", "caption", "columns", "pos", "rowGroups", "rows", "separatorWidths", "shortCaption", "type"],
   "table_cell": ["align", "attrs", "blocks", "children", "colspan", "header", "pos", "rowspan", "span", "type", "valign"],
   "table_row": ["attrs", "cells", "pos", "type"],
   "tag": ["attrs", "name", "pos", "type"],
@@ -366,7 +366,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "substitution": { "attrs": "object", "new": "array", "old": "array", "pos": "object" },
   "superscript": { "attrs": "object", "children": "array", "pos": "object" },
   "symbol": { "attrs": "object", "name": "string", "pos": "object" },
-  "table": { "attrs": "object", "caption": "array", "columns": "array", "pos": "object", "rowGroups": "object", "rows": "array", "shortCaption": "array" },
+  "table": { "attrs": "object", "caption": "array", "columns": "array", "pos": "object", "rowGroups": "object", "rows": "array", "separatorWidths": "array", "shortCaption": "array" },
   "table.columns": { "align": "enum:left\u0000right\u0000center", "valign": "enum:top\u0000middle\u0000bottom" },
   "table.rowGroups": { "bodies": "array", "footAttrs": "object", "footRows": "integer>=0", "headAttrs": "object", "headRows": "integer>=0" },
   "table.rowGroups.bodies": { "attrs": "object", "bodyRows": "integer>=0", "headRows": "integer>=0", "rowHeadColumns": "integer>=0" },
@@ -383,6 +383,7 @@ export const WIRE_ARRAY_MIN_ITEMS: Readonly<Record<string, Readonly<Record<strin
   "line_block": { "lines": [{"depth":1,"minimum":1}] },
   "ruby": { "pairs": [{"depth":0,"minimum":1}] },
   "rubyPair": { "base": [{"depth":0,"minimum":1}] },
+  "table": { "separatorWidths": [{"depth":0,"minimum":1}] },
 }
 
 /**

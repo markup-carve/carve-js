@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { CANONICAL_AHEAD_OF_PIN } from './canonical-ahead-of-pin.js'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -172,6 +173,12 @@ const shapeWithoutWrappers = (source: string): string =>
 
 /** The spec's pinned canonical form for a document, where the corpus ships one. */
 const canonicalForm = (name: string): string | undefined => {
+  // A sidecar this engine is deliberately AHEAD of reads as the bytes the
+  // clause states today. Reading the stale pinned form here instead would put
+  // the document on the PART 11 §1c branch below and call a clause the engine
+  // implements a ceiling - which is the opposite of what that branch is for.
+  const ahead = CANONICAL_AHEAD_OF_PIN.get(name)
+  if (ahead !== undefined) return ahead.fmt
   const sidecar = resolve(corpusDir, `${name}.fmt`)
   return existsSync(sidecar) ? readFileSync(sidecar, 'utf8') : undefined
 }

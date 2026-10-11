@@ -44,7 +44,7 @@ import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
-import { CARRIER_CHAR, CARRIER_MARKER, RESERVED_CARRIER_ATTRIBUTES, readCarrier } from './roundtrip-carriers.js'
+import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RESERVED_CARRIER_ATTRIBUTES, readCarrier } from './roundtrip-carriers.js'
 import type { PrefixedCarrier } from './roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
@@ -3898,7 +3898,35 @@ class Importer {
       })
       return listTableOf(kept, ownAlignment, caption, attrs, this.writing)
     }
-    return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+    const separatorWidths = this.separatorWidths(node, path)
+    return { type: 'table', rows, ...(separatorWidths ? { separatorWidths } : {}), ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+  }
+
+  /**
+   * `data-carve-col-widths` -> `table.separatorWidths` (PART 10 §13a).
+   *
+   * The attribute's PRESENCE is the distinction it restores, so an EMPTY array
+   * is not a value to keep: a separator row needs at least one cell, and a tree
+   * carrying `[]` would claim a row no source spells.
+   *
+   * THE WHOLE CARRIER IS REFUSED where any entry is not a run of decimal digits
+   * or any entry exceeds `MAX_CARRIED_SEPARATOR_WIDTH` ([CARVE-P10-016]). Not a
+   * partial read and not a clamp to the bound: both put a separator row on the
+   * page whose widths nobody wrote, and refusing leaves the table correct in its
+   * other spelling - the `|=` header form, which is what the field's absence
+   * means.
+   */
+  private separatorWidths(node: P5Node, path: string): number[] | undefined {
+    const raw = readCarrier((name) => this.attr(node, name), 'col-widths')
+    if (raw === undefined) return undefined
+    const widths = raw.split(',').map((part) => {
+      if (!/^[0-9]+$/.test(part)) return undefined
+      const width = Number(part)
+      return Number.isSafeInteger(width) && width >= 1 && width <= MAX_CARRIED_SEPARATOR_WIDTH ? width : undefined
+    })
+    if (widths.length > 0 && widths.every(width => width !== undefined)) return widths as number[]
+    this.report.add('attribute-dropped', 'Dropped invalid col-widths carrier on <table>', 'warning', path, node)
+    return undefined
   }
 
   /**

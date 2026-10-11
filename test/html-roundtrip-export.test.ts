@@ -183,16 +183,84 @@ describe('the twelve carriers', () => {
     expect(html.indexOf('<template')).toBeLessThan(html.indexOf('role="doc-endnotes"'))
   })
 
-  it('data-carve-col-widths is NOT written, and the contract does not promise it', () => {
-    // The one carrier with no field behind it: §13 itself says a table's
-    // separator-row widths are a distinction "the AST does NOT record". Writing
-    // it needs a parse-to-render channel for the dash counts, which is its own
-    // decision - see the ticket this PR links. Measured: adding the field to
-    // `Table` turns 37 tests red across 9 files, because the writer emits a
-    // canonical `---` and every "parses to the same tree" comparison then sees
-    // a field the re-parse cannot reproduce.
-    expect(rt('| a | bb |\n|:-----|---:|\n| 1 | 2 |\n')).not.toContain('col-widths')
+  it('data-carve-col-widths carries the authored separator widths', () => {
+    // The carrier the inventory reserved before anything wrote it. It is
+    // written now because `table.separatorWidths` exists to restore it
+    // (markup-carve/carve#2894, PART 11 §6h [CARVE-P11-066]): the field
+    // answers all three of the measured causes at once - the wire field set,
+    // the closed reader schema, and the writer reproducing the row so a
+    // "parses to the same tree" comparison sees no new field.
+    expect(rt('| a | bb |\n|:-----|---:|\n| 1 | 2 |\n')).toContain(
+      '<table data-carve-col-widths="5,3">',
+    )
   })
+
+  it('writes no carrier for a table the author gave no separator row', () => {
+    // PRESENCE is the distinction. `|=` header cells and a separator row parse
+    // to the same rows and alignments, so the attribute's absence is what says
+    // which one was written.
+    expect(rt('|= a |= bb |\n| 1 | 2 |\n')).not.toContain('col-widths')
+  })
+
+  it('round-trips the separator row byte-identically', () => {
+    // Measured before this change: the same source came back as
+    // `|=< a |=> b |\n| 1 | 2 |\n`.
+    const src = '| a | b |\n|:-----|---:|\n| 1 | 2 |\n'
+    expect(htmlToCarve(rt(src)).value).toBe(src)
+  })
+
+  it('still comes back as the |= form with the option OFF', () => {
+    const src = '| a | b |\n|:-----|---:|\n| 1 | 2 |\n'
+    expect(htmlToCarve(carveToHtml(src)).value).toBe('|=< a |=> b |\n| 1 | 2 |\n')
+  })
+
+  it('imports the deprecated spelling of the carrier too', () => {
+    const html = '<table data-djot-col-widths="4,2">\n<tr><th>a</th><th>b</th></tr>\n'
+      + '<tr><td>1</td><td>2</td></tr>\n</table>'
+    expect(htmlToCarve(html).value).toBe('| a | b |\n|----|--|\n| 1 | 2 |\n')
+  })
+
+  it('refuses the WHOLE carrier where an entry exceeds the bound', () => {
+    // [CARVE-P10-016]. The widths arrive in an attribute read off untrusted
+    // HTML and the writer spells one `-` per unit, so the bound is what stops
+    // six characters of attribute buying a megabyte of separator row. REFUSED,
+    // not clamped: a clamp keeps a separator row whose widths nobody wrote.
+    const at = (value: string): string =>
+      `<table data-carve-col-widths="${value}">\n<tr><th>a</th></tr>\n<tr><td>1</td></tr>\n</table>`
+    expect(htmlToCarve(at('1001')).value).toBe('|= a |\n| 1 |\n')
+    // One bad entry refuses the whole carrier, not just its own cell.
+    expect(htmlToCarve(at('3,1001')).value).toBe('|= a |\n| 1 |\n')
+    // The bound itself is carried.
+    expect(htmlToCarve(at('1000')).value).toBe(`| a |\n|${'-'.repeat(1000)}|\n| 1 |\n`)
+  })
+
+  it('writes no carrier where the FIELD holds an entry above the bound', () => {
+    // The other side of the same rule: a carrier a conforming reader will
+    // refuse is a round-trip promise the writer cannot keep. The field itself
+    // has no upper bound - a parse records what the author typed - so the
+    // table still renders and still carries the widths in the tree.
+    const table = parse(`| a |\n|${'-'.repeat(1001)}|\n| 1 |\n`).children[0]
+    if (table?.type !== 'table') throw new Error('no table')
+    expect(table.separatorWidths).toEqual([1001])
+    const html = renderHtml({ type: 'document', children: [table] }, { roundtrip: true })
+    expect(html).not.toContain('col-widths')
+    expect(html).toContain('<table>')
+    expect(rt(`| a |\n|${'-'.repeat(1000)}|\n| 1 |\n`)).toContain('col-widths')
+  })
+
+  it('refuses the WHOLE carrier where an entry is not a run of digits', () => {
+    // The table still imports, in the `|=` header form, which is what the
+    // field's absence means. One bad entry refuses the whole attribute rather
+    // than keeping the entries around it: a partial read would put a separator
+    // row on the page whose widths nobody wrote.
+    for (const value of ['', '0', '2,x', '-1', '1.5', '3,', '+3', ' ', ' 3', '3 ', '2, 3']) {
+      const html = `<table data-carve-col-widths="${value}">\n<tr><th>a</th></tr>\n<tr><td>1</td></tr>\n</table>`
+      const result = htmlToCarve(html)
+      expect(result.value, value).toBe('|= a |\n| 1 |\n')
+      expect(result.report.diagnostics.map(item => item.code), value).toContain('attribute-dropped')
+    }
+  })
+
 })
 
 describe('an authored attribute colliding with a carrier', () => {

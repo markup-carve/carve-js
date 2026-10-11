@@ -46,7 +46,13 @@ describe('a trailing header span writes the native form', () => {
   it('keeps the delimiter row when a real cell follows a header span', () => {
     // H spans three columns, then K - the span is mid-row, not trailing.
     const midSpan = '|~ H | < | < |< K |\n|---|---|---|---|\n| p | q |> s | t |\n'
-    expect(renderCarve(parse(midSpan))).toBe(midSpan)
+    // The ROW survives; the header's alignment moves into the separator's own
+    // colons, because PART 11 §6h [CARVE-P11-066] writes the colon from the
+    // CELL's alignment and the cell marker would be a second spelling of it.
+    // The widths are the authored ones and the tree is unchanged.
+    const written = '| H | < | < | K |\n|:---:|---|---|:---|\n| p | q |> s | t |\n'
+    expect(renderCarve(parse(midSpan))).toBe(written)
+    expect(renderCarve(parse(written))).toBe(written)
   })
 
   it('keeps the delimiter row for a trailing rowspan, which does not absorb left', () => {

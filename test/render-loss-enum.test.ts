@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
-  carveToAstJson, fromAstJson, resolve, renderCarve, renderMarkdown, renderPlainText, renderAnsi, renderHtml,
+  fromAstJson, resolve, renderCarve, renderMarkdown, renderPlainText, renderAnsi, renderHtml,
 } from '../src/index.js'
 import type { RenderLoss } from '../src/render-loss.js'
 import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
@@ -62,17 +62,41 @@ const namedLosses = () => ({
   ],
 })
 
-const collect = (render: (ast: never, opts: never) => string, wire: unknown, roundtrip = false): RenderLoss[] => {
+const collect = (
+  render: (ast: never, opts: never) => string,
+  wire: unknown,
+  opts: Record<string, unknown> = {},
+): RenderLoss[] => {
   const losses: RenderLoss[] = []
-  render(resolve(fromAstJson(wire as never)) as never, { roundtrip, onRenderLoss: (loss: RenderLoss) => losses.push(loss) } as never)
+  render(resolve(fromAstJson(wire as never)) as never, { ...opts, onRenderLoss: (loss: RenderLoss) => losses.push(loss) } as never)
   return losses
 }
+
+/*
+ * An authored attribute under a name PART 10 §13a reserves for a roundtrip
+ * carrier. It is DROPPED and the drop reported, which is the fifth code - and
+ * the only one that needs an export option on to be reachable, so the sweep
+ * below renders this one with `roundtrip` enabled.
+ */
+const collidesWithCarrier = (): unknown => ({
+  type: 'document',
+  srcByteLength: 0,
+  children: [
+    { type: 'thematic_break', marker: '*', attrs: { keyValues: { 'data-char': 'Z' } } },
+  ],
+})
 
 const targets = { carve: renderCarve, markdown: renderMarkdown, plain: renderPlainText, ansi: renderAnsi, html: renderHtml }
 
 describe('the render-loss code enum', () => {
   it('names five codes in the pinned schema', () => {
-    expect(schemaCodes()).toEqual(['raw-format-dropped', 'ruby-flattened', 'destination-denied', 'editorial-comment-flattened', 'carrier-attribute-dropped'])
+    expect(schemaCodes()).toEqual([
+      'raw-format-dropped',
+      'ruby-flattened',
+      'destination-denied',
+      'editorial-comment-flattened',
+      'carrier-attribute-dropped',
+    ])
   })
 
   it('names no interchange-only shape on any target', () => {
@@ -87,7 +111,7 @@ describe('the render-loss code enum', () => {
       for (const loss of [
         ...collect(render as never, interchangeOnly()),
         ...collect(render as never, namedLosses()),
-        ...collect(render as never, carveToAstJson('{data-marker=Z}\n* a\n'), true),
+        ...collect(render as never, collidesWithCarrier(), { roundtrip: true }),
       ]) {
         expect(schemaCodes(), `${target} emitted ${loss.code}`).toContain(loss.code)
         seen.add(loss.code)

@@ -13409,6 +13409,7 @@ class ParseSession {
     // delimiter row anywhere else is an ordinary data row.
     // A cell carrying author attributes (`|{.x} ---`) is content, not a plain
     // structural delimiter, so it never makes its row a GFM header separator.
+    let separatorWidths: number[] | undefined
     if (
       rawRows.length >= 2 &&
       isGfmDelimiterRow(rawRows[1]!) &&
@@ -13426,6 +13427,14 @@ class ParseSession {
         const left = t.startsWith(':')
         const right = t.endsWith(':')
         return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined
+      })
+      // PART 12 §3 / [CARVE-P11-066]: the dash runs AS AUTHORED, colons
+      // excluded, recorded before the row is dropped. The presence of the array
+      // is what says a separator row was written at all, so it is recorded even
+      // where every run is the canonical three.
+      separatorWidths = rawRows[1]!.map((c) => {
+        const t = trimCellPadding(c.raw)
+        return t.length - (t.startsWith(':') ? 1 : 0) - (t.endsWith(':') ? 1 : 0)
       })
       rawRows.splice(1, 1)
       rowAttrsList.splice(1, 1)
@@ -13537,6 +13546,7 @@ class ParseSession {
       return row
     })
     const table: Table = { type: 'table', rows }
+    if (separatorWidths !== undefined) table.separatorWidths = separatorWidths
     // Optional caption ^ ...
     let lookahead = 0
     while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++

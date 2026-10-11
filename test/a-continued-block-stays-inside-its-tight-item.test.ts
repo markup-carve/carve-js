@@ -55,12 +55,12 @@ const cases: Array<[string, string, string]> = [
   [
     'a table below a table',
     '- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n',
-    '- |= a |\n+\n|= a |\n\nZ\n',
+    '- | a |\n  |-|\n+\n| a |\n|-|\n\nZ\n',
   ],
   [
     'a table below a table, item in a div',
     '::: h\n- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n:::\n',
-    '::: h\n- |= a |\n+\n|= a |\n\nZ\n:::\n',
+    '::: h\n- | a |\n  |-|\n+\n| a |\n|-|\n\nZ\n:::\n',
   ],
   [
     'a quote below an emptied sub-list item',

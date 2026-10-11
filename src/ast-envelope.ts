@@ -29,7 +29,7 @@ import { hasOwnKey, ownValue } from './own-property.js'
  * removes, renames or reinterprets a field or a meaning; a minor bump adds a
  * field or a node type.
  */
-export const AST_CONTRACT_VERSION = '1.0'
+export const AST_CONTRACT_VERSION = '1.1'
 
 /** The vocabulary an envelope with no `vocabulary` is written in. */
 export const CORE_AST_VOCABULARY = 'https://markup-carve.org/ast/core'
@@ -96,12 +96,17 @@ export class AstEnvelopeShapeError extends Error {
 }
 
 /**
- * Thrown when the payload announces a higher MAJOR contract version.
+ * Thrown when the payload announces a higher contract version, major OR minor.
  *
  * §34(a) asks for a typed error naming both versions, and says why it is not a
  * schema failure: the payload may be perfectly well-formed under a contract
  * this build predates. Reporting it as a validation error sends the caller
  * looking for a corrupt tree.
+ *
+ * §34(b) puts a higher MINOR here too. A minor adds a FIELD and the node schema
+ * stays closed, so a reader handed a tree one minor up fails on the field itself
+ * - as a schema error naming no version at all. Accepting the envelope and then
+ * refusing its payload is the worse of the two failures, not the gentler one.
  */
 export class AstEnvelopeVersionError extends Error {
   constructor(
@@ -110,8 +115,9 @@ export class AstEnvelopeVersionError extends Error {
   ) {
     super(
       `AST envelope announces contract version ${found}; this build implements ` +
-        `${implemented}. A higher major removes, renames or reinterprets, so the ` +
-        'payload is refused rather than half-read (PART 12 §34(a))',
+        `${implemented}. A higher major removes, renames or reinterprets and a ` +
+        'higher minor adds a field the closed node schema would refuse, so the ' +
+        'payload is refused rather than half-read (PART 12 §34(a), §34(b))',
     )
     this.name = 'AstEnvelopeVersionError'
   }
@@ -252,12 +258,18 @@ export function fromAstEnvelope(
   }
   if (!hasOwnKey(record, 'document')) throw new AstEnvelopeShapeError('"document" is missing')
 
-  const [major] = astVersion.split('.') as [string, string]
-  const [ourMajor] = AST_CONTRACT_VERSION.split('.') as [string, string]
-  // A higher major only. A LOWER one cannot arrive while this build implements
-  // major 1, which the schema's pattern makes the lowest there is, so there is
-  // nothing to decide and no rule invented for it.
-  if (Number(major) > Number(ourMajor)) throw new AstEnvelopeVersionError(astVersion)
+  const [major, minor] = astVersion.split('.') as [string, string]
+  const [ourMajor, ourMinor] = AST_CONTRACT_VERSION.split('.') as [string, string]
+  // THE READER ACCEPTS ITS OWN VERSION OR LOWER (§34(b)). A higher minor is
+  // refused on the same terms as a higher major: the node schema is closed, so
+  // the field a minor adds is refused one level down whatever the envelope says,
+  // and a typed error naming both versions is the answer that explains itself.
+  if (
+    Number(major) > Number(ourMajor) ||
+    (Number(major) === Number(ourMajor) && Number(minor) > Number(ourMinor))
+  ) {
+    throw new AstEnvelopeVersionError(astVersion)
+  }
 
   const vocabulary = ownValue(record, 'vocabulary')
   if (vocabulary !== undefined) {

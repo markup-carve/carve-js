@@ -13,6 +13,27 @@
 import type { Attrs, Position } from './ast.js'
 import type { RenderLossSinkOptions } from './render-loss.js'
 
+/**
+ * The bound on a separator width, on BOTH sides of `data-carve-col-widths`
+ * (PART 10 §13a, [CARVE-P10-016]).
+ *
+ * The widths arrive comma-joined in an attribute an importer reads off
+ * UNTRUSTED HTML and the writer spells one `-` per unit, so six characters of
+ * attribute buy a megabyte of separator row. A reader REFUSES the whole carrier
+ * past this - not a clamp and not a partial read, both of which put a separator
+ * row on the page whose widths nobody wrote - and a writer writes no carrier at
+ * all, because a carrier a conforming reader will refuse is a round-trip
+ * promise it cannot keep.
+ *
+ * `table.separatorWidths` itself has NO upper bound: a parse records what the
+ * author typed, and an author who types a thousand dashes has already paid for
+ * them. The amplification is the carrier's alone.
+ *
+ * 1000 is a round number chosen so the engines agree on the bytes, not derived
+ * from anything.
+ */
+export const MAX_CARRIED_SEPARATOR_WIDTH = 1000
+
 /** A carrier whose own spelling is not under the reserved prefix (§13a, ruling 3). */
 export const CARRIER_MARKER = 'data-marker'
 export const CARRIER_CHAR = 'data-char'

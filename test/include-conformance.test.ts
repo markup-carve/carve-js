@@ -84,7 +84,16 @@ const files = readdirSync(vectorDir)
  * DECLARED, NEVER TOLERATED: an entry whose vector already matches its own
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
-const AHEAD_OF_PIN = new Map<string, { field: string; value: string; reason: string }>()
+const AHEAD_OF_PIN = new Map<string, { field: string; value: string; reason: string }>([
+  [
+    'i02-directive-in-a-table-cell',
+    {
+      field: 'fmt',
+      value: '| A | {{ c.crv }} |\n|---|---|\n| 1 | 2 |\n',
+      reason: 'the authored separator row is written where the author wrote one ([CARVE-P11-066])',
+    },
+  ],
+])
 
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.

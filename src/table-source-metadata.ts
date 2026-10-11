@@ -1,3 +1,4 @@
+import { SourceUnspellableError } from './source-unspellable-error.js'
 import type { Attrs, Table, TableColumn, TableRowGroups } from './ast.js'
 
 function shiftDecimal(value: string, places: number): string | undefined {
@@ -136,4 +137,37 @@ export function tableNeedsDelimiterHeader(table: Table): boolean {
   if (!first?.cells.length || !first.cells.every(cell => cell.header)) return false
   const firstSpan = first.cells.findIndex(cell => cell.span !== undefined)
   return firstSpan >= 0 && !(firstSpan >= 1 && first.cells.slice(firstSpan).every(cell => cell.span === 'colspan'))
+}
+
+/** Write recorded dash counts and header alignment colons ([CARVE-P11-066]).
+ * Entry count controls separator width. Invalid unvalidated widths are omitted;
+ * the caller refuses valid widths that would promote non-header cells.
+ */
+export function authoredSeparator(table: Table): string | undefined {
+  const widths = table.separatorWidths
+  const first = table.rows[0]
+  if (widths === undefined || widths.length < 1 || !first?.cells.length) return undefined
+  if (!first.cells.every((cell) => cell.header)) return undefined
+  if (!widths.every(width => Number.isInteger(width) && width > 0)) return undefined
+  let length = widths.length + 1
+  for (const [i, width] of widths.entries()) {
+    const align = first.cells[i]?.align
+    length += width + (align === 'center' ? 2 : align === 'left' || align === 'right' ? 1 : 0)
+    if (!Number.isSafeInteger(length)) {
+      throw new SourceUnspellableError('table', 'separatorWidths exceeds the string capacity', table)
+    }
+  }
+  try {
+    const cells = widths.map((width, i) => {
+      const dashes = '-'.repeat(width)
+      const align = first.cells[i]?.align
+      const left = align === 'left' || align === 'center' ? ':' : ''
+      const right = align === 'right' || align === 'center' ? ':' : ''
+      return `${left}${dashes}${right}`
+    })
+    return `|${cells.join('|')}|`
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    throw new SourceUnspellableError('table', 'separatorWidths exceeds the string capacity', table)
+  }
 }
