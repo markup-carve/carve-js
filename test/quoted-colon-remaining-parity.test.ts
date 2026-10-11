@@ -3,7 +3,7 @@ import {carveToHtml, parse, renderHtml} from '../src/index.js'
 import fixtures from './fixtures/quoted-colon-remaining-parity.json'
 
 it('preserves the shared Native ownership controls through Source and AST rendering', () => {
-  expect(fixtures).toHaveLength(206)
+  expect(fixtures).toHaveLength(210)
   for (const fixture of fixtures) {
     for (const actual of [carveToHtml(fixture.source), renderHtml(parse(fixture.source))]) {
       expect(actual.replace(/>\s+</g, '><').trim(), fixture.id).toBe(fixture.html)

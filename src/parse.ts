@@ -3656,7 +3656,7 @@ function trackQuoteHostFence(
       state.mode = { kind: 'paragraph', absorbingFence: true }
       return true
     }
-    if (bare && open === undefined && at > floor && host.initialMarkerColumn !== undefined &&
+    if (bare && open === undefined && at >= floor && host.initialMarkerColumn !== undefined &&
         (host.markers.at(-1) ?? host.initialMarkerColumn) < host.initialMarkerColumn) return false
     if (width !== null && !absorbedBare) {
       colons.push({ width, column: at, floor, awaitingBody: blockStart,
