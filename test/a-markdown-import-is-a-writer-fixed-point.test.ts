@@ -556,8 +556,8 @@ describe('a Markdown import keeps the blocks containers hold', () => {
     ['keeps the body of a tab-indented fence in its item', '- a\n  \t~~~\n  b\n  ~~~\n', '- a\n  ```\n  b\n  ```\n', '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>'],
     ['keeps the body of an indented fence in its item', '- a\n    ~~~\n  b\n      c\n  ~~~\n', '- a\n  ```\n  b\n    c\n  ```\n', null],
     ['closes an unclosed fence under item text', '- a\n  ~~~\n  x\n', '- a\n  ```\n  x\n  ```\n', null],
-    // Carve does not link a bare URL, so it is text.
-    ['escapes hyphen runs in a bare URL', 'see http://e.com/a--b\n', 'see http://e.com/a\\-\\-b\n', '<p>see http://e.com/a--b</p>'],
+    // GFM bare links retain literal hyphens in their label and destination.
+    ['escapes hyphen runs in a bare URL', 'see http://e.com/a--b\n', 'see [http://e.com/a\\-\\-b](http://e.com/a--b)\n', '<p>see <a href="http://e.com/a--b">http://e.com/a--b</a></p>'],
     // A pipe row in a nested quote is paragraph text there.
     ['writes a lazy row in the nested quote', '> | a | b |\n> > |---|---|\n> | x | y |\n', '> \\| a | b |\n>\n> > \\|\\-\\-\\-|\\-\\-\\-|\n> > \\| x | y |\n', '<blockquote>\n  <p>| a | b |</p>\n  <blockquote><p>|---|---|\n| x | y |</p></blockquote>\n</blockquote>'],
     ['writes a lazy table header in the nested quote', '> > a\n> | x | y |\n> |---|---|\n', '> > a\n> > \\| x | y |\n> > \\|\\-\\-\\-|\\-\\-\\-|\n', null],

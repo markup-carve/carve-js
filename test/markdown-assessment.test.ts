@@ -77,7 +77,7 @@ describe('Markdown construct assessment', () => {
     // `path` counts in the source, never in the reference-definition-stripped
     // array the importer builds (markup-carve/carve#2792).
     const diagnostics = rows('[ref]: https://example.org\n\nvisit www.bare.example now\n\n1. [x] done\n')
-    expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'fidelity-unverified' }))
+    expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'markdown-bare-autolink', path: 'line:3', confidence: 'exact' }))
     expect(diagnostics.filter(row => row.code === 'structure-unspellable').map(row => row.path)).toEqual(['line:5'])
   })
 
@@ -88,7 +88,7 @@ describe('Markdown construct assessment', () => {
   })
 
   it('fails closed for unsupported syntax and altered writer output', () => {
-    for (const source of ['https://example.org', '[^note]\n\n[^note]: note', '\0', '| a |\n| --- |\n| x | extra |']) {
+    for (const source of ['<code>http://example.org</code>', '[^note]\n\n[^note]: note', '\0', '| a |\n| --- |\n| x | extra |']) {
       expect(rows(source)).toContainEqual(expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'dropped' }))
     }
     expect(assessMarkdown('**strong**', 'wrong').complete).toBe(false)
@@ -98,10 +98,11 @@ describe('Markdown construct assessment', () => {
 
 // Native cmark-gfm autolink output contains a link for every protocol spelling here.
 it.each(['ftp://example.test', 'FTP://example.test', 'Ftp://example.test', 'HTTP://example.test', 'HTTPS://example.test', 'see ftp://example.test/a', 'ftp://x'])(
-  'keeps an unsupported GFM protocol link unassessed: %s', source => {
+  'assesses a preserved GFM protocol link: %s', source => {
     expect(migrateMarkdown(source).report.diagnostics).toContainEqual(expect.objectContaining({
-      code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback',
+      code: 'markdown-bare-autolink', fidelity: 'normalized', confidence: 'exact',
     }))
+    expect(rows(source).some(row => row.fidelity === 'dropped')).toBe(false)
   },
 )
 

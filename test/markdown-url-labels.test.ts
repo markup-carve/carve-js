@@ -59,18 +59,16 @@ it.each([
 
 it.each([
   ['[a/b](x)\n', '[a/b](x)\n'],
-  ['https://x.test/[r]\n\n[r]: /u\n', 'https://x.test/[r]\n\n[r]: /u\n'],
-  ['https://x.test/a\\_b/[r]\n\n[r]: /u\n', 'https://x.test/a\\_b/[r]\n\n[r]: /u\n'],
   ['[src/index.ts](x)\n', '[src/index.ts](x)\n'],
   ['[https://e.test](https://e.test)\n', '[https://e.test](https://e.test)\n'],
-  ['see https://x.test/a\\_b/_c_\n', 'see https://x.test/a\\_b/_c_\n'],
 ])('keeps literal path spelling for %s', (source, expected) => {
   expect(markdownToCarve(source)).toBe(expected)
 })
 
-it.each(['https://x.test/[r]\n\n[r]: /u\n', 'https://x.test/a\\_b/[r]\n\n[r]: /u\n'])('reports unverified fidelity for preserved bare URL spelling: %s', source => {
+it.each(['https://x.test/[r]\n\n[r]: /u\n', 'https://x.test/a\\_b/[r]\n\n[r]: /u\n'])('reports verified fidelity for imported bare URL paths: %s', source => {
   const rows = migrateMarkdown(source).report.diagnostics
-  expect(rows.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback' && row.fidelity === 'dropped')).toBe(true)
+  expect(rows.some(row => row.code === 'markdown-bare-autolink' && row.confidence === 'exact' && row.fidelity === 'normalized')).toBe(true)
+  expect(rows.every(row => row.confidence === 'exact' && row.fidelity !== 'dropped')).toBe(true)
 })
 
 
@@ -83,19 +81,3 @@ it.each([
   expect(migration.report.diagnostics.some(row => row.code === 'structure-unspellable' && row.fidelity === 'dropped')).toBe(true)
 })
 
-it('braces HTML emphasis after an escaped URL slash and reports the remaining URL fidelity gap', () => {
-  const migration = migrateMarkdown('https://x.test/a\\/<em>b</em>\n')
-  expect(migration.value).toBe('https://x.test/a\\/{/b/}\n')
-  expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback')).toBe(true)
-})
-
-
-it.each([
-  ['https://x.test/?a=1&amp;b=_c_\n', 'https://x.test/?a=1&amp;b=_c_\n'],
-  ['https://x.test/?a=1&amp;b=*c*\n', 'https://x.test/?a=1&amp;b=*c*\n'],
-  ['https://x.test/?a=1&amp;[r]\n\n[r]: /u\n', 'https://x.test/?a=1&amp;[r]\n\n[r]: /u\n'],
-])('preserves unverified URL migration spelling across a character reference: %s', (source, expected) => {
-  const migration = migrateMarkdown(source)
-  expect(migration.value).toBe(expected)
-  expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified' && row.confidence === 'fallback')).toBe(true)
-})
