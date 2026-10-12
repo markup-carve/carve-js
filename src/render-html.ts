@@ -764,7 +764,8 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       // it does not lead, and presence where the id is generated.
       let wrapperCarriers = ''
       if (wrapSections && roundtripExport(opts)) {
-        const slot = explicitId === '' ? -1 : node.attrs!.order!.indexOf('#id')
+        // Counted among the slots that survive the reserved-name drop.
+        const slot = explicitId === '' ? -1 : node.attrs!.order!.filter((entry) => !isReservedExportName(entry)).indexOf('#id')
         if (slot > 0) {
           wrapperCarriers = ` ${carrier('id-slot')}="${slot}"`
         } else if (explicitId === '' && node.attrs?.id !== undefined) {

@@ -83,6 +83,17 @@ describe('rule 4: id slots are bounded, decimal and wrapper-only', () => {
   })
 })
 
+describe('rule 4 with rule 7: the slot counts the attributes that survive', () => {
+  it('writes a slot its own import accepts when a reserved name precedes the id', () => {
+    const html = carveToHtml('{data-carve-ref=x .c #mine}\n# H\n', { roundtrip: true })
+    expect(html).toContain('data-carve-id-slot="1"')
+    const result = htmlToAst(html)
+    expect(JSON.stringify(result.report.diagnostics)).not.toContain('id-slot')
+    expect(JSON.stringify(result.value)).toContain('"order":[".class","#id"]')
+    expect(carveToHtml('{data-carve-ref=x #mine .c}\n# H\n', { roundtrip: true })).not.toContain('data-carve-id-slot')
+  })
+})
+
 describe('rule 5: only four validated carrier pairs contradict', () => {
   it('refuses each pair once, including aliases and roundtrip raw mode', () => {
     for (const mode of modes) for (const prefix of ['data-carve', 'data-djot']) {
