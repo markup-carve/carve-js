@@ -7465,9 +7465,11 @@ function rebaseOverindentedBlocks(
       // base folds into an open term and is never an authored block
       // (carve#2411). Only a list marker still interrupts it (§24 C4).
       let termOpen = RE_DEFLIST_TERM.test(opener)
+      let termFloorText = false
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate)) {
+          if (termFloorText) break
           termOpen = false
           let k = j + 1
           while (k < lines.length && isBlankLine(lines[k]!)) k++
@@ -7487,12 +7489,21 @@ function rebaseOverindentedBlocks(
         const local = sliceColumns(candidate, base, true)
         const description = column === base ? RE_DEFLIST_DEF.exec(local) : null
         if (column === base && (RE_DEFLIST_TERM.test(local) || description !== null)) {
+          // After floor text, measure the next entry from its own authored base.
+          if (termFloorText) break
           end = j
           termOpen = description === null
           if (description) descriptionColumn = base + 1 + description[1]!.length
           continue
         }
-        if (termOpen && column > base && markerContentColumn(local) < 0) {
+        if (termOpen && column === base && opensWrappedAttributeBlock(local)) {
+          const attributes = quoteProbe ??= new Lexer([])
+          attributes.lines = lines
+          attributes.pos = j
+          if (peekBlockAttributes(attributes, local)) break
+        }
+        if (termOpen && markerContentColumn(local) < 0 && (column > base || (!lineOpensItemBlock(local) && !RE_COMMENT_LINE.test(local)))) {
+          if (column === base) termFloorText = true
           // A comment fence keeps its body and closer, whatever they look like.
           const comment = commentFenceRun(sliceColumns(candidate, column, true))
           if (comment !== undefined) {
