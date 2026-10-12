@@ -4620,7 +4620,7 @@ type DefListOpening = false | 'term' | 'description'
 
 type ItemOpaqueState =
   | { kind: 'code'; close: RegExp; column?: number; paragraphBefore?: boolean }
-  | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean }
+  | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean; term?: boolean }
 
 /**
  * A verbatim fence a DESCENDANT of a list item holds open, with its base.
@@ -4635,6 +4635,7 @@ interface DescendantOpaque { close: RegExp; base: number }
 
 interface ItemLazyState {
   opaque: ItemOpaqueState | null
+  termAfterComment?: boolean
   // Whether the item's collected content currently ends in an OPEN paragraph
   // that a dedented (below content-column) non-blank line lazily continues
   // (CommonMark family-D rule). True after plain prose, a blockquote line, or
@@ -5739,7 +5740,7 @@ function trackItemLazyState(
     } else {
       state.lazyFoldable = false
     }
-    state.inDefList = false
+    state.inDefList = comment.term ? 'term' : false
     return
   }
   if (state.opaque?.kind === 'code') {
@@ -5755,6 +5756,16 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
+  if (state.inDefList === 'term' && (state.lazyFoldable || state.termAfterComment) && state.opaque === null &&
+      leadingWhitespace(content) > 0 && RE_COMMENT_LINE.test(content.trimStart())) {
+    const run = commentFenceRun(content.trimStart())
+    if (run !== undefined && hasCommentCloser(run)) {
+      state.opaque = { kind: 'comment', length: run, paragraphBefore: false, atColumn: false, term: true }
+    }
+    state.lazyFoldable = false
+    state.termAfterComment = true
+    return
+  }
   // A WRAPPED block-attribute block is held open the way a fence is (§15 A5).
   // It renders nothing and opens nothing at either width, so the container has
   // no paragraph for a column-0 line to fold into while the run is open or once
@@ -5767,6 +5778,7 @@ function trackItemLazyState(
     return
   }
   if (isBlankLine(content)) {
+    delete state.termAfterComment
     // A blank is a separator; a `:  def` may follow it (djot allows a blank
     // between a term and its definition), so leave inDefList unchanged.
     state.lazyFoldable = false
@@ -5781,6 +5793,7 @@ function trackItemLazyState(
   // list in this item, and leaves an open paragraph for its body.
   if (RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content)) {
     state.inDefList = RE_DEFLIST_TERM.test(content) ? 'term' : 'description'
+    delete state.termAfterComment
     state.lazyFoldable = true
     return
   }
@@ -13056,7 +13069,7 @@ class ParseSession {
           } else {
             const opener = dedented.trimStart()
             const indented = opener !== dedented
-            const mayOpenFence = indented && lazyState.literalColon === undefined && lazyState.quoteInner === null &&
+            const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined && lazyState.quoteInner === null &&
               opensCodeFence(opener)
             if (mayOpenFence && l.slice(0, lexer.lineLeadingWhitespace(lexer.pos)).includes('\t')) {
               tabFenceSourceColumn = indentColumns(l)
