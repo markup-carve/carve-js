@@ -148,6 +148,7 @@ source**.
 | `data-marker` | `<ul>` | the authored bullet marker, only where it is not `-` |
 | `data-char` | `<hr>` | the authored thematic-break character, only where it is not `-` |
 | `data-carve-explicit-id` | `<section>`, `<h1>`-`<h6>` | presence: the identifier was authored, not generated |
+| `data-carve-generated-id` | `<section>`, `<h1>`-`<h6>` | presence: the identifier was generated |
 | `data-carve-ref` | `<a>`, `<img>` | the reference label the link or image resolved by |
 | `data-carve-autolink` | `<a>` | presence: the link was authored as an autolink |
 | `data-carve-footnote-label` | `<a>`, `<li>` | the authored footnote label, on the reference and on the endnote item |
@@ -157,9 +158,8 @@ source**.
 | `data-carve-abbreviations` | `<template>` | the document's abbreviation definitions, one per line |
 | `data-carve-col-widths` | `<table>` | the authored separator-row dash widths, comma-joined; omitted for a table with no separator row or a width outside 1 to 1000 |
 | `data-carve-label` | `<pre>` | a code block's authored label, the text between the fence label's brackets |
-| `data-carve-ext` | `<section>` | `section`: the wrapper was generated for a heading whose identifier is generated |
 | `data-carve-id-slot` | `<section>` | the authored identifier's slot among the heading's attributes, counted from 0; omitted at 0, where the identifier leads |
-| `data-carve-tight` | `<ul>`, `<ol>` | `true`: the list is tight although an item's paragraph keeps its `<p>` for its own attributes |
+| `data-carve-tight` | `<ul>`, `<ol>` | presence: the list is tight although an item's paragraph keeps its `<p>` for its own attributes |
 
 ```carve
 | a | b |
@@ -175,20 +175,21 @@ source**.
 dropped with the option on exactly as with it off, and the render reports
 `raw-format-dropped` either way.
 
-An **authored attribute that collides** with a carrier is dropped and the drop
-is reported as a `carrier-attribute-dropped` render loss naming it. The carrier
-wins because it is structural; emitting both would be invalid HTML.
+Under roundtrip export, every authored attribute whose name is reserved is
+dropped on every node, even when that node writes no carrier of that name.
+Each drop reports one `carrier-attribute-dropped` render loss naming the
+authored key. A carrier still writes its own value. Default export passes
+these authored attributes through and reports no carrier loss.
 
-One name is reserved without a carrier. No export writes `data-carve-src`, and
-every import consumes it, so an authored one would be lost on the way back.
-Roundtrip export drops it and reports the same `carrier-attribute-dropped`
-loss. Default export passes it through untouched.
+The reserved export names are the table's names plus `data-carve-src` and
+`data-djot-src`. Neither source name has a carrier or is written by the core.
+Matching is case-insensitive. Other names, including `data-carve-ext`,
+`data-djot-ext`, and unlisted `data-carve-*` names, are ordinary authored
+attributes. The other `data-djot-*` aliases are also passed through on export.
 
-`data-carve-*` is the serializer's protocol, not an author's content. An import
-**consumes** these names and never writes one back out as an authored
-attribute, in `safe` mode exactly as in `roundtrip`; the deprecated
-`data-djot-*` spelling that earlier releases wrote is read too, so a document
-exported before the rename still imports.
+An import consumes the reserved names and accepts the table's deprecated
+`data-djot-*` aliases in every mode. It never puts those names into authored
+attributes.
 
 ### What the import rebuilds
 
@@ -208,20 +209,32 @@ htmlToCarve(carveToHtml('`\\x`{=tex}\n', { roundtrip: true })).value
 // => '`\\x`{=tex}\n'
 ```
 
-A carrier that cannot be honored is **not** a carrier: a value outside its
-enumeration (an id slot that is not a run of decimal digits, a tight value
-other than `true` or `false`), a reference label no Carve source could spell,
-an escape longer than one character, or an autolink whose text is not its own
-destination. Those are dropped and reported, not guessed at, and the reserved
-name is still never written back out.
+An unmarked identifier on a heading is authored in every import mode.
+An unmarked section-wrapper identifier matching its heading's default slug,
+including a generated deduplication suffix, is generated and dropped. Any
+other wrapper identifier moves to the heading as authored. The
+`data-carve-generated-id` presence carrier drops the identifier regardless of
+its value; `data-carve-explicit-id` keeps it as authored.
 
-Two carriers that contradict each other on one element restore neither
-meaning. The element imports as its ordinary form, one `attribute-dropped`
-warning covers the pair, and neither name becomes an authored attribute. The
-pairs are a footnote label beside an inline-note carrier on one endnote, an
-autolink carrier beside a reference label on one `<a>` (it imports as an inline
-link), and an authored-id carrier beside `data-carve-ext="section"` on one
-wrapper. A value outside its grammar is not a carrier and contradicts nothing.
+An identifier slot is read only on a wrapper with `data-carve-explicit-id`,
+only as decimal digits, and only up to the number of the heading's other
+attribute slots. An invalid or oversized slot is dropped and reported, and
+the identifier leads. Without an explicit-id carrier, no attribute order is
+published. An unwrapped heading with explicit-id publishes the element's own
+attribute order. Tightness is read by presence on lists, whatever the
+carrier's value.
+
+A carrier that cannot be honored is dropped and reported. Examples include
+a reference label no Carve source could spell, an escape longer than one
+character, and an autolink whose text differs from its destination. A reserved
+name never becomes an authored attribute.
+
+Exactly four pairs contradict on one element: footnote-label with
+inline-footnote, autolink with ref, explicit-id with generated-id, and escaped
+with raw. Neither meaning is restored; the ordinary element imports, one
+`attribute-dropped` warning covers the pair, and both names are consumed.
+This applies to the `data-djot-*` aliases too. Value validation comes first:
+an invalid value is not a carrier and contradicts nothing.
 
 One carrier's answer depends on the import mode. A raw inline of format `html`
 is markup every HTML render emits verbatim, so rebuilding one would hand the
@@ -234,7 +247,8 @@ target and rebuilds in every mode.
 
 One distinction is not recovered. A collapsed reference `[r][]` and the full
 `[r][r]` render identical bytes, carrier included, so the import writes the
-full form. The label, the destination and the rendering survive; the spelling
+collapsed form `[r][]`. A reference with distinct label text stays `[t][r]`.
+The label, the destination and the rendering survive; the spelling
 is not in the HTML to read.
 
 ### Export is not an import mode
@@ -273,6 +287,11 @@ An admonition body.
 `carve migrate --from markdown` reads those markers back and returns the
 container. Programmatically the mode is the `roundtrip` option on
 `carveToMarkdown` and `renderMarkdown`.
+
+A definition list nested inside a carried definition list takes no markers.
+Its visible Markdown stays unchanged, and roundtrip export reports one
+`definition-list-flattened` render loss per nested list, in document order.
+Default export reports no such loss.
 
 The mode is **off by default**, and the default output is unchanged: a renderer
 with raw HTML turned off shows the comment as text, so the carrier is a choice

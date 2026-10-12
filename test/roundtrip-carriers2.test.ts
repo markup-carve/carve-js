@@ -188,3 +188,9 @@ describe('new roundtrip carriers', () => {
     expect(result.report.diagnostics.find(d => d.code === 'carrier-markers-damaged')).toMatchObject({ fidelity: 'degraded', confidence: 'fallback' })
   })
 })
+
+it('drops a reserved code-label name on a heading that writes no label carrier', () => {
+  const result = carveToHtmlWithReport('{data-carve-label=x}\n# H\n', { roundtrip: true })
+  expect(result.value).not.toContain('data-carve-label')
+  expect(result.losses).toEqual([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: 'data-carve-label' })])
+})

@@ -55,11 +55,9 @@ import {
   CARRIER_CHAR,
   CARRIER_MARKER,
   carrier,
-  dropCollidingAuthored,
-  EXT_SECTION,
-  isRetiredSourceName,
+  isReservedExportName,
   MAX_CARRIED_SEPARATOR_WIDTH,
-  reportRetiredSourceNames,
+  reportReservedAuthoredNames,
   roundtripExport,
 } from './roundtrip-carriers.js'
 import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
@@ -662,7 +660,7 @@ export function renderHtml(
   activeRenderOptions = opts
   admonitionCount = 0
   if (roundtripExport(opts)) {
-    reportRetiredSourceNames(ast, new Set([...CANONICAL_INLINE_TYPES, ...Object.keys(FOLDED_NODE_TYPES)]), opts)
+    reportReservedAuthoredNames(ast, new Set([...CANONICAL_INLINE_TYPES, ...Object.keys(FOLDED_NODE_TYPES)]), opts)
   }
   try {
     return renderDocumentBody(ast, opts)
@@ -763,17 +761,14 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         ? ` ${carrier('explicit-id')}="1"`
         : ''
       // §13a carriers that ride the wrapper only: the authored id's slot where
-      // it does not lead, and `section` where the id is generated.
-      const sectionCarriers: string[] = []
+      // it does not lead, and presence where the id is generated.
       let wrapperCarriers = ''
       if (wrapSections && roundtripExport(opts)) {
         const slot = explicitId === '' ? -1 : node.attrs!.order!.indexOf('#id')
         if (slot > 0) {
-          sectionCarriers.push(carrier('id-slot'))
           wrapperCarriers = ` ${carrier('id-slot')}="${slot}"`
         } else if (explicitId === '' && node.attrs?.id !== undefined) {
-          sectionCarriers.push(carrier('ext'))
-          wrapperCarriers = ` ${carrier('ext')}="${EXT_SECTION}"`
+          wrapperCarriers = ` ${carrier('generated-id')}="1"`
         }
       }
       if (wrapSections) {
@@ -799,19 +794,11 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         continue
       }
       const headingAttrs = wrapSections ? stripId(node.attrs) : node.attrs
-      const explicit = explicitIdAttr(node.attrs, headingAttrs, opts)
-      // The carrier wins the collision wherever it is written, and on a wrapped
-      // heading it is written on the `<section>` while the authored attribute
-      // sits on the `<h*>` - so the drop has to happen on the heading's own
-      // attributes either way.
-      const written = [...(explicit === '' && explicitId === '' ? [] : [carrier('explicit-id')]), ...sectionCarriers]
-      const ownAttrs = written.length === 0
-        ? headingAttrs
-        : dropCollidingAuthored(headingAttrs, written, opts, node, 'block')
+      const explicit = headingIdCarrierAttr(node.attrs, headingAttrs, opts)
       const inner = renderInlines(node.children, opts)
-      const slAttr = sourceLineAttr(opts, node.pos?.startLine, ownAttrs)
+      const slAttr = sourceLineAttr(opts, node.pos?.startLine, headingAttrs)
       out.push(
-        `${indent(headingLevel)}<h${node.level}${renderAttrs(ownAttrs, `h${node.level}`)}${explicit}${slAttr}>${inner}</h${node.level}>`,
+        `${indent(headingLevel)}<h${node.level}${renderAttrs(headingAttrs, `h${node.level}`)}${explicit}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
@@ -847,19 +834,14 @@ function authoredId(attrs: Attrs | undefined): boolean {
   return attrs?.id !== undefined && attrs.order?.includes('#id') === true
 }
 
-/**
- * §13a's `data-carve-explicit-id` RIDES THE ELEMENT THAT CARRIES THE ID: the
- * `<section>` where PART 9 §13 wraps one, the heading where it does not. So it
- * is emitted here only when the id stayed on the `<h*>`.
- */
-function explicitIdAttr(
+function headingIdCarrierAttr(
   nodeAttrs: Attrs | undefined,
   renderedAttrs: Attrs | undefined,
   opts: RenderOptions,
 ): string {
   if (!roundtripExport(opts)) return ''
   if (renderedAttrs?.id === undefined) return ''
-  return authoredId(nodeAttrs) ? ` ${carrier('explicit-id')}="1"` : ''
+  return ` ${carrier(authoredId(nodeAttrs) ? 'explicit-id' : 'generated-id')}="1"`
 }
 
 /**
@@ -1228,8 +1210,8 @@ function renderAttrs(raw?: Attrs, tag?: string): string {
     // dangerous-scheme or CSS-expression value, regardless of render options.
     if (isDangerousAttrName(k)) return ''
     if (!HTML_ATTR_NAME_RE.test(k)) return ''
-    // §13a reserves the name without a row; `renderHtml` reports the drop.
-    if (roundtripExport(activeRenderOptions) && isRetiredSourceName(k)) return ''
+    // The reporting walk owns authored reserved-name losses.
+    if (roundtripExport(activeRenderOptions) && isReservedExportName(k)) return ''
     const v = attrs.keyValues?.[k]
     return v !== undefined ? `${k}="${escapeAttr(sanitizeAttrValue(k, v))}"` : ''
   }
@@ -1585,11 +1567,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     }
     case 'heading': {
       const inner = renderInlines(node.children, opts)
-      const explicit = explicitIdAttr(node.attrs, node.attrs, opts)
-      const attrs = explicit === ''
-        ? node.attrs
-        : dropCollidingAuthored(node.attrs, [carrier('explicit-id')], opts, node, 'block')
-      return `${pad}<h${node.level}${renderAttrs(attrs, `h${node.level}`)}${explicit}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
+      const explicit = headingIdCarrierAttr(node.attrs, node.attrs, opts)
+      return `${pad}<h${node.level}${renderAttrs(node.attrs, `h${node.level}`)}${explicit}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
     }
     case 'paragraph': {
       const inner = renderInlines(node.children, opts)
@@ -1603,10 +1582,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       const charAttr = roundtripExport(opts) && node.marker !== undefined && node.marker !== '-'
         ? ` ${CARRIER_CHAR}="${escapeAttr(node.marker)}"`
         : ''
-      const hrAttrs = charAttr === ''
-        ? node.attrs
-        : dropCollidingAuthored(node.attrs, [CARRIER_CHAR], opts, node, 'block')
-      return `${pad}<hr${charAttr}${renderAttrs(hrAttrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      return `${pad}<hr${charAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
     }
     case 'code_block': {
       // The opener header becomes a title attribute at parse time, including in code groups.
@@ -1752,8 +1728,7 @@ function renderCodeBlockCore(
   const escaped = escapeHtml(node.content)
   const labelAttr = roundtripExport(opts) && node.label !== undefined
     ? ` ${carrier('label')}="${escapeAttr(node.label)}"` : ''
-  const attrs = labelAttr === '' ? node.attrs : dropCollidingAuthored(node.attrs, [carrier('label')], opts, { type: 'code_block', ...(node.pos ? { pos: node.pos } : {}) }, 'block')
-  return `${pad}<pre${labelAttr}${renderAttrs(attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
+  return `${pad}<pre${labelAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
 }
 
 /**
@@ -1808,18 +1783,14 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
   // an importer reads a `<p>` there as a loose list.
   const tightAttr = roundtripExport(opts) && node.tight
     && node.items.some((it) => it.children.some((child) => child.type === 'paragraph' && child.attrs))
-    ? ` ${carrier('tight')}="true"`
+    ? ` ${carrier('tight')}="1"`
     : ''
-  const listCarriers = [...(markerAttr === '' ? [] : [CARRIER_MARKER]), ...(tightAttr === '' ? [] : [carrier('tight')])]
-  const listOwnAttrs = listCarriers.length === 0
-    ? node.attrs
-    : dropCollidingAuthored(node.attrs, listCarriers, opts, node, 'block')
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
   // PART 19 §1: a task list's mandatory base class leads the authored ones.
   const isTaskList = !node.ordered && node.items.length > 0 && node.items.every((it) => it.checked !== undefined)
-  const listAttrs = isTaskList ? renderAttrs2(listOwnAttrs, { baseClass: 'task-list' }) : renderAttrs(listOwnAttrs)
+  const listAttrs = isTaskList ? renderAttrs2(node.attrs, { baseClass: 'task-list' }) : renderAttrs(node.attrs)
   return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${markerAttr}${tightAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
@@ -1950,7 +1921,6 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const widthsAttr = roundtripExport(opts) && carriable
     ? ` ${carrier('col-widths')}="${escapeAttr(node.separatorWidths!.join(','))}"`
     : ''
-  if (widthsAttr !== '') tableAttrs = dropCollidingAuthored(tableAttrs, [carrier('col-widths')], opts, node, 'block')
   const lines: string[] = [
     `${pad}<table${renderAttrs(tableAttrs)}${widthsAttr}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
   ]
@@ -2372,7 +2342,6 @@ function renderImage(img: Image, opts: RenderOptions): string {
   const refAttr = roundtripExport(opts) && img.ref !== undefined
     ? ` ${carrier('ref')}="${escapeAttr(img.ref)}"`
     : ''
-  if (refAttr !== '') attrs = dropCollidingAuthored(attrs, [carrier('ref')], opts, img, 'inline')
   // The sanitized structural src wins; never re-emit an author-supplied
   // `src` from an attribute block, which would bypass sanitization.
   return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${refAttr}${renderAttrs(attrs)}>`
@@ -2545,7 +2514,6 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       const refAttr = roundtripExport(opts) && node.ref !== undefined
         ? ` ${carrier('ref')}="${escapeAttr(node.ref)}"`
         : ''
-      if (refAttr !== '') attrs = dropCollidingAuthored(attrs, [carrier('ref')], opts, node, 'inline')
       return `<a href="${href}"${titleAttr}${refAttr}${renderAttrs(attrs)}>${label}</a>`
     }
     case 'image':
@@ -2650,8 +2618,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // `<https://e>` from `[https://e](https://e)`, and the AST does - the
       // autolink is its own node type.
       const autoAttr = roundtripExport(opts) ? ` ${carrier('autolink')}="1"` : ''
-      let autoAttrs = stripKeyValue(node.attrs, 'href')
-      if (autoAttr !== '') autoAttrs = dropCollidingAuthored(autoAttrs, [carrier('autolink')], opts, node, 'inline')
+      const autoAttrs = stripKeyValue(node.attrs, 'href')
       return `<a href="${href}"${autoAttr}${renderAttrs(autoAttrs)}>${escapeHtml(display)}</a>`
     }
     case 'mention': {
@@ -2713,10 +2680,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
         const labelAttr = roundtripExport(opts) && node.label !== undefined
           ? ` ${carrier('footnote-label')}="${escapeAttr(node.label)}"`
           : ''
-        const refAttrs = labelAttr === ''
-          ? node.attrs
-          : dropCollidingAuthored(node.attrs, [carrier('footnote-label')], opts, node, 'inline')
-        return `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(refAttrs, { dropId: true })}><sup>${node.number}</sup></a>`
+        return `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
       }
     case 'non_breaking_space':
       return node.attrs ? `<span${renderAttrs(node.attrs)}>&nbsp;</span>` : '&nbsp;'

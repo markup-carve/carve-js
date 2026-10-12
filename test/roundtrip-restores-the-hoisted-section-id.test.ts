@@ -267,3 +267,9 @@ describe('an import restores the id the renderer hoisted onto a section', () => 
     )
   })
 })
+
+it('drops a carried generated wrapper id even when it is not the heading slug', () => {
+  for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+    expect(htmlToAst('<section id="custom" data-carve-generated-id><h2>Setup</h2></section>', { mode }).value.children[0].attrs?.id).toBeUndefined()
+  }
+})
