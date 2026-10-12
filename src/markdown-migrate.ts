@@ -2621,14 +2621,26 @@ function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
     while (before >= 0 && blank(items[before]!)) before--
     const above = before >= 0 ? items[before]!.kind : undefined
     const below = end < items.length ? items[end]!.kind : undefined
-    // Top-level placeholders can leave a leading separator or duplicate
-    // separators after a closer. Keep one separator between surviving blocks,
-    // or the final empty line that supplies the trailing newline.
-    if (before < 0 && below === 'open' && items[end]!.lead === '') {
+    // Placeholder separators at a host's edges do not separate its blocks.
+    // Keep the final empty line for the newline, and one separator when the
+    // next block remains in the same host.
+    const openingHost = below === 'open' ? items[end]!.lead.trimEnd() : undefined
+    if (openingHost !== undefined && (before < 0 || (
+      openingHost.includes('>') && !items[before]!.lead.trimEnd().startsWith(openingHost)
+      && items.slice(at, end).every(item => item.lead.trimEnd() === openingHost)
+    ))) {
       for (let dropAt = at; dropAt < end; dropAt++) hugged.add(dropAt)
     }
-    if ((above === 'close' || above === 'caption') && items[before]!.lead === '') {
-      for (let dropAt = at + 1; dropAt < end; dropAt++) hugged.add(dropAt)
+    if (above === 'close' || above === 'caption') {
+      const closingHost = items[before]!.lead
+      const leavesHost = end === items.length || (
+        !items[end]!.lead.startsWith(closingHost)
+      )
+      const dropStart = leavesHost ? at : at + 1
+      const dropEnd = end === items.length ? end - 1 : end
+      for (let dropAt = dropStart; dropAt < dropEnd; dropAt++) {
+        hugged.add(dropAt)
+      }
     }
     // A blank above a closer and one below an opener are both inside the
     // container, where the canonical writer puts none. A caption line hugs the
