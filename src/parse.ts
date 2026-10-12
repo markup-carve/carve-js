@@ -7492,7 +7492,7 @@ function rebaseOverindentedBlocks(
           if (description) descriptionColumn = base + 1 + description[1]!.length
           continue
         }
-        if (termOpen && column > base && markerContentColumn(local) < 0) {
+        if (termOpen && markerContentColumn(local) < 0 && (column > base || (!lineOpensItemBlock(local) && !RE_COMMENT_LINE.test(local)))) {
           // A comment fence keeps its body and closer, whatever they look like.
           const comment = commentFenceRun(sliceColumns(candidate, column, true))
           if (comment !== undefined) {
