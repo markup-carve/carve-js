@@ -13185,6 +13185,8 @@ class ParseSession {
           pendingBlankLineNumbers = []
           pendingBlankTexts = []
           const isMarker =
+            !(lazyState.inFootnoteBody && nestedNoteBodyColumn !== undefined &&
+              indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) &&
             !insideOpenFence(lazyState) &&
             !insideOpenQuoteParagraph(lazyState) &&
             (RE_ORDERED.test(l) ||
@@ -13475,7 +13477,7 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
-          if (markerNoteItem && lazyState.invisibleAtColumn && RE_FOOTNOTE_DEF.test(dedented.trimStart())) {
+          if (lazyState.invisibleAtColumn && RE_FOOTNOTE_DEF.test(dedented.trimStart())) {
             nestedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
             nestedNoteParagraph = true
             nestedNoteContainer = false
