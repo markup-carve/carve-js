@@ -7496,6 +7496,12 @@ function rebaseOverindentedBlocks(
           if (description) descriptionColumn = base + 1 + description[1]!.length
           continue
         }
+        if (termOpen && column === base && opensWrappedAttributeBlock(local)) {
+          const attributes = quoteProbe ??= new Lexer([])
+          attributes.lines = lines
+          attributes.pos = j
+          if (peekBlockAttributes(attributes, local)) break
+        }
         if (termOpen && markerContentColumn(local) < 0 && (column > base || (!lineOpensItemBlock(local) && !RE_COMMENT_LINE.test(local)))) {
           if (column === base) termFloorText = true
           // A comment fence keeps its body and closer, whatever they look like.
