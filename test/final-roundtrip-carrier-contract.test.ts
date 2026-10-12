@@ -164,7 +164,7 @@ describe('rule 7: roundtrip drops every reserved authored name on every node', (
     expect(reference.losses).toHaveLength(1)
   })
 
-  it('covers table group attributes, mixed-case keys and ordinary aliases', () => {
+  it('covers table group attributes, mixed-case keys and deprecated carrier spellings', () => {
     const ast = parse('| a |\n|---|\n| b |\n')
     const table = ast.children[0] as Extract<BlockNode, { type: 'table' }>
     const attrs = () => ({ keyValues: { 'DATA-CARVE-REF': 'x', 'data-keep': 'x', 'data-carve-ext': 'x', 'data-djot-ref': 'x', 'data-djot-ext': 'x' } })
@@ -172,8 +172,9 @@ describe('rule 7: roundtrip drops every reserved authored name on every node', (
     const losses: unknown[] = []
     const html = renderHtml(ast, { roundtrip: true, onRenderLoss: row => losses.push(row) })
     expect(html).not.toContain('DATA-CARVE-REF')
-    expect(losses).toHaveLength(3)
-    for (const name of ['data-keep', 'data-carve-ext', 'data-djot-ref', 'data-djot-ext']) expect(attributes(html).filter(attr => attr.name === name)).toHaveLength(3)
+    expect(attributes(html).filter(attr => attr.name === 'data-djot-ref')).toHaveLength(0)
+    expect(losses).toHaveLength(6)
+    for (const name of ['data-keep', 'data-carve-ext', 'data-djot-ext']) expect(attributes(html).filter(attr => attr.name === name)).toHaveLength(3)
     for (const prefix of ['data-carve', 'data-djot']) expect(first(`<p ${prefix}-ext="x">a</p>`).attrs?.keyValues).toEqual({ [`${prefix}-ext`]: 'x' })
   })
 })

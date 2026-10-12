@@ -109,7 +109,7 @@ export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.
 export function isReservedExportName(key: string): boolean {
   const name = key.toLowerCase()
   return name === CARRIER_MARKER || name === CARRIER_CHAR || name === RETIRED_SOURCE_CARRIER
-    || name === 'data-djot-src' || PREFIXED.some((entry) => carrier(entry) === name)
+    || name === 'data-djot-src' || PREFIXED.some((entry) => carrier(entry) === name || legacyCarrier(entry) === name)
 }
 
 export function reportReservedAuthoredNames(
