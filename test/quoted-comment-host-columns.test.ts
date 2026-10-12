@@ -31,7 +31,7 @@ describe('quoted comments retain stored host columns', () => {
       for (const child of Object.values(object)) visit(child)
     }
     visit(parse(source))
-    expect(values).toEqual(['\ncode'])
+    expect(values).toEqual(['\ncode\n- tail'])
   })
 
 })

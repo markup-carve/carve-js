@@ -4613,7 +4613,7 @@ class CarveRenderSession {
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
-    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'g')
+    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'g')
     if (this.termKeepsLineIndent && marker.test(written)) {
       throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }
@@ -4760,7 +4760,7 @@ class CarveRenderSession {
       text
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
         .replaceAll(this.sentinels[7]!, '')
-        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>:\\[])`, 'gm'), (_match, prefix: string, marker: string) =>
+        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>:\\[\\-*0-9a-zA-Z])`, 'gm'), (_match, prefix: string, marker: string) =>
           (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
         .replace(new RegExp(this.verbatimLineGuardPattern(), 'g'), '')

@@ -392,7 +392,7 @@
   {
     "id": "followon-d2-qfalse-lfalse-x-y",
     "source": "- a\n  - b\n    %% c\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    x\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    x\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d2-qfalse-lfalse-x- %% d\n x",
@@ -402,7 +402,7 @@
   {
     "id": "followon-d2-qfalse-lfalse-# h-y",
     "source": "- a\n  - b\n    %% c\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    # h\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    # h\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d2-qfalse-lfalse-# h- %% d\n x",
@@ -412,7 +412,7 @@
   {
     "id": "followon-d2-qfalse-ltrue-x-y",
     "source": "- a\n  - b\n    ::: |\n    %%%\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n    x\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n    x\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-x- %% d\n x",
@@ -422,7 +422,7 @@
   {
     "id": "followon-d2-qfalse-ltrue-# h-y",
     "source": "- a\n  - b\n    ::: |\n    %%%\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n    # h\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n          <p></p>\n        </div>\n      </li>\n    </ul>\n    # h\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-# h- %% d\n x",
@@ -432,7 +432,7 @@
   {
     "id": "followon-d2-qtrue-lfalse-x-y",
     "source": "> - a\n>   - b\n>     %% c\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      x\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      x\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-lfalse-x- %% d\n x",
@@ -442,7 +442,7 @@
   {
     "id": "followon-d2-qtrue-lfalse-# h-y",
     "source": "> - a\n>   - b\n>     %% c\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      # h\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      # h\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-lfalse-# h- %% d\n x",
@@ -452,7 +452,7 @@
   {
     "id": "followon-d2-qtrue-ltrue-x-y",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n      x\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n      x\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-ltrue-x- %% d\n x",
@@ -462,7 +462,7 @@
   {
     "id": "followon-d2-qtrue-ltrue-# h-y",
     "source": "> - a\n>   - b\n>     ::: |\n>     %%%\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n      # h\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <div class=\"line-block\">\n            <p></p>\n          </div>\n        </li>\n      </ul>\n      # h\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d2-qtrue-ltrue-# h- %% d\n x",
@@ -472,7 +472,7 @@
   {
     "id": "followon-d3-qfalse-lfalse-x-y",
     "source": "- a\n  - b\n    - c\n      %% c\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    x\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    x\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d3-qfalse-lfalse-x- %% d\n x",
@@ -482,7 +482,7 @@
   {
     "id": "followon-d3-qfalse-lfalse-# h-y",
     "source": "- a\n  - b\n    - c\n      %% c\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    # h\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    # h\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d3-qfalse-lfalse-# h- %% d\n x",
@@ -492,7 +492,7 @@
   {
     "id": "followon-d3-qfalse-ltrue-x-y",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    x\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    x\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-x- %% d\n x",
@@ -502,7 +502,7 @@
   {
     "id": "followon-d3-qfalse-ltrue-# h-y",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n # h\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    # h\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n              <p></p>\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    # h\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-# h- %% d\n x",
@@ -512,7 +512,7 @@
   {
     "id": "followon-d3-qtrue-lfalse-x-y",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      x\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      x\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-lfalse-x- %% d\n x",
@@ -522,7 +522,7 @@
   {
     "id": "followon-d3-qtrue-lfalse-# h-y",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      # h\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      # h\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-lfalse-# h- %% d\n x",
@@ -532,7 +532,7 @@
   {
     "id": "followon-d3-qtrue-ltrue-x-y",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      x\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      x\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-ltrue-x- %% d\n x",
@@ -542,7 +542,7 @@
   {
     "id": "followon-d3-qtrue-ltrue-# h-y",
     "source": "> - a\n>   - b\n>     - c\n>       ::: |\n>       %%%\n>  # h\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      # h\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <div class=\"line-block\">\n                <p></p>\n              </div>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      # h\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-d3-qtrue-ltrue-# h- %% d\n x",
@@ -557,12 +557,12 @@
   {
     "id": "followon-explicit-33",
     "source": "> - a\n>   - b\n>     %% c\n>  x\ny\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      x\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      x\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-explicit-34",
     "source": "- a\n  %% c\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    x\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    x\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-explicit-35",
@@ -572,32 +572,32 @@
   {
     "id": "followon-boundary-36",
     "source": "- a\n  ::: box\n  %% c\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"box\">\n      <p>x\ny</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "followon-boundary-37",
     "source": "> - a\n>   ::: box\n>   %% c\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <div class=\"box\">\n        <p>x</p>\n      </div>\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <div class=\"box\">\n        <p>x\ny</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-boundary-38",
     "source": "- ::: box\n  %% c\n x\ny\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x\ny</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "followon-boundary-39",
     "source": "> - ::: box\n>   %% c\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>x</p>\n      </div>\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <p>x\ny</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-boundary-40",
     "source": "- a\n  - b\n    %%%\n    c\n    %%%\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    x\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    x\ny\n  </li>\n</ul>"
   },
   {
     "id": "followon-boundary-41",
     "source": "> - a\n>   - b\n>     %%%\n>     c\n>     %%%\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      x\n    </li>\n  </ul>\n  <p>y</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      x\ny\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "followon-boundary-42",
@@ -612,7 +612,7 @@
   {
     "id": "staged-3-false-false-x",
     "source": "- a\n  - b\n    - c\n      %% c\n   x\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n        x\n      </li>\n    </ul>\n    x\ny\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n        x\nx\ny\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "staged-3-false-false-# h",
@@ -642,7 +642,7 @@
   {
     "id": "staged-3-true-false-x",
     "source": "> - a\n>   - b\n>     - c\n>       %% c\n>    x\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n          x\n        </li>\n      </ul>\n      x\ny\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n          x\nx\ny\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "staged-3-true-false-# h",
@@ -672,7 +672,7 @@
   {
     "id": "staged-4-false-false-x",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n     x\n   x\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n            x\n          </li>\n        </ul>\n        x\nx\ny\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n            x\nx\nx\ny\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "staged-4-false-false-# h",
@@ -687,7 +687,7 @@
   {
     "id": "staged-4-false-true-x",
     "source": "1. a\n  1. b\n    1. c\n      1. d\n        %% c\n     x\n   x\n x\ny\n",
-    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c\n1. d\n        x\n      </li>\n    </ol>\n    x\nx\ny\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>a\n1. b\n    <ol>\n      <li>c\n1. d\n        x\nx\nx\ny\n      </li>\n    </ol>\n  </li>\n</ol>"
   },
   {
     "id": "staged-4-false-true-# h",
@@ -702,7 +702,7 @@
   {
     "id": "staged-4-true-false-x",
     "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>      x\n>    x\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n              x\n            </li>\n          </ul>\n          x\nx\ny\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n              x\nx\nx\ny\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "staged-4-true-false-# h",
@@ -717,7 +717,7 @@
   {
     "id": "staged-4-true-true-x",
     "source": "> 1. a\n>   1. b\n>     1. c\n>       1. d\n>         %% c\n>      x\n>    x\n>  x\n> y\n",
-    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c\n1. d\n          x\n        </li>\n      </ol>\n      x\nx\ny\n    </li>\n  </ol>\n</blockquote>"
+    "html": "<blockquote>\n  <ol>\n    <li>a\n1. b\n      <ol>\n        <li>c\n1. d\n          x\nx\nx\ny\n        </li>\n      </ol>\n    </li>\n  </ol>\n</blockquote>"
   },
   {
     "id": "staged-4-true-true-# h",
@@ -732,16 +732,16 @@
   {
     "id": "review-0",
     "source": "- a\n  - b\n    - c\n      %% c\n     x\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            x\n          </li>\n        </ul>\n        x\ny\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            x\nx\ny\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-1",
     "source": "- a\n  > - b\n  >   %% c\n  >  x\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>b\n          x\n        </li>\n      </ul>\n      <p>x\ny</p>\n    </blockquote>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>b\n          x\nx\ny\n        </li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>"
   },
   {
     "id": "review-3",
     "source": "- a\n  - b\n    %% c\n   x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        x\n      </li>\n    </ul>\n    y\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        x\ny\n      </li>\n    </ul>\n  </li>\n</ul>"
   }
 ]

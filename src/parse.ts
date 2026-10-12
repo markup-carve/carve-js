@@ -3644,6 +3644,13 @@ function trackQuoteHostFence(
     return false
   }
   const paragraph = blockQuoteParagraphOpen(state)
+  if (afterComment && host.kinds.at(-1) === 'item' && column > 0 &&
+      column < host.columns.at(-1)! &&
+      (!lineOpensBlock(text) || isListMarkerLine(text) || column < host.columns[1]! ||
+        ((host.colons?.length ?? 0) > 0 && (RE_FENCE.test(text) || RE_RAW_FENCE.test(text))))) {
+    state.mode = { kind: 'paragraph', absorbingFence: false }
+    return true
+  }
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
   const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
   // A marker below an ancestor's content column can remain paragraph text.
@@ -4691,6 +4698,7 @@ type ItemOpaqueState =
 interface DescendantOpaque { close: RegExp; base: number; markerLine?: boolean }
 
 interface ItemLazyState {
+  retainedMarker?: boolean
   opaque: ItemOpaqueState | null
   termAfterComment?: boolean
   // Whether the item's collected content currently ends in an OPEN paragraph
@@ -5607,6 +5615,7 @@ function trackItemLazyState(
   // fence between the malformed fence and a later bare `:::` from leaving the
   // flag set: at the top level those end the paragraph and the later fence
   // opens a real div, and this tracker has to give the same answer.
+  delete state.retainedMarker
   const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
   const wasAbsorbing = state.absorbingFence
   state.absorbingFence = false
@@ -5970,6 +5979,13 @@ function trackItemLazyState(
       if (runColumns < state.ownedColumn) {
         const text = content.slice(run)
         const marker = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0
+        if (!state.literalLayout && facts?.rebasedFrame !== true && !state.ownedAuthored && (state.deepest?.ownedColumn ?? -1) < 0 &&
+            (state.deepest?.commentAtColumn || wasCommentAtColumn) && marker) {
+          state.retainedMarker = true
+          state.lazyFoldable = false
+          state.commentAtColumn = false
+          return
+        }
         if (facts?.rebasedFrame !== true && !state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
             (marker
               ? state.ownedMarker !== undefined && run > state.ownedMarker
@@ -13095,7 +13111,7 @@ class ParseSession {
         // divergence from djot, which attaches at any indent past the marker.
         // An ancestor's folded text needs an open paragraph in this item.
         // A comment can retain the ancestor's frame after closing this leaf.
-        if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !insideOpenFence(lazyState)) break
+        if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
         // A MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT COLUMN HERE
         // (markup-carve/carve#1904). It carried no `>`, so it is not inside the
@@ -13501,7 +13517,7 @@ class ParseSession {
         } else if (
           pendingBlanks === 0 &&
           !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-          ((((lazyState.lazyFoldable && !afterNoteBody) ||
+          ((((lazyState.lazyFoldable && !afterNoteBody) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
             (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore && !lazyState.opaque.atColumn) ||
             // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
             // (markup-carve/carve#1364). The item goes on collecting, so a line
@@ -13512,7 +13528,7 @@ class ParseSession {
             (lazyState.commentAtColumn &&
               !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               indentColumns(l, contentCol) > 0)) &&
-            (!lazyContinuationEndsList(l, lexer) ||
+            (!lazyContinuationEndsList(l, lexer) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
               // A list marker indented past the base column but BELOW the content
               // column folds into what the item is still holding open, rather than
               // ending the list. Under symmetric §10 no list marker interrupts a
@@ -13553,8 +13569,8 @@ class ParseSession {
               indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart())))
         ) {
           bodyHasBelowColumnLine = true
-          const retainedCommentFrame = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
-            lazyState.opaque === null && lazyState.literalColon === undefined && indentColumns(l, contentCol) > 0
+          const retainedComment = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
+            lazyState.opaque === null && lazyState.literalColon === undefined && RE_COMMENT_LINE.test(l.trimStart())
           let lazyLine = l
           if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
             lazyLine = l.replace(/^[ \t]+/, '')
@@ -13658,8 +13674,7 @@ class ParseSession {
           // behind it (corpus 183, 197, 358).
           trackItemLazyState(lazyLine, lazyState, () => true, false,
             lazyState.authoredColon ? (width) => commentBlockHasCloser(lexer, width) : undefined)
-          if (retainedCommentFrame) {
-            // A retained line below the column opens no claim for a flush-left follower.
+          if (retainedComment) {
             lazyState.lazyFoldable = false
             lazyState.commentAtColumn = true
             lazyState.ownedColumn = -1
