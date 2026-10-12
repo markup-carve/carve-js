@@ -4652,7 +4652,7 @@ type ItemOpaqueState =
  * Tracking it here as well moved nothing over 1968 corpus documents and 13776
  * generated shapes.
  */
-interface DescendantOpaque { close: RegExp; base: number }
+interface DescendantOpaque { close: RegExp; base: number; markerLine?: boolean }
 
 interface ItemLazyState {
   opaque: ItemOpaqueState | null
@@ -12676,7 +12676,8 @@ class ParseSession {
           // A closer stands at its fence's base or at its container's content
           // column (CARVE-P0-004), never past the base.
           if (column <= base && descendantOpaque.close.test(opener)) {
-            closedDescendantFence = descendantNoteBody
+            closedDescendantFence = descendantNoteBody || descendantOpaque.markerLine === true
+            if (descendantOpaque.markerLine) lazyState.lazyFoldable = false
             if (descendantNoteBody) {
               consumedNoteCloserBodyColumn = contentCol + FOOTNOTE_BODY_COLUMN
               consumedNoteParagraphBefore = descendantNoteParagraphBefore
@@ -12696,7 +12697,9 @@ class ParseSession {
         // The child's own frame already holds a fence, so this line is its payload or closer.
         if (lazyState.deepest?.opaque?.kind === 'code') return
         const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
-        const base = indentColumns(line)
+        const base = opener === line.trimStart()
+          ? indentColumns(line)
+          : indentColumns(line) + line.length - leadingWhitespace(line) - opener.length
         const key = `${lexer.lineNumber(lineIndex)}:${marker}`
         // A CONTAINER ABOVE MAY HAVE ANSWERED ALREADY, over lines this item never
         // received. Re-deriving it here asks a narrower question, so three levels
@@ -12731,18 +12734,16 @@ class ParseSession {
         // cannot see how many levels lie between its child and the fence, so a no
         // here would refuse a closer the descendant can see for itself.
         if (closerAhead) lexer.descendantFenceAnswers.set(key, true)
-        // ASK WHETHER IT REALLY OPENED (§10 CLOSER LOOKAHEAD). With the
-        // descendant's own paragraph still open and no closer ahead the run is an
-        // inline verbatim span inside that paragraph, which stays open - so a
-        // below-column line still folds there and nothing ends.
-        if (followsBlank || !lazyState.lazyFoldable || closerAhead) {
+        // A marker-line fence opens a block even without a closer.
+        // In an open body paragraph, an unclosed fence stays inline (§10).
+        if (opener !== line.trimStart() || followsBlank || !lazyState.lazyFoldable || closerAhead) {
           const laterNoteFence = noteBodyHeldCode && nestedNoteBodyColumn !== undefined && sourceBase === nestedNoteBodyColumn
           descendantNoteBody = laterNoteFence || (nestedNoteBodyColumn !== undefined && sourceBase === nestedNoteBodyColumn &&
             lazyState.lazyFoldable && !followsBlank && !lazyState.ownedAuthored && lazyState.ownedColumn > base)
           openedLaterNoteFence = laterNoteFence
           if (descendantNoteBody) noteBodyHeldCode = true
           descendantNoteParagraphBefore = lazyState.lazyFoldable
-          descendantOpaque = { close: fenceCloseRe(marker), base }
+          descendantOpaque = { close: fenceCloseRe(marker), base, markerLine: opener !== line.trimStart() }
         }
       }
       // Candidate sublist markers, resolved after authored fence bases are applied.
@@ -12813,6 +12814,17 @@ class ParseSession {
       const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
         (isListMarkerLine(line) && indentColumns(line) <= baseIndent) ||
         (afterBlank && !isBlankLine(line) && indentColumns(line, contentCol) < contentCol)
+      const descendantLead = content.includes("`") || content.includes('~')
+        ? markerLineBottomBlock(content, this.markerPrefixMemo(lexer, itemStartLineIndex)) : content
+      const descendantLeadFence = descendantLead !== content
+        ? RE_FENCE.exec(descendantLead) ?? RE_RAW_FENCE.exec(descendantLead) : null
+      if (descendantLeadFence) {
+        descendantOpaque = {
+          close: fenceCloseRe(RE_FENCE.test(descendantLead) ? descendantLeadFence[2]! : descendantLeadFence[1]!),
+          base: lazyState.ownedColumn,
+          markerLine: true,
+        }
+      }
       const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
       if (leadFence) {
         lazyState.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!) }
@@ -13166,7 +13178,11 @@ class ParseSession {
               } else trackedContent = 'text'
             }
           } else {
-            const opener = dedented.trimStart()
+            const trimmed = dedented.trimStart()
+            const bottom = descendantOpaque === null && lazyState.deepest?.opaque?.kind !== 'code' &&
+              (trimmed.includes('`') || trimmed.includes('~')) && isListMarkerLine(trimmed)
+              ? markerLineBottomBlock(trimmed, this.markerPrefixMemo(lexer, fenceLineIndex)) : trimmed
+            const opener = opensCodeFence(bottom) ? bottom : trimmed
             const indented = opener !== dedented
             const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined &&
               (lazyState.quoteInner === null || !blockQuoteParagraphOpen(lazyState.quoteInner)) &&
@@ -13278,9 +13294,7 @@ class ParseSession {
           const foldedDescription = nestedOwnerColumn < 0 && lazyState.quoteInner === null && lazyState.lazyFoldable &&
             !lazyState.absorbingFence && (lazyState.ownedColumn < 0 || lazyState.ownedAuthored) &&
             lazyState.inDefList === false && RE_DEFLIST_DEF.test(trackedContent)
-          // The note's CODE closer was consumed by its descendant frame.
-          // Reading it again would invent a paragraph in the item.
-          // The descendant frame holds this fence, so the item must not open it too.
+          // A consumed descendant closer must not reopen a paragraph in the item.
           const skipConsumedCloser = closedDescendantFence || openedLaterNoteFence
           closedDescendantFence = false
           openedLaterNoteFence = false
@@ -13790,7 +13804,7 @@ class ParseSession {
       // A descendant's body-line fence keeps its trailing payload blanks.
       // Parent separators do not belong to fences on child marker lines.
       if (pendingBlanks > 0 && (
-        lazyState.opaque !== null || authoredCodeFenceOpen || descendantOpaque !== null ||
+        lazyState.opaque !== null || authoredCodeFenceOpen || (descendantOpaque !== null && !descendantOpaque.markerLine) ||
         (trailingDescendantFence && (firstBlockIdx >= 0 || leadIsMarker || RE_DEFLIST_TERM.test(content)))
       )) {
         hasBlank = true

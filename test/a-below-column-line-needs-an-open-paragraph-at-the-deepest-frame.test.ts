@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parse, renderHtml } from '../src/index.js'
+import { layoutWork } from '../src/parse.js'
 
 // CARVE-P0-009: a below-column line continues a paragraph only where one is open
 // at the deepest frame. Otherwise it closes the list and begins a new block, and
@@ -105,4 +106,103 @@ describe('an unmatched comment fence below the content column ends the item', ()
     expect(read(lines('- a', '  %%%', '%%%', '  x'))).toBe('<ul><li>a\nx\n</li></ul>')
     expect(read(lines('- a', '  %%%%', '%%%%', '  x'))).toBe('<ul><li>a\nx\n</li></ul>')
   })
+})
+
+
+describe('a marker-line fence preserves the deepest paragraph state at every depth', () => {
+  for (const depth of [2, 3]) {
+    for (const fence of ['```', '~~~']) {
+      for (const marker of ['-', '1.']) {
+        for (const quote of ['', '> ']) {
+          it(`closes depth ${depth} with ${marker} ${fence} under ${quote || 'no quote'}`, () => {
+            const width = marker.length + 1
+            const tag = marker === '-' ? 'ul' : 'ol'
+            const parents = ['a', 'b', 'c'].slice(0, depth)
+            const source = lines(
+              ...parents.map((text, level) => `${quote}${' '.repeat(level * width)}${marker} ${text}`),
+              `${quote}${' '.repeat(depth * width)}${marker} ${fence}`,
+              `${quote}${' '.repeat((depth + 1) * width)}x`,
+              `${quote}${' '.repeat((depth + 1) * width)}${fence}`,
+              'tail',
+            )
+            const list = parents.map(text => `<${tag}><li>${text}\n`).join('') +
+              `<${tag}><li><pre><code>x\n</code></pre></li></${tag}>` +
+              `</li></${tag}>`.repeat(depth)
+            expect(read(source)).toBe(`${quote ? `<blockquote>${list}</blockquote>` : list}<p>tail</p>`)
+          })
+        }
+      }
+    }
+  }
+
+  it('continues the deepest prose paragraph', () => {
+    expect(read(lines('- a', '  - b', '    - c', 'tail'))).toBe(
+      '<ul><li>a\n<ul><li>b\n<ul><li>c\ntail</li></ul></li></ul></li></ul>',
+    )
+  })
+
+  for (const depth of [2, 3, 4]) {
+    for (const fence of ['```', '~~~']) {
+      for (const marker of ['-', '1.']) {
+        for (const quote of ['', '> ']) {
+          for (const tail of ['tail', ' tail']) {
+            for (const payload of [['x'], ['x', 'more']]) {
+              it(`ends depth ${depth} with unclosed ${marker} ${fence}, quote ${quote}, tail ${tail}, payload ${payload.length}`, () => {
+                const width = marker.length + 1
+                const tag = marker === '-' ? 'ul' : 'ol'
+                const parents = ['a', 'b', 'c', 'd'].slice(0, depth)
+                const source = lines(
+                  ...parents.map((text, level) => `${quote}${' '.repeat(level * width)}${marker} ${text}`),
+                  `${quote}${' '.repeat(depth * width)}${marker} ${fence}`,
+                  ...payload.map(text => `${quote}${' '.repeat((depth + 1) * width)}${text}`),
+                  tail,
+                )
+                const list = parents.map(text => `<${tag}><li>${text}\n`).join('') +
+                  `<${tag}><li><pre><code>${payload.join('\n')}\n</code></pre></li></${tag}>` +
+                  `</li></${tag}>`.repeat(depth)
+                expect(read(source)).toBe(`${quote ? `<blockquote>${list}</blockquote>` : list}<p>tail</p>`)
+              })
+            }
+          }
+        }
+      }
+    }
+  }
+
+  it('continues prose opened after the deepest fence', () => {
+    expect(read(lines('- a', '  - b', `    - ${FENCE}`, '      x', `      ${FENCE}`, '      more', 'tail'))).toBe(
+      '<ul><li>a\n<ul><li>b\n<ul><li><pre><code>x\n</code></pre>\nmore\ntail\n</li></ul></li></ul></li></ul>',
+    )
+  })
+
+  it.each([true, false])('bounds repeated depth-3 marker-line fences with closer %s', closed => {
+    const previous = layoutWork.on
+    try {
+      const rows = [64, 128, 256].map(count => {
+        const source = lines('- a', '  - b', `    - ${FENCE}`, '      x', ...(closed ? [`      ${FENCE}`] : []), 'tail', '').repeat(count)
+        layoutWork.reset()
+        layoutWork.on = true
+        const html = read(source)
+        expect(html.match(/<pre>/g)?.length).toBe(count)
+        expect(html.match(/<\/ul><p>tail<\/p>/g)?.length).toBe(count)
+        const work = layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines
+        expect(work).toBeLessThanOrEqual(source.length * 64)
+        return work
+      })
+      expect(rows[1]!).toBeLessThanOrEqual(rows[0]! * 2.5)
+      expect(rows[2]!).toBeLessThanOrEqual(rows[1]! * 2.5)
+    } finally {
+      layoutWork.on = previous
+      layoutWork.reset()
+    }
+  })
+})
+
+it('keeps a marker-shaped fence line in descendant code payload', () => {
+  const source = '- - ```\n    - ```\n\ntail\n'
+  for (const positions of [false, true]) {
+    const html = renderHtml(parse(source, { positions }))
+    expect(html.match(/<code>([\s\S]*?)<\/code>/)?.[1]).toBe('- ```\n')
+    expect(normalized(html)).toBe('<ul><li><ul><li><pre><code>- ```\n</code></pre></li></ul></li></ul><p>tail</p>')
+  }
 })
