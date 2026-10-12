@@ -712,22 +712,24 @@ export function djotInlineLayout(source: string): string {
     '{"': '“',
     '"}': '”',
   }
-  let output = ''
+  const output: string[] = []
+  let escaped = false
   for (let i = 0; i < source.length; i++) {
+    escaped = source[i - 1] === '\\' ? !escaped : false
     const commentEnd = comments.get(i)
     if (commentEnd !== undefined && source[commentEnd - 2] !== '%' && source.slice(i + 2, commentEnd).includes('{')) {
-      output += '{%%}'
+      output.push('{%%}')
       i = commentEnd - 1
       continue
     }
-    if (mask[i] !== source[i] || isDjotEscaped(source, i)) {
-      output += source[i]
+    if (mask[i] !== source[i] || escaped) {
+      output.push(source[i]!)
       continue
     }
     if (source[i] === '<') {
       const angle = /^<([^<>\s]+)>/.exec(source.slice(i))
       if (angle && /[^:]@|[A-Za-z]:/.test(angle[1]!)) {
-        output += angle[0]
+        output.push(angle[0])
         i += angle[0].length - 1
         continue
       }
@@ -735,7 +737,7 @@ export function djotInlineLayout(source: string): string {
     if (source[i] === '{') {
       const attrs = readAttributes(source, i)
       if (attrs) {
-        output += source.slice(i, attrs.end)
+        output.push(source.slice(i, attrs.end))
         i = attrs.end - 1
         continue
       }
@@ -743,7 +745,7 @@ export function djotInlineLayout(source: string): string {
     if (source.startsWith('{}', i)) {
       if (mask[i - 1] === ']' && !isDjotEscaped(source, i - 1)) {
         // Empty attributes turn bracketed text into a span.
-        output += '{}'
+        output.push('{}')
         i++
         continue
       }
@@ -751,7 +753,7 @@ export function djotInlineLayout(source: string): string {
       while (source.startsWith('{}', end)) end += 2
       if (/[_*]/.test(source[i - 1] ?? '') && source[i - 1] === source[end]) {
         // Keep the boundary until emphasis pairing can write separate forced spans.
-        output += source.slice(i, end)
+        output.push(source.slice(i, end))
         i = end - 1
         continue
       }
@@ -763,20 +765,24 @@ export function djotInlineLayout(source: string): string {
     }
     const quote = quotes[source.slice(i, i + 2)]
     if (quote) {
-      output += quote
+      output.push(quote)
       i++
       continue
     }
-    if (source[i] === '\\' && /[ \t]$/.test(output) && /^[ \t]*\n/.test(source.slice(i + 1)) && !/^[ \t>]*:{3,}[ \t]+$/.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))) {
-      let end = output.length
-      while (end > 0 && /[ \t]/.test(output[end - 1]!) && !isDjotEscaped(output, end - 1)) end--
-      output = output.slice(0, end) + '\\'
+    if (source[i] === '\\' && (output.at(-1) === ' ' || output.at(-1) === '\t') && /^[ \t]*\n/.test(source.slice(i + 1)) && !/^[ \t>]*:{3,}[ \t]+$/.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))) {
+      while (output.at(-1) === ' ' || output.at(-1) === '\t') {
+        let slashes = 0
+        for (let at = output.length - 2; at >= 0 && output[at] === '\\'; at--) slashes++
+        if (slashes % 2) break
+        output.pop()
+      }
+      output.push('\\')
       while (/[ \t]/.test(source[i + 1] ?? '')) i++
       continue
     }
-    output += source[i]
+    output.push(source[i]!)
   }
-  return output
+  return output.join('')
 }
 
 /** Pad closed code spans for Carve's one-space trimming rule. */

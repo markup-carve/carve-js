@@ -5,6 +5,7 @@ import { readAttributes } from './djot-word-attributes.js'
 
 export interface DjotOpaqueOptions {
   comments?: boolean
+  commentAttributeBoundaries?: boolean
   code?: boolean
   destinations?: boolean
   inlineDestinations?: boolean
@@ -90,6 +91,10 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
           at = end
           continue
         }
+      }
+      if (attrs && source[at + 1] === '%' && options.comments === false && options.commentAttributeBoundaries === true) {
+        const end = source.indexOf('}', at + 2)
+        if (end >= 0) { at = end; continue }
       }
       if (attrs) {
         for (const value of source.slice(at, attrs.end).matchAll(/=\s*("(?:\\.|[^"\\])*"|[^\s{}%]+)/g)) {
