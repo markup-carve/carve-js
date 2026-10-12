@@ -1,3 +1,4 @@
+import { backtickRunEnds } from './backtick-run-index.js'
 import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { attributeContext, continuesParagraph, resetParagraphContext } from './djot-attributes.js'
@@ -297,6 +298,8 @@ function convertDjotBlockMarkers(source: string): string {
   }
   for (let i = 0; i < lines.length; i++) {
     if ((masked[i] ?? '').trim() === '') continue
+    const contentAt = /^[ \t]*/.exec(lines[i]!)![0].length
+    if (masked[i]![contentAt] !== lines[i]![contentAt]) continue
     let view = lines[i]!
     const prefix =
       /^(?:[ \t]*> ?|[ \t]*(?:(?:[-*+]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-zA-Z])[.)]|\([0-9A-Za-z]+\)) +(?:\[[ xX]\] +)?|: |\[\^[^\]\r\n]+\]: +))/
@@ -327,7 +330,7 @@ function convertDjotBlockMarkers(source: string): string {
       continue
     }
     const rule = /^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)([*-])(?:[ \t]*\3){2,}[ \t]*$/.exec(masked[i]!)
-    if (!rule) continue
+    if (!rule || !/^((?:(?:[ \t]*>)+[ \t]*)?)([ \t]*)([*-])(?:[ \t]*\3){2,}[ \t]*$/.test(lines[i]!)) continue
     const quote = rule[1]!
     const indent = rule[2]!
     lines[i] = `${quote}${quote === '' && nested[i] ? indent : ''}***`
@@ -921,10 +924,30 @@ function convertDjotDocument(djot: string): string {
     while (reserved.has(String(serial))) serial++
     const whitespacePrefix = `DJOTALTSCALAR${serial}Z`
     const scalar = (value: string): string => { whitespace.push(value); return `${whitespacePrefix}${whitespace.length - 1}Z` }
-    const altMask = maskDjotCodeAndDestinations(normalizedLabel)
-    const blockProtected = normalizedLabel.replace(/(\n[ \t]*)(#{1,6}(?=[ \t]|$)|>(?=[ \t]|$)|(?:[-*][ \t]*){3,}(?=\n|$)|[-*+](?=[ \t]|$)|:{1,}(?=[ \t]|$)|\||\^(?=[ \t]|$)|%%|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)](?=[ \t]|$))/gm, (all, prefix: string, marker: string, at: number) => altMask[at + prefix.length] === marker[0] ? prefix + scalar(marker) : all)
+    const codeMask = maskDjotOpaque(normalizedLabel, false, { code: false, rawCode: false })
+    const codeEnds = backtickRunEnds(codeMask)
+    const codeChunks: string[] = []
+    const rawFormats = new Map(Array.from(normalizedLabel.matchAll(/\{=[^\s{}`]+\}/g), match => [match.index!, match.index! + match[0].length]))
+    let codeCopied = 0
+    if (codeEnds) for (let at = 0; at < codeMask.length; at++) {
+      if (codeMask[at] !== '`' || isDjotEscaped(normalizedLabel, at)) continue
+      let width = 1
+      while (codeMask[at + width] === '`') width++
+      const end = codeEnds[at]!
+      if (end < 0) { at += width - 1; continue }
+      let value = normalizedLabel.slice(at + width, end - width)
+      const raw = rawFormats.get(end)
+      if (raw) value = value.replace(/^ `/, '`').replace(/` $(?![\s\S])/, '`')
+      else if (value.startsWith(' ') && value.endsWith(' ') && /[^ \t\n\r]/.test(value)) value = value.slice(1, -1)
+      codeChunks.push(normalizedLabel.slice(codeCopied, at), scalar(value))
+      codeCopied = raw ?? end
+      at = codeCopied - 1
+    }
+    const codeProtected = codeCopied ? codeChunks.join('') + normalizedLabel.slice(codeCopied) : normalizedLabel
+    const altMask = maskDjotCodeAndDestinations(codeProtected)
+    const blockProtected = codeProtected.replace(/(\n[ \t]*)(#{1,6}(?=[ \t]|$)|>(?=[ \t]|$)|(?:[-*][ \t]*){3,}(?=\n|$)|[-*+](?=[ \t]|$)|:{1,}(?=[ \t]|$)|\||\^(?=[ \t]|$)|%%|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)](?=[ \t]|$))/gm, (all, prefix: string, marker: string, at: number) => altMask[at + prefix.length] === marker[0] ? prefix + scalar(marker) : all)
     const protectedLabel = blockProtected.replace(/^[ \t\u000b\u000c\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gm, value => /^[ \t]*$/.test(value) ? value : scalar(value))
-    const altDocument = parse(convert(`DJOTALT ${protectedLabel} DJOTEND`).replaceAll('\0U\0', '\0'))
+    const altDocument = parse(invalidAttributes.restore(convert(`DJOTALT ${protectedLabel} DJOTEND`)).replaceAll('\0U\0', '\0'))
     if (label.includes('\n')) {
       const blocks = [...altDocument.children]
       while (blocks.length) {

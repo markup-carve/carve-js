@@ -7,6 +7,7 @@ export interface DjotOpaqueOptions {
   comments?: boolean
   commentAttributeBoundaries?: boolean
   code?: boolean
+  rawCode?: boolean
   destinations?: boolean
   inlineDestinations?: boolean
   autolinks?: boolean
@@ -28,15 +29,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       previousLine = line
     }
   }
-  const rawFormats = new Map<number, number>()
-  if (source.includes('{=')) {
-    let rawEnd = -1
-    for (let at = source.length - 1; at >= 0; at--) {
-      if (source[at] === '}') rawEnd = at + 1
-      else if (source[at] === '\n') rawEnd = -1
-      if (source[at] === '{' && source[at + 1] === '=' && rawEnd >= 0) rawFormats.set(at, rawEnd)
-    }
-  }
+  const rawFormats = new Map(Array.from(source.matchAll(/\{=[^\s{}`]+\}/g), match => [match.index!, match.index! + match[0].length]))
   const lastBrace = source.lastIndexOf('}')
   const out = source.split('')
   const hide = (start: number, end: number): void => {
@@ -140,7 +133,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
     }
     const rawEnd = rawFormats.get(end)
     const math = source[at - 1] === '$'
-    if (options.code !== false || rawEnd !== undefined || math) hide(at - (math ? 1 : 0), end)
+    if (options.code !== false || rawEnd !== undefined && options.rawCode !== false || math) hide(at - (math ? 1 : 0), end)
     at = (rawEnd ?? end) - 1
   }
   return out.join('')
