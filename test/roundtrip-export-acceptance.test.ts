@@ -5,7 +5,7 @@ import { parseFragment, serialize } from 'parse5'
 import { parse, carveToHtml, carveToHtmlWithReport, htmlToAst, htmlToCarve, carveToMarkdown, migrateMarkdown } from '../src/index.js'
 
 const fixtures = JSON.parse(readFileSync(new URL('../spec/resources/roundtrip-export-acceptance-fixtures.json', import.meta.url), 'utf8'))
-const inventory = ['explicit-id', 'ref', 'autolink', 'footnote-label', 'inline-footnote', 'raw', 'escaped', 'abbreviations', 'col-widths']
+const inventory = ['explicit-id', 'ref', 'autolink', 'footnote-label', 'inline-footnote', 'raw', 'escaped', 'abbreviations', 'col-widths', 'label']
 const reservedNames = new Set(['data-marker', 'data-char', ...inventory.flatMap((name) => [`data-carve-${name}`, `data-djot-${name}`])])
 const isReserved = (name: string) => reservedNames.has(name)
 const field = (node: Record<string, any>, path: string) => path.split('.').reduce((value, key) => value?.[key], node)

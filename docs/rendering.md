@@ -135,8 +135,8 @@ It is **off by default** on every surface, and enabling it neither removes nor
 reorders an attribute the default output writes.
 
 **The target decides the carrier.** HTML writes the named attributes PART 10
-§13a lists; Markdown writes the container carrier comments below. A Markdown
-export carries containers and no more.
+§13a lists; Markdown writes the carrier comments below, and none of the HTML
+names.
 
 What it guarantees is **recovery of the named distinctions, not byte-identical
 source**.
@@ -155,11 +155,22 @@ source**.
 | `data-carve-raw` | `<span>` | the raw inline's format; the span holds its content |
 | `data-carve-escaped` | `<span>` | presence; the span holds one escaped character |
 | `data-carve-abbreviations` | `<template>` | the document's abbreviation definitions, one per line |
+| `data-carve-col-widths` | `<table>` | the authored separator-row dash widths, comma-joined; omitted for a table with no separator row or a width outside 1 to 1000 |
+| `data-carve-label` | `<pre>` | a code block's authored label, the text between the fence label's brackets |
 
-Two names in the inventory are **not written by this engine**:
-`data-carve-col-widths` needs a table's separator-row dash widths, which this
-parser does not keep, and raw blocks have no carrier at all - the contract does
-not promise them.
+```carve
+| a | b |
+|:--|-----:|
+| 1 | 2 |
+```
+
+```html
+<table data-carve-col-widths="2,5">
+```
+
+**A raw block has no carrier.** One whose format the target cannot write is
+dropped with the option on exactly as with it off, and the render reports
+`raw-format-dropped` either way.
 
 An **authored attribute that collides** with a carrier is dropped and the drop
 is reported as a `carrier-attribute-dropped` render loss naming it. The carrier
@@ -178,7 +189,8 @@ the authored bullet and ordered delimiter, the thematic-break character, an
 authored identifier, a link's or image's reference label (with the
 `[label]: /url` definition written beside it), an `autolink` node, a footnote's
 authored label, an inline footnote, an `escaped_text` node, a `raw_inline` with
-its own format, and the abbreviation definitions - so a use of a defined
+its own format, a table's separator-row widths, a code block's label, and the
+abbreviation definitions - so a use of a defined
 abbreviation comes back as prose rather than as `[HTML]{abbr="..."}` on every
 occurrence.
 
@@ -269,21 +281,64 @@ where that escape would land grows by one, so the transform reverses exactly.
 Nothing else is escaped: the payload is Carve source, and Carve's own escape is
 the one the reader already has.
 
+### Attribute lines, definition lists and captions
+
+Three constructs that are not containers take markers too (`CARVE-P11-067`).
+
+An attribute line this target drops - a heading's `#id`, a class on a paragraph,
+a block quote, a list or a table - takes one marker directly above its block. A
+generated heading id is not authored and takes none.
+
+```markdown
+<!-- carve: {#start} -->
+# Roundtrip Test
+```
+
+A definition list is carried term by term: a marker holding the term line above
+the term's paragraph, a `:` marker above each definition's first block, and one
+marker with an empty payload after the list's last block.
+
+```markdown
+<!-- carve: :: Carve -->
+**Carve**
+
+<!-- carve: : -->
+A markup language.
+
+<!-- carve: -->
+```
+
+A caption - on a block quote, a table, an image, a code listing, an equation or
+a composite figure - takes a marker holding the `^` line, directly above the
+paragraph the caption renders as. For a composite figure that is the line after
+the closer's marker.
+
+```markdown
+> Stay hungry.
+
+<!-- carve: ^ Steve Jobs -->
+Steve Jobs
+```
+
+The import replaces a term's or a caption's rendered paragraph, so neither
+appears twice.
+
 ### What takes no marker
 
 - A container this target already spells. An attributes-only opener
   (`::: {.warning}`) is written verbatim and a list table becomes a pipe table,
   so neither is element-less.
-- A container inside a line-prefixing host - a list item, a block quote, a table
-  cell. The comment would sit at the host's content column or behind its `>`,
-  where the import does not read it, so writing one would look like a carry and
-  not be. Such a container degrades exactly as it does with the mode off.
+- A container inside a table cell. This target flattens a cell to one line, so
+  there is no line for a marker to stand on. A container inside a list item or a
+  block quote does take its markers, at the item's content column or behind the
+  `>`, and the import restores it in that host.
+- A definition list nested inside a definition. Only the outermost list is
+  carried.
+- An attribute on a list item's marker line or on an inline construct. Only an
+  attribute line is carried.
 - A marker-shaped line inside a fenced code block, on the way back in: a code
   block's payload is verbatim content, so a page like this one holds lines that
   record no container.
-
-A composite figure group's own caption is not restored either. The caption slot
-hangs on the closing fence, outside the container the markers bracket.
 
 ### A damaged marker set is never guessed
 
