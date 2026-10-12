@@ -808,5 +808,185 @@
     "id": "term-floor-plain-sibling-71",
     "source": "> > - :: term\n> >   %% comment\n> >       ~~~\n> >       code\n> >       ~~~\n> > after\n",
     "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "floor-transition-root-floor text-description-code",
+    "source": ":: term\nfloor text\n: description\n\n  ```\n  code\n  ```\nafter\n",
+    "html": "<dl><dt>term\nfloor text</dt><dd><p>description</p><pre><code>code\n</code></pre></dd></dl><p>after</p>"
+  },
+  {
+    "id": "floor-transition-root-floor text-second-term",
+    "source": ":: term\nfloor text\n:: next\n  deep text\n  ~~~\n  code\n  ~~~\nafter\n",
+    "html": "<dl><dt>term\nfloor text</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl>"
+  },
+  {
+    "id": "floor-transition-root-floor text-blank-description",
+    "source": ":: term\nfloor text\n\n: description\n\n  ```\n  code\n  ```\nafter\n",
+    "html": "<dl><dt>term\nfloor text</dt><dd><p>description</p><pre><code>code\n</code></pre></dd></dl><p>after</p>"
+  },
+  {
+    "id": "floor-transition-root-floor text-reference",
+    "source": ":: term\nfloor text\n[r]: /url\n  ~~~\n  code\n  ~~~\nafter\n",
+    "html": "<dl><dt>term\nfloor text</dt></dl><p>~~~\ncode\n~~~\nafter</p>"
+  },
+  {
+    "id": "floor-transition-root-floor text-footnote",
+    "source": ":: term\nfloor text\n[^n]: note\n  ~~~\n  code\n  ~~~\nafter\n",
+    "html": "<dl><dt>term\nfloor text</dt></dl><p>after</p>"
+  },
+  {
+    "id": "floor-transition-root-floor text-child",
+    "source": ":: term\nfloor text\n- child\n  body\nafter\n",
+    "html": "<dl><dt>term\nfloor text</dt></dl><ul><li>child\nbody\nafter</li></ul>"
+  },
+  {
+    "id": "floor-transition-root-~~~invalid info-description-code",
+    "source": ":: term\n~~~invalid info\n: description\n\n  ```\n  code\n  ```\nafter\n",
+    "html": "<dl><dt>term\n~~~invalid info</dt><dd><p>description</p><pre><code>code\n</code></pre></dd></dl><p>after</p>"
+  },
+  {
+    "id": "floor-transition-root-~~~invalid info-second-term",
+    "source": ":: term\n~~~invalid info\n:: next\n  deep text\n  ~~~\n  code\n  ~~~\nafter\n",
+    "html": "<dl><dt>term\n~~~invalid info</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl>"
+  },
+  {
+    "id": "floor-transition-root-~~~invalid info-blank-description",
+    "source": ":: term\n~~~invalid info\n\n: description\n\n  ```\n  code\n  ```\nafter\n",
+    "html": "<dl><dt>term\n~~~invalid info</dt><dd><p>description</p><pre><code>code\n</code></pre></dd></dl><p>after</p>"
+  },
+  {
+    "id": "floor-transition-root-~~~invalid info-reference",
+    "source": ":: term\n~~~invalid info\n[r]: /url\n  ~~~\n  code\n  ~~~\nafter\n",
+    "html": "<dl><dt>term\n~~~invalid info</dt></dl><p>~~~\ncode\n~~~\nafter</p>"
+  },
+  {
+    "id": "floor-transition-root-~~~invalid info-footnote",
+    "source": ":: term\n~~~invalid info\n[^n]: note\n  ~~~\n  code\n  ~~~\nafter\n",
+    "html": "<dl><dt>term\n~~~invalid info</dt></dl><p>after</p>"
+  },
+  {
+    "id": "floor-transition-root-~~~invalid info-child",
+    "source": ":: term\n~~~invalid info\n- child\n  body\nafter\n",
+    "html": "<dl><dt>term\n~~~invalid info</dt></dl><ul><li>child\nbody\nafter</li></ul>"
+  },
+  {
+    "id": "floor-transition-marker-floor text-second-term",
+    "source": "- :: term\n  floor text\n  :: next\n    deep text\n    ~~~\n    code\n    ~~~\n  after\n",
+    "html": "<ul><li><dl><dt>term\nfloor text</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul>"
+  },
+  {
+    "id": "floor-transition-marker-floor text-footnote",
+    "source": "- :: term\n  floor text\n  [^n]: note\n    ~~~\n    code\n    ~~~\n  after\n",
+    "html": "<ul><li><dl><dt>term\nfloor text</dt></dl>\n    after\n  </li></ul>"
+  },
+  {
+    "id": "floor-transition-marker-floor text-child",
+    "source": "- :: term\n  floor text\n  - child\n    body\n  after\n",
+    "html": "<ul><li><dl><dt>term\nfloor text</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-marker-~~~invalid info-second-term",
+    "source": "- :: term\n  ~~~invalid info\n  :: next\n    deep text\n    ~~~\n    code\n    ~~~\n  after\n",
+    "html": "<ul><li><dl><dt>term\n~~~invalid info</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul>"
+  },
+  {
+    "id": "floor-transition-marker-~~~invalid info-footnote",
+    "source": "- :: term\n  ~~~invalid info\n  [^n]: note\n    ~~~\n    code\n    ~~~\n  after\n",
+    "html": "<ul><li><dl><dt>term\n~~~invalid info</dt></dl>\n    after\n  </li></ul>"
+  },
+  {
+    "id": "floor-transition-marker-~~~invalid info-child",
+    "source": "- :: term\n  ~~~invalid info\n  - child\n    body\n  after\n",
+    "html": "<ul><li><dl><dt>term\n~~~invalid info</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-quote-floor text-second-term",
+    "source": "> - :: term\n>   floor text\n>   :: next\n>     deep text\n>     ~~~\n>     code\n>     ~~~\n>   after\n",
+    "html": "<blockquote><ul><li><dl><dt>term\nfloor text</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul></blockquote>"
+  },
+  {
+    "id": "floor-transition-quote-floor text-footnote",
+    "source": "> - :: term\n>   floor text\n>   [^n]: note\n>     ~~~\n>     code\n>     ~~~\n>   after\n",
+    "html": "<blockquote><ul><li><dl><dt>term\nfloor text</dt></dl>\n      after\n    </li></ul></blockquote>"
+  },
+  {
+    "id": "floor-transition-quote-floor text-child",
+    "source": "> - :: term\n>   floor text\n>   - child\n>     body\n>   after\n",
+    "html": "<blockquote><ul><li><dl><dt>term\nfloor text</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul></blockquote>"
+  },
+  {
+    "id": "floor-transition-quote-~~~invalid info-second-term",
+    "source": "> - :: term\n>   ~~~invalid info\n>   :: next\n>     deep text\n>     ~~~\n>     code\n>     ~~~\n>   after\n",
+    "html": "<blockquote><ul><li><dl><dt>term\n~~~invalid info</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul></blockquote>"
+  },
+  {
+    "id": "floor-transition-quote-~~~invalid info-footnote",
+    "source": "> - :: term\n>   ~~~invalid info\n>   [^n]: note\n>     ~~~\n>     code\n>     ~~~\n>   after\n",
+    "html": "<blockquote><ul><li><dl><dt>term\n~~~invalid info</dt></dl>\n      after\n    </li></ul></blockquote>"
+  },
+  {
+    "id": "floor-transition-quote-~~~invalid info-child",
+    "source": "> - :: term\n>   ~~~invalid info\n>   - child\n>     body\n>   after\n",
+    "html": "<blockquote><ul><li><dl><dt>term\n~~~invalid info</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul></blockquote>"
+  },
+  {
+    "id": "floor-transition-list-floor text-second-term",
+    "source": "- outer\n  - :: term\n    floor text\n    :: next\n      deep text\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <ul><li><dl><dt>term\nfloor text</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-list-floor text-footnote",
+    "source": "- outer\n  - :: term\n    floor text\n    [^n]: note\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <ul><li><dl><dt>term\nfloor text</dt></dl>\n        after\n      </li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-list-floor text-child",
+    "source": "- outer\n  - :: term\n    floor text\n    - child\n      body\n    after\n",
+    "html": "<ul><li>outer\n    <ul><li><dl><dt>term\nfloor text</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-list-~~~invalid info-second-term",
+    "source": "- outer\n  - :: term\n    ~~~invalid info\n    :: next\n      deep text\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <ul><li><dl><dt>term\n~~~invalid info</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-list-~~~invalid info-footnote",
+    "source": "- outer\n  - :: term\n    ~~~invalid info\n    [^n]: note\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <ul><li><dl><dt>term\n~~~invalid info</dt></dl>\n        after\n      </li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-list-~~~invalid info-child",
+    "source": "- outer\n  - :: term\n    ~~~invalid info\n    - child\n      body\n    after\n",
+    "html": "<ul><li>outer\n    <ul><li><dl><dt>term\n~~~invalid info</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-overindented-floor text-second-term",
+    "source": "- outer\n    :: term\n    floor text\n    :: next\n      deep text\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <dl><dt>term\nfloor text</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul>"
+  },
+  {
+    "id": "floor-transition-overindented-floor text-footnote",
+    "source": "- outer\n    :: term\n    floor text\n    [^n]: note\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <dl><dt>term\nfloor text</dt></dl>\n    after\n  </li></ul>"
+  },
+  {
+    "id": "floor-transition-overindented-floor text-child",
+    "source": "- outer\n    :: term\n    floor text\n    - child\n      body\n    after\n",
+    "html": "<ul><li>outer\n    <dl><dt>term\nfloor text</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul>"
+  },
+  {
+    "id": "floor-transition-overindented-~~~invalid info-second-term",
+    "source": "- outer\n    :: term\n    ~~~invalid info\n    :: next\n      deep text\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <dl><dt>term\n~~~invalid info</dt><dt>next\n  deep text\n  ~~~\n  code\n  ~~~\nafter</dt></dl></li></ul>"
+  },
+  {
+    "id": "floor-transition-overindented-~~~invalid info-footnote",
+    "source": "- outer\n    :: term\n    ~~~invalid info\n    [^n]: note\n      ~~~\n      code\n      ~~~\n    after\n",
+    "html": "<ul><li>outer\n    <dl><dt>term\n~~~invalid info</dt></dl>\n    after\n  </li></ul>"
+  },
+  {
+    "id": "floor-transition-overindented-~~~invalid info-child",
+    "source": "- outer\n    :: term\n    ~~~invalid info\n    - child\n      body\n    after\n",
+    "html": "<ul><li>outer\n    <dl><dt>term\n~~~invalid info</dt></dl><ul><li>child\nbody\nafter</li></ul></li></ul>"
   }
 ]
