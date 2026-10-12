@@ -46,7 +46,7 @@ export function protectNativeMarkdownDestinationGlyphs(
       while (/[ \t\n]/.test(source[first] ?? '')) first++
       if (source[first] === '<' && first + 1 < end && source[first + 1] !== '>') {
         const escaped = source[first + 1] === '\\' && /[!-/:-@\[-`{-~]/.test(source[first + 2] ?? '')
-        glyphs.set(first + 1, escaped ? 2 : 1)
+        glyphs.set(first + 1, escaped ? 2 : String.fromCodePoint(source.codePointAt(first + 1)!).length)
       }
       for (let pos = open + 1; pos < end; pos++) {
         if (source[pos] === '`' || source[pos] === '$' || source[pos] === '<' && pos !== first) glyphs.set(pos, 1)

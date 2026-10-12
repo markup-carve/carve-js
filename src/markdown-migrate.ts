@@ -1625,7 +1625,7 @@ function convertInline(
           activeEmptyDestinationOpeners.add(open)
           if (image) activeImageLabelRanges.push([open, close])
           const end = markdownInlineDestinationEnd(subject, close + 1)
-          if (end !== undefined) opaqueRanges.push([close + 1, end + 1])
+          if (end !== undefined && validDestinationSource(subject, close + 1, end)) opaqueRanges.push([close + 1, end + 1])
         }, (open, end) => validDestinationSource(subject, open, end))
       const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
       for (let cursor = 0; cursor < subject.length; cursor++) {
@@ -1665,7 +1665,7 @@ function convertInline(
             const label = source.slice(at + 2, close)
             const inline = markdownInlineDestinationEnd(source, close + 1)
             const reference = /^\[([^\[\]\n]*)\]/.exec(source.slice(close + 1))
-            if (inline !== undefined) end = inline + 1
+            if (inline !== undefined && validDestinationSource(source, close + 1, inline)) end = inline + 1
             else if (reference && (referenceDestinationLabel(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans))) end = close + 1 + reference[0].length
             else if (referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans)) end = close + 1
           }
@@ -1781,9 +1781,13 @@ function convertInline(
   const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
     const sourceDest = referenceSourceText(dest, protectedSources)
     const encoded = markdownInlineDestinationEnd(sourceDest, 0) === sourceDest.length - 1 ? encodeDest(dest) : undefined
-    return encoded === undefined
-      ? (alt === '' ? '' : protect(alt, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
-      : protect(alt + encoded, source)
+    if (encoded !== undefined) return protect(alt + encoded, source)
+    const imageReference = /^!\[([\s\S]*)\]$/.exec(alt)
+    const canonical = imageReference ? referenceDestinationLabel(imageReference[1]!, decodeHtmlEntitiesRaw, protectedSpans, table) : undefined
+    const referenceTarget = canonical === undefined ? undefined : referenceInlineTarget(canonical, table)
+    const referenceEncoded = referenceTarget === undefined ? undefined : encodeDest(`(${referenceTarget})`)
+    const label = canonical === undefined ? alt : imageLabel(alt) + (referenceEncoded ?? `[${canonical}]`)
+    return (alt === '' ? '' : protect(label, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
   }
   type NativeDestination = { offset: number; label: string; dest: string }
   const protectDestinations = (pattern: RegExp | readonly NativeDestination[]): void => {
@@ -1941,7 +1945,9 @@ function convertInline(
 
   line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^[\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
     (match, label: string, reference: string | undefined, offset: number, source: string) => {
-      if (source[offset + match.length] === '(') return match
+      const open = offset + match.length
+      const inlineEnd = markdownInlineDestinationEnd(source, open)
+      if (inlineEnd !== undefined && validDestinationSource(source, open, inlineEnd)) return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (canonical === undefined) return table && match.includes('|') ? protect(match.replace(/[\[\]]/g, '\\$&'), match) : match
       if (/[\[\]]/.test(canonical)) return match
