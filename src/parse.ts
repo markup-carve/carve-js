@@ -5943,7 +5943,7 @@ function trackItemLazyState(
   // column a following dedented line therefore reaches no container (PART 1
   // S4, carve#1377), just as it does after a table row or thematic break.
   if (RE_HEADING.test(content)) {
-    if (wasRejectedFence) state.rejectedFenceParagraph = true
+    if (wasRejectedFence || (wasInlineFence && facts?.rebasedFrame !== true)) state.rejectedFenceParagraph = true
     state.lazyFoldable = false
     state.inDefList = false
     return
