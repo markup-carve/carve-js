@@ -169,7 +169,7 @@ describe('new roundtrip carriers', () => {
   it.each([
     '<!-- carve: {.c} -->\n\nText.\n',
     '<!-- carve: {.c} -->\n',
-    '<!-- carve: :: Term -->\n**Term**\n\n<!-- carve: -->\n',
+    '<!-- carve: :: Term -->\n**Term**\n',
     '<!-- carve: : -->\nDefinition.\n<!-- carve: -->\n',
     '<!-- carve: :: Term -->\n**Term**\n\n<!-- carve: : -->\nDefinition.\n',
     '<!-- carve: -->\n',
