@@ -107,3 +107,61 @@ describe('the §8c constructs that already round-tripped', () => {
     expect(round('strike ~str~ here\n')).toBe('strike ~str~ here\n')
   })
 })
+
+it('keeps URL text literal inside an editorial comment', () => {
+  expect(markdownToCarve('<span class="critic-comment">see http://example.com</span>\n')).toBe('{#see http://example.com#}\n')
+})
+
+it('checks comment delimiters before replacing protected URLs', () => {
+  const imported = markdownToCarve('<span class="critic-comment">http://example.com/#}a</span>\n')
+  expect(imported).toContain('{=html}')
+  expect(imported).not.toContain('{#')
+})
+
+
+describe('protected Markdown inside attributed editorial tags', () => {
+  it.each([
+    ['an escaped star', String.raw`a <del class="critic-delete">x \* y</del> b`, String.raw`a {-x \* y-} b` + '\n'],
+    ['braces in code', 'a <del class="critic-delete">call `f{}`</del> b', 'a {-call `f{}`-} b\n'],
+  ])('keeps %s inside a deletion', (_name, markdown, carve) => {
+    expect(markdownToCarve(markdown + '\n')).toBe(carve)
+  })
+
+  it('reads the exporter’s escaped comment text back literally', () => {
+    const carve = 'a {#x <b> & *y* b#} c\n'
+    expect(round(carve)).toBe(carve)
+  })
+
+  it('keeps a reference destination ending in a backslash', () => {
+    const markdown = "[a\\]b]: /x\\\n\n[a\\]b]"
+    expect(carveToHtml(markdownToCarve(markdown))).toContain('href="/x%5C"')
+  })
+})
+
+
+describe('literal comment escapes and entities', () => {
+  it.each(['&lt;', '&amp;', '&copy;', '&#92;*'])('round-trips literal %s', text => {
+    const carve = `a {#x ${text} y#} b\n`
+    expect(round(carve)).toBe(carve)
+  })
+
+  it.each([
+    String.raw`http://a.b/x\_y`,
+    "`a\\*b`",
+    '&#92;*',
+  ])('refuses a literal backslash in %s', body => {
+    expect(markdownToCarve(`<span class="critic-comment">${body}</span>\n`)).toContain('{=html}')
+  })
+
+  it('keeps entity bytes in a protected code span', () => {
+    expect(markdownToCarve('<span class="critic-comment">`&amp;`</span>\n'))
+      .toBe('{#`&amp;`#}\n')
+  })
+})
+
+
+it.each(['a <!-- c --> b', '<code>x</code>'])('keeps protected HTML %s inside its raw comment span', body => {
+  const imported = markdownToCarve(`<span class="critic-comment">${body}</span>\n`)
+  expect(imported).toContain('{=html}')
+  expect(imported).not.toContain('{#')
+})

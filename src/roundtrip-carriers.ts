@@ -46,6 +46,7 @@ const PREFIXED = [
   'footnote-label',
   'inline-footnote',
   'col-widths',
+  'label',
   'raw',
   'escaped',
   'abbreviations',

@@ -2414,6 +2414,9 @@ class Importer {
     if ((tag === 'section' || /^h[1-6]$/.test(tag)) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
       this.recordCarrier(node, 'explicit-id')
     }
+    const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
+    const label = carriedLabel !== undefined && carriedLabel !== '' && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
+    if (label !== undefined) this.recordCarrier(node, 'label')
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
       this.headingDepth++
@@ -2560,7 +2563,7 @@ class Importer {
       // dropping it unconditionally lost a line on every all-blank payload,
       // including this engine's own HTML (carve-js#2342, raised by codex review).
       const content = this.codeText(node, path, depth, true, code, lang)
-      return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
+      return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(label !== undefined ? { label } : {}), ...(attrs ? { attrs } : {}) }]
     }
     // The synthetic element `pruneFootnoteContainers` leaves where an endnotes
     // section sat that was NOT last; never present in real HTML input. It reads
