@@ -8,7 +8,14 @@ export interface MarkdownBareLink {
   tail?: string
 }
 
-const hostCharacter = (value: string): boolean => !/[\s\p{P}]/u.test(value) && !/[!-/:-@\[-`{-~]/.test(value)
+const hostCharacter = (value: string): boolean => {
+  const code = value.charCodeAt(0)
+  if (code < 0x80) {
+    return code !== 9 && code !== 10 && code !== 12 && code !== 13 && code !== 32
+      && !(code >= 33 && code <= 47 || code >= 58 && code <= 64 || code >= 91 && code <= 96 || code >= 123 && code <= 126)
+  }
+  return !/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\p{P}]/u.test(value)
+}
 
 function domainAllowed(text: string, start: number, end: number, short: boolean): boolean {
   if (start >= end || text[start] === '\x00' || !hostCharacter(text[start]!)) return false
@@ -138,11 +145,11 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email', raw = false,
     } else {
       if (mode === 'email') continue
       const www = match[0] === 'www.'
-      if (www && start > 0 && !/[ \t\r\n\f\v*_~(]/.test(text[start - 1]!)) continue
+      if (www && start > 0 && !/[ \t\r\n*_~(]/.test(text[start - 1]!)) continue
       if (!www && /[A-Za-z]/.test(text[start - 1] ?? '')) continue
       if (end >= chunkEnd) {
         chunkEnd = end
-        while (chunkEnd < text.length && !/[ \t\r\n\f\v<\x00]/.test(text[chunkEnd]!)) chunkEnd++
+        while (chunkEnd < text.length && !/[ \t\r\n<\x00]/.test(text[chunkEnd]!)) chunkEnd++
       }
       if (!domainAllowed(text, www ? start : triggers.lastIndex, text.length, !www)) continue
       end = chunkEnd

@@ -10238,5 +10238,45 @@
   {
     "source": "[a](/x (http://a.b/a(b)))",
     "html": "<p>[a](/x (<a href=\"http://a.b/a(b)\">http://a.b/a(b)</a>))</p>\n"
+  },
+  {
+    "source": "www.a.b\fwww.c.d\n",
+    "html": "<p><a href=\"http://www.a.b%0Cwww.c.d\">www.a.b\fwww.c.d</a></p>\n"
+  },
+  {
+    "source": "www.a.b\u000bwww.c.d\n",
+    "html": "<p><a href=\"http://www.a.b%0Bwww.c.d\">www.a.b\u000bwww.c.d</a></p>\n"
+  },
+  {
+    "source": "\fwww.a.b\n",
+    "html": "<p>\fwww.a.b</p>\n"
+  },
+  {
+    "source": "\u000bwww.a.b\n",
+    "html": "<p>\u000bwww.a.b</p>\n"
+  },
+  {
+    "source": "http://\u000ba.b\n",
+    "html": "<p><a href=\"http://%0Ba.b\">http://\u000ba.b</a></p>\n"
+  },
+  {
+    "source": "www.a.b\u000bc_d\n",
+    "html": "<p>www.a.b\u000bc_d</p>\n"
+  },
+  {
+    "source": "www.a_b.c\u000bd.e.f\n",
+    "html": "<p><a href=\"http://www.a_b.c%0Bd.e.f\">www.a_b.c\u000bd.e.f</a></p>\n"
+  },
+  {
+    "source": "http://﻿a.b\n",
+    "html": "<p><a href=\"http://%EF%BB%BFa.b\">http://﻿a.b</a></p>\n"
+  },
+  {
+    "source": "http:// a.b\n",
+    "html": "<p><a href=\"http://%E2%80%A8a.b\">http:// a.b</a></p>\n"
+  },
+  {
+    "source": "http:// a.b\n",
+    "html": "<p><a href=\"http://%E2%80%A9a.b\">http:// a.b</a></p>\n"
   }
 ]
