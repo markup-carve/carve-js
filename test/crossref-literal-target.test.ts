@@ -3,7 +3,7 @@ import { carveToCarve, carveToHtml, renderCarve, parse, type Document } from '..
 import { SourceUnspellableError } from '../src/source-unspellable-error.js'
 
 describe('cross-reference target spelling', () => {
-  for (const target of ['p\\an', 'ls\\-greet', 'a\\\\b', 'a\\', '日本語']) {
+  for (const target of ['p\\an', 'ls\\-greet', 'a\\\\b', 'a\\', '日本語', 'a\tb']) {
     it(`keeps the literal target ${JSON.stringify(target)}`, () => {
       const source = `See </#${target}>.\n`
       const once = carveToCarve(source)
@@ -27,7 +27,7 @@ describe('cross-reference target spelling', () => {
       expect(carveToHtml(once)).toBe(carveToHtml(source))
     })
   }
-  for (const target of ['', 'a>b', 'a b', 'a\tb', 'a\nb', 'a\rb', 'a\0b']) {
+  for (const target of ['', 'a>b', 'a b', 'a\nb', 'a\rb', 'a\0b']) {
     it(`refuses an unspellable hand-built target ${JSON.stringify(target)}`, () => {
       const document: Document = { type: 'document', children: [{ type: 'paragraph', children: [{ type: 'heading_ref', target }] }] }
       expect(() => renderCarve(document)).toThrow(SourceUnspellableError)

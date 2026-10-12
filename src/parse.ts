@@ -2296,7 +2296,7 @@ function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs: Attrs;
     const closed = line.includes('}')
     // A continuation is a complete attribute fragment: quoted values cannot
     // cross a newline. Reject a later opener before re-reading its whole tail.
-    if (count > 0 && !closed && !isValidAttrPayload(line)) return null
+    if (count > 0 && !closed && !isValidAttrPayload('\n' + line + '\n')) return null
     collected += (count === 0 ? '' : '\n') + line
     count++
     if (closed) {
@@ -5135,7 +5135,7 @@ function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
  * text here. That errs toward the old answer (the item stays open), never
  * toward closing an item the author kept open.
  */
-function isBlockAttributeLine(content: string): boolean {
+export function isBlockAttributeLine(content: string): boolean {
   if (!content.startsWith('{') || !content.includes('}')) return false
   return parseBlockAttributeRun(content) !== null
 }
@@ -7971,12 +7971,8 @@ export const RE_AUTOLINK = new RegExp(
     '<"\\\\`{}|^]+|[A-Za-z0-9._+\\-]+@[A-Za-z0-9._+\\-]+\\.[A-Za-z]+)>',
   'u',
 )
-// `crossref_id` is one of the eleven productions that read the `whitespace`
-// TERMINAL (PART 7), so the id ends at PART 7's four characters -- unlike the
-// autolink body directly above, whose end is the White_Space PROPERTY because
-// `unicode_url_char` says so. Two neighbouring productions, two classes, and
-// the difference is written in the grammar rather than inherited from the host.
-const RE_CROSSREF = /^<\/#([^> \t\n\r]+)>/
+// `crossref_id` ends at a space, `>` or a line break; a tab inside the id is content.
+const RE_CROSSREF = /^<\/#([^> \n\r]+)>/
 const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}/
 
 // Inline node types a trailing `{...}` must NOT attach to: their renderers emit
@@ -8801,7 +8797,7 @@ function crossrefBodyCanEnd(text: string, from: number, memo: CrossrefMemo): boo
   const range = memo.invalidRange
   if (range && from >= range[0] && from <= range[1]) return false
   let end = from
-  while (text[end] !== '>' && !isCarveWhitespace(text[end])) end++
+  while (text[end] !== '>' && text[end] !== ' ' && text[end] !== '\n' && text[end] !== '\r') end++
   if (text[end] === '>') return true
   memo.invalidRange = [from, end]
   return false
