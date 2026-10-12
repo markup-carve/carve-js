@@ -34,6 +34,12 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-description-marker-followed-by-a-no-break-space-has-content',
+  'a-closed-fence-in-a-quoted-sub-item-after-a-lazy-line-leaves-no-paragraph',
+  'a-quoted-term-takes-a-lazy-line',
+  'an-opener-past-a-hosted-container-s-column-interrupts-its-open-paragraph',
+  'a-footnote-reference-in-link-text-keeps-its-id-on-the-sup',
+  'a-head-row-alignment-marker-sets-the-whole-column',
   'a-line-block-takes-a-lazy-line-whatever-its-last-payload-line',
   'an-at-column-comment-retains-nothing',
   'a-line-final-run-of-spaces-and-tabs-is-dropped-before-the-line-is-read',
@@ -985,49 +991,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ["310-a-footnote-in-link-text-nests-the-anchors", {
-    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
-    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
-  }],
-  ["310-a-footnote-in-link-text-nests-the-anchors-2", {
-    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
-    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
-  }],
-  ["312-a-note-body-s-own-references-resolve-3", {
-    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
-    html: "<p>a <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>see <a href=\"/u\">t<sup id=\"fnref2\">2</sup></a><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n    <li id=\"fn2\">\n      <p>two<a href=\"#fnref2\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
-  }],
-  ["311-a-footnote-in-reference-link-text-nests-the-anchors-too", {
-    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
-    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
-  }],
-  ["311-a-footnote-in-reference-link-text-nests-the-anchors-too-2", {
-    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
-    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
-  }],
-  ["311-a-footnote-in-reference-link-text-nests-the-anchors-too-3", {
-    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
-    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> c <a id=\"fnref1-2\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference 1\">↩<sup>1</sup></a> <a href=\"#fnref1-2\" role=\"doc-backlink\" aria-label=\"Back to reference 2\">↩<sup>2</sup></a></p>\n    </li>\n  </ol>\n</section>",
-  }],
-  ["510-a-nested-quoted-term-leaves-no-paragraph-for-a-lazy-line", {
-    reason: 'ruled on markup-carve/carve-js#2860: a quoted term takes a lazy line',
-    html: "<blockquote>\n  <blockquote>\n    <dl>\n      <dt>term\ntail</dt>\n    </dl>\n  </blockquote>\n</blockquote>",
-  }],
-  ["82-blockquote-lazy-continuation-5", {
-    reason: 'ruled on markup-carve/carve-js#2860: a quoted term takes a lazy line',
-    html: "<blockquote>\n  <dl>\n    <dt>t\n~</dt>\n  </dl>\n</blockquote>",
-  }],
-  ["558-a-container-boundary-is-read-at-the-container-s-own-column-3", {
-    reason: 'ruling Q2 on markup-carve/carve#2978: an opener interrupts the open paragraph in an item-hosted colon body',
-    html: "<ul>\n  <li>\n    <div class=\"box\">\n      <p>text</p>\n      <aside class=\"admonition note\" aria-label=\"Note\">\n        <p>x</p>\n      </aside>\n    </div>\n  </li>\n</ul>\n<p>tail</p>",
-  }],
-  ["566-an-opener-past-a-hosted-container-s-column-opens-there-4", {
-    reason: 'ruling Q2 on markup-carve/carve#2978: an opener interrupts the open paragraph in an item-hosted colon body',
-    html: "<ul>\n  <li>\n    <div class=\"box\">\n      <p>text</p>\n      <div class=\"line-block\">\n        <p>x</p>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>tail</p>",
-  }],
-])
-// A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()// A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
 // meant every renumbering broke this guard for ~100 categories that had not

@@ -84,17 +84,7 @@ const files = readdirSync(vectorDir)
  * DECLARED, NEVER TOLERATED: an entry whose vector already matches its own
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
-const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>([
-  ['i01-padding-is-a-run-of-whitespace', [
-    { field: 'html', value: '<p>body</p>\n<p>{{\tc.crv\t}}</p>', reason: 'I1 padding consists of U+0020 only' },
-  ]],
-  ['i01-section-after-a-tab', [
-    { field: 'html', value: '<p>{{ child\t<span class="tag"><strong>#pick</strong></span> }}</p>', reason: 'I1 keeps a tab in the bare path' },
-    { field: 'warnings', value: [{ rule: 'include-unresolved' }], reason: 'the tab-bearing path is unresolved' },
-    { field: 'dependencies', value: [{ id: 'child\t', resolved: false }], reason: 'the dependency retains the path tab' },
-  ]],
-])
-
+const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>()
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.
   it('vendors the full vector corpus', () => {
