@@ -1,5 +1,5 @@
 import { plainCommentEnd } from './djot-attributes.js'
-import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries } from './djot-inline-boundaries.js'
+import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries, djotContentStart } from './djot-inline-boundaries.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-word-attributes.js'
 
@@ -22,7 +22,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
   if (source.includes(']:')) {
     for (const line of source.split('\n')) {
       const definition = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[(?!\^)[^\]\n]+\](?=:)/.exec(line)
-      if (definition) definitionLines.set(lineOffset + definition[0].length - 1, { start: lineOffset, previous: previousLine.trim() })
+      if (definition) definitionLines.set(lineOffset + definition[0].length - 1, { start: lineOffset, previous: previousLine.slice(djotContentStart(previousLine)).trim() })
       lineOffset += line.length + 1
       previousLine = line
     }
