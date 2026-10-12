@@ -8,7 +8,14 @@ export interface MarkdownBareLink {
   tail?: string
 }
 
-const hostCharacter = (value: string): boolean => !/[\t\n\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\p{P}]/u.test(value) && !/[!-/:-@\[-`{-~]/.test(value)
+const hostCharacter = (value: string): boolean => {
+  const code = value.charCodeAt(0)
+  if (code < 0x80) {
+    return code !== 9 && code !== 10 && code !== 12 && code !== 13 && code !== 32
+      && !(code >= 33 && code <= 47 || code >= 58 && code <= 64 || code >= 91 && code <= 96 || code >= 123 && code <= 126)
+  }
+  return !/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\p{P}]/u.test(value)
+}
 
 function domainAllowed(text: string, start: number, end: number, short: boolean): boolean {
   if (start >= end || text[start] === '\x00' || !hostCharacter(text[start]!)) return false
