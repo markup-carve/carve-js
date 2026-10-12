@@ -122,7 +122,7 @@
   {
     "name": "reader scope 9, quote depth 0",
     "source": "- :::: box\n  ```\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>  :::\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>  :::\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "name": "reader scope 9, quote depth 1",

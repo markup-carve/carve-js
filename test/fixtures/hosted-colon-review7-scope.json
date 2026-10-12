@@ -322,22 +322,22 @@
   {
     "id": "review7-c07-open-fence-tail-owner-01",
     "source": "- ::: box\n  ```\n  %%%\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-02",
     "source": "- ::: box\n  ```\n  %%%\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-03",
     "source": "- ::: box\n  ~~~\n  %%%\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-04",
     "source": "- ::: box\n  ~~~\n  %%%\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-05",
