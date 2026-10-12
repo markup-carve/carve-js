@@ -8,7 +8,7 @@ export interface MarkdownBareLink {
   tail?: string
 }
 
-const hostCharacter = (value: string): boolean => !/[\s\p{P}]/u.test(value) && !/[!-/:-@\[-`{-~]/.test(value)
+const hostCharacter = (value: string): boolean => !/[\t\n\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\p{P}]/u.test(value) && !/[!-/:-@\[-`{-~]/.test(value)
 
 function domainAllowed(text: string, start: number, end: number, short: boolean): boolean {
   if (start >= end || text[start] === '\x00' || !hostCharacter(text[start]!)) return false
