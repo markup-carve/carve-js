@@ -1825,7 +1825,7 @@ function convertInline(
     )
   }
 
-  if (line.includes('](') && /\]\([^ \t\n]*\(/.test(line)) {
+  if (line.includes('](') && /\]\([ \t\n]*(?:\\.|[^ \t\n()\\])*\(/.test(line)) {
     const subject = line
     const opaque = opaqueHtmlScanner(subject)
     const tokenAt = /\x00P\d+\x00/y

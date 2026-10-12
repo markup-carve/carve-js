@@ -258,5 +258,29 @@
   {
     "source": "![a [b ![c](/x)](oops](/i)",
     "html": "<p><img src=\"/i\" alt=\"a [b c](oops\" /></p>\n"
+  },
+  {
+    "source": "[a]( /x( \"t\")",
+    "html": "<p><a href=\"/x(\" title=\"t\">a</a></p>\n"
+  },
+  {
+    "source": "[a](\n/x( \"t\")",
+    "html": "<p><a href=\"/x(\" title=\"t\">a</a></p>\n"
+  },
+  {
+    "source": "![a]( /x( \"t\")",
+    "html": "<p><img src=\"/x(\" alt=\"a\" title=\"t\" /></p>\n"
+  },
+  {
+    "source": "![a](\n/x( \"t\")",
+    "html": "<p><img src=\"/x(\" alt=\"a\" title=\"t\" /></p>\n"
+  },
+  {
+    "source": "[a](/x\\)( \"t\")",
+    "html": "<p><a href=\"/x)(\" title=\"t\">a</a></p>\n"
+  },
+  {
+    "source": "[a](/x)[b](/y)",
+    "html": "<p><a href=\"/x\">a</a><a href=\"/y\">b</a></p>\n"
   }
 ]
