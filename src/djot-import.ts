@@ -290,7 +290,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
     const prefix = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(lines[index]!)![0]
     const body = lines[index]!.slice(prefix.length).trimEnd()
     const depth = (prefix.match(/>/g) ?? []).length
-    if (body.trim() === '') { previousDepth = Math.min(previousDepth, depth); continue }
+    if (body.trim() === '' && depth <= previousDepth) { previousDepth = Math.min(previousDepth, depth); continue }
     const opens = depth > previousDepth
     quoteScopeChanges[index] = Number(opens || depth !== previousNonblankDepth)
     previousNonblankDepth = depth
@@ -314,7 +314,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
     nextBlock[index] = following
     const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(lines[index]!)![0].length
     const body = lines[index]!.slice(first).trimEnd()
-    if (body.trim() !== '' && (quoteScopeChanges[index] || !(masked[index]![first] === '{' && wholeAttribute.test(body)))) following = index
+    if (quoteScopeChanges[index] || body.trim() !== '' && !(masked[index]![first] === '{' && wholeAttribute.test(body))) following = index
   }
   const converted = lines.map((line, index) => {
     const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(line)![0].length
@@ -2224,7 +2224,9 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       if (content !== '' && (depth !== dedent.depth || indent < dedent.column)) dedent = undefined
       else if (content !== '') lines[n] = quotes + line.slice(quotes.length + dedent.delta)
     }
+    let exitedNote = false
     while (noteColumn !== undefined && content !== '' && column + 1 < noteColumn) {
+      exitedNote = true
       if (metadataNote && listColumn !== undefined && column >= listColumn && n > 0 && /^[ \t]*$/.test(lines[n - 1]!)) {
         while (reserved.has(serial)) serial++
         comments.add(serial)
@@ -2305,6 +2307,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
       heading = false
     }
     boundary = content === '' || reference || fenceLines.has(n) || row || div || heading || blockAllowed && /^(?:[-*][ \t]*){3,}$/.test(content)
+    if (exitedNote && !marker && content.startsWith('{') && readAttributes(content, 0)?.end === content.length && n > 0 && lines[n - 1]!.trim() !== '') lines[n] = prefix + '\n' + lines[n]
     offset += line.length + 1
   }
   return { source: header + lines.join('\n'), losses, isBoundary: line => { const token = /\0DJOTNOTEATTR\x00(\d+)\0$/.exec(line.replace(/[ \t]+$/, '')); return token !== null && comments.has(Number(token[1])) }, restore: text => text.replace(/\0DJOTNOTEATTR\x00(\d+)\0/g, (value, index: string) => comments.has(Number(index)) ? '%%' : value) }

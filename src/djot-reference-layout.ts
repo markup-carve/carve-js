@@ -76,6 +76,13 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       ? label.replace(/\s+/g, ' ').trim()
       : undefined, true)
   const lines = source.split('\n')
+  const quoteOpenings = new Set<number>()
+  let previousQuoteDepth = 0
+  for (const [index, line] of lines.entries()) {
+    const depth = (line.slice(0, contentStart(line)).match(/>/g) ?? []).length
+    if (depth > previousQuoteDepth) quoteOpenings.add(index)
+    previousQuoteDepth = depth
+  }
   const definitions = new Map<string, { target: string; attrs: string; slots: Map<string, string[]>; line: number; first: number }>()
   const definitionMask = referenceMask(source).split('\n')
   const definitionLines = new Set<number>()
@@ -89,19 +96,28 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     let first = n, cursor = n
     const attrs: string[] = []
     const attributeLines: number[] = []
+    let attributeDepth: number | undefined
     while (cursor > 0) {
       const precedingStart = contentStart(lines[cursor - 1]!)
       const precedingPrefix = lines[cursor - 1]!.slice(0, precedingStart)
       const prefix = lines[n]!.slice(0, start)
       const quoteDepth = (value: string) => value.split('>').length - 1
       if (/[-*+.):]/.test(prefix) || quoteDepth(prefix) > quoteDepth(precedingPrefix)) break
+      const depth = quoteDepth(precedingPrefix)
       const preceding = lines[cursor - 1]!.slice(precedingStart)
-      if (preceding.trim() === '') { cursor--; continue }
+      if (preceding.trim() === '') {
+        if (quoteOpenings.has(cursor - 1)) break
+        if (attributeDepth !== undefined && depth < attributeDepth) break
+        cursor--; continue
+      }
+      if (attributeDepth !== undefined && depth < attributeDepth) break
       const parsed = readAttributes(preceding, 0)
       if (parsed?.end !== preceding.length) break
+      attributeDepth = depth
       attrs.push(preceding)
       attributeLines.push(cursor - 1)
       first = --cursor
+      if (quoteOpenings.has(cursor)) break
     }
     const boundary = (at: number): boolean => {
       const previous = lines[at - 1] ?? ''

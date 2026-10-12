@@ -250,5 +250,33 @@
   {
     "source": ">   a\n> {.a}\n\n[r]: /u\n\n[x][r]",
     "html": "<blockquote>\n<p>a\n</p>\n</blockquote>\n<p><a href=\"/u\">x</a></p>\n"
+  },
+  {
+    "source": "> {.a}\n\n> {.b}\n\n[r]: /u\n\n[x][r]",
+    "html": "<blockquote>\n</blockquote>\n<blockquote class=\"a\">\n</blockquote>\n<p><a href=\"/u\" class=\"b\">x</a></p>\n"
+  },
+  {
+    "source": "{.a}\n> {.b}\n\n[r]: /u\n\n[x][r]",
+    "html": "<blockquote class=\"a\">\n</blockquote>\n<p><a href=\"/u\" class=\"b\">x</a></p>\n"
+  },
+  {
+    "source": "> {.a}\n\n>\n\n[r]: /u\n\n[x][r]",
+    "html": "<blockquote>\n</blockquote>\n<blockquote class=\"a\">\n</blockquote>\n<p><a href=\"/u\">x</a></p>\n"
+  },
+  {
+    "source": "{.a}\n>\n\n[r]: /u\n\n[x][r]",
+    "html": "<blockquote class=\"a\">\n</blockquote>\n<p><a href=\"/u\">x</a></p>\n"
+  },
+  {
+    "source": "> {.a}\n>\n[r]: /u\n\n[x][r]",
+    "html": "<blockquote>\n</blockquote>\n<p><a href=\"/u\" class=\"a\">x</a></p>\n"
+  },
+  {
+    "source": "{.-a}\n\nword",
+    "html": "<p class=\"-a\">word</p>\n"
+  },
+  {
+    "source": "{.md:flex}\n\nword",
+    "html": "<p class=\"md:flex\">word</p>\n"
   }
 ]
