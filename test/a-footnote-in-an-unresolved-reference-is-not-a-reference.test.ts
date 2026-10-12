@@ -114,7 +114,7 @@ describe('PART 9R R2: a footnote inside an unresolved reference is not a referen
   it('counts only the resolved use when the same label is used both ways', () => {
     const html = carveToHtml('a [t[^1]][r] b [u[^1]][nope] c\n\n[r]: /u\n\n[^1]: n\n')
     expect(html).toBe(
-      `<p>a <a href="/u">t${noteref}</a> b [u[^1]][nope] c</p>\n${loneEndnote('n')}`,
+      `<p>a <a href="/u">t<sup id="fnref1">1</sup></a> b [u[^1]][nope] c</p>\n${loneEndnote('n')}`,
     )
     // One use reached the reader, so the endnote carries ONE backlink and the
     // numbered-backlink form (`↩<sup>1</sup>`) is not used at all.
@@ -169,15 +169,15 @@ describe('PART 9R R2: a footnote inside an unresolved reference is not a referen
       )
     })
 
-    it('a note in a reference that DOES resolve is an ordinary reference (§16)', () => {
+    it('a note in a resolved reference renders as a sup', () => {
       expect(carveToHtml('a [t[^1]][r] b\n\n[r]: /u\n\n[^1]: n\n')).toBe(
-        `<p>a <a href="/u">t${noteref}</a> b</p>\n${loneEndnote('n')}`,
+        `<p>a <a href="/u">t<sup id="fnref1">1</sup></a> b</p>\n${loneEndnote('n')}`,
       )
     })
 
-    it('a note in an inline link is an ordinary reference', () => {
+    it('a note in an inline link renders as a sup', () => {
       expect(carveToHtml('a [t[^1]](/u) b\n\n[^1]: n\n')).toBe(
-        `<p>a <a href="/u">t${noteref}</a> b</p>\n${loneEndnote('n')}`,
+        `<p>a <a href="/u">t<sup id="fnref1">1</sup></a> b</p>\n${loneEndnote('n')}`,
       )
     })
   })

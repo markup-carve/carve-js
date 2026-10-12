@@ -2356,7 +2356,7 @@ function renderImage(img: Image, opts: RenderOptions): string {
  * Is the renderer inside a link's text right now?
  *
  * Module-scoped rather than threaded through every signature: rendering is
- * synchronous and single-threaded, and the only reader is the crossref arm.
+ * synchronous and single-threaded, and crossrefs and footnotes read the flag.
  * A footnote body renders outside any anchor, so the flag is cleared for it.
  */
 let insideLink = false
@@ -2681,6 +2681,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
         const labelAttr = roundtripExport(opts) && node.label !== undefined
           ? ` ${carrier('footnote-label')}="${escapeAttr(node.label)}"`
           : ''
+        if (insideLink)
+          return `<sup id="${node.refId}"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}>${node.number}</sup>`
         return `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
       }
     case 'non_breaking_space':

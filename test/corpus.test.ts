@@ -983,6 +983,30 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ["310-a-footnote-in-link-text-nests-the-anchors", {
+    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
+    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+  }],
+  ["310-a-footnote-in-link-text-nests-the-anchors-2", {
+    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
+    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+  }],
+  ["312-a-note-body-s-own-references-resolve-3", {
+    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
+    html: "<p>a <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>see <a href=\"/u\">t<sup id=\"fnref2\">2</sup></a><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n    <li id=\"fn2\">\n      <p>two<a href=\"#fnref2\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+  }],
+  ["311-a-footnote-in-reference-link-text-nests-the-anchors-too", {
+    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
+    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+  }],
+  ["311-a-footnote-in-reference-link-text-nests-the-anchors-too-2", {
+    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
+    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+  }],
+  ["311-a-footnote-in-reference-link-text-nests-the-anchors-too-3", {
+    reason: 'ruling on markup-carve/carve#2978: a footnote reference in link text renders as a bare sup with the id',
+    html: "<p>a <a href=\"/u\">t<sup id=\"fnref1\">1</sup></a> c <a id=\"fnref1-2\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> b</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference 1\">↩<sup>1</sup></a> <a href=\"#fnref1-2\" role=\"doc-backlink\" aria-label=\"Back to reference 2\">↩<sup>2</sup></a></p>\n    </li>\n  </ol>\n</section>",
+  }],
   ["510-a-nested-quoted-term-leaves-no-paragraph-for-a-lazy-line", {
     reason: 'ruled on markup-carve/carve-js#2860: a quoted term takes a lazy line',
     html: "<blockquote>\n  <blockquote>\n    <dl>\n      <dt>term\ntail</dt>\n    </dl>\n  </blockquote>\n</blockquote>",

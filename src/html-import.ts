@@ -6025,8 +6025,25 @@ class Importer {
       used.add(fragment)
     }
 
-    if (anchors.length === 0 || (!heuristic && !anchors.some(({ anchor }) => this.attr(anchor, 'role') === 'doc-noteref'))) return []
     const candidates: FootnoteCandidate[] = []
+    for (const backlink of elements) {
+      if (domTag(backlink) !== 'a' || this.attr(backlink, 'role') !== 'doc-backlink') continue
+      const href = this.attr(backlink, 'href') ?? ''
+      if (!/^#fnref\d+(?:-\d+)?$/.test(href)) continue
+      const reference = targets.get(href.slice(1))
+      if (reference === undefined || domTag(reference) !== 'sup') continue
+      let target = domParent(backlink)
+      while (target !== undefined && !this.attr(target, 'id')) target = domParent(target)
+      if (target === undefined) continue
+      let endnotes: P5Node | undefined = target
+      while (endnotes !== undefined && this.attr(endnotes, 'role') !== 'doc-endnotes') endnotes = domParent(endnotes)
+      if (endnotes === undefined) continue
+      const fragment = this.attr(target, 'id')!
+      used.add(fragment)
+      const block = this.resolveFootnoteDefinitionBlock(target, targetsIndex)
+      if (block === null || this.p5Contains(block, reference, targetsIndex)) continue
+      candidates.push({ ref: reference, block, fragment, mutual: true })
+    }
     for (const { anchor, fragment } of anchors) {
       if (!heuristic && this.attr(anchor, 'role') !== 'doc-noteref') continue
       const block = this.resolveFootnoteDefinitionBlock(targets.get(fragment)!, targetsIndex)
