@@ -3521,7 +3521,7 @@ function parseAbbrDef(lexer: Lexer): AbbreviationDef {
 
 type BlockQuoteLazyMode =
   | { kind: 'closed' }
-  | { kind: 'paragraph'; absorbingFence: boolean }
+  | { kind: 'paragraph'; absorbingFence: boolean; term?: boolean }
   | { kind: 'code_fence'; close: RegExp }
   | { kind: 'comment_fence'; length: number }
   // A QUOTE INSIDE THIS ONE IS ASKED WHAT IT ENDS ON, rather than assumed to
@@ -4056,17 +4056,15 @@ function classifyQuotedLine(
 
     return { text: quoted, state: inner }
   }
-  // Two more kinds that leave no paragraph, for the same S4 reason. A
-  // definition TERM is bounded like a heading - it holds inline content, not a
-  // paragraph - and a reference, footnote or abbreviation definition is
-  // invisible, so there is nothing on the page for a lazy line to continue.
-  // Without these, `>:: t` / `~` produced `<dt>t ~</dt>` and `>[f]: ~` / `/`
-  // put the `/` inside the quote (carve-js#554).
-  // No RE_ABBR_DEF: this content is inside a block quote, and PART 12 SS7
-  // recognizes an abbreviation definition only at document level - so the line
-  // IS a paragraph here, and a lazy line continues it.
+  // A term accepts lazy text under PART 0 and CARVE-P2-028, including
+  // inside a quote (markup-carve/carve-js#2860).
+  if (RE_DEFLIST_TERM.test(content)) {
+    state.mode = { kind: 'paragraph', absorbingFence: false, term: true }
+    return null
+  }
+  // Invisible definitions leave no leaf that can accept a following lazy line.
+  // Abbreviation definitions are recognized only at document level.
   if (
-    RE_DEFLIST_TERM.test(content) ||
     RE_FOOTNOTE_DEF.test(content) ||
     (leadingWhitespace(content) === 0 && isLinkDefLine(content))
   ) {
@@ -12235,6 +12233,12 @@ class ParseSession {
       paragraphOpen ??= blockQuoteParagraphOpen(state)
       if (handDown && handDown.paragraphOpen === undefined) handDown.paragraphOpen = paragraphOpen
       if (!paragraphOpen) break
+      if (deflistMarkerLine(ln)) {
+        let leaf = state
+        while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
+        // A description marker opens a block; the ruling covers plain lazy text.
+        if (leaf.mode.kind === 'paragraph' && leaf.mode.term) break
+      }
       const lineIndex = lexer.pos
       lexer.consume()
       const lazyLinkDef = this.isLinkDefLine(ln)

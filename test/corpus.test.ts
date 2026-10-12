@@ -983,6 +983,14 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ["510-a-nested-quoted-term-leaves-no-paragraph-for-a-lazy-line", {
+    reason: 'ruled on markup-carve/carve-js#2860: a quoted term takes a lazy line',
+    html: "<blockquote>\n  <blockquote>\n    <dl>\n      <dt>term\ntail</dt>\n    </dl>\n  </blockquote>\n</blockquote>",
+  }],
+  ["82-blockquote-lazy-continuation-5", {
+    reason: 'ruled on markup-carve/carve-js#2860: a quoted term takes a lazy line',
+    html: "<blockquote>\n  <dl>\n    <dt>t\n~</dt>\n  </dl>\n</blockquote>",
+  }],
   ["558-a-container-boundary-is-read-at-the-container-s-own-column-3", {
     reason: 'ruling Q2 on markup-carve/carve#2978: an opener interrupts the open paragraph in an item-hosted colon body',
     html: "<ul>\n  <li>\n    <div class=\"box\">\n      <p>text</p>\n      <aside class=\"admonition note\" aria-label=\"Note\">\n        <p>x</p>\n      </aside>\n    </div>\n  </li>\n</ul>\n<p>tail</p>",
