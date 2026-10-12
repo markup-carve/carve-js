@@ -43,6 +43,20 @@ describe('escaper perf: inserting many escapes stays linear', () => {
     })
   })
 
+  perfIt('a line of bare openers with no closer scales near-linearly', () => {
+    expectScansLinearly((input) => void escapePlainCarveInlineSyntax(input), '=x *y ~z _w ', {
+      label: 'unclosed bare openers',
+      smallRepeats: 4_000,
+    })
+  })
+
+  perfIt('a line of bare pairs behind backslash runs scales near-linearly', () => {
+    expectScansLinearly((input) => void escapePlainCarveInlineSyntax(input), '\\\\=a=b= ', {
+      label: 'bare pairs behind backslashes',
+      smallRepeats: 4_000,
+    })
+  })
+
   perfIt('a Djot line of braced openers with a padded closer scales near-linearly', () => {
     expectScansLinearly((input) => void djotToCarve(input), '{,x ,} ', {
       label: 'djot padded braced closers',

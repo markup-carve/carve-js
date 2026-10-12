@@ -9,6 +9,8 @@
  * it is frozen as text before that caller ever rewrites it.
  */
 
+import { isCarveWhitespace } from './trim-non-nbsp.js'
+
 /**
  * The braced-pair delimiters that may be literal text in a source language.
  *
@@ -77,26 +79,44 @@ function insertEscapes(subject: string, offsets: readonly number[]): string {
 }
 
 /**
- * Escape each bare `/` that could open emphasis and has a closer after it.
+ * Escape each bare delimiter that could open a pair and has a closer after it.
  *
- * The parser skips a slash that can neither open nor close and pairs the opener
- * with a later closer, so a pair may hold slashes: `/usr/local/` is one
- * emphasis. A pattern whose body stops at the first slash never saw it.
+ * The parser skips a delimiter that can neither open nor close and pairs the
+ * opener with a later closer, so a pair may hold its own delimiter: `/usr/local/`
+ * is one emphasis and `=a=b=` one highlight, and a closer may sit before
+ * another delimiter, as in `=a==`. A pattern whose body stops at the first
+ * delimiter saw neither.
  *
  * One backward pass finds the nearest closer after each offset, so a line of
  * openers with no closer costs its length once.
+ *
+ * `_` before an opener is not treated as a word character the way the parser
+ * treats it: a caller may still rewrite that `_` into another delimiter.
+ *
+ * @param behindBrace Whether an opener behind an unescaped `{` is escaped too.
  */
-function escapeSlashOpeners(subject: string): string {
-  if (!subject.includes('/')) return subject
+function escapeBareOpeners(subject: string, delimiter: string, behindBrace: boolean): string {
+  if (!subject.includes(delimiter)) return subject
   const alnum = (c: string | undefined): boolean => c !== undefined && /[A-Za-z0-9]/.test(c)
-  const blank = (c: string | undefined): boolean => c === undefined || /\s/.test(c)
   const offsets: number[] = []
   let closer = -1
+  let lineIsBlank = false
   for (let i = subject.length - 1; i >= 0; i--) {
-    if (subject[i] !== '/' || isEscapedAt(subject, i)) continue
+    const c = subject[i]!
+    if (c === '\n') {
+      // A pair never spans a blank line.
+      if (lineIsBlank) closer = -1
+      lineIsBlank = true
+      continue
+    }
+    if (c !== ' ' && c !== '\t' && c !== '\r') lineIsBlank = false
+    if (c !== delimiter || isEscapedAt(subject, i)) continue
     const before = subject[i - 1], after = subject[i + 1]
-    if (before !== '/' && !alnum(before) && after !== '/' && !blank(after) && closer > i + 1) offsets.push(i)
-    if (!blank(before) && !alnum(after)) closer = i
+    if (
+      before !== delimiter && !alnum(before) && after !== delimiter && after !== undefined && !isCarveWhitespace(after)
+      && closer > i + 1 && (behindBrace || before !== '{' || isEscapedAt(subject, i - 1))
+    ) offsets.push(i)
+    if (before !== undefined && !isCarveWhitespace(before) && !alnum(after)) closer = i
   }
 
   return insertEscapes(subject, offsets.reverse())
@@ -306,40 +326,20 @@ export function escapePlainCarveInlineSyntax(
   // run. Escaping the inner delimiter as well is what makes the whole thing
   // literal.
   //
-  // That reasoning holds only when the brace WAS escaped, which is why `=` and
-  // `~` carry the same `(?<!(?<!\\)\{)` guard as `*` and `_` below. A brace
-  // left bare here is one the caller declared handled: `{=x=}` is a highlight
-  // in Djot as well as in Carve, so a Djot converter passes `=` as braced and
-  // the run has to survive untouched. Escaping the inner `=` there lands on
-  // markup that was meant to live, and `{=x=}` came back as literal text
-  // instead of a mark.
+  // That reasoning holds only when the brace WAS escaped, which is why every
+  // delimiter but `/` is left alone behind an unescaped `{`. A brace left bare
+  // here is one the caller declared handled: `{=x=}` is a highlight in Djot as
+  // well as in Carve, so a Djot converter passes `=` as braced and the run has
+  // to survive untouched.
   //
-  // The `/` in the slash rule's lookbehind is load-bearing, not symmetry:
-  // without it the SECOND slash of `ftp://x/` matched, and escaping it freed the
-  // first one to open emphasis — `ftp:/\/x/` rendering as `ftp:<em>/x</em>`.
-  // Only http and https URLs are protected above, so every other scheme reaches
-  // this rule.
-  if (!bareHandled.includes('/')) {
-    out = escapeSlashOpeners(out)
-  }
-  if (!bareHandled.includes('=')) {
-    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9=])(?<!(?<!\\)\{)=(?![=\s])([^=]+?)(?<!\s)=(?![A-Za-z0-9=])/g, out)
-  }
-  if (!bareHandled.includes('~')) {
-    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9~])(?<!(?<!\\)\{)~(?![~\s])([^~]+?)(?<!\s)~(?![A-Za-z0-9~])/g, out)
-  }
-
-  // `*` is a strong and `_` an underline, and both are word-bounded: the
-  // lookarounds are the ones the parser opens on, so `a*b*c`,
-  // `feature_flag_company`, `can_*` and `5 * 4 * 3` stay bare - escaping those
-  // would put a backslash in front of a character the author typed as itself.
-  // Doubling is excluded because `**x**` and `__x__` are already literal to the
-  // parser. Ported from carve-php#1141, which fixed the same gap there.
-  if (!bareHandled.includes('*')) {
-    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9*])(?<!(?<!\\)\{)\*(?![*\s])([^*\n]+?)(?<!\s)\*(?![A-Za-z0-9*])/g, out)
-  }
-  if (!bareHandled.includes('_')) {
-    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])(?<!(?<!\\)\{)_(?![_\s])([^_\n]+?)(?<!\s)_(?![A-Za-z0-9_])/g, out)
+  // The same-delimiter test is load-bearing for `/`: without it the SECOND
+  // slash of `ftp://x/` was escaped, which freed the first one to open
+  // emphasis - `ftp:/\/x/` rendering as `ftp:<em>/x</em>`.
+  //
+  // `a*b*c`, `feature_flag_company` and `5 * 4 * 3` open nothing in the parser,
+  // so none of them gains a backslash.
+  for (const delimiter of '/=~*_') {
+    if (!bareHandled.includes(delimiter)) out = escapeBareOpeners(out, delimiter, delimiter === '/')
   }
 
   if (!bareHandled.includes('#')) {
