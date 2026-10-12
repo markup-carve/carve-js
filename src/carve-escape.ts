@@ -357,6 +357,9 @@ export function escapePlainCarveInlineSyntax(
   return out
 }
 
+const PRIVATE_USE_FIRST = 0xe000
+const PRIVATE_USE_LAST = 0xf8ff
+
 /**
  * Escape plain text that surrounds opaque runs such as code spans and
  * destinations, one paragraph at a time.
@@ -373,17 +376,30 @@ export function escapePlainCarveInlineSyntaxAround(
   handled: HandledDelimiters = {},
 ): string {
   // Private-use characters are neither blank nor alphanumeric to any rule.
-  let code = 0xe000
-  while (source.includes(String.fromCharCode(code))) code++
-  const standIn = String.fromCharCode(code)
+  const used = new Set<number>()
+  for (let i = 0; i < source.length; i++) {
+    const unit = source.charCodeAt(i)
+    if (unit >= PRIVATE_USE_FIRST && unit <= PRIVATE_USE_LAST) used.add(unit)
+  }
+  let code = PRIVATE_USE_FIRST
+  while (used.has(code)) code++
+  const standIn = code <= PRIVATE_USE_LAST ? String.fromCharCode(code) : null
   const hidden: string[] = []
   let text = ''
+  let pieces = ''
+  let from = 0
   for (let i = 0; i < source.length; i++) {
-    if (opaque(i)) {
+    if (!opaque(i)) text += source[i]
+    else if (standIn !== null) {
       hidden.push(source[i]!)
       text += standIn
-    } else text += source[i]
+    } else {
+      // No stand-in is free, so each run between opaque characters stands alone.
+      pieces += escapePlainCarveInlineSyntax(source.slice(from, i), handled) + source[i]
+      from = i + 1
+    }
   }
+  if (standIn === null) return pieces + escapePlainCarveInlineSyntax(source.slice(from), handled)
   // A pair never spans a blank line, so no rule may pair across one either.
   const escaped = text.split(/(\n(?:[ \t]*\n)+)/)
     .map((part, index) => index % 2 === 1 ? part : escapePlainCarveInlineSyntax(part, handled))

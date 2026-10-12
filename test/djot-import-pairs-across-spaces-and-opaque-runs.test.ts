@@ -42,7 +42,16 @@ describe('escaping around opaque runs', () => {
   })
 
   it('picks a stand-in the source does not hold', () => {
-    const source = '/a x b/'
-    expect(escapePlainCarveInlineSyntaxAround(source, at => at === 5, HANDLED_DJOT)).toBe('\\/a x b/')
+    const source = '/a \uE000\uE001x b/'
+    expect(escapePlainCarveInlineSyntaxAround(source, at => at === 5, HANDLED_DJOT)).toBe('\\/a \uE000\uE001x b/')
+  })
+
+  it('escapes each run on its own when every private-use character is taken', () => {
+    let taken = ''
+    for (let code = 0xe000; code <= 0xf8ff; code++) taken += String.fromCharCode(code)
+    const source = taken + ' /a/ [/b/] /c d/'
+    const open = source.indexOf('[')
+    const opaque = (at: number) => at >= open && at <= open + 4
+    expect(escapePlainCarveInlineSyntaxAround(source, opaque, HANDLED_DJOT)).toBe(taken + ' \\/a/ [/b/] \\/c d/')
   })
 })
