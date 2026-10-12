@@ -426,5 +426,57 @@
   {
     "source": "| [a](/x \"t`\") | `b` |\n|---|---|",
     "html": "<table>\n<thead>\n<tr>\n<th><a href=\"/x\" title=\"t`\">a</a></th>\n<th><code>b</code></th>\n</tr>\n</thead>\n</table>\n"
+  },
+  {
+    "source": "![*r*](/y`c d`)\n\n[r]: /u",
+    "html": "<p>![<em>r</em>](/y<code>c d</code>)</p>\n"
+  },
+  {
+    "source": "![*r*](/y`c d`)\n\n[*r*]: /u",
+    "html": "<p><img src=\"/u\" alt=\"r\" />(/y<code>c d</code>)</p>\n"
+  },
+  {
+    "source": "![x [r]](/y`c d`)\n\n[r]: /u\n[x r]: /other",
+    "html": "<p>![x <a href=\"/u\">r</a>](/y<code>c d</code>)</p>\n"
+  },
+  {
+    "source": "![a [b](/x`c d`) e](/i)",
+    "html": "<p><img src=\"/i\" alt=\"a [b](/xc d) e\" /></p>\n"
+  },
+  {
+    "source": "[a](<a\\\nb>)",
+    "html": "<p><a href=\"a%5C%0Ab\">a</a></p>\n"
+  },
+  {
+    "source": "[a](<a\\\nb> \"t\")",
+    "html": "<p><a href=\"a%5C%0Ab\" title=\"t\">a</a></p>\n"
+  },
+  {
+    "source": "> [a](<a\\\n> b>)",
+    "html": "<blockquote>\n<p><a href=\"a%5C%0Ab\">a</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- [a](<a\\\n  b>)",
+    "html": "<ul>\n<li><a href=\"a%5C%0Ab\">a</a></li>\n</ul>\n"
+  },
+  {
+    "source": "![a](<a\\\nb>)",
+    "html": "<p><img src=\"a%5C%0Ab\" alt=\"a\" /></p>\n"
+  },
+  {
+    "source": "[o [a](<a\\\nb>) p](/u)",
+    "html": "<p>[o <a href=\"a%5C%0Ab\">a</a> p](/u)</p>\n"
+  },
+  {
+    "source": "- [a](<a\\\n  b>)\n- c",
+    "html": "<ul>\n<li><a href=\"a%5C%0Ab\">a</a></li>\n<li>c</li>\n</ul>\n"
+  },
+  {
+    "source": "[a](<a\\\nb>) `c\nd` tail\nlast",
+    "html": "<p><a href=\"a%5C%0Ab\">a</a> <code>c d</code> tail\nlast</p>\n"
+  },
+  {
+    "source": "[a](<a\\\nb>) [c](/x\n\"t\")",
+    "html": "<p><a href=\"a%5C%0Ab\">a</a> <a href=\"/x\" title=\"t\">c</a></p>\n"
   }
 ]

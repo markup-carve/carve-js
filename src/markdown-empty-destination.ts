@@ -596,7 +596,7 @@ function quoteAttributeValue(value: string): string {
 }
 
 /** CommonMark's alt text: the description's content with its markup removed. */
-export function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string): string {
+export function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string, sources: readonly string[] = placeholders): string {
   let previous: string
   const nestedLink = new RegExp(String.raw`!?\[${LABEL}\](?=\()`, 'g')
   const referenceLink = new RegExp(String.raw`!?\[${LABEL}\]`, 'g')
@@ -611,8 +611,10 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
     let nestedWritten = '', nestedCursor = 0
     nestedLink.lastIndex = 0
     for (let match; (match = nestedLink.exec(label)) !== null;) {
-      const end = markdownInlineDestinationEnd(label, nestedLink.lastIndex)
-      if (end === undefined) { nestedLink.lastIndex = match.index + 1; continue }
+      const open = nestedLink.lastIndex
+      const end = markdownInlineDestinationEnd(label, open)
+      const destination = end === undefined ? undefined : referenceSourceText(label.slice(open, end + 1), sources)
+      if (end === undefined || destination === undefined || markdownInlineDestinationEnd(destination, 0) !== destination.length - 1) { nestedLink.lastIndex = match.index + 1; continue }
       nestedWritten += label.slice(nestedCursor, match.index) + match[1]!
       nestedLink.lastIndex = end + 1
       nestedCursor = nestedLink.lastIndex

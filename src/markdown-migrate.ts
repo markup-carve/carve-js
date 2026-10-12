@@ -1291,11 +1291,23 @@ function convertInline(
     return token
   }
   let codeCursor = 0, codeLine = 0
+  const codeSourceToken = /\x00P(\d+)\x00/y
   const writeCodeSpan = (span: string, offset: number, trackLines = true): string => {
     const fence = /^`+/.exec(span)?.[0] ?? ''
     if (fence.length > 2 || !span.includes('\n')) return protectCode(span)
     if (joinedLines && trackLines) {
-      while (codeCursor < offset) if (rawLine[codeCursor++] === '\n') codeLine++
+      while (codeCursor < offset) {
+        if (rawLine[codeCursor] === '\x00') {
+          codeSourceToken.lastIndex = codeCursor
+          const token = codeSourceToken.exec(rawLine)
+          if (token) {
+            codeLine += (referenceSourceText(token[0], protectedSpans).match(/\n/g) ?? []).length
+            codeCursor += token[0].length
+            continue
+          }
+        }
+        if (rawLine[codeCursor++] === '\n') codeLine++
+      }
       while (codeCursor < offset + span.length) if (rawLine[codeCursor++] === '\n') joinedLines.add(++codeLine)
     }
     let value = span.slice(fence.length, -fence.length).replace(/\n[ \t]*/g, ' ')
@@ -1775,19 +1787,21 @@ function convertInline(
   }
 
   const imageLabel = (label: string): string => {
-    const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw)
+    const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw, protectedSources)
     return `![${rawImageBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : escapeUnclosedImageEditorialOpeners(alt.replace(/[\\[\]`]/g, '\\$&'))}]`
   }
-  const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
+  const protectDestination = (alt: string, dest: string, source = alt + dest, imageSourceLabel?: string): string => {
     const sourceDest = referenceSourceText(dest, protectedSources)
-    const encoded = markdownInlineDestinationEnd(sourceDest, 0) === sourceDest.length - 1 ? encodeDest(dest) : undefined
+    const nativeValid = markdownInlineDestinationEnd(sourceDest, 0) === sourceDest.length - 1
+    const encoded = nativeValid ? encodeDest(dest) : undefined
     if (encoded !== undefined) return protect(alt + encoded, source)
-    const imageReference = /^!\[([\s\S]*)\]$/.exec(alt)
-    const canonical = imageReference ? referenceDestinationLabel(imageReference[1]!, decodeHtmlEntitiesRaw, protectedSpans, table) : undefined
+    const canonical = nativeValid || imageSourceLabel === undefined ? undefined : referenceDestinationLabel(imageSourceLabel, decodeHtmlEntitiesRaw, protectedSpans, table)
     const referenceTarget = canonical === undefined ? undefined : referenceInlineTarget(canonical, table)
     const referenceEncoded = referenceTarget === undefined ? undefined : encodeDest(`(${referenceTarget})`)
-    const label = canonical === undefined ? alt : imageLabel(alt) + (referenceEncoded ?? `[${canonical}]`)
-    return (alt === '' ? '' : protect(label, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
+    const sourceLabel = source.slice(0, source.length - dest.length)
+    const label = canonical === undefined || /[\[\]]/.test(canonical)
+      ? sourceLabel : protect(alt + (referenceEncoded ?? `[${canonical}]`), sourceLabel)
+    return label + protect('\\(', '(') + dest.slice(1)
   }
   type NativeDestination = { offset: number; label: string; dest: string }
   const protectDestinations = (pattern: RegExp | readonly NativeDestination[]): void => {
@@ -1814,7 +1828,7 @@ function convertInline(
       }
       if (cursor > offset || (label === '' && pairedEnd !== offset - 1)) return match
       const image = label.startsWith('!')
-      const written = protectDestination(image ? imageLabel(label) : '', dest, image ? label + dest : dest)
+      const written = protectDestination(image ? imageLabel(label) : '', dest, image ? label + dest : dest, image ? label.slice(2, -1) : undefined)
       if (written.startsWith('\x00P')) cursor = offset + match.length
       const destinationToken = /^\x00P(\d+)\x00$/.exec(written)
       if (joinedLines && destinationToken) {
@@ -1822,7 +1836,7 @@ function convertInline(
           if (subject[lineCursor] === '\x00') {
             const token = /^\x00P(\d+)\x00/.exec(subject.slice(lineCursor))
             if (token) {
-              lineNumber += (protectedSpans[Number(token[1])]!.match(/\n/g) ?? []).length
+              lineNumber += (referenceSourceText(token[0], protectedSpans).match(/\n/g) ?? []).length
               lineCursor += token[0].length
               continue
             }
@@ -1830,7 +1844,7 @@ function convertInline(
           if (subject[lineCursor++] === '\n') lineNumber++
         }
         const result = (image ? '' : label) + protectedSpans[Number(destinationToken[1])]!
-        const removed = (match.match(/\n/g) ?? []).length - (result.match(/\n/g) ?? []).length
+        const removed = (referenceSourceText(match, protectedSpans).match(/\n/g) ?? []).length - (result.match(/\n/g) ?? []).length
         for (let n = 1; n <= removed; n++) {
           const origin = origins[lineNumber + n]
           if (origin !== undefined) joinedLines.add(origin)

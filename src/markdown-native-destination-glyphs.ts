@@ -44,11 +44,18 @@ export function protectNativeMarkdownDestinationGlyphs(
     if (end !== undefined) {
       let first = open + 1
       while (/[ \t\n]/.test(source[first] ?? '')) first++
-      if (source[first] === '<' && first + 1 < end && source[first + 1] !== '>') {
+      if (source[first] === '<' && first + 1 < end && source[first + 1] !== '>' && source[first + 1] !== '\x00') {
         const escaped = source[first + 1] === '\\' && /[!-/:-@\[-`{-~]/.test(source[first + 2] ?? '')
         glyphs.set(first + 1, escaped ? 2 : String.fromCodePoint(source.codePointAt(first + 1)!).length)
       }
+      let pointy = source[first] === '<'
       for (let pos = open + 1; pos < end; pos++) {
+        if (pointy && source[pos] === '\\') {
+          if (source[pos + 1] === '\n') glyphs.set(pos, 2)
+          pos++
+          continue
+        }
+        if (pointy && source[pos] === '>') pointy = false
         if (source[pos] === '`' || source[pos] === '$' || source[pos] === '<' && pos !== first) glyphs.set(pos, 1)
       }
       if (!opener.image) generation++
