@@ -79,6 +79,30 @@ function replaceDjotImageLabels(source: string, mask: string, replace: (image: s
   return chunks.join('')
 }
 
+type DjotImageLineOwner = { start: number; end: number; quotes: number; itemColumn: number; itemQuote: number; table: boolean; div: { width: number; depth: number; column: number } | undefined }
+
+function djotImageLineOwners(source: string, mask: string): DjotImageLineOwner[] {
+  const imageLines: DjotImageLineOwner[] = []
+  let imageOffset = 0, imageItemColumn = 0, imageItemQuote = 0
+  const imageDivs: Array<{ width: number; depth: number; column: number }> = []
+  const imageOwnerMarker = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/
+  for (const line of source.split('\n')) {
+    const contentStart = djotContentStart(line)
+    const [depth, body] = quoted(line), text = body.replace(/^[ \t]*/, ''), indent = body.length - text.length
+    if (imageOwnerMarker.test(text)) { imageItemColumn = indent + 1; imageItemQuote = depth }
+    else if (text && (depth < imageItemQuote || depth === imageItemQuote && indent < imageItemColumn && /^(?:#{1,6} |:{3,}|[-*+] |\{|\|)/.test(text))) imageItemColumn = 0
+    const delimiter = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(contentStart))
+    if (delimiter && mask[imageOffset + contentStart] !== ' ') {
+      const owner = imageDivs.at(-1)
+      if (owner && (line.slice(0, contentStart).match(/>/g) ?? []).length === owner.depth && /^:{3,}[ \t]*$/.test(line.slice(contentStart)) && delimiter[1]!.length >= owner.width) imageDivs.pop()
+      else imageDivs.push({ width: delimiter[1]!.length, depth: (line.slice(0, contentStart).match(/>/g) ?? []).length, column: contentStart })
+    }
+    imageLines.push({ start: imageOffset + contentStart, end: imageOffset + line.length + 1, quotes: (line.slice(0, contentStart).match(/>/g) ?? []).length, itemColumn: imageItemColumn, itemQuote: imageItemQuote, table: line[contentStart] === '|', div: imageDivs.at(-1) })
+    imageOffset += line.length + 1
+  }
+  return imageLines
+}
+
 function djotImageAltLayout(label: string, quotes: number, itemColumn = 0, itemQuote = 0, div?: { width: number; depth: number; column: number }): { normalized: string; continuations: string[]; valid: boolean } {
   const continuations: string[] = []
   let valid = true
@@ -884,27 +908,9 @@ function convertDjotDocument(djot: string): string {
   const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && !(key.startsWith('^') && key.length > 1) && definitions.has(key) ? `${label}[${key}]` : value)
   const imageParagraph = djotPlaceholderPrefix(body, '\x00DJOTIMAGEPARAGRAPH\x00')
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
-  const imageStarts = new Set<number>()
-  const imageLines: Array<{ end: number; quotes: number; itemColumn: number; itemQuote: number; table: boolean; div: { width: number; depth: number; column: number } | undefined }> = []
+  const imageLines = djotImageLineOwners(rawFolded, imageMask)
+  const imageStarts = new Set(imageLines.map(line => line.start))
   let imageLine = 0
-  let imageOffset = 0, imageItemColumn = 0, imageItemQuote = 0
-  const imageDivs: Array<{ width: number; depth: number; column: number }> = []
-  const imageOwnerMarker = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/
-  for (const line of rawFolded.split('\n')) {
-    const contentStart = djotContentStart(line)
-    imageStarts.add(imageOffset + contentStart)
-    const [depth, body] = quoted(line), text = body.replace(/^[ \t]*/, ''), indent = body.length - text.length
-    if (imageOwnerMarker.test(text)) { imageItemColumn = indent + 1; imageItemQuote = depth }
-    else if (text && (depth < imageItemQuote || depth === imageItemQuote && indent < imageItemColumn && /^(?:#{1,6} |:{3,}|[-*+] |\{|\|)/.test(text))) imageItemColumn = 0
-    const delimiter = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(contentStart))
-    if (delimiter && imageMask[imageOffset + contentStart] !== ' ') {
-      const owner = imageDivs.at(-1)
-      if (owner && (line.slice(0, contentStart).match(/>/g) ?? []).length === owner.depth && /^:{3,}[ \t]*$/.test(line.slice(contentStart)) && delimiter[1]!.length >= owner.width) imageDivs.pop()
-      else imageDivs.push({ width: delimiter[1]!.length, depth: (line.slice(0, contentStart).match(/>/g) ?? []).length, column: contentStart })
-    }
-    imageLines.push({ end: imageOffset + line.length + 1, quotes: (line.slice(0, contentStart).match(/>/g) ?? []).length, itemColumn: imageItemColumn, itemQuote: imageItemQuote, table: line[contentStart] === '|', div: imageDivs.at(-1) })
-    imageOffset += line.length + 1
-  }
   const folded = replaceDjotImageLabels(rawFolded, imageMask, (image, label, at) => {
     if (imageMask[at] !== '!' || imageMask[at + image.length - 1] !== ']' || /\n[ \t]*\n/.test(label) || isDjotEscaped(rawFolded, at)) return image
     const paragraph = imageStarts.has(at) ? imageParagraph : ''
@@ -1137,6 +1143,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
   if (!source.includes('](')) return source
   const mask = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false })
   const rows = djotTableRows(source, mask)
+  let imageLines: DjotImageLineOwner[] | undefined
   const angles = new Map(
     [...source.matchAll(/<[^<>\s]+>/g)]
       .filter((match) => /[^:]@|[A-Za-z]:/.test(match[0]))
@@ -1156,6 +1163,11 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
   let pipeSerial = 0
   let line = 0
   const boundaries = new Set(djotInlineBoundaries(source, mask))
+  if (source.includes(':::')) {
+    const divClosers = new Map<number, number[]>()
+    djotInlineBoundaries(source, mask, true, divClosers)
+    for (const at of divClosers.keys()) boundaries.add(at)
+  }
   const labelOf = (start: number, limit: number): string => {
     let label = '',
       brackets = 0
@@ -1282,6 +1294,22 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
         destinationOwner = undefined
         pendingNotes.clear()
         continue
+      }
+      const authoredLabel = owner.image ? source.slice(owner.at + 1, owner.labelEnd!) : ''
+      if (authoredLabel.includes('\n')) {
+        imageLines ??= djotImageLineOwners(source, mask)
+        let left = 0, right = imageLines.length
+        while (left < right) {
+          const middle = (left + right) >>> 1
+          if (imageLines[middle]!.end <= owner.at) left = middle + 1
+          else right = middle
+        }
+        const imageOwner = imageLines[left]!
+        if (!djotImageAltLayout(authoredLabel, imageOwner.quotes, imageOwner.itemColumn, imageOwner.itemQuote).valid) {
+          stack.pop()
+          destinationOwner = undefined
+          continue
+        }
       }
       let label = labelOf(owner.at + 1, owner.labelEnd!)
       let rawDestination = ''
