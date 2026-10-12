@@ -157,6 +157,9 @@ source**.
 | `data-carve-abbreviations` | `<template>` | the document's abbreviation definitions, one per line |
 | `data-carve-col-widths` | `<table>` | the authored separator-row dash widths, comma-joined; omitted for a table with no separator row or a width outside 1 to 1000 |
 | `data-carve-label` | `<pre>` | a code block's authored label, the text between the fence label's brackets |
+| `data-carve-ext` | `<section>` | `section`: the wrapper was generated for a heading whose identifier is generated |
+| `data-carve-id-slot` | `<section>` | the authored identifier's slot among the heading's attributes, counted from 0; omitted at 0, where the identifier leads |
+| `data-carve-tight` | `<ul>`, `<ol>` | `true`: the list is tight although an item's paragraph keeps its `<p>` for its own attributes |
 
 ```carve
 | a | b |
@@ -176,6 +179,11 @@ An **authored attribute that collides** with a carrier is dropped and the drop
 is reported as a `carrier-attribute-dropped` render loss naming it. The carrier
 wins because it is structural; emitting both would be invalid HTML.
 
+One name is reserved without a carrier. No export writes `data-carve-src`, and
+every import consumes it, so an authored one would be lost on the way back.
+Roundtrip export drops it and reports the same `carrier-attribute-dropped`
+loss. Default export passes it through untouched.
+
 `data-carve-*` is the serializer's protocol, not an author's content. An import
 **consumes** these names and never writes one back out as an authored
 attribute, in `safe` mode exactly as in `roundtrip`; the deprecated
@@ -189,8 +197,9 @@ the authored bullet and ordered delimiter, the thematic-break character, an
 authored identifier, a link's or image's reference label (with the
 `[label]: /url` definition written beside it), an `autolink` node, a footnote's
 authored label, an inline footnote, an `escaped_text` node, a `raw_inline` with
-its own format, a table's separator-row widths, a code block's label, and the
-abbreviation definitions - so a use of a defined
+its own format, a table's separator-row widths, a code block's label, the slot
+an authored identifier held among a heading's attributes, a tight list whose
+item paragraph kept its `<p>`, and the abbreviation definitions - so a use of a defined
 abbreviation comes back as prose rather than as `[HTML]{abbr="..."}` on every
 occurrence.
 
@@ -200,11 +209,19 @@ htmlToCarve(carveToHtml('`\\x`{=tex}\n', { roundtrip: true })).value
 ```
 
 A carrier that cannot be honored is **not** a carrier: a value outside its
-enumeration, a reference label no Carve source could spell, an escape longer
-than one character, an autolink whose text is not its own destination, or a
-label and an inline-note carrier contradicting each other on one endnote.
-Those are dropped and reported, not guessed at, and the reserved name is still
-never written back out.
+enumeration (an id slot that is not a run of decimal digits, a tight value
+other than `true` or `false`), a reference label no Carve source could spell,
+an escape longer than one character, or an autolink whose text is not its own
+destination. Those are dropped and reported, not guessed at, and the reserved
+name is still never written back out.
+
+Two carriers that contradict each other on one element restore neither
+meaning. The element imports as its ordinary form, one `attribute-dropped`
+warning covers the pair, and neither name becomes an authored attribute. The
+pairs are a footnote label beside an inline-note carrier on one endnote, an
+autolink carrier beside a reference label on one `<a>` (it imports as an inline
+link), and an authored-id carrier beside `data-carve-ext="section"` on one
+wrapper. A value outside its grammar is not a carrier and contradicts nothing.
 
 One carrier's answer depends on the import mode. A raw inline of format `html`
 is markup every HTML render emits verbatim, so rebuilding one would hand the

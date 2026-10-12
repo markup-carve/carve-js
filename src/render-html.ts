@@ -56,9 +56,13 @@ import {
   CARRIER_MARKER,
   carrier,
   dropCollidingAuthored,
+  EXT_SECTION,
+  isRetiredSourceName,
   MAX_CARRIED_SEPARATOR_WIDTH,
+  reportRetiredSourceNames,
   roundtripExport,
 } from './roundtrip-carriers.js'
+import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
 
 export type SocialLinkKind = 'mention' | 'tag'
 
@@ -657,6 +661,9 @@ export function renderHtml(
   docIdSource = docIds ? null : ast
   activeRenderOptions = opts
   admonitionCount = 0
+  if (roundtripExport(opts)) {
+    reportRetiredSourceNames(ast, new Set([...CANONICAL_INLINE_TYPES, ...Object.keys(FOLDED_NODE_TYPES)]), opts)
+  }
   try {
     return renderDocumentBody(ast, opts)
   } finally {
@@ -755,6 +762,20 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       const explicitId = roundtripExport(opts) && authoredId(node.attrs)
         ? ` ${carrier('explicit-id')}="1"`
         : ''
+      // §13a carriers that ride the wrapper only: the authored id's slot where
+      // it does not lead, and `section` where the id is generated.
+      const sectionCarriers: string[] = []
+      let wrapperCarriers = ''
+      if (wrapSections && roundtripExport(opts)) {
+        const slot = explicitId === '' ? -1 : node.attrs!.order!.indexOf('#id')
+        if (slot > 0) {
+          sectionCarriers.push(carrier('id-slot'))
+          wrapperCarriers = ` ${carrier('id-slot')}="${slot}"`
+        } else if (explicitId === '' && node.attrs?.id !== undefined) {
+          sectionCarriers.push(carrier('ext'))
+          wrapperCarriers = ` ${carrier('ext')}="${EXT_SECTION}"`
+        }
+      }
       if (wrapSections) {
         // The id moves to <section>; any other heading attrs (classes,
         // key-values) stay on the <h*>.
@@ -762,7 +783,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
         // <section> (it already suppressed the auto-slug in resolveHeadingIds).
         const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
-        out.push(`${indent(depth)}<section${sectionId}${explicitId}>`)
+        out.push(`${indent(depth)}<section${sectionId}${explicitId}${wrapperCarriers}>`)
         sectionStack.push(node.level)
       }
       // Where the <h*> sits: one level in when a wrapper opened above it,
@@ -783,9 +804,10 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       // heading it is written on the `<section>` while the authored attribute
       // sits on the `<h*>` - so the drop has to happen on the heading's own
       // attributes either way.
-      const ownAttrs = explicit === '' && explicitId === ''
+      const written = [...(explicit === '' && explicitId === '' ? [] : [carrier('explicit-id')]), ...sectionCarriers]
+      const ownAttrs = written.length === 0
         ? headingAttrs
-        : dropCollidingAuthored(headingAttrs, [carrier('explicit-id')], opts, node, 'block')
+        : dropCollidingAuthored(headingAttrs, written, opts, node, 'block')
       const inner = renderInlines(node.children, opts)
       const slAttr = sourceLineAttr(opts, node.pos?.startLine, ownAttrs)
       out.push(
@@ -1206,6 +1228,8 @@ function renderAttrs(raw?: Attrs, tag?: string): string {
     // dangerous-scheme or CSS-expression value, regardless of render options.
     if (isDangerousAttrName(k)) return ''
     if (!HTML_ATTR_NAME_RE.test(k)) return ''
+    // §13a reserves the name without a row; `renderHtml` reports the drop.
+    if (roundtripExport(activeRenderOptions) && isRetiredSourceName(k)) return ''
     const v = attrs.keyValues?.[k]
     return v !== undefined ? `${k}="${escapeAttr(sanitizeAttrValue(k, v))}"` : ''
   }
@@ -1780,16 +1804,23 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
   const markerAttr = roundtripExport(opts) && authoredMarker !== undefined
     ? ` ${CARRIER_MARKER}="${escapeAttr(authoredMarker)}"`
     : ''
-  const listOwnAttrs = markerAttr === ''
+  // §13a: a tight item's paragraph keeps its `<p>` for its own attributes, and
+  // an importer reads a `<p>` there as a loose list.
+  const tightAttr = roundtripExport(opts) && node.tight
+    && node.items.some((it) => it.children.some((child) => child.type === 'paragraph' && child.attrs))
+    ? ` ${carrier('tight')}="true"`
+    : ''
+  const listCarriers = [...(markerAttr === '' ? [] : [CARRIER_MARKER]), ...(tightAttr === '' ? [] : [carrier('tight')])]
+  const listOwnAttrs = listCarriers.length === 0
     ? node.attrs
-    : dropCollidingAuthored(node.attrs, [CARRIER_MARKER], opts, node, 'block')
+    : dropCollidingAuthored(node.attrs, listCarriers, opts, node, 'block')
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
   // PART 19 §1: a task list's mandatory base class leads the authored ones.
   const isTaskList = !node.ordered && node.items.length > 0 && node.items.every((it) => it.checked !== undefined)
   const listAttrs = isTaskList ? renderAttrs2(listOwnAttrs, { baseClass: 'task-list' }) : renderAttrs(listOwnAttrs)
-  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${markerAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
+  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${markerAttr}${tightAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(

@@ -38,6 +38,18 @@ export const MAX_CARRIED_SEPARATOR_WIDTH = 1000
 export const CARRIER_MARKER = 'data-marker'
 export const CARRIER_CHAR = 'data-char'
 
+/**
+ * Reserved without an inventory row (§13a): no writer emits it and every
+ * importer consumes it, so an authored one cannot survive a round trip.
+ */
+export const RETIRED_SOURCE_CARRIER = 'data-carve-src'
+
+/** `data-carve-ext`: the one value the core writes, on a generated section wrapper. */
+export const EXT_SECTION = 'section'
+
+/** `data-carve-id-slot`: a run of decimal digits (§13a). */
+export const RE_ID_SLOT = /^[0-9]+$/
+
 /** The carriers a writer can emit under the reserved prefix, without it. */
 const PREFIXED = [
   'explicit-id',
@@ -50,6 +62,9 @@ const PREFIXED = [
   'raw',
   'escaped',
   'abbreviations',
+  'ext',
+  'id-slot',
+  'tight',
 ] as const
 
 export type PrefixedCarrier = (typeof PREFIXED)[number]
@@ -74,7 +89,7 @@ export const RESERVED_CARRIER_ATTRIBUTES: ReadonlySet<string> = new Set<string>(
   ...PREFIXED.map(carrier),
   ...PREFIXED.map(legacyCarrier),
   // Verbatim-source names remain reserved on import but are excluded from §13a export.
-  'data-carve-src',
+  RETIRED_SOURCE_CARRIER,
   'data-djot-src',
 ])
 
@@ -127,4 +142,49 @@ export function dropCollidingAuthored(
     })
   }
   return next
+}
+
+/**
+ * Under roundtrip export an authored `data-carve-src` is dropped (§13a): every
+ * importer consumes the name, so passing it through loses it silently on the
+ * way back. `renderAttrs` strips it; this reports each node that held one.
+ */
+export function isRetiredSourceName(key: string): boolean {
+  return key.toLowerCase() === RETIRED_SOURCE_CARRIER
+}
+
+export function reportRetiredSourceNames(
+  tree: unknown,
+  inlineTypes: ReadonlySet<string>,
+  opts: RenderLossSinkOptions,
+): void {
+  if (!opts.onRenderLoss) return
+  const seen = new Set<object>()
+  const visit = (value: unknown, inline: boolean): void => {
+    if (value === null || typeof value !== 'object' || seen.has(value)) return
+    seen.add(value)
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry, inline)
+      return
+    }
+    const node = value as { type?: unknown; attrs?: Attrs; pos?: Position }
+    const within = inline || (typeof node.type === 'string' && inlineTypes.has(node.type))
+    if (typeof node.type === 'string') {
+      for (const key of Object.keys(node.attrs?.keyValues ?? {})) {
+        if (!isRetiredSourceName(key)) continue
+        opts.onRenderLoss!({
+          code: 'carrier-attribute-dropped',
+          target: 'html',
+          nodeType: within ? 'inline' : 'block',
+          attribute: key,
+          message: `Dropped the authored attribute ${key}: the name is reserved and an importer would consume it`,
+          ...(node.pos ? { pos: node.pos } : {}),
+        })
+      }
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== 'attrs' && key !== 'pos') visit(child, within)
+    }
+  }
+  visit(tree, false)
 }
