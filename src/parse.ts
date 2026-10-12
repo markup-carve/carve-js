@@ -12438,6 +12438,12 @@ class ParseSession {
       // like. A below-column run then folded into a paragraph the deepest
       // structure did not hold (markup-carve/carve#2509, carve-js#2261).
       let descendantOpaque: DescendantOpaque | null = null
+      let closedDescendantFence = false
+      let descendantNoteBody = false
+      let descendantNoteParagraphBefore = false
+      let nestedNoteBodyColumn: number | undefined
+      let consumedNoteCloserBodyColumn: number | undefined
+      let consumedNoteParagraphBefore = false
       let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
       let firstBodyMarkerColumn: number | undefined = RE_DEFLIST_TERM.test(content) ? -1 : undefined
@@ -12532,6 +12538,11 @@ class ParseSession {
           // A closer stands at its fence's base or at its container's content
           // column (CARVE-P0-004), never past the base.
           if (column <= base && descendantOpaque.close.test(opener)) {
+            closedDescendantFence = descendantNoteBody
+            if (descendantNoteBody) {
+              consumedNoteCloserBodyColumn = contentCol + FOOTNOTE_BODY_COLUMN
+              consumedNoteParagraphBefore = descendantNoteParagraphBefore
+            }
             descendantOpaque = null
             return
           }
@@ -12585,6 +12596,9 @@ class ParseSession {
         // inline verbatim span inside that paragraph, which stays open - so a
         // below-column line still folds there and nothing ends.
         if (followsBlank || !lazyState.lazyFoldable || closerAhead) {
+          descendantNoteBody = lazyState.lazyFoldable && !followsBlank && nestedNoteBodyColumn !== undefined && sourceBase === nestedNoteBodyColumn &&
+            !lazyState.ownedAuthored && lazyState.ownedColumn > base
+          descendantNoteParagraphBefore = lazyState.lazyFoldable
           descendantOpaque = { close: fenceCloseRe(marker), base }
         }
       }
@@ -12703,6 +12717,13 @@ class ParseSession {
       const markerNoteItem = markerNoteBodyPending
       while (!lexer.eof()) {
         const l = lexer.peek()!
+        // Keep the observed note-body paragraph permission separate from an
+        // item tail after its CODE closer. The next body line consumes it.
+        if (consumedNoteCloserBodyColumn !== undefined) {
+          if (!isBlankLine(l) && indentColumns(l, consumedNoteCloserBodyColumn) >= consumedNoteCloserBodyColumn) lazyState.lazyFoldable = consumedNoteParagraphBefore
+          consumedNoteCloserBodyColumn = undefined
+        }
+        if (nestedNoteBodyColumn !== undefined && !isBlankLine(l) && indentColumns(l, nestedNoteBodyColumn) < nestedNoteBodyColumn) nestedNoteBodyColumn = undefined
         if (isBlankLine(l)) {
           pendingBlanks++
           pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -13009,7 +13030,11 @@ class ParseSession {
           const foldedDescription = nestedOwnerColumn < 0 && lazyState.quoteInner === null && lazyState.lazyFoldable &&
             !lazyState.absorbingFence && (lazyState.ownedColumn < 0 || lazyState.ownedAuthored) &&
             lazyState.inDefList === false && RE_DEFLIST_DEF.test(trackedContent)
-          trackItemLazyState(
+          // The note's CODE closer was consumed by its descendant frame.
+          // Reading it again would invent a paragraph in the item.
+          const skipConsumedCloser = closedDescendantFence
+          closedDescendantFence = false
+          if (!skipConsumedCloser) trackItemLazyState(
             trackedContent,
             lazyState,
             (marker, extraColumns = 0) => {
@@ -13067,6 +13092,9 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (markerNoteItem && lazyState.invisibleAtColumn && RE_FOOTNOTE_DEF.test(dedented.trimStart())) {
+            nestedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
+          }
           if (foldedDescription && lazyState.inDefList === 'description') {
             lazyState.inDefList = false
           }
