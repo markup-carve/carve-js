@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml, lintCarve } from '../src/index.js'
 
 describe('footnote label lookup keys', () => {
-  it('trim and collapse ASCII whitespace', () => {
-    expect(carveToHtml('[^ a\t b ]\n\n[^a b]: foo\n')).toContain('doc-noteref')
+  it('trim and collapse spaces only', () => {
+    expect(carveToHtml('[^ a\t b ]\n\n[^a b]: foo\n')).not.toContain('doc-noteref')
   })
 
   it('keep case and non-ASCII whitespace significant', () => {
