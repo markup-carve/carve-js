@@ -472,6 +472,15 @@ describe('contradictory carriers restore neither meaning (§13d)', () => {
     }
   })
 
+  it('tests the pair on presence, as the footnote pair does, not on whether the autolink could be rebuilt', () => {
+    // §13e exempts a VALUE outside its grammar. An autolink carrier has no
+    // value to validate, so one whose text is not its destination still
+    // contradicts the label beside it.
+    const html = '<p><a href="/u" data-carve-autolink data-carve-ref="r">t</a></p>'
+    expect(htmlToCarve(html).value).toBe('[t](/u)\n')
+    expect(dropped(html, 'safe')).toHaveLength(1)
+  })
+
   it('keeps each carrier working alone, and an invalid label contradicts nothing', () => {
     for (const mode of modes) {
       expect(htmlToCarve('<p><a href="https://e.com" data-carve-autolink>https://e.com</a></p>', { mode }).value).toBe('<https://e.com>\n')
