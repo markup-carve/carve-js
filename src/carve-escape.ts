@@ -358,52 +358,70 @@ export function escapePlainCarveInlineSyntax(
 }
 
 /**
+ * Escape plain text that surrounds opaque runs such as code spans and
+ * destinations, one paragraph at a time.
+ *
+ * A pair rule needs its opener and its closer in the same call. Escaping the
+ * text between opaque runs piece by piece hid one from the other, so a pair
+ * across a space or a code span stayed bare and rendered as markup. Each
+ * opaque character is swapped for a stand-in no rule matches, the paragraph
+ * is escaped whole, and the original characters are put back in order.
+ */
+export function escapePlainCarveInlineSyntaxAround(
+  source: string,
+  opaque: (offset: number) => boolean,
+  handled: HandledDelimiters = {},
+): string {
+  // Private-use characters are neither blank nor alphanumeric to any rule.
+  let code = 0xe000
+  while (source.includes(String.fromCharCode(code))) code++
+  const standIn = String.fromCharCode(code)
+  const hidden: string[] = []
+  let text = ''
+  for (let i = 0; i < source.length; i++) {
+    if (opaque(i)) {
+      hidden.push(source[i]!)
+      text += standIn
+    } else text += source[i]
+  }
+  // A pair never spans a blank line, so no rule may pair across one either.
+  const escaped = text.split(/(\n(?:[ \t]*\n)+)/)
+    .map((part, index) => index % 2 === 1 ? part : escapePlainCarveInlineSyntax(part, handled))
+    .join('')
+  if (hidden.length === 0) return escaped
+  let next = 0
+  return escaped.replaceAll(standIn, () => hidden[next++]!)
+}
+
+/**
  * Escape the opening brace of every braced pair that is not escaped already.
  *
- * Scans with an explicit offset instead of one sweeping replace, for two
- * reasons a plain replace gets wrong:
+ * A pair is `{X`, content that starts with a non-blank, and `X}` behind a
+ * non-blank, all on one line. Pairs nest and overlap, so every opener with a
+ * closer after it is escaped, not only the outermost.
  *
- *  - a nested `{^a{,b,}c^}` has its inner pair swallowed by the outer match, so
- *    resuming AFTER each match never reaches it, and the inner pair would then
- *    render as a subscript inside literal text. Resuming just inside the match
- *    does reach it.
- *  - whether a brace is escaped is a question about the PARITY of the backslash
- *    run before it, which a fixed-width lookbehind cannot ask.
+ * One backward pass keeps the last closer of each delimiter on the current
+ * line. Searching forward from each opener reread the line once per opener.
  *
- * The scan runs over the ORIGINAL line and collects offsets, which the one
- * forward pass at the end turns into escapes. Splicing each backslash in as it
- * was found made the pass quadratic, and the parity answers are the same either
- * way: an insertion only changes the character in front of the brace it
- * escapes, and the character after that brace is the pair's delimiter, so no
- * later match can start where an inserted backslash would be read.
- *
- * Terminates because the offset strictly increases on every iteration.
- *
- * @param delimiters A regex character class body.
+ * @param delimiters The delimiter characters, as a regex character class body.
  */
 function escapeBracedPairs(line: string, delimiters: string): string {
-  const pattern = new RegExp(`\\{([${delimiters}])(?!\\s)[^\\n]+?(?<!\\s)\\1\\}`, 'g')
+  if (!line.includes('}')) return line
+  const isDelimiter = new RegExp(`[${delimiters}]`)
+  const blank = (c: string | undefined): boolean => c === undefined || /\s/.test(c)
+  const closers = new Map<string, number>()
   const offsets: number[] = []
-  let offset = 0
-
-  while (offset < line.length) {
-    pattern.lastIndex = offset
-    const match = pattern.exec(line)
-    if (match === null) {
-      break
+  for (let i = line.length - 1; i >= 0; i--) {
+    const c = line[i]!
+    if (c === '\n') closers.clear()
+    else if (c === '}' && i >= 2 && isDelimiter.test(line[i - 1]!) && !blank(line[i - 2])) {
+      if (!closers.has(line[i - 1]!)) closers.set(line[i - 1]!, i - 1)
+    } else if (c === '{' && (closers.get(line[i + 1] ?? '') ?? -1) >= i + 3 && !blank(line[i + 2]) && !isEscapedAt(line, i)) {
+      offsets.push(i)
     }
-
-    const at = match.index
-    if (!isEscapedAt(line, at)) {
-      offsets.push(at)
-    }
-
-    // Resumed just past the brace rather than past the whole match, so a pair
-    // NESTED inside this one is the next thing considered.
-    offset = at + 1
   }
 
-  return insertEscapes(line, offsets)
+  return insertEscapes(line, offsets.reverse())
 }
 
 /** Find the first editorial opener whose non-overlapping closer is absent. */
