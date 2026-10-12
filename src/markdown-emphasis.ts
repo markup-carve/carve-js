@@ -144,6 +144,20 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       for (let i = run.start; i < run.end; i++) if (!claimed.has(i)) literalEscapes.add(i)
     }
   }
+  // Only a singleton can open bare Carve strike; index possible closers once.
+  const tildeEscapes = new Set<number>()
+  if (strikethrough) {
+    let closer = false
+    for (let i = source.length - 1; i >= 0; i--) {
+      const ch = source[i]!
+      if (ch === '\n') { closer = false; continue }
+      if (ch !== '~' || source[i - 1] === '\\') continue
+      const before = source[i - 1] ?? '', after = source[i + 1] ?? ''
+      if (!claimed.has(i) && before !== '~' && after !== '~' &&
+          !/[A-Za-z0-9_]/.test(before) && after !== '' && !whitespace(after) && closer) tildeEscapes.add(i)
+      if (before !== '' && !whitespace(before) && !/[A-Za-z0-9]/.test(after)) closer = true
+    }
+  }
   const bracketEnds = new Map<number, number>()
   const bracketStarts = new Map<number, number>()
   const brackets: number[] = []
@@ -156,14 +170,14 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       bracketStarts.set(i, start)
     }
   }
-  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; repeated: boolean; keep: boolean; peak: number }
+  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; literalTilde: boolean; repeated: boolean; keep: boolean; peak: number }
   const output: string[] = []
   const stack: Frame[] = []
   const active = new Map<string, number>()
   let flattened = false
   const hostPeaks = protectedDepths.get(protectedSpans)
   const protectedToken = /\x00P(\d+)\x00/y
-  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true, peak: 0 }
+  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0 }
   const record = (first: string, last: string): void => {
     if (frame.first === '') frame.first = first
     if (last !== '') frame.last = last
@@ -175,7 +189,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         frame.i = pair.close + pair.width
         stack.push(frame)
         frame = { i: pair.open + pair.width, end: pair.close, kind: pair.kind, pair, parent: frame.kind,
-          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true, peak: 0 }
+          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0 }
         frame.repeated = (active.get(pair.kind) ?? 0) > 0
         // `hostDepth` is the inline nesting this text already sits under - a
         // link label is converted on its own, so its own levels are not here.
@@ -194,7 +208,9 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
           ch === '[' && (bracketEnds.get(at) ?? -1) >= frame.end
           || ch === ']' && (bracketStarts.get(at) ?? at) < frame.pair.open
         )
-        const literal = literalEscapes.has(at) || crossesBracket ? `\\${ch}` : ch
+        if (ch === '~') frame.literalTilde = true
+        const literalTilde = tildeEscapes.has(at)
+        const literal = literalEscapes.has(at) || crossesBracket || literalTilde || ((active.get('~') ?? 0) > 0 && /[*_]/.test(ch) && !claimed.has(at)) ? `\\${ch}` : ch
         output.push(protectOutput !== undefined && /[*_~]/.test(ch) ? protectOutput(`\\${ch}`) : literal)
         record(ch, ch)
       }
@@ -207,9 +223,9 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     frame.keep &&= hostDepth + stack.length + frame.peak < MAX_NESTING_DEPTH
     if (frame.keep) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
-      const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => /[*_]/.test(source[i] ?? '') && !claimed.has(i))
+      const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => (/[*_]/.test(source[i] ?? '') || pair.kind === '~' && source[i] === '~') && !claimed.has(i))
       const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
-      const braced = protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const braced = (frame.kind === '~' && frame.literalTilde) || protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'
@@ -226,7 +242,9 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     } else flattened = true
     active.set(pair.kind, active.get(pair.kind)! - 1)
     const peak = frame.peak + (frame.keep ? 1 : 0)
+    const literalTilde = frame.literalTilde
     frame = stack.pop()!
+    frame.literalTilde ||= literalTilde
     frame.peak = Math.max(frame.peak, peak)
     frame.strong ||= strong
     frame.italic ||= italic

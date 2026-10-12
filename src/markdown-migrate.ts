@@ -2327,25 +2327,11 @@ function convertInline(
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
   if (!holdsFenceBody) line = escapeTypographicDashes(line)
 
-  // Whether a run at `offset` has an alphanumeric neighbor, so it opens or
-  // closes INTRAWORD. Carve's bare markers do not open there and its braced
-  // forms do, so that is the spelling Markdown's intraword emphasis takes
-  // (carve-js#2031). `*` can open intraword in Markdown and `_` cannot, which
-  // is why only the star passes below drop their boundary guard.
-  const intraword = (full: string, offset: number, length: number): boolean =>
-    /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
-  const wrap = (open: string, body: string, close: string, braced: boolean): string =>
-    braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
-
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
-  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans, false, false, 0, undefined, true)
-
-  // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
-  // strikethrough and the run lost a tilde as well.
-  line = line.replace(/~~([^~]+)~~/g, (match, body: string, at: number, full: string) =>
-    wrap('~', body, '~', intraword(full, at, match.length)))
+  line = line.replace(/\n([ \t]{4,}~{3,}[ \t]*)(?=\n|$)/g, (_match, run: string) => `\n${protect(run)}`)
+  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, undefined, true)
 
   // ==highlight== -> =highlight=. Carve highlight is a single `=`; a literal
   // `==x==` renders as plain text in Carve (corpus 74-two-char-delimiter-runs),
