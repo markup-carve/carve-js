@@ -16,18 +16,15 @@ describe('an imported slash pair that holds slashes stays literal', () => {
       expect(html(carve)).toBe(`<p>${source}</p>`)
     })
 
-    // The Djot importer escapes one text fragment at a time, so a pair that
-    // spans a space is out of its reach here.
-    if (name !== 'djot') {
-      it.each([
-        ['/a b/c d/', '\\/a b/c d/'],
-        ['/a /b/', '\\/a \\/b/'],
-        ['/aa //', '\\/aa //'],
-      ])(`${name} writes %j as %j`, (source, carve) => {
-        expect(convert(source + '\n')).toBe(carve + '\n')
-        expect(html(carve)).toBe(`<p>${source}</p>`)
-      })
-    }
+    it.each([
+      ['/a b/', '\\/a b/'],
+      ['/a b/c d/', '\\/a b/c d/'],
+      ['/a /b/', '\\/a \\/b/'],
+      ['/aa //', '\\/aa //'],
+    ])(`${name} writes %j as %j`, (source, carve) => {
+      expect(convert(source + '\n')).toBe(carve + '\n')
+      expect(html(carve)).toBe(`<p>${source}</p>`)
+    })
 
     it.each(['/usr/local/bin', 'a/b/c', 'x /a/b c', 'and/or'])(`${name} leaves %j bare`, (source) => {
       expect(convert(source + '\n')).toBe(source + '\n')
