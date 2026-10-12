@@ -183,6 +183,11 @@ function convertDjotBlockMarkers(source: string): string {
     while ((host = prefix.exec(view))) view = view.slice(host[0].length)
     view = view.replace(/^[ \t]+/, '')
     const containerOffset = lines[i]!.length - view.length
+    // Carve numbers a list from a bare period; Djot reads the same line as text.
+    if (/^\.(?=[ \t]|$|\{)/.test(view) && masked[i]![containerOffset] === '.') {
+      lines[i] = lines[i]!.slice(0, containerOffset) + '\\' + view
+      continue
+    }
     const container =
       view.startsWith(':::') && masked[i]!.slice(containerOffset).startsWith(':::')
         ? [view, lines[i]!.slice(0, containerOffset), view]
