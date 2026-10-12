@@ -2241,7 +2241,7 @@ function convertInline(
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
-  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
+  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans, false, false, 0, undefined, true)
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
   // strikethrough and the run lost a tilde as well.
