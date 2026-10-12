@@ -2508,12 +2508,16 @@ function attachBlockPos(
       node.pos.startColumn = (node.pos.startColumn ?? 1) + lead
     }
   }
-  if ((type === 'list' || type === 'list_item') && lexer.sublistsCarryAuthoredBase) {
+  if (type === 'list' || type === 'list_item') {
     const startLine = lexer.lineAt(startLineIndex) ?? ''
     const leadChars = leadingWhitespace(startLine)
-    if (leadChars > 0) {
+    const documentLine = leadChars > 0 ? (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1] : undefined
+    // A container's span may open in the line's indentation only where nothing
+    // but indentation precedes it; behind a quote marker it opens at the marker.
+    const behindMarkup = documentLine !== undefined && documentLine.endsWith(startLine) &&
+      /\S/.test(documentLine.slice(0, documentLine.length - startLine.length))
+    if (leadChars > 0 && (lexer.sublistsCarryAuthoredBase || behindMarkup)) {
       const markerLine = startLine.slice(leadChars)
-      const documentLine = (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1]
       // A tab straddling a container strip is represented by synthetic spaces
       // in the local line. When the remaining marker text is an exact suffix,
       // measure its column in the untouched document line so those spaces are
