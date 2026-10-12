@@ -5869,6 +5869,7 @@ function trackItemLazyState(
       { terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true },
       (width, extra = 0) => hasLiteralCommentCloser?.(width, run! + extra) ?? false,
     )
+    state.commentAtColumn = inner.commentAtColumn
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
     state.inDefList = false
@@ -12964,7 +12965,9 @@ class ParseSession {
             // there (corpus 197, 277-3, 358). The container ends at document
             // column 0, which is the line this test excludes and which is all
             // that separates 358 from 357-2.
-            (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
+            (lazyState.commentAtColumn &&
+              !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+              indentColumns(l, contentCol) > 0)) &&
             (!lazyContinuationEndsList(l, lexer) ||
               // A list marker indented past the base column but BELOW the content
               // column folds into what the item is still holding open, rather than
@@ -13006,6 +13009,8 @@ class ParseSession {
               indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart())))
         ) {
           bodyHasBelowColumnLine = true
+          const retainedCommentFrame = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
+            lazyState.opaque === null && lazyState.literalColon === undefined && indentColumns(l, contentCol) > 0
           let lazyLine = l
           if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
             lazyLine = l.replace(/^[ \t]+/, '')
@@ -13100,6 +13105,13 @@ class ParseSession {
           // behind it (corpus 183, 197, 358).
           trackItemLazyState(lazyLine, lazyState, () => true, false,
             lazyState.authoredColon ? (width) => commentBlockHasCloser(lexer, width) : undefined)
+          if (retainedCommentFrame) {
+            // A retained line below the column opens no claim for a flush-left follower.
+            lazyState.lazyFoldable = false
+            lazyState.commentAtColumn = true
+            lazyState.ownedColumn = -1
+            lazyState.deepest = null
+          }
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else if (
