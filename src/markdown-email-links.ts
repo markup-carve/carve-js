@@ -1,4 +1,5 @@
 import type { Document, InlineNode, Text } from './ast.js'
+import { renderInlinesInLinkContext } from './render-html.js'
 import { ownedChildFields } from './owned-child-fields.js'
 import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 
@@ -125,10 +126,13 @@ export function linkMarkdownEmailText(document: Document, boundaryKey?: string):
       for (let i = 0; i < nodes.length; i++) {
         const child = nodes[i]
         if (record(child) && ['emphasis', 'strong', 'strike', 'underline', 'highlight', 'superscript', 'subscript', 'insert', 'delete'].includes(String(child['type'])) && Array.isArray(child['children']) && child['children'].length === 0) {
-          const tags: Record<string, string> = { emphasis: 'em', strong: 'strong', strike: 'del', underline: 'u', highlight: 'mark', superscript: 'sup', subscript: 'sub', insert: 'ins', delete: 'del' }
-          const tag = tags[String(child['type'])]!
-          const attributes = child['type'] === 'delete' ? ' class="critic-delete"' : ''
-          nodes[i] = { type: 'raw_inline', format: 'html', content: `<${tag}${attributes}></${tag}>` }
+          const node = child as unknown as InlineNode
+          const marked = node.type === 'delete'
+            ? { ...node, attrs: { ...node.attrs, classes: ['critic-delete', ...(node.attrs?.classes ?? [])] } }
+            : node
+          const html = renderInlinesInLinkContext([marked], {})
+          const content = node.type === 'strike' ? html.replace(/^<s(?=[ >])/, '<del').replace(/<\/s>$/, '</del>') : html
+          nodes[i] = { type: 'raw_inline', format: 'html', content }
           changed = true
         }
       }

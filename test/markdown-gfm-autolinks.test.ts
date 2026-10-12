@@ -326,3 +326,18 @@ it.each([
     expect(html).toContain('role="doc-noteref"')
   }
 })
+
+
+it.each(['~~[]()~~', '**[]()**', '*[]()*', '__[]()__', '_[]()_', '<del class="critic-delete">[]()</del>'])(
+  'preserves authored attributes on an empty mark fallback: %s', mark => {
+    const result = migrateMarkdown(`${mark}{.x #kept title="t"} a@b.test`, { dialect: { attributes: true } })
+    for (const value of [result.value, carveToCarve(result.value)]) {
+      const html = carveToHtml(value)
+      expect(html).toMatch(/class="[^"]*\bx\b[^"]*"/)
+      expect(html).toContain('id="kept"')
+      expect(html).toContain('title="t"')
+      expect(html).toContain('href="mailto:a@b.test"')
+      expect(value).not.toContain('carve-md-empty-')
+    }
+  },
+)
