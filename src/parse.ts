@@ -3547,6 +3547,7 @@ interface QuoteFenceHosts {
    */
   fence: { marker: string; column: number; floor: number } | null
   commentBoundary?: boolean
+  commentBoundaryBelow?: boolean
 }
 
 function trackQuoteHostFence(
@@ -3558,7 +3559,9 @@ function trackQuoteHostFence(
 ): boolean {
   const host = state.hosts ??= { columns: [0], markers: [], kinds: [], terms: [], fence: null }
   const afterComment = host.commentBoundary === true
+  const afterCommentBelow = host.commentBoundaryBelow === true
   delete host.commentBoundary
+  delete host.commentBoundaryBelow
   const column = indentColumns(content)
   const text = content.replace(/^[ \t]*/, '')
   if (host.fence) {
@@ -3631,8 +3634,10 @@ function trackQuoteHostFence(
       else high = middle
     }
     const open = colons[low - 1]
-    if (!(host.kinds[level - 1] === 'item' && open && floor === open.floor && column > open.column)) {
+    if ((commentFenceRun(text) !== undefined && column < host.columns.at(-1)!) ||
+        !(host.kinds[level - 1] === 'item' && open && floor === open.floor && column > open.column)) {
       host.commentBoundary = true
+      host.commentBoundaryBelow = commentFenceRun(text) !== undefined && column < host.columns.at(-1)!
     }
     return false
   }
@@ -3646,6 +3651,7 @@ function trackQuoteHostFence(
   const paragraph = blockQuoteParagraphOpen(state)
   if (afterComment && host.kinds.at(-1) === 'item' && column > 0 &&
       column < host.columns.at(-1)! &&
+      !(!afterCommentBelow && opensCodeFence(text) && host.colons?.some(open => open.floor <= column && open.column < column)) &&
       (!lineOpensBlock(text) || isListMarkerLine(text) || column < host.columns[1]! ||
         ((host.colons?.length ?? 0) > 0 && (RE_FENCE.test(text) || RE_RAW_FENCE.test(text))))) {
     state.mode = { kind: 'paragraph', absorbingFence: false }
@@ -3759,8 +3765,6 @@ function trackQuoteHostFence(
   const marker = code?.[2] ?? raw?.[1] ?? null
   if (marker && floor > 0) {
     const colon = colons.at(-1)
-    if (insideItem && colon && floor === colon.floor && at > colon.column && !afterComment &&
-        !hasCloser(marker, floor) && !hasCloser(marker, at)) return false
     // AN OVER-INDENTED OPENER IS STILL THE HOST'S FENCE. §24 C3 asks a processor
     // to NAME a block opener past the item's canonical content column, not to
     // refuse it, so the host holds its payload exactly as it holds a canonical
@@ -7353,16 +7357,22 @@ function rebasedColonGroupEnd(
   let authoredCodeAdjustment = 0
   let authoredChildColumn = -1
   let authoredChildBlank = false
+  let authoredChildBlockBoundary = false
   for (let j = start + 1; j < lines.length; j++) {
     let candidate = lines[j]!
     let authoredColumn: number | undefined
     const insideAuthoredCode = authoredCodeClose !== undefined
     if (nestedBodyLines && authoredChildColumn >= 0) {
+      if (opaque === null && RE_COMMENT_LINE.test(candidate.trimStart()) &&
+          (commentFenceRun(candidate.trimStart()) === undefined ||
+            indentColumns(candidate, authoredChildColumn) >= authoredChildColumn)) authoredChildBlockBoundary = true
       if (isBlankLine(candidate)) authoredChildBlank = true
       else if (opaque === null && (authoredChildBlank || hostedAuthoredBlockOpener(candidate.trimStart()) || RE_ADMONITION_CLOSE.test(candidate.trimStart()))) {
         const column = authoredColumn = indentColumns(candidate, authoredChildColumn)
         if (column < authoredChildColumn && (authoredChildBlank ||
-            (column === authored.at(-1)!.column && lineOpensItemBlock(candidate.trimStart())))) authoredChildColumn = -1
+            ((column === authored.at(-1)!.column && lineOpensItemBlock(candidate.trimStart())) ||
+              (column > authored.at(-1)!.column && (colonFenceOpenerLen(candidate.trimStart()) !== null ||
+                (authoredChildBlockBoundary && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
       }
     }
     if (authoredCodeClose) {
@@ -7382,6 +7392,7 @@ function rebasedColonGroupEnd(
       if (childColumn >= 0) {
         authoredChildColumn = childColumn
         authoredChildBlank = false
+        authoredChildBlockBoundary = false
       }
       const code = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
       if (code && column === owner.column && owner.paragraph &&

@@ -7,12 +7,12 @@ describe('a line retained after a comment opens the deepest paragraph', () => {
     expect(carveToHtml(source)).toBe("<ul>\n  <li>a\n    <ul>\n      <li>inner</li>\n    </ul>\n    code\ntail\n  </li>\n</ul>")
   })
 
-  it.each(['inner', '::: inner'])('folds a lazy marker into quoted %s text after a comment span', (inner) => {
+  it.each(['inner', '::: inner'])('releases a marker after a code block following quoted %s and a comment span', (inner) => {
     const source = ['> - ::: box', `>   - ${inner}`, '>     %%%', '>     hidden', '>     %%%', '>    ```', '>    code', '- tail'].join('\n')
     const html = carveToHtml(source)
-    expect(html).toContain('<code>\ncode\n- tail</code>')
+    expect(html).toContain('<pre><code>code\n</code></pre>')
     expect(html.match(/<blockquote>/g)).toHaveLength(1)
-    expect(html.endsWith('</blockquote>')).toBe(true)
+    expect(html).toContain('</blockquote>\n<ul>\n  <li>tail</li>\n</ul>')
   })
 })
 
