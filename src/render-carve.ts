@@ -1884,11 +1884,13 @@ function escapePlainLine(text: string): string {
 /**
  * An image's ALT TEXT, written between `![` and `]`.
  */
-function escapeImageAlt(text: string, inTable = false): string {
-  if (rawImageBracketRunCloses(text) && !/\\[!-/:-@\[-`{-~]/.test(text)) {
-    return inTable ? text.replaceAll('|', '\\|') : text
-  }
-  return escapeUnclosedImageEditorialOpeners(text.replace(inTable ? /[\\[\]`|]/g : /[\\[\]`]/g, '\\$&'))
+export function escapeImageAlt(text: string, inTable = false): string {
+  const escaped = rawImageBracketRunCloses(text) && !/\\[!-/:-@\[-`{-~]/.test(text) && !/\n[ \t]*(?:\[[^\]\n]+\]:|`{3,})/.test(text)
+    ? inTable ? text.replaceAll('|', '\\|') : text
+    : escapeUnclosedImageEditorialOpeners(text.replace(inTable ? /[\\[\]`|]/g : /[\\[\]`]/g, '\\$&'))
+  return escaped
+    .replace(/(\n[ \t]*)(?=#{1,6}(?:[ \t]|$)|>(?:[ \t]|$)|[-*](?:[ \t]|[-*]{2})|:{1,3}(?:[ \t]|:|$)|`{3,}|~{3,}|\||\^(?:[ \t]|$)|\{|%%|\[[^\]\n]+\]:)/gm, '$1\\')
+    .replace(/(\n[ \t]*(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.)))([.)])(?=[ \t])/g, '$1\\$2')
 }
 
 /**

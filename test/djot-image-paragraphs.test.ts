@@ -25,3 +25,23 @@ it('keeps tight image lists tight', () => {
 it('preserves the space between adjacent images', () => {
   expect(carveToHtml(djotToCarve('![x](/u) ![y](/v)'))).toBe('<p><img src="/u" alt="x"> <img src="/v" alt="y"></p>')
 })
+
+it('preserves code following a multiline image inside a list quote', () => {
+  const html = carveToHtml(djotToCarve('- > ![*a*\n  > b](x) `c\n  > d`'))
+  expect(html).toContain('<img src="x" alt="a\nb"> <code>c\nd</code>')
+})
+
+it.each([
+  '{%%}![a\n\\# b](u)',
+  '{%%}![a\n\\::: b](u)',
+  '{%%}![a\n\\> b](u)',
+  '{%%}![a\n\\- b](u)',
+  '{%%}![a\n1\\. b](u)',
+  '{%%}![a\n\\%% b](u)',
+  '{%%}![a\n\\[r\\]: b](u)',
+])('preserves literal block markers in image alt text on export: %s', source => {
+  const tree = parse(source)
+  const result = renderCarveWithConversionReport(tree)
+  expect(carveToHtml(result.value ?? '')).toBe(carveToHtml(source))
+  expect(result.report.diagnostics).toEqual([])
+})

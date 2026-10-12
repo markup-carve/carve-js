@@ -6,6 +6,9 @@ import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { trimEndMatchingEdges, trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderPlainText } from './render-plain.js'
+import { escapeImageAlt } from './render-carve.js'
+import { visitInlineChildren } from './inline-children.js'
+import { forEachChildBlockList } from './block-children.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords } from './djot-word-attributes.js'
 import { readAttributes, rejectedCommentStartsBlock } from './djot-attributes.js'
@@ -41,6 +44,92 @@ const quoted = (line: string): [number, string] => {
     if (!prefix) return [depth, content]
     depth++
     content = content.slice(prefix[0].length)
+  }
+}
+
+function djotImageAltLayout(label: string, quotes: number, itemColumn = 0, itemQuote = 0, div?: { width: number; depth: number; column: number }): { normalized: string; continuations: string[]; valid: boolean } {
+  const continuations: string[] = []
+  let valid = true
+  const normalized = label.split('\n').map((line, index) => {
+      if (index === 0) return line
+      const [depth, body] = quoted(line)
+      let ownerBody = line
+      for (let quote = 0; quote < itemQuote; quote++) {
+        const prefix = /^[ \t]*>(?:[ \t]|$)/.exec(ownerBody)
+        if (!prefix) break
+        ownerBody = ownerBody.slice(prefix[0].length)
+      }
+      const ownerIndent = /^[ \t]*/.exec(ownerBody)![0].length
+      const text = body.replace(/^[ \t]*/, '')
+      const attributes = text.startsWith('{') ? readAttributes(text, 0) : undefined
+      const ownerQuote = /^[ \t]*>(?:[ \t]|$)/.test(ownerBody)
+      const extraBlock = /^(?:[-*][ \t]*){3,}$/.test(text.replace(/[ \t]*$/, '')) || attributes !== undefined && /^[ \t]*$/.test(text.slice(attributes.end))
+      if ((extraBlock || ownerQuote) && (depth < quotes || itemColumn > 0 && ownerIndent < itemColumn)) valid = false
+      if (div && depth === div.depth && /^[ \t]*:{3,}[ \t]*$/.test(body) && body.trim().length >= div.width && /^[ \t]*/.exec(body)![0].length <= div.column + 3) valid = false
+      if ((depth < quotes || itemColumn > 0 && ownerIndent < itemColumn) && /^(?:[-*+](?:[ \t]|$)|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|\||\^ |\[[^\]]+\]:)/.test(body.replace(/^[ \t]*/, ''))) valid = false
+      let start = 0
+      for (let quote = 0; quote < quotes; quote++) {
+        while (line[start] === ' ' || line[start] === '\t') start++
+        if (line[start] !== '>' || start + 1 < line.length && line[start + 1] !== ' ' && line[start + 1] !== '\t') break
+        start++
+      }
+      while (line[start] === ' ' || line[start] === '\t') start++
+      continuations.push(line.slice(0, start))
+      return line.slice(start)
+    }).join('\n')
+  return { normalized, continuations, valid: valid && !/\n[ \t]*\n/.test(normalized) }
+}
+
+function djotImageBoundaryIndex(source: string, mask: string): (start: number, end: number, depth: number, itemColumn: number, itemQuote: number, divAt?: number) => boolean {
+  const offsets: number[] = [], thresholds: number[] = [], itemThresholds: number[] = []
+  const stride = source.length + 1
+  const divClosers = new Map<number, number>()
+  const divs: Array<{ width: number; depth: number; at: number }> = []
+  let offset = 0
+  const block = /^(?:[-*+](?:[ \t]|$)|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|\||\^ |\[[^\]]+\]:)/
+  for (const line of source.split('\n')) {
+    const [depth, body] = quoted(line)
+    const blank = /^[ \t]*$/.test(body)
+    const text = body.replace(/^[ \t]*/, ''), indent = body.length - text.length
+    const attrs = text.startsWith('{') ? readAttributes(text, 0) : undefined
+    const extraBlock = /^(?:[-*][ \t]*){3,}$/.test(text) || attrs !== undefined && /^[ \t]*$/.test(text.slice(attrs.end))
+    if (blank || block.test(text) || extraBlock) {
+      offsets.push(offset)
+      thresholds.push(depth + (blank ? 0 : 1))
+      itemThresholds.push(depth * stride + (blank ? -1 : indent))
+    }
+    const contentAt = djotContentStart(line), delimiter = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(contentAt))
+    if (delimiter && mask[offset + contentAt] !== ' ') {
+      const owner = divs.at(-1)
+      if (owner && depth === owner.depth && /^:{3,}[ \t]*$/.test(line.slice(contentAt)) && delimiter[1]!.length >= owner.width) { divClosers.set(owner.at, offset); divs.pop() }
+      else divs.push({ width: delimiter[1]!.length, depth, at: offset })
+    }
+    offset += line.length + 1
+  }
+  let size = 1
+  while (size < offsets.length) size *= 2
+  const tree = Array<number>(size * 2).fill(Infinity), itemTree = Array<number>(size * 2).fill(Infinity)
+  for (let at = 0; at < thresholds.length; at++) { tree[size + at] = thresholds[at]!; itemTree[size + at] = itemThresholds[at]! }
+  for (let at = size - 1; at > 0; at--) { tree[at] = Math.min(tree[at * 2]!, tree[at * 2 + 1]!); itemTree[at] = Math.min(itemTree[at * 2]!, itemTree[at * 2 + 1]!) }
+  const after = (offset: number): number => {
+    let low = 0, high = offsets.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (offsets[middle]! <= offset) low = middle + 1
+      else high = middle
+    }
+    return low
+  }
+  return (start, end, depth, itemColumn, itemQuote, divAt) => {
+    if (divAt !== undefined && (divClosers.get(divAt) ?? Infinity) <= end) return false
+    const boundary = itemQuote * stride + itemColumn
+    let left = after(start) + size, right = after(end) + size
+    while (left < right) {
+      if (left % 2) { if (tree[left]! <= depth || itemColumn > 0 && itemTree[left]! < boundary) return false; left++ }
+      if (right % 2) { right--; if (tree[right]! <= depth || itemColumn > 0 && itemTree[right]! < boundary) return false }
+      left = Math.floor(left / 2); right = Math.floor(right / 2)
+    }
+    return true
   }
 }
 
@@ -760,26 +849,75 @@ function convertDjotDocument(djot: string): string {
   const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!))
   const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && !(key.startsWith('^') && key.length > 1) && definitions.has(key) ? `${label}[${key}]` : value)
   const imageParagraph = djotPlaceholderPrefix(body, '\x00DJOTIMAGEPARAGRAPH\x00')
+  const imageMask = maskDjotCodeAndDestinations(rawFolded)
   const imageStarts = new Set<number>()
-  let imageOffset = 0
+  const imageLines: Array<{ end: number; quotes: number; itemColumn: number; itemQuote: number; table: boolean; div: { width: number; depth: number; column: number } | undefined }> = []
+  let imageLine = 0
+  let imageOffset = 0, imageItemColumn = 0, imageItemQuote = 0
+  const imageDivs: Array<{ width: number; depth: number; column: number }> = []
+  const imageOwnerMarker = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/
   for (const line of rawFolded.split('\n')) {
-    imageStarts.add(imageOffset + djotContentStart(line))
+    const contentStart = djotContentStart(line)
+    imageStarts.add(imageOffset + contentStart)
+    const [depth, body] = quoted(line), text = body.replace(/^[ \t]*/, ''), indent = body.length - text.length
+    if (imageOwnerMarker.test(text)) { imageItemColumn = indent + 1; imageItemQuote = depth }
+    else if (text && (depth < imageItemQuote || depth === imageItemQuote && indent < imageItemColumn && /^(?:#{1,6} |:{3,}|[-*+] |\{|\|)/.test(text))) imageItemColumn = 0
+    const delimiter = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(contentStart))
+    if (delimiter && imageMask[imageOffset + contentStart] !== ' ') {
+      const owner = imageDivs.at(-1)
+      if (owner && (line.slice(0, contentStart).match(/>/g) ?? []).length === owner.depth && /^:{3,}[ \t]*$/.test(line.slice(contentStart)) && delimiter[1]!.length >= owner.width) imageDivs.pop()
+      else imageDivs.push({ width: delimiter[1]!.length, depth: (line.slice(0, contentStart).match(/>/g) ?? []).length, column: contentStart })
+    }
+    imageLines.push({ end: imageOffset + line.length + 1, quotes: (line.slice(0, contentStart).match(/>/g) ?? []).length, itemColumn: imageItemColumn, itemQuote: imageItemQuote, table: line[contentStart] === '|', div: imageDivs.at(-1) })
     imageOffset += line.length + 1
   }
-  const imageMask = maskDjotCodeAndDestinations(rawFolded)
   const folded = rawFolded.replace(/!\[([^\[\]]*)\](?=[([])/g, (image: string, label: string, at: number) => {
     if (imageMask[at] !== '!' || imageMask[at + image.length - 1] !== ']' || /\n[ \t]*\n/.test(label) || isDjotEscaped(rawFolded, at)) return image
     const paragraph = imageStarts.has(at) ? imageParagraph : ''
+    if (isDjotEscaped(rawFolded, at + image.length - 1)) return paragraph + image
     if (label.startsWith('^')) return image
-    if (label.includes('\\') || label.includes('\n')) return paragraph + image
-    if (!/[_*`{^~]/.test(label)) {
+    if (!label.includes('\n') && !/[_*`{^~]/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
       spans.push(label)
       return `${paragraph}![${prefix}${spans.length - 1}\x00]`
     }
+    while (imageLines[imageLine]!.end <= at) imageLine++
+    const altLayout = djotImageAltLayout(label, imageLines[imageLine]!.quotes, imageLines[imageLine]!.itemColumn, imageLines[imageLine]!.itemQuote, imageLines[imageLine]!.div)
+    if (!altLayout.valid) return image
+    const { normalized: normalizedLabel, continuations } = altLayout
+    let continuation = 0
+    const whitespace: string[] = [], reserved = new Set<string>()
+    for (const match of normalizedLabel.matchAll(/DJOTALTSCALAR([0-9]+)Z/g)) reserved.add(match[1]!)
+    let serial = 0
+    while (reserved.has(String(serial))) serial++
+    const whitespacePrefix = `DJOTALTSCALAR${serial}Z`
+    const scalar = (value: string): string => { whitespace.push(value); return `${whitespacePrefix}${whitespace.length - 1}Z` }
+    const altMask = maskDjotCodeAndDestinations(normalizedLabel)
+    const blockProtected = normalizedLabel.replace(/(\n[ \t]*)(#{1,6}(?=[ \t]|$)|>(?=[ \t]|$)|(?:[-*][ \t]*){3,}(?=\n|$)|[-*+](?=[ \t]|$)|:{1,}(?=[ \t]|$)|\||\^(?=[ \t]|$)|%%|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)](?=[ \t]|$))/gm, (all, prefix: string, marker: string, at: number) => altMask[at + prefix.length] === marker[0] ? prefix + scalar(marker) : all)
+    const protectedLabel = blockProtected.replace(/^[ \t\u000b\u000c\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gm, value => /^[ \t]*$/.test(value) ? value : scalar(value))
+    const altDocument = parse(convert(`DJOTALT ${protectedLabel} DJOTEND`).replaceAll('\0U\0', '\0'))
+    if (label.includes('\n')) {
+      const blocks = [...altDocument.children]
+      while (blocks.length) {
+        const block = blocks.pop()!
+        forEachChildBlockList(block, children => { blocks.push(...children) })
+        if (block.type !== 'paragraph') continue
+        const inlineLists = [block.children]
+        while (inlineLists.length) {
+          const children = inlineLists.pop()!
+          for (let index = 0; index < children.length; index++) {
+            const child = children[index]!
+            if (child.type === 'soft_break') children[index] = { type: 'hard_break' }
+            else visitInlineChildren(child, nested => { inlineLists.push(nested) }, undefined)
+          }
+        }
+      }
+    }
     spans.push(
-      renderPlainText(parse(convert(`DJOTALT ${label} DJOTEND`).replaceAll('\0U\0', '\0')), { smartTypography: false })
-        .replace(/ DJOTEND\n?$/, '')
-        .slice(8),
+      escapeImageAlt(renderPlainText(altDocument, { smartTypography: false })
+        .replace(/ ?DJOTEND\n?$/, '')
+        .replace(/^DJOTALT ?/, '')
+        .replace(new RegExp(`${whitespacePrefix}(\\d+)Z`, 'g'), (all, index: string) => whitespace[Number(index)] ?? all), imageLines[imageLine]!.table)
+        .replace(/\n/g, () => `\n${continuations[continuation++] ?? ''}`),
     )
     return `${paragraph}![${prefix}${spans.length - 1}\x00]`
   })
@@ -1996,6 +2134,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
     else if (source[at] === '[') bracketStack.push(at)
     else if (source[at] === ']' && bracketStack.length) labels.set(bracketStack.pop()!, at)
   }
+  const imageParagraphValid = source.includes('![') ? djotImageBoundaryIndex(source, mask) : undefined
   const block =
     /^(?:[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|>(?:[ \t]|$)|\||\^ |\[[^\]]+\]:)/
   const marker =
@@ -2011,7 +2150,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
   let itemKind = '',
     previousBlock = true
   let fenced: { width: number; ch: string; depth: number; column: number; item: number } | undefined
-  const divs: { width: number; depth: number; column: number }[] = []
+  const divs: { width: number; depth: number; column: number; at: number }[] = []
   const output: string[] = []
   for (const line of source.split('\n')) {
     const at = djotContentStart(line),
@@ -2103,7 +2242,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
         const owner = divs.at(-1)
         if (owner && depth === owner.depth && /^:{3,}[ \t]*$/.test(line.slice(at)) && div[1]!.length >= owner.width)
           divs.pop()
-        else if (mask[offset + at] !== ' ') divs.push({ width: div[1]!.length, depth, column: at })
+        else if (mask[offset + at] !== ' ') divs.push({ width: div[1]!.length, depth, column: at, at: offset })
       }
       if (line[at] === '|' && ((oldColumn > 0 && depth <= oldQuote && indent < oldColumn) || depth < previousQuote)) {
         output.push(source.slice(cursor, offset), /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0].trimEnd(), '\n')
@@ -2141,6 +2280,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       if (source.startsWith('![', i)) {
         const end = labels.get(i + 1)
         if (end !== undefined && balancedTicks(i + 2, end)) {
+          if (end >= lineEnd && /[([]/.test(source[end + 1] ?? '') && imageParagraphValid?.(i, end, codeDepth, itemColumn, itemQuote, divs.at(-1)?.at)) { consumed = end + 1; codeHostDepth = codeDepth }
           i = end + 1
           continue
         }
