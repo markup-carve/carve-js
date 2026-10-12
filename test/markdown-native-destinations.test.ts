@@ -7,7 +7,7 @@ type HtmlNode = DefaultTreeAdapterMap['node']
 const shape = (node: HtmlNode): unknown => {
   if ('value' in node) return node.value.replace(/[\t\n\r\f ]+/g, ' ')
   const children = 'childNodes' in node ? node.childNodes
-    .filter(child => !(node.nodeName === '#document-fragment' && 'value' in child && /^[\t\n\r\f ]*$/.test(child.value)))
+    .filter(child => !(['#document-fragment', 'blockquote', 'ul', 'ol'].includes(node.nodeName) && 'value' in child && /^[\t\n\r\f ]*$/.test(child.value)))
     .map(shape) : []
   const attrs = 'attrs' in node ? node.attrs.map(attr => {
     // Carve keeps brackets in URL paths; cmark percent-encodes those bytes.

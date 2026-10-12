@@ -1,3 +1,4 @@
+import { protectNativeMarkdownDestinationGlyphs } from './markdown-native-destination-glyphs.js'
 import type { BlockNode, Document, InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
@@ -1322,6 +1323,23 @@ function convertInline(
     }
     rawLine = captured + input.slice(cursor)
   }
+  if (rawLine.includes('](') && (rawLine.includes('`') || rawLine.includes('<') || dialect.math && rawLine.includes('$'))) {
+    const rawSubject = rawLine
+    const rawOpaque = opaqueHtmlScanner(rawSubject)
+    const rawAngle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
+    rawLine = protectNativeMarkdownDestinationGlyphs(rawSubject, value => protect(value, value),
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+        || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+      offset => {
+        if (dialect.math && rawSubject[offset] === '$') {
+          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(rawSubject.slice(offset))
+          if (math) return offset + math[0].length
+        }
+        rawAngle.lastIndex = offset
+        const angle = rawAngle.exec(rawSubject)
+        return angle ? offset + angle[0].length : rawOpaque(offset) ?? scanHtmlTag(rawSubject, offset)?.end
+      })
+  }
   let line = protectCodeSpans(rawLine, writeCodeSpan)
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
   // Keep empty and multiline values in HTML where a source slot may fold them.
@@ -1521,6 +1539,12 @@ function convertInline(
     const match = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(subject.slice(offset))
     return match ? offset + match[0].length : undefined
   }
+  const validDestinationSource = (subject: string, open: number, end: number): boolean => {
+    const destination = subject.slice(open, end + 1)
+    if (!destination.includes('\x00')) return true
+    const original = referenceSourceText(destination, protectedSources)
+    return markdownInlineDestinationEnd(original, 0) === original.length - 1
+  }
   const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
   if (line.includes('[') && line.includes(']')) {
     const subject = line
@@ -1535,7 +1559,7 @@ function convertInline(
         auto.lastIndex = offset
         const link = auto.exec(subject)
         return link ? offset + link[0].length : opaque(offset) ?? scanHtmlTag(subject, offset)?.end
-      })
+      }, undefined, (open, end) => validDestinationSource(subject, open, end))
   }
   let opaqueSubject: string | undefined
   let opaqueRanges: Array<[number, number]> = []
@@ -1602,7 +1626,7 @@ function convertInline(
           if (image) activeImageLabelRanges.push([open, close])
           const end = markdownInlineDestinationEnd(subject, close + 1)
           if (end !== undefined) opaqueRanges.push([close + 1, end + 1])
-        })
+        }, (open, end) => validDestinationSource(subject, open, end))
       const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
       for (let cursor = 0; cursor < subject.length; cursor++) {
         if (subject[cursor] !== '<') continue
@@ -1723,7 +1747,8 @@ function convertInline(
       activationAutolink.lastIndex = offset
       const autolink = activationAutolink.exec(activationSource)
       return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
-    }, (opener, closer) => { activeLinkBoundaries.add(opener); activeLinkBoundaries.add(closer) })
+    }, (opener, closer) => { activeLinkBoundaries.add(opener); activeLinkBoundaries.add(closer) },
+    (open, end) => validDestinationSource(activationSource, open, end))
   if (activeLinkBoundaries.size > 0) {
     activationOriginalSource = referenceSourceText(activationSource, protectedSources)
     let activationSourceOffset = 0
@@ -1786,7 +1811,8 @@ function convertInline(
       const image = label.startsWith('!')
       const written = protectDestination(image ? imageLabel(label) : '', dest, image ? label + dest : dest)
       if (written.startsWith('\x00P')) cursor = offset + match.length
-      if (joinedLines && written.startsWith('\x00P')) {
+      const destinationToken = /^\x00P(\d+)\x00$/.exec(written)
+      if (joinedLines && destinationToken) {
         while (lineCursor < offset) {
           if (subject[lineCursor] === '\x00') {
             const token = /^\x00P(\d+)\x00/.exec(subject.slice(lineCursor))
@@ -1798,8 +1824,7 @@ function convertInline(
           }
           if (subject[lineCursor++] === '\n') lineNumber++
         }
-        const token = /^\x00P(\d+)\x00$/.exec(written)!
-        const result = (image ? '' : label) + protectedSpans[Number(token[1])]!
+        const result = (image ? '' : label) + protectedSpans[Number(destinationToken[1])]!
         const removed = (match.match(/\n/g) ?? []).length - (result.match(/\n/g) ?? []).length
         for (let n = 1; n <= removed; n++) {
           const origin = origins[lineNumber + n]
@@ -1854,7 +1879,7 @@ function convertInline(
       if (subject[at] !== ']' || opens.length === 0) continue
       const opener = opens.pop()!
       const through = markdownInlineDestinationEnd(subject, at + 1)
-      if (through === undefined) continue
+      if (through === undefined || !validDestinationSource(subject, at + 1, through)) continue
       const offset = opener.image ? opener.at - 1 : at + 1
       if (opener.image) {
         while (destinations.length && destinations.at(-1)!.offset >= offset) destinations.pop()

@@ -282,5 +282,101 @@
   {
     "source": "[a](/x)[b](/y)",
     "html": "<p><a href=\"/x\">a</a><a href=\"/y\">b</a></p>\n"
+  },
+  {
+    "source": "> [a](/x`c d`( \"t\")",
+    "html": "<blockquote>\n<p>[a](/x<code>c d</code>( &quot;t&quot;)</p>\n</blockquote>\n"
+  },
+  {
+    "source": "> [a](/x`c d`)",
+    "html": "<blockquote>\n<p>[a](/x<code>c d</code>)</p>\n</blockquote>\n"
+  },
+  {
+    "source": "- [a](/x`c d`( \"t\")",
+    "html": "<ul>\n<li>[a](/x<code>c d</code>( &quot;t&quot;)</li>\n</ul>\n"
+  },
+  {
+    "source": "- [a](/x`c d`)",
+    "html": "<ul>\n<li>[a](/x<code>c d</code>)</li>\n</ul>\n"
+  },
+  {
+    "source": "> [a](/x`c\n> d`( \"t\")",
+    "html": "<blockquote>\n<p>[a](/x<code>c d</code>( &quot;t&quot;)</p>\n</blockquote>\n"
+  },
+  {
+    "source": "- [a](/x`c\n  d`( \"t\")",
+    "html": "<ul>\n<li>[a](/x<code>c d</code>( &quot;t&quot;)</li>\n</ul>\n"
+  },
+  {
+    "source": "[o [a](/x`c d`( \"t\") p](/u)",
+    "html": "<p><a href=\"/u\">o [a](/x<code>c d</code>( &quot;t&quot;) p</a></p>\n"
+  },
+  {
+    "source": "[o [a](/x`c d`) p](/u)",
+    "html": "<p><a href=\"/u\">o [a](/x<code>c d</code>) p</a></p>\n"
+  },
+  {
+    "source": "![a](/x`c d`( \"t\")",
+    "html": "<p>![a](/x<code>c d</code>( &quot;t&quot;)</p>\n"
+  },
+  {
+    "source": "> ![a](/x`c d`( \"t\")",
+    "html": "<blockquote>\n<p>![a](/x<code>c d</code>( &quot;t&quot;)</p>\n</blockquote>\n"
+  },
+  {
+    "source": "[o ![a](/x`c d`( \"t\") p](/u)",
+    "html": "<p><a href=\"/u\">o ![a](/x<code>c d</code>( &quot;t&quot;) p</a></p>\n"
+  },
+  {
+    "source": "> [o [a](/x`c d`( \"t\") p](/u)",
+    "html": "<blockquote>\n<p><a href=\"/u\">o [a](/x<code>c d</code>( &quot;t&quot;) p</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "[o [a](/x`)`) p](/u)",
+    "html": "<p>[o <a href=\"/x%60\">a</a>`) p](/u)</p>\n"
+  },
+  {
+    "source": "[o [a](/x \"t`\")`\") p](/u)",
+    "html": "<p>[o <a href=\"/x\" title=\"t`\">a</a>`&quot;) p](/u)</p>\n"
+  },
+  {
+    "source": "[o [a](/x<!--)-->) p](/u)",
+    "html": "<p>[o <a href=\"/x%3C!--\">a</a>--&gt;) p](/u)</p>\n"
+  },
+  {
+    "source": "[a](/x`c\\ d`( \"t\")",
+    "html": "<p>[a](/x<code>c\\ d</code>( &quot;t&quot;)</p>\n"
+  },
+  {
+    "source": "[o [a](/x`c\\ d`( \"t\") p](/u)",
+    "html": "<p><a href=\"/u\">o [a](/x<code>c\\ d</code>( &quot;t&quot;) p</a></p>\n"
+  },
+  {
+    "source": "> [o [a](/x`c\\ d`( \"t\") p](/u)",
+    "html": "<blockquote>\n<p><a href=\"/u\">o [a](/x<code>c\\ d</code>( &quot;t&quot;) p</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- [o [a](/x`c\\ d`( \"t\") p](/u)",
+    "html": "<ul>\n<li><a href=\"/u\">o [a](/x<code>c\\ d</code>( &quot;t&quot;) p</a></li>\n</ul>\n"
+  },
+  {
+    "source": "[o [a][r] p](/x`c`( \"t\")\n\n[r]: /r",
+    "html": "<p>[o <a href=\"/r\">a</a> p](/x<code>c</code>( &quot;t&quot;)</p>\n"
+  },
+  {
+    "source": "[o [a] p](/x`c`( \"t\")\n\n[a]: /a",
+    "html": "<p>[o <a href=\"/a\">a</a> p](/x<code>c</code>( &quot;t&quot;)</p>\n"
+  },
+  {
+    "source": "`[a](/x`)`",
+    "html": "<p><code>[a](/x</code>)`</p>\n"
+  },
+  {
+    "source": "[o `[a]` p](/x`c`( \"t\")",
+    "html": "<p><a href=\"/x%60c%60(\" title=\"t\">o <code>[a]</code> p</a></p>\n"
+  },
+  {
+    "source": "[a](<http://a`b>) `tail`",
+    "html": "<p><a href=\"http://a%60b\">a</a> <code>tail</code></p>\n"
   }
 ]
