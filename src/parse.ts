@@ -6994,6 +6994,45 @@ function rebasedQuoteEnd(lines: string[], start: number, quote: Lexer): number {
   return quote.pos - 1
 }
 
+function sourceCodeFenceEnd(
+  lines: string[], start: number, base: number, marker: string,
+  heldFoldedLines: Set<number>, takenBelowColumn: ReadonlySet<number> | undefined,
+  onFenceBodyLine: ((index: number) => void) | undefined,
+  onUnclosedCodeFence: (() => void) | undefined,
+  authoredBase: number, sourceLines: readonly (string | undefined)[], authoredFloor: number | undefined,
+): number {
+  let end = start
+  const close = fenceCloseRe(marker)
+  let closed = false
+  for (let j = start + 1; j < lines.length; j++) {
+    const candidate = lines[j]!
+    end = j
+    onFenceBodyLine?.(j)
+    if (isBlankLine(candidate)) continue
+    const source = sourceLines[j]
+    if (source === undefined) {
+      const column = indentColumns(candidate, base)
+      if (column < base) {
+        if (column === 0 && close.test(candidate)) { closed = true; break }
+        continue
+      }
+      if (takenBelowColumn?.has(j)) { heldFoldedLines.add(j); continue }
+      if (close.test(sliceColumns(candidate, base, true))) { closed = true; break }
+      continue
+    }
+    const column = indentColumns(source)
+    if (takenBelowColumn?.has(j)) heldFoldedLines.add(j)
+    if ((column === authoredBase || column === authoredFloor) && !heldFoldedLines.has(j) &&
+        close.test(candidate.slice(leadingWhitespace(candidate)))) {
+      if (column === authoredBase) lines[j] = ' '.repeat(base) + candidate.slice(leadingWhitespace(candidate))
+      closed = true
+      break
+    }
+  }
+  if (!closed) onUnclosedCodeFence?.()
+  return end
+}
+
 // Keep a code fence's payload and closer in the same rebasing group.
 function rebasedCodeFenceEnd(
   lines: string[],
@@ -7004,9 +7043,6 @@ function rebasedCodeFenceEnd(
   takenBelowColumn?: ReadonlySet<number>,
   onFenceBodyLine?: (index: number) => void,
   onUnclosedCodeFence?: () => void,
-  authoredBase?: number,
-  sourceLines?: readonly (string | undefined)[],
-  authoredFloor?: number,
 ): number {
   let end = start
   const close = fenceCloseRe(marker)
@@ -7019,18 +7055,6 @@ function rebasedCodeFenceEnd(
     end = j
     onFenceBodyLine?.(j)
     if (isBlankLine(candidate)) continue
-    const source = sourceLines?.[j]
-    if (authoredBase !== undefined && source !== undefined) {
-      const column = indentColumns(source)
-      if (takenBelowColumn?.has(j)) heldFoldedLines.add(j)
-      if ((column === authoredBase || column === authoredFloor) && !heldFoldedLines.has(j) &&
-          close.test(candidate.slice(leadingWhitespace(candidate)))) {
-        if (column === authoredBase) lines[j] = ' '.repeat(base) + candidate.slice(leadingWhitespace(candidate))
-        closed = true
-        break
-      }
-      continue
-    }
     const column = indentColumns(candidate, base)
     if (column < base) {
       if (column === 0 && close.test(candidate)) {
@@ -7380,11 +7404,12 @@ function rebaseOverindentedBlocks(
 
     if (code) {
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
-      end = rebasedCodeFenceEnd(
-        lines, i, base, marker, heldFoldedLines, takenBelowColumn,
-        onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines,
-        sourceCodeBase === undefined ? undefined : sourceCodeBase - tabFenceColumns!.get(i)!,
-      )
+      end = sourceCodeBase === undefined
+        ? rebasedCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
+          onFenceBodyLine, onUnclosedCodeFence)
+        : sourceCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
+          onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines!,
+          sourceCodeBase - tabFenceColumns!.get(i)!)
     } else if (comment !== undefined) {
       const closeAt = (commentCloser ??= commentCloserLookup(lines))(comment, i)
       for (let j = i + 1; j < lines.length; j++) {
@@ -7513,15 +7538,18 @@ function rebaseOverindentedBlocks(
     // carve-rs holds the same line for the same reason (carve-rs#1573).
     const keepsAuthoredColumn = hostIsFootnoteBody && RE_FOOTNOTE_DEF.test(opener) && base > 0
     if (!keepsAuthoredColumn) {
-      for (let j = i; j <= end; j++) {
-        // A payload line below the base keeps the residue the collector left it.
-        const sourceLine = sourceCodeBase === undefined ? undefined : sourceLines?.[j]
-        if (sourceLine !== undefined) {
-          if (indentColumns(sourceLine, sourceCodeBase!) >= sourceCodeBase! && !heldFoldedLines.has(j)) {
-            lines[j] = sliceColumns(sourceLine, sourceCodeBase!, true)
+      if (sourceCodeBase !== undefined) {
+        for (let j = i; j <= end; j++) {
+          const sourceLine = sourceLines?.[j]
+          if (sourceLine !== undefined && indentColumns(sourceLine, sourceCodeBase) >= sourceCodeBase &&
+              !heldFoldedLines.has(j)) lines[j] = sliceColumns(sourceLine, sourceCodeBase, true)
+        }
+      } else {
+        for (let j = i; j <= end; j++) {
+          // A payload line below the base keeps the residue the collector left it.
+          if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
+            lines[j] = sliceColumns(lines[j]!, base, true)
           }
-        } else if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
-          lines[j] = sliceColumns(lines[j]!, base, true)
         }
       }
     }
@@ -12883,14 +12911,19 @@ class ParseSession {
             }
           }
           if (lazyState.opaque?.kind === 'code') {
-            if (tabFenceSourceColumn === undefined) {
+            if (tabFenceSourceColumn !== undefined && tabFenceOpenerIndex !== undefined &&
+                dedented.slice(0, leadingWhitespace(dedented)).includes('\t')) {
+              const facts = tabLineFacts ??= new Map()
+              const entry = facts.get(tabFenceOpenerIndex)
+              if (entry) entry.sourceRebase = true
+              else facts.set(tabFenceOpenerIndex, { text: nested[tabFenceOpenerIndex]!, sourceRebase: true,
+                facts: { terminatorFree: false, fenceColumns: tabFenceSourceColumn - contentCol } })
+            }
+            if (tabFenceSourceColumn === undefined || tabLineFacts?.has(tabFenceOpenerIndex!) !== true) {
               if (authoredFenceBase > 0 && indentColumns(dedented, authoredFenceBase) >= authoredFenceBase) {
                 trackedContent = sliceColumns(dedented, authoredFenceBase, true)
               }
             } else {
-              if (tabFenceOpenerIndex !== undefined && dedented.slice(0, leadingWhitespace(dedented)).includes('\t')) {
-                tabLineFacts!.get(tabFenceOpenerIndex)!.sourceRebase = true
-              }
               if ((indentColumns(l) === tabFenceSourceColumn || indentColumns(l) === contentCol) &&
                   lazyState.opaque.close.test(l.slice(leadingWhitespace(l)))) {
                 lazyState.opaque = null
@@ -12904,16 +12937,20 @@ class ParseSession {
             const mayOpenFence = indented && lazyState.literalColon === undefined && lazyState.quoteInner === null &&
               opensCodeFence(opener)
             if (mayOpenFence && l.slice(0, lexer.lineLeadingWhitespace(lexer.pos)).includes('\t')) {
-              const facts = tabLineFacts ??= new Map()
-              facts.set(nested.length - 1, { text: dedented,
-                sourceRebase: dedented.slice(0, leadingWhitespace(dedented)).includes('\t'), facts: {
-                terminatorFree: lexer.lineTerminatorFree(lexer.pos),
-                whitespace: leadingWhitespace(dedented),
-                fenceColumns: indentColumns(l) - contentCol,
-                descendantFrames: true,
-                prefixMemo: nestedOrigins.get(nested.length - 1)?.text === dedented
-                  ? this.markerPrefixMemo(lexer, fenceLineIndex) : undefined,
-              } })
+              tabFenceSourceColumn = indentColumns(l)
+              tabFenceOpenerIndex = nested.length - 1
+              if (lazyState.lazyFoldable || dedented.slice(0, leadingWhitespace(dedented)).includes('\t')) {
+                const facts = tabLineFacts ??= new Map()
+                facts.set(nested.length - 1, { text: dedented,
+                  sourceRebase: dedented.slice(0, leadingWhitespace(dedented)).includes('\t'), facts: {
+                  terminatorFree: lexer.lineTerminatorFree(lexer.pos),
+                  whitespace: leadingWhitespace(dedented),
+                  fenceColumns: indentColumns(l) - contentCol,
+                  descendantFrames: true,
+                  prefixMemo: nestedOrigins.get(nested.length - 1)?.text === dedented
+                    ? this.markerPrefixMemo(lexer, fenceLineIndex) : undefined,
+                } })
+              }
             }
             ownerPending.push({
               line: dedented,
@@ -13000,14 +13037,9 @@ class ParseSession {
               return closes
             },
           )
-          if (tabLineFacts !== undefined) {
-            if (lazyState.opaque?.kind !== 'code') {
-              tabFenceSourceColumn = undefined
-              tabFenceOpenerIndex = undefined
-            } else if (tabLineFacts.has(nested.length - 1)) {
-              tabFenceSourceColumn = indentColumns(l)
-              tabFenceOpenerIndex = nested.length - 1
-            }
+          if (tabFenceSourceColumn !== undefined && lazyState.opaque?.kind !== 'code') {
+            tabFenceSourceColumn = undefined
+            tabFenceOpenerIndex = undefined
           }
           if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.inlineFenceParagraph) lazyState.inlineFenceBlock = true
