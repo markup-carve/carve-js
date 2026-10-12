@@ -69,3 +69,11 @@ it.each(['a@example.test', 'a\\_b@example.test', 'a+-b@example.test'])(
     expect(result.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(true)
   },
 )
+
+it.each(['[a@b.test]()', '![a@b.test]()', 'a@b[]().test', 'a@b![]().test'])(
+  'keeps empty destinations from introducing an email link: %s', source => {
+    const result = migrateMarkdown(source)
+    expect(carveToHtml(result.value)).not.toContain('mailto:')
+    expect(result.report.diagnostics.some(row => row.message.includes('empty destination'))).toBe(true)
+  },
+)
