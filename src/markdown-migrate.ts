@@ -1259,7 +1259,7 @@ function convertInline(
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
   unwrapEmptyLinks = true,
   nativeCode = false,
-  stripDestinationIndent: boolean | ((offset: number) => boolean) = false,
+  stripDestinationIndent: boolean | ((line: number) => boolean | string) = false,
 ): string {
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
@@ -3354,7 +3354,8 @@ type PrefixedInlineLine = {
   // container, so it cannot be the delimiter row of a table.
   continued?: boolean | undefined
   lazyQuote?: boolean | undefined
-  continuationIndents?: boolean[] | undefined
+  continuationIndents?: Array<boolean | string> | undefined
+  nativeContinuationIndent?: string | undefined
   // The paragraph body the collector escaped, without that escape, for a setext
   // fold to write instead: the escape guards a marker at the start of a line,
   // and a folded heading is one line with the marker in its middle, where it
@@ -3775,7 +3776,7 @@ function restorePrefixedInlineRun(
     offset += part.text.length + 1
     return entries
   })
-  const continuationIndents = run.flatMap(part => part.continuationIndents ?? part.text.split('\n').map(() => !part.lazyQuote))
+  const continuationIndents = run.flatMap(part => part.continuationIndents ?? part.text.split('\n').map(() => part.nativeContinuationIndent ?? !part.lazyQuote))
   const converted = convertInline(
     run.map((part) => part.text).join('\n'),
     dialect,
@@ -3963,7 +3964,7 @@ function headingLine(line: string, last = false): string {
   return trimEndSpaceTab(backslashes % 2 === 1 ? trimmed.slice(0, -1) : trimmed)
 }
 
-function headingParagraphParts(lines: string[], dialect: MarkdownDialect, lazyLines: boolean[] = []): { parts: string[]; joined: string } {
+function headingParagraphParts(lines: string[], dialect: MarkdownDialect, lazyLines: boolean[] = []): { parts: string[]; joined: string; retainedLines: number[] } {
   const source = lines.join('\n')
   const retained = new Set<number>()
   if (source.includes('](') && source.includes('<') && source.includes('\\\n')) {
@@ -3983,14 +3984,16 @@ function headingParagraphParts(lines: string[], dialect: MarkdownDialect, lazyLi
   }
   let offset = 0
   const separators: string[] = []
+  const retainedLines = [0]
   const parts = lines.map((line, index) => {
     const keep = retained.has(offset + line.length)
     offset += line.length + 1
     separators.push(keep ? '\n' : ' ')
+    if (keep) retainedLines.push(index + 1)
     return index > 0 && separators[index - 1] === '\n' && lazyLines[index]
       ? trimEndSpaceTab(line) : headingLine(line, index === lines.length - 1 || keep)
   })
-  return { parts, joined: parts.map((part, index) => part + (index + 1 < parts.length ? separators[index] : '')).join('') }
+  return { parts, joined: parts.map((part, index) => part + (index + 1 < parts.length ? separators[index] : '')).join(''), retainedLines }
 }
 
 /** The indent and item markers a line opens with (`- - `, `  1. `). */
@@ -4065,7 +4068,9 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[], dialect: Markdo
         const quote = heldInContainer(part).quote
         const indent = lead !== '' ? lead : /^[ \t]*/.exec(first)![0]
         const entries = out.slice(start)
-        const { parts, joined } = headingParagraphParts(entries.map(entry => entry.lazyQuote ? entry.text : entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body), dialect, entries.map(entry => !!entry.lazyQuote))
+        const { parts, joined, retainedLines } = headingParagraphParts(entries.map(entry => entry.nativeContinuationIndent !== undefined
+          ? entry.text.replace(/^[ \t]*/, entry.nativeContinuationIndent)
+          : entry.lazyQuote ? entry.text : entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body), dialect, entries.map(entry => !!entry.lazyQuote))
         const head = `${held.lead}${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} `
         let offset = head.length
         const sourceSegments = parts.map((text, index) => {
@@ -4073,7 +4078,7 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[], dialect: Markdo
           offset += text.length + 1
           return entry
         })
-        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: head + joined, source: out[start]!.source, sourceSegments, continuationIndents: entries.map(entry => !entry.lazyQuote) })
+        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: head + joined, source: out[start]!.source, sourceSegments, continuationIndents: retainedLines.map(index => entries[index]!.nativeContinuationIndent ?? !entries[index]!.lazyQuote) })
         starts.splice(start, starts.length - start, -1)
         continue
       }
@@ -5085,7 +5090,7 @@ function collectListInlineRun(
       run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain, source: end })
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
-      run.push({ prefix, text, continued: true, lazyQuote: true, source: end })
+      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true, lazyQuote: true, nativeContinuationIndent: /^[ \t]*/.exec(text)![0], source: end })
     } else if (over > 0 && over < 4) run.push({ prefix, text: pad + respellHeldQuoteMarkers(trimmed), source: end })
     // A later line the item holds, at the column the quote opens at. As text
     // the marker is escaped above, so a `>` arriving here is structural.

@@ -6,12 +6,13 @@ export function protectNativeMarkdownDestinationGlyphs(
   protect: (value: string, source: string) => string,
   isReference: (label: string) => boolean,
   opaqueEnd: (offset: number) => number | undefined,
-  stripContinuationIndent: boolean | ((offset: number) => boolean) = false,
+  stripContinuationIndent: boolean | ((line: number) => boolean | string) = false,
   onEscapedLineBreak?: (offset: number) => void,
 ): string {
   const codeEnds = backtickRunEnds(source)
   const opens: Array<{ at: number; image: boolean; generation: number; nested: boolean }> = []
   const glyphs = new Map<number, number>()
+  const glyphValues = new Map<number, string>()
   let lineCursor = 0, lineNumber = 0
   const tokenAt = /\x00P\d+\x00/y
   let generation = 0
@@ -57,7 +58,11 @@ export function protectNativeMarkdownDestinationGlyphs(
           if (source[pos + 1] === '\n') {
             let end = pos + 2
             while (lineCursor <= pos + 1) if (source[lineCursor++] === '\n') lineNumber++
-            if (typeof stripContinuationIndent === 'function' ? stripContinuationIndent(lineNumber) : stripContinuationIndent) while (/[ \t]/.test(source[end] ?? '')) end++
+            const strip = typeof stripContinuationIndent === 'function' ? stripContinuationIndent(lineNumber) : stripContinuationIndent
+            if (strip === true || typeof strip === 'string') {
+              while (/[ \t]/.test(source[end] ?? '')) end++
+              glyphValues.set(pos, '\\\n' + (typeof strip === 'string' ? strip : ''))
+            }
             glyphs.set(pos, end - pos)
             onEscapedLineBreak?.(pos + 1)
           }
@@ -95,7 +100,7 @@ export function protectNativeMarkdownDestinationGlyphs(
     const width = glyphs.get(at)
     if (width) {
       const original = source.slice(at, at + width)
-      output.push(protect(width > 2 && original.startsWith('\\\n') ? '\\\n' : original, original))
+      output.push(protect(glyphValues.get(at) ?? original, original))
       at += width - 1
     } else output.push(source[at]!)
   }
