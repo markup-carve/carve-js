@@ -56,6 +56,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     loose: boolean
     start: number
     continuation: boolean
+    empty?: boolean
   }[] = []
   const mainOut: string[] = []
   let out = mainOut
@@ -336,9 +337,11 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       fences[n] !== original ||
       /^(?:#{1,6}(?:[ \t]|$)|:{3,}|\|)/.test(visible) ||
       /^(?:[*-][ \t]*){3,}$/.test(visible)
+    // Match authored empty bodies, not spaces masking inline code.
+    const emptyItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]*$/.test(text) || /^[-*+] \[[ xX]\][ \t]*$/.test(text)
     const item =
       /^(?:([-*+])|((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)))[ \t]+[^ \t]/.exec(
-        visible,
+        emptyItem ? visible.trimEnd() + ' +' : visible,
       )
     if (outsideQuoteItem) {
       paragraph = false
@@ -523,9 +526,10 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       }
       if (parent && !nested && parent.loose && parent.continuation && out.at(-1)?.trim() !== '')
         out.push(quoteForCarve().trimEnd())
-      const compact = compactDjotListPrefix(text)
+      const compact = compactDjotListPrefix(emptyItem ? text.trimEnd() + ' +' : text)
       const written = item[1] ? context!.bullet + compact.slice(1) : compact
       context!.continuation = false
+      context!.empty = emptyItem
       headingMarker = ''
       out.push(quoteForCarve() + ' '.repeat(context!.target) + written)
       const body = text.slice(item[0].length - 1)
@@ -551,7 +555,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       }
       const quoteBody = itemQuote?.body ?? ''
       const itemAttributes = itemBody.startsWith('{') ? readAttributes(itemBody, 0) : undefined
-      paragraph = !itemDiv && !itemHeading && itemAttributes?.end !== itemBody.length && !/^\[(?!\^)[^\]\n]+\]:/.test(itemBody) && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
+      paragraph = !emptyItem && !itemDiv && !itemHeading && itemAttributes?.end !== itemBody.length && !/^\[(?!\^)[^\]\n]+\]:/.test(itemBody) && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
       blank = !!itemDiv
       continue
     }
@@ -572,6 +576,13 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     }
     const attrs = visible.startsWith('{') ? readAttributes(raw, rawIndent) : undefined
     const attributeLine = attrs?.end === raw.length
+    if (lists.at(-1)?.empty && indent <= lists.at(-1)!.column && visible.trim() !== '' && !attributeLine) {
+      if (out.at(-1)?.trim() !== '') out.push(quoteForCarve().trimEnd())
+      blank = true
+    }
+    if (visible.trim() !== '' && !attributeLine) {
+      for (const list of lists) if (indent > list.column) list.empty = false
+    }
     const outsideColumn = blank && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
     if (outsideColumn !== undefined) { lists.length = 0; setEmbedded(undefined) }
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
