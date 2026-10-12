@@ -13341,9 +13341,11 @@ class ParseSession {
                   index => lexer.ownedIndentColumns(index))
               }
               const openerColumn = lexer.ownedIndentColumns(fenceLineIndex)
+              const hasOpenerCloser = openerColumn !== undefined && openerColumn >= contentCol + markerDescriptionColumn &&
+                hasOwnedCloser(openerColumn - contentCol)
               if (openerColumn !== undefined && openerColumn >= contentCol + markerDescriptionColumn &&
-                  (hasOwnedCloser(openerColumn - contentCol) || hasOwnedCloser(0))) {
-                (markerDescriptionCodeOpeners ??= new Set()).add(nested.length)
+                  (hasOpenerCloser || hasOwnedCloser(0))) {
+                if (!hasOpenerCloser) (markerDescriptionCodeOpeners ??= new Set()).add(nested.length)
                 markerDescriptionCodeBase = openerColumn - contentCol
                 markerDescriptionCodeTracked = true
                 singleMarkerTerm = false

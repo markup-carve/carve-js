@@ -157,7 +157,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-1",
     "source": "- :: term\n  : payload\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-2",
@@ -182,7 +182,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-6",
     "source": "- :: term\n  : payload\n      ```\n      code\n      ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-7",
@@ -207,7 +207,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-11",
     "source": "- :: term\n  : payload\n        ```\n        code\n        ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-12",
@@ -277,7 +277,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-25",
     "source": "> - :: term\n>   : payload\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>payload</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-26",
@@ -302,7 +302,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-30",
     "source": "> - :: term\n>   : payload\n>       ```\n>       code\n>       ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>payload</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-31",
@@ -327,7 +327,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-35",
     "source": "> - :: term\n>   : payload\n>         ```\n>         code\n>         ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>payload</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-36",
@@ -397,7 +397,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-49",
     "source": "> > - :: term\n> >   : payload\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>payload</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-50",
@@ -422,7 +422,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-54",
     "source": "> > - :: term\n> >   : payload\n> >       ```\n> >       code\n> >       ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>payload</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-55",
@@ -447,7 +447,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-59",
     "source": "> > - :: term\n> >   : payload\n> >         ```\n> >         code\n> >         ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>payload</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-60",
@@ -512,32 +512,32 @@
   {
     "id": "rs2532-review-host-controls.json:definition-deep-0",
     "source": "- :: term\n  : desc\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>desc</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>desc</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-1",
     "source": "- :: term\n  : desc\n      ```\n      code\n      ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>desc</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>desc</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-2",
     "source": "- :: term\n  : desc\n        ```\n        code\n        ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>desc</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>desc</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-3",
     "source": "- :: term\n  : desc\n    paragraph\n    ```\n    code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>desc\nparagraph</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>desc\nparagraph</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-4",
     "source": "- :: term\n  : desc\n    paragraph\n      ```\n      code\n      ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>desc\nparagraph</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>desc\nparagraph</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-5",
     "source": "- :: term\n  : desc\n    paragraph\n        ```\n        code\n        ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>desc\nparagraph</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>desc\nparagraph</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-12",
@@ -712,32 +712,32 @@
   {
     "id": "rs2532-review-host-controls.json:definition-deep-54",
     "source": "> - :: term\n>   : desc\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>desc</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>desc</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-55",
     "source": "> - :: term\n>   : desc\n>       ```\n>       code\n>       ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>desc</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>desc</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-56",
     "source": "> - :: term\n>   : desc\n>         ```\n>         code\n>         ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>desc</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>desc</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-57",
     "source": "> - :: term\n>   : desc\n>     paragraph\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>desc\nparagraph</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>desc\nparagraph</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-58",
     "source": "> - :: term\n>   : desc\n>     paragraph\n>       ```\n>       code\n>       ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>desc\nparagraph</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>desc\nparagraph</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-59",
     "source": "> - :: term\n>   : desc\n>     paragraph\n>         ```\n>         code\n>         ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>desc\nparagraph</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>desc\nparagraph</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-66",
@@ -912,32 +912,32 @@
   {
     "id": "rs2532-review-host-controls.json:definition-deep-108",
     "source": "> > - :: term\n> >   : desc\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>desc</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>desc</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-109",
     "source": "> > - :: term\n> >   : desc\n> >       ```\n> >       code\n> >       ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>desc</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>desc</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-110",
     "source": "> > - :: term\n> >   : desc\n> >         ```\n> >         code\n> >         ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>desc</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>desc</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-111",
     "source": "> > - :: term\n> >   : desc\n> >     paragraph\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>desc\nparagraph</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>desc\nparagraph</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-112",
     "source": "> > - :: term\n> >   : desc\n> >     paragraph\n> >       ```\n> >       code\n> >       ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>desc\nparagraph</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>desc\nparagraph</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-113",
     "source": "> > - :: term\n> >   : desc\n> >     paragraph\n> >         ```\n> >         code\n> >         ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>desc\nparagraph</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>desc\nparagraph</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "rs2532-review-host-controls.json:definition-deep-120",
@@ -1132,22 +1132,22 @@
   {
     "id": "mixed-308",
     "source": "- :: term\n  : payload\n    ```\n    body\n    ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-309",
     "source": "- :: term\n  : payload\n    ```\n    body\n    ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-310",
     "source": "- :: term\n  : payload\n    ```\n    body\n    ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-311",
     "source": "- :: term\n  : payload\n    ```\n    body\n    ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-312",
@@ -1172,22 +1172,22 @@
   {
     "id": "mixed-316",
     "source": "- :: term\n  : payload\n      ```\n      body\n      ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-317",
     "source": "- :: term\n  : payload\n      ```\n      body\n      ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-318",
     "source": "- :: term\n  : payload\n      ```\n      body\n      ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-319",
     "source": "- :: term\n  : payload\n      ```\n      body\n      ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-324",
@@ -1212,22 +1212,22 @@
   {
     "id": "mixed-328",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n    ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-329",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n    ~~~\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-330",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n    ~~~\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-331",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n    ~~~\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-332",
@@ -1252,22 +1252,22 @@
   {
     "id": "mixed-336",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n      ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-337",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n      ~~~\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-338",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n      ~~~\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-339",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n      ~~~\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>body\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-344",
@@ -1292,22 +1292,22 @@
   {
     "id": "mixed-348",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n    ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-349",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n    ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-350",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n    ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-351",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n    ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-352",
@@ -1332,22 +1332,22 @@
   {
     "id": "mixed-356",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n      ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-357",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n      ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-358",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n      ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-359",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n      ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        body\n      </dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-364",
@@ -3662,32 +3662,32 @@
   {
     "id": "review-following-code-root-0",
     "source": "- :: w0\n  : w1\n    ```\n    ```\n   ```\n  %% w2\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>w1</dd>\n    </dl>\n    <pre><code></code></pre>\n    <pre><code>%% w2\n</code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>\n        <p>w1</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n    <pre><code>%% w2\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-quote-1",
     "source": "> - :: w0\n>   : w1\n>     ```\n>     ```\n>    ```\n>   %% w2\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>w1</dd>\n      </dl>\n      <pre><code></code></pre>\n      <pre><code>%% w2\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>\n          <p>w1</p>\n          <pre><code></code></pre>\n        </dd>\n      </dl>\n      <pre><code>%% w2\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-2",
     "source": "- outer\n  - :: w0\n    : w1\n      ```\n      ```\n     ```\n    %% w2\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>w1</dd>\n        </dl>\n        <pre><code></code></pre>\n        <pre><code>%% w2\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>\n            <p>w1</p>\n            <pre><code></code></pre>\n          </dd>\n        </dl>\n        <pre><code>%% w2\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-3",
     "source": "- :: w0\n  : w1\n    ```\n    ```\n   ```\n      w2   w3\n\n  w4\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>w1</dd>\n    </dl>\n    <pre><code></code></pre>\n    <pre><code>   w2   w3\n\nw4\n</code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>\n        <p>w1</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n    <pre><code>   w2   w3\n\nw4\n</code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-quote-4",
     "source": "> - :: w0\n>   : w1\n>     ```\n>     ```\n>    ```\n>       w2   w3\n>\n>   w4\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>w1</dd>\n      </dl>\n      <pre><code></code></pre>\n      <pre><code>   w2   w3\n\nw4\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>\n          <p>w1</p>\n          <pre><code></code></pre>\n        </dd>\n      </dl>\n      <pre><code>   w2   w3\n\nw4\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-5",
     "source": "- outer\n  - :: w0\n    : w1\n      ```\n      ```\n     ```\n        w2   w3\n\n    w4\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>w1</dd>\n        </dl>\n        <pre><code></code></pre>\n        <pre><code>   w2   w3\n\nw4\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>\n            <p>w1</p>\n            <pre><code></code></pre>\n          </dd>\n        </dl>\n        <pre><code>   w2   w3\n\nw4\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-6",
