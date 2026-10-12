@@ -13502,6 +13502,10 @@ class ParseSession {
             lazyLine = l.startsWith(LAZY_FRAME)
               ? l
               : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+          } else if (lazyState.deepest?.inDefList === 'term' &&
+              indentColumns(l, baseIndent + 1) > baseIndent && isListMarkerLine(l)) {
+            // A band marker folds into the descendant's open term.
+            lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           } else if (
             lazyState.inDefList &&
             indentColumns(l, contentCol) < contentCol &&
@@ -13520,9 +13524,14 @@ class ParseSession {
             // point and `:: term` is an opener. The pair is the tracker's own -
             // `trackItemLazyState` opens `inDefList` on exactly these two - so one
             // spelling answers both.
-            (deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')))
+            ((lazyState.inDefList === 'term' &&
+              (!isListMarkerLine(l) || (indentColumns(l, baseIndent + 1) > baseIndent &&
+                !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))))) ||
+              deflistMarkerLine(l) || !lineOpensBlock(l.replace(/^[ \t]+/, '')))
           ) {
             lazyLine = l.replace(/^[ \t]+/, '')
+            // A retained marker under an open term stays text on reparse.
+            if (lazyState.inDefList === 'term' && !deflistMarkerLine(l) && lineOpensBlock(lazyLine)) lazyLine = LAZY_FRAME + lazyLine
           } else if (lazyState.opaque === null && lazyState.literalColon === undefined && indentColumns(l, contentCol) < contentCol &&
               (lazyState.commentAtColumn || RE_COMMENT_LINE.test((nested.at(-1) ?? '').trimStart()) ||
                 lazyState.authoredColon?.depth === lazyState.divDepth) &&
