@@ -1,3 +1,6 @@
+import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
+import { normalizeRefLabel } from './label-key.js'
+import { renderLinkReferenceDefinition } from './render-carve.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { renderCellContent } from './render-cell-content.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
@@ -74,15 +77,17 @@ function renderPass(
     // (markup-carve/carve-js#892).
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    referencedLinks: referencedLinkLabels(ast),
     expandedDefinitions,
     expanded: new Set(),
   }
-  const out = renderBlocks(ast.children, ctx)
+  const out = renderBlocks(blocksWithLinkDefinitionsInSourceOrder(ast), ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return { text: stripBidiControls(normalize(`${out}${footnotes}`)), expanded: ctx.expanded }
 }
 
 interface PlainContext {
+  referencedLinks: ReadonlySet<string>
   options: PlainTextRenderOptions
   smartTypography: SmartTypographyOption
   listDepth: number
@@ -197,7 +202,10 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return ''
     case 'comment':
       return ''
-    case 'link_reference_definition':
+    case 'link_reference_definition': {
+      if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
+      return `${stripControls(renderLinkReferenceDefinition(node))}\n\n`
+    }
     case 'citation_definition':
       // Renders nothing: a definition line is not prose. PART 12 §18 gave the
       // citation line a node without moving output on any target.
