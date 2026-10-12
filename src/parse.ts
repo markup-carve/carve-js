@@ -534,7 +534,7 @@ export const RE_ESCAPABLE_PUNCTUATION = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/
  * (`[a]: /u{.c}`).
  */
 const RE_LINK_DEF =
-  /^[ \t]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\[\s\S])*)"|'((?:[^'\\]|\\[\s\S])*)'))?(?: (\{.*\}))?[ \t]*$/u
+  /^[ \t]*\[(?!@)([^\]]+)\]: +(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\[\s\S])*)"|'((?:[^'\\]|\\[\s\S])*)'))?(?: (\{.*\}))?[ \t]*$/u
 
 /** A reference definition read off one line. */
 interface LinkDefMatch {
