@@ -852,7 +852,7 @@
   {
     "id": "review8-older-o05-mixed-hosted-ownership-012",
     "source": "- ::::: o\n      - ```\n  ::: in\n    ::: |\n  - a\n      ::: |\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"o\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n      <div class=\"in\">\n        <p>::: |\n- a\n::: |\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"o\">\n      <ul>\n        <li>\n          <pre><code></code></pre>\n        </li>\n      </ul>\n      <div class=\"in\">\n        <div class=\"line-block\">\n          <p>- a<br>\n&nbsp;&nbsp;::: |<br>\nTAILX</p>\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-c01-authored-div-base-043",

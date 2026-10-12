@@ -134,7 +134,7 @@ describe('fence ownership after earlier blocks', () => {
   })
   it('a heading after a sublist', () => {
     expect(carveToHtml('- head\n\n  - sub\n\n  # heading\n\n      ```\n      a\n      ```\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <ul>\n      <li>sub</li>\n    </ul>\n    <h1 id=\"heading\">heading</h1>\n    <code>\na\n</code>\ntext\n  </li>\n</ul>',
+      "<ul>\n  <li>head\n    <ul>\n      <li>sub</li>\n    </ul>\n    <h1 id=\"heading\">heading</h1>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>",
     )
   })
   it('quote-lazy text', () => {

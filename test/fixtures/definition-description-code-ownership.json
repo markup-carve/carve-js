@@ -3197,7 +3197,7 @@
   {
     "id": "review-297",
     "source": "- outer\n  - :: a\n    : p\n      ```=html\n   :::\n     ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>a</dt>\n          <dd>p\n<code>=html</code></dd>\n        </dl>\n      </li>\n    </ul>\n    <div>\n      <p><code></code></p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>a</dt>\n          <dd>p\n<code>=html</code></dd>\n        </dl>\n      </li>\n    </ul>\n    <div>\n      <pre><code></code></pre>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review-298",
@@ -3632,7 +3632,7 @@
   {
     "id": "review-final-8",
     "source": "- :: t\n  :    q\n    :::\n        ```\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>q</dd>\n    </dl>\n    <div>\n      <p><code>\n</code>\ntail</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>q</dd>\n    </dl>\n    <div>\n      <pre><code></code></pre>\n    </div>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "review-final-9",

@@ -6,7 +6,7 @@ it('preserves the shared Native ownership controls through Source and AST render
   expect(fixtures).toHaveLength(210)
   for (const fixture of fixtures) {
     for (const actual of [carveToHtml(fixture.source), renderHtml(parse(fixture.source))]) {
-      expect(actual.replace(/>\s+</g, '><').trim(), fixture.id).toBe(fixture.html)
+      expect(actual.replace(/>\s+</g, '><').trim(), fixture.id).toBe(fixture.html.replace(/>\s+</g, '><').trim())
     }
   }
 })

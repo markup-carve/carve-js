@@ -38,6 +38,7 @@ const IMPLEMENTED = new Set([
   'a-tab-is-content-in-a-heading-key-and-in-a-cross-reference-id',
   'a-closed-block-leaves-no-frame-for-the-line-below',
   'a-container-boundary-is-read-at-the-container-s-own-column',
+  'an-opener-past-a-hosted-container-s-column-opens-there',
   'a-description-keeps-a-block-at-its-body-column-whatever-leads-the-item',
   'a-line-block-payload-span-pairs-past-the-content-column',
   'a-line-retained-after-a-comment-opens-a-paragraph',
@@ -981,7 +982,16 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ["558-a-container-boundary-is-read-at-the-container-s-own-column-3", {
+    reason: 'ruling Q2 on markup-carve/carve#2978: an opener interrupts the open paragraph in an item-hosted colon body',
+    html: "<ul>\n  <li>\n    <div class=\"box\">\n      <p>text</p>\n      <aside class=\"admonition note\" aria-label=\"Note\">\n        <p>x</p>\n      </aside>\n    </div>\n  </li>\n</ul>\n<p>tail</p>",
+  }],
+  ["566-an-opener-past-a-hosted-container-s-column-opens-there-4", {
+    reason: 'ruling Q2 on markup-carve/carve#2978: an opener interrupts the open paragraph in an item-hosted colon body',
+    html: "<ul>\n  <li>\n    <div class=\"box\">\n      <p>text</p>\n      <div class=\"line-block\">\n        <p>x</p>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>tail</p>",
+  }],
+])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
