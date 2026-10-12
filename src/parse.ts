@@ -12339,6 +12339,7 @@ class ParseSession {
       // Collection can later rebase or frame a line; consumers check its text before reuse.
       const nestedOrigins = new Map<number, StrippedLineOrigin>()
       let tabLineFacts: Map<number, { text: string; facts: ItemLineFacts }> | undefined
+      let tabFenceSourceColumn: number | undefined
       const lineFacts = (text: string, origin?: StrippedLineOrigin, index?: number): ItemLineFacts | undefined => {
         const remaining = origin && origin.text === text
           ? lexer.lineLeadingWhitespace(origin.parentIndex) - origin.prefix : -1
@@ -12876,7 +12877,13 @@ class ParseSession {
             }
           }
           if (lazyState.opaque?.kind === 'code') {
-            if (authoredFenceBase > 0 && indentColumns(dedented, authoredFenceBase) >= authoredFenceBase) {
+            if (tabFenceSourceColumn !== undefined &&
+                (indentColumns(l) === tabFenceSourceColumn || indentColumns(l) === contentCol) &&
+                lazyState.opaque.close.test(l.slice(leadingWhitespace(l)))) {
+              lazyState.opaque = null
+              tabFenceSourceColumn = undefined
+              trackedContent = ''
+            } else if (authoredFenceBase > 0 && indentColumns(dedented, authoredFenceBase) >= authoredFenceBase) {
               trackedContent = sliceColumns(dedented, authoredFenceBase, true)
             }
           } else {
@@ -12974,6 +12981,9 @@ class ParseSession {
               return closes
             },
           )
+          if (lazyState.opaque?.kind === 'code' && tabLineFacts?.has(nested.length - 1)) {
+            tabFenceSourceColumn = indentColumns(l)
+          }
           if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.inlineFenceParagraph) lazyState.inlineFenceBlock = true
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.opaque === null) leadColonAwaitingBody = false
