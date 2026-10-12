@@ -14070,38 +14070,6 @@ class ParseSession {
       const closerLines = fenceLines.map((line, index) => index === 0 ? line :
         line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0))
       const closers = buildCloserIndex(closerLines)
-      // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
-      // `:::` container that IS the item's first block is the item's own body:
-      // the blank line between two of its blocks is the only blank line the item
-      // has, and §17 L1 reads it. Writing the closer is a spelling change, so it
-      // must not move the tightness - which is why the `firstContentIdx` test
-      // below exempts the lead container rather than reading the closer.
-      // Marking the range made
-      //
-      //     - ::: d
-      //       b
-      //
-      //       tail
-      //
-      // loose and the same document with `  :::` written TIGHT, which is
-      // `parse(fmt(x)) != parse(x)` - PART 11 §1 - on the one corpus document
-      // where the writer supplies a missing closer, corpus
-      // `362-an-unterminated-container-does-not-extend-the-item-past-a-blank-line-3`.
-      // The maintainer ruled the two converge on the reading the SOURCE already
-      // gets, which is loose.
-      //
-      // A container the item ATTACHES below a lead block keeps its interior: a
-      // blank between two of ITS blocks is the container's, not the item's, and
-      // corpus `279-a-boundary-line-inside-an-open-fence-does-not-end-the-
-      // container-10` pins that reading. So the lead test is what separates them,
-      // not the presence of a closer.
-      //
-      // STILL ONE MARKED RANGE PER OUTERMOST OPAQUE FENCE, so the pass stays
-      // linear. `openOpaque` counts the opaque fences currently open, and only
-      // the transition through zero writes a range: nesting a hundred containers
-      // inside an item marks the outermost span once rather than once per level,
-      // which is the same bound the openIdx it replaces had.
-      const firstContentIdx = fenceLines.findIndex((l) => l.trim() !== '')
       const open: Array<{
         kind: 'code' | 'comment' | 'colon'
         close: RegExp | null
@@ -14170,7 +14138,7 @@ class ParseSession {
         if (opened === null) continue
         const entry = {
           ...opened,
-          opaque: !(opened.kind === 'colon' && k === firstContentIdx),
+          opaque: true,
         }
         open.push(entry)
         enter(entry, k)
