@@ -214,7 +214,7 @@ export function djotImportLosses(
     if (source[at] !== ']') continue
     const opener = stack.pop()
     if (opener === undefined) continue
-    if (source[opener.at + 1] === '^') { carryNested(opener.nested); continue }
+    if (source[opener.at + 1] === '^' && at > opener.at + 2) { carryNested(opener.nested); continue }
     const open = opener.at
     const image = source[open - 1] === '!' && !escaped[open - 1]
     let end = at + 1,

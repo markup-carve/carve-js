@@ -11,7 +11,7 @@ export function djotContentStart(line: string): number {
     while (at < line.length) {
       while (line[at] === ' ' || line[at] === '\t') at++
       if (line[at] === '>' && (at + 1 === line.length || line[at + 1] === ' ' || line[at + 1] === '\t')) { at++; continue }
-      const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)|:)[ \t]+)/.exec(line.slice(at))
+      const marker = /^(?:\[\^[^\]\n]+\]:(?:[ \t]+|[\r\n]*$)|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)|:)[ \t]+)/.exec(line.slice(at))
       if (!marker) break
       at += marker[0].length
       if (/^[-*+]/.test(marker[0])) {

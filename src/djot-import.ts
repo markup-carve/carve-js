@@ -700,7 +700,14 @@ function convertDjotInput(djot: string): string {
 function convertDjotDocument(djot: string): string {
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
-  const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
+  const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
+  let body = sourceBody
+  if (body.includes('[^') && body.includes(']:') && body.split('\n').some(line => /^\[\^[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) {
+    const accepted = new Map<number, { label: string; target: string; end: number }>()
+    foldDjotReferences(body, accepted)
+    body = djotReferenceLayout(body, djotContentStart, true, accepted)
+  }
+
   const convert = (text: string, transform?: (chunk: string) => string): string => {
     const emptyTerm = djotPlaceholderPrefix(text, '\x00DJOTEMPTYTERM\x00')
     const attrs = consumeOrphanDjotAttributes(convertDefinitionLists(convertDjotBlockMarkers(text), emptyTerm))
@@ -751,7 +758,7 @@ function convertDjotDocument(djot: string): string {
   let definitionOffset = 0, previousDefinitionLine = ''
   for (const line of headingFolded.split('\n')) { previousDefinitionLines.set(definitionOffset, previousDefinitionLine); definitionOffset += line.length + 1; previousDefinitionLine = line }
   const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!))
-  const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && definitions.has(key) ? `${label}[${key}]` : value)
+  const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && !(key.startsWith('^') && key.length > 1) && definitions.has(key) ? `${label}[${key}]` : value)
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
   const folded = rawFolded.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (image: string, label: string, at: number) => {
     if (imageMask[at] !== '!' || isDjotEscaped(rawFolded, at) || label.includes('\\') || label.startsWith('^')) return image
@@ -1049,7 +1056,7 @@ function foldDjotReferences(source: string, accepted?: Map<number, { label: stri
       [depth] = quoted(line),
       at = djotContentStart(line),
       content = line.slice(at)
-    const definition = /^\[(?!\^)([^\]\n]*)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(content)
+    const definition = /^\[(?!\^[^\]\n]+\]:(?:[ \t\r]|$))([^\]\n]*)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(content)
     const previousLine = lines[n - 1] ?? '', previousAt = djotContentStart(previousLine)
     const previousNote = previousLine.slice(0, previousAt).indexOf('[^')
     const previousOwner = previousNote < 0 ? previousAt : previousNote + 1
@@ -1360,7 +1367,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
   }
   const output: string[] = []
   const imageEnds = new Map(
-    [...brackets].filter(([at, close]) => source[at - 1] === '!' && /[([]/.test(source[close + 1] ?? '')),
+    [...brackets].filter(([at, close]) => source[at - 1] === '!' && (source[at + 1] !== '^' || close === at + 2) && /[([]/.test(source[close + 1] ?? '')),
   )
   for (let i = 0; i < source.length;) {
     const destinationEnd = destinations.get(i)
@@ -1401,7 +1408,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
     }
     const definition = definitions.get(i),
       end = definition?.end ?? brackets.get(i)
-    if (source.startsWith('[^', i) && (definition || mask[i] === '[') && end !== undefined) {
+    if (source.startsWith('[^', i) && (definition || mask[i] === '[') && end !== undefined && end > i + 2) {
       const key = definition?.key ?? keyOf(source.slice(i + 2, end))
       {
         const rename = labels.has(key) || unsupported(key) || !defined.has(key)
@@ -1415,6 +1422,10 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
           output.push(`: ${emptyNote}`)
           i++
         }
+        if (definition && source[i] === ':' && source[i + 1] === '\t') {
+          output.push(': ')
+          i += 2
+        }
         if (!definition && source[i] === ':' && lineHeads.has(at)) {
           output.push('\\:')
           i++
@@ -1422,6 +1433,7 @@ function normalizeDjotFootnotes(source: string, isDefinitionBoundary: (line: str
         continue
       }
     }
+    if (source[i] === '!' && !isDjotEscaped(source, i) && source.startsWith('[^', i + 1) && (brackets.get(i + 1) ?? 0) > i + 3 && mask[i + 1] === '[') output.push('\\')
     output.push(source[i++]!)
   }
   const stubs: string[] = []

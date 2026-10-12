@@ -194,3 +194,11 @@ it('keeps reference-looking text after a paragraph footnote literal', () => {
   expect(carveToHtml(result.value)).toContain('[r]: /u')
   expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toHaveLength(1)
 })
+
+it('preserves adjacent footnote references beside a caret-labeled definition', () => {
+  const result = migrateDjot('[^n]:/u\n\n[^n][^n]')
+  const html = carveToHtml(result.value)
+  expect(html.match(/role="doc-noteref"/g)).toHaveLength(2)
+  expect(html).not.toContain('carve-djot-reference')
+  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toEqual([])
+})
