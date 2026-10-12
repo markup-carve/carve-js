@@ -22,7 +22,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
   if (source.includes(']:')) {
     for (const line of source.split('\n')) {
       const definition = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[(?!\^)[^\]\n]+\](?=:)/.exec(line)
-      if (definition) definitionLines.set(lineOffset + definition[0].length - 1, { start: lineOffset, previous: previousLine.slice(djotContentStart(previousLine)).trim() })
+      if (definition) definitionLines.set(lineOffset + definition[0].length - 1, { start: lineOffset, previous: previousLine })
       lineOffset += line.length + 1
       previousLine = line
     }
@@ -109,8 +109,10 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       const definition = definitionLines.get(at)
       if (definition) {
         const { start: lineStart, previous } = definition
-        if (lineStart && previous && !/^(?:#{1,6} |:{3,}|[`~]{3,}|\{|\[[^\]]+\]:|(?:[*-][ \t]*){3,}$)/.test(previous))
-          continue
+        const content = previous.slice(djotContentStart(previous)).trim()
+        const block = previous.replace(/^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/, '').trim()
+        const definitionBoundary = /^(?:#{1,6} |:{3,}|[`~]{3,}|\{|\[[^\]]+\]:|(?:[*-][ \t]*){3,}$)/
+        if (lineStart && content && !definitionBoundary.test(content) && !definitionBoundary.test(block)) continue
         const newline = source.indexOf('\n', at)
         const end = newline < 0 ? source.length : newline
         if (options.destinations !== false) hide(at + 2, end)
