@@ -138,11 +138,11 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email', raw = false,
     } else {
       if (mode === 'email') continue
       const www = match[0] === 'www.'
-      if (www && start > 0 && !/[ \t\r\n\f\v*_~(]/.test(text[start - 1]!)) continue
+      if (www && start > 0 && !/[ \t\r\n*_~(]/.test(text[start - 1]!)) continue
       if (!www && /[A-Za-z]/.test(text[start - 1] ?? '')) continue
       if (end >= chunkEnd) {
         chunkEnd = end
-        while (chunkEnd < text.length && !/[ \t\r\n\f\v<\x00]/.test(text[chunkEnd]!)) chunkEnd++
+        while (chunkEnd < text.length && !/[ \t\r\n<\x00]/.test(text[chunkEnd]!)) chunkEnd++
       }
       if (!domainAllowed(text, www ? start : triggers.lastIndex, text.length, !www)) continue
       end = chunkEnd
