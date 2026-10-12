@@ -759,19 +759,29 @@ function convertDjotDocument(djot: string): string {
   for (const line of headingFolded.split('\n')) { previousDefinitionLines.set(definitionOffset, previousDefinitionLine); definitionOffset += line.length + 1; previousDefinitionLine = line }
   const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!))
   const rawFolded = headingFolded.replace(/(!?\[([^\[\]\n]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => collapsedMask[at] !== ' ' && !(key.startsWith('^') && key.length > 1) && definitions.has(key) ? `${label}[${key}]` : value)
+  const imageParagraph = djotPlaceholderPrefix(body, '\x00DJOTIMAGEPARAGRAPH\x00')
+  const imageStarts = new Set<number>()
+  let imageOffset = 0
+  for (const line of rawFolded.split('\n')) {
+    imageStarts.add(imageOffset + djotContentStart(line))
+    imageOffset += line.length + 1
+  }
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
-  const folded = rawFolded.replace(/!\[([^\[\]\n]*)\](?=[([])/g, (image: string, label: string, at: number) => {
-    if (imageMask[at] !== '!' || isDjotEscaped(rawFolded, at) || label.includes('\\') || label.startsWith('^')) return image
+  const folded = rawFolded.replace(/!\[([^\[\]]*)\](?=[([])/g, (image: string, label: string, at: number) => {
+    if (imageMask[at] !== '!' || imageMask[at + image.length - 1] !== ']' || /\n[ \t]*\n/.test(label) || isDjotEscaped(rawFolded, at)) return image
+    const paragraph = imageStarts.has(at) ? imageParagraph : ''
+    if (label.startsWith('^')) return image
+    if (label.includes('\\') || label.includes('\n')) return paragraph + image
     if (!/[_*`{^~]/.test(label)) {
       spans.push(label)
-      return `![${prefix}${spans.length - 1}\x00]`
+      return `${paragraph}![${prefix}${spans.length - 1}\x00]`
     }
     spans.push(
       renderPlainText(parse(convert(`DJOTALT ${label} DJOTEND`).replaceAll('\0U\0', '\0')), { smartTypography: false })
         .replace(/ DJOTEND\n?$/, '')
         .slice(8),
     )
-    return `![${prefix}${spans.length - 1}\x00]`
+    return `${paragraph}![${prefix}${spans.length - 1}\x00]`
   })
   const wordMask = maskDjotCodeAndDestinations(folded).replace(/\[\^[^\]\n]*\]/g, (value, at: number) => isDjotEscaped(folded, at) ? value : ' '.repeat(value.length))
   const words = attributedDjotWords(folded, wordMask, convert, span => {
@@ -780,7 +790,7 @@ function convertDjotDocument(djot: string): string {
   }, invalidAttributes.inherited)
   const restoreSpans = new RegExp(`${prefix}(\\d+)\x00`, 'g')
   const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
-    .replaceAll(emptyNote, '%%%%')
+    .replaceAll(emptyNote, '%%%%').replaceAll(imageParagraph, '{%%}')
   return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
 
