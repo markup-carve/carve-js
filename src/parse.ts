@@ -12990,6 +12990,9 @@ class ParseSession {
             lazyState.divDepth++
             lazyState.authoredColon = { width: leadColon!, column: 0, depth: lazyState.divDepth }
           }
+          const foldedDescription = nestedOwnerColumn < 0 && lazyState.quoteInner === null && lazyState.lazyFoldable &&
+            !lazyState.absorbingFence && (lazyState.ownedColumn < 0 || lazyState.ownedAuthored) &&
+            lazyState.inDefList === false && RE_DEFLIST_DEF.test(trackedContent)
           trackItemLazyState(
             trackedContent,
             lazyState,
@@ -13045,6 +13048,9 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (foldedDescription && lazyState.inDefList === 'description') {
+            lazyState.inDefList = false
+          }
           if (tabFenceSourceColumn !== undefined && lazyState.opaque?.kind !== 'code') {
             tabFenceSourceColumn = undefined
             tabFenceOpenerIndex = undefined
