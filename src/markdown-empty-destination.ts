@@ -51,11 +51,11 @@ export function useEmptyDestinationBoundaryKey(key?: string): void {
   boundaryKey = key
 }
 
-function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string, enabled = true): string {
-  if (!enabled || boundaryKey === undefined || text === '' && lineStart) return text
+function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string, enabled = true, literal = false): string {
+  if (!enabled || boundaryKey === undefined || text === '' && lineStart) return literal ? protect(text) : text
   if (text.startsWith('^')) text = protect('\\^') + text.slice(1)
   const separator = lineStart ? '' : protect('`<!--' + boundaryKey + '-->`{=html}')
-  return `${separator}${protect('[')}${text || '0'}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
+  return `${separator}${protect('[')}${text === '' ? '0' : literal ? protect(text) : text}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
 }
 
 /** Makes the references a document defines visible to the inline pass. */
@@ -621,7 +621,7 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
     }
     label = written + label.slice(cursor)
   } while (label !== previous)
-  return markdownEmphasis(label, undefined, undefined, placeholders, true).replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
+  return markdownEmphasis(label, undefined, undefined, placeholders, true, true).replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
     const span = placeholders[Number(index)] ?? ''
     const code = /^(`+)([\s\S]*)\1$/.exec(span)
     if (code) {
@@ -653,7 +653,7 @@ function unwrapEmptyDestination(
     const titleAttr = title === '' ? '' : ` title="${escapeHtml(title)}"`
     const html = `<p><img src="" alt="${escapeHtml(plainAltText(label, placeholders, decodeEntity))}"${titleAttr}></p>`
     const text = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
-    return protect(keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect, keepBoundary))
+    return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect, keepBoundary, true)
   }
   if (title === '') return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(label) : label, lineStart, protect, keepBoundary)
   return keepEmptyDestinationBoundary(`[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`, lineStart, protect, keepBoundary)

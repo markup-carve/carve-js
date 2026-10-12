@@ -219,3 +219,33 @@ it.each(['[$a*b*c$]()', '[$$a*b*c$$]()'])('keeps opt-in math inside an empty lab
   if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'math', content: 'a*b*c' })
   expect(carveToHtml(carveToCarve(result.value))).toBe(carveToHtml(result.value))
 })
+
+
+it.each(['[a][b][^1]', '![a][b][^1]'])('keeps an undefined full reference before a footnote: %s', source => {
+  const result = migrateMarkdown(`${source}\n\n[a]: /u\n\n[^1]: note`)
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    const html = carveToHtml(value)
+    expect(html).not.toContain('href="/u"')
+    expect(html).not.toContain('<img')
+    expect(html).toContain('[a][b]')
+    expect((html.match(/role="doc-noteref"/g) ?? []).length).toBe(1)
+  }
+})
+
+it.each(['a&amp;b', 'a\\*b', 'a|b'])('keeps a renamed footnote after a literal bracket: %s', label => {
+  const result = migrateMarkdown(`[x][^${label}]\n\n[^${label}]: note`)
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    const html = carveToHtml(value)
+    expect(html).toContain('[x]')
+    expect((html.match(/role="doc-noteref"/g) ?? []).length).toBe(1)
+  }
+})
+
+
+it.each(['my_note', 'a&amp;b', 'a\\*b'])('keeps a footnote label inside an empty link unchanged: %s', label => {
+  const result = migrateMarkdown(`[see[^${label}]]()\n\n[^${label}]: note`)
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    expect((carveToHtml(value).match(/role="doc-noteref"/g) ?? []).length).toBe(1)
+    expect(value).not.toContain('carve-md-empty-')
+  }
+})

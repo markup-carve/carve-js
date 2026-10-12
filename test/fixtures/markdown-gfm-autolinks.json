@@ -10422,5 +10422,50 @@
     "source": "[<https://a.b/x_y>]() c@d.test",
     "html": "<p><a href=\"https://a.b/x_y\">https://a.b/x_y</a> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n",
     "emptyDestinationLoss": true
+  },
+  {
+    "source": "[![logo](/assets/_static_/logo.png)]()",
+    "html": "<p><img src=\"/assets/_static_/logo.png\" alt=\"logo\" /></img></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[![*x*](u)]()",
+    "html": "<p><img src=\"u\" alt=\"x\" /></img></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[![~b~](u)]()",
+    "html": "<p><img src=\"u\" alt=\"b\" /></img></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "`c`![a@b.test]()",
+    "html": "<p><code>c</code>a@b.test</img></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "$![a@b.test]()",
+    "html": "<p>$a@b.test</img></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "!![a@b.test]()",
+    "html": "<p>!a@b.test</img></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "`c`![]()\n\nmail a@b.test",
+    "html": "<p><code>c</code></img></p>\n<p>mail <a href=\"mailto:a@b.test\">a@b.test</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[![*x*][r]]()\n\n[r]: /u \"a*b*\"",
+    "html": "<p><img src=\"/u\" alt=\"x\" title=\"a*b*\" /></img></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[![*x*]]()\n\n[*x*]: /u",
+    "html": "<p><img src=\"/u\" alt=\"x\" /></img></p>\n",
+    "emptyDestinationLoss": true
   }
 ]

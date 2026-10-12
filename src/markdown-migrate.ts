@@ -1609,14 +1609,36 @@ function convertInline(
       || !activeEmptyDestinationOpeners.has(subject[offset] === '!' ? offset + 1 : offset)
   }, label => {
     const masked = new Map<string, string>()
-    if (label.includes('<') || dialect.math && label.includes('$')) {
+    if (label.includes('<') || label.includes('![') || label.includes('[^') || dialect.math && label.includes('$')) {
       const source = label
       const opaque = opaqueHtmlScanner(source)
       const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+      const bracketEnd = (open: number): number | undefined => {
+        let depth = 0
+        for (let at = open; at < source.length; at++) {
+          if (source[at] === '\\') { at++; continue }
+          if (source[at] === '[') depth++
+          else if (source[at] === ']' && --depth === 0) return at
+        }
+        return undefined
+      }
       let output = ''
       for (let at = 0; at < source.length;) {
         let end: number | undefined
-        if (source[at] === '<') {
+        if (source[at] === '!' && source[at + 1] === '[') {
+          const close = bracketEnd(at + 1)
+          if (close !== undefined) {
+            const label = source.slice(at + 2, close)
+            const inline = markdownInlineDestinationEnd(source, close + 1)
+            const reference = /^\[([^\[\]\n]*)\]/.exec(source.slice(close + 1))
+            if (inline !== undefined) end = inline + 1
+            else if (reference && (referenceDestinationLabel(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans))) end = close + 1 + reference[0].length
+            else if (referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans)) end = close + 1
+          }
+        } else if (source[at] === '[' && source[at + 1] === '^') {
+          const close = bracketEnd(at)
+          if (close !== undefined) end = close + 1
+        } else if (source[at] === '<') {
           autolink.lastIndex = at
           const angle = autolink.exec(source)
           end = angle ? at + angle[0].length : opaque(at) ?? scanHtmlTag(source, at, protectedSpans)?.end
@@ -1869,11 +1891,14 @@ function convertInline(
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
-  if (line.includes('][^')) {
+  let literalReferenceOpeners: Set<string> | undefined
+  if (line.includes('][^') || /\]\x00P\d+\x00/.test(line)) {
     const footnotePrefixSource = line
     const opaque = opaqueHtmlScanner(line)
     let cursor = 0
-    line = line.replace(/(?<!\\)\[((?!\^)(?:[^\[\]\n]|\[[^\]\n]*\])+)\](?=\[\^)/g, (match, label: string, offset: number) => {
+    line = line.replace(/(?<!\\)\[((?!\^)(?:[^\[\]\n]|\[[^\]\n]*\])+)\](?=\[\^|\x00P\d+\x00)/g, (match, label: string, offset: number) => {
+      const following = /^\x00P(\d+)\x00/.exec(footnotePrefixSource.slice(offset + match.length))
+      if (following && !protectedSpans[Number(following[1])]?.startsWith('[^')) return match
       while (cursor < offset) {
         const end = footnotePrefixSource[cursor] === '<' ? opaque(cursor) ?? scanHtmlTag(footnotePrefixSource, cursor)?.end : undefined
         if (end !== undefined) { cursor = end; continue }
@@ -1884,7 +1909,10 @@ function convertInline(
         cursor++
       }
       if (footnotePrefixSource[offset - 1] === ']' && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined) return match
-      return cursor > offset ? match : protect('\\[') + label + protect('\\]')
+      if (cursor > offset) return match
+      const opener = protect('\\[')
+      ;(literalReferenceOpeners ??= new Set()).add(opener)
+      return opener + label + protect('\\]')
     })
   }
   const referenceSubject = line
@@ -1904,7 +1932,6 @@ function convertInline(
     if (referenceSubject[at] === '[') referenceStack.push(at)
     else if (referenceSubject[at] === ']' && referenceStack.length) referenceOpeners.set(at, referenceStack.pop()!)
   }
-  let literalReferenceOpeners: Set<string> | undefined
   line = line.replace(/(?<=\])\[([^\]]*)\]/g, (match, reference: string, offset: number, source: string) => {
     if (referenceHtml.has(offset)) return match
     if (reference.startsWith('^')) return protect(match, match)
