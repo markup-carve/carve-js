@@ -6,7 +6,7 @@ import fixtures from './fixtures/heading-between-rejected-and-admitted-fences.js
 const normalized = (html: string) => html.replace(/>\s+</g, '><').trim()
 
 for (const row of fixtures) {
-  it(`preserves paragraph ownership and source positions: ${row.id}`, () => {
+  it(`reads paragraph ownership and keeps source positions in range: ${row.id}`, () => {
     const ast = parse(row.source, { positions: true })
     expect(normalized(renderHtml(resolve(ast)))).toBe(normalized(row.html))
     expect(normalized(renderHtml(resolve(parse(row.source))))).toBe(normalized(row.html))
@@ -27,17 +27,17 @@ for (const row of fixtures) {
   })
 }
 
-it('bounds paragraph resumes across repeated headings', () => {
+it('bounds repeated items that end on a heading and a closed code block', () => {
   const previous = layoutWork.on
   try {
     const rows = [64, 128, 256].map(count => {
-      const source = '- a\n    ```\n\n' + '  # h\n\n  ~~~~\n  code\n  ~~~~\nafter\n'.repeat(count)
+      const source = '- a\n    ```\n\n  # h\n\n  ~~~~\n  code\n  ~~~~\nafter\n\n'.repeat(count)
       layoutWork.reset()
       layoutWork.on = true
       const html = renderHtml(parse(source))
       expect(html.match(/<pre>/g)?.length).toBe(count)
-      expect(html.match(/after/g)?.length).toBe(count)
-      expect(html.lastIndexOf('after')).toBeLessThan(html.lastIndexOf('</li>'))
+      // No paragraph is open after the closed block, so every `after` leaves its list.
+      expect(html.match(/<\/ul>\n<p>after<\/p>/g)?.length).toBe(count)
       const work = layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines
       expect(work).toBeLessThanOrEqual(source.length * 64)
       return work
