@@ -8,6 +8,7 @@ export function protectNativeMarkdownDestinationGlyphs(
   opaqueEnd: (offset: number) => number | undefined,
   stripContinuationIndent: boolean | ((line: number) => boolean | string) = false,
   onEscapedLineBreak?: (offset: number) => void,
+  opaqueRanges: ReadonlyArray<{ start: number; end: number }> = [],
 ): string {
   const codeEnds = backtickRunEnds(source)
   const opens: Array<{ at: number; image: boolean; generation: number; nested: boolean }> = []
@@ -15,8 +16,11 @@ export function protectNativeMarkdownDestinationGlyphs(
   const glyphValues = new Map<number, string>()
   let lineCursor = 0, lineNumber = 0
   const tokenAt = /\x00P\d+\x00/y
-  let generation = 0
+  let generation = 0, rangeAt = 0
   for (let at = 0; at < source.length; at++) {
+    while (opaqueRanges[rangeAt]?.end !== undefined && opaqueRanges[rangeAt]!.end <= at) rangeAt++
+    const range = opaqueRanges[rangeAt]
+    if (range && range.start <= at && at < range.end) { at = range.end - 1; continue }
     if (source[at] === '\x00') {
       tokenAt.lastIndex = at
       const token = tokenAt.exec(source)

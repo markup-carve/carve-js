@@ -1247,6 +1247,22 @@ function escapeAttributeListsThatAttach(input: string): string {
  *   fence, so its backticks are that fence rather than literal prose text. See
  *   `restorePrefixedInlineRun`, the only caller that passes it.
  */
+function markdownDestinationOpaqueEnd(source: string, dialect: MarkdownDialect): (offset: number) => number | undefined {
+  const opaque = opaqueHtmlScanner(source)
+  const angle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
+  const math = /(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/y
+  return offset => {
+    if (dialect.math && source[offset] === '$') {
+      math.lastIndex = offset
+      const match = math.exec(source)
+      if (match) return offset + match[0].length
+    }
+    angle.lastIndex = offset
+    const match = angle.exec(source)
+    return match ? offset + match[0].length : opaque(offset) ?? scanHtmlTag(source, offset)?.end
+  }
+}
+
 function convertInline(
   input: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
@@ -1338,20 +1354,10 @@ function convertInline(
   }
   if (rawLine.includes('](') && (rawLine.includes('`') || rawLine.includes('<') || dialect.math && rawLine.includes('$'))) {
     const rawSubject = rawLine
-    const rawOpaque = opaqueHtmlScanner(rawSubject)
-    const rawAngle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
     rawLine = protectNativeMarkdownDestinationGlyphs(rawSubject, (value, source) => protect(value, source),
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
         || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
-      offset => {
-        if (dialect.math && rawSubject[offset] === '$') {
-          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(rawSubject.slice(offset))
-          if (math) return offset + math[0].length
-        }
-        rawAngle.lastIndex = offset
-        const angle = rawAngle.exec(rawSubject)
-        return angle ? offset + angle[0].length : rawOpaque(offset) ?? scanHtmlTag(rawSubject, offset)?.end
-      }, stripDestinationIndent)
+      markdownDestinationOpaqueEnd(rawSubject, dialect), stripDestinationIndent)
   }
   let line = protectCodeSpans(rawLine, writeCodeSpan)
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
@@ -3798,11 +3804,12 @@ function restorePrefixedInlineRun(
     true, false, line => continuationIndents[line] ?? false,
   ).split('\n')
   let physicalLine = 0
-  run = run.filter(part => {
-    const keep = !joinedLines.has(physicalLine)
-    physicalLine += countNewlines(part.text) + 1
-    return keep
-  })
+  run = run.flatMap(part => part.continuationIndents === undefined ? [part] : part.text.split('\n').map(text => ({ ...part, text })))
+    .filter(part => {
+      const keep = !joinedLines.has(physicalLine)
+      physicalLine += countNewlines(part.text) + 1
+      return keep
+    })
   const held = heldByItem(run)
   // Only a run whose lines this function can place in a container gets the
   // escape at all. What `prefix` holds is up to the collector, and a run can
@@ -3968,19 +3975,11 @@ function headingParagraphParts(lines: string[], dialect: MarkdownDialect, lazyLi
   const source = lines.join('\n')
   const retained = new Set<number>()
   if (source.includes('](') && source.includes('<') && source.includes('\\\n')) {
-    const opaque = opaqueHtmlScanner(source)
-    const angle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
+    const opaque = markdownDestinationOpaqueEnd(source, dialect)
+    const bareLinks = source.includes(':') || source.includes('www.') ? markdownRawBareLinks(source, opaque) : []
     protectNativeMarkdownDestinationGlyphs(source, value => value,
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, [], false) !== undefined || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, []),
-      at => {
-        if (dialect.math && source[at] === '$') {
-          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(source.slice(at))
-          if (math) return at + math[0].length
-        }
-        angle.lastIndex = at
-        const match = angle.exec(source)
-        return match ? at + match[0].length : opaque(at) ?? scanHtmlTag(source, at)?.end
-      }, false, at => retained.add(at))
+      opaque, false, at => retained.add(at), bareLinks)
   }
   let offset = 0
   const separators: string[] = []
@@ -3991,7 +3990,7 @@ function headingParagraphParts(lines: string[], dialect: MarkdownDialect, lazyLi
     separators.push(keep ? '\n' : ' ')
     if (keep) retainedLines.push(index + 1)
     return index > 0 && separators[index - 1] === '\n' && lazyLines[index]
-      ? trimEndSpaceTab(line) : headingLine(line, index === lines.length - 1 || keep)
+      ? /^[ \t]*/.exec(line)![0] + headingLine(line, index === lines.length - 1 || keep) : headingLine(line, index === lines.length - 1 || keep)
   })
   return { parts, joined: parts.map((part, index) => part + (index + 1 < parts.length ? separators[index] : '')).join(''), retainedLines }
 }
@@ -4585,7 +4584,7 @@ function respellQuotedBlocks(
             !RE_LIST_MARKER.test(trimmed) &&
             (isParagraphRunLine([trimmed], 0, 'text') || isStandardTableRow(trimmed))))
       if (lazy) {
-        out.push({ prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true, source: part.source })
+        out.push({ ...part, prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true, lazyQuote: true, nativeContinuationIndent: /^[ \t]*/.exec(part.text)![0] })
         prevTable = false
         continue
       }

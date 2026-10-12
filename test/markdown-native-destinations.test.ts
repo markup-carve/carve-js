@@ -61,3 +61,32 @@ it('keeps spaces in a lazy quote continuation inside a heading', () => {
   expect(carveToHtml(written)).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
   expect(carveToHtml(carveToCarve(written))).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
 })
+
+it.each(['https://example.com/', 'www.example.com/'])('keeps a bare URL inside one setext heading: %s', url => {
+  const source = `${url}[a](<b\\\nc>)\n---`
+  const written = markdownToCarve(source)
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html.match(/<h2(?: |>)/g)).toHaveLength(1)
+    expect(html).not.toContain('<p>')
+  }
+})
+
+it.each(['https://example.com/', 'www.example.com/'])('keeps the paragraph after a bare URL heading: %s', url => {
+  const source = `> ${url}[a](<b\\\n> c>)\n> ---\n> tail`
+  const written = markdownToCarve(source)
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html.match(/<h2(?: |>)/g)).toHaveLength(1)
+    expect(html).toContain('<p>tail</p>')
+  }
+})
+
+it('keeps lazy indentation after a soft line in a folded heading', () => {
+  const written = markdownToCarve('> first\n> [a](<a\\\n   b>)\n> ---\n> tail')
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
+    expect(html).toContain('<p>tail</p>')
+  }
+})

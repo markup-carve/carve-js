@@ -510,5 +510,9 @@
   {
     "source": "- - [a](<a\\\n   b>)",
     "html": "<ul>\n<li>\n<ul>\n<li><a href=\"a%5C%0A%20b\">a</a></li>\n</ul>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "> > [a](<a\\\n>    b>)",
+    "html": "<blockquote>\n<blockquote>\n<p><a href=\"a%5C%0A%20%20%20b\">a</a></p>\n</blockquote>\n</blockquote>\n"
   }
 ]
