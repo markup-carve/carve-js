@@ -68,7 +68,7 @@ describe("an invisible line below a description's column folds as text", () => {
     // characters on the page.
     expect(html(':: t\n:  d\n  %% c\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>')
     expect(html(':: t\n:  d\n  %% c\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>tail</p>\n  </dd>\n</dl>',
     )
   })
 

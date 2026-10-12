@@ -34,10 +34,20 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-description-marker-followed-by-a-no-break-space-has-content',
+  'a-closed-fence-in-a-quoted-sub-item-after-a-lazy-line-leaves-no-paragraph',
+  'a-quoted-term-takes-a-lazy-line',
+  'an-opener-past-a-hosted-container-s-column-interrupts-its-open-paragraph',
+  'a-footnote-reference-in-link-text-keeps-its-id-on-the-sup',
+  'a-head-row-alignment-marker-sets-the-whole-column',
+  'a-line-block-takes-a-lazy-line-whatever-its-last-payload-line',
+  'an-at-column-comment-retains-nothing',
   'a-line-final-run-of-spaces-and-tabs-is-dropped-before-the-line-is-read',
   'a-tab-is-content-in-a-heading-key-and-in-a-cross-reference-id',
   'a-closed-block-leaves-no-frame-for-the-line-below',
   'a-container-boundary-is-read-at-the-container-s-own-column',
+  'an-opener-past-a-hosted-container-s-column-opens-there',
+  'a-shifted-fence-in-a-quoted-container-s-body-stores-no-continuation-claim',
   'a-description-keeps-a-block-at-its-body-column-whatever-leads-the-item',
   'a-line-block-payload-span-pairs-past-the-content-column',
   'a-line-retained-after-a-comment-opens-a-paragraph',
@@ -981,8 +991,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
-// A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()// A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
 // meant every renumbering broke this guard for ~100 categories that had not

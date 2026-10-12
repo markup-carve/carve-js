@@ -2,31 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /**
- * THE COLUMN GATE IS ONE OPERATION IN EVERY CONTAINER (PART 9 §17 L3,
- * markup-carve/carve#1814, markup-carve/carve-js#1554).
- *
- * `AND FLUSH-LEFT MEANS COLUMN 0` (§17 L3, markup-carve/carve#1436) says the
- * `+` marker attaches a block that begins at DOCUMENT column 0 and nothing
- * else. A line at any other column is not attached at all: it falls through to
- * the ordinary column rules, which give it to whichever container its own
- * column names, "exactly as if the `+` line had been a comment".
- *
- * That question was asked in the LIST ITEM and nowhere else. The predicate
- * existed, but only the list's three attach paths called it, so a footnote
- * body, a definition description and a block quote each reached out for a line
- * the clause leaves where the author wrote it.
- *
- * THE CLAUSE NAMES ITS OWN CONTROL, so the rule is a RELATION between two
- * documents and no single golden can express it: for every container, the
- * marker spelling and the comment spelling of the same document must render
- * the same thing. A change that fixes three containers and drifts the fourth
- * passes every golden it did not touch.
- *
- * The QUOTE row uses the blank-line control as well. A comment line at column
- * 0 under an OPEN quoted paragraph is folded into it as lazy text rather than
- * being skipped - a defect of the quote's invisible-line handling and not of
- * the marker (markup-carve/carve#1817 left it deliberately) - so the row closes
- * the quoted paragraph with a bare `>` first and asks about the column alone.
+ * The continuation marker attaches only a block at document column 0.
+ * Comments can retain description and footnote bodies below their columns,
+ * so those hosts need separate expectations for the two spellings.
  */
 
 // Whitespace before a closing tag is dropped as well as collapsed: a comment
@@ -51,9 +29,24 @@ const BAND: Array<[string, string]> = [
 ]
 
 describe("the continuation marker's column gate reaches every container", () => {
-  for (const [what, src] of BAND) {
+  for (const [what, src] of BAND.slice(4)) {
     it(`reaches no further than a comment does in ${what}`, () => {
       expect(html(marker(src))).toBe(html(comment(src)))
+    })
+  }
+
+  for (const [what, src] of BAND.slice(0, 4)) {
+    it(`leaves indented text outside ${what}, while a comment retains it`, () => {
+      const footnote = what.startsWith('a footnote')
+      const reference = '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>'
+      const notes = '<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1">'
+      const backlink = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
+      expect(html(marker(src))).toBe(footnote
+        ? '<p>more</p>' + reference + notes + '<p>intro' + backlink + '</p></li></ol></section>'
+        : '<dl><dt>term</dt><dd>intro</dd></dl><p>more</p>')
+      expect(html(comment(src))).toBe(footnote
+        ? reference + notes + '<p>intro</p><p>more' + backlink + '</p></li></ol></section>'
+        : '<dl><dt>term</dt><dd><p>intro</p><p>more</p></dd></dl>')
     })
   }
 

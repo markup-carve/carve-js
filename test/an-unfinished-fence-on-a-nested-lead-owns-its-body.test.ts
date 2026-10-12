@@ -81,7 +81,7 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
 
   it("a colon container on the same lead is untouched", () => {
     expect(carveToHtml("- - ::: d\nbody\n:::\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>::: d\nbody</li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <div class=\"d\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>body</p>\n<div>\n\n</div>",
     )
   })
 

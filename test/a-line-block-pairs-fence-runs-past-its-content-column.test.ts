@@ -48,19 +48,18 @@ tail
 </ul>`)
 })
 
-it('keeps overindented fence behavior in a plain div', () => {
+it('opens an overindented code fence in a plain div', () => {
   const source = ['- ::: box', '    ```', '  :::', '    ```', '  :::', '  para', 'tail', ''].join('\n')
   expect(carveToHtml(source)).toBe(`<ul>
   <li>
     <div class="box">
-      <p><code></code></p>
-    </div>
-    <pre><code>:::
-para
+      <pre><code>:::
 </code></pre>
+    </div>
+    para
+tail
   </li>
-</ul>
-<p>tail</p>`)
+</ul>`)
 })
 
  it("keeps lazy prose after mixed-column runs in bullet ordered and quoted items", () => {

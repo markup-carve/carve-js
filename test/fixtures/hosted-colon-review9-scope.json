@@ -62,12 +62,12 @@
   {
     "id": "review9-g4",
     "source": "> - ::: |\n  :::\n",
-    "html": "<blockquote>\n  <ul>\n    <li>::: |\n:::</li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>:::</p>"
   },
   {
     "id": "review9-g4-code",
     "source": "> - ::: |\n  ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>::: |\n<code></code></li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p><code></code></p>"
   },
   {
     "id": "review9-g5",

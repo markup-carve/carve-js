@@ -25,22 +25,22 @@ const html = (s: string) => carveToHtml(s).trim()
  *
  *   - THE ITEM'S PARAGRAPH HAS TO BE OPEN. A fence on the lead leaves a BLOCK,
  *     and the line below a fenced item is the body's own. `leavesParagraphOpen`
- *     answers one question short of this, since a fence leaves that flag set.
+ *     also leaves that flag set for a colon opener, which opens a block.
  *   - A DEFINITION REGISTERS WHEREVER IT STANDS. A reference and a footnote
  *     definition render nothing and are recognized from a leading run, so the
  *     oracle still takes one here.
  */
 
 describe("a line below a description item's content column opens nothing", () => {
-  it('reads the ticket\'s colon run as the item\'s one paragraph', () => {
+  it('releases the ticket\'s below-column lines after the colon opener', () => {
     expect(html(':: t\n: 1. ::: note\n    n\n    :::\n')).toBe(
-      ['<dl>', '  <dt>t</dt>', '  <dd>', '    <ol>', '      <li>::: note', 'n', ':::</li>', '    </ol>', '  </dd>', '</dl>'].join('\n'),
+      ['<dl>', '  <dt>t</dt>', '  <dd>', '    <ol>', '      <li>', '        <aside class="admonition note" aria-label="Note">', '', '        </aside>', '      </li>', '    </ol>', '    <p>n</p>', '    <div>', '', '    </div>', '  </dd>', '</dl>'].join('\n'),
     )
   })
 
   it('reads the unordered spelling of the same column miss alike', () => {
     expect(html(':: t\n:  - ::: note\n    n\n    :::\n')).toBe(
-      ['<dl>', '  <dt>t</dt>', '  <dd>', '    <ul>', '      <li>::: note', 'n', ':::</li>', '    </ul>', '  </dd>', '</dl>'].join('\n'),
+      ['<dl>', '  <dt>t</dt>', '  <dd>', '    <ul>', '      <li>', '        <aside class="admonition note" aria-label="Note">', '', '        </aside>', '      </li>', '    </ul>', '    <p>n</p>', '    <div>', '', '    </div>', '  </dd>', '</dl>'].join('\n'),
     )
   })
 
@@ -84,9 +84,13 @@ describe("a line below a description item's content column opens nothing", () =>
         '  <dt>t</dt>',
         '  <dd>',
         '    <ul>',
-        '      <li>::: note',
-        'n</li>',
+        '      <li>',
+        '        <aside class="admonition note" aria-label="Note">',
+        '',
+        '        </aside>',
+        '      </li>',
         '    </ul>',
+        '    <p>n</p>',
         '    <div>',
         '',
         '    </div>',

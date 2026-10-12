@@ -67,9 +67,9 @@ describe('list lazy continuation', () => {
     )
   })
 
-  it('a glued item-local typed opener stays literal before a flush-left div opener', () => {
+  it('a marker-line typed opener releases prose before a flush-left div opener', () => {
     expect(html('- ::: note\nbody\n:::')).toBe(
-      '<ul>\n  <li>::: note\nbody</li>\n</ul>\n<div>\n\n</div>',
+      "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ul>\n<p>body</p>\n<div>\n\n</div>",
     )
   })
 

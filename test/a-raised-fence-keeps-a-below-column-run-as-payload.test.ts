@@ -193,7 +193,7 @@ describe('a raised fence keeps a below-column run as payload', () => {
     [
       'a terminated comment fence still leaves it as text',
       '- item\n\n   :::\n   a\n   %%%\n   b\n   %%%\n # heading\n   :::\n',
-      '<ul>\n  <li>item\n    <div>\n      <p>a</p>\n      <p># heading</p>\n    </div>\n  </li>\n</ul>',
+      "<ul>\n  <li>item\n    <div>\n      <p>a</p>\n    </div>\n  </li>\n</ul>\n<p># heading\n:::</p>",
     ],
     // A VERBATIM CLOSER RE-BASES AND A COMMENT ONE DOES NOT, so a folded run is
     // the comment fence's closer and never the code fence's. Reading it as one

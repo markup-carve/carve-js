@@ -212,62 +212,62 @@
   {
     "id": "review7-c04-below-column-marker-after-comment-01",
     "source": "- ::: box\n  %% c\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>- m</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-02",
     "source": "- ::: box\n  %% c\n - [ ] t\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>- [ ] t</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"t\"> t</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-03",
     "source": "- ::: box\n  x\n  %% c\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n      <p>- m</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-04",
     "source": "- ::: box\n  x\n  %% c\n - [ ] t\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n      <p>- [ ] t</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"t\"> t</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-05",
     "source": "- ::: box\n  %%%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>- m</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-06",
     "source": "- ::: box\n  %%%%\n - [ ] t\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>- [ ] t</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"t\"> t</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-07",
     "source": "- ::: box\n  x\n  %%%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n      <p>- m</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-08",
     "source": "- ::: box\n  x\n  %%%%\n - [ ] t\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n      <p>- [ ] t</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"t\"> t</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-09",
     "source": "- ::: box\n   %%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>- m</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-10",
     "source": "- ::: box\n   %%%\n - [ ] t\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>- [ ] t</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"t\"> t</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-11",
     "source": "- ::: box\n  x\n   %%%\n - m\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n      <p>- m</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>m</li>\n</ul>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-12",
     "source": "- ::: box\n  x\n   %%%\n - ::: in\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n      <p>- ::: in</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <p>x</p>\n    </div>\n  </li>\n</ul>\n<ul>\n  <li>\n    <div class=\"in\">\n\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c05-shifted-comment-shields-closer-01",
@@ -322,22 +322,22 @@
   {
     "id": "review7-c07-open-fence-tail-owner-01",
     "source": "- ::: box\n  ```\n  %%%\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-02",
     "source": "- ::: box\n  ```\n  %%%\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-03",
     "source": "- ::: box\n  ~~~\n  %%%\n    :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  :::\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-04",
     "source": "- ::: box\n  ~~~\n  %%%\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\nTAILX\n</code></pre>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <pre><code>%%%\n  ::: box\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c07-open-fence-tail-owner-05",

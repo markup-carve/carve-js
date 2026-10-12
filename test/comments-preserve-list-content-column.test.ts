@@ -35,3 +35,17 @@ for (const marker of ['- tail', '1. tail', '-{.y} tail', '- [x] tail']) {
     })
   }
 }
+
+for (const closer of [' %%%', '  %%%']) {
+  it(`releases a flush-left tail after a below-column comment closed at ${closer.length - 3}`, () => {
+    const source = `- item
+ %%%
+ hidden
+${closer}
+  \`\`\`
+tail
+`
+    const expected = '<ul>\n  <li>item\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>tail</p>'
+    expect(carveToHtml(source)).toBe(expected)
+  })
+}

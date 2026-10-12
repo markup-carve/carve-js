@@ -78,14 +78,11 @@ describe('a link reference definition', () => {
     expect((once.match(/\/u/g) ?? []).length).toBe(1)
   })
 
-  it('renders nothing on the html, markdown and plain targets', () => {
-    // The node feeds every link that resolves the label (PART 9R R1); the line
-    // itself is not content. carve-php emits nothing for it on these targets too,
-    // which is what keeps the two in agreement there.
+  it('drops an unused definition only on HTML', () => {
     const src = 'text\n\n[unused]: /u\n'
     expect(carveToHtml(src).trim()).toBe('<p>text</p>')
-    expect(carveToMarkdown(src).trim()).toBe('text')
-    expect(carveToPlainText(src).trim()).toBe('text')
+    expect(carveToMarkdown(src)).toBe(src)
+    expect(carveToPlainText(src)).toBe(src)
   })
 
   it('leaves an inline link alone', () => {

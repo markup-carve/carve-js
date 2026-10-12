@@ -104,8 +104,7 @@ describe("BELOW the body's column the body ends", () => {
     // register". Ending the body and re-emitting the characters one level out is
     // not carrying that sentence out, whatever the bytes look like.
     //
-    // The comment stays in the ejecting column: it is column-exempt (PART 9 §24)
-    // and renders nothing at any column, which corpus 430-5 pins.
+    // A comment renders nothing and separates the paragraphs inside the body.
     const band = (n: number, opener: string) =>
       carveToHtml(body + ' '.repeat(n) + opener + '\npara\n')
     for (const opener of ['{.x}', '[a]: /u']) {
@@ -113,7 +112,7 @@ describe("BELOW the body's column the body ends", () => {
       expect(band(1, opener)).toBe(folded)
       expect(band(2, opener)).toBe(folded)
     }
-    expect(band(1, '%% c')).toBe(dd + '<p>para</p>')
+    expect(band(1, '%% c')).toBe('<dl>\n  <dt>t</dt>\n  <dd>\n    <p>body\nmore</p>\n    <p>para</p>\n  </dd>\n</dl>')
     expect(band(2, '%% c')).toBe(band(1, '%% c'))
     // AND THE FOLD IS A FOLD, not a half one: the attribute attaches nothing and
     // the definition registers nothing, so a later reference stays literal.

@@ -28,16 +28,9 @@ for (const indent of [6, 8]) {
   }
 }
 
-// A comment below the item's content column is not the line that reaches it,
-// so the marker-line colon run gets no body and stays item text. The checker
-// opens the container on the comment.
-it('keeps a marker-line colon run as text across a below-column comment', () => {
+// The comment ends the empty marker-line container; text belongs to the document.
+it('ends a marker-line colon container across a below-column comment', () => {
   const document = parse(lines('- ::: inner', ' %% c', ' text'))
-  const html = renderHtml(document)
-  expect(html).not.toContain('<div')
-  expect(html).toContain('<li>::: inner')
-  expect(html.indexOf('text')).toBeLessThan(html.indexOf('</li>'))
-  const list = document.children[0]
-  expect(list?.type).toBe('list')
-  expect(document.children).toHaveLength(1)
+  expect(normalized(renderHtml(document))).toBe('<ul><li><div class="inner"></div></li></ul><p>text</p>')
+  expect(document.children.map(node => node.type)).toEqual(['list', 'comment', 'paragraph'])
 })

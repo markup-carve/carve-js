@@ -9,7 +9,7 @@
  * exactly as before.
  */
 import { describe, it, expect } from 'vitest'
-import { htmlToCarve, carveToHtml } from '../src/index.js'
+import { htmlToCarve, carveToHtml, migrateHtml } from '../src/index.js'
 
 /** Pandoc 2.11+ output shape: roles on the reference, back-link and section. */
 const PANDOC_211 = `<p>Text<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> and more<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a>.</p>
@@ -82,4 +82,21 @@ describe('generic mode reads the footnote roles', () => {
     expect(imported).toContain('[^1]')
     expect(imported).toContain('See [the first note](#fn1).')
   })
+})
+
+it.each([true, false])('imports a backlink-paired sup in link text (carrier: %s)', roundtrip => {
+  const html = carveToHtml('[t[^note]](/u)\n\n[^note]: n\n', { roundtrip })
+  const label = roundtrip ? 'note' : '1'
+  expect(migrateHtml(html).value).toBe(`[t[^${label}]](/u)\n\n[^${label}]: n\n`)
+})
+
+it.each([true, false])('imports a repeated sup in link text (carrier: %s)', roundtrip => {
+  const html = carveToHtml('[^note] [t[^note]](/u)\n\n[^note]: n\n', { roundtrip })
+  const label = roundtrip ? 'note' : '1'
+  expect(migrateHtml(html).value).toBe(`[^${label}] [t[^${label}]](/u)\n\n[^${label}]: n\n`)
+})
+
+it('keeps a sup without a matching endnote backlink as superscript', () => {
+  expect(migrateHtml('<p><a href="/u">t<sup id="fnref1">1</sup></a></p>').value)
+    .toBe('[t{^1^}{#fnref1}](/u)\n')
 })

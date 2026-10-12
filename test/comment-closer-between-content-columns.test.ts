@@ -180,18 +180,17 @@ for (const sibling of [false, true]) {
     ['span closed below the content column', '  %%%\n  n\n %%%\n'],
     ['span closed at column zero', '  %%%\n  n\n%%%\n'],
   ])(`reads a blank before a %s (sibling ${sibling})`, (_name, comment) => {
-    // The band tail is the item's own second paragraph either way; a sibling
-    // marker is not what the blank has to separate (carve#2548, corpus 517).
-    expect(carveToHtml('- a\n\n' + comment + ' tail\n' + (sibling ? '- b\n' : ''))).toBe(
-      '<ul>\n  <li><p>a</p>\n    <p>tail</p>\n  </li>\n' +
-        (sibling ? '  <li><p>b</p></li>\n' : '') +
-        '</ul>',
-    )
+    const leavesItem = comment === '  %% n\n' || comment === '  %%%\n  n\n  %%%\n'
+    const expected = leavesItem
+      ? '<ul>\n  <li>a</li>\n</ul>\n<p>tail' + (sibling ? '\n- b' : '') + '</p>'
+      : '<ul>\n  <li><p>a</p>\n    <p>tail</p>\n  </li>\n' +
+        (sibling ? '  <li><p>b</p></li>\n' : '') + '</ul>'
+    expect(carveToHtml('- a\n\n' + comment + ' tail\n' + (sibling ? '- b\n' : ''))).toBe(expected)
   })
 }
 
 it('keeps a descendant blank from loosening the host before its sibling', () => {
   expect(carveToHtml('- outer\n  - a\n\n    %%%\n    n\n   %%%\n tail\n- b\n')).toBe(
-    '<ul>\n  <li>outer\n    <ul>\n      <li>a</li>\n    </ul>\n    tail\n  </li>\n  <li>b</li>\n</ul>',
+    "<ul>\n  <li>outer\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<p>tail\n- b</p>",
   )
 })

@@ -13,6 +13,7 @@ import type {
   Image,
   InlineNode,
   Link,
+  LinkReferenceDefinition,
   List,
   ListItem,
   Table,
@@ -3246,12 +3247,7 @@ class CarveRenderSession {
         // Unless a definition list already wrote it on its own description line,
         // where the author put it - writing it twice would define it twice.
         if (this.definitionsWrittenInPlace.has(node as unknown as object)) return ''
-        const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
-        const attrs = renderAttrs(node.attrs)
-        // The href is re-escaped the way the inline tail's is: the reader
-        // resolves `\(`, `\)` and `\\`, so writing the resolved value bare would
-        // hand back a line whose parentheses no longer balance.
-        return `[${node.label}]: ${escapeDestinationEscapes(node.href)}${title}${attrs === '' ? '' : ` ${attrs}`}`
+        return renderLinkReferenceDefinition(node)
       }
       case 'citation_definition': {
         // PART 12 §18 gave the bibliography line a node for the same reason §10
@@ -5270,4 +5266,10 @@ class CarveRenderSession {
     }
     return out
   }
+}
+
+export function renderLinkReferenceDefinition(node: LinkReferenceDefinition): string {
+  const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
+  const attrs = renderAttrs(node.attrs)
+  return `[${node.label}]: ${escapeDestinationEscapes(node.href)}${title}${attrs === '' ? '' : ` ${attrs}`}`
 }

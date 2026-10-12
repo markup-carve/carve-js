@@ -35,7 +35,7 @@ import {
   useEmptyDestinationReferences,
   useEmptyDestinationBoundaryKey,
 } from './markdown-empty-destination.js'
-import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
+import { CARRIER_MARKER_DROPPED, CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
@@ -2608,7 +2608,7 @@ export type MarkdownImportLoss = {
  * PART 11 §10s: the carrier payloads this conversion lifted out of the source,
  * in the order their marker lines appeared.
  */
-let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string }> = []
+let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string; dropped?: boolean }> = []
 
 /** The placeholder a lifted marker line stands in as, unique in the source. */
 let carrierToken = ''
@@ -2748,7 +2748,7 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
 }
 
 /**
- * Lift every carrier marker line out of the source, leaving a placeholder.
+ * Drop invalid payloads and lift valid carrier lines to placeholders.
  *
  * A set that does not balance is NEVER reconstructed: the source comes back
  * untouched, the markers import as the raw HTML they are, and one
@@ -2759,7 +2759,8 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   carrierToken = ''
   if (!markdown.includes(CARRIER_PREFIX)) return markdown
 
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  let lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const dropped: MarkdownImportLoss[] = []
   const payloads = new Map<number, string>()
   const hosts = new Map<number, string>()
   // A MARKER IS A LINE THE BLOCK STRUCTURE READ AS HTML. The payload of a code
@@ -2773,11 +2774,28 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     const host = carrierHostPrefix(line)
     const payload = carrierPayload(line.slice(host.length))
     if (payload !== undefined) {
+      const valid = /^\{.*\}$/.test(payload)
+        ? isValidAttrPayload(payload.slice(1, -1))
+        : carrierFenceWidth(payload) > 0 || carrierIsCaption(payload) || /^::[ \t]/.test(payload) || payload === ':' || payload === ''
+      if (!valid) {
+        hosts.set(at, host)
+        dropped.push({
+          code: 'carrier-markers-damaged',
+          message: `${CARRIER_MARKER_DROPPED}: ${line.slice(host.length)}`,
+          line: at + 1,
+          fidelity: 'degraded',
+          confidence: 'fallback',
+        })
+        continue
+      }
       payloads.set(at, payload)
       hosts.set(at, host)
     }
   }
-  if (payloads.size === 0) return markdown
+  if (payloads.size === 0 && dropped.length === 0) return markdown
+  const droppedLines = new Set(dropped.map(loss => loss.line! - 1))
+  // Keep source line numbers while removing invalid marker content.
+  lines = lines.map((line, at) => droppedLines.has(at) ? carrierHostPrefix(line).trimEnd() : line)
   if (!carrierSetBalances([...payloads.values()]) || !carrierPlacementsValid(lines, payloads, hosts)) {
     importLosses.push({
       code: 'carrier-markers-damaged',
@@ -2789,6 +2807,8 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     return markdown
   }
 
+  importLosses.push(...dropped)
+
   let token = 'CARVECARRIER'
   while (markdown.includes(token)) token += 'X'
   carrierToken = token
@@ -2799,6 +2819,11 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   let host = ''
   const last = lines.length - 1
   for (const [at, line] of lines.entries()) {
+    if (droppedLines.has(at)) {
+      out.push(`${hosts.get(at) ?? ''}${token}${carrierSlots.length}Z`)
+      carrierSlots.push({ payload: '', closer: false, caption: false, replaceParagraph: false, dropped: true })
+      continue
+    }
     const payload = payloads.get(at)
     if (payload === undefined) {
       const body = withoutCarrierHost(line, host)
@@ -3074,7 +3099,12 @@ function restoreCarrierMarkers(carve: string): string {
     } else for (const child of Object.values(value)) visit(child)
   }
   visit(parse(carve).children)
-  const items: CarrierLine[] = sourceLines.filter((_line, at) => !removed.has(at)).map((line) => {
+  const items: CarrierLine[] = sourceLines.filter((line, at) => {
+    if (removed.has(at)) return false
+    const tokenAt = line.indexOf(carrierToken)
+    const match = tokenAt === -1 ? null : pattern.exec(line.slice(tokenAt).trimEnd())
+    return match === null || !carrierSlots[Number(match[1])]?.dropped
+  }).map((line) => {
     const at = line.indexOf(carrierToken)
     const match = at === -1 ? null : pattern.exec(line.slice(at).trimEnd())
     if (match === null) {

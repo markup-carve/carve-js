@@ -70,7 +70,7 @@ tail
    :::
   :::
 tail
-`, '<ul><li><div class="box"><p>p ::: note x :::</p></div></li></ul>' + tail],
+`, '<ul><li><div class="box"><p>p</p><aside class="admonition note" aria-label="Note"><p>x</p></aside></div></li></ul>' + tail],
     ['F', `- a
 
   ::: box
@@ -79,7 +79,7 @@ tail
    :::
   :::
 tail
-`, '<ul><li>a<div class="box"><p>::: note x :::</p></div></li></ul>' + tail],
+`, '<ul><li>a'+box+'</li></ul>' + tail],
     ['G', `::: box
  ::: note
  x

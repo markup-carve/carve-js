@@ -1,3 +1,5 @@
+import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
+import { normalizeRefLabel } from './label-key.js'
 import { definitionListFlattened } from './render-loss.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { backtickRunEnds } from './backtick-run-index.js'
@@ -131,8 +133,9 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     abbrBudget: budget,
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    referencedLinks: referencedLinkLabels(ast),
   }
-  const out = renderBlocks(ast.children, ctx)
+  const out = renderBlocks(blocksWithLinkDefinitionsInSourceOrder(ast), ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   if (!normalizeOutput) return `${out}${footnotes}`
   const body = normalize(`${out}${footnotes}`)
@@ -158,6 +161,7 @@ function renderFrontmatter(frontmatter: Document['frontmatter']): string {
 }
 
 interface MarkdownContext {
+  referencedLinks: ReadonlySet<string>
   options: MarkdownRenderOptions
   /** Carve heading id -> the GFM slug of the heading the target writes. */
   headingSlugs: Map<string, string>
@@ -543,11 +547,12 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       return `${withMarker(`*[${escapeMdHtml(stripControls(node.abbr))}]: `, escapeMdHtml(stripControls(node.expansion)))}\n\n`
     case 'comment':
       return ''
-    case 'link_reference_definition':
-      // Renders nothing, same as carve-php on this target. The definition's
-      // destination already reached every link that resolved it, and Markdown's
-      // own reference form is not what this writer emits.
-      return ''
+    case 'link_reference_definition': {
+      if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
+      const destination = neutralizeCharRefs(stripControls(node.href).replace(/[\\()<>]/g, '\\$&'))
+      const title = node.title === undefined ? '' : ` "${escapeMdTitle(node.title)}"`
+      return `[${node.label}]: ${destination}${title}\n\n`
+    }
     case 'citation_definition':
       // Renders nothing, which is what the line has always produced here: the
       // entry belongs to the references list, and PART 12 §18 gave the line a
