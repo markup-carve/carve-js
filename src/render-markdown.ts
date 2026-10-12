@@ -440,6 +440,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
 
 function attributeMarker(node: BlockNode, ctx: MarkdownContext): string {
   if (!ctx.roundtrip || !node.attrs || (node.type === 'definition_list' && ctx.definitionListDepth > 0)) return ''
+  // A block image's attributes reach the <img> §10u writes, so §10t has nothing left to carry.
+  if (node.type === 'image') return ''
   let attrs = node.attrs
   if (node.type === 'heading' && !attrs.order?.includes('#id')) {
     const { id: _generated, ...authored } = attrs

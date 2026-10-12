@@ -326,3 +326,14 @@ describe('a cross-reference carrier accepts every crossref_id', () => {
     })
   }
 })
+
+describe('a block image carries its attributes once', () => {
+  for (const source of ['![a](i.png){width=300}\n', '{.wide}\n![a](i.png)\n']) {
+    it(`writes no attribute-line marker beside the marked <img> for ${JSON.stringify(source)}`, () => {
+      const markdown = carveToMarkdown(source, { roundtrip: true })
+      expect(markdown).not.toContain('<!-- carve: {')
+      expect(markdown).toContain('data-carve-inline')
+      expect(migrateMarkdown(markdown).value).toBe(source.startsWith('{') ? '![a](i.png){.wide}\n' : source)
+    })
+  }
+})
