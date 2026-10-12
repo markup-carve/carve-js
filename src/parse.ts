@@ -1071,6 +1071,37 @@ class Lexer {
   // Reuse a measured whitespace run while literal dedents stay inside it.
   private leadingWhitespaceLines: number[] = []
 
+  columnParent?: Lexer
+  columnOrigins?: ReadonlyMap<number, StrippedLineOrigin> | undefined
+
+  private ownedColumnCache = new Map<number, { text: string, value: number | undefined }>()
+
+  ownedIndentColumns(index: number): number | undefined {
+    const line = this.lineAt(index) ?? ''
+    const cached = this.ownedColumnCache.get(index)
+    if (cached?.text === line) return cached.value
+    const value = this.measureOwnedIndentColumns(index, line)
+    this.ownedColumnCache.set(index, { text: line, value })
+    if (layoutWork.on) layoutWork.geometryEntries++
+    return value
+  }
+
+  private measureOwnedIndentColumns(index: number, line: string): number | undefined {
+    if (line.slice(0, this.lineLeadingWhitespace(index)).includes('\t')) return undefined
+    const origin = this.columnOrigins?.get(index)
+    if (origin?.text === line && this.columnParent) {
+      const parentLine = this.columnParent.lineAt(origin.parentIndex) ?? ''
+      if (parentLine.slice(0, this.columnParent.lineLeadingWhitespace(origin.parentIndex)).includes('\t')) return undefined
+      if (origin.prefix <= this.columnParent.lineLeadingWhitespace(origin.parentIndex)) {
+        const column = this.columnParent.ownedIndentColumns(origin.parentIndex)
+        return column === undefined ? undefined : Math.max(0, column - indentColumns(parentLine.slice(0, origin.prefix)))
+      }
+      return indentColumns(line)
+    }
+    if (this.nested && line.slice(0, this.lineLeadingWhitespace(index)).includes('\t')) return undefined
+    return indentColumns(line)
+  }
+
   lineLeadingWhitespace(index: number): number {
     return this.leadingWhitespaceLines[index] ??= /^[ \t]*/.exec(this.lineAt(index) ?? '')![0].length
   }
@@ -1413,6 +1444,8 @@ function nestedSubLexer(
     parent.unclosedContainerKeys,
     parent,
   )
+  sub.columnParent = parent
+  sub.columnOrigins = origins
   sub.usesContainerFenceLookahead = true
   sub.nested = true
   sub.documentLineCount = parent.documentLineCount
@@ -2998,7 +3031,8 @@ function itemFenceHasCloser(
   // Where the container has ended, so nothing further is this fence's to
   // close. The memo stays sound because that line does not depend on which
   // opener asked.
-  endsContainer: (line: string, afterBlank: boolean) => boolean,
+  endsContainer: (line: string, afterBlank: boolean, index: number) => boolean,
+  columnAt?: (index: number) => number | undefined,
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
@@ -3007,15 +3041,17 @@ function itemFenceHasCloser(
   let maxRun = 0
   let afterBlank = false
   for (let i = start; i < lexer.lineCount; i++) {
+    if (columnAt && layoutWork.on) layoutWork.closerLines++
     const line = lexer.lineAt(i)!
-    if (endsContainer(line, afterBlank)) break
+    if (endsContainer(line, afterBlank, i)) break
     if (isBlankLine(line)) {
       afterBlank = true
       continue
     }
     afterBlank = false
-    if (indentColumns(line, contentCol) < contentCol) continue
-    const dedented = sliceColumns(line, contentCol, true)
+    const column = columnAt ? columnAt(i) : indentColumns(line, contentCol)
+    if (column === undefined || column < contentCol || (columnAt && column !== contentCol)) continue
+    const dedented = columnAt ? line.slice(lexer.lineLeadingWhitespace(i)) : sliceColumns(line, contentCol, true)
     if (closeRe.test(dedented)) return true
     const closer = RE_FENCE_CLOSER.exec(dedented)
     if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
@@ -5859,7 +5895,8 @@ function trackItemLazyState(
         }
         state.ownedColumn = -1
         state.deepest = null
-      } else if (state.ownedAuthored && (run === state.ownedColumn || (state.divDepth === 0 && colonFenceOpenerLen(content.slice(run)) !== null))) readFlush = true
+      } else if (state.ownedAuthored && (run === state.ownedColumn || (state.divDepth === 0 &&
+          colonFenceOpenerLen(content.slice(run)) !== null))) readFlush = true
       else if (!state.ownedAuthored && (facts?.descendantFrames === true || authoredFenceColumns !== undefined)) readDescendant = true
     }
     if (state.ownedColumn < 0 && atContentColumn && run > 0) {
@@ -7238,6 +7275,7 @@ function rebaseOverindentedBlocks(
   markerColonOwnsExtent = false,
   sourceLines?: readonly (string | undefined)[],
   tabFenceColumns?: ReadonlyMap<number, number>,
+  markerDescriptionCodeOpeners?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7411,6 +7449,7 @@ function rebaseOverindentedBlocks(
         }
         termOpen = false
         if (descriptionColumn !== null && column >= descriptionColumn) {
+          if (markerDescriptionCodeOpeners?.has(j)) break
           end = j
           continue
         }
@@ -12470,7 +12509,15 @@ class ParseSession {
       let consumedNoteParagraphBefore = false
       let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
-      let firstBodyMarkerColumn: number | undefined = RE_DEFLIST_TERM.test(content) ? -1 : undefined
+      const markerLineTerm = RE_DEFLIST_TERM.test(content)
+      let singleMarkerTerm = markerLineTerm
+      let markerDescriptionColumn: number | undefined
+      let markerDescriptionCodeOpeners: Set<number> | undefined
+      let markerDescriptionCodeBase: number | undefined
+      let markerDescriptionCodeTracked = false
+      let markerDescriptionCodeClosedAtFloor = false
+      let markerDescriptionFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
+      let firstBodyMarkerColumn: number | undefined = markerLineTerm ? -1 : undefined
       let hasParentAuthoredBlock = false
       // Lines that could open a parent-owned block, tested only where the answer
       // is read: isParentAuthoredBlock() walks an indentation run per line and a
@@ -12666,7 +12713,7 @@ class ParseSession {
         lazyFoldable: leadState.leavesParagraphOpen,
         inTable: leadState.endsOnTableRow,
         quoteInner: leadState.quote,
-        inDefList: RE_DEFLIST_TERM.test(content)
+        inDefList: markerLineTerm
           ? 'term'
           : RE_DEFLIST_DEF.test(content)
             ? 'description'
@@ -12754,6 +12801,13 @@ class ParseSession {
           nestedNoteBodyColumn = undefined
           noteBodyHeldCode = false
         }
+        if (markerDescriptionColumn !== undefined &&
+            (lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) ||
+              (!isBlankLine(l) && indentColumns(l, contentCol) < contentCol))) markerDescriptionColumn = undefined
+        const resumesMarkerDescriptionParagraph = markerDescriptionCodeClosedAtFloor && pendingBlanks === 0 &&
+          opensCodeFence(l.trimStart()) && indentColumns(l) > contentCol + markerDescriptionCodeBase!
+        if (resumesMarkerDescriptionParagraph) lazyState.lazyFoldable = true
+        if (markerDescriptionCodeClosedAtFloor && !isBlankLine(l)) markerDescriptionCodeClosedAtFloor = false
         if (isBlankLine(l)) {
           pendingBlanks++
           pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -13057,6 +13111,69 @@ class ParseSession {
             lazyState.divDepth++
             lazyState.authoredColon = { width: leadColon!, column: 0, depth: lazyState.divDepth }
           }
+          const itemHasFenceCloser = (marker: string, extraColumns = 0): boolean => {
+            const perColumn = itemFenceMemos ??= new Map()
+            let memo = perColumn.get(extraColumns)
+            if (memo === undefined) perColumn.set(extraColumns, memo = new Map())
+            const answer = itemFenceHasCloser(
+              lexer,
+              marker,
+              fenceLineIndex,
+              contentCol + extraColumns,
+              memo,
+              itemEndsAt,
+            )
+            if (extraColumns > 0 && nestedOwnerColumn < 0 && answer) {
+              lexer.descendantFenceAnswers.set(`${lexer.lineNumber(fenceLineIndex)}:${marker}`, true)
+            }
+            // Not published for an offset query; see the twin above.
+            if (extraColumns === 0) {
+              lexer.fenceLookaheadAnswers.set(
+                `${lexer.lineNumber(fenceLineIndex)}:${marker}`,
+                answer,
+              )
+            }
+            return answer
+          }
+          if (markerDescriptionColumn !== undefined && !opensCodeFence(dedented.trimStart()) &&
+              lineOpensItemBlock(dedented.trimStart())) markerDescriptionColumn = undefined
+          const markerDescription = singleMarkerTerm && lazyState.quoteInner === null && !insideOpenFence(lazyState)
+            ? RE_DEFLIST_DEF.exec(trackedContent) : null
+          if (markerDescriptionColumn !== undefined && markerDescription === null && !isBlankLine(trackedContent) &&
+              indentColumns(trackedContent) < markerDescriptionColumn) markerDescriptionColumn = undefined
+          if (singleMarkerTerm && !insideOpenFence(lazyState) && RE_DEFLIST_TERM.test(trackedContent)) singleMarkerTerm = false
+          if (singleMarkerTerm && lazyState.quoteInner === null && lazyState.inDefList === 'description' &&
+              (lazyState.ownedColumn < 0 || lazyState.ownedAuthored) && !insideOpenFence(lazyState) &&
+              markerDescriptionColumn !== undefined && indentColumns(trackedContent) >= markerDescriptionColumn) {
+            const opener = trackedContent.trimStart()
+            const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+            if (fence !== null) {
+              const marker = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+              const hasOwnedCloser = (extraColumns: number): boolean => {
+                const memos = markerDescriptionFenceMemos ??= new Map()
+                let memo = memos.get(extraColumns)
+                if (memo === undefined) memos.set(extraColumns, memo = new Map())
+                return itemFenceHasCloser(lexer, marker, fenceLineIndex, contentCol + extraColumns, memo,
+                  (line, afterBlank, index) => itemEndsAt(line, afterBlank) ||
+                    (!isBlankLine(line) && ((lexer.ownedIndentColumns(index) ?? -1) < contentCol ||
+                      lexer.quoteLazyLines.has(lexer.lineNumber(index)))),
+                  index => lexer.ownedIndentColumns(index))
+              }
+              const openerColumn = lexer.ownedIndentColumns(fenceLineIndex)
+              if (openerColumn !== undefined && openerColumn >= contentCol + markerDescriptionColumn &&
+                  (hasOwnedCloser(openerColumn - contentCol) || hasOwnedCloser(0))) {
+                (markerDescriptionCodeOpeners ??= new Set()).add(nested.length)
+                markerDescriptionCodeBase = openerColumn - contentCol
+                markerDescriptionCodeTracked = true
+                singleMarkerTerm = false
+                lazyState.inDefList = false
+                lazyState.ownedColumn = -1
+                lazyState.deepest = null
+              }
+              singleMarkerTerm = false
+              markerDescriptionColumn = undefined
+            }
+          }
           const foldedDescription = nestedOwnerColumn < 0 && lazyState.quoteInner === null && lazyState.lazyFoldable &&
             !lazyState.absorbingFence && (lazyState.ownedColumn < 0 || lazyState.ownedAuthored) &&
             lazyState.inDefList === false && RE_DEFLIST_DEF.test(trackedContent)
@@ -13066,33 +13183,11 @@ class ParseSession {
           const skipConsumedCloser = closedDescendantFence || openedLaterNoteFence
           closedDescendantFence = false
           openedLaterNoteFence = false
+          const wasMarkerDescriptionCode = markerDescriptionCodeTracked && lazyState.opaque?.kind === 'code'
           if (!skipConsumedCloser) trackItemLazyState(
             trackedContent,
             lazyState,
-            (marker, extraColumns = 0) => {
-              const perColumn = itemFenceMemos ??= new Map()
-              let memo = perColumn.get(extraColumns)
-              if (memo === undefined) perColumn.set(extraColumns, memo = new Map())
-              const answer = itemFenceHasCloser(
-                lexer,
-                marker,
-                fenceLineIndex,
-                contentCol + extraColumns,
-                memo,
-                itemEndsAt,
-              )
-              if (extraColumns > 0 && nestedOwnerColumn < 0 && answer) {
-                lexer.descendantFenceAnswers.set(`${lexer.lineNumber(fenceLineIndex)}:${marker}`, true)
-              }
-              // Not published for an offset query; see the twin above.
-              if (extraColumns === 0) {
-                lexer.fenceLookaheadAnswers.set(
-                  `${lexer.lineNumber(fenceLineIndex)}:${marker}`,
-                  answer,
-                )
-              }
-              return answer
-            },
+            itemHasFenceCloser,
             true,
             // Classify the span before applying the item's column boundary.
             // A below-column payload line still ends the item; its own parse
@@ -13126,6 +13221,17 @@ class ParseSession {
           )
           if (markerNoteItem && lazyState.invisibleAtColumn && RE_FOOTNOTE_DEF.test(dedented.trimStart())) {
             nestedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
+          }
+          if (resumesMarkerDescriptionParagraph && lazyState.opaque === null) authoredBaseEligible.delete(nested.length - 1)
+          if (wasMarkerDescriptionCode && lazyState.opaque === null && opensCodeFence(dedented.trimStart())) {
+            markerDescriptionCodeClosedAtFloor = indentColumns(l) === contentCol
+            markerDescriptionCodeTracked = false
+          }
+          if (opensCodeFence(dedented.trimStart())) singleMarkerTerm = false
+          if (markerDescription !== null && lazyState.inDefList === 'description' &&
+              !lineOpensItemBlock(markerDescription[2]!.trimStart()) &&
+              !opensCodeFence(markerDescription[2]!.trimStart())) {
+            markerDescriptionColumn = 1 + markerDescription[1]!.length
           }
           if (foldedDescription && lazyState.inDefList === 'description') {
             lazyState.inDefList = false
@@ -13492,7 +13598,7 @@ class ParseSession {
         taskMatch(content, terminatorFree) !== null ||
         extractItemAttr(content, terminatorFree) !== null
       // Include marker-line containers whose continuation keeps its own extent.
-      const leadOwnsExtent = (leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)) || RE_DEFLIST_TERM.test(content) ||
+      const leadOwnsExtent = (leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)) || markerLineTerm ||
         (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&
           blockQuoteParagraphOpen(markerLineQuoteState(content)!))
       const rebaseLines = leadOwnsExtent ? [content, ...nested] : nested
@@ -13531,6 +13637,7 @@ class ParseSession {
           tabRebaseColumns === undefined ? undefined
             : leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
           tabRebaseColumns,
+          markerDescriptionCodeOpeners,
         )
         : new Set<number>()
       if (leadOwnsExtent) {
