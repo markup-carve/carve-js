@@ -63,7 +63,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         let body = match[2]!.replace(/\n/g, ' ')
         if (/^ .* $/.test(body) && /[^ ]/.test(body)) body = body.slice(1, -1)
         emit('code-span', line); result += `<code>${escape(body)}</code>`; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
-      } else if ((match = /^\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`^{|}~])/.exec(rest))) {
+      } else if ((match = /^\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/.exec(rest))) {
         emit('escape', line, 'normalized'); result += escape(match[1]!); i += match[0].length
       } else if (bare?.start === i) {
         const body = text.slice(bare.start, bare.end)

@@ -74,7 +74,7 @@ export const RE_LINK_REST = /^(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S]
 const RE_LINK_REST_STICKY = new RegExp(RE_LINK_REST.source.slice(1), 'y')
 
 /** Complete destination openers, with nested destinations scanned once. */
-export function completeDestinationRanges(text: string, includeEmpty = true): Map<number, number> {
+export function completeDestinationOpeners(text: string): Set<number> {
   const stops = new Int32Array(text.length + 1)
   stops[text.length] = text.length
   for (let i = text.length - 1; i >= 0; i--) {
@@ -86,23 +86,19 @@ export function completeDestinationRanges(text: string, includeEmpty = true): Ma
     } else if (c === ')' || RE_DESTINATION_WHITESPACE.test(c)) stops[i] = i
     else stops[i] = stops[i + 1]!
   }
-  const found = new Map<number, number>()
-  const closes = new Map<number, number>()
+  const found = new Set<number>()
+  const closes = new Map<number, boolean>()
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== '(') continue
     const stop = stops[i + 1]!
-    if (stop < i + 1 || (!includeEmpty && stop === i + 1)) continue
+    if (stop <= i + 1) continue
     let closed = closes.get(stop)
     if (closed === undefined) {
       RE_LINK_REST_STICKY.lastIndex = stop
-      closed = RE_LINK_REST_STICKY.exec(text)?.[0].length ?? 0
+      closed = RE_LINK_REST_STICKY.test(text)
       closes.set(stop, closed)
     }
-    if (closed) found.set(i, stop + closed)
+    if (closed) found.add(i)
   }
   return found
-}
-
-export function completeDestinationOpeners(text: string): Set<number> {
-  return new Set(completeDestinationRanges(text, false).keys())
 }

@@ -1,6 +1,6 @@
 import type { InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
-import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
+import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
@@ -850,14 +850,22 @@ function opaqueHtmlScanner(s: string): (start: number) => number | undefined {
  * double-quoted attribute and no other, and a body that cannot break out of the
  * construct. Anything else falls back to the raw span the importer wrote before.
  */
-function attributedNative(tag: string, open: string, body: string, protect: (s: string) => string): string | undefined {
+function attributedNative(tag: string, open: string, body: string, protect: (s: string) => string, sources: readonly string[] = []): string | undefined {
   if (body.includes('<')) return undefined
   if (tag === 'span') {
     // CARVE-P3-016 makes a comment's content literal, so the whole construct is
     // protected: no later inline pass may read markup inside it.
     if (!/^<span\s+class\s*=\s*"critic-comment"\s*>$/i.test(open)) return undefined
-    const value = decodeHtmlEntitiesRaw(body)
-    return /[#{}\\\n]/.test(value) ? undefined : protect(`{#${value}#}`)
+    const escapesAndEntities = new RegExp(String.raw`\x00P(\d+)\x00|\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
+    let rawHtml = false
+    const value = body.replace(escapesAndEntities, (match, index: string | undefined, escaped: string | undefined) => {
+      if (index === undefined) return escaped ?? decodeHtmlEntitiesRaw(match)
+      const source = referenceSourceText(match, sources)
+      if (/^\\[!-/:-@\[-`{-~]$/.test(source)) return source.slice(1)
+      if (source.includes('<')) rawHtml = true
+      return source
+    })
+    return rawHtml || /[{}\\\n]/.test(value) ? undefined : protect(`{#${value}#}`)
   }
   if (tag !== 'abbr') return undefined
   const title = /^<abbr\s+title\s*=\s*"([^"]*)"\s*>$/i.exec(open)
@@ -908,7 +916,7 @@ function criticDeletion(
   return { carve: protect('{-') + body + protect('-}'), end }
 }
 
-function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[]): string {
+function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[], sources: readonly string[] = placeholders): string {
   let out = ''
   let i = 0
   const opaqueEnd = opaqueHtmlScanner(input)
@@ -946,7 +954,7 @@ function convertInlineHtml(input: string, protect: (s: string) => string, placeh
             i = deletion.end
             continue
           }
-          const carve = attributedNative(tag.name, input.slice(i, tag.end), body, protect)
+          const carve = attributedNative(tag.name, input.slice(i, tag.end), body, protect, sources)
           if (carve !== undefined) {
             out += carve
             i = end
@@ -1284,8 +1292,8 @@ function convertInline(
     const fence = /^`+/.exec(span)?.[0] ?? ''
     if (fence.length > 2 || !span.includes('\n')) return protectCode(span)
     if (joinedLines && trackLines) {
-      while (codeCursor < offset) if (input[codeCursor++] === '\n') codeLine++
-      while (codeCursor < offset + span.length) if (input[codeCursor++] === '\n') joinedLines.add(++codeLine)
+      while (codeCursor < offset) if (rawLine[codeCursor++] === '\n') codeLine++
+      while (codeCursor < offset + span.length) if (rawLine[codeCursor++] === '\n') joinedLines.add(++codeLine)
     }
     let value = span.slice(fence.length, -fence.length).replace(/\n[ \t]*/g, ' ')
     if (value.startsWith(' ') && value.endsWith(' ') && /[^ ]/.test(value)) value = value.slice(1, -1)
@@ -1298,7 +1306,15 @@ function convertInline(
   if (!holdsFenceBody && !isReferenceDefinition && (input.includes(':') || input.includes('www.'))) {
     let cursor = 0
     let captured = ''
-    for (const link of markdownRawBareLinks(input)) {
+    const rawOpaqueEnd = opaqueHtmlScanner(input)
+    const rawAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+    for (const link of markdownRawBareLinks(input, at => {
+      const opaque = rawOpaqueEnd(at) ?? scanHtmlTag(input, at)?.end
+      if (opaque !== undefined) return opaque
+      rawAutolink.lastIndex = at
+      const angle = rawAutolink.exec(input)
+      return angle === null ? undefined : at + angle[0].length
+    })) {
       captured += input.slice(cursor, link.start) + protect(writeLiteralAutolink(input.slice(link.start, link.end), link.prefix, true), input.slice(link.start, link.end))
       cursor = link.end
     }
@@ -1623,7 +1639,8 @@ function convertInline(
     return `![${rawImageBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : escapeUnclosedImageEditorialOpeners(alt.replace(/[\\[\]`]/g, '\\$&'))}]`
   }
   const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
-    const encoded = encodeDest(dest)
+    const sourceDest = referenceSourceText(dest, protectedSources)
+    const encoded = markdownInlineDestinationEnd(sourceDest, 0) === sourceDest.length - 1 ? encodeDest(dest) : undefined
     return encoded === undefined
       ? (alt === '' ? '' : protect(alt, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
       : protect(alt + encoded, source)
@@ -1904,7 +1921,7 @@ function convertInline(
     return escaped
   }
   if (line.includes('/') && /[*_]|<(?:em|i)\b/i.test(line)) line = escapeLabelSlashes(line, true)
-  line = convertInlineHtml(line, protect, protectedSpans)
+  line = convertInlineHtml(line, protect, protectedSpans, protectedSources)
 
   const referenceUrls = plainMarkdownUrlRanges(line, protectedSpans, protectedSources)
   let referenceUrlAt = 0

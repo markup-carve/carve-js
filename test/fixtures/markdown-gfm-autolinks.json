@@ -10194,5 +10194,49 @@
   {
     "source": "[x](http://a.b \"http://c.d\")",
     "html": "<p><a href=\"http://a.b\" title=\"http://c.d\">x</a></p>\n"
+  },
+  {
+    "source": "[a]( http://example.com )",
+    "html": "<p><a href=\"http://example.com\">a</a></p>\n"
+  },
+  {
+    "source": "[b](http://example.com  \"two spaces\")",
+    "html": "<p><a href=\"http://example.com\" title=\"two spaces\">b</a></p>\n"
+  },
+  {
+    "source": "[c](http://example.com (paren title))",
+    "html": "<p><a href=\"http://example.com\" title=\"paren title\">c</a></p>\n"
+  },
+  {
+    "source": "[d](http://example.com/long\n\"title on next line\")",
+    "html": "<p><a href=\"http://example.com/long\" title=\"title on next line\">d</a></p>\n"
+  },
+  {
+    "source": "\\``http://example.com`",
+    "html": "<p>`<code>http://example.com</code></p>\n"
+  },
+  {
+    "source": "<a title=\"a>b\" href=\"http://example.com\">x</a>",
+    "html": "<p><a title=\"a>b\" href=\"http://example.com\">x</a></p>\n"
+  },
+  {
+    "source": "a <?php echo \"http://example.com\"; ?> b",
+    "html": "<p>a <?php echo \"http://example.com\"; ?> b</p>\n"
+  },
+  {
+    "source": "a <!DOCTYPE html SYSTEM \"http://www.w3.org/TR/html4/strict.dtd\"> b",
+    "html": "<p>a <!DOCTYPE html SYSTEM \"http://www.w3.org/TR/html4/strict.dtd\"> b</p>\n"
+  },
+  {
+    "source": "> See http://example.com/some/long/path for\n> details `multi\n> line` end",
+    "html": "<blockquote>\n<p>See <a href=\"http://example.com/some/long/path\">http://example.com/some/long/path</a> for\ndetails <code>multi line</code> end</p>\n</blockquote>\n"
+  },
+  {
+    "source": "a\\@b.test",
+    "html": "<p><a href=\"mailto:a@b.test\">a@b.test</a></p>\n"
+  },
+  {
+    "source": "[a](/x (http://a.b/a(b)))",
+    "html": "<p>[a](/x (<a href=\"http://a.b/a(b)\">http://a.b/a(b)</a>))</p>\n"
   }
 ]

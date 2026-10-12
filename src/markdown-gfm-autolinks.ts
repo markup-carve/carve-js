@@ -1,4 +1,4 @@
-import { completeDestinationRanges } from './link-destination.js'
+import { markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 
 export interface MarkdownBareLink {
   start: number
@@ -46,7 +46,7 @@ function trimmedEnd(text: string, start: number, end: number): number {
   return end
 }
 
-function scanBareLinks(text: string, mode: 'all' | 'url' | 'email', raw = false): MarkdownBareLink[] {
+function scanBareLinks(text: string, mode: 'all' | 'url' | 'email', raw = false, opaqueEnd?: (offset: number) => number | undefined): MarkdownBareLink[] {
   if (mode === 'all') {
     const urls = scanBareLinks(text, 'url')
     const result: MarkdownBareLink[] = []
@@ -61,7 +61,6 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email', raw = false)
   }
   const links: MarkdownBareLink[] = []
   const triggers = /https?:\/\/|ftp:\/\/|www\.|@/gi
-  const destinations = raw ? completeDestinationRanges(text) : undefined
   const codeClosers = new Map<number, number>()
   if (raw) {
     const runs = [...text.matchAll(/`+/g)]
@@ -70,6 +69,10 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email', raw = false)
       const run = runs[i]!
       const close = next.get(run[0].length)
       if (close !== undefined) codeClosers.set(run.index, close + run[0].length)
+      if (run[0].length > 1) {
+        const partialClose = next.get(run[0].length - 1)
+        if (partialClose !== undefined) codeClosers.set(run.index + 1, partialClose + run[0].length - 1)
+      }
       next.set(run[0].length, run.index)
     }
   }
@@ -87,11 +90,12 @@ function scanBareLinks(text: string, mode: 'all' | 'url' | 'email', raw = false)
         continue
       }
       if (raw && text[contextAt] === '<') {
-        const opaque = /^(?:<!--(?:[\s\S]*?)-->|<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>|<\/?[A-Za-z][^<>]*>)/.exec(text.slice(contextAt))
-        if (opaque) { contextAt += opaque[0].length; continue }
+        const end = opaqueEnd?.(contextAt)
+        if (end !== undefined) { contextAt = end; continue }
       }
       if (raw && text[contextAt] === ']' && bracketDepth > 0) {
-        const end = destinations?.get(contextAt + 1)
+        const close = markdownInlineDestinationEnd(text, contextAt + 1)
+        const end = close === undefined ? undefined : close + 1
         if (end !== undefined) { bracketDepth--; contextAt = end; continue }
       }
       if (text[contextAt] === '[') bracketDepth++
@@ -194,6 +198,7 @@ export function markdownBareLinks(
   })
 }
 
-export function markdownRawBareLinks(text: string): MarkdownBareLink[] {
-  return scanBareLinks(text, 'url', true)
+export function markdownRawBareLinks(text: string, opaqueEnd?: (offset: number) => number | undefined): MarkdownBareLink[] {
+  if (!/https?:\/\/|ftp:\/\/|www\./i.test(text)) return []
+  return scanBareLinks(text, 'url', true, opaqueEnd)
 }

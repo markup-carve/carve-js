@@ -161,7 +161,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       }
       continue
     }
-    const end = activationTailEnd(source, i + 1)
+    const end = markdownInlineDestinationEnd(source, i + 1)
     if (end !== undefined) {
       onActiveLink(opener.at, i)
       if (!opener.image) generation++
@@ -186,7 +186,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   return output.join('')
 }
 
-function activationTailEnd(source: string, open: number): number | undefined {
+export function markdownInlineDestinationEnd(source: string, open: number): number | undefined {
   if (source[open] !== '(') return undefined
   let at = open + 1
   const tokenAt = /\x00P\d+\x00/y
