@@ -2078,7 +2078,12 @@ function convertInline(
       }
       const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
       if (tagEnd !== undefined) { escaped += label.slice(at, tagEnd); at = tagEnd; continue }
-      escaped += label[at] === '/' ? (guard ? protect('\\/', '/') : '\\/') : label[at]!
+      // An intraword slash, or one with whitespace on both sides, neither opens nor closes emphasis.
+      const before = label[at - 1], next = label[at + 1]
+      const delimiter = label[at] === '/' && (
+        (next !== undefined && !/[ \t\n]/.test(next) && !/[A-Za-z0-9]/.test(before ?? ''))
+        || (before !== undefined && !/[ \t\n]/.test(before) && !/[A-Za-z0-9]/.test(next ?? '')))
+      escaped += delimiter ? (guard ? protect('\\/', '/') : '\\/') : label[at]!
       at++
     }
     return escaped
@@ -2236,7 +2241,7 @@ function convertInline(
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
-  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
+  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans, false, false, 0, undefined, true)
 
   // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
   // strikethrough and the run lost a tilde as well.
@@ -2606,7 +2611,7 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return
     if (Array.isArray(value)) {
-      const definitions: Array<{ depth: number; defined: boolean }> = []
+      const definitions: Array<{ depth: number }> = []
       let depth = 0
       for (let i = 0; i < value.length; i++) {
         const node = value[i] as BlockNode
@@ -2620,15 +2625,13 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
             if (carrierFenceWidth(payload) > 0) depth += carrierIsCloser(payload) ? -1 : 1
             if (/^::[ \t]/.test(payload)) {
               const last = definitions.at(-1)
-              if (!last || last.depth !== depth) definitions.push({ depth, defined: false })
-              else last.defined = false
+              if (!last || last.depth !== depth) definitions.push({ depth })
             } else if (payload === ':') {
               const last = definitions.at(-1)
               if (!last || last.depth !== depth) valid = false
-              else last.defined = true
             } else if (payload === '') {
               const last = definitions.pop()
-              if (!last?.defined || last.depth !== depth) valid = false
+              if (!last || last.depth !== depth) valid = false
             }
             const next = value[i + 1] as BlockNode | undefined
             const previous = value[i - 1] as BlockNode | undefined

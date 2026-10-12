@@ -77,6 +77,32 @@ function insertEscapes(subject: string, offsets: readonly number[]): string {
 }
 
 /**
+ * Escape each bare `/` that could open emphasis and has a closer after it.
+ *
+ * The parser skips a slash that can neither open nor close and pairs the opener
+ * with a later closer, so a pair may hold slashes: `/usr/local/` is one
+ * emphasis. A pattern whose body stops at the first slash never saw it.
+ *
+ * One backward pass finds the nearest closer after each offset, so a line of
+ * openers with no closer costs its length once.
+ */
+function escapeSlashOpeners(subject: string): string {
+  if (!subject.includes('/')) return subject
+  const alnum = (c: string | undefined): boolean => c !== undefined && /[A-Za-z0-9]/.test(c)
+  const blank = (c: string | undefined): boolean => c === undefined || /\s/.test(c)
+  const offsets: number[] = []
+  let closer = -1
+  for (let i = subject.length - 1; i >= 0; i--) {
+    if (subject[i] !== '/' || isEscapedAt(subject, i)) continue
+    const before = subject[i - 1], after = subject[i + 1]
+    if (before !== '/' && !alnum(before) && after !== '/' && !blank(after) && closer > i + 1) offsets.push(i)
+    if (!blank(before) && !alnum(after)) closer = i
+  }
+
+  return insertEscapes(subject, offsets.reverse())
+}
+
+/**
  * Escape every match of the pattern that is not escaped ALREADY.
  *
  * Escaping an escaped delimiter a second time is worse than leaving it: the
@@ -294,7 +320,7 @@ export function escapePlainCarveInlineSyntax(
   // Only http and https URLs are protected above, so every other scheme reaches
   // this rule.
   if (!bareHandled.includes('/')) {
-    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9/])\/(?!\s)([^/]+?)(?<!\s)\/(?![A-Za-z0-9])/g, out)
+    out = escapeSlashOpeners(out)
   }
   if (!bareHandled.includes('=')) {
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9=])(?<!(?<!\\)\{)=(?![=\s])([^=]+?)(?<!\s)=(?![A-Za-z0-9=])/g, out)
