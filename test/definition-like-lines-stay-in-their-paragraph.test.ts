@@ -21,14 +21,21 @@ describe('definition-like lines stay in their paragraph', () => {
     expect(html('> [d]: u\n)\n')).toBe('<blockquote>\n\n</blockquote>\n<p>)</p>')
   })
 
+  // CARVE-P0-009: a link definition leaves the item no open paragraph, so `)`
+  // closes the list and no surviving frame, the quote included, adopts it.
   it.each([
     ['> - a\n>   [d]: u\n)\n', 'ul'],
     ['> 1. a\n>    [d]: u\n)\n', 'ol'],
     ['> - a\n>\n>   [d]: u\n)\n', 'ul'],
-    ['> - a\n>   [^f]: u\n)\n', 'ul'],
-  ])('matches the oracle for a definition inside a quoted list (%j)', (source, tag) => {
+  ])('ends the quote after a link definition inside a quoted list (%j)', (source, tag) => {
     expect(html(source)).toBe(
-      `<blockquote>\n  <${tag}>\n    <li>a</li>\n  </${tag}>\n  <p>)</p>\n</blockquote>`,
+      `<blockquote>\n  <${tag}>\n    <li>a</li>\n  </${tag}>\n</blockquote>\n<p>)</p>`,
+    )
+  })
+
+  it('keeps the line in the quote after a footnote definition inside a quoted list', () => {
+    expect(html('> - a\n>   [^f]: u\n)\n')).toBe(
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <p>)</p>\n</blockquote>',
     )
   })
 
