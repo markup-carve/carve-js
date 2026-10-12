@@ -12965,7 +12965,9 @@ class ParseSession {
             // there (corpus 197, 277-3, 358). The container ends at document
             // column 0, which is the line this test excludes and which is all
             // that separates 358 from 357-2.
-            (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
+            (lazyState.commentAtColumn &&
+              !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+              indentColumns(l, contentCol) > 0)) &&
             (!lazyContinuationEndsList(l, lexer) ||
               // A list marker indented past the base column but BELOW the content
               // column folds into what the item is still holding open, rather than
