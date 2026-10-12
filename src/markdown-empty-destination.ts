@@ -1,3 +1,4 @@
+import { rawBracketRunCloses } from './parse.js'
 import { trimMatchingEdges } from './trim-non-nbsp.js'
 import { readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
 /*
@@ -45,6 +46,21 @@ function rewriteParenthesizedTitle(value: string): string {
 const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), tableInline: new Map(), sourceLabels: new Map(), footnotes: new Map() }
 
 let references = NO_REFERENCES
+let boundaryKey: string | undefined
+
+export function useEmptyDestinationBoundaryKey(key?: string): void {
+  boundaryKey = key
+}
+
+function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string, enabled = true, literal = false): string {
+  if (!enabled || boundaryKey === undefined || text === '' && lineStart) return literal ? protect(text) : text
+  if (literal && !rawBracketRunCloses(text)) {
+    text = text.replace(/(\\*)[\[\]]/g, (match, slashes: string) => slashes.length % 2 === 0 ? slashes + '\\' + match.at(-1)! : match)
+  }
+  if (text.startsWith('^')) text = protect('\\^') + text.slice(1)
+  const separator = lineStart ? '' : protect('`<!--' + boundaryKey + '-->`{=html}')
+  return `${separator}${protect('[')}${text === '' ? '0' : literal ? protect(text) : text}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
+}
 
 /** Makes the references a document defines visible to the inline pass. */
 export function useEmptyDestinationReferences(found: EmptyDestinationReferences | null): void {
@@ -64,6 +80,10 @@ export function referenceDestinationLabel(
   const key = normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders))
   const found = references.empty.has(key) ? undefined : references.labels.get(key)
   return table && found !== undefined && references.tableInline.has(found) && authored === undefined ? undefined : found
+}
+
+export function isEmptyDestinationReference(label: string, decodeEntity: (entity: string) => string, placeholders: readonly string[]): boolean {
+  return references.empty.has(normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders)))
 }
 
 export function referenceInlineTarget(label: string, table = false): string | undefined {
@@ -605,7 +625,7 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
     }
     label = written + label.slice(cursor)
   } while (label !== previous)
-  return markdownEmphasis(label, undefined, undefined, placeholders, true).replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
+  return markdownEmphasis(label, undefined, undefined, placeholders, true, true).replace(RE_ENTITY, decodeEntity).replace(/\x00P(\d+)\x00/g, (_m, index: string) => {
     const span = placeholders[Number(index)] ?? ''
     const code = /^(`+)([\s\S]*)\1$/.exec(span)
     if (code) {
@@ -629,17 +649,18 @@ function unwrapEmptyDestination(
   placeholders: readonly string[],
   protect: (s: string) => string,
   decodeEntity: (entity: string) => string,
+  keepBoundary = true,
 ): string {
   // Bare at the start of a line or container, the text would open a block.
-  const lineStart = /^[ \t]*(?:(?:>|[-*+]|(?:[0-9]{1,9}|[A-Za-z])[.)])[ \t]+|>)*$/.test(before)
+  const lineStart = /^[ \t]*(?:(?:>|[-*+]|(?:[0-9]{1,9}|[A-Za-z])[.)])[ \t]+|>)*(?:#{1,6}[ \t]+)?$/.test(before)
   if (image) {
     const titleAttr = title === '' ? '' : ` title="${escapeHtml(title)}"`
     const html = `<p><img src="" alt="${escapeHtml(plainAltText(label, placeholders, decodeEntity))}"${titleAttr}></p>`
     const text = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
-    return protect(lineStart ? escapeLineInitialBlockSyntax(text) : text)
+    return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect, keepBoundary, true)
   }
-  if (title === '') return lineStart ? escapeLineInitialBlockSyntax(label) : label
-  return `[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`
+  if (title === '') return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(label) : label, lineStart, protect, keepBoundary)
+  return keepEmptyDestinationBoundary(`[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`, lineStart, protect, keepBoundary)
 }
 
 /** Rewrites every link and image with an empty destination on one line of inline text. */
@@ -650,16 +671,22 @@ export function unwrapEmptyDestinations(
   decodeEntity: (entity: string) => string,
   onUnwrap?: (image: boolean, before: string, subject: string) => void,
   excluded?: (subject: string, offset: number) => boolean,
+  prepareLabel?: (label: string) => string,
+  keepBoundaryAt?: (subject: string, offset: number) => boolean,
+  insideImageAt?: (subject: string, offset: number) => boolean,
 ): string {
-  const replaceAt = (re: RegExp, pick: (m: RegExpExecArray) => string | null): void => {
+  const replaceAt = (re: RegExp, pick: (m: RegExpExecArray, emittedPrefix: string) => string | null): void => {
     const subject = line
     let out = ''
     let cursor = 0
     re.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = re.exec(subject)) !== null) {
-      if (excluded?.(subject, m.index)) continue
-      const replacement = pick(m)
+      if (excluded?.(subject, m.index)) {
+        re.lastIndex = m.index + 1
+        continue
+      }
+      const replacement = pick(m, out + subject.slice(cursor, m.index))
       if (replacement === null) continue
       out += subject.slice(cursor, m.index) + replacement
       cursor = m.index + m[0].length
@@ -668,7 +695,7 @@ export function unwrapEmptyDestinations(
   }
   let imageSubject: string | undefined
   let imageRanges: Array<[number, number]> = []
-  const unwrap = (m: RegExpExecArray, title: string, subject: string) => {
+  const unwrap = (m: RegExpExecArray, title: string, subject: string, emittedPrefix: string) => {
     if (subject !== imageSubject) {
       imageSubject = subject
       imageRanges = []
@@ -680,26 +707,37 @@ export function unwrapEmptyDestinations(
         }
       }
     }
-    if (!imageRanges.some(([start, end]) => m.index > start && m.index < end)) {
+    const insideImage = (insideImageAt?.(subject, m.index) ?? false) || imageRanges.some(([start, end]) => m.index > start && m.index < end)
+    if (!insideImage) {
       onUnwrap?.(m[0][0] === '!', subject.slice(0, m.index), subject)
     }
-    return unwrapEmptyDestination(m[1]!, m[0][0] === '!', title, subject.slice(0, m.index), placeholders, protect, decodeEntity)
+    const image = m[0][0] === '!'
+    const label = image ? m[1]! : prepareLabel?.(m[1]!) ?? m[1]!
+    const next = subject[m.index + m[0].length]
+    const isolatedPlainLabel = /^[A-Za-z0-9 ]+$/.test(m[1]!)
+      && (emittedPrefix === '' || /\s$/.test(emittedPrefix))
+      && (next === undefined || /\s/.test(next))
+    return unwrapEmptyDestination(label, image, title, emittedPrefix, placeholders, protect, decodeEntity, !insideImage && !isolatedPlainLabel && (keepBoundaryAt?.(subject, m.index) ?? true))
   }
   if (references.empty.size > 0) {
-    const byReference = (m: RegExpExecArray, reference: string, subject: string): string | null => {
+    const byReference = (m: RegExpExecArray, reference: string, subject: string, emittedPrefix: string): string | null => {
       const key = normalizeReferenceLabel(decodeLinkTitle(reference, decodeEntity, placeholders))
       const title = references.empty.get(key)
-      return title === undefined ? null : unwrap(m, title, subject)
+      return title === undefined ? null : unwrap(m, title, subject, emittedPrefix)
     }
     let subject = line
-    replaceAt(new RegExp(String.raw`!?\[${LABEL}\](?:\[\]|\[([^[\]\n]+)\])`, 'g'), (m) => byReference(m, m[2] ?? m[1]!, subject))
+    replaceAt(new RegExp(String.raw`!?\[${LABEL}\](?:\[\]|\[([^[\]\n]+)\])`, 'g'), (m, before) => byReference(m, m[2] ?? m[1]!, subject, before))
     subject = line
-    replaceAt(/!?\[([^[\]\n]+)\](?![[(:\x00])/g, (m) => byReference(m, m[1]!, subject))
+    replaceAt(/!?\[([^[\]\n]+)\](?![[(:])/g, (m, before) => {
+      const next = /^\x00P(\d+)\x00/.exec(subject.slice(m.index + m[0].length))
+      if (next && placeholders[Number(next[1])] !== '\\]') return null
+      return byReference(m, m[1]!, subject, before)
+    })
   }
   const subject = line
   replaceAt(
     new RegExp(String.raw`!?\[${LABEL}\]\([ \t]*(?:<>(?:[ \t]+("[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*)?\)`, 'g'),
-    (m) => unwrap(m, m[2] !== undefined ? decodeLinkTitle(m[2].slice(1, -1), decodeEntity, placeholders) : '', subject),
+    (m, before) => unwrap(m, m[2] !== undefined ? decodeLinkTitle(m[2].slice(1, -1), decodeEntity, placeholders) : '', subject, before),
   )
   return line
 }

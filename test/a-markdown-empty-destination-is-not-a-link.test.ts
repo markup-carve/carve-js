@@ -22,7 +22,7 @@ describe('a Markdown link or image with an empty destination', () => {
     ["an image at the start of a line escapes its block opener", "![- x]()", "\\- x"],
     ["an image alt drops defined reference links only", "![a [b][r] [r][] [r] [z]]()\n\n[r]: /u", "a b r r [z]\n\n[r]: /u"],
     ["deeply nested brackets", "[a [b [c]]]()", "a [b [c]]"],
-    ["the label keeps its formatting", "pre [a *b* `c`]() post", "pre a /b/ `c` post"],
+    ["the label keeps its formatting", "pre [a *b* `c`]() post", "pre a {/b/} `c` post"],
     ["a full reference", "[w][r]\n\n[r]: <>", "w"],
     ["collapsed, shortcut and case-folded references", "[r][] [r] [R]\n\n[r]: <>", "r r R"],
     ["a reference title is decoded", "[v][s]\n\n[s]: <> \"a &amp; \\\"b\"", "[v]{title=\"a & \\\"b\"}"],
