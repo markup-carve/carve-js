@@ -209,7 +209,8 @@ describe('borrowed HTML layout', () => {
     // Corpus 549 adds the all-dot ordered-list example.
     // The spec pin past carve#2867 adds five more accepted documents; each one
     // is held against the authoritative render above before it is counted.
-    expect(accepted).toBe(66)
+    // The pin at carve 6a11a860 adds corpus 559-3 and 559-6.
+    expect(accepted).toBe(68)
     // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
     expect(acceptedFiles).toEqual(expect.arrayContaining([
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',

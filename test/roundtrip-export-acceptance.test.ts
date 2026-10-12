@@ -1,11 +1,10 @@
-import { specResource } from './helpers/ahead-of-pin-resource.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'vitest'
 import { parseFragment, serialize } from 'parse5'
 import { parse, carveToHtml, carveToHtmlWithReport, htmlToAst, htmlToCarve, carveToMarkdown, carveToMarkdownWithReport, migrateMarkdown } from '../src/index.js'
 
-const fixtures = JSON.parse(readFileSync(specResource('roundtrip-export-acceptance-fixtures.json'), 'utf8'))
+const fixtures = JSON.parse(readFileSync(new URL('../spec/resources/roundtrip-export-acceptance-fixtures.json', import.meta.url), 'utf8'))
 const inventory = ['explicit-id', 'generated-id', 'ref', 'autolink', 'footnote-label', 'inline-footnote', 'raw', 'escaped', 'abbreviations', 'col-widths', 'label', 'id-slot', 'tight']
 // Reserved without an inventory row: no core writer emits it, every importer consumes it.
 const retiredNames = ['data-carve-src', 'data-djot-src']

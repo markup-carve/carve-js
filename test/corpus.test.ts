@@ -34,6 +34,16 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-line-final-run-of-spaces-and-tabs-is-dropped-before-the-line-is-read',
+  'a-tab-is-content-in-a-heading-key-and-in-a-cross-reference-id',
+  'a-closed-block-leaves-no-frame-for-the-line-below',
+  'a-container-boundary-is-read-at-the-container-s-own-column',
+  'a-description-keeps-a-block-at-its-body-column-whatever-leads-the-item',
+  'a-line-block-payload-span-pairs-past-the-content-column',
+  'a-line-retained-after-a-comment-opens-a-paragraph',
+  'a-paragraph-in-a-held-container-does-not-loosen-the-item',
+  'a-quoted-item-that-ends-on-a-block-past-its-column-holds-no-paragraph',
+  'a-tab-inside-a-line-is-content-in-a-label-and-after-a-definition-marker',
   'an-unterminated-raw-fence-keeps-literal-payload-termination',
   'a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run',
   'a-link-destination-is-opaque-to-the-bracket-scan',
