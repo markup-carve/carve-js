@@ -1,16 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToAstJson, carveToCarve, carveToHtml } from '../src/index.js'
 
-/**
- * markup-carve/carve#1602: writing a container's missing closer is a spelling
- * change, so it must not move the list's tightness.
- *
- * THE PIN IS THE PARSE FORM, and it has to be. Every gate this engine runs was
- * green on this document before the fix, because the HTML is byte-identical on
- * both sides: the item's blocks sit inside the div, and a tight list's
- * paragraph suppression never reaches in there. An assertion on rendered HTML
- * here would be a check that could not fail.
- */
 describe("an item's lead container hides no blank line", () => {
   // Corpus `362-an-unterminated-container-does-not-extend-the-item-past-a-
   // blank-line-3`, and the document the ruling was measured on.
@@ -27,14 +17,9 @@ describe("an item's lead container hides no blank line", () => {
     expect(carveToCarve(source)).toBe(formatted)
   })
 
-  it('reads both spellings loose', () => {
-    // Loose was the ruled direction because it is the reading the engine
-    // already gave the SOURCE - the smaller of the two moves, and the one that
-    // changes no HTML anywhere. Whether an item whose only child is a container
-    // holding a blank line is loose AT ALL is a separate question the ruling
-    // deliberately left open.
-    expect(tightness(source)).toBe(false)
-    expect(tightness(formatted)).toBe(false)
+  it('reads both spellings tight', () => {
+    expect(tightness(source)).toBe(true)
+    expect(tightness(formatted)).toBe(true)
   })
 
   it('renders the same bytes either way, which is why the HTML gates missed it', () => {

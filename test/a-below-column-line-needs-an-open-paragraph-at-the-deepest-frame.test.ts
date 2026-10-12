@@ -64,7 +64,7 @@ describe('a block at a quoted item content column leaves the quote for the line 
       '<blockquote><ul><li>a\n<h1>H</h1></li></ul><p>tail</p></blockquote>',
     )
     expect(read(lines('> - a', '>     # H', 'tail'))).toBe(
-      '<blockquote><ul><li>a\n<h1>H</h1></li></ul><p>tail</p></blockquote>',
+      '<blockquote><ul><li>a\n<h1>H</h1></li></ul></blockquote><p>tail</p>',
     )
   })
 })

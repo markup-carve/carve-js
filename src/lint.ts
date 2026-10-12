@@ -31,6 +31,7 @@ import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import {
   parse,
   isTableRow,
+  isBlockAttributeLine,
   readCellAttributeBlock,
   rowAttrsFromLine,
   splitTableRowSpans,
@@ -1110,7 +1111,6 @@ const FENCE_RUN = /^(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
 const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|!\[[^\]]*\]\([^)\s]+(?: "[^"]*"| '[^']*')?\)(?:\{[^{}\n]+\})?[ \t]*$|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
-const LINT_BLOCK_ATTRIBUTE = /^(?:\{[^{}\n]+\})+[ \t]*$/
 /**
  * A footnote definition line. Mirrors parse.ts.
  *
@@ -1400,7 +1400,7 @@ function collectListItemIndentWarnings(
     const authoredColonFence = /^(:{3,})(?: |$)/.exec(authored.rest)
     if (authored.column === 0 ||
         (!LINT_BLOCK_OPENER.test(authored.rest) &&
-         !LINT_BLOCK_ATTRIBUTE.test(authored.rest) &&
+         !isBlockAttributeLine(authored.rest) &&
          !isTableRow(authored.rest))) continue
     let item: LintItemColumn | undefined = containing
     let rule: string | undefined

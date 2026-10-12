@@ -207,7 +207,7 @@
   {
     "id": "review7-c03-overindented-div-body-12",
     "source": "> - a\n>     ::: box\n>     ---\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <div class=\"box\">\n        <hr>\n      </div>\n    </li>\n  </ul>\n  <p>TAILX</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <div class=\"box\">\n        <hr>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "review7-c04-below-column-marker-after-comment-01",

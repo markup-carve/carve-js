@@ -1,26 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToAstJson, carveToCarve, carveToHtml } from '../src/index.js'
 
-/**
- * carve-js#1376, ruled TIGHT: writing an attached container's missing closer is
- * a spelling change, so the list's tightness must not move across it.
- *
- * #1372 answered the shape markup-carve/carve#1602 was measured on - the
- * container that IS the item's first block, which converges on LOOSE. This is
- * the other configuration of the same production, and it converges the other
- * way for the same reason: on the reading the engine already gives the OTHER
- * spelling. There the source's; here the closed spelling's, which is tight and
- * is what corpus
- * `279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-10`
- * pins.
- *
- * THIS ONE BROKE BOTH FORMS OF §1, unlike #1602's. The lead paragraph rendered
- * `<p>x</p>` on one side and `x` on the other, so `to_html(fmt(x)) ==
- * to_html(x)` failed too - and `test/render-carve.test.ts` has swept the corpus
- * with that assertion all along, green only because no corpus document holds
- * this shape. A corpus document is owed and is named in the PR; the spec repo is
- * frozen for the release, so it cannot land yet.
- */
 describe("an attached container's closer is a spelling change", () => {
   const unclosed = '- x\n  :::\n  a\n\n  b\n'
   const closed = '- x\n  :::\n  a\n\n  b\n  :::\n'
@@ -64,13 +44,9 @@ describe("an attached container's closer is a spelling change", () => {
     expect(carveToCarve(closed)).toBe(closed)
   })
 
-  it('keeps the LEAD container loose, both spellings', () => {
-    // #1372's ruling, unmoved. The two configurations converge on opposite
-    // answers, and each converges on what its own other spelling already said -
-    // so a fix that made all four agree on one value would be the spec change
-    // both rulings declined.
-    expect(tightness('- ::: d\n  b\n\n  tail\n')).toBe(false)
-    expect(tightness('- ::: d\n  b\n\n  tail\n  :::\n')).toBe(false)
+  it('keeps the lead container tight, both spellings', () => {
+    expect(tightness('- ::: d\n  b\n\n  tail\n')).toBe(true)
+    expect(tightness('- ::: d\n  b\n\n  tail\n  :::\n')).toBe(true)
   })
 
   it('keeps a verbatim fence opaque, closed or not', () => {
@@ -83,13 +59,10 @@ describe("an attached container's closer is a spelling change", () => {
     expect(tightness('- %%%\n  b\n\n  tail\n  %%%\n')).toBe(true)
   })
 
-  it('agrees with carve-php on every attached configuration', () => {
-    // Measured on carve-php aae2f24: both attached shapes tight, both lead
-    // shapes loose. This brings the two engines into agreement on all four
-    // rather than trading one divergence for another.
+  it('keeps attached and lead configurations tight', () => {
     for (const src of [unclosed, closed]) expect(tightness(src)).toBe(true)
     for (const src of ['- ::: d\n  b\n\n  tail\n', '- ::: d\n  b\n\n  tail\n  :::\n']) {
-      expect(tightness(src)).toBe(false)
+      expect(tightness(src)).toBe(true)
     }
   })
 })

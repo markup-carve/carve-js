@@ -292,7 +292,11 @@ export function wireFieldsSource(schema) {
     if (Array.isArray(property.enum)) {
       return `enum:${property.enum.map(String).join("\u0000")}`;
     }
-    if (property.type === "string") return "string";
+    if (property.type === "string") {
+      return Number.isInteger(property.minLength)
+        ? `string>=${property.minLength}`
+        : "string";
+    }
     if (property.type === "boolean") return "boolean";
     if (property.type === "integer") {
       if (property.minimum === 0) return "integer>=0";

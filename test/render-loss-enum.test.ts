@@ -1,4 +1,3 @@
-import { specResource } from './helpers/ahead-of-pin-resource.js'
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
@@ -22,7 +21,7 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
  * read out of the pinned `render-loss-report.schema.json`.
  */
 const schemaCodes = (): string[] => JSON.parse(
-  readFileSync(specResource('render-loss-report.schema.json'), 'utf8'),
+  readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'),
 ).properties.losses.items.properties.code.enum
 
 /** Every §1d shape at once: a section, a block cell, a labelled equation and an attributed partition. */

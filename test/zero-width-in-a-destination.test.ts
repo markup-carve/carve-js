@@ -173,8 +173,9 @@ describe('U+0085 is White_Space even though it is not in JavaScript `\\s`', () =
     // the anchor does not touch.
   })
 
-  it('is skipped as separator whitespace before a definition destination', () => {
-    expect(href(`[r]: ${NEL}https://e.com/\n\nsee [x][r]\n`)).toBe('https://e.com/')
+  it('after the separator spaces starts a destination that cannot hold it', () => {
+    // The separator is a run of U+0020 only (CARVE-P3-009).
+    expect(href(`[r]: ${NEL}https://e.com/\n\nsee [x][r]\n`)).toBe(null)
   })
 })
 
@@ -203,8 +204,9 @@ describe('real whitespace still ends a destination', () => {
     expect(href('[r]: https://e\n\nsee [x][r]\n')).toBe('https://e')
   })
 
-  it('a tab is still separator whitespace in a definition', () => {
-    expect(href('[r]: \thttps://e.com/\n\nsee [x][r]\n')).toBe('https://e.com/')
+  it('a tab after the separator spaces makes the line a paragraph', () => {
+    expect(href('[r]: \thttps://e.com/\n\nsee [x][r]\n')).toBe(null)
+    expect(href('[r]:  https://e.com/\n\nsee [x][r]\n')).toBe('https://e.com/')
   })
 
   it('a definition whose destination is empty is not a definition', () => {

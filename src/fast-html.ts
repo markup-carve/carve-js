@@ -205,7 +205,7 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
     // the line vanished from the output. A definition the borrowed layout does not
     // recognize is handed back below rather than guessed at, which is why
     // tightening the pattern is the whole fix.
-    const match = /^\[([^\]]+)\]: (\S+)(?: "([^"]*)")?$/.exec(line)
+    const match = /^\[([^\]]+)\]: +(\S+)(?: "([^"]*)")?$/.exec(line)
     if (!match || match[1]!.startsWith('@')) return undefined
     // Escaped titles use the full grammar; the borrowed renderer keeps them out.
     if (match[3]?.includes('\\')) return undefined

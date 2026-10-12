@@ -39,12 +39,12 @@ const SQUOTED_RUN = String.raw`'(?:\\.|[^'\\\n])*?'`
  */
 const QUOTE_AWARE_OPTIONS = String.raw`(?:${DQUOTED_RUN}|${SQUOTED_RUN}|(?!${DQUOTED_RUN})(?!${SQUOTED_RUN})[^\n])*?`
 
-const OPEN = String.raw`\{\{\s+`
-const PATH = String.raw`(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))`
+const OPEN = String.raw`\{\{ +`
+const PATH = String.raw`(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@} "\u201c\n]+))`
 // `explicit_identifier`: an id may open on a digit (`#2024-plan`). The path
 // stops at `#`, so the name needs no whitespace in front of it (carve#2773).
-const SECTION = String.raw`((?:\s*#\w[\w-]*)?)`
-const CLOSE = String.raw`\s+\}\}`
+const SECTION = String.raw`((?: *#\w[\w-]*)?)`
+const CLOSE = String.raw` +\}\}`
 const body = (options: string): string => `${OPEN}${PATH}${SECTION}(${options})${CLOSE}`
 
 const QUOTE_AWARE_BODY = body(QUOTE_AWARE_OPTIONS)
@@ -69,6 +69,14 @@ function unescapeQuotedPath(path: string): string {
   return unescapeAttrValue(path)
 }
 
+function trimSpaces(value: string): string {
+  let start = 0
+  let end = value.length
+  while (start < end && value[start] === ' ') start++
+  while (end > start && value[end - 1] === ' ') end--
+  return value.slice(start, end)
+}
+
 /**
  * Parse one candidate directive token. Returns null when the token is not a
  * well-formed directive per spec I1 -- a bad shape, or an unrecognized or
@@ -83,14 +91,14 @@ export function parseDirective(
   if (!m) return null
   const path = m[1] !== undefined ? unescapeQuotedPath(m[1]) : m[2] ?? m[3]!
   if (path === '') return null
-  const sectionPart = m[4]?.trim()
+  const sectionPart = trimSpaces(m[4] ?? '')
   const section = sectionPart ? sectionPart.slice(1) : undefined
   let lines: Directive['lines']
   let shift: number | 'auto' = 0
-  const rest = m[5]?.trim()
+  const rest = trimSpaces(m[5] ?? '')
   if (rest) {
     // An option needs no whitespace before its `@` either (carve#2773).
-    for (const part of rest.split(/\s+|(?=@)/).filter(Boolean)) {
+    for (const part of rest.split(/ +|(?=@)/).filter(Boolean)) {
       // `include_section` is one slot: a second name is malformed, not ignored.
       if (section !== undefined && SECTION_TOKEN_RE.test(part)) {
         onSecondSection?.(part)

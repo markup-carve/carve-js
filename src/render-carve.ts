@@ -2094,7 +2094,7 @@ function escapeAutolinkHref(text: string): string {
 }
 
 function spellCrossrefTarget(text: string): string {
-  if (text === '' || /[> \t\r\n\0]/.test(text)) {
+  if (text === '' || /[> \r\n\0]/.test(text)) {
     throw new SourceUnspellableError('heading_ref', 'an empty target or a target with a closer, whitespace or NUL has no Carve source spelling')
   }
   return text
@@ -4401,7 +4401,7 @@ class CarveRenderSession {
         // span. An attribute block is written after it, so a code span carrying
         // one keeps the closed form (and `raw_inline` and `literal_inline`, which
         // both append to `renderCode`, never ask for it).
-        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === ''), ctx, 'code', node))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === '', 'code', ctx, renderSession.inlineAttrs(node.attrs, node) === ''), ctx, 'code', node))
       case 'link':
         return renderSession.renderLink(node, ctx)
       case 'image':
@@ -4416,7 +4416,7 @@ class CarveRenderSession {
         return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderSession.inlineAttrs(node.attrs, node)}` : content
       }
       case 'math':
-        return withAttrs(renderSession.guardCodeLines(renderSession.renderMath(node.display, node.content), ctx, 'math', node))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderMath(node.display, node.content, ctx), ctx, 'math', node))
       case 'raw_inline':
         if (node.content === '') {
           throw new SourceUnspellableError(
@@ -4424,12 +4424,12 @@ class CarveRenderSession {
             'an empty raw inline has no Carve source spelling',
           )
         }
-        return `${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'raw_inline'), ctx, 'raw_inline', node)}{=${escapeFormat(node.format)}}`
+        return `${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'raw_inline', ctx), ctx, 'raw_inline', node)}{=${escapeFormat(node.format)}}`
       case 'literal_inline':
         // §27: `!` prefix on a verbatim span. A trailing attribute block is the
         // ordinary inline attribute block (same as a code span carries).
         // renderCode widens the backtick fence when the content holds backticks.
-        return `!${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'literal_inline'), ctx, 'literal_inline', node)}${renderSession.inlineAttrs(node.attrs, node)}`
+        return `!${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'literal_inline', ctx), ctx, 'literal_inline', node)}${renderSession.inlineAttrs(node.attrs, node)}`
       case 'symbol':
         return withAttrs(`:${escapeSymbolName(node.name)}:`)
       case 'autolink':
@@ -4582,8 +4582,8 @@ class CarveRenderSession {
     return `${fence}\n${this.protectVerbatim(content)}\n${fence}`
   }
 
-  private renderMath(display: boolean, content: string): string {
-    const code = this.renderCode(content, false, 'math')
+  private renderMath(display: boolean, content: string, ctx: CarveContext): string {
+    const code = this.renderCode(content, false, 'math', ctx)
     return `${display ? '$$' : '$'}${code}`
   }
 
@@ -4613,7 +4613,7 @@ class CarveRenderSession {
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
-    const marker = /\n(?=>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/g
+    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'g')
     if (this.termKeepsLineIndent && marker.test(written)) {
       throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }
@@ -4623,14 +4623,19 @@ class CarveRenderSession {
     return written.replace(marker, `\n${guard}`)
   }
 
-  private renderCode(content: string, allowUnclosed = false, nodeType = 'code'): string {
+  private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true): string {
     // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
     // much as it is inside a fence - and `normalize()` would otherwise rewrite it
     // to `\ `, which inside backticks is a literal backslash and a space
     // (carve-js#688). Same sentinel as protectVerbatim uses; `restoreVerbatim`
     // puts the character back at the end of normalization. carve-rs already emits
     // it as itself here.
-    const fence = codeSpanFence(content)
+    const hidesLineBlockCloser = ctx !== undefined && ctx.lineBlockDepth > 0
+      && new RegExp(`(?:^|[\\r\\n])[ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
+    if (hidesLineBlockCloser && (nodeType !== 'code' || !canPairFence)) {
+      throw new SourceUnspellableError(nodeType, 'a prefixed or suffixed verbatim span cannot hide a line-block closer')
+    }
+    const fence = hidesLineBlockCloser ? safeFence(content, 3) : codeSpanFence(content)
     const needsPad =
       content.startsWith('`') ||
       content.endsWith('`') ||
@@ -4659,6 +4664,7 @@ class CarveRenderSession {
     if (needsPad && /^[\r\n]/.test(content)) {
       throw new SourceUnspellableError(nodeType, 'a leading newline loses its padding where the code span cannot run to the end')
     }
+    if (hidesLineBlockCloser) content = content.replace(/\n([ \t\u00a0]*)$/, (_, indent: string) => '\n' + indent.replace(/\u00a0/g, ' '))
     return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
   }
 
@@ -4754,7 +4760,7 @@ class CarveRenderSession {
       text
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
         .replaceAll(this.sentinels[7]!, '')
-        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>\\[])`, 'gm'), (_match, prefix: string, marker: string) =>
+        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>:\\[\\-*0-9a-zA-Z])`, 'gm'), (_match, prefix: string, marker: string) =>
           (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
         .replace(new RegExp(this.verbatimLineGuardPattern(), 'g'), '')

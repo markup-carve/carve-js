@@ -127,7 +127,7 @@
   {
     "id": "review10-quote-column",
     "source": "> - ::: |\n>     ```\n>   :::\n>   ```\n>   ```\n>   para\nTAIL\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>&nbsp;&nbsp;<code></code></p>\n      </div>\n      <pre><code></code></pre>\n      para\nTAIL\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>&nbsp;&nbsp;<code>\n:::\n</code><br>\n<code>\npara</code></p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAIL</p>"
   },
   {
     "id": "review10-inline-blank",

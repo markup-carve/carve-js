@@ -657,7 +657,7 @@
   {
     "id": "audit-131",
     "source": ">  - ::: box\n>    body\n> - next\n>    :::\n- tail\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><p>body</p></div></li></ul><ul><li>next\n      <div></div></li></ul><p>- tail</p></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"box\"><p>body</p></div></li></ul><ul><li>next\n      <div></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-132",
@@ -862,7 +862,7 @@
   {
     "id": "shifted-initial-marker-descendant",
     "source": ">  - a\n>    - ::: box\n>      body\n> - next\n>      :::\n- tail\n",
-    "html": "<blockquote><ul><li>a\n      <ul><li><div class=\"box\"><p>body</p></div></li></ul></li></ul><ul><li>next\n      <div></div></li></ul><p>- tail</p></blockquote>"
+    "html": "<blockquote><ul><li>a\n      <ul><li><div class=\"box\"><p>body</p></div></li></ul></li></ul><ul><li>next\n      <div></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "js-blank-literal",
@@ -1032,21 +1032,21 @@
   {
     "id": "shift-nested-bare-2-False",
     "source": ">   - a\n> - b\n>     - c\n>   :::\n1. lazy\n",
-    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
   },
   {
     "id": "shift-nested-bare-2-True",
     "source": ">   - a\n> - b\n>     - c\n>\n>   :::\n1. lazy\n",
-    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
   },
   {
     "id": "shift-nested-bare-4-False",
     "source": ">   - a\n> - b\n>     - c\n>     :::\n1. lazy\n",
-    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
   },
   {
     "id": "shift-nested-bare-4-True",
     "source": ">   - a\n> - b\n>     - c\n>\n>     :::\n1. lazy\n",
-    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul><p>1. lazy</p></blockquote>"
+    "html": "<blockquote><ul><li>a</li></ul><ul><li>b\n      <ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
   }
 ]

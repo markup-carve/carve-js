@@ -1,0 +1,37 @@
+import { expect, it } from 'vitest'
+import { carveToHtml } from '../src/index.js'
+
+for (const [name, host, column] of [
+  ['unordered host', ['- a', '  [^b]: inner'], 4],
+  ['ordered host', ['1. a', '   [^b]: inner'], 5],
+  ['nested host', ['- a', '  - b', '    [^b]: inner'], 6],
+  ['marker-line note', ['- [^b]: inner'], 4],
+] as const) {
+  for (const marker of ['- c2', '1. c2', '- [ ] c2']) {
+    for (const quoted of [false, true]) {
+      for (const code of name === 'marker-line note' ? [false] : [false, true]) {
+        it(`${name}, ${marker}, quoted ${quoted}, code ${code}`, () => {
+          const body = [...host, ' '.repeat(column) + marker]
+          if (code) body.push(...['```', 'x', '```'].map(line => ' '.repeat(column) + line))
+          const source = [...body.map(line => quoted ? '> ' + line : line), 'below', '', '[^b]'].join('\n')
+          const html = carveToHtml(source)
+          const [document, note] = html.split('<section role="doc-endnotes"')
+          if (name !== 'nested host' || code) expect(document).toContain('<p>below</p>')
+          expect(document).not.toContain('c2')
+          expect(document).not.toContain('<pre>')
+          expect(note).toContain('<p>inner\n' + marker)
+          expect(note).not.toContain('<ul>')
+          if (code) expect(note).toContain('<pre><code>x\n</code></pre>')
+        })
+      }
+    }
+  }
+}
+
+it('keeps a marker below the note body column in the host list', () => {
+  const source = ['- a', '  [^b]: inner', '   - c2', 'below', '', '[^b]'].join('\n')
+  const [document, note] = carveToHtml(source).split('<section role="doc-endnotes"')
+  expect(document).toContain('<li>c2\nbelow</li>')
+  expect(note).toContain('<p>inner<a ')
+  expect(note).not.toContain('c2')
+})

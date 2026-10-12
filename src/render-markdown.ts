@@ -1669,10 +1669,8 @@ function fragmentId(href: string): string | undefined {
  * Scanning the value works either way and does not care how the run was split.
  */
 function escapeUnresolvedCrossrefs(value: string): string {
-  // The SAME production as the parser's RE_CROSSREF, so the same class: the id
-  // ends at PART 7's four characters. Two producers for one production is how
-  // this class of defect starts, so they are narrowed together.
-  const pattern = /<\/#[^> \t\n\r]+>/g
+  // The same class as the parser's RE_CROSSREF: the id ends at a space, `>` or a line break.
+  const pattern = /<\/#[^> \n\r]+>/g
   let out = ''
   let last = 0
   for (const match of value.matchAll(pattern)) {
