@@ -81,7 +81,7 @@ export function djotTableRows(source: string, mask: string): boolean[] {
 }
 
 
-export function djotInlineBoundaries(source: string, mask: string, codeScopes = false, divClosers?: Map<number, number[]>): number[] {
+export function djotInlineBoundaries(source: string, mask: string, codeScopes = false, divClosers?: Map<number, number[]>, divOwners?: Map<number, { column: number | undefined; depth: number }>): number[] {
   const boundaries: number[] = []
   const rows = djotTableRows(source, mask)
   const items: Array<{ column: number; depth: number }> = []
@@ -149,6 +149,7 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
             else low = mid + 1
           }
           divClosers?.set(offset, divs.slice(low).map(owner => owner.start).reverse())
+          divOwners?.set(offset, { column: divs[low]!.itemColumn, depth: divs[low]!.itemDepth })
           divs.length = low
           previousBlock = true
         } else if (fence && visible && canOpen) {

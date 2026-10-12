@@ -259,6 +259,70 @@ function collapseFalseListBoundaries(source: string): string {
   return result.join('\n')
 }
 
+function carryDjotAttributesAcrossDivClosers(source: string): string {
+  if (!source.includes('{') || !source.includes(':::')) return source
+  const mask = maskDjotCodeAndDestinations(source, false)
+  const closers = new Map<number, number[]>()
+  const owners = new Map<number, { column: number | undefined; depth: number }>()
+  djotInlineBoundaries(source, mask, true, closers, owners)
+  if (closers.size === 0) return source
+  const lines = source.split('\n'), removed = new Set<number>(), moved = new Map<number, string[]>(), residues = new Map<number, string>()
+  let pending: Array<{ line: number; value: string }> = [], crossed = false
+  let offset = 0, previous = '', previousDepth = 0
+  let closedOwner: { column: number | undefined; depth: number } | undefined
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!
+    const physical = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(line)![0]
+    const start = physical.length, content = line.slice(start)
+    const depth = (physical.match(/>/g) ?? []).length
+    const followsBlock = pending.length > 0 || previous === '' || /^(?:#{1,6} |:{3,}|[`~]{3,}|\[[^\]]+\]:|(?:[*-][ \t]*){3,}$)/.test(previous)
+    const candidate = content[0] === '{' && (followsBlock || mask[offset + start] === '{') ? readAttributes(content, 0) : undefined
+    if (followsBlock && depth === previousDepth && candidate?.source === '{}' && candidate.end === content.replace(/[ \t\r]+$/, '').length) { offset += line.length + 1; continue }
+    const attrs = mask[offset + start] === '{' ? candidate : undefined
+    const whole = attrs !== undefined && attrs.end === content.replace(/[ \t\r]+$/, '').length
+    if (crossed && !closers.has(offset) && content.replace(/^[ \t\r]+|[ \t\r]+$/g, '') !== '' && (!whole || depth !== previousDepth)) {
+      const indent = /^[ \t]*/.exec(line.slice(/^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0].length))![0].length
+      const peerItem = closedOwner?.column !== undefined && depth === closedOwner.depth && indent < closedOwner.column && /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))(?:[ \t]+|$)/.test(line.slice(physical.length))
+      if (!peerItem || /^(?:[-*][ \t]*){3,}$/.test(content)) {
+        let prefix = physical
+        if (depth > previousDepth) {
+          const marker = Array.from(physical.matchAll(/>/g))[previousDepth]!.index!
+          prefix = physical.slice(0, marker)
+        }
+        moved.set(index, pending.map(attr => { removed.add(attr.line); return prefix + attr.value }))
+      }
+      pending = []
+      crossed = false
+    }
+    if (whole && followsBlock) {
+      if (!crossed && depth > previousDepth) pending = []
+      pending.push({ line: index, value: content.replace(/[ \t\r]+$/, '') })
+      if (depth > previousDepth) residues.set(index, physical.trimEnd())
+    } else if (closers.has(offset)) {
+      crossed ||= pending.length > 0
+      closedOwner = owners.get(offset)
+    } else if (content.replace(/^[ \t\r]+|[ \t\r]+$/g, '') !== '') {
+      pending = []
+    }
+    if (!whole) previous = content.replace(/^[ \t\r]+|[ \t\r]+$/g, '')
+    previousDepth = content.replace(/^[ \t\r]+|[ \t\r]+$/g, '') === '' ? Math.min(previousDepth, depth) : depth
+    offset += line.length + 1
+  }
+  if (crossed) {
+    for (const attr of pending) removed.add(attr.line)
+  }
+  if (removed.size === 0) return source
+  const out: string[] = []
+  for (let index = 0; index <= lines.length; index++) {
+    for (const attr of moved.get(index) ?? []) out.push(attr)
+    if (index < lines.length) {
+      if (!removed.has(index)) out.push(lines[index]!)
+      else if (residues.has(index)) out.push(residues.get(index)!)
+    }
+  }
+  return out.join('\n')
+}
+
 function consumeOrphanDjotAttributes(source: string): { source: string; restore: (text: string, transform?: (chunk: string) => string) => string } {
   if (!source.includes('{')) return { source, restore: (text, transform = chunk => chunk) => transform(text) }
   const masked = maskDjotCodeAndDestinations(source).replace(/\[\^[^\]\n]*\]/g, (value, at: number) => isDjotEscaped(source, at) ? value : ' '.repeat(value.length)).replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>/g, value => ' '.repeat(value.length)).split('\n')
@@ -650,7 +714,7 @@ function convertDjotDocument(djot: string): string {
   }
   const spans: string[] = []
   const prefix = djotPlaceholderPrefix(body, '\x00DJOTSTRONG')
-  const invalidAttributes = escapeInvalidDjotAttributes(body)
+  const invalidAttributes = escapeInvalidDjotAttributes(carryDjotAttributesAcrossDivClosers(body))
   // Carve has no empty footnote body: `[^b]:` alone is a paragraph, not a
   // definition, so an empty Djot body needs a body that renders nothing - a
   // comment. It travels as a NUL token so the text escaper cannot reach it and
