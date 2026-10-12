@@ -276,13 +276,12 @@ describe('a quote on the description MARKER line is already open', () => {
     )
   })
 
-  it('a quote that ENDED still suppresses the band [PRE-EXISTING divergence]', () => {
-    // The oracle ends the body here; carve-js folds. That was already true
-    // before this change and is unmoved by it - the flag stays set once a
-    // quote has been seen, so the band simply does not reach this document.
+  it('a line below a heading past an ended quote stays in the body [PRE-EXISTING divergence]', () => {
+    // The oracle ends the body after the heading and puts `tail` outside the
+    // definition list; carve-js opens the heading and keeps `tail` in the body.
     // Pinned so the remaining gap is visible rather than silent.
     expect(carveToHtml(":: term\n:  definition\n   > q\n\n   more\n    # H\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n    <p>more\n# H\ntail</p>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <blockquote><p>q</p></blockquote>\n    <p>more</p>\n    <h1 id=\"H\">H</h1>\n    <p>tail</p>\n  </dd>\n</dl>",
     )
   })
 })
