@@ -1,3 +1,4 @@
+import { markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { rawBracketRunCloses } from './parse.js'
 import { trimMatchingEdges } from './trim-non-nbsp.js'
 import { readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
@@ -595,9 +596,9 @@ function quoteAttributeValue(value: string): string {
 }
 
 /** CommonMark's alt text: the description's content with its markup removed. */
-export function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string): string {
+export function plainAltText(label: string, placeholders: readonly string[], decodeEntity: (entity: string) => string, sources: readonly string[] = placeholders): string {
   let previous: string
-  const nestedLink = new RegExp(String.raw`!?\[${LABEL}\]\([^()\n]*\)`, 'g')
+  const nestedLink = new RegExp(String.raw`!?\[${LABEL}\](?=\()`, 'g')
   const referenceLink = new RegExp(String.raw`!?\[${LABEL}\]`, 'g')
   const referenceTail = /\[([^[\]\n]*)\]/y
   const defined = (label: string): boolean => references.defined.has(normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders)))
@@ -607,7 +608,19 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
       const span = placeholders[Number(index)] ?? token
       return span.startsWith('(') || span.startsWith('![') || span.startsWith('[') ? span : token
     })
-    label = label.replace(nestedLink, '$1')
+    let nestedWritten = '', nestedCursor = 0
+    nestedLink.lastIndex = 0
+    for (let match; (match = nestedLink.exec(label)) !== null;) {
+      const open = nestedLink.lastIndex
+      const end = markdownInlineDestinationEnd(label, open)
+      const destination = end === undefined ? undefined : label.slice(open, end + 1)
+      const original = destination?.includes('\x00') ? referenceSourceText(destination, sources) : undefined
+      if (end === undefined || original !== undefined && markdownInlineDestinationEnd(original, 0) !== original.length - 1) { nestedLink.lastIndex = match.index + 1; continue }
+      nestedWritten += label.slice(nestedCursor, match.index) + match[1]!
+      nestedLink.lastIndex = end + 1
+      nestedCursor = nestedLink.lastIndex
+    }
+    label = nestedWritten + label.slice(nestedCursor)
     let written = '', cursor = 0
     referenceLink.lastIndex = 0
     for (let match; (match = referenceLink.exec(label)) !== null;) {

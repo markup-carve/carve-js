@@ -10503,5 +10503,11 @@
     "html": "<p>x_&quot;a&quot;__y</p>\n",
     "emptyDestinationLoss": true,
     "nativeHtml": "<p>x<a href=\"\">_&quot;a&quot;__</a>y</p>\n"
+  },
+  {
+    "source": "![a [b ![c](/x)](oops]()",
+    "nativeHtml": "<p><img src=\"\" alt=\"a [b c](oops\" /></p>\n",
+    "html": "<p>a [b c](oops</p>\n",
+    "emptyDestinationLoss": true
   }
 ]

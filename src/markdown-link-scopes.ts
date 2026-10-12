@@ -89,6 +89,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   isReference: (label: string) => boolean,
   opaqueEnd: (offset: number) => number | undefined,
   onActiveLink: (opener: number, closer: number, image: boolean) => void = () => {},
+  validDestination: (open: number, end: number) => boolean = () => true,
 ): string {
   if (!source.includes('[')) return source
   const opaque = new Map<number, number>()
@@ -162,7 +163,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       continue
     }
     const end = markdownInlineDestinationEnd(source, i + 1)
-    if (end !== undefined) {
+    if (end !== undefined && validDestination(i + 1, end)) {
       onActiveLink(opener.at, i, opener.image)
       if (!opener.image) generation++
       i = end
@@ -211,18 +212,17 @@ export function markdownInlineDestinationEnd(source: string, open: number): numb
         const token = tokenAt.exec(source)
         if (token) { at += token[0].length - 1; continue }
       }
-      if (source[at] === '\\') { at++; continue }
+      if (source[at] === '\\' && /[!-/:-@\[-`{-~]/.test(source[at + 1] ?? '')) { at++; continue }
       if (source[at] === '(') {
         if (++depth > 32) return undefined
       } else if (source[at] === ')') {
         if (depth === 0) break
         depth--
       } else if (/[\x00-\x20\x7f]/.test(source[at]!)) {
-        if (depth > 0) return undefined
         break
       }
     }
-    if (depth > 0) return undefined
+    if (depth > 0 && at >= source.length) return undefined
   }
   const spaced = skipSpace()
   if (source[at] === ')') return at
