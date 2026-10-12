@@ -4583,7 +4583,7 @@ function isLiteralColonFenceLine(line: string): boolean {
 type DefListOpening = false | 'term' | 'description'
 
 type ItemOpaqueState =
-  | { kind: 'code'; close: RegExp; column?: number }
+  | { kind: 'code'; close: RegExp; column?: number; paragraphBefore?: boolean }
   | { kind: 'comment'; length: number; paragraphBefore: boolean; atColumn: boolean }
 
 /**
@@ -4671,6 +4671,7 @@ interface ItemLazyState {
   // paragraph that was never interrupted (carve#891).
   absorbingFence: boolean
   inlineFenceParagraph?: boolean
+  rejectedFenceParagraph?: boolean
   // The collector's paragraph carry can contain a real code block in a colon body.
   inlineFenceBlock?: boolean
   unrebasedColonBody?: { width: number }
@@ -5490,6 +5491,8 @@ function trackItemLazyState(
   state.absorbingFence = false
   const wasInlineFence = state.inlineFenceParagraph === true
   delete state.inlineFenceParagraph
+  const wasRejectedFence = state.rejectedFenceParagraph === true
+  delete state.rejectedFenceParagraph
   const wasInlineFenceBlock = state.inlineFenceBlock === true
   delete state.inlineFenceBlock
   const wasClosedColon = state.closedColonBody === true
@@ -5708,8 +5711,11 @@ function trackItemLazyState(
     state.deepest = null
     const base = state.opaque.column ?? 0
     const column = indentColumns(content, base + 1)
-    if ((column === 0 || column === base) && state.opaque.close.test(column === 0 ? content : sliceColumns(content, base, true))) state.opaque = null
-    state.lazyFoldable = false
+    const closed = (column === 0 || column === base) && state.opaque.close.test(column === 0 ? content : sliceColumns(content, base, true))
+    const paragraphBefore = state.opaque.paragraphBefore === true
+    if (closed) state.opaque = null
+    state.lazyFoldable = closed && paragraphBefore
+    if (state.lazyFoldable) state.rejectedFenceParagraph = true
     state.inDefList = false
     return
   }
@@ -5731,6 +5737,7 @@ function trackItemLazyState(
     // The paragraph that was absorbing fences ends here, so the next
     // fence-shaped line is an opener again.
     state.absorbingFence = false
+    if (wasInlineFence || wasRejectedFence) state.rejectedFenceParagraph = true
     if (state.deepest) delete state.deepest.closedColonBody
     return
   }
@@ -5758,7 +5765,7 @@ function trackItemLazyState(
   // A closed child leaves the following unmatched fence foldable; a blank ends that claim.
   const followsClosedChild = state.divDepth > 0 && state.deepest?.closedColonBody === true
   if (fenceMarker !== null && ((!state.lazyFoldable && !followsClosedChild) || hasFenceCloser(fenceMarker))) {
-    state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker) }
+    state.opaque = { kind: 'code', close: fenceCloseRe(fenceMarker), paragraphBefore: wasInlineFence || wasRejectedFence }
     state.deepest = null
     state.lazyFoldable = false
     state.inDefList = false
@@ -5890,7 +5897,7 @@ function trackItemLazyState(
   ) {
     const overIndented = content.slice(run!)
     const inlineCode = RE_FENCE.exec(overIndented) ?? RE_RAW_FENCE.exec(overIndented)
-    if (inlineCode && state.lazyFoldable) {
+    if (inlineCode && (state.lazyFoldable || wasRejectedFence)) {
       const marker = RE_FENCE.test(overIndented) ? inlineCode[2]! : inlineCode[1]!
       if (!hasFenceCloser(marker, authoredFenceColumns ?? run!) && !hasFenceCloser(marker, 0)) {
         state.inlineFenceParagraph = true
@@ -5898,7 +5905,7 @@ function trackItemLazyState(
         return
       }
       if ((facts?.descendantFrames === true || authoredFenceColumns !== undefined) && !wasDescendantColumn) {
-        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: authoredFenceColumns ?? run! }
+        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: authoredFenceColumns ?? run!, paragraphBefore: wasInlineFence || wasRejectedFence }
         state.lazyFoldable = false
         state.inDefList = false
         return
@@ -6147,6 +6154,7 @@ function trackItemLazyState(
   state.absorbingFence = wasAbsorbing
   state.lazyFoldable = true
   if (wasInlineFence) state.inlineFenceParagraph = true
+  if (wasRejectedFence) state.rejectedFenceParagraph = true
   if (wasInlineFenceBlock && wasInlineFence) state.inlineFenceBlock = true
   // A QUOTE SURVIVES ITS OWN LAZY LINE. Prose here is the quote's lazy text,
   // not a line that ended it, so dropping `quoteInner` told the collector one
