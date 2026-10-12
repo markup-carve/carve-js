@@ -5332,14 +5332,15 @@ function descriptionLeadFenceScans(lead: string): {
   return {
     code: new AppendOnlyCloser(close ? line => close.test(line.replace(/^[ \t]+/, '')) : undefined),
     paragraphOpen: (lines, fallback, hasCloser, atContentColumn) => {
-      if (ownClose === undefined || !ownsBody) return fallback
+      if (ownClose === undefined) return fallback
+      if (!ownsBody) return false
       for (; next < lines.length; next++) {
         const line = lines[next]!
         if (!closed) {
           const indent = indentColumns(line)
           if (atContentColumn && !isBlankLine(line) && indent < column) {
             ownsBody = false
-            return fallback
+            return false
           }
           if (indent === column && ownClose.test(line.trimStart())) closed = true
           continue
@@ -5347,7 +5348,7 @@ function descriptionLeadFenceScans(lead: string): {
         trackItemLazyState(sliceColumns(line, column), trailing, hasCloser)
       }
 
-      return closed ? trailing.lazyFoldable : true
+      return closed ? trailing.lazyFoldable : false
     },
   }
 }
@@ -11396,7 +11397,8 @@ class ParseSession {
           lazyState.lazyFoldable = false
         }
       }
-      const leadFenceScans = nestedLeadScans = descriptionLeadFenceScans(first)
+      nestedLeadScans = descriptionLeadFenceScans(first)
+      lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, () => true, true)
       // A definition continues like a list item (PART 9 \u00a717):
       //  - form A: a deeper-indented line (>= the content column) folds in, and a
       //    blank line is tolerated when a later line still continues the body, so
@@ -11645,32 +11647,12 @@ class ParseSession {
           lexer.consume()
           continue
         }
-        // A FLUSH-LEFT FENCE LINE IS THE OPEN NESTED FENCE'S OWN CONTENT
-        // (markup-carve/carve#1958, corpus 455). Column 0 is outside the body, so
-        // it cannot close the fence the body's nested lead left open; the veto
-        // below read it as an opener instead, ended the body on it, and the
-        // document took it for a fresh fence - the nested fence came out empty
-        // and the entry after it was swallowed (markup-carve/carve-js#2500). The
-        // fold frame this branch already records is what keeps the line verbatim.
-        const nestedFenceOwnsLine =
-          atDocumentColumn &&
-          opensCodeFence(ln) &&
-          !leadFenceScans.code.closedIn(bodyLines) && leadFenceScans.code.active
         // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
           lazyState.lazyFoldable &&
-          (!startsInterruptingBlock(lexer, below, true, false, atDocumentColumn) ||
-            nestedFenceOwnsLine)
+          !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
         ) {
           const lineIndex = lexer.pos
-          // RECORD THE FOLD so the reparse can read it (markup-carve/carve-js#1650,
-          // carve#1947). A flush-left line this body folds in is invisible from the
-          // column alone; the description body is a container above the item just
-          // as a list is, so when that item's lead opened an unfinished fence the
-          // folded line is the fence's BODY - and parseList's fence-owns-its-body
-          // arm keys off exactly this set (carve-js#1630). Unconditional like the
-          // list collector's own recording; the reparse consumes it only for an
-          // item whose lead actually opened a fence.
           if (indentColumns(ln, contentCol) < contentCol) {
             lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
           }
@@ -11690,11 +11672,7 @@ class ParseSession {
           // a second list where the fold continues the first. Every other kind
           // either ends the body above or reads the same at both columns.
           //
-          // The clamp is not applied where the nested lead's own fence still
-          // owns the line: that line is the fence's verbatim content and keeps
-          // the column the author wrote.
           const folded =
-            !nestedFenceOwnsLine &&
             atDocumentColumn &&
             opensCodeFence(below)
               ? ' ' + below
@@ -12627,6 +12605,8 @@ class ParseSession {
       // like. A below-column run then folded into a paragraph the deepest
       // structure did not hold (markup-carve/carve#2509, carve-js#2261).
       let descendantOpaque: DescendantOpaque | null = null
+      let descriptionFenceAwaitingPayload = false
+      let descriptionMarkerFence = false
       let closedDescendantFence = false
       let descendantNoteBody = false
       // A later fence in the same nested note body is its code as well.
@@ -12709,8 +12689,12 @@ class ParseSession {
         lineIndex: number,
         followsBlank: boolean,
       ): void => {
+        if (descriptionFenceAwaitingPayload && descendantOpaque !== null) {
+          descriptionFenceAwaitingPayload = false
+          if (indentColumns(line, descendantOpaque.base) < descendantOpaque.base) descendantOpaque = null
+        }
         const child = nestedOwnerColumn
-        if (child < 0) return
+        if (child < 0 && opener === line.trimStart()) return
         // BELOW A CHILD'S COLUMN THE CHILD IS OVER, and so is any fence it held:
         // the base is at or past that column, so such a line is never payload.
         // What a later below-column line reads is whether an ANCESTOR is left
@@ -12721,7 +12705,7 @@ class ParseSession {
         // the line leaves a paragraph open. `walkOwnership` is drained only at a
         // fence-shaped line, so without this a plain paragraph left the state
         // standing and the item stopped continuing.
-        if (indentColumns(line, child) < child) {
+        if (child >= 0 && indentColumns(line, child) < child) {
           const bottom = markerLineBottomBlock(opener)
           if (
             bottomBlockLeavesParagraphOpen(bottom) &&
@@ -12751,7 +12735,7 @@ class ParseSession {
           // unterminated and the containers down to its own owner, so the item's
           // paragraph state is whatever that line leaves. Only a line AT or PAST
           // the base is the fence's body.
-          if (column < base) descendantOpaque = null
+          if (column < base && !descendantOpaque.markerLine) descendantOpaque = null
           return
         }
         const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
@@ -12881,6 +12865,7 @@ class ParseSession {
       const descendantLeadFence = descendantLead !== content
         ? RE_FENCE.exec(descendantLead) ?? RE_RAW_FENCE.exec(descendantLead) : null
       if (descendantLeadFence) {
+        lazyState.lazyFoldable = false
         descendantOpaque = {
           close: fenceCloseRe(RE_FENCE.test(descendantLead) ? descendantLeadFence[2]! : descendantLeadFence[1]!),
           base: lazyState.ownedColumn,
@@ -13242,9 +13227,14 @@ class ParseSession {
             }
           } else {
             const trimmed = dedented.trimStart()
+            const descriptionLead = RE_DEFLIST_DEF.exec(trimmed)
             const bottom = descendantOpaque === null && lazyState.deepest?.opaque?.kind !== 'code' &&
-              (trimmed.includes('`') || trimmed.includes('~')) && isListMarkerLine(trimmed)
-              ? markerLineBottomBlock(trimmed, this.markerPrefixMemo(lexer, fenceLineIndex)) : trimmed
+              (trimmed.includes('`') || trimmed.includes('~')) &&
+              (isListMarkerLine(trimmed) || RE_DEFLIST_DEF.test(trimmed))
+              ? descriptionLead !== null
+                ? markerLineBottomBlock(descriptionLead[2]!)
+                : markerLineBottomBlock(trimmed, this.markerPrefixMemo(lexer, fenceLineIndex))
+              : trimmed
             const opener = opensCodeFence(bottom) ? bottom : trimmed
             const indented = opener !== dedented
             const mayOpenFence = indented && !(lazyState.inDefList === 'term' && lazyState.termAfterComment) && lazyState.literalColon === undefined &&
@@ -13277,6 +13267,10 @@ class ParseSession {
             else if (indented &&
               (descendantOpaque !== null || (lazyState.opaque === null && mayOpenFence))) {
               trackDescendantOpaque(dedented, opener, fenceLineIndex, followsBlank)
+              if (descriptionLead !== null && descendantOpaque !== null) {
+                descriptionFenceAwaitingPayload = true
+                if (markerLineTerm && descendantOpaque.markerLine) descriptionMarkerFence = true
+              }
             } else if (!indented && !isBlankLine(dedented)) {
               // A block of THIS item, so no descendant is open behind it.
               descendantOpaque = null
@@ -13432,7 +13426,7 @@ class ParseSession {
           }
           // The item holds no paragraph a below-column line can continue while a
           // descendant holds a fence open. PART 1 S4 asks about the open STACK.
-          if (descendantOpaque !== null) lazyState.lazyFoldable = false
+          if (descendantOpaque !== null && !descriptionFenceAwaitingPayload) lazyState.lazyFoldable = false
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else if (
@@ -13608,7 +13602,8 @@ class ParseSession {
           lazyState.opaque?.kind === 'code' &&
           pendingBlanks === 0 &&
           indentColumns(l, contentCol) < contentCol &&
-          (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
+          (((descendantLeadFence !== null || descriptionMarkerFence) && leadFence === null && descendantOpaque === null) ||
+            lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
         ) {
           // An open fence owns lines an enclosing container already admitted
