@@ -4726,6 +4726,8 @@ interface ItemLazyState {
   absorbingFence: boolean
   inlineFenceParagraph?: boolean
   rejectedFenceParagraph?: boolean
+  /** Reads a literal line block's marker-shaped payload, which opens no block. */
+  literalLayout?: boolean
   // The collector's paragraph carry can contain a real code block in a colon body.
   inlineFenceBlock?: boolean
   unrebasedColonBody?: { width: number }
@@ -5638,7 +5640,7 @@ function trackItemLazyState(
       const layoutContent = open.column > 0 && column >= open.column ? sliceColumns(content, open.column, true) : content
       if ((column === 0 || column === open.column) && /^:{3,}/.test(text) && colonFenceOpenerLen(text) === null) open.absorbing = true
       if ((marked && state.divDepth === 0) || open.markerFrame) {
-        const frame = open.markerFrame ??= verbatimOnlyLazyState()
+        const frame = open.markerFrame ??= { ...verbatimOnlyLazyState(), literalLayout: true }
         trackItemLazyState(content, frame, hasFenceCloser, true, hasCommentCloser, facts, hasLiteralCommentCloser)
       }
       state.lazyFoldable = open.opaque === undefined && !RE_COMMENT_LINE.test(text) && !RE_FOOTNOTE_DEF.test(text) &&
@@ -6211,8 +6213,9 @@ function trackItemLazyState(
       }
       // A fence on the marker line is the sub-item's first block. It interrupts
       // no paragraph, so it opens with or without a closer and leaves none open.
+      // In a literal line block the line is payload, and its backticks stay inline.
       const nestedFence = RE_FENCE.exec(nestedContent) ?? RE_RAW_FENCE.exec(nestedContent)
-      if (nestedFence !== null) {
+      if (nestedFence !== null && state.literalLayout !== true) {
         frame.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(nestedContent) ? nestedFence[2]! : nestedFence[1]!) }
         frame.lazyFoldable = false
         state.lazyFoldable = false

@@ -817,7 +817,7 @@
   {
     "id": "review8-older-o05-mixed-hosted-ownership-011",
     "source": "- :::: box\n  :::\n  - ```\n  ~~~\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <ul>\n          <li>\n            <pre><code></code></pre>\n          </li>\n        </ul>\n        <pre><code>  ::: box\nTAILX\n</code></pre>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <ul>\n          <li>\n            <pre><code></code></pre>\n          </li>\n        </ul>\n        <pre><code>  ::: box\n</code></pre>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "review8-c04-marker-payload-frame-012",

@@ -79,6 +79,12 @@ describe('a fence on a sublist marker line leaves the list for the line below', 
     expect(read(lines('- a', ...body, 'tail'))).toBe(`<ul><li>a\n${sublist}</li></ul><p>tail</p>`)
   })
 
+  it('keeps a marker-shaped line in a literal line block inline, so the line below continues it', () => {
+    expect(read(lines('- ::: |', `  - ${FENCE}`, 'tail'))).toBe(
+      '<ul><li><div class="line-block"><p>- <code>\ntail</code></p></div></li></ul>',
+    )
+  })
+
   it('folds the line into a paragraph the sublist opens after the fence', () => {
     expect(read(lines('- a', `  - ${FENCE}`, '    x', `    ${FENCE}`, '    y', 'tail'))).toBe(
       '<ul><li>a\n<ul><li><pre><code>x\n</code></pre>\ny\ntail\n</li></ul></li></ul>',
