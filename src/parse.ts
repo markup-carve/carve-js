@@ -5427,6 +5427,8 @@ function trackWrappedAttributeRun(
 }
 
 interface ItemLineFacts {
+  /** Authored columns for fence lookahead, separate from character offsets. */
+  fenceColumns?: number | undefined
   terminatorFree: boolean
   whitespace?: number | undefined
   prefixMemo?: Map<number, number> | undefined
@@ -5885,7 +5887,7 @@ function trackItemLazyState(
     const inlineCode = RE_FENCE.exec(overIndented) ?? RE_RAW_FENCE.exec(overIndented)
     if (inlineCode && state.lazyFoldable) {
       const marker = RE_FENCE.test(overIndented) ? inlineCode[2]! : inlineCode[1]!
-      if (!hasFenceCloser(marker, run!) && !hasFenceCloser(marker, 0)) {
+      if (!hasFenceCloser(marker, facts?.fenceColumns ?? run!) && !hasFenceCloser(marker, 0)) {
         state.inlineFenceParagraph = true
         state.inDefList = false
         return
@@ -6997,6 +6999,8 @@ function rebasedCodeFenceEnd(
   takenBelowColumn?: ReadonlySet<number>,
   onFenceBodyLine?: (index: number) => void,
   onUnclosedCodeFence?: () => void,
+  authoredBase?: number,
+  sourceLines?: readonly (string | undefined)[],
 ): number {
   let end = start
   const close = fenceCloseRe(marker)
@@ -7009,6 +7013,13 @@ function rebasedCodeFenceEnd(
     end = j
     onFenceBodyLine?.(j)
     if (isBlankLine(candidate)) continue
+    const source = sourceLines?.[j]
+    if (authoredBase !== undefined && source !== undefined &&
+        indentColumns(source) === authoredBase && close.test(candidate.trimStart())) {
+      lines[j] = ' '.repeat(base) + candidate.trimStart()
+      closed = true
+      break
+    }
     const column = indentColumns(candidate, base)
     if (column < base) {
       if (column === 0 && close.test(candidate)) {
@@ -7168,6 +7179,7 @@ function rebaseOverindentedBlocks(
   // must not dedent one onto its base - see the dedent below.
   takenBelowColumn?: ReadonlySet<number>,
   markerColonOwnsExtent = false,
+  sourceLines?: readonly (string | undefined)[],
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7350,12 +7362,15 @@ function rebaseOverindentedBlocks(
     const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
     const comment = code ? undefined : commentFenceRun(opener)
     const colon = code || comment !== undefined ? null : colonBlockOpenerRun(opener)
+    const source = code ? sourceLines?.[i] : undefined
+    const sourceCodeBase = source !== undefined && source.slice(0, leadingWhitespace(source)).includes('\t')
+      ? indentColumns(source) : undefined
 
     if (code) {
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
       end = rebasedCodeFenceEnd(
         lines, i, base, marker, heldFoldedLines, takenBelowColumn,
-        onFenceBodyLine, onUnclosedCodeFence,
+        onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines,
       )
     } else if (comment !== undefined) {
       const closeAt = (commentCloser ??= commentCloserLookup(lines))(comment, i)
@@ -7487,7 +7502,11 @@ function rebaseOverindentedBlocks(
     if (!keepsAuthoredColumn) {
       for (let j = i; j <= end; j++) {
         // A payload line below the base keeps the residue the collector left it.
-        if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
+        const sourceLine = sourceCodeBase === undefined ? undefined : sourceLines?.[j]
+        if (sourceLine !== undefined && indentColumns(sourceLine, sourceCodeBase!) >= sourceCodeBase! &&
+            !heldFoldedLines.has(j)) {
+          lines[j] = sliceColumns(sourceLine, sourceCodeBase!, true)
+        } else if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
           lines[j] = sliceColumns(lines[j]!, base, true)
         }
       }
@@ -12312,7 +12331,10 @@ class ParseSession {
       const nestedLineNumbers: number[] = []
       // Collection can later rebase or frame a line; consumers check its text before reuse.
       const nestedOrigins = new Map<number, StrippedLineOrigin>()
+      let tabLineFacts: Map<string, ItemLineFacts> | undefined
       const lineFacts = (text: string, origin?: StrippedLineOrigin): ItemLineFacts | undefined => {
+        const tabFacts = tabLineFacts?.get(text)
+        if (tabFacts !== undefined) return tabFacts
         if (!origin || origin.text !== text) return undefined
         const remaining = lexer.lineLeadingWhitespace(origin.parentIndex) - origin.prefix
         return {
@@ -12855,6 +12877,14 @@ class ParseSession {
             const indented = opener !== dedented
             const mayOpenFence = indented && lazyState.literalColon === undefined && lazyState.quoteInner === null &&
               opensCodeFence(opener)
+            if (mayOpenFence && l.slice(0, lexer.lineLeadingWhitespace(lexer.pos)).includes('\t')) {
+              const facts = tabLineFacts ??= new Map()
+              facts.set(dedented, {
+                terminatorFree: lexer.lineTerminatorFree(lexer.pos),
+                whitespace: leadingWhitespace(dedented),
+                fenceColumns: indentColumns(l) - contentCol,
+              })
+            }
             ownerPending.push({
               line: dedented,
               followsBlank,
@@ -13309,6 +13339,7 @@ class ParseSession {
           () => { authoredCodeFenceOpen = true },
           rebaseTakenBelowColumn,
           leadColon !== null,
+          leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
         )
         : new Set<number>()
       if (leadOwnsExtent) {
