@@ -4723,7 +4723,7 @@ interface ItemLazyState {
    * the ruling says and what separates 358 from 357-2.
    */
   invisibleAtColumn: boolean
-  /** Only comments keep §24 C3's nonzero below-column path open. */
+  /** A consumed below-column comment retains a noninterrupting follower. */
   commentAtColumn: boolean
   /**
    * Is the tracker inside a footnote definition's body?
@@ -5863,15 +5863,11 @@ function trackItemLazyState(
     state.deepest = null
     if (run === comment.length) {
       state.opaque = null
-      // THE OPENER'S COLUMN DECIDES, NOT THE CLOSER'S (PART 9 §53,
-      // markup-carve/carve#2527). A span opened at the content column is a block
-      // of this container and its paragraph is over; where the closer is written
-      // is not a parameter of that. Reading the closer's column too let
-      // `- a` / `  - b` / `    %%%` / `    x` / `%%%` / `  tail` fold `tail` into
-      // the CHILD's paragraph, so authored text landed one item too deep.
+      // The opener ends its paragraph at the content column. Only a closing
+      // boundary consumed below that column retains the indented follower.
       state.lazyFoldable = comment.paragraphBefore && !comment.atColumn
       state.invisibleAtColumn = comment.atColumn
-      state.commentAtColumn = comment.atColumn
+      state.commentAtColumn = comment.atColumn && !atContentColumn
       state.closedBelowComment = !comment.atColumn && !comment.term && state.inDefList === false
     } else {
       state.lazyFoldable = false
@@ -6040,8 +6036,18 @@ function trackItemLazyState(
           state.inDefList = false
           return
         }
+        const closedDescendantMarker = facts?.rebasedFrame !== true && !state.ownedAuthored && state.deepest?.invisibleAtColumn === true &&
+          !state.deepest.lazyFoldable && marker
         state.ownedColumn = -1
         state.deepest = null
+        // A new marker after a closed descendant supplies no continuation
+        // claim. A line already admitted by an ancestor may still belong here.
+        if (closedDescendantMarker) {
+          state.retainedMarker = true
+          state.lazyFoldable = false
+          state.inDefList = false
+          return
+        }
       } else if (state.ownedAuthored && (runColumns === state.ownedColumn ||
           (state.authoredColon !== undefined && runColumns > state.authoredColon.column && hostedAuthoredBlockOpener(content.slice(run))) || (state.divDepth === 0 &&
           colonFenceOpenerLen(content.slice(run)) !== null))) readFlush = true
@@ -6191,7 +6197,7 @@ function trackItemLazyState(
     // them is the container's again.
     state.inFootnoteBody = RE_FOOTNOTE_DEF.test(content)
     state.invisibleAtColumn = true
-    state.commentAtColumn = RE_COMMENT_LINE.test(invisibleContent)
+    state.commentAtColumn = false
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -13630,12 +13636,7 @@ class ParseSession {
           !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
           ((((lazyState.lazyFoldable && !afterNoteBody) || (lazyState.retainedMarker && (quoteLazyFramed || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)))) ||
             (lazyState.opaque?.kind === 'comment' && lazyState.opaque.paragraphBefore && !lazyState.opaque.atColumn) ||
-            // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
-            // (markup-carve/carve#1364). The item goes on collecting, so a line
-            // still indented belongs to it and starts a paragraph of its own
-            // there (corpus 197, 277-3, 358). The container ends at document
-            // column 0, which is the line this test excludes and which is all
-            // that separates 358 from 357-2.
+            // Only a consumed below-column comment retains a follower (X1).
             (lazyState.commentAtColumn &&
               !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               indentColumns(l, contentCol) > 0)) &&

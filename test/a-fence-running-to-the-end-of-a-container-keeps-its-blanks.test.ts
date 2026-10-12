@@ -76,10 +76,10 @@ describe('a fence running to the end of a container keeps its blank lines', () =
      * content and the separator that loosens the list, so consuming it into the
      * body must not consume the loose signal with it.
      */
-    it('a blank before the next sibling still loosens the list', () => {
+    it('an at-column degraded comment releases the band paragraph', () => {
       const html = carveToHtml('- a\n  %%% x\n b\n\n- c\n')
-      expect(html).toContain('<p>a</p>')
-      expect(html).toContain('<p>c</p>')
+      expect(html).toContain('<li>a</li>')
+      expect(html).toContain('<p>b</p>\n<ul>\n  <li>c</li>')
     })
   })
 })

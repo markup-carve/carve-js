@@ -1082,7 +1082,7 @@
   {
     "id": "review8-older-o04-fence-comment-shifted-colon-006",
     "source": "1. a\n    ```\n    ::: |\n    ```\n    %%%\n  x\n",
-    "html": "<ol>\n  <li>a\n    <pre><code>::: |\n</code></pre>\n    x\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>a\n    <pre><code>::: |\n</code></pre>\n  </li>\n</ol>\n<p>x</p>"
   },
   {
     "id": "review8-older-o05-mixed-hosted-ownership-017",

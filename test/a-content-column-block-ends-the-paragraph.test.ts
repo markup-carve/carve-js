@@ -46,14 +46,9 @@ describe('a block at a container content column ends the paragraph', () => {
     expect(tailIsTopLevel('- a\n  %% c\ntail\n')).toBe(true)
   })
 
-  /**
-   * THE FIRST CONTROL, and the one that separates the two halves of the ruling.
-   * The comment ENDS THE PARAGRAPH, not the container - so a line still indented
-   * belongs to the item and starts a paragraph of its own there. Only document
-   * column 0 ends the container.
-   */
-  it('keeps the item on the same comment when the line below is indented', () => {
-    expect(html('- a\n  %% c\n b\n')).toBe('<ul>\n  <li>a\n    b\n  </li>\n</ul>')
+  // A follower still indented below the content column leaves the item too.
+  it('releases an indented follower below the comment column', () => {
+    expect(html('- a\n  %% c\n b\n')).toBe("<ul>\n  <li>a</li>\n</ul>\n<p>b</p>")
   })
 
   it('adds no block for a comment written BELOW the content column', () => {
@@ -89,13 +84,13 @@ describe('a block at a container content column ends the paragraph', () => {
     expect(html('- a\n %%% c\n %%%\ntail\n')).not.toContain('<p>tail</p>')
   })
 
-  it('keeps the item collecting after a content-column comment fence closes', () => {
+  it('releases a below-column follower after a content-column closer', () => {
     // The other half of the same closer: the fence ended the PARAGRAPH, so an
     // indented line below it is a block of the item's own rather than the top
     // level's. Without it the item ends at the closer and `# h` becomes a
     // document heading (corpus 277-3).
     expect(html('- a\n  %%%\n  x\n  %%%\n # h\n')).toBe(
-      '<ul>\n  <li>a\n    # h\n  </li>\n</ul>',
+      "<ul>\n  <li>a</li>\n</ul>\n<p># h</p>",
     )
   })
 
