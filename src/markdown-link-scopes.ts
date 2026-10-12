@@ -218,11 +218,10 @@ export function markdownInlineDestinationEnd(source: string, open: number): numb
         if (depth === 0) break
         depth--
       } else if (/[\x00-\x20\x7f]/.test(source[at]!)) {
-        if (depth > 0) return undefined
         break
       }
     }
-    if (depth > 0) return undefined
+    if (depth > 0 && at >= source.length) return undefined
   }
   const spaced = skipSpace()
   if (source[at] === ')') return at

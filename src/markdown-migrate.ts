@@ -1759,14 +1759,15 @@ function convertInline(
       ? (alt === '' ? '' : protect(alt, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
       : protect(alt + encoded, source)
   }
-  const protectDestinations = (pattern: RegExp): void => {
+  type NativeDestination = { offset: number; label: string; dest: string }
+  const protectDestinations = (pattern: RegExp | readonly NativeDestination[]): void => {
     const subject = line
     let cursor = 0, depth = 0, pairedEnd = -1
     let lineCursor = 0, lineNumber = 0
     const origins = joinedLines ? input.split('\n').map((_text, index) => index).filter(index => !joinedLines.has(index)) : []
     let commentEnd = subject.indexOf('-->')
     const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
-    line = subject.replace(pattern, (match, label: string, dest: string, offset: number) => {
+    const replaceDestination = (match: string, label: string, dest: string, offset: number): string => {
       while (cursor < offset) {
         if (subject[cursor] === '<') {
           autolink.lastIndex = cursor
@@ -1806,10 +1807,62 @@ function convertInline(
         }
       }
       return (image ? '' : label) + written
-    })
+    }
+    if (pattern instanceof RegExp) line = subject.replace(pattern, replaceDestination)
+    else {
+      const output: string[] = []
+      let at = 0
+      for (const { offset, label, dest } of pattern) {
+        const match = label + dest
+        output.push(subject.slice(at, offset), replaceDestination(match, label, dest, offset))
+        at = offset + match.length
+      }
+      output.push(subject.slice(at))
+      line = output.join('')
+    }
     line = line.replace(/\[\^([^\[\]\n]+)\](?=\x00P(\d+)\x00)/g, (match, label: string, index: string) =>
       protectedSpans[Number(index)]?.startsWith('(') ? '[' + protect('\\^', '^') + label + ']' : match,
     )
+  }
+
+  if (line.includes('](') && /\]\([^ \t\n]*\(/.test(line)) {
+    const subject = line
+    const opaque = opaqueHtmlScanner(subject)
+    const tokenAt = /\x00P\d+\x00/y
+    const opens: { at: number; image: boolean }[] = []
+    const destinations: NativeDestination[] = []
+    let escapedPosition = -1
+    for (let at = 0; at < subject.length; at++) {
+      if (subject[at] === '\x00') {
+        tokenAt.lastIndex = at
+        const token = tokenAt.exec(subject)
+        if (token) { at += token[0].length - 1; continue }
+      }
+      let htmlEnd: number | undefined
+      if (subject[at] === '<') {
+        activationAutolink.lastIndex = at
+        const auto = activationAutolink.exec(subject)
+        htmlEnd = opaque(at) ?? (auto ? at + auto[0].length : scanHtmlTag(subject, at)?.end)
+      }
+      const end = opaqueMathEnd(subject, at) ?? htmlEnd
+      if (end !== undefined) { at = end - 1; continue }
+      if (subject[at] === '\\') { escapedPosition = at + 1; at++; continue }
+      if (subject[at] === '[') {
+        opens.push({ at, image: subject[at - 1] === '!' && escapedPosition !== at - 1 })
+        continue
+      }
+      if (subject[at] !== ']' || opens.length === 0) continue
+      const opener = opens.pop()!
+      const through = markdownInlineDestinationEnd(subject, at + 1)
+      if (through === undefined) continue
+      const offset = opener.image ? opener.at - 1 : at + 1
+      if (opener.image) {
+        while (destinations.length && destinations.at(-1)!.offset >= offset) destinations.pop()
+      }
+      destinations.push({ offset, label: opener.image ? subject.slice(offset, at + 1) : '', dest: subject.slice(at + 1, through + 1) })
+      at = through
+    }
+    protectDestinations(destinations)
   }
 
   const pointyDestination = String.raw`\([ \t]*<[^<>\n]*>(?:[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'))?[ \t]*\)`
