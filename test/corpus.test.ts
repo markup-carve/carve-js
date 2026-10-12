@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-line-block-takes-a-lazy-line-whatever-its-last-payload-line',
   'an-at-column-comment-retains-nothing',
   'a-line-final-run-of-spaces-and-tabs-is-dropped-before-the-line-is-read',
   'a-tab-is-content-in-a-heading-key-and-in-a-cross-reference-id',

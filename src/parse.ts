@@ -3590,13 +3590,9 @@ function trackQuoteHostFence(
   }
   const literal = host.colons?.at(-1)
   if (literal?.literal && column >= literal.floor) {
-    if (literal.floor === 0 && column === 0 && opensCodeFence(text)) {
-      host.colons!.pop()
-      return false
-    }
     if (literal.opaque) {
       const closedPayload = literal.opaque.closes(text)
-      if (literal.floor === 0 && closedPayload && !literal.opaque.belowBaseCloses && column > literal.floor) {
+      if (literal.floor === 0 && text !== '') {
         state.mode = { kind: 'paragraph', absorbingFence: false }
       } else closeBlockQuoteParagraph(state)
       if (closedPayload) delete literal.opaque
@@ -3611,8 +3607,10 @@ function trackQuoteHostFence(
       host.colons!.pop()
       if (literal.floor === 0) state.colonWidths.pop()
     }
-    if (literal.floor === 0 && !close && !literal.opaque) return false
-    closeBlockQuoteParagraph(state)
+    // Line-block payload is inline content, whatever its block shape.
+    if (literal.floor === 0 && host.colons?.at(-1) === literal && text !== '') {
+      state.mode = { kind: 'paragraph', absorbingFence: false }
+    } else closeBlockQuoteParagraph(state)
     return true
   }
   if (RE_COMMENT_LINE.test(text)) {
