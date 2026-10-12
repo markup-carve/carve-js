@@ -1338,15 +1338,8 @@ function convertInline(
   if (!holdsFenceBody && !isReferenceDefinition && (input.includes(':') || input.includes('www.'))) {
     let cursor = 0
     let captured = ''
-    const rawOpaqueEnd = opaqueHtmlScanner(input)
-    const rawAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
-    for (const link of markdownRawBareLinks(input, at => {
-      const opaque = rawOpaqueEnd(at) ?? scanHtmlTag(input, at)?.end
-      if (opaque !== undefined) return opaque
-      rawAutolink.lastIndex = at
-      const angle = rawAutolink.exec(input)
-      return angle === null ? undefined : at + angle[0].length
-    })) {
+    const rawOpaqueEnd = markdownDestinationOpaqueEnd(input, dialect)
+    for (const link of markdownRawBareLinks(input, rawOpaqueEnd)) {
       captured += input.slice(cursor, link.start) + protect(writeLiteralAutolink(input.slice(link.start, link.end), link.prefix, true), input.slice(link.start, link.end))
       cursor = link.end
     }
@@ -6960,7 +6953,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        const { parts, joined } = headingParagraphParts(bare, dialect)
+        const { parts, joined } = headingParagraphParts(bare, dialect, bare.map((text, index) => index > 0 && listCols.length > 0 && indentColumns(text) < contentCol))
         let offset = heading.length + 1
         const sourceLines = parts.map((text, index) => {
           const entry = { offset, line: sourceLine(i + index) }

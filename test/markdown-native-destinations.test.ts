@@ -90,3 +90,22 @@ it('keeps lazy indentation after a soft line in a folded heading', () => {
     expect(html).toContain('<p>tail</p>')
   }
 })
+
+it('keeps malformed angle email text and its code span before a destination heading', () => {
+  const written = markdownToCarve('x <a`@b.> http://x.y/`[k](<p\\\nq>)\n===')
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html).toContain('x &lt;a<code>@b.&gt; http://x.y/</code><a href="p%5C%0Aq">k</a>')
+    expect(html.match(/<h1(?: |>)/g)).toHaveLength(1)
+    expect(html).not.toContain('<p>')
+  }
+})
+
+it('keeps lazy indentation in a later list paragraph heading', () => {
+  const written = markdownToCarve('- x\n\n  [a](<a\\\n b>)\n  ---')
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html).toContain('<a href="a%5C%0A%20b">a</a>')
+    expect(html).toContain('<h2')
+  }
+})

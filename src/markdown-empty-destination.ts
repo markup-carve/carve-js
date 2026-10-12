@@ -613,8 +613,9 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
     for (let match; (match = nestedLink.exec(label)) !== null;) {
       const open = nestedLink.lastIndex
       const end = markdownInlineDestinationEnd(label, open)
-      const destination = end === undefined ? undefined : referenceSourceText(label.slice(open, end + 1), sources)
-      if (end === undefined || destination === undefined || markdownInlineDestinationEnd(destination, 0) !== destination.length - 1) { nestedLink.lastIndex = match.index + 1; continue }
+      const destination = end === undefined ? undefined : label.slice(open, end + 1)
+      const original = destination?.includes('\x00') ? referenceSourceText(destination, sources) : undefined
+      if (end === undefined || original !== undefined && markdownInlineDestinationEnd(original, 0) !== original.length - 1) { nestedLink.lastIndex = match.index + 1; continue }
       nestedWritten += label.slice(nestedCursor, match.index) + match[1]!
       nestedLink.lastIndex = end + 1
       nestedCursor = nestedLink.lastIndex
