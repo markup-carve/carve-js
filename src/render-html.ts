@@ -2760,7 +2760,9 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
           () => withinLink(() => renderInlines(node.resolvedText ?? [], opts)),
           node.target,
         )
-        return `<a href="${crossrefHref}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
+        const xrefAttr = roundtripExport(opts) ? ` ${carrier('xref')}` : ''
+        const attrs = xrefAttr === '' ? node.attrs : dropCollidingAuthored(node.attrs, [carrier('xref')], opts, node, 'inline')
+        return `<a href="${crossrefHref}"${xrefAttr}${renderAttrs(stripKeyValue(attrs, 'href'))}>${label}</a>`
       }
       // Unresolved: literal source, the same as an unresolved reference link.
       return `&lt;/#${escapeHtml(node.target)}&gt;`
@@ -2771,7 +2773,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // Markdown/plain/ANSI arms already do. A composite figure's PANEL
       // caption keeps its placeholder un-numbered by design (PART 9 §4c), so
       // this arm is what makes it render as the literal `#` the author wrote.
-      return node.n === undefined ? '#' : String(node.n)
+      return node.n === undefined ? '#' : roundtripExport(opts) ? `<span ${carrier('caption-number')}>${node.n}</span>` : String(node.n)
     case 'citation_group': {
       // Extension-produced node: per-extension resolution in registration order
       // (mirrors the block path). For each extension, static mode tries its

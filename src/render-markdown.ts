@@ -30,8 +30,9 @@ import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentin
 import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
-import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
+import { renderHtml, isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
 import { renderCarve } from './render-carve.js'
+import { RESERVED_CARRIER_ATTRIBUTES } from './roundtrip-carriers.js'
 import { carrierLine, spellCarrierMarkers } from './carrier-markers.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -54,6 +55,53 @@ export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   smartTypography?: SmartTypographyOption
   /** Markdown renderers with raw HTML disabled show carrier comments as text. */
   roundtrip?: boolean
+}
+
+function hasInlineAttributes(attrs: Attrs | undefined): boolean {
+  return (
+    attrs !== undefined && (attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || Object.keys(attrs.keyValues ?? {}).length > 0)
+  )
+}
+
+function inlineCarrier(node: InlineNode, body: string | undefined, ctx: MarkdownContext): string {
+  let placeholder = 'CARVEINLINEBODY'
+  for (const key of Object.keys(node.attrs?.keyValues ?? {})) {
+    if (RESERVED_CARRIER_ATTRIBUTES.has(key.toLowerCase()))
+      ctx.options.onRenderLoss?.({
+        code: 'carrier-attribute-dropped',
+        target: 'markdown',
+        nodeType: 'inline',
+        attribute: key,
+        message: `Dropped the authored attribute ${key}: the roundtrip carrier of the same name owns it`,
+        ...(node.pos ? { pos: node.pos } : {}),
+      })
+  }
+  const attrs = node.attrs
+    ? {
+        ...node.attrs,
+        keyValues: Object.fromEntries(
+          Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !RESERVED_CARRIER_ATTRIBUTES.has(key.toLowerCase())),
+        ),
+      }
+    : undefined
+  node = { ...node, ...(attrs ? { attrs } : {}) }
+  const authored = JSON.stringify([attrs, 'href' in node ? node.href : undefined, 'title' in node ? node.title : undefined])
+  while (authored.includes(placeholder)) placeholder += 'X'
+  const text: InlineNode[] = [{ type: 'text', value: placeholder }]
+  const projected =
+    node.type === 'heading_ref'
+      ? { ...node, resolvedText: text }
+      : node.type === 'link' || node.type === 'span'
+        ? { ...node, children: text }
+        : node
+  const html = renderHtml(
+    { type: 'document', children: [{ type: 'paragraph', children: [projected] }] },
+    { onRenderLoss: (loss) => ctx.options.onRenderLoss?.({ ...loss, target: 'markdown' }) },
+  )
+    .trim()
+    .replace(/^<p>|<\/p>$/g, '')
+  const marked = html.replace(/^(<[^>]+)>/, `$1 data-carve-${node.type === 'heading_ref' ? 'xref' : 'inline'}>`)
+  return body === undefined ? marked : marked.replace(placeholder, () => body)
 }
 
 function renderHtmlAttrs(attrs: Attrs | undefined): string {
@@ -1100,10 +1148,20 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination reaches rendered Markdown.
       if (insideLink) return renderInlines(node.children, ctx)
+      if (ctx.roundtrip && hasInlineAttributes(node.attrs)) return inlineCarrier(node, withinLink(() => renderInlines(node.children, ctx)), ctx)
       return renderLink(node, ctx)
     case 'image':
       return renderImage(node, ctx)
     case 'span': {
+      if (ctx.roundtrip && hasInlineAttributes(node.attrs)) {
+        const previous = suppressAutomaticAbbreviation
+        if (node.attrs?.keyValues?.abbr !== undefined) suppressAutomaticAbbreviation = true
+        try {
+          return inlineCarrier(node, renderInlines(node.children, ctx), ctx)
+        } finally {
+          suppressAutomaticAbbreviation = previous
+        }
+      }
       // PART 9 §10 + carve#1127: an authored `abbr` OUTRANKS automatic
       // expansion, and a resolved abbreviation inside such a span contributes
       // only its visible text - a renderer must not emit the nested expansion.
@@ -1276,6 +1334,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // nothing else, so a crossref to a figure or a table renders as the
       // words it resolved to - the same rule `renderLink` applies to an
       // ordinary `#fragment` link.
+      if (ctx.roundtrip && !insideLink) return inlineCarrier(node, crossrefText, ctx)
       if (insideLink || crossrefSlug === undefined) return crossrefText
       // Resolved: the Markdown link this crossref always rendered as. The
       // authored `</#target>` stays in the tree (PART 12 §3a); only this
@@ -1388,6 +1447,7 @@ function renderImage(node: Image, ctx: MarkdownContext): string {
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
   // no longer answers this question (carve#596).
   if (isUnresolvedReference(node)) return escapeText(referenceSourceText(node.rawRef))
+  if (ctx.roundtrip && hasInlineAttributes(node.attrs)) return inlineCarrier(node, undefined, ctx)
   const src = markdownDestination(node.src)
   destinationDenied(ctx.options, 'image', 'markdown', deniedProbeInput(node.src), src, node.pos)
   const alt = escapeMarkdownLabel(node.alt)

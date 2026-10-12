@@ -40,6 +40,7 @@ import {
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
 import { inlineText, slugify } from './heading-ids.js'
+
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
@@ -60,6 +61,11 @@ export type HtmlImportAdapter =
 export { HTML_IMPORT_DIAGNOSTIC_CODES } from './html-import-report.js'
 export type { HtmlImportDiagnostic, HtmlImportDiagnosticCode, HtmlImportFidelity, HtmlImportConfidence } from './html-import-report.js'
 import { HtmlImportReportCollector, type DiagnosticMark, type HtmlImportDiagnostic } from './html-import-report.js'
+
+/** A cross-reference carrier's fragment is a PART 3 `crossref_id`: exactly what `</#...>` can name. */
+function isCrossReferenceFragment(href: string): boolean {
+  return /^#[^> \t\n\r]+$/.test(href)
+}
 
 export interface HtmlImportOptions {
   mode?: HtmlImportMode
@@ -1948,6 +1954,15 @@ class Importer {
    * place and lets the attribute pass know which names were consumed.
    */
   private readInlineCarriers(node: P5Node, tag: string, children: InlineNode[], path: string): void {
+    if ((['span', 'a', 'img'].includes(tag) || SEMANTIC_SPAN_TAGS.has(tag)) && this.hasCarrier(node, 'inline')) this.recordCarrier(node, 'inline')
+    if (tag === 'a' && this.hasCarrier(node, 'xref')) {
+      const href = this.attr(node, 'href') ?? ''
+      if (isCrossReferenceFragment(href)) this.recordCarrier(node, 'xref')
+    }
+    if (tag === 'span' && this.hasCarrier(node, 'caption-number')) {
+      const bare = (domAttrs(node) ?? []).every(attribute => [carrier('caption-number'), legacyCarrier('caption-number')].includes(attribute.name))
+      if (bare && (domChildren(node) ?? []).every(child => child.nodeName === '#text')) this.recordCarrier(node, 'caption-number')
+    }
     if (tag === 'span') {
       // NEITHER A RAW INLINE NOR AN ESCAPE HAS AN ATTRIBUTE SLOT its writer
       // emits, so rebuilding one over an element carrying anything else
@@ -2107,7 +2122,7 @@ class Importer {
     // downstream reads one out of it.
     if (tag === 'a') {
       if (name === 'href') return true
-      return name === 'title' && destinationIsCarried(this.attr(node, 'href'))
+      return name === 'title' && !this.carrierReads.get(node)?.names.has('xref') && destinationIsCarried(this.attr(node, 'href'))
     }
     if (tag === 'img') {
       // `alt` stays consumed either way: with a source it is the image node's
@@ -4699,6 +4714,10 @@ class Importer {
     this.readInlineCarriers(node, tag, children, path)
     const carried = this.carrierReads.get(node)
     const attrs = this.attrs(node, path)
+    if (tag === 'a' && carried?.names.has('xref')) {
+      return [{ type: 'heading_ref', target: this.attr(node, 'href')!.slice(1), ...(attrs ? { attrs } : {}) }]
+    }
+    if (tag === 'span' && carried?.names.has('caption-number')) return [{ type: 'caption_number' }]
     if (tag === 'span' && carried?.names.has('raw')) {
       // §13a `data-carve-raw`. Without this the carrier span was read as raw
       // HTML, so `` `x`{=tex} `` came back as

@@ -1,7 +1,10 @@
 import type { BlockNode, Document, InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
-import { parseFragment } from 'parse5'
+import { parseFragment, serialize } from 'parse5'
+import { htmlToAst } from './html-import.js'
+import { renderHtml } from './render-html.js'
+import { RESERVED_CARRIER_ATTRIBUTES, readCarrier } from './roundtrip-carriers.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
@@ -918,10 +921,64 @@ function criticDeletion(
   return { carve: protect('{-') + body + protect('-}'), end }
 }
 
-function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[], sources: readonly string[] = placeholders): string {
+const MARKED_INLINE_TAGS = new Set(['span', 'a', 'img', 'abbr', 'time', 'kbd', 'samp', 'var', 'cite', 'dfn'])
+let damagedInlineSet = false
+
+function markedInline(open: string): boolean {
+  if (!/\bdata-(?:carve|djot)-(?:inline|xref)(?=[\s=>/])/i.test(open)) return false
+  const element = parseFragment(open).childNodes[0]
+  if (!element || !('attrs' in element)) return false
+  return (['inline', 'xref'] as const).some(
+    (name) => readCarrier((key) => element.attrs.find((attr) => attr.name === key)?.value, name) !== undefined,
+  )
+}
+
+function importMarkedInline(open: string, tag: string, body: string, protect: (s: string) => string, reconstructBody: () => InlineNode[]): string {
+  let placeholder = 'CARVEMARKEDBODY'
+  while (decodeHtmlEntitiesRaw(open).includes(placeholder)) placeholder += 'X'
+  if (damagedInlineSet) {
+    const fragment = parseFragment(open)
+    const element = fragment.childNodes[0]
+    if (element && 'attrs' in element) element.attrs = element.attrs.filter((attr) => !RESERVED_CARRIER_ATTRIBUTES.has(attr.name))
+    open = serialize(fragment).replace(new RegExp(`</${tag}>$`), '')
+  }
+  const imported = htmlToAst(`${open}${tag === 'img' ? '' : placeholder + `</${tag}>`}`, { mode: 'safe' })
+  for (const diagnostic of imported.report.diagnostics) {
+    importLosses.push({ code: 'structure-unspellable', message: diagnostic.message })
+  }
+  if (damagedInlineSet) {
+    const html = renderHtml(imported.value)
+      .trim()
+      .replace(/^<p>|<\/p>$/g, '')
+    const at = tag === 'img' ? -1 : html.indexOf(placeholder)
+    return at < 0
+      ? protect(rawInlineHtml(html))
+      : protect(rawInlineHtml(html.slice(0, at))) + body + protect(rawInlineHtml(html.slice(at + placeholder.length)))
+  }
+  const paragraph = imported.value.children[0]
+  const inline = paragraph?.type === 'paragraph' ? paragraph.children[0] : undefined
+  if (inline?.type === 'span' || inline?.type === 'link') {
+    inline.children = reconstructBody()
+    return protect(renderCarve(imported.value).replace(/\n+$/, ''))
+  }
+  const source = renderCarve(imported.value).replace(/\n+$/, '')
+  const at = tag === 'img' ? -1 : source.indexOf(placeholder)
+  if (at < 0) return protect(source)
+  return protect(source.slice(0, at)) + body + protect(source.slice(at + placeholder.length))
+}
+
+function convertInlineHtml(
+  input: string,
+  protect: (s: string) => string,
+  placeholders: readonly string[],
+  sources: readonly string[],
+  markedDepth: number,
+  reconstructBody: (body: string) => InlineNode[],
+): string {
   let out = ''
   let i = 0
   const opaqueEnd = opaqueHtmlScanner(input)
+  const mayHaveMarkedElements = /\bdata-(?:carve|djot)-(?:inline|xref)\b/i.test(input)
   while (i < input.length) {
     if (input[i] !== '<') {
       out += input[i]!
@@ -936,8 +993,83 @@ function convertInlineHtml(input: string, protect: (s: string) => string, placeh
     }
     const tag = scanHtmlTag(input, i, placeholders)
     if (!tag) {
+      if (
+        mayHaveMarkedElements &&
+        /^<(?:span|a|img|abbr|time|kbd|samp|var|cite|dfn)\b[^>]*\bdata-(?:carve|djot)-(?:inline|xref)\b/i.test(input.slice(i))
+      ) {
+        importLosses.push({
+          code: 'carrier-markers-damaged',
+          message: CARRIER_MARKERS_DAMAGED,
+          fidelity: 'degraded',
+          confidence: 'fallback',
+        })
+        out += protect(
+          renderCarve({
+            type: 'document',
+            children: [{ type: 'paragraph', children: [{ type: 'text', value: referenceSourceText(input.slice(i), sources) }] }],
+          }).replace(/\n+$/, ''),
+        )
+        break
+      }
       out += input[i]!
       i++
+      continue
+    }
+    if (mayHaveMarkedElements && !tag.closing && markedInline(input.slice(i, tag.end))) {
+      const open = input.slice(i, tag.end)
+      let closeStart = tag.end
+      let closeEnd = tag.end
+      let balanced = tag.name === 'img'
+      if (!balanced && !tag.selfClosing) {
+        const stack = [tag.name]
+        let cursor = tag.end
+        while (cursor < input.length) {
+          const at = input.indexOf('<', cursor)
+          if (at < 0) break
+          const opaque = opaqueEnd(at)
+          if (opaque !== undefined) {
+            cursor = opaque
+            continue
+          }
+          const nested = scanHtmlTag(input, at, placeholders)
+          if (!nested) {
+            cursor = at + 1
+            continue
+          }
+          if (nested.closing) {
+            if (stack.pop() !== nested.name) break
+            if (stack.length === 0) {
+              balanced = true
+              closeStart = at
+              closeEnd = nested.end
+              break
+            }
+          } else if (!nested.selfClosing && !['img', 'br', 'hr', 'wbr', 'input'].includes(nested.name)) stack.push(nested.name)
+          cursor = nested.end
+        }
+      }
+      if (!balanced || !MARKED_INLINE_TAGS.has(tag.name) || markedDepth >= 64) {
+        importLosses.push({
+          code: 'carrier-markers-damaged',
+          message: CARRIER_MARKERS_DAMAGED,
+          fidelity: 'degraded',
+          confidence: 'fallback',
+        })
+        out += protect(
+          renderCarve({
+            type: 'document',
+            children: [{ type: 'paragraph', children: [{ type: 'text', value: referenceSourceText(input.slice(i), sources) }] }],
+          }).replace(/\n+$/, ''),
+        )
+        break
+      }
+      const rawBody = input.slice(tag.end, closeStart)
+      const body = damagedInlineSet
+        ? convertInlineHtml(rawBody, protect, placeholders, sources, markedDepth + 1, reconstructBody)
+        : rawBody
+      out += importMarkedInline(referenceSourceText(open, sources), tag.name, body, protect,
+        () => reconstructBody(referenceSourceText(rawBody, sources)))
+      i = closeEnd
       continue
     }
     let end = tag.end
@@ -948,7 +1080,11 @@ function convertInlineHtml(input: string, protect: (s: string) => string, placeh
       if (close) {
         end = tag.end + close.index + close[0].length
         const body = input.slice(tag.end, tag.end + close.index)
-        native = input.slice(i, tag.end).toLowerCase() === `<${tag.name}>` && close[0].toLowerCase() === `</${tag.name}>` && NATIVE_INLINE_HTML_TAGS.has(tag.name) && !body.includes('<')
+        native =
+          input.slice(i, tag.end).toLowerCase() === `<${tag.name}>` &&
+          close[0].toLowerCase() === `</${tag.name}>` &&
+          NATIVE_INLINE_HTML_TAGS.has(tag.name) &&
+          !body.includes('<')
         if (!native && tag.attrs && close[0].toLowerCase() === `</${tag.name}>`) {
           const deletion = criticDeletion(tag.name, input.slice(i, tag.end), body, input, end, protect)
           if (deletion !== undefined) {
@@ -973,7 +1109,8 @@ function convertInlineHtml(input: string, protect: (s: string) => string, placeh
     out += protect(rawInlineHtml(input.slice(i, tag.end)))
     i = tag.end
   }
-  return out}
+  return out
+}
 
 /**
  * Replace every inline code span in `s` via `repl`, leaving everything else
@@ -1258,6 +1395,7 @@ function convertInline(
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
   unwrapEmptyLinks = true,
   nativeCode = false,
+  markedDepth = 0,
 ): string {
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
@@ -2089,7 +2227,18 @@ function convertInline(
     return escaped
   }
   if (line.includes('/') && /[*_]|<(?:em|i)\b/i.test(line)) line = escapeLabelSlashes(line, true)
-  line = convertInlineHtml(line, protect, protectedSpans, protectedSources)
+  line = convertInlineHtml(line, protect, protectedSpans, protectedSources, markedDepth, body => {
+    const converted = convertInline(body, dialect, holdsFenceBody, false, undefined, true, table, reportEmptyLosses, undefined, unwrapEmptyLinks, nativeCode, markedDepth + 1)
+    // Keep leading heading and list markers inside a paragraph while rebuilding its inline children.
+    const paragraph = parse(`CARVEMARKEDBODY ${converted}`).children[0]
+    if (paragraph?.type !== 'paragraph') return []
+    const first = paragraph.children[0]
+    if (first?.type === 'text') {
+      first.value = first.value.slice('CARVEMARKEDBODY '.length)
+      if (!first.value) paragraph.children.shift()
+    }
+    return paragraph.children
+  })
 
   const referenceUrls = plainMarkdownUrlRanges(line, protectedSpans, protectedSources)
   let referenceUrlAt = 0
@@ -5111,6 +5260,7 @@ function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | nu
   if (block && HTML_BLOCK_TAGS.has(block[1]!.toLowerCase())) return collectUntil(RE_NEVER, true)
   const tag = scanHtmlTag(trimmed, 0)
   if (!tag) return null
+  if (!tag.closing && markedInline(trimmed.slice(0, tag.end))) return null
   // Condition 7: a complete tag, alone on the line. The block runs to the next
   // blank line - taking only the opening line split `<span>`/`text`/`</span>`
   // into a fence, a paragraph and an inline span, which is three readings of
@@ -5427,6 +5577,16 @@ export function markdownToCarveWithLosses(
     const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
 
     let value = restoreCarrierMarkers(convertMarkdown(prepared, dialect))
+    if (losses.some(loss => loss.code === 'carrier-markers-damaged')) {
+      losses.length = 0
+      carrierSlots = []
+      carrierToken = ''
+      damagedInlineSet = true
+      value = convertMarkdown(markdown, dialect)
+      const otherLosses = losses.filter(loss => loss.code !== 'carrier-markers-damaged')
+      losses.length = 0
+      losses.push({ code: 'carrier-markers-damaged', message: CARRIER_MARKERS_DAMAGED, fidelity: 'degraded', confidence: 'fallback' }, ...otherLosses)
+    }
     const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
     if (value.includes('@') || usedBoundaryKey !== undefined) {
       const document = parse(value)
@@ -5441,6 +5601,7 @@ export function markdownToCarveWithLosses(
     }
     return { value, losses }
   } finally {
+    damagedInlineSet = false
     carrierSlots = []
     carrierToken = ''
     useEmptyDestinationReferences(null)
