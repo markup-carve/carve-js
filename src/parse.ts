@@ -13005,7 +13005,7 @@ class ParseSession {
                 memo,
                 itemEndsAt,
               )
-              if (extraColumns > 0 && answer) {
+              if (extraColumns > 0 && nestedOwnerColumn < 0 && answer) {
                 lexer.descendantFenceAnswers.set(`${lexer.lineNumber(fenceLineIndex)}:${marker}`, true)
               }
               // Not published for an offset query; see the twin above.
