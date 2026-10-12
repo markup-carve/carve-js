@@ -5707,8 +5707,11 @@ function trackItemLazyState(
     // See the comment twin above.
     state.deepest = null
     const base = state.opaque.column ?? 0
-    const column = indentColumns(content, base + 1)
-    if ((column === 0 || column === base) && state.opaque.close.test(column === 0 ? content : sliceColumns(content, base, true))) state.opaque = null
+    const column = facts?.fenceColumns ?? indentColumns(content, base + 1)
+    const closer = facts?.fenceColumns === undefined
+      ? column === 0 ? content : sliceColumns(content, base, true)
+      : content.slice(leadingWhitespace(content))
+    if ((column === 0 || column === base) && state.opaque.close.test(closer)) state.opaque = null
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -5897,7 +5900,7 @@ function trackItemLazyState(
         return
       }
       if (facts?.descendantFrames === true && !wasDescendantColumn) {
-        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: indentColumns(content) }
+        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: facts?.fenceColumns ?? run! }
         state.lazyFoldable = false
         state.inDefList = false
         return
@@ -7005,6 +7008,7 @@ function rebasedCodeFenceEnd(
   onUnclosedCodeFence?: () => void,
   authoredBase?: number,
   sourceLines?: readonly (string | undefined)[],
+  authoredFloor?: number,
 ): number {
   let end = start
   const close = fenceCloseRe(marker)
@@ -7018,12 +7022,16 @@ function rebasedCodeFenceEnd(
     onFenceBodyLine?.(j)
     if (isBlankLine(candidate)) continue
     const source = sourceLines?.[j]
-    if (authoredBase !== undefined && source !== undefined &&
-        indentColumns(source) === authoredBase && !takenBelowColumn?.has(j) &&
-        close.test(candidate.slice(leadingWhitespace(candidate)))) {
-      lines[j] = ' '.repeat(base) + candidate.slice(leadingWhitespace(candidate))
-      closed = true
-      break
+    if (authoredBase !== undefined && source !== undefined) {
+      const column = indentColumns(source)
+      if (takenBelowColumn?.has(j)) heldFoldedLines.add(j)
+      if ((column === authoredBase || column === authoredFloor) && !heldFoldedLines.has(j) &&
+          close.test(candidate.slice(leadingWhitespace(candidate)))) {
+        if (column === authoredBase) lines[j] = ' '.repeat(base) + candidate.slice(leadingWhitespace(candidate))
+        closed = true
+        break
+      }
+      continue
     }
     const column = indentColumns(candidate, base)
     if (column < base) {
@@ -7185,7 +7193,7 @@ function rebaseOverindentedBlocks(
   takenBelowColumn?: ReadonlySet<number>,
   markerColonOwnsExtent = false,
   sourceLines?: readonly (string | undefined)[],
-  tabFenceLines?: ReadonlySet<number>,
+  tabFenceColumns?: ReadonlyMap<number, number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7368,7 +7376,7 @@ function rebaseOverindentedBlocks(
     const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
     const comment = code ? undefined : commentFenceRun(opener)
     const colon = code || comment !== undefined ? null : colonBlockOpenerRun(opener)
-    const source = code && tabFenceLines?.has(i) ? sourceLines?.[i] : undefined
+    const source = code && tabFenceColumns?.has(i) ? sourceLines?.[i] : undefined
     const sourceCodeBase = source !== undefined && source.slice(0, leadingWhitespace(source)).includes('\t')
       ? indentColumns(source) : undefined
 
@@ -7377,6 +7385,7 @@ function rebaseOverindentedBlocks(
       end = rebasedCodeFenceEnd(
         lines, i, base, marker, heldFoldedLines, takenBelowColumn,
         onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines,
+        sourceCodeBase === undefined ? undefined : sourceCodeBase - tabFenceColumns!.get(i)!,
       )
     } else if (comment !== undefined) {
       const closeAt = (commentCloser ??= commentCloserLookup(lines))(comment, i)
@@ -12965,8 +12974,12 @@ class ParseSession {
             // THE LIST ITEM HOST OPTS IN to classifying a descendant-owned line
             // in the descendant's own frame (carve#2884). The flag rides on the
             // facts, and the arm needs the measured run anyway, so a line with
-            // no facts opts in to nothing.
-            itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1), nested.length - 1)),
+            // no facts opts in to nothing. A tab fence carries source-column facts
+            // when a split tab prevents reuse of its stripped origin.
+            tabFenceSourceColumn === undefined
+              ? itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1), nested.length - 1))
+              : { ...lineFacts(trackedContent, nestedOrigins.get(nested.length - 1), nested.length - 1),
+                terminatorFree: lexer.lineTerminatorFree(fenceLineIndex), fenceColumns: indentColumns(l) - contentCol },
             (width, extra = 0) => {
               const closes = literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol + extra)
               const owner = lazyState.literalColon?.sourceLine
@@ -12981,9 +12994,8 @@ class ParseSession {
               return closes
             },
           )
-          if (lazyState.opaque?.kind === 'code' && tabLineFacts?.has(nested.length - 1)) {
-            tabFenceSourceColumn = indentColumns(l)
-          }
+          if (lazyState.opaque?.kind !== 'code') tabFenceSourceColumn = undefined
+          else if (tabLineFacts?.has(nested.length - 1)) tabFenceSourceColumn = indentColumns(l)
           if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.inlineFenceParagraph) lazyState.inlineFenceBlock = true
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.opaque === null) leadColonAwaitingBody = false
@@ -13362,7 +13374,8 @@ class ParseSession {
           tabLineFacts === undefined ? undefined
             : leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
           tabLineFacts === undefined ? undefined
-            : new Set(Array.from(tabLineFacts.keys(), (index) => leadOwnsExtent ? index + 1 : index)),
+            : new Map(Array.from(tabLineFacts).filter(([index, entry]) => nested[index] === entry.text)
+              .map(([index, entry]) => [leadOwnsExtent ? index + 1 : index, entry.facts.fenceColumns!] as const)),
         )
         : new Set<number>()
       if (leadOwnsExtent) {
