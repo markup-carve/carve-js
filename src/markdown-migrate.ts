@@ -1516,6 +1516,11 @@ function convertInline(
 
 
 
+  const opaqueMathEnd = (subject: string, offset: number): number | undefined => {
+    if (!dialect.math || subject[offset] !== '$') return undefined
+    const match = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(subject.slice(offset))
+    return match ? offset + match[0].length : undefined
+  }
   const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
   if (line.includes('[') && line.includes(']')) {
     const subject = line
@@ -1525,6 +1530,8 @@ function convertInline(
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
         || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
       offset => {
+        const mathEnd = opaqueMathEnd(subject, offset)
+        if (mathEnd !== undefined) return mathEnd
         auto.lastIndex = offset
         const link = auto.exec(subject)
         return link ? offset + link[0].length : opaque(offset) ?? scanHtmlTag(subject, offset)?.end
@@ -1534,6 +1541,7 @@ function convertInline(
   let opaqueRanges: Array<[number, number]> = []
   let activeEmptyDestinationOpeners = new Set<number>()
   let scalarBoundaryRanges: Array<[number, number]> = []
+  let activeImageLabelRanges: Array<[number, number]> = []
   line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before, subject) => {
     if (!reportEmptyLosses) return
     let counts = sourceLineCounts.get(subject)
@@ -1571,6 +1579,7 @@ function convertInline(
       opaqueSubject = subject
       opaqueRanges = []
       scalarBoundaryRanges = []
+      activeImageLabelRanges = []
       for (const scalar of subject.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>|<span\s+class\s*=\s*"critic-comment"\s*>([^<]*)<\/span>/gi)) {
         const body = scalar[1] ?? scalar[2]!
         if (!decodeHtmlEntitiesRaw(referenceSourceText(body, protectedSources)).includes('@')) {
@@ -1587,9 +1596,10 @@ function convertInline(
       escapeInactiveMarkdownLinkBrackets(subject, value => value,
         label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
           || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
-        offset => emptyDestinationOpaque(offset) ?? scanHtmlTag(subject, offset)?.end,
-        (open, close) => {
+        offset => opaqueMathEnd(subject, offset) ?? emptyDestinationOpaque(offset) ?? scanHtmlTag(subject, offset)?.end,
+        (open, close, image) => {
           activeEmptyDestinationOpeners.add(open)
+          if (image) activeImageLabelRanges.push([open, close])
           const end = markdownInlineDestinationEnd(subject, close + 1)
           if (end !== undefined) opaqueRanges.push([close + 1, end + 1])
         })
@@ -1667,7 +1677,8 @@ function convertInline(
     }
     return masked.size === 0 ? converted : converted.replace(/\x00P\d+\x00/g, token => masked.get(token) ?? token)
   },
-  (_subject, offset) => !scalarBoundaryRanges.some(([start, end]) => offset >= start && offset < end))
+  (_subject, offset) => !scalarBoundaryRanges.some(([start, end]) => offset >= start && offset < end),
+  (_subject, offset) => activeImageLabelRanges.some(([start, end]) => offset > start && offset < end))
 
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
@@ -1705,6 +1716,8 @@ function convertInline(
   line = escapeInactiveMarkdownLinkBrackets(activationSource, value => protect(value, value.slice(1)),
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     offset => {
+      const mathEnd = opaqueMathEnd(activationSource, offset)
+      if (mathEnd !== undefined) return mathEnd
       const opaque = activationOpaque(offset)
       if (opaque !== undefined) return opaque
       activationAutolink.lastIndex = offset
@@ -2197,6 +2210,12 @@ function convertInline(
   // brace that ATTACHES to the construct before it, and one alone on a line;
   // mid-prose, attaching to nothing, was the position neither reached.
   if (!dialect.attributes) line = escapeAttributeBlockOpener(line)
+  if (dialect.attributes && !holdsFenceBody) {
+    const wholeLine = line.trim()
+    line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+      (match, inner: string, offset: number, source: string) =>
+        (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
+  }
   line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
   // Numeric references are decoded below. Keep their hash available to that
   // pass even though the standalone escaper freezes it.
@@ -2254,14 +2273,15 @@ function convertInline(
     line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
   }
 
+  if (dialect.attributes && !holdsFenceBody) {
+    const wholeLine = line.trim()
+    line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+      (match, inner: string, offset: number, source: string) =>
+        (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
+  }
+
 
   if (!holdsFenceBody) {
-    if (dialect.attributes) {
-      const wholeLine = line.trim()
-      line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
-        (match, inner: string, offset: number, source: string) =>
-          (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
-    }
     line = line.replace(/["']/g, '\\$&')
   }
   // In a table cell a `#` run is literal text, not a heading marker, so the

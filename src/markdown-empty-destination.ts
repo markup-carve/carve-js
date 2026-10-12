@@ -1,3 +1,4 @@
+import { rawBracketRunCloses } from './parse.js'
 import { trimMatchingEdges } from './trim-non-nbsp.js'
 import { readMarkdownReferenceDefinition } from './markdown-reference-definition.js'
 /*
@@ -53,6 +54,9 @@ export function useEmptyDestinationBoundaryKey(key?: string): void {
 
 function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string, enabled = true, literal = false): string {
   if (!enabled || boundaryKey === undefined || text === '' && lineStart) return literal ? protect(text) : text
+  if (literal && !rawBracketRunCloses(text)) {
+    text = text.replace(/(\\*)[\[\]]/g, (match, slashes: string) => slashes.length % 2 === 0 ? slashes + '\\' + match.at(-1)! : match)
+  }
   if (text.startsWith('^')) text = protect('\\^') + text.slice(1)
   const separator = lineStart ? '' : protect('`<!--' + boundaryKey + '-->`{=html}')
   return `${separator}${protect('[')}${text === '' ? '0' : literal ? protect(text) : text}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
@@ -669,6 +673,7 @@ export function unwrapEmptyDestinations(
   excluded?: (subject: string, offset: number) => boolean,
   prepareLabel?: (label: string) => string,
   keepBoundaryAt?: (subject: string, offset: number) => boolean,
+  insideImageAt?: (subject: string, offset: number) => boolean,
 ): string {
   const replaceAt = (re: RegExp, pick: (m: RegExpExecArray, emittedPrefix: string) => string | null): void => {
     const subject = line
@@ -702,7 +707,7 @@ export function unwrapEmptyDestinations(
         }
       }
     }
-    const insideImage = imageRanges.some(([start, end]) => m.index > start && m.index < end)
+    const insideImage = (insideImageAt?.(subject, m.index) ?? false) || imageRanges.some(([start, end]) => m.index > start && m.index < end)
     if (!insideImage) {
       onUnwrap?.(m[0][0] === '!', subject.slice(0, m.index), subject)
     }

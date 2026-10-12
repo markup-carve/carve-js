@@ -249,3 +249,64 @@ it.each(['my_note', 'a&amp;b', 'a\\*b'])('keeps a footnote label inside an empty
     expect(value).not.toContain('carve-md-empty-')
   }
 })
+
+
+it.each(['a\\]b@c.test', '&#93;a@b.test', '`]`a@b.test', 'a\\[b@c.test'])('keeps empty image brackets literal without leaking a marker: %s', alt => {
+  const result = migrateMarkdown(`![${alt}]()`)
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    expect(value).not.toContain('carve-md-empty-')
+    expect(carveToHtml(value)).not.toContain('mailto:')
+    expect(carveToHtml(value)).toContain(alt.startsWith('a') ? alt.replace(/\\/g, '') : ']a@b.test')
+  }
+})
+
+it.each(['$', '$$'])('keeps opt-in math opaque to inactive bracket escaping: %s', delimiter => {
+  const result = migrateMarkdown(`${delimiter}f[g[i](x)]${delimiter}`, { dialect: { math: true } })
+  const paragraph = parse(result.value).children[0]
+  expect(paragraph?.type).toBe('paragraph')
+  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'math', content: 'f[g[i](x)]' })
+})
+
+it.each(['[a@b.test](){.x #kept title="t"}', '![a@b.test](){.x #kept title="t"}'])('preserves authored attributes after removing an empty destination boundary: %s', source => {
+  const result = migrateMarkdown(source, { dialect: { attributes: true } })
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    const html = carveToHtml(value)
+    expect(html).toContain('class="x"')
+    expect(html).toContain('id="kept"')
+    expect(html).toContain('title="t"')
+    expect(html).not.toContain('mailto:')
+    expect(value).not.toContain('carve-md-empty-')
+  }
+})
+
+
+it.each(['del class="critic-delete"', 'ins', 'del'])('preserves an empty mark after boundary cleanup: %s', tag => {
+  const close = tag.split(' ')[0]!
+  const result = migrateMarkdown(`<${tag}>[]()</${close}> a@b.test`)
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    expect(carveToHtml(value)).toContain(`<${tag}></${close}>`)
+    expect(carveToHtml(value)).toContain('mailto:a@b.test')
+    expect(value).not.toContain('carve-md-empty-')
+  }
+})
+
+
+it.each([
+  '![logo [docs]()](logo.png "My\ntitle")\n\nmail a@b.test',
+  '![logo [docs]()](logo.png "a ( b") a@b.test',
+  '![logo [docs]()](\nlogo.png) a@b.test',
+])('keeps internal boundaries out of multiline image alt text: %s', source => {
+  const result = migrateMarkdown(source)
+  expect(result.value).not.toContain('carve-md-empty-')
+  const html = carveToHtml(result.value)
+  expect(html).toContain('alt="logo docs"')
+  expect(html).toContain('href="mailto:a@b.test"')
+  expect(result.report.diagnostics.filter(row => row.code === 'structure-unspellable')).toHaveLength(0)
+})
+
+it.each(['mark', 'u', 'ins', 'del', 's', 'sup', 'sub', 'strong', 'b', 'em', 'i'])(
+  'preserves quoted attributes after HTML inline marks: %s', tag => {
+    const result = migrateMarkdown(`<${tag}>a</${tag}>{title="t"}`, { dialect: { attributes: true } })
+    expect(carveToHtml(result.value)).toContain('title="t"')
+  },
+)

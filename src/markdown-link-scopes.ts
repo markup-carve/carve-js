@@ -88,7 +88,7 @@ export function escapeInactiveMarkdownLinkBrackets(
   protect: (value: string) => string,
   isReference: (label: string) => boolean,
   opaqueEnd: (offset: number) => number | undefined,
-  onActiveLink: (opener: number, closer: number) => void = () => {},
+  onActiveLink: (opener: number, closer: number, image: boolean) => void = () => {},
 ): string {
   if (!source.includes('[')) return source
   const opaque = new Map<number, number>()
@@ -104,7 +104,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       const token = tokenAt.exec(source)
       if (token) { i += token[0].length - 1; continue }
     }
-    if (source[i] === '<') {
+    if (source[i] === '<' || source[i] === '$') {
       const end = opaqueEnd(i)
       if (end !== undefined) { opaque.set(i, end); i = end - 1; continue }
     }
@@ -163,7 +163,7 @@ export function escapeInactiveMarkdownLinkBrackets(
     }
     const end = markdownInlineDestinationEnd(source, i + 1)
     if (end !== undefined) {
-      onActiveLink(opener.at, i)
+      onActiveLink(opener.at, i, opener.image)
       if (!opener.image) generation++
       i = end
       continue
@@ -176,7 +176,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       referenceEnd = close
     }
     if (label !== null && isReference(label)) {
-      onActiveLink(opener.at, i)
+      onActiveLink(opener.at, i, opener.image)
       if (!opener.image) generation++
       i = referenceEnd
     }

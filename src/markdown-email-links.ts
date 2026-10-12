@@ -88,7 +88,16 @@ export function linkMarkdownEmailText(document: Document, boundaryKey?: string):
           const boundary = keys?.[boundaryKey]
           if (record(child) && child['type'] === 'span' && (boundary === 'label' || boundary === 'empty') && Array.isArray(child['children'])) {
             rewrite = changed = true
-            if (boundary === 'label') {
+            if (keys) delete keys[boundaryKey]
+            if (attrs && Array.isArray(attrs['order'])) attrs['order'] = attrs['order'].filter(slot => slot !== boundaryKey)
+            const authored = attrs && (attrs['id'] !== undefined
+              || Array.isArray(attrs['classes']) && attrs['classes'].length > 0
+              || keys && Object.keys(keys).length > 0)
+            if (authored) {
+              if (boundary === 'empty') child['children'] = []
+              rewritten.push(child)
+              cleanup.push(child)
+            } else if (boundary === 'label') {
               for (let i = child['children'].length - 1; i >= 0; i--) remaining.push(child['children'][i])
             }
           } else if (record(child) && child['type'] === 'raw_inline' && child['format'] === 'html' && child['content'] === `<!--${boundaryKey}-->`) {
@@ -115,10 +124,11 @@ export function linkMarkdownEmailText(document: Document, boundaryKey?: string):
       const nodes = arrays[at]!
       for (let i = 0; i < nodes.length; i++) {
         const child = nodes[i]
-        if (record(child) && ['emphasis', 'strong', 'strike', 'underline', 'highlight', 'superscript', 'subscript', 'insert'].includes(String(child['type'])) && Array.isArray(child['children']) && child['children'].length === 0) {
-          const tags: Record<string, string> = { emphasis: 'em', strong: 'strong', strike: 'del', underline: 'u', highlight: 'mark', superscript: 'sup', subscript: 'sub', insert: 'ins' }
+        if (record(child) && ['emphasis', 'strong', 'strike', 'underline', 'highlight', 'superscript', 'subscript', 'insert', 'delete'].includes(String(child['type'])) && Array.isArray(child['children']) && child['children'].length === 0) {
+          const tags: Record<string, string> = { emphasis: 'em', strong: 'strong', strike: 'del', underline: 'u', highlight: 'mark', superscript: 'sup', subscript: 'sub', insert: 'ins', delete: 'del' }
           const tag = tags[String(child['type'])]!
-          nodes[i] = { type: 'raw_inline', format: 'html', content: `<${tag}></${tag}>` }
+          const attributes = child['type'] === 'delete' ? ' class="critic-delete"' : ''
+          nodes[i] = { type: 'raw_inline', format: 'html', content: `<${tag}${attributes}></${tag}>` }
           changed = true
         }
       }
