@@ -1,0 +1,392 @@
+[
+  {
+    "id": "comment-target-d2-false-# h",
+    "source": "- a\n  - b\n    %% c\n # h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    # h\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d2-false-> q",
+    "source": "- a\n  - b\n    %% c\n > q\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    &gt; q\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d2-false-:::",
+    "source": "- a\n  - b\n    %% c\n :::\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    :::\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d2-false-```",
+    "source": "- a\n  - b\n    %% c\n ```\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    <code></code>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d2-false-| a |",
+    "source": "- a\n  - b\n    %% c\n | a |\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    | a |\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d2-false-[^x]: note",
+    "source": "- a\n  - b\n    %% c\n [^x]: note\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    [^x]: note\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d2-false-payload",
+    "source": "- a\n  - b\n    %% c\n payload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d2-true-# h",
+    "source": "> - a\n>   - b\n>     %% c\n>  # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      # h\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d2-true-> q",
+    "source": "> - a\n>   - b\n>     %% c\n>  > q\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      &gt; q\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d2-true-:::",
+    "source": "> - a\n>   - b\n>     %% c\n>  :::\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      :::\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d2-true-```",
+    "source": "> - a\n>   - b\n>     %% c\n>  ```\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      <code></code>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d2-true-| a |",
+    "source": "> - a\n>   - b\n>     %% c\n>  | a |\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      | a |\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d2-true-[^x]: note",
+    "source": "> - a\n>   - b\n>     %% c\n>  [^x]: note\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      [^x]: note\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d2-true-payload",
+    "source": "> - a\n>   - b\n>     %% c\n>  payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d3-false-# h",
+    "source": "- a\n  - b\n    - c\n      %% c\n # h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    # h\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d3-false-> q",
+    "source": "- a\n  - b\n    - c\n      %% c\n > q\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    &gt; q\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d3-false-:::",
+    "source": "- a\n  - b\n    - c\n      %% c\n :::\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    :::\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d3-false-```",
+    "source": "- a\n  - b\n    - c\n      %% c\n ```\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    <code></code>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d3-false-| a |",
+    "source": "- a\n  - b\n    - c\n      %% c\n | a |\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    | a |\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d3-false-[^x]: note",
+    "source": "- a\n  - b\n    - c\n      %% c\n [^x]: note\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    [^x]: note\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d3-false-payload",
+    "source": "- a\n  - b\n    - c\n      %% c\n payload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d3-true-# h",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      # h\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d3-true-> q",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  > q\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      &gt; q\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d3-true-:::",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  :::\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      :::\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d3-true-```",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  ```\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      <code></code>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d3-true-| a |",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  | a |\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      | a |\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d3-true-[^x]: note",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  [^x]: note\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      [^x]: note\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d3-true-payload",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>  payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d4-false-# h",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n # h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    # h\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d4-false-> q",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n > q\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    &gt; q\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d4-false-:::",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n :::\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    :::\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d4-false-```",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n ```\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <code></code>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d4-false-| a |",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n | a |\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    | a |\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d4-false-[^x]: note",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n [^x]: note\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    [^x]: note\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d4-false-payload",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n payload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-target-d4-true-# h",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      # h\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d4-true-> q",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  > q\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      &gt; q\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d4-true-:::",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  :::\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      :::\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d4-true-```",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  ```\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      <code></code>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d4-true-| a |",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  | a |\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      | a |\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d4-true-[^x]: note",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  [^x]: note\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      [^x]: note\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-target-d4-true-payload",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>  payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d1-false-c0-# h",
+    "source": "- a\n  %% c\n# h\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
+  },
+  {
+    "id": "comment-neighbor-d1-false-c0-payload",
+    "source": "- a\n  %% c\npayload\n",
+    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>payload</p>"
+  },
+  {
+    "id": "comment-neighbor-d1-false-c1-# h",
+    "source": "- a\n  %% c\n # h\n",
+    "html": "<ul>\n  <li>a\n    # h\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d1-false-c1-payload",
+    "source": "- a\n  %% c\n payload\n",
+    "html": "<ul>\n  <li>a\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d1-false-c2-# h",
+    "source": "- a\n  %% c\n  # h\n",
+    "html": "<ul>\n  <li>a\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d1-false-c2-payload",
+    "source": "- a\n  %% c\n  payload\n",
+    "html": "<ul>\n  <li>a\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d1-true-c0-# h",
+    "source": "> - a\n>   %% c\n> # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d1-true-c0-payload",
+    "source": "> - a\n>   %% c\n> payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d1-true-c1-# h",
+    "source": "> - a\n>   %% c\n>  # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      # h\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d1-true-c1-payload",
+    "source": "> - a\n>   %% c\n>  payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d1-true-c2-# h",
+    "source": "> - a\n>   %% c\n>   # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d1-true-c2-payload",
+    "source": "> - a\n>   %% c\n>   payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d2-false-c0-# h",
+    "source": "- a\n  - b\n    %% c\n# h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
+  },
+  {
+    "id": "comment-neighbor-d2-false-c0-payload",
+    "source": "- a\n  - b\n    %% c\npayload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+  },
+  {
+    "id": "comment-neighbor-d2-false-c2-# h",
+    "source": "- a\n  - b\n    %% c\n  # h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d2-false-c2-payload",
+    "source": "- a\n  - b\n    %% c\n  payload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d2-true-c0-# h",
+    "source": "> - a\n>   - b\n>     %% c\n> # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d2-true-c0-payload",
+    "source": "> - a\n>   - b\n>     %% c\n> payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d2-true-c2-# h",
+    "source": "> - a\n>   - b\n>     %% c\n>   # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d2-true-c2-payload",
+    "source": "> - a\n>   - b\n>     %% c\n>   payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b</li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d3-false-c0-# h",
+    "source": "- a\n  - b\n    - c\n      %% c\n# h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
+  },
+  {
+    "id": "comment-neighbor-d3-false-c0-payload",
+    "source": "- a\n  - b\n    - c\n      %% c\npayload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+  },
+  {
+    "id": "comment-neighbor-d3-false-c2-# h",
+    "source": "- a\n  - b\n    - c\n      %% c\n  # h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d3-false-c2-payload",
+    "source": "- a\n  - b\n    - c\n      %% c\n  payload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d3-true-c0-# h",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n> # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d3-true-c0-payload",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n> payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d3-true-c2-# h",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>   # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d3-true-c2-payload",
+    "source": "> - a\n>   - b\n>     - c\n>       %% c\n>   payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c</li>\n          </ul>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d4-false-c0-# h",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n# h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>"
+  },
+  {
+    "id": "comment-neighbor-d4-false-c0-payload",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\npayload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+  },
+  {
+    "id": "comment-neighbor-d4-false-c2-# h",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n  # h\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d4-false-c2-payload",
+    "source": "- a\n  - b\n    - c\n      - d\n        %% c\n  payload\n",
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+  },
+  {
+    "id": "comment-neighbor-d4-true-c0-# h",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n> # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <h1 id=\"h\">h</h1>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d4-true-c0-payload",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n> payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n    </li>\n  </ul>\n  <p>payload</p>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d4-true-c2-# h",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>   # h\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      <h1 id=\"h\">h</h1>\n    </li>\n  </ul>\n</blockquote>"
+  },
+  {
+    "id": "comment-neighbor-d4-true-c2-payload",
+    "source": "> - a\n>   - b\n>     - c\n>       - d\n>         %% c\n>   payload\n",
+    "html": "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>b\n          <ul>\n            <li>c\n              <ul>\n                <li>d</li>\n              </ul>\n            </li>\n          </ul>\n        </li>\n      </ul>\n      payload\n    </li>\n  </ul>\n</blockquote>"
+  }
+]
