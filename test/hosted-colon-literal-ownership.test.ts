@@ -44,7 +44,7 @@ for (const quote of ['', '> ', '> > ']) {
   for (const body of [':::', '# h']) {
     it(`rebases ${body} after a real marker-line div closer, quote ${quote}`, () => {
       const source = `${quote}- ::: box\n${quote}  :::\n${quote}    ${body}\nTAILX\n`
-      expect(parse(source).children.map(node => node.type)).toEqual(quote && body === '# h' ? ['block_quote'] : [quote ? 'block_quote' : 'list', 'paragraph'])
+      expect(parse(source).children.map(node => node.type)).toEqual([quote ? 'block_quote' : 'list', 'paragraph'])
       expect(carveToHtml(source)).toContain(body === '# h' ? '<h1 id="h">h</h1>' : '<div>\n\n')
       expect(carveToHtml(source)).toContain('<p>TAILX</p>')
     })

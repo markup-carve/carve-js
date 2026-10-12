@@ -652,7 +652,7 @@
   {
     "id": "fixed-linkdef-one-q3-f4-b-p2-7",
     "source": "> - text\n>    > quote\n>\n>     [r]: https://e.test\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>quote</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-linkdef-two-q3-f4-b-p0-7",
@@ -662,7 +662,7 @@
   {
     "id": "fixed-linkdef-two-q3-f4-b-p2-7",
     "source": "> - text\n>    > q\n>    > r\n>\n>     [r]: https://e.test\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote><p>q\nr</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-linkdef-nest-q3-f4-b-p0-7",
@@ -672,7 +672,7 @@
   {
     "id": "fixed-linkdef-nest-q3-f4-b-p2-7",
     "source": "> - text\n>    > > q\n>\n>     [r]: https://e.test\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <blockquote><p>q</p></blockquote>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-linkdef-qlist-q3-f4-b-p0-7",
@@ -682,7 +682,7 @@
   {
     "id": "fixed-linkdef-qlist-q3-f4-b-p2-7",
     "source": "> - text\n>    > - q\n>\n>     [r]: https://e.test\nafter\n",
-    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>text\n      <blockquote>\n        <ul>\n          <li>q</li>\n        </ul>\n      </blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>after</p>"
   },
   {
     "id": "fixed-bt-quote-4-after-0--",

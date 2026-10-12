@@ -3538,6 +3538,7 @@ interface QuoteFenceHosts {
   columns: number[]
   markers: number[]
   kinds: ('item' | 'note')[]
+  terms: boolean[]
   colons?: Array<{ width: number; column: number; floor: number; awaitingBody: boolean; literal: boolean; markerBody?: boolean; opaque?: OpaqueGroup }>
   /**
    * The fence a list item or footnote inside this quote holds open. `column` is
@@ -3555,7 +3556,7 @@ function trackQuoteHostFence(
   hasCommentCloser: (width: number, floor: number) => boolean,
   wasInTable: boolean,
 ): boolean {
-  const host = state.hosts ??= { columns: [0], markers: [], kinds: [], fence: null }
+  const host = state.hosts ??= { columns: [0], markers: [], kinds: [], terms: [], fence: null }
   const afterComment = host.commentBoundary === true
   delete host.commentBoundary
   const column = indentColumns(content)
@@ -3637,7 +3638,7 @@ function trackQuoteHostFence(
   }
   if (text === '') { if (host.markers.length === 0) host.initialMarkerColumn = undefined; return false }
   if (quotedLineText(content, terminatorFree) !== null) {
-    host.columns = [0]; host.markers = []; host.kinds = []
+    host.columns = [0]; host.markers = []; host.kinds = []; host.terms = []
     host.colons = []
     host.initialMarkerColumn = undefined
     return false
@@ -3656,7 +3657,7 @@ function trackQuoteHostFence(
     (lazyMarker || (bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)))
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody)
   while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) {
-    host.columns.pop(); host.markers.pop(); host.kinds.pop()
+    host.columns.pop(); host.markers.pop(); host.kinds.pop(); host.terms.pop()
   }
   const colons = host.colons ??= []
   while (colons.length > 0 && colons.at(-1)!.floor > host.columns.at(-1)!) colons.pop()
@@ -3676,6 +3677,7 @@ function trackQuoteHostFence(
       at += RE_TASK.test(markerText) ? 2 : width - (inner.length - markerText.length)
       host.columns.push(at)
       host.kinds.push('item')
+      host.terms.push(false)
       blockStart = true
       const tail = inner.slice(width)
       at += indentColumns(tail)
@@ -3684,13 +3686,14 @@ function trackQuoteHostFence(
     }
     const note = RE_FOOTNOTE_DEF.exec(inner)
     if (note) {
-      host.markers.push(at); host.columns.push(at + 2); host.kinds.push('note')
+      host.markers.push(at); host.columns.push(at + 2); host.kinds.push('note'); host.terms.push(false)
       at += 2
       inner = note[2]!
       blockStart = true
     }
     break
   }
+  if (blockStart && RE_DEFLIST_TERM.test(inner)) host.terms[host.terms.length - 1] = true
   const floor = host.columns.at(-1)!
   const pendingColonBody = colons.at(-1)?.awaitingBody === true
   if (blockStart && state.mode.kind === 'paragraph') state.mode.absorbingFence = false
@@ -3734,8 +3737,6 @@ function trackQuoteHostFence(
       state.mode = { kind: 'paragraph', absorbingFence: true }
       return true
     }
-    if (bare && open === undefined && at >= floor && host.initialMarkerColumn !== undefined &&
-        (host.markers.at(-1) ?? host.initialMarkerColumn) < host.initialMarkerColumn) return false
     if (width !== null && !absorbedBare) {
       colons.push({ width, column: at, floor, awaitingBody: blockStart,
         literal: RE_LINE_BLOCK_OPEN.test(inner), markerBody: blockStart })
@@ -3770,12 +3771,12 @@ function trackQuoteHostFence(
       return true
     }
   }
-  // A block of one line at an item's content column leaves the item no paragraph
-  // (CARVE-P0-009), as the same line does at the quote's own column.
-  if (floor > 0 && at === floor && !blockStart && host.kinds.at(-1) === 'item') {
+  if (!blockStart && at === floor && host.terms.length > 0) host.terms[host.terms.length - 1] = false
+  if (floor > 0 && at >= floor && !blockStart && !host.terms.at(-1)) {
     const row = isTableRow(inner) || (wasInTable && RE_TABLE_CONT.test(inner))
-    if (row || RE_HEADING.test(inner) || RE_HR.test(inner) || RE_DEFLIST_TERM.test(inner) ||
-        isBlockAttributeLine(inner) || isLinkDefLine(inner)) {
+    if (row || RE_HEADING.test(inner) || RE_HR.test(inner) || isLinkDefLine(inner) ||
+        (host.kinds.at(-1) === 'item' && (RE_DEFLIST_TERM.test(inner) ||
+          isBlockAttributeLine(inner)))) {
       state.inTable = row
       closeBlockQuoteParagraph(state)
       return true
