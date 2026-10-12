@@ -26,6 +26,7 @@ import {
   plainAltText,
   referenceDestinationLabel,
   referenceInlineTarget,
+  isEmptyDestinationReference,
   referenceSourceLabel,
   referenceSourceText,
   referenceLiteralText,
@@ -1518,6 +1519,8 @@ function convertInline(
   const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
   let opaqueSubject: string | undefined
   let opaqueRanges: Array<[number, number]> = []
+  let activeEmptyDestinationOpeners = new Set<number>()
+  let scalarBoundaryRanges: Array<[number, number]> = []
   line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before, subject) => {
     if (!reportEmptyLosses) return
     let counts = sourceLineCounts.get(subject)
@@ -1554,6 +1557,29 @@ function convertInline(
     if (subject !== opaqueSubject) {
       opaqueSubject = subject
       opaqueRanges = []
+      scalarBoundaryRanges = []
+      for (const scalar of subject.matchAll(/<code>([^<]*)<\/code>|<span\s+class\s*=\s*"critic-comment"\s*>([^<]*)<\/span>/gi)) {
+        const body = scalar[1] ?? scalar[2]!
+        if (!decodeHtmlEntitiesRaw(referenceSourceText(body, protectedSources)).includes('@')) {
+          scalarBoundaryRanges.push([scalar.index! + scalar[0].indexOf('>') + 1, scalar.index! + scalar[0].lastIndexOf('</')])
+        }
+      }
+      if (dialect.math) {
+        for (const math of subject.matchAll(/\$\$([^$]+)\$\$|\$([^$\s][^$]*[^$\s]|\S)\$(?!\d)/g)) {
+          if (math[1] !== undefined || !/^[\d.,]+$/.test(math[2]!)) opaqueRanges.push([math.index!, math.index! + math[0].length])
+        }
+      }
+      activeEmptyDestinationOpeners = new Set<number>()
+      const emptyDestinationOpaque = opaqueHtmlScanner(subject)
+      escapeInactiveMarkdownLinkBrackets(subject, value => value,
+        label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+          || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+        offset => emptyDestinationOpaque(offset) ?? scanHtmlTag(subject, offset)?.end,
+        (open, close) => {
+          activeEmptyDestinationOpeners.add(open)
+          const end = markdownInlineDestinationEnd(subject, close + 1)
+          if (end !== undefined) opaqueRanges.push([close + 1, end + 1])
+        })
       const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
       for (let cursor = 0; cursor < subject.length; cursor++) {
         if (subject[cursor] !== '<') continue
@@ -1567,7 +1593,9 @@ function convertInline(
       }
     }
     return opaqueRanges.some(([start, end]) => offset > start && offset < end)
-  })
+      || !activeEmptyDestinationOpeners.has(subject[offset] === '!' ? offset + 1 : offset)
+  }, label => markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 1, undefined, true, value => protect(value)),
+  (_subject, offset) => !scalarBoundaryRanges.some(([start, end]) => offset >= start && offset < end))
 
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
@@ -1827,7 +1855,7 @@ function convertInline(
       if (sourceLabel !== undefined && !tablePipe) return protect(match, match)
       const precedingOpener = referenceOpeners.get(offset - 1)
       const precedingLabel = precedingOpener === undefined ? '' : source.slice(precedingOpener + 1, offset - 1)
-      if (!tablePipe && !/[*_`\\\x00<&]/.test(reference + precedingLabel)) return protect(match, match)
+      if (!tablePipe && !/[*_`\\\x00<&~"'=^]/.test(reference + precedingLabel)) return protect(match, match)
       return protect('\\[', '[') + reference + protect('\\]', ']')
     }
     return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`, match)
@@ -5261,7 +5289,8 @@ export function markdownToCarveWithLosses(
   const decoded = markdown.includes('&') ? decodeHtmlEntitiesRaw(markdown) : markdown
   let emptyDestinationKey: string | undefined
   if (decoded.includes('@')) {
-    const occupied = new Set([...decoded.toLowerCase().matchAll(/carve-md-empty-(\d+)/g)].map(match => match[1]))
+    const keySource = decoded.includes('\\') ? decoded.replace(/\\([!-\/:-@\[-`{-~])/g, '$1') : decoded
+    const occupied = new Set([...keySource.toLowerCase().matchAll(/carve-md-empty-(\d+)/g)].map(match => match[1]))
     let slot = 0
     while (occupied.has(String(slot))) slot++
     emptyDestinationKey = `carve-md-empty-${slot}`
@@ -5283,6 +5312,9 @@ export function markdownToCarveWithLosses(
         value = renderCarve(document, { onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }) })
         if (!trailingNewline) value = value.replace(/\n$/, '')
       }
+    }
+    if (usedBoundaryKey !== undefined && (value.includes(`${usedBoundaryKey}=`) || value.includes(`<!--${usedBoundaryKey}-->`))) {
+      throw new Error('Markdown import could not remove its internal empty-destination boundary')
     }
     return { value, losses }
   } finally {

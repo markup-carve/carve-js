@@ -51,8 +51,8 @@ export function useEmptyDestinationBoundaryKey(key?: string): void {
   boundaryKey = key
 }
 
-function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string): string {
-  if (boundaryKey === undefined || text === '' && lineStart) return text
+function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string, enabled = true): string {
+  if (!enabled || boundaryKey === undefined || text === '' && lineStart) return text
   return `${protect('`<!--' + boundaryKey + '-->`{=html}')}${protect('[')}${text || '0'}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
 }
 
@@ -74,6 +74,10 @@ export function referenceDestinationLabel(
   const key = normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders))
   const found = references.empty.has(key) ? undefined : references.labels.get(key)
   return table && found !== undefined && references.tableInline.has(found) && authored === undefined ? undefined : found
+}
+
+export function isEmptyDestinationReference(label: string, decodeEntity: (entity: string) => string, placeholders: readonly string[]): boolean {
+  return references.empty.has(normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders)))
 }
 
 export function referenceInlineTarget(label: string, table = false): string | undefined {
@@ -639,6 +643,7 @@ function unwrapEmptyDestination(
   placeholders: readonly string[],
   protect: (s: string) => string,
   decodeEntity: (entity: string) => string,
+  keepBoundary = true,
 ): string {
   // Bare at the start of a line or container, the text would open a block.
   const lineStart = /^[ \t]*(?:(?:>|[-*+]|(?:[0-9]{1,9}|[A-Za-z])[.)])[ \t]+|>)*(?:#{1,6}[ \t]+)?$/.test(before)
@@ -646,10 +651,10 @@ function unwrapEmptyDestination(
     const titleAttr = title === '' ? '' : ` title="${escapeHtml(title)}"`
     const html = `<p><img src="" alt="${escapeHtml(plainAltText(label, placeholders, decodeEntity))}"${titleAttr}></p>`
     const text = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
-    return protect(keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect))
+    return protect(keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect, keepBoundary))
   }
-  if (title === '') return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(label) : label, lineStart, protect)
-  return keepEmptyDestinationBoundary(`[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`, lineStart, protect)
+  if (title === '') return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(label) : label, lineStart, protect, keepBoundary)
+  return keepEmptyDestinationBoundary(`[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`, lineStart, protect, keepBoundary)
 }
 
 /** Rewrites every link and image with an empty destination on one line of inline text. */
@@ -660,6 +665,8 @@ export function unwrapEmptyDestinations(
   decodeEntity: (entity: string) => string,
   onUnwrap?: (image: boolean, before: string, subject: string) => void,
   excluded?: (subject: string, offset: number) => boolean,
+  prepareLabel?: (label: string) => string,
+  keepBoundaryAt?: (subject: string, offset: number) => boolean,
 ): string {
   const replaceAt = (re: RegExp, pick: (m: RegExpExecArray) => string | null): void => {
     const subject = line
@@ -668,7 +675,10 @@ export function unwrapEmptyDestinations(
     re.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = re.exec(subject)) !== null) {
-      if (excluded?.(subject, m.index)) continue
+      if (excluded?.(subject, m.index)) {
+        re.lastIndex = m.index + 1
+        continue
+      }
       const replacement = pick(m)
       if (replacement === null) continue
       out += subject.slice(cursor, m.index) + replacement
@@ -690,10 +700,13 @@ export function unwrapEmptyDestinations(
         }
       }
     }
-    if (!imageRanges.some(([start, end]) => m.index > start && m.index < end)) {
+    const insideImage = imageRanges.some(([start, end]) => m.index > start && m.index < end)
+    if (!insideImage) {
       onUnwrap?.(m[0][0] === '!', subject.slice(0, m.index), subject)
     }
-    return unwrapEmptyDestination(m[1]!, m[0][0] === '!', title, subject.slice(0, m.index), placeholders, protect, decodeEntity)
+    const image = m[0][0] === '!'
+    const label = image ? m[1]! : prepareLabel?.(m[1]!) ?? m[1]!
+    return unwrapEmptyDestination(label, image, title, subject.slice(0, m.index), placeholders, protect, decodeEntity, !insideImage && (keepBoundaryAt?.(subject, m.index) ?? true))
   }
   if (references.empty.size > 0) {
     const byReference = (m: RegExpExecArray, reference: string, subject: string): string | null => {

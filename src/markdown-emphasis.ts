@@ -24,7 +24,7 @@ export function recordMarkdownProtectedDepth(spans: readonly string[], token: st
 }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -192,7 +192,8 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
           ch === '[' && (bracketEnds.get(at) ?? -1) >= frame.end
           || ch === ']' && (bracketStarts.get(at) ?? at) < frame.pair.open
         )
-        output.push(literalEscapes.has(at) || crossesBracket ? `\\${ch}` : ch)
+        const literal = literalEscapes.has(at) || crossesBracket ? `\\${ch}` : ch
+        output.push(protectOutput !== undefined && /[*_~]/.test(ch) ? protectOutput(`\\${ch}`) : literal)
         record(ch, ch)
       }
       continue
@@ -214,8 +215,10 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       // braced opener of this kind, which nests since markup-carve/carve#2877.
       const tail = output.length - 1
       if (tail > frame.slot && output[tail] === '{') output[tail] = '\\{'
-      output[frame.slot] = braced ? `{${pair.kind}` : pair.kind
-      output.push(braced ? `${pair.kind}}` : pair.kind)
+      const opener = braced ? `{${pair.kind}` : pair.kind
+      const closer = braced ? `${pair.kind}}` : pair.kind
+      output[frame.slot] = protectOutput?.(opener) ?? opener
+      output.push(protectOutput?.(closer) ?? closer)
       first = braced ? '{' : pair.kind
       last = braced ? '}' : pair.kind
     } else flattened = true

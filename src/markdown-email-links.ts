@@ -110,8 +110,9 @@ export function linkMarkdownEmailText(document: Document, boundaryKey?: string):
       const nodes = arrays[at]!
       for (let i = 0; i < nodes.length; i++) {
         const child = nodes[i]
-        if (record(child) && (child['type'] === 'emphasis' || child['type'] === 'strong') && Array.isArray(child['children']) && child['children'].length === 0) {
-          const tag = child['type'] === 'emphasis' ? 'em' : 'strong'
+        if (record(child) && ['emphasis', 'strong', 'strike', 'underline', 'highlight', 'superscript', 'subscript', 'insert'].includes(String(child['type'])) && Array.isArray(child['children']) && child['children'].length === 0) {
+          const tags: Record<string, string> = { emphasis: 'em', strong: 'strong', strike: 'del', underline: 'u', highlight: 'mark', superscript: 'sup', subscript: 'sub', insert: 'ins' }
+          const tag = tags[String(child['type'])]!
           nodes[i] = { type: 'raw_inline', format: 'html', content: `<${tag}></${tag}>` }
           changed = true
         }

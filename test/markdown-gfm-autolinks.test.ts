@@ -84,8 +84,7 @@ it.each([
   '[a@b.test](<> "title")', '![a@b.test](<> "title")',
   '[![a@b.test]()](u)', '[a ![a@b.test]() b]()',
   '[a@b.test]() [c@d.test]()',
-  '[x][a@b.test]()', '[a [x](u) b@c.test]()',
-  '[a [foo] b@c.test]()\n\n[foo]: /url',
+  '[x][a@b.test]()',
 ])('removes private scopes and preserves empty-destination email boundaries through formatting: %s', source => {
   const result = migrateMarkdown(source)
   expect(result.value).not.toContain('carve-md-empty-')
@@ -109,8 +108,54 @@ it('keeps empty heading and blank-table normalization with email elsewhere', () 
   expect(result.report.diagnostics.some(row => row.message.includes('blank cell'))).toBe(true)
 })
 
-it.each(['[foo]()\n\nmail a@b.test\n\n[foo]: /url', '*a [b*]() c@d.test', '- [ ]()\n\na@b.test', 'x [ ]() a@b.test', 'a@b.test *[]()*', '[[]()](u) a@b.test', '<code>[a]()</code> a@b.test', '<code>[a@b.test]()</code>', 'para\n# []()\n\na@b.test', '- para\n  # []()\n\na@b.test', '[]()\n===\n\na@b.test'])('does not expose private empty-link scopes: %s', source => {
+it.each(['[foo]()\n\nmail a@b.test\n\n[foo]: /url', '*a [b*]() c@d.test', '- [ ]()\n\na@b.test', 'x [ ]() a@b.test', 'a@b.test *[]()*', '[[]()](u) a@b.test', '<code>[a]()</code> a@b.test', '<code>[a@b.test]()</code>', 'para\n# []()\n\na@b.test', '- para\n  # []()\n\na@b.test', '[]()\n===\n\na@b.test', '~~[]()~~ a@b.test', '<mark>[]()</mark> a@b.test', '<u>[]()</u> a@b.test', '<s>[]()</s> a@b.test', '<sup>[]()</sup> a@b.test', '<sub>[]()</sub> a@b.test', '<ins>[]()</ins> a@b.test', '![x [a]() y](u) m@n.o', '[x](u "t [a]() t") c@d.e'])('does not expose private empty-link scopes: %s', source => {
   const result = migrateMarkdown(source)
   expect(result.value).not.toContain('carve-md-empty-')
   expect(carveToHtml(result.value)).not.toContain('carve-md-empty-')
+})
+
+it.each([
+  ['[a [x](u) b@c.test]()', '<p>[a <a href="u">x</a> <a href="mailto:b@c.test">b@c.test</a>]()</p>'],
+  ['[a [foo] b@c.test]()\n\n[foo]: /url', '<p>[a <a href="/url">foo</a> <a href="mailto:b@c.test">b@c.test</a>]()</p>'],
+  ['*a [b*]() c@d.test', '<p>*a b* <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[https://a.b]() c@d.test', '<p>https://a.b <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[www.a.b]() c@d.test', '<p>www.a.b <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[<https://a.b>]() c@d.test', '<p><a href="https://a.b">https://a.b</a> <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[http://a.b/*x*]() c@d.test', '<p>http://a.b/<em>x</em> <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['~~[]()~~ a@b.test', '<p><del></del> <a href="mailto:a@b.test">a@b.test</a></p>'],
+  ['<mark>[]()</mark> a@b.test', '<p><mark></mark> <a href="mailto:a@b.test">a@b.test</a></p>'],
+])('preserves native structure after dropping an empty destination: %s', (source, expected) => {
+  const result = migrateMarkdown(source)
+  expect(htmlTree(carveToHtml(result.value))).toEqual(htmlTree(expected))
+  expect(htmlTree(carveToHtml(carveToCarve(result.value)))).toEqual(htmlTree(expected))
+  expect(result.value).not.toContain('carve-md-empty-')
+})
+
+it.each(['$[a]() + 1$ x@y.z', '$$[a]() + 1$$ x@y.z'])('keeps opt-in math bodies opaque to empty-destination conversion: %s', source => {
+  const result = migrateMarkdown(source, { dialect: { math: true } })
+  expect(result.value).not.toContain('carve-md-empty-')
+  const paragraph = parse(result.value).children[0]
+  expect(paragraph?.type).toBe('paragraph')
+  if (paragraph?.type === 'paragraph') expect(paragraph.children.find(node => node.type === 'math')).toMatchObject({ content: '[a]() + 1' })
+  expect(result.report.diagnostics.some(row => row.message.includes('empty destination'))).toBe(false)
+})
+
+it('preserves an authored escaped boundary-like key as ordinary text', () => {
+  const result = migrateMarkdown('carve\\-md\\-empty\\-0=label [a@b.test]() c@d.test')
+  expect(carveToHtml(result.value)).toContain('carve-md-empty-0=label')
+  expect(result.value).not.toContain('carve-md-empty-1')
+  expect(carveToHtml(result.value)).not.toContain('mailto:a@b.test')
+  expect(carveToHtml(result.value)).toContain('mailto:c@d.test')
+})
+
+it.each([
+  ['<code>[a]()</code> a@b.test', 'code'],
+  ['<span class="critic-comment">[a]()</span> a@b.test', 'critic_comment'],
+])('keeps native scalar HTML conversion when email appears elsewhere: %s', (source, type) => {
+  const result = migrateMarkdown(source)
+  const paragraph = parse(result.value).children[0]
+  expect(paragraph?.type).toBe('paragraph')
+  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]?.type).toBe(type)
+  expect(result.value).not.toContain('carve-md-empty-')
+  expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(false)
 })
