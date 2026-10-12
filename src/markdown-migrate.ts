@@ -2078,7 +2078,12 @@ function convertInline(
       }
       const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
       if (tagEnd !== undefined) { escaped += label.slice(at, tagEnd); at = tagEnd; continue }
-      escaped += label[at] === '/' ? (guard ? protect('\\/', '/') : '\\/') : label[at]!
+      // An intraword slash, or one with whitespace on both sides, neither opens nor closes emphasis.
+      const before = label[at - 1], next = label[at + 1]
+      const delimiter = label[at] === '/' && (
+        (next !== undefined && !/[ \t\n]/.test(next) && !/[A-Za-z0-9]/.test(before ?? ''))
+        || (before !== undefined && !/[ \t\n]/.test(before) && !/[A-Za-z0-9]/.test(next ?? '')))
+      escaped += delimiter ? (guard ? protect('\\/', '/') : '\\/') : label[at]!
       at++
     }
     return escaped
