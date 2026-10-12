@@ -24,12 +24,14 @@ export function recordMarkdownProtectedDepth(spans: readonly string[], token: st
 }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
   const literalEscapes = new Set<number>()
   const neighbor = (index: number, left: boolean): string => {
+    if (index < 0 && edgeNeighbors) return edgeNeighbors.before
+    if (index >= source.length && edgeNeighbors) return edgeNeighbors.after
     if (source[index] === '\x00') {
       const other = left ? source.lastIndexOf('\x00', index - 1) : source.indexOf('\x00', index + 1)
       const token = other < 0 ? '' : source.slice(Math.min(index, other), Math.max(index, other) + 1)

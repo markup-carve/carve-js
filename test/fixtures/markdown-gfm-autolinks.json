@@ -10467,5 +10467,41 @@
     "source": "[![*x*]]()\n\n[*x*]: /u",
     "html": "<p><img src=\"/u\" alt=\"x\" /></img></p>\n",
     "emptyDestinationLoss": true
+  },
+  {
+    "source": "x[**\"a\"*]()y",
+    "html": "<p>x**&quot;a&quot;*y</p>\n",
+    "emptyDestinationLoss": true,
+    "nativeHtml": "<p>x<a href=\"\">**&quot;a&quot;*</a>y</p>\n"
+  },
+  {
+    "source": "[**\"a\"*]()",
+    "html": "<p>**&quot;a&quot;*</p>\n",
+    "emptyDestinationLoss": true,
+    "nativeHtml": "<p><a href=\"\">**&quot;a&quot;*</a></p>\n"
+  },
+  {
+    "source": "x[*\"a\"**]()y",
+    "html": "<p>x*&quot;a&quot;**y</p>\n",
+    "emptyDestinationLoss": true,
+    "nativeHtml": "<p>x<a href=\"\">*&quot;a&quot;**</a>y</p>\n"
+  },
+  {
+    "source": "x[***\"a\"***]()y",
+    "html": "<p>x<em><strong>&quot;a&quot;</strong></em>y</p>\n",
+    "emptyDestinationLoss": true,
+    "nativeHtml": "<p>x<a href=\"\"><em><strong>&quot;a&quot;</strong></em></a>y</p>\n"
+  },
+  {
+    "source": "x[__\"a\"_]()y",
+    "html": "<p>x__&quot;a&quot;_y</p>\n",
+    "emptyDestinationLoss": true,
+    "nativeHtml": "<p>x<a href=\"\">__&quot;a&quot;_</a>y</p>\n"
+  },
+  {
+    "source": "x[_\"a\"__]()y",
+    "html": "<p>x_&quot;a&quot;__y</p>\n",
+    "emptyDestinationLoss": true,
+    "nativeHtml": "<p>x<a href=\"\">_&quot;a&quot;__</a>y</p>\n"
   }
 ]

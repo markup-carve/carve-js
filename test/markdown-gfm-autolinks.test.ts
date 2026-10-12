@@ -310,3 +310,19 @@ it.each(['mark', 'u', 'ins', 'del', 's', 'sup', 'sub', 'strong', 'b', 'em', 'i']
     expect(carveToHtml(result.value)).toContain('title="t"')
   },
 )
+
+
+it.each([
+  ['http://a.b/x', '1'],
+  ['www.a.b', '1'],
+  ['http://a.b/x', 'my_note'],
+])('keeps bracket ownership before a footnote: %s, %s', (url, label) => {
+  const result = migrateMarkdown(`[see ${url} y][^${label}]\n\n[^${label}]: note`)
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    const html = carveToHtml(value)
+    expect(html).toContain(`[see ${url} y]`)
+    expect(html).not.toContain(`href="${url}"`)
+    expect(html).not.toContain('href="http://www.a.b"')
+    expect(html).toContain('role="doc-noteref"')
+  }
+})

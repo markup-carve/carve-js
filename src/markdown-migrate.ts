@@ -1666,7 +1666,7 @@ function convertInline(
       label = output
     }
     let depth = 0
-    const converted = markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, peak => { depth = peak }, true, value => protect(value))
+    const converted = markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, peak => { depth = peak }, true, value => protect(value), { before: '[', after: ']' })
     if (depth > 0) {
       for (const match of converted.matchAll(/\x00P(\d+)\x00/g)) {
         if (/^\{[*/~]/.test(protectedSpans[Number(match[1])] ?? '')) {
@@ -1923,9 +1923,9 @@ function convertInline(
       }
       if (footnotePrefixSource[offset - 1] === ']' && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined) return match
       if (cursor > offset) return match
-      const opener = protect('\\[')
+      const opener = protect('\\[', '[')
       ;(literalReferenceOpeners ??= new Set()).add(opener)
-      return opener + label + protect('\\]')
+      return opener + label + protect('\\]', ']')
     })
   }
   const referenceSubject = line
