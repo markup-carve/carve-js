@@ -67,7 +67,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('escape', line, 'normalized'); result += escape(match[1]!); i += match[0].length
       } else if (bare?.start === i) {
         const body = text.slice(bare.start, bare.end)
-        const href = (bare.prefix + body).replace(/[^\x21-\x7e]|["<>\\`{|}\[\]]/gu, char => {
+        const href = (bare.prefix + body).replace(/[^\x21-\x7e]|["<>\\`^{|}\[\]]/gu, char => {
           const point = char.codePointAt(0)!
           return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
         })
