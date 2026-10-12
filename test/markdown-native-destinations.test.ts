@@ -26,3 +26,13 @@ it.each(controls as Array<{ source: string; html: string; carveHtml?: string; dr
   expect(shape(parseFragment(carveToHtml(carveToCarve(written))))).toEqual(expected)
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.confidence === 'exact' && row.fidelity === 'dropped')).toHaveLength(dropped)
 })
+
+it.each(['[a](<a\\\nb>)\n---', '> [a](<a\\\n> b>)\n> ---', '- [a](<a\\\n  b>)\n  ---'])('preserves the escaped destination newline in a setext heading: %s', source => {
+  const written = markdownToCarve(source)
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html).toContain('<a href="a%5C%0Ab">a</a>')
+    expect(html).toMatch(/<h2(?: [^>]*)?><a /)
+  }
+  expect(migrateMarkdown(source).report.diagnostics.filter(row => row.confidence === 'exact' && row.fidelity === 'dropped')).toHaveLength(0)
+})

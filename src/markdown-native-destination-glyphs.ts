@@ -3,9 +3,11 @@ import { markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 
 export function protectNativeMarkdownDestinationGlyphs(
   source: string,
-  protect: (value: string) => string,
+  protect: (value: string, source: string) => string,
   isReference: (label: string) => boolean,
   opaqueEnd: (offset: number) => number | undefined,
+  stripContinuationIndent: boolean | ((offset: number) => boolean) = false,
+  onEscapedLineBreak?: (offset: number) => void,
 ): string {
   const codeEnds = backtickRunEnds(source)
   const opens: Array<{ at: number; image: boolean; generation: number; nested: boolean }> = []
@@ -51,7 +53,12 @@ export function protectNativeMarkdownDestinationGlyphs(
       let pointy = source[first] === '<'
       for (let pos = open + 1; pos < end; pos++) {
         if (pointy && source[pos] === '\\') {
-          if (source[pos + 1] === '\n') glyphs.set(pos, 2)
+          if (source[pos + 1] === '\n') {
+            let end = pos + 2
+            if (typeof stripContinuationIndent === 'function' ? stripContinuationIndent(pos + 1) : stripContinuationIndent) while (/[ \t]/.test(source[end] ?? '')) end++
+            glyphs.set(pos, end - pos)
+            onEscapedLineBreak?.(pos + 1)
+          }
           pos++
           continue
         }
@@ -85,7 +92,8 @@ export function protectNativeMarkdownDestinationGlyphs(
   for (let at = 0; at < source.length; at++) {
     const width = glyphs.get(at)
     if (width) {
-      output.push(protect(source.slice(at, at + width)))
+      const original = source.slice(at, at + width)
+      output.push(protect(width > 2 && original.startsWith('\\\n') ? '\\\n' : original, original))
       at += width - 1
     } else output.push(source[at]!)
   }

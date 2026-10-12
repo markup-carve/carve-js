@@ -1259,6 +1259,7 @@ function convertInline(
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
   unwrapEmptyLinks = true,
   nativeCode = false,
+  stripDestinationIndent: boolean | ((offset: number) => boolean) = false,
 ): string {
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
@@ -1339,7 +1340,7 @@ function convertInline(
     const rawSubject = rawLine
     const rawOpaque = opaqueHtmlScanner(rawSubject)
     const rawAngle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
-    rawLine = protectNativeMarkdownDestinationGlyphs(rawSubject, value => protect(value, value),
+    rawLine = protectNativeMarkdownDestinationGlyphs(rawSubject, (value, source) => protect(value, source),
       label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
         || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
       offset => {
@@ -1350,7 +1351,7 @@ function convertInline(
         rawAngle.lastIndex = offset
         const angle = rawAngle.exec(rawSubject)
         return angle ? offset + angle[0].length : rawOpaque(offset) ?? scanHtmlTag(rawSubject, offset)?.end
-      })
+      }, stripDestinationIndent)
   }
   let line = protectCodeSpans(rawLine, writeCodeSpan)
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
@@ -3352,6 +3353,7 @@ type PrefixedInlineLine = {
   // Continues the paragraph above lazily or from four columns past its
   // container, so it cannot be the delimiter row of a table.
   continued?: boolean | undefined
+  lazyQuote?: boolean | undefined
   // The paragraph body the collector escaped, without that escape, for a setext
   // fold to write instead: the escape guards a marker at the start of a line,
   // and a folded heading is one line with the marker in its middle, where it
@@ -3772,6 +3774,12 @@ function restorePrefixedInlineRun(
     offset += part.text.length + 1
     return entries
   })
+  let continuationOffset = 0
+  const continuationStarts = run.map(part => {
+    const at = continuationOffset
+    continuationOffset += part.text.length + 1
+    return at
+  })
   const converted = convertInline(
     run.map((part) => part.text).join('\n'),
     dialect,
@@ -3789,6 +3797,15 @@ function restorePrefixedInlineRun(
         else high = mid
       }
       return sourceSegments[low - 1]?.line
+    },
+    true, false, at => {
+      let low = 0, high = continuationStarts.length
+      while (low < high) {
+        const mid = (low + high) >>> 1
+        if (continuationStarts[mid]! <= at + 1) low = mid + 1
+        else high = mid
+      }
+      return !run[low - 1]?.lazyQuote
     },
   ).split('\n')
   run = run.filter((_, index) => !joinedLines.has(index))
@@ -3953,6 +3970,25 @@ function headingLine(line: string, last = false): string {
   return trimEndSpaceTab(backslashes % 2 === 1 ? trimmed.slice(0, -1) : trimmed)
 }
 
+function headingParagraphParts(lines: string[]): { parts: string[]; joined: string } {
+  const source = lines.join('\n')
+  const retained = new Set<number>()
+  if (source.includes('](<') && source.includes('\\\n')) {
+    const opaque = opaqueHtmlScanner(source)
+    protectNativeMarkdownDestinationGlyphs(source, value => value, () => false,
+      at => opaque(at) ?? scanHtmlTag(source, at)?.end, false, at => retained.add(at))
+  }
+  let offset = 0
+  const separators: string[] = []
+  const parts = lines.map((line, index) => {
+    const keep = retained.has(offset + line.length)
+    offset += line.length + 1
+    separators.push(keep ? '\n' : ' ')
+    return headingLine(line, index === lines.length - 1 || keep)
+  })
+  return { parts, joined: parts.map((part, index) => part + (index + 1 < parts.length ? separators[index] : '')).join('') }
+}
+
 /** The indent and item markers a line opens with (`- - `, `  1. `). */
 const RE_ITEM_LEAD = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*/
 
@@ -4025,7 +4061,7 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
         const quote = heldInContainer(part).quote
         const indent = lead !== '' ? lead : /^[ \t]*/.exec(first)![0]
         const entries = out.slice(start)
-        const parts = entries.map((entry, index) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body, index === entries.length - 1))
+        const { parts, joined } = headingParagraphParts(entries.map(entry => entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body))
         const head = `${held.lead}${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} `
         let offset = head.length
         const sourceSegments = parts.map((text, index) => {
@@ -4033,7 +4069,7 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
           offset += text.length + 1
           return entry
         })
-        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: head + parts.join(' '), source: out[start]!.source, sourceSegments })
+        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: head + joined, source: out[start]!.source, sourceSegments })
         starts.splice(start, starts.length - start, -1)
         continue
       }
@@ -4222,7 +4258,7 @@ function collectBlockquoteInlineRun(
     if (!parsed && paragraph && line.trim() !== '' && (plain || over)) {
       const text = over && !plain ? escapeBlockOpener(strip(line).trimStart()) : strip(line)
       lazyPrefix ??= lazyQuotePrefix(run)
-      run.push({ prefix: lazyPrefix, text, continued: true, source: end })
+      run.push({ prefix: lazyPrefix, text, continued: true, lazyQuote: true, source: end })
       end++
       continue
     }
@@ -6916,14 +6952,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        const parts = bare.map((text, index) => headingLine(text, index === bare.length - 1))
+        const { parts, joined } = headingParagraphParts(bare)
         let offset = heading.length + 1
         const sourceLines = parts.map((text, index) => {
           const entry = { offset, line: sourceLine(i + index) }
           offset += text.length + 1
           return entry
         })
-        out.push(containerPad + convertInline(`${heading} ${parts.join(' ')}`, dialect, false, false, undefined, true, false, true, at => {
+        out.push(containerPad + convertInline(`${heading} ${joined}`, dialect, false, false, undefined, true, false, true, at => {
           let line = sourceLines[0]?.line
           for (const entry of sourceLines) {
             if (entry.offset > at) break
@@ -6947,7 +6983,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
                   inItem && indentColumns(text) < contentCol && !RE_LIST_MARKER.test(text) ? containerPad + text.trimStart() : text,
                 )
                 .join('\n'),
-              dialect,
+              dialect, false, false, undefined, true, false, true, undefined, true, false,
+              listCols.length === 0 && !/^[ \t]*>/.test(line),
             ),
           ),
         )

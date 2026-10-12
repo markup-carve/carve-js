@@ -478,5 +478,25 @@
   {
     "source": "[a](<a\\\nb>) [c](/x\n\"t\")",
     "html": "<p><a href=\"a%5C%0Ab\">a</a> <a href=\"/x\" title=\"t\">c</a></p>\n"
+  },
+  {
+    "source": "[a](<a\\\n   b>)",
+    "html": "<p><a href=\"a%5C%0Ab\">a</a></p>\n"
+  },
+  {
+    "source": "[a](<a\\\n\tb>)",
+    "html": "<p><a href=\"a%5C%0Ab\">a</a></p>\n"
+  },
+  {
+    "source": "- [a](<a\\\n     b>)",
+    "html": "<ul>\n<li><a href=\"a%5C%0Ab\">a</a></li>\n</ul>\n"
+  },
+  {
+    "source": "> [a](<a\\\n   b>)",
+    "html": "<blockquote>\n<p><a href=\"a%5C%0A%20%20%20b\">a</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "> [a](<a\\\n>    b>)",
+    "html": "<blockquote>\n<p><a href=\"a%5C%0Ab\">a</a></p>\n</blockquote>\n"
   }
 ]
