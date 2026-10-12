@@ -12696,6 +12696,11 @@ class ParseSession {
         !RE_LINE_BLOCK_OPEN.test(content) &&
         !RE_HARDBREAKS_OPEN.test(content) &&
         !RE_QUOTE_BLOCK_OPEN.test(content)
+      // The marker-line definition did not pass through the body tracker.
+      // Track its first paragraph continuation without opening a child list.
+      let markerNoteBodyPending = RE_FOOTNOTE_DEF.test(content)
+      let markerNoteFirstText = false
+      const markerNoteItem = markerNoteBodyPending
       while (!lexer.eof()) {
         const l = lexer.peek()!
         if (isBlankLine(l)) {
@@ -12704,6 +12709,12 @@ class ParseSession {
           pendingBlankTexts.push(l)
           lexer.consume()
           continue
+        }
+        if (markerNoteBodyPending) {
+          markerNoteBodyPending = false
+          const continuation = sliceColumns(l, contentCol, true)
+          markerNoteFirstText = indentColumns(l, contentCol + FOOTNOTE_BODY_COLUMN) >= contentCol + FOOTNOTE_BODY_COLUMN &&
+            (isListMarkerLine(continuation) || !lineOpensItemBlock(continuation.trimStart()))
         }
         // List-continuation marker (Carve): a lone `+` at the marker column
         // attaches the FOLLOWING flush-left block to this item without indenting
@@ -12907,7 +12918,12 @@ class ParseSession {
           nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
           const fenceLineIndex = lexer.pos
-          let trackedContent = dedented
+          const continuedMarkerNoteText = markerNoteItem && !followsBlank && lazyState.lazyFoldable &&
+            lazyState.opaque === null && lazyState.quoteInner === null && lazyState.literalColon === undefined &&
+            indentColumns(l, contentCol + FOOTNOTE_BODY_COLUMN) >= contentCol + FOOTNOTE_BODY_COLUMN &&
+            isListMarkerLine(dedented.trimStart())
+          let trackedContent = markerNoteFirstText || continuedMarkerNoteText ? 'text' : dedented
+          markerNoteFirstText = false
           if (isMarker && lazyState.opaque === null) {
             const markerContent = markerFreeContent(dedented)
             const run = commentFenceRun(markerContent)
@@ -13008,6 +13024,9 @@ class ParseSession {
                 memo,
                 itemEndsAt,
               )
+              if (extraColumns > 0 && nestedOwnerColumn < 0 && answer) {
+                lexer.descendantFenceAnswers.set(`${lexer.lineNumber(fenceLineIndex)}:${marker}`, true)
+              }
               // Not published for an offset query; see the twin above.
               if (extraColumns === 0) {
                 lexer.fenceLookaheadAnswers.set(
@@ -13869,7 +13888,8 @@ class ParseSession {
         leadOpensColonFence && bodyHasBelowColumnLine && !bodyHasContentColumnLine
       const itemLead = literalBelowColumnColonFence ? ` ${content}` : content
       const keepStreamWhole =
-        firstBlockIdx === -1 || leadIsMarker || (leadOpensColonFence && !literalBelowColumnColonFence)
+        firstBlockIdx === -1 || leadIsMarker || RE_FOOTNOTE_DEF.test(content) ||
+        (leadOpensColonFence && !literalBelowColumnColonFence)
       const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
       const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
       const mkSub = (
