@@ -10290,5 +10290,17 @@
   {
     "source": "[unknown http://a.b/a\\>][missing]",
     "html": "<p>[unknown http://a.b/a&gt;][missing]</p>\n"
+  },
+  {
+    "source": "[unknown *label*][missing]",
+    "html": "<p>[unknown <em>label</em>][missing]</p>\n"
+  },
+  {
+    "source": "[unknown text][*missing*]",
+    "html": "<p>[unknown text][<em>missing</em>]</p>\n"
+  },
+  {
+    "source": "[<https://a.b>][missing]",
+    "html": "<p>[<a href=\"https://a.b\">https://a.b</a>][missing]</p>\n"
   }
 ]

@@ -31,6 +31,7 @@ import {
   referenceLiteralText,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
+  useEmptyDestinationBoundaryKey,
 } from './markdown-empty-destination.js'
 import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
@@ -1790,7 +1791,25 @@ function convertInline(
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
+  const referenceSubject = line
+  const referenceOpeners = new Map<number, number>()
+  const referenceStack: number[] = []
+  const referenceHtml = new Set<number>()
+  const hasReferencePairs = referenceSubject.includes('][')
+  for (let at = 0; hasReferencePairs && at < referenceSubject.length; at++) {
+    if (referenceSubject[at] === '<') {
+      const tag = scanHtmlTag(referenceSubject, at)
+      if (tag) {
+        for (; at < tag.end; at++) referenceHtml.add(at)
+        at--
+        continue
+      }
+    }
+    if (referenceSubject[at] === '[') referenceStack.push(at)
+    else if (referenceSubject[at] === ']' && referenceStack.length) referenceOpeners.set(at, referenceStack.pop()!)
+  }
   line = line.replace(/(?<=\])\[([^\]]*)\]/g, (match, reference: string, offset: number, source: string) => {
+    if (referenceHtml.has(offset)) return match
     const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
@@ -1804,8 +1823,12 @@ function convertInline(
     }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
     if (canonical === undefined || /[\[\]]/.test(canonical)) {
-      if (!referenceSourceText(reference, protectedSpans).includes('|')) return protect(match, match)
-      return protect(`\\[${writeLiteralReference(reference)}\\]`, match)
+      const tablePipe = table && referenceSourceText(reference, protectedSpans).includes('|')
+      if (sourceLabel !== undefined && !tablePipe) return protect(match, match)
+      const precedingOpener = referenceOpeners.get(offset - 1)
+      const precedingLabel = precedingOpener === undefined ? '' : source.slice(precedingOpener + 1, offset - 1)
+      if (!tablePipe && !/[*_`\\\x00<&]/.test(reference + precedingLabel)) return protect(match, match)
+      return protect('\\[', '[') + reference + protect('\\]', ']')
     }
     return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`, match)
   })
@@ -5235,6 +5258,15 @@ export function markdownToCarveWithLosses(
 ): { value: string; losses: MarkdownImportLoss[] } {
   const losses: MarkdownImportLoss[] = []
   importLosses = losses
+  const decoded = markdown.includes('&') ? decodeHtmlEntitiesRaw(markdown) : markdown
+  let emptyDestinationKey: string | undefined
+  if (decoded.includes('@')) {
+    const occupied = new Set([...decoded.toLowerCase().matchAll(/carve-md-empty-(\d+)/g)].map(match => match[1]))
+    let slot = 0
+    while (occupied.has(String(slot))) slot++
+    emptyDestinationKey = `carve-md-empty-${slot}`
+  }
+  useEmptyDestinationBoundaryKey(emptyDestinationKey)
   try {
     // PART 11 §10s: a carrier marker is lifted to a placeholder before the
     // conversion and written back as the Carve line it is afterwards, so the
@@ -5243,9 +5275,10 @@ export function markdownToCarveWithLosses(
     const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
 
     let value = restoreCarrierMarkers(convertMarkdown(prepared, dialect))
-    if (value.includes('@')) {
+    const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
+    if (value.includes('@') || usedBoundaryKey !== undefined) {
       const document = parse(value)
-      if (linkMarkdownEmailText(document)) {
+      if (linkMarkdownEmailText(document, usedBoundaryKey)) {
         const trailingNewline = value.endsWith('\n')
         value = renderCarve(document, { onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }) })
         if (!trailingNewline) value = value.replace(/\n$/, '')
@@ -5256,6 +5289,7 @@ export function markdownToCarveWithLosses(
     carrierSlots = []
     carrierToken = ''
     useEmptyDestinationReferences(null)
+    useEmptyDestinationBoundaryKey()
     importLosses = []
     inlineRunSourceLine = undefined
     importSourceLine = undefined
@@ -6522,7 +6556,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (isHeading && /^[ \t]*(#{1,6})(?:[ \t]+#*)?[ \t]*$/.test(line)) {
       const level = /^#+/.exec(trimmed)![0].length
       if (out.length && out.at(-1)!.trim() !== '') out.push('')
-      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text), '')
+      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text))
       prevType = 'heading'
       continue
     }
@@ -6676,7 +6710,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // the migrated document grew a table the author never saw
     // (markup-carve/carve-js#1061). Escaping only the opening pipe keeps the
     // line in the paragraph it belongs to.
-    out.push(
+    if (isHeading && /^[ \t]*#{1,6}[ \t]*$/.test(converted)) {
+      const level = /^#+/.exec(trimmed)![0].length
+      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text))
+    } else out.push(
       !inGfmTable[i] && isStandardTableRow(converted) ? keepPipeRowLiteral(converted) : converted,
     )
     itemParagraph = listCols.length > 0 && indentColumns(line) >= contentCol && !isHeading && opensParagraph(held)

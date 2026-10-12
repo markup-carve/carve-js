@@ -45,6 +45,16 @@ function rewriteParenthesizedTitle(value: string): string {
 const NO_REFERENCES: EmptyDestinationReferences = { empty: new Map(), defined: new Set(), labels: new Map(), inline: new Map(), tableInline: new Map(), sourceLabels: new Map(), footnotes: new Map() }
 
 let references = NO_REFERENCES
+let boundaryKey: string | undefined
+
+export function useEmptyDestinationBoundaryKey(key?: string): void {
+  boundaryKey = key
+}
+
+function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string): string {
+  if (boundaryKey === undefined || text === '' && lineStart) return text
+  return `${protect('`<!--' + boundaryKey + '-->`{=html}')}${protect('[')}${text || '0'}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
+}
 
 /** Makes the references a document defines visible to the inline pass. */
 export function useEmptyDestinationReferences(found: EmptyDestinationReferences | null): void {
@@ -631,15 +641,15 @@ function unwrapEmptyDestination(
   decodeEntity: (entity: string) => string,
 ): string {
   // Bare at the start of a line or container, the text would open a block.
-  const lineStart = /^[ \t]*(?:(?:>|[-*+]|(?:[0-9]{1,9}|[A-Za-z])[.)])[ \t]+|>)*$/.test(before)
+  const lineStart = /^[ \t]*(?:(?:>|[-*+]|(?:[0-9]{1,9}|[A-Za-z])[.)])[ \t]+|>)*(?:#{1,6}[ \t]+)?$/.test(before)
   if (image) {
     const titleAttr = title === '' ? '' : ` title="${escapeHtml(title)}"`
     const html = `<p><img src="" alt="${escapeHtml(plainAltText(label, placeholders, decodeEntity))}"${titleAttr}></p>`
     const text = trimMatchingEdges(htmlToCarve(html).value, (code) => code === 10)
-    return protect(lineStart ? escapeLineInitialBlockSyntax(text) : text)
+    return protect(keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(text) : text, lineStart, protect))
   }
-  if (title === '') return lineStart ? escapeLineInitialBlockSyntax(label) : label
-  return `[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`
+  if (title === '') return keepEmptyDestinationBoundary(lineStart ? escapeLineInitialBlockSyntax(label) : label, lineStart, protect)
+  return keepEmptyDestinationBoundary(`[${label}]${protect(`{title=${quoteAttributeValue(title)}}`)}`, lineStart, protect)
 }
 
 /** Rewrites every link and image with an empty destination on one line of inline text. */

@@ -5,7 +5,7 @@ import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-export function linkMarkdownEmailText(document: Document): boolean {
+export function linkMarkdownEmailText(document: Document, boundaryKey?: string): boolean {
   const pending: unknown[] = [document, ...Object.values(document.footnoteDefs ?? {})]
   const seen = new Set<object>()
   let changed = false
@@ -61,8 +61,61 @@ export function linkMarkdownEmailText(document: Document): boolean {
         for (const node of rewritten) nodes.push(node)
       }
     } else if (record(value)) {
+      const attrs = record(value['attrs']) ? value['attrs'] : undefined
+      const keys = attrs && record(attrs['keyValues']) ? attrs['keyValues'] : undefined
+      if (boundaryKey !== undefined && value['type'] === 'span' && keys?.[boundaryKey] !== undefined) continue
       if (value['type'] === 'link' || value['type'] === 'image' || value['type'] === 'block_image') continue
       for (const field of ownedChildFields(value)) pending.push(value[field])
+    }
+  }
+  if (boundaryKey !== undefined) {
+    const cleanup: unknown[] = [document, ...Object.values(document.footnoteDefs ?? {})]
+    const cleaned = new Set<object>()
+    const arrays: unknown[][] = []
+    while (cleanup.length > 0) {
+      const value = cleanup.pop()
+      if (typeof value !== 'object' || value === null || cleaned.has(value)) continue
+      cleaned.add(value)
+      if (Array.isArray(value)) {
+        arrays.push(value as unknown[])
+        const remaining: unknown[] = (value as unknown[]).slice().reverse()
+        const rewritten: unknown[] = []
+        let rewrite = false
+        while (remaining.length > 0) {
+          const child = remaining.pop()
+          const attrs = record(child) && record(child['attrs']) ? child['attrs'] : undefined
+          const keys = attrs && record(attrs['keyValues']) ? attrs['keyValues'] : undefined
+          const boundary = keys?.[boundaryKey]
+          if (record(child) && child['type'] === 'span' && (boundary === 'label' || boundary === 'empty') && Array.isArray(child['children'])) {
+            rewrite = changed = true
+            if (boundary === 'label') {
+              for (let i = child['children'].length - 1; i >= 0; i--) remaining.push(child['children'][i])
+            }
+          } else if (record(child) && child['type'] === 'raw_inline' && child['format'] === 'html' && child['content'] === `<!--${boundaryKey}-->`) {
+            rewrite = changed = true
+          } else {
+            rewritten.push(child)
+            cleanup.push(child)
+          }
+        }
+        if (rewrite) {
+          value.length = 0
+          for (const child of rewritten) value.push(child)
+        }
+      } else if (record(value)) {
+        for (const field of ownedChildFields(value)) cleanup.push(value[field])
+      }
+    }
+    for (let at = arrays.length - 1; at >= 0; at--) {
+      const nodes = arrays[at]!
+      for (let i = 0; i < nodes.length; i++) {
+        const child = nodes[i]
+        if (record(child) && (child['type'] === 'emphasis' || child['type'] === 'strong') && Array.isArray(child['children']) && child['children'].length === 0) {
+          const tag = child['type'] === 'emphasis' ? 'em' : 'strong'
+          nodes[i] = { type: 'raw_inline', format: 'html', content: `<${tag}></${tag}>` }
+          changed = true
+        }
+      }
     }
   }
   return changed
