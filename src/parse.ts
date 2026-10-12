@@ -5615,6 +5615,10 @@ function trackItemLazyState(
     )
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
+    // An invisible descendant comment ends its paragraph, not the enclosing item.
+    if (inner.literalColon && RE_COMMENT_LINE.test(sliceColumns(content, offset, true).trimStart())) {
+      state.commentAtColumn = true
+    }
     state.inDefList = false
     return
   }
@@ -13070,6 +13074,9 @@ class ParseSession {
                 lazyState.authoredColon?.depth === lazyState.divDepth) &&
               (RE_TASK.test(l) || RE_UNORDERED.test(l) || RE_ORDERED.test(l) || extractItemAttr(l) !== null)) {
             // Retained markers below the content column stay text on reparse.
+            lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
+          } else if (lazyState.commentAtColumn && lazyState.opaque === null && lazyState.literalColon === undefined &&
+              indentColumns(l, contentCol) < contentCol && !RE_COMMENT_LINE.test(l)) {
             lazyLine = LAZY_FRAME + l.replace(/^[ \t]+/, '')
           } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
             // A block-SHAPED line below the content column opens nothing (§24 C3:
