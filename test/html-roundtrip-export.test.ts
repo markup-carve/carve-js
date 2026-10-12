@@ -94,10 +94,10 @@ describe('the HTML carriers', () => {
     expect(rt('# C\n')).not.toContain('data-carve-explicit-id')
   })
 
-  it('data-carve-ext: `section` on the wrapper of a generated id, and nowhere else', () => {
-    expect(rt('# C\n')).toBe('<section id="C" data-carve-ext="section">\n  <h1>C</h1>\n</section>')
-    expect(rt('{#ex}\n# C\n')).not.toContain('data-carve-ext')
-    expect(renderHtml(resolve(parse('# C\n')), { roundtrip: true, sections: false })).toBe('<h1 id="C">C</h1>')
+  it('data-carve-generated-id: presence on the wrapper or heading holding a generated id', () => {
+    expect(rt('# C\n')).toBe('<section id="C" data-carve-generated-id="1">\n  <h1>C</h1>\n</section>')
+    expect(rt('{#ex}\n# C\n')).not.toContain('data-carve-generated-id')
+    expect(renderHtml(resolve(parse('# C\n')), { roundtrip: true, sections: false })).toBe('<h1 id="C" data-carve-generated-id="1">C</h1>')
   })
 
   it('data-carve-id-slot: the authored id\u2019s slot, omitted where the id leads', () => {
@@ -113,11 +113,11 @@ describe('the HTML carriers', () => {
 
   it('data-carve-tight: only a tight list whose item paragraph keeps its <p>', () => {
     expect(rt('- {.x}\n  a\n- b\n')).toBe(
-      '<ul data-carve-tight="true">\n  <li><p class="x">a</p></li>\n  <li>b</li>\n</ul>',
+      '<ul data-carve-tight="1">\n  <li><p class="x">a</p></li>\n  <li>b</li>\n</ul>',
     )
-    expect(rt('1) {.x}\n   a\n2) b\n')).toContain('<ol data-delim=")" data-carve-tight="true">')
-    expect(rt('* {.x}\n  a\n')).toContain('<ul data-marker="*" data-carve-tight="true">')
-    expect(rt('{.l}\n- {.x}\n  a\n')).toContain('<ul data-carve-tight="true" class="l">')
+    expect(rt('1) {.x}\n   a\n2) b\n')).toContain('<ol data-delim=")" data-carve-tight="1">')
+    expect(rt('* {.x}\n  a\n')).toContain('<ul data-marker="*" data-carve-tight="1">')
+    expect(rt('{.l}\n- {.x}\n  a\n')).toContain('<ul data-carve-tight="1" class="l">')
     for (const src of ['- a\n- b\n', '- {.x}\n  a\n\n- b\n']) expect(rt(src), src).not.toContain('data-carve-tight')
   })
 
@@ -319,12 +319,10 @@ describe('an authored attribute colliding with a carrier', () => {
     expect(report.losses[0]!.message).toContain('data-char')
   })
 
-  it('leaves the authored attribute alone where the carrier is not written', () => {
-    // No collision without a carrier: a `-` break writes no `data-char`, so the
-    // authored one is ordinary content and the default bytes are unchanged.
+  it('drops a reserved authored attribute where no carrier is written', () => {
     const report = carveToHtmlWithReport('{data-char=Z}\n---\n', { roundtrip: true })
-    expect(report.value).toBe('<hr data-char="Z">')
-    expect(report.losses).toEqual([])
+    expect(report.value).toBe('<hr>')
+    expect(report.losses).toEqual([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: 'data-char' })])
   })
 
   it('leaves the authored attribute alone with the option OFF', () => {
@@ -408,10 +406,10 @@ describe('the section 13a rows added for markup-carve/carve#2894', () => {
     expect(slot.value.match(/data-carve-id-slot/g)).toHaveLength(1)
     expect(slot.losses.map((row) => row.code === 'carrier-attribute-dropped' && row.attribute)).toEqual(['data-carve-id-slot'])
     const ext = carveToHtmlWithReport('{data-carve-ext=zz}\n# H\n', { roundtrip: true })
-    expect(ext.value).toBe('<section id="H" data-carve-ext="section">\n  <h1>H</h1>\n</section>')
-    expect(ext.losses.map((row) => row.code === 'carrier-attribute-dropped' && row.attribute)).toEqual(['data-carve-ext'])
+    expect(ext.value).toBe('<section id="H" data-carve-generated-id="1">\n  <h1 data-carve-ext="zz">H</h1>\n</section>')
+    expect(ext.losses).toEqual([])
     const tight = carveToHtmlWithReport('{data-carve-tight=false}\n- {.x}\n  a\n', { roundtrip: true })
-    expect(tight.value).toContain('<ul data-carve-tight="true">')
+    expect(tight.value).toContain('<ul data-carve-tight="1">')
     expect(tight.losses.map((row) => row.code === 'carrier-attribute-dropped' && row.attribute)).toEqual(['data-carve-tight'])
   })
 

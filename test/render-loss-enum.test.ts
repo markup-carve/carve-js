@@ -1,7 +1,8 @@
+import { specResource } from './helpers/ahead-of-pin-resource.js'
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
-  fromAstJson, resolve, renderCarve, renderMarkdown, renderPlainText, renderAnsi, renderHtml,
+  carveToMarkdownWithReport, fromAstJson, resolve, renderCarve, renderMarkdown, renderPlainText, renderAnsi, renderHtml,
 } from '../src/index.js'
 import type { RenderLoss } from '../src/render-loss.js'
 import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.js'
@@ -21,7 +22,7 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
  * read out of the pinned `render-loss-report.schema.json`.
  */
 const schemaCodes = (): string[] => JSON.parse(
-  readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'),
+  readFileSync(specResource('render-loss-report.schema.json'), 'utf8'),
 ).properties.losses.items.properties.code.enum
 
 /** Every §1d shape at once: a section, a block cell, a labelled equation and an attributed partition. */
@@ -89,13 +90,14 @@ const collidesWithCarrier = (): unknown => ({
 const targets = { carve: renderCarve, markdown: renderMarkdown, plain: renderPlainText, ansi: renderAnsi, html: renderHtml }
 
 describe('the render-loss code enum', () => {
-  it('names five codes in the pinned schema', () => {
+  it('names six codes in the selected schema', () => {
     expect(schemaCodes()).toEqual([
       'raw-format-dropped',
       'ruby-flattened',
       'destination-denied',
       'editorial-comment-flattened',
       'carrier-attribute-dropped',
+      'definition-list-flattened',
     ])
   })
 
@@ -107,6 +109,10 @@ describe('the render-loss code enum', () => {
 
   it('emits only codes the schema permits, and emits every one of them', () => {
     const seen = new Set<string>()
+    for (const loss of carveToMarkdownWithReport(':: Outer\n: body\n\n  :: Inner\n  : inner body\n', { roundtrip: true }).losses) {
+      expect(schemaCodes()).toContain(loss.code)
+      seen.add(loss.code)
+    }
     for (const [target, render] of Object.entries(targets)) {
       for (const loss of [
         ...collect(render as never, interchangeOnly()),

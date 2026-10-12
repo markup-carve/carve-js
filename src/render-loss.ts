@@ -7,6 +7,7 @@ export type RenderLossCode =
   | 'destination-denied'
   | 'editorial-comment-flattened'
   | 'carrier-attribute-dropped'
+  | 'definition-list-flattened'
 
 interface RenderLossBase {
   target: RenderTarget
@@ -21,6 +22,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'destination-denied'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'editorial-comment-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'carrier-attribute-dropped'; attribute: string })
+  | (RenderLossBase & { code: 'definition-list-flattened'; target: 'markdown'; nodeType: 'block' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -167,4 +169,14 @@ export function checkedRender(
   Object.defineProperty(result, 'lossCounts', { value: lossCounts, enumerable: false })
   if (opts.strictLosses && totalLosses > 0) throw new RenderLossError(result)
   return result
+}
+
+export function definitionListFlattened(opts: RenderLossSinkOptions, node: { pos?: Position }): void {
+  opts.onRenderLoss?.({
+    code: 'definition-list-flattened',
+    target: 'markdown',
+    nodeType: 'block',
+    message: 'Flattened a nested definition list without roundtrip markers',
+    ...(node.pos ? { pos: node.pos } : {}),
+  })
 }

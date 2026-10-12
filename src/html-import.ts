@@ -44,7 +44,7 @@ import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
-import { CARRIER_CHAR, CARRIER_MARKER, EXT_SECTION, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './roundtrip-carriers.js'
+import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './roundtrip-carriers.js'
 import type { PrefixedCarrier } from './roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
@@ -829,20 +829,6 @@ function slotOrderFromElement(node: P5Node, held: Attrs): string[] {
 }
 
 /**
- * Whether `id` sits where `renderHtml` writes a GENERATED one: after every
- * authored attribute.
- *
- * `data-source-line` is the one thing allowed to follow it, because that is a
- * render annotation rather than an authored attribute and the renderer appends
- * it last on purpose (`injectSourceLine`).
- */
-function idInGeneratedPosition(node: P5Node): boolean {
-  const names = (domAttrs(node) ?? []).map((attr) => attr.name.toLowerCase())
-  while (names[names.length - 1] === 'data-source-line') names.pop()
-  return names[names.length - 1] === 'id'
-}
-
-/**
  * Whether `id` is a value the renderer would derive for a heading whose
  * plain-text projection is `text`.
  *
@@ -874,6 +860,7 @@ function restoreHoistedSectionId(
   attrs: Attrs | undefined,
   blocks: BlockNode[],
   explicitId: boolean,
+  generatedId: boolean,
   writing: boolean,
   slot: number,
   elementSlots: (held: Attrs) => string[],
@@ -893,13 +880,13 @@ function restoreHoistedSectionId(
   // and nothing is what `reportUnwrappedAttributes` reads as "no row" - an
   // empty object would write a row naming no attribute at all.
   const kept = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
-  if (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children))) return kept
+  if (generatedId || (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children)))) return kept
   heading.attrs = { ...(heading.attrs ?? {}), id }
   // The carrier says the id was authored, and `attrs.order` is where a tree
   // records that, so a carried id publishes its slot on both exits.
   if (writing || explicitId) {
     const slots = (heading.attrs.order ?? elementSlots(heading.attrs)).filter((entry) => entry !== '#id')
-    slots.splice(Math.min(slot, slots.length), 0, '#id')
+    slots.splice(slot, 0, '#id')
     heading.attrs.order = slots
   }
   return kept
@@ -1863,22 +1850,18 @@ class Importer {
     )
   }
 
-  /**
-   * The carriers a `<section id>` wrapper holds (§13a). `explicit-id` says the
-   * id was authored and `ext="section"` says it was generated, so the two on
-   * one wrapper contradict; an id slot is read only beside an authored id.
-   */
-  private readSectionCarriers(node: P5Node, path: string): void {
+  private readIdCarriers(node: P5Node, path: string, wrapper: boolean): void {
     const explicit = this.hasCarrier(node, 'explicit-id')
-    const generated = this.carrierValue(node, 'ext') === EXT_SECTION
+    const generated = this.hasCarrier(node, 'generated-id')
     if (explicit && generated) {
-      this.refuseContradiction(node, path, 'explicit-id', 'ext')
+      this.refuseContradiction(node, path, 'explicit-id', 'generated-id')
       return
     }
-    if (generated) this.recordCarrier(node, 'ext')
+    if (generated) this.recordCarrier(node, 'generated-id')
     if (!explicit) return
     this.recordCarrier(node, 'explicit-id')
-    if (RE_ID_SLOT.test(this.carrierValue(node, 'id-slot') ?? '')) this.recordCarrier(node, 'id-slot')
+    const slot = this.carrierValue(node, 'id-slot') ?? ''
+    if (wrapper && RE_ID_SLOT.test(slot)) this.recordCarrier(node, 'id-slot')
   }
 
   private recordCarrier(node: P5Node, name: PrefixedCarrier, read: Omit<CarrierRead, 'names'> = {}): void {
@@ -1956,30 +1939,18 @@ class Importer {
       // dangerous name this still has to see.
       const bare = (domAttrs(node) ?? []).every((attribute) => RESERVED_CARRIER_ATTRIBUTES.has(attribute.name.toLowerCase()))
       const format = this.carrierValue(node, 'raw')
-      if (format !== undefined) {
-        const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
-        // A format the parser would not read is not a format: the writer
-        // NORMALIZES what it is given, so `h t m l` came back as `{=html}` and
-        // walked markup past the mode gate below. An empty raw inline has no
-        // Carve spelling at all. And `html` is markup every HTML render emits
-        // verbatim, so only `roundtrip` - which already preserves input markup
-        // wholesale - rebuilds one (§13b); every other format is inert here.
-        const spellable = bare && RE_RAW_INLINE_FORMAT.test(format)
-          && (holdsElements || this.flatText(node) !== '')
-          && (this.mode === 'roundtrip' || (format.toLowerCase() !== 'html' && !holdsElements))
-        if (spellable) this.recordCarrier(node, 'raw')
+      const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
+      const value = bare && !holdsElements ? this.flatText(node) : ''
+      const escaped = this.hasCarrier(node, 'escaped') && [...value].length === 1 && RE_ESCAPABLE_PUNCTUATION.test(value)
+      // The writer normalizes a format, so one the parser would not read is not a carrier.
+      const raw = format !== undefined && bare && RE_RAW_INLINE_FORMAT.test(format)
+        && (holdsElements || this.flatText(node) !== '')
+      if (escaped && raw) {
+        this.refuseContradiction(node, path, 'escaped', 'raw')
         return
       }
-      if (this.hasCarrier(node, 'escaped')) {
-        // ONE ESCAPABLE CHARACTER, TEXT-ONLY (ruling 4). A multi-character
-        // value came back as `\a\b\c`, which is not Carve; `a` is not an
-        // escape at all, it is a backslash and a letter; and flattening a
-        // subtree would swallow whatever the children were.
-        const value = bare && (domChildren(node) ?? []).every((child) => domTag(child) === undefined)
-          ? this.flatText(node)
-          : ''
-        if ([...value].length === 1 && RE_ESCAPABLE_PUNCTUATION.test(value)) this.recordCarrier(node, 'escaped')
-      }
+      if (raw && (this.mode === 'roundtrip' || (format!.toLowerCase() !== 'html' && !holdsElements))) this.recordCarrier(node, 'raw')
+      if (escaped) this.recordCarrier(node, 'escaped')
       return
     }
     if (tag !== 'a' && tag !== 'img') return
@@ -2041,7 +2012,8 @@ class Importer {
     const suffix = this.carveAttributeSuffix(attrs)
     if (suffix === undefined) return {}
     this.referenceLabelsUsed.add(normalizeRefLabel(carried.ref))
-    return { ref: carried.ref, rawRef: `${carried.labelSource}[${carried.ref}]${suffix}` }
+    const collapsed = carried.labelSource === `[${carried.ref}]` || carried.labelSource === `![${carried.ref}]`
+    return { ref: carried.ref, rawRef: `${carried.labelSource}[${collapsed ? '' : carried.ref}]${suffix}` }
   }
 
   /** The reference definitions every rebuilt `data-carve-ref` needs beside it. */
@@ -2479,14 +2451,14 @@ class Importer {
       return []
     }
     if (tag === 'section' && this.attr(node, 'id') !== undefined) {
-      this.readSectionCarriers(node, path)
-    } else if (/^h[1-6]$/.test(tag) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
-      this.recordCarrier(node, 'explicit-id')
+      this.readIdCarriers(node, path, true)
+    } else if (/^h[1-6]$/.test(tag) && this.attr(node, 'id') !== undefined) {
+      this.readIdCarriers(node, path, false)
     }
     // Read in `table()`; recorded here so `attrs()` does not report it as dropped.
     if (tag === 'table' && this.carriedSeparatorWidths(node) !== undefined) this.recordCarrier(node, 'col-widths')
-    // §13a: `true` or `false`; any other value is not a carrier (§13e).
-    if ((tag === 'ul' || tag === 'ol') && ['true', 'false'].includes(this.carrierValue(node, 'tight') ?? '')) {
+    // Tightness is read by presence, regardless of the value.
+    if ((tag === 'ul' || tag === 'ol') && this.hasCarrier(node, 'tight')) {
       this.recordCarrier(node, 'tight')
     }
     const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
@@ -2517,36 +2489,10 @@ class Importer {
       }
       let held = attrs
       if (held?.id !== undefined) {
-        /*
-         * A heading id from HTML is authored input, even when it equals the
-         * slug a fresh Carve parse would generate - EXCEPT where the element
-         * itself says the renderer wrote it. `roundtrip` mode's input is
-         * Carve-produced HTML BY DEFINITION, so there the id can be read back
-         * as generated rather than authored. A generated id follows every
-         * authored attribute, which is what `idInGeneratedPosition` recognizes
-         * (markup-carve/carve-js#1459).
-         */
-        if (
-          this.mode === 'roundtrip' &&
-          !this.hasCarrier(node, 'explicit-id') &&
-          idInGeneratedPosition(node) &&
-          isGeneratedHeadingId(held.id, inlineText(children))
-        ) {
-          // The renderer derives it again from the same text, so dropping it is
-          // the no-op `dropDerived` documents for every other derived
-          // attribute. Carrying it would spell an authored slot the source
-          // never had - and an id that was the whole of `attrs` leaves the
-          // heading with none rather than an empty attribute block.
+        if (this.carrierReads.get(node)?.names.has('generated-id')) {
           const { id: _dropped, ...rest } = held
           held = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
-        } else if (this.writing) {
-          // Authored. Attribute order is exhaustive when present, so retain
-          // every populated slot.
-          //
-          // ON THE WRITING EXIT ONLY. `order` is a source-layout field and an
-          // import read no source, so the published tree records none of them
-          // (markup-carve/carve#1647); see `writing` above for why the writer
-          // still needs the slot.
+        } else if (this.writing || this.carrierReads.get(node)?.names.has('explicit-id')) {
           held.order = slotOrderFromElement(node, held)
         }
       }
@@ -2838,7 +2784,7 @@ class Importer {
           this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
         if (!mapped) hoistedChildren = []
         // No heading took the id, so nothing was rebuilt from the wrapper's carriers.
-        for (const read of ['explicit-id', 'id-slot', 'ext'] as const) {
+        for (const read of ['explicit-id', 'id-slot', 'generated-id'] as const) {
           if (mapped || !this.carrierReads.get(node)?.names.delete(read)) continue
           const name = this.carrierName(node, read)!
           this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(this.attr(node, name) ?? ''))
@@ -2846,6 +2792,14 @@ class Importer {
       }
       const sectionReads = this.carrierReads.get(node)?.names
       const headingElement = tag === 'section' ? this.firstHeadingWithin(node) : undefined
+      const heading = hoistedChildren[0]
+      if (sectionReads?.has('id-slot') && heading?.type === 'heading' && headingElement) {
+        const slots = slotOrderFromElement(headingElement, heading.attrs ?? {}).filter((slot) => slot !== '#id')
+        if (Number(this.carrierValue(node, 'id-slot')) > slots.length) {
+          sectionReads.delete('id-slot')
+          this.report.refuseAttribute(node, path, `round-trip marker attribute ${this.carrierName(node, 'id-slot')!}`, '', 'info', false)
+        }
+      }
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
@@ -2854,6 +2808,7 @@ class Importer {
             attrs,
             hoistedChildren,
             sectionReads?.has('explicit-id') === true,
+            sectionReads?.has('generated-id') === true,
             this.writing,
             sectionReads?.has('id-slot') ? Number(this.carrierValue(node, 'id-slot')) : 0,
             (held) => (headingElement ? slotOrderFromElement(headingElement, held) : []),
@@ -3040,7 +2995,7 @@ class Importer {
     // Seen through the unsupported wrappers `blocks()` splices away.
     // §13a `data-carve-tight` wins over what the items' `<p>` elements imply.
     const tight = this.carrierReads.get(node)?.names.has('tight')
-      ? this.carrierValue(node, 'tight') === 'true'
+      ? true
       : !listItems.some((li) =>
         this.spliceUnsupported(domChildren(li) ?? [], path).some((entry) => !entry.splice && domTag(entry.node) === 'p'),
       )
@@ -4854,6 +4809,7 @@ class Importer {
       if (math) return [math]
     }
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
+    if (tag === 'span' && this.mode === 'roundtrip' && this.contradicted.has(node)) return children
     /*
      * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
      *

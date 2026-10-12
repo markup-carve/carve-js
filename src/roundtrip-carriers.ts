@@ -44,9 +44,6 @@ export const CARRIER_CHAR = 'data-char'
  */
 export const RETIRED_SOURCE_CARRIER = 'data-carve-src'
 
-/** `data-carve-ext`: the one value the core writes, on a generated section wrapper. */
-export const EXT_SECTION = 'section'
-
 /** `data-carve-id-slot`: a run of decimal digits (§13a). */
 export const RE_ID_SLOT = /^[0-9]+$/
 
@@ -62,7 +59,7 @@ const PREFIXED = [
   'raw',
   'escaped',
   'abbreviations',
-  'ext',
+  'generated-id',
   'id-slot',
   'tight',
 ] as const
@@ -109,82 +106,47 @@ export function readCarrier(
 
 export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.roundtrip === true
 
-/**
- * An authored attribute colliding with a carrier is DROPPED, and the drop is
- * reported (ruling 1).
- *
- * Emitting both is what carve-php does today and it is invalid HTML; refusing
- * the export was the alternative, and it lets one authored attribute veto a
- * mode the caller asked for. Only the carriers this element actually writes are
- * passed in, so an authored `data-marker` on a `<p>` is ordinary content.
- */
-export function dropCollidingAuthored(
-  attrs: Attrs | undefined,
-  names: readonly string[],
-  opts: RenderLossSinkOptions,
-  node: { type: string; pos?: Position },
-  nodeType: 'block' | 'inline',
-): Attrs | undefined {
-  if (!attrs?.keyValues) return attrs
-  let next = attrs
-  for (const name of names) {
-    const match = Object.keys(next.keyValues ?? {}).find((key) => key.toLowerCase() === name)
-    if (match === undefined) continue
-    const { [match]: _dropped, ...keyValues } = next.keyValues!
-    next = { ...next, keyValues, ...(next.order ? { order: next.order.filter((slot) => slot !== match) } : {}) }
-    opts.onRenderLoss?.({
-      code: 'carrier-attribute-dropped',
-      target: 'html',
-      nodeType,
-      attribute: match,
-      message: `Dropped the authored attribute ${match}: the roundtrip carrier of the same name owns it`,
-      ...(node.pos ? { pos: node.pos } : {}),
-    })
-  }
-  return next
+export function isReservedExportName(key: string): boolean {
+  const name = key.toLowerCase()
+  return name === CARRIER_MARKER || name === CARRIER_CHAR || name === RETIRED_SOURCE_CARRIER
+    || name === 'data-djot-src' || PREFIXED.some((entry) => carrier(entry) === name)
 }
 
-/**
- * Under roundtrip export an authored `data-carve-src` is dropped (§13a): every
- * importer consumes the name, so passing it through loses it silently on the
- * way back. `renderAttrs` strips it; this reports each node that held one.
- */
-export function isRetiredSourceName(key: string): boolean {
-  return key.toLowerCase() === RETIRED_SOURCE_CARRIER
-}
-
-export function reportRetiredSourceNames(
+export function reportReservedAuthoredNames(
   tree: unknown,
   inlineTypes: ReadonlySet<string>,
   opts: RenderLossSinkOptions,
 ): void {
   if (!opts.onRenderLoss) return
   const seen = new Set<object>()
-  const visit = (value: unknown, inline: boolean): void => {
+  const visit = (value: unknown, inline: boolean, position?: Position): void => {
     if (value === null || typeof value !== 'object' || seen.has(value)) return
     seen.add(value)
     if (Array.isArray(value)) {
-      for (const entry of value) visit(entry, inline)
+      for (const entry of value) visit(entry, inline, position)
       return
     }
-    const node = value as { type?: unknown; attrs?: Attrs; pos?: Position }
-    const within = inline || (typeof node.type === 'string' && inlineTypes.has(node.type))
-    if (typeof node.type === 'string') {
-      for (const key of Object.keys(node.attrs?.keyValues ?? {})) {
-        if (!isRetiredSourceName(key)) continue
-        opts.onRenderLoss!({
-          code: 'carrier-attribute-dropped',
-          target: 'html',
-          nodeType: within ? 'inline' : 'block',
-          attribute: key,
-          message: `Dropped the authored attribute ${key}: the name is reserved and an importer would consume it`,
-          ...(node.pos ? { pos: node.pos } : {}),
-        })
-      }
+    const node = value as { type?: unknown; pos?: Position; keyValues?: Attrs['keyValues'] }
+    const within = typeof node.type === 'string' ? inlineTypes.has(node.type) : inline
+    for (const key of Object.keys(node.keyValues ?? {})) {
+      if (!isReservedExportName(key)) continue
+      opts.onRenderLoss!({
+        code: 'carrier-attribute-dropped',
+        target: 'html',
+        nodeType: within ? 'inline' : 'block',
+        attribute: key,
+        message: `Dropped the authored attribute ${key}: the name is reserved for roundtrip import`,
+        ...(position ? { pos: position } : {}),
+      })
     }
-    for (const [key, child] of Object.entries(value)) {
-      if (key !== 'attrs' && key !== 'pos') visit(child, within)
+    const entries = Object.entries(value)
+    for (const [key, child] of entries) {
+      if (key === 'attrs' || key.endsWith('Attrs')) visit(child, within, node.pos ?? position)
     }
+    for (const [key, child] of entries) {
+      if (key !== 'attrs' && !key.endsWith('Attrs') && key !== 'pos' && key !== 'keyValues') visit(child, within, node.pos ?? position)
+    }
+    if (node.keyValues && node.type === undefined) seen.delete(value)
   }
   visit(tree, false)
 }

@@ -1,3 +1,4 @@
+import { definitionListFlattened } from './render-loss.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { renderCellContent } from './render-cell-content.js'
@@ -6,7 +7,6 @@ import type {
   Admonition,
   Attrs,
   BlockNode,
-  DefinitionItem,
   Document,
   Figure,
   Image,
@@ -127,6 +127,7 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     roundtrip: opts.roundtrip === true,
     carrierDepth: 0,
     definitionListDepth: 0,
+    flattenedDefinitionLists: new WeakSet(),
     abbrBudget: budget,
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
@@ -175,6 +176,7 @@ interface MarkdownContext {
    */
   carrierDepth: number
   definitionListDepth: number
+  flattenedDefinitionLists: WeakSet<object>
   /** Inside a block quote, whose every line this target prefixes with `> `. */
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
@@ -488,7 +490,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       return carried(markers, carriedChildren(node.children, markers, ctx))
     }
     case 'definition_list':
-      return renderDefinitionList(node.items, ctx)
+      return renderDefinitionList(node, ctx)
     case 'figure':
       return renderFigure(node, ctx)
     case 'figure_group': {
@@ -737,7 +739,12 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
  * its terms as strong paragraphs followed by its descriptions' blocks (PART 11
  * section 10p).
  */
-function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext): string {
+function renderDefinitionList(node: Extract<BlockNode, { type: 'definition_list' }>, ctx: MarkdownContext): string {
+  const items = node.items
+  if (ctx.roundtrip && ctx.definitionListDepth > 0 && !ctx.flattenedDefinitionLists.has(node)) {
+    ctx.flattenedDefinitionLists.add(node)
+    definitionListFlattened(ctx.options, node)
+  }
   const carried = ctx.roundtrip && ctx.definitionListDepth === 0
   let out = ''
   ctx.definitionListDepth++
