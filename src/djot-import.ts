@@ -47,6 +47,37 @@ const quoted = (line: string): [number, string] => {
   }
 }
 
+function replaceDjotImageLabels(source: string, mask: string, replace: (image: string, label: string, at: number) => string): string {
+  if (!source.includes('![')) return source
+  const opens: Array<{ at: number; nested: boolean }> = [], closes = new Map<number, number>()
+  const boundaries = new Set(djotInlineBoundaries(source, mask))
+  for (const match of source.matchAll(/\n[ \t]*\n/g)) boundaries.add(match.index!)
+  for (let at = 0; at < source.length; at++) {
+    if (boundaries.has(at)) opens.length = 0
+    if (mask[at] === '[' && !isDjotEscaped(source, at)) {
+      const parent = opens.at(-1)
+      if (parent) parent.nested = true
+      opens.push({ at, nested: false })
+    }
+    else if (mask[at] === ']' && !isDjotEscaped(source, at)) {
+      const open = opens.pop()
+      if (open !== undefined && !open.nested && source[open.at - 1] === '!' && mask[open.at - 1] === '!' && !isDjotEscaped(source, open.at - 1) && /[([]/.test(source[at + 1] ?? '')) closes.set(open.at - 1, at)
+    }
+  }
+  if (!closes.size) return source
+  const chunks: string[] = []
+  let cursor = 0
+  for (let at = 0; at < source.length; at++) {
+    const end = closes.get(at)
+    if (end === undefined) continue
+    chunks.push(source.slice(cursor, at), replace(source.slice(at, end + 1), source.slice(at + 2, end), at))
+    cursor = end + 1
+    at = end
+  }
+  chunks.push(source.slice(cursor))
+  return chunks.join('')
+}
+
 function djotImageAltLayout(label: string, quotes: number, itemColumn = 0, itemQuote = 0, div?: { width: number; depth: number; column: number }): { normalized: string; continuations: string[]; valid: boolean } {
   const continuations: string[] = []
   let valid = true
@@ -871,12 +902,11 @@ function convertDjotDocument(djot: string): string {
     imageLines.push({ end: imageOffset + line.length + 1, quotes: (line.slice(0, contentStart).match(/>/g) ?? []).length, itemColumn: imageItemColumn, itemQuote: imageItemQuote, table: line[contentStart] === '|', div: imageDivs.at(-1) })
     imageOffset += line.length + 1
   }
-  const folded = rawFolded.replace(/!\[([^\[\]]*)\](?=[([])/g, (image: string, label: string, at: number) => {
+  const folded = replaceDjotImageLabels(rawFolded, imageMask, (image, label, at) => {
     if (imageMask[at] !== '!' || imageMask[at + image.length - 1] !== ']' || /\n[ \t]*\n/.test(label) || isDjotEscaped(rawFolded, at)) return image
     const paragraph = imageStarts.has(at) ? imageParagraph : ''
-    if (isDjotEscaped(rawFolded, at + image.length - 1)) return paragraph + image
     if (label.startsWith('^')) return image
-    if (!label.includes('\n') && !/[_*`{^~]/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
+    if (!label.includes('\n') && !/[_*`{^~\[\]]/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
       spans.push(label)
       return `${paragraph}![${prefix}${spans.length - 1}\x00]`
     }
