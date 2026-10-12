@@ -9,7 +9,7 @@ export function protectNativeMarkdownDestinationGlyphs(
 ): string {
   const codeEnds = backtickRunEnds(source)
   const opens: Array<{ at: number; image: boolean; generation: number; nested: boolean }> = []
-  const glyphs = new Set<number>()
+  const glyphs = new Map<number, number>()
   const tokenAt = /\x00P\d+\x00/y
   let generation = 0
   for (let at = 0; at < source.length; at++) {
@@ -44,9 +44,12 @@ export function protectNativeMarkdownDestinationGlyphs(
     if (end !== undefined) {
       let first = open + 1
       while (/[ \t\n]/.test(source[first] ?? '')) first++
-      if (source[first] === '<' && first + 1 < end && source[first + 1] !== '>') glyphs.add(first + 1)
+      if (source[first] === '<' && first + 1 < end && source[first + 1] !== '>') {
+        const escaped = source[first + 1] === '\\' && /[!-/:-@\[-`{-~]/.test(source[first + 2] ?? '')
+        glyphs.set(first + 1, escaped ? 2 : 1)
+      }
       for (let pos = open + 1; pos < end; pos++) {
-        if (source[pos] === '`' || source[pos] === '$' || source[pos] === '<' && pos !== first) glyphs.add(pos)
+        if (source[pos] === '`' || source[pos] === '$' || source[pos] === '<' && pos !== first) glyphs.set(pos, 1)
       }
       if (!opener.image) generation++
       at = end
@@ -72,6 +75,12 @@ export function protectNativeMarkdownDestinationGlyphs(
   }
   if (glyphs.size === 0) return source
   const output: string[] = []
-  for (let at = 0; at < source.length; at++) output.push(glyphs.has(at) ? protect(source[at]!) : source[at]!)
+  for (let at = 0; at < source.length; at++) {
+    const width = glyphs.get(at)
+    if (width) {
+      output.push(protect(source.slice(at, at + width)))
+      at += width - 1
+    } else output.push(source[at]!)
+  }
   return output.join('')
 }

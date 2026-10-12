@@ -1725,7 +1725,8 @@ function convertInline(
     if (table) {
       const quoted = RE_QUOTED_TITLE.exec(title)
       if (quoted) {
-        const decoded = unescapeAttrValue(quoted[3]!)
+        const restored = quoted[3]!.replace(/\x00P(\d+)\x00/g, (token, index: string) => protectedSpans[Number(index)] ?? token)
+        const decoded = unescapeAttrValue(restored)
         const escaped = decoded.replace(/\\/g, '\\\\').split(quoted[2]!).join('\\' + quoted[2]).replaceAll('`', '\\`')
         title = `${quoted[1]}${quoted[2]}${escaped}${quoted[2]}${quoted[4]}`
       }

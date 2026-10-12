@@ -378,5 +378,25 @@
   {
     "source": "[a](<http://a`b>) `tail`",
     "html": "<p><a href=\"http://a%60b\">a</a> <code>tail</code></p>\n"
+  },
+  {
+    "source": "[a](<\\\\>)",
+    "html": "<p><a href=\"%5C\">a</a></p>\n"
+  },
+  {
+    "source": "[a](<\\>>)",
+    "html": "<p><a href=\"%3E\">a</a></p>\n"
+  },
+  {
+    "source": "[a](<\\_>)",
+    "html": "<p><a href=\"_\">a</a></p>\n"
+  },
+  {
+    "source": "[a](<\\<>)",
+    "html": "<p><a href=\"%3C\">a</a></p>\n"
+  },
+  {
+    "source": "[a](<\\`>)",
+    "html": "<p><a href=\"%60\">a</a></p>\n"
   }
 ]
