@@ -4855,6 +4855,26 @@ function insideOpenFence(state: ItemLazyState): boolean {
   return state.opaque !== null || state.divDepth > 0
 }
 
+function isRetainableLineComment(lexer: Lexer, content: string): boolean {
+  if (!RE_COMMENT_LINE.test(content.trimStart())) return false
+  const run = commentFenceRun(content.trimStart())
+  return run === undefined || !commentBlockHasCloser(lexer, run)
+}
+
+function retainCommentBoundary(state: ItemLazyState): void {
+  state.lazyFoldable = false
+  state.commentAtColumn = true
+  state.ownedColumn = -1
+  state.deepest = null
+}
+
+function retainBelowColumnComment(content: string, state: ItemLazyState, atColumn: boolean): boolean {
+  if (atColumn || state.opaque !== null || state.literalColon !== undefined ||
+      !RE_COMMENT_LINE.test(content.trimStart())) return false
+  retainCommentBoundary(state)
+  return true
+}
+
 /** An `ItemLazyState` that has seen nothing, for a collector that only reads fences. */
 function verbatimOnlyLazyState(): ItemLazyState {
   return {
@@ -5637,6 +5657,17 @@ function trackItemLazyState(
   state.invisibleAtColumn = false
   const wasCommentAtColumn = state.commentAtColumn
   state.commentAtColumn = false
+  // A retained fence opens a block, including one held by a description.
+  if ((wasCommentAtColumn || state.deepest?.commentAtColumn) && state.opaque === null && opensCodeFence(content.trimStart())) {
+    const fence = RE_FENCE.exec(content.trimStart()) ?? RE_RAW_FENCE.exec(content.trimStart())
+    if (fence) {
+      state.opaque = { kind: 'code', close: fenceCloseRe(RE_FENCE.test(content.trimStart()) ? fence[2]! : fence[1]!) }
+      state.lazyFoldable = false
+      state.inDefList = false
+      state.deepest = null
+      return
+    }
+  }
   // A FOOTNOTE DEFINITION'S BODY RUNS ON. A blank between its lines is inside
   // the body rather than after it, so it does not end the run.
   //
@@ -10525,9 +10556,14 @@ class ParseSession {
     let pendingBlankLineNumbers: number[] = []
     let pendingBlankSources: string[] = []
     const noteSpanScan = newCommentSpanScan()
+    const lazyState = verbatimOnlyLazyState()
+    trackItemLazyState(m[2]!, lazyState, () => false)
+    let retainedBelowComment = false
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) {
+        retainedBelowComment = false
+        trackItemLazyState('', lazyState)
         pendingBlanks++
         pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
         pendingBlankSources.push(ln)
@@ -10587,7 +10623,10 @@ class ParseSession {
         pendingBlanks = 0
         pendingBlankLineNumbers = []
         pendingBlankSources = []
-        bodyLines.push(sliceColumns(ln, bodyColumn, true))
+        const content = sliceColumns(ln, bodyColumn, true)
+        bodyLines.push(content)
+        trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, bodyColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn))
+        retainedBelowComment = false
         bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
         bodySourceLines.push(ln)
         lexer.consume()
@@ -10611,6 +10650,23 @@ class ParseSession {
         bodyLines.push(flush === ln ? ln : ' ' + flush)
         bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
         bodySourceLines.push(ln)
+        lexer.consume()
+      } else if (
+        pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
+        (retainedBelowComment || (lazyState.lazyFoldable && isRetainableLineComment(lexer, ln))) &&
+        (retainedBelowComment || isRetainableLineComment(lexer, ln) ||
+          !startsInterruptingBlock(lexer, ln.trimStart(), false, false, ln === ln.trimStart()))
+      ) {
+        const content = retainedBelowComment && !RE_COMMENT_LINE.test(ln.trimStart())
+          ? ln.trimStart()
+          : ln
+        bodyLines.push(content)
+        bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+        bodySourceLines.push(ln)
+        lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+        trackItemLazyState(content, lazyState, (marker) => itemFenceHasCloser(lexer, marker, lexer.pos, markerColumn, new Map(), (line, blank) => blank && indentColumns(line, bodyColumn) < bodyColumn), false,
+          (run) => commentBlockHasCloser(lexer, run))
+        retainedBelowComment = retainBelowColumnComment(content, lazyState, false)
         lexer.consume()
       } else {
         break
@@ -11279,6 +11335,8 @@ class ParseSession {
         ownedColumn: -1,
         ownedAuthored: false,
       }
+      let retainedBelowComment = false
+      let belowCommentSpan = false
       let defFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       /**
        * The CONTENT COLUMN of the nested item this body currently has open, in
@@ -11366,6 +11424,7 @@ class ParseSession {
         if (nestedLeadScans !== undefined) {
           lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, hasFenceCloser, atContentColumn)
         }
+        retainedBelowComment = false
       }
       // Lines admitted by REACHING the body's content column, mirroring the list
       // item's `authoredBaseEligible` one collector over. A below-column lazy line
@@ -11707,17 +11766,22 @@ class ParseSession {
           bodyLines.push(atDocumentColumn ? ln : ' ' + below)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-          // A span delimiter is a comment boundary, even below the column.
-          // It leaves no paragraph for the next below-column line to continue.
           track(below)
+          if (belowCommentSpan) {
+            retainCommentBoundary(lazyState)
+            retainedBelowComment = true
+            belowCommentSpan = false
+          }
           lexer.consume()
           continue
         }
         // A collecting list does not supply an open paragraph (CARVE-P0-009).
         if (
-          lazyState.lazyFoldable &&
+          (lazyState.lazyFoldable || retainedBelowComment || belowCommentSpan) &&
           !(RE_LINE_BLOCK_OPEN.test(first) && markerContentColumn(below) > 0) &&
-          !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
+          (retainedBelowComment || belowCommentSpan || (lazyState.opaque === null &&
+            ((RE_COMMENT_LINE.test(below) && !atDocumentColumn) || isRetainableLineComment(lexer, below))) ||
+            !startsInterruptingBlock(lexer, below, !retainedBelowComment, false, atDocumentColumn))
         ) {
           const lineIndex = lexer.pos
           if (indentColumns(ln, contentCol) < contentCol) {
@@ -11740,17 +11804,21 @@ class ParseSession {
           // either ends the body above or reads the same at both columns.
           //
           const folded =
-            atDocumentColumn &&
+            retainedBelowComment && !RE_COMMENT_LINE.test(below)
+              ? below
+              : atDocumentColumn &&
             opensCodeFence(below)
               ? ' ' + below
               : ln
           bodyLines.push(folded)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-          // The CLAMPED line is what this body holds, so it is what the trailing
-          // state is read off: a clamped fence line opens no span here, and the
-          // paragraph it folded into stays open for the line below it.
+          // Track the body's reading: retained openers stay flush, while a
+          // clamped fence continues the paragraph.
           track(folded, undefined, false)
+          retainedBelowComment = retainBelowColumnComment(folded, lazyState, false)
+          const commentRun = commentFenceRun(below)
+          if (commentRun !== undefined && commentBlockHasCloser(lexer, commentRun)) belowCommentSpan = true
           lexer.consume()
           continue
         }
@@ -13666,11 +13734,8 @@ class ParseSession {
           // behind it (corpus 183, 197, 358).
           trackItemLazyState(lazyLine, lazyState, () => true, false,
             lazyState.authoredColon ? (width) => commentBlockHasCloser(lexer, width) : undefined)
-          if (retainedComment) {
-            lazyState.lazyFoldable = false
-            lazyState.commentAtColumn = true
-            lazyState.ownedColumn = -1
-            lazyState.deepest = null
+          if (retainedComment || (lazyState.inDefList === 'description' && isRetainableLineComment(lexer, l))) {
+            retainCommentBoundary(lazyState)
           }
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()

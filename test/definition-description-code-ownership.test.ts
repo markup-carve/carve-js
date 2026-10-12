@@ -21,7 +21,7 @@ const htmlTree = (html: string): unknown => {
   return visit(parseFragment(html))
 }
 
-// Native HTML comes from spec 2d473af7.
+// Controls use spec 2d473af7, with below-column comment retention updated for X1.
 it.each(controls)('keeps description code and following blocks in their authored hosts: $id', control => {
   expect(htmlTree(carveToHtml(control.source))).toEqual(htmlTree(control.html))
   for (const positions of [false, true]) {
