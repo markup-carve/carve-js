@@ -22,6 +22,7 @@ export function djotImportLosses(
   rows: readonly boolean[],
   contentStart: (line: string) => number,
   rawCode: readonly number[] = [],
+  accepted: ReadonlyMap<number, { label: string; target: string; end: number }>,
 ): DjotImportLoss[] {
   const losses: DjotImportLoss[] = []
   const reported = new Set<string>()
@@ -75,7 +76,6 @@ export function djotImportLosses(
     const at = contentStart(line),
       content = line.slice(at),
       contentMask = visible.slice(at)
-    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(content)
     const previous = lines[n - 1] ?? ''
     const previousContent = previous.slice(contentStart(previous)).trim()
     const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(djotItemPrefix(line, at))
@@ -88,16 +88,10 @@ export function djotImportLosses(
       /^(?:[*-][ \t]*){3,}$/.test(previousContent) ||
       (contentStart(previous) > at &&
         /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(djotItemPrefix(previous, contentStart(previous))))
-    if (definition && contentMask.startsWith('[') && boundary) {
-      let destination = definition[2]!
-      for (let next = n + 1; next < lines.length; next++) {
-        const nextAt = contentStart(lines[next]!), prefix = lines[next]!.slice(0, nextAt)
-        const token = lines[next]!.slice(nextAt).replace(/\r$/, '')
-        if (quoteDepths[next] !== quoteDepths[n] || nextAt <= at || prefix.includes('[^') || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(prefix) || !/^[^ \t\r\n]+$/.test(token)) break
-        destination += token
-        definitionLines.add(next)
-      }
-      definitions.set(definitionKey(definition[1]!), destination)
+    const decision = accepted.get(n)
+    if (decision) {
+      for (let next = n + 1; next <= decision.end; next++) definitionLines.add(next)
+      definitions.set(definitionKey(decision.label), decision.target)
       definitionLines.add(n)
       for (let k = offsets[n]!; k < offsets[n]! + line.length; k++) masked[k] = ' '
     }

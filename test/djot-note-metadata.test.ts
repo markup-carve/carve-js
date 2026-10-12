@@ -4,6 +4,7 @@ import fixtures from './fixtures/djot-note-metadata.json'
 describe('Djot footnote definition attributes',()=>{
 for(const row of fixtures) it(row.name,()=>{
 const result=migrateDjot(row.source)
+expect(result.report.diagnostics.filter(d=>d.message.includes('unresolved Djot reference'))).toEqual([])
 expect(result.value).toBe(djotToCarve(row.source))
 const losses=result.report.diagnostics.filter(d=>d.code==='djot-footnote-definition-attributes-dropped')
 expect(losses.map(d=>d.path)).toEqual(row.lossLines.map(line=>`line:${line}`))

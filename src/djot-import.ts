@@ -781,10 +781,13 @@ export function djotToCarveWithLosses(djot: string): { value: string; losses: Dj
   const normalized = djot.replace(/\r\n?/g, '\n')
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
   const source = (frontmatter + separator).replace(/[^\n]/g, ' ') + body
-  const rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false))
+  const mask = maskDjotCodeAndDestinations(source, false, true, false)
+  const rows = djotTableRows(source, mask)
   const rawCode: number[] = []
   if (hasDjotCodeLayoutCandidates(source)) closeDjotTableCode(source, at => rawCode.push(at))
-  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode) }
+  const accepted = new Map<number, { label: string; target: string; end: number }>()
+  foldDjotReferences(source, accepted, mask, rows)
+  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode, accepted) }
 }
 
 function dropLeadingDjotSeparators(source: string): string {
@@ -1032,11 +1035,11 @@ function normalizeDjotAttributeLines(source: string): string {
   return parts.join('')
 }
 
-function foldDjotReferences(source: string): string {
+function foldDjotReferences(source: string, accepted?: Map<number, { label: string; target: string; end: number }>, originalMask?: string, originalRows?: readonly boolean[]): string {
   if (!source.includes(']:')) return source
   const lines = source.split('\n'),
-    mask = maskDjotCodeAndDestinations(source, false, true, false)
-  const rows = djotTableRows(source, mask)
+    mask = originalMask ?? maskDjotCodeAndDestinations(source, false, true, false)
+  const rows = originalRows ? [...originalRows] : djotTableRows(source, mask)
   const removed = new Set<number>()
   let offset = 0, previous = '', previousDepth = 0, previousAttributeBlock = false
   const definitionOwners: Array<{ start: number; depth: number }> = []
@@ -1059,7 +1062,7 @@ function foldDjotReferences(source: string): string {
     const metadata = definition !== null || content.startsWith('{') && readAttributes(content, 0)?.end === content.trimEnd().length
     if (ownerExit && metadata && mask[offset + at] === ' ') fenceMask ??= maskDjotFences(source, undefined, rows, true)
     const metadataExit = ownerExit && metadata && (mask[offset + at] !== ' ' || fenceMask?.[offset + at] !== ' ')
-    const outdented = metadataExit || at < previousOwner && (previousNote >= 0 || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousLine.slice(0, previousAt)))
+    const outdented = metadataExit || at < previousOwner && /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousLine.slice(0, previousNote < 0 ? previousAt : previousNote))
     const boundary: boolean = previous === '' || previousAttributeBlock || rows[n - 1] || depth !== previousDepth || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || outdented || /^(?:#{1,6} |:{3,}|[`~]{3,}|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
     const marker = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(noteAt < 0 ? prefix : prefix.slice(0, noteAt))
     const rowEnd = line.trimEnd().length - 1
@@ -1074,7 +1077,7 @@ function foldDjotReferences(source: string): string {
     }
     const separator = (metadataExit && !marker || rowEntry || definition !== null && rows[n - 1] && !marker && (ownerExit || definitionOwner === undefined)) && previous !== '' ? physicalPrefix + '\n' : ''
     if (separator) lines[n] = separator + line
-    if (definition && mask[offset + at] === '[' && (boundary || marker)) {
+    if (definition && (mask[offset + at] === '[' || metadataExit && fenceMask?.[offset + at] === '[') && (boundary || marker)) {
       let target = definition[2] ?? '',
         end = n
       while (end + 1 < lines.length) {
@@ -1086,6 +1089,7 @@ function foldDjotReferences(source: string): string {
         target += nextToken
         end++
       }
+      accepted?.set(n, { label: definition[1]!, target, end })
       const nextByte = content[definition[1]!.length + 3]
       if (end > n || target !== '' && nextByte !== ' ')
         lines[n] = separator + line.slice(0, at) + `[${definition[1]}]:${target ? ' ' + target : ''}`
