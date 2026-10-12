@@ -95,10 +95,10 @@ function djotImageAltLayout(label: string, quotes: number, itemColumn = 0, itemQ
       const text = body.replace(/^[ \t]*/, '')
       const attributes = text.startsWith('{') ? readAttributes(text, 0) : undefined
       const ownerQuote = /^[ \t]*>(?:[ \t]|$)/.test(ownerBody)
-      const extraBlock = /^(?:[-*][ \t]*){3,}$/.test(text.replace(/[ \t]*$/, '')) || attributes !== undefined && /^[ \t]*$/.test(text.slice(attributes.end))
+      const extraBlock = /^(?:[-*][ \t]*){3,}$/.test(trimEndMatchingEdges(text, code => code === 32 || code === 9)) || attributes !== undefined && /^[ \t]*$/.test(text.slice(attributes.end))
       if ((extraBlock || ownerQuote) && (depth < quotes || itemColumn > 0 && ownerIndent < itemColumn)) valid = false
       if (div && depth === div.depth && /^[ \t]*:{3,}[ \t]*$/.test(body) && body.trim().length >= div.width && /^[ \t]*/.exec(body)![0].length <= div.column + 3) valid = false
-      if ((depth < quotes || itemColumn > 0 && ownerIndent < itemColumn) && /^(?:[-*+](?:[ \t]|$)|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|\||\^ |\[[^\]]+\]:)/.test(body.replace(/^[ \t]*/, ''))) valid = false
+      if ((depth < quotes || itemColumn > 0 && ownerIndent < itemColumn) && /^(?:[-*+](?:[ \t]|$)|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$|\||\^ |\[[^\]]+\]:)/.test(body.replace(/^[ \t]*/, ''))) valid = false
       let start = 0
       for (let quote = 0; quote < quotes; quote++) {
         while (line[start] === ' ' || line[start] === '\t') start++
@@ -118,7 +118,7 @@ function djotImageBoundaryIndex(source: string, mask: string): (start: number, e
   const divClosers = new Map<number, number>()
   const divs: Array<{ width: number; depth: number; at: number }> = []
   let offset = 0
-  const block = /^(?:[-*+](?:[ \t]|$)|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|\||\^ |\[[^\]]+\]:)/
+  const block = /^(?:[-*+](?:[ \t]|$)|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$|\||\^ |\[[^\]]+\]:)/
   for (const line of source.split('\n')) {
     const [depth, body] = quoted(line)
     const blank = /^[ \t]*$/.test(body)
@@ -2189,7 +2189,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
   }
   const imageParagraphValid = source.includes('![') ? djotImageBoundaryIndex(source, mask) : undefined
   const block =
-    /^(?:[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}|>(?:[ \t]|$)|\||\^ |\[[^\]]+\]:)/
+    /^(?:[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] |\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\) |: |#{1,6} |`{3,}|~{3,}|:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$|>(?:[ \t]|$)|\||\^ |\[[^\]]+\]:)/
   const marker =
     /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+)/
   const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
@@ -2435,7 +2435,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
           .slice(1)
           .some(
             (value) =>
-              (block.test(value) || value.startsWith('{')) && (!/^\|[ \t:|-]*\|$/.test(value) || line[at] !== '|'),
+              (block.test(value) || value.startsWith(':::') || value.startsWith('{')) && (!/^\|[ \t:|-]*\|$/.test(value) || line[at] !== '|'),
           ) ||
         (itemColumn > 0 && itemKind.startsWith('[^') && normalized.length > 1)
       if (codeDepth > 0 && !rawCode) payload = normalized.join('\n')
@@ -2463,7 +2463,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       !beganInside &&
       consumed <= lineEnd &&
       (trimmed === '' ||
-        /^(?:#{1,6} |:{3,}|\[[^\]]+\]:)/.test(trimmed) ||
+        /^(?:#{1,6} |:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$|\[[^\]]+\]:)/.test(trimmed) ||
         blockAttributes(trimmed) ||
         (line[at] === '|' && line.trimEnd().endsWith('|') && !line.trimEnd().endsWith('\\|')))
     offset = lineEnd + 1

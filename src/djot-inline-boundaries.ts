@@ -136,7 +136,7 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
         codeFence = { ch: ticks[1]![0]!, width: ticks[1]!.length, depth: bodyDepth, itemColumn: startsItem ? indent + marker![0].length : active && depth === active.depth && indent >= active.column ? active.column : undefined }
         previousBlock = false
       } else {
-        const fence = /^(:{3,})[ \t]*[A-Za-z0-9_-]*[ \t]*$/.exec(body)
+        const fence = /^(:{3,})(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$/.exec(body)
         const owner = divs.at(-1)
         const visible = mask[offset + line.length - body.length] === ':'
         if (fence && visible && owner && /^[ \t]*$/.test(body.slice(fence[1]!.length)) &&
