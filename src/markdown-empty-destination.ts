@@ -53,7 +53,9 @@ export function useEmptyDestinationBoundaryKey(key?: string): void {
 
 function keepEmptyDestinationBoundary(text: string, lineStart: boolean, protect: (s: string) => string, enabled = true): string {
   if (!enabled || boundaryKey === undefined || text === '' && lineStart) return text
-  return `${protect('`<!--' + boundaryKey + '-->`{=html}')}${protect('[')}${text || '0'}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
+  if (text.startsWith('^')) text = protect('\\^') + text.slice(1)
+  const separator = lineStart ? '' : protect('`<!--' + boundaryKey + '-->`{=html}')
+  return `${separator}${protect('[')}${text || '0'}${protect(']')}${protect(`{${boundaryKey}=${text === '' ? 'empty' : 'label'}}`)}`
 }
 
 /** Makes the references a document defines visible to the inline pass. */
@@ -668,7 +670,7 @@ export function unwrapEmptyDestinations(
   prepareLabel?: (label: string) => string,
   keepBoundaryAt?: (subject: string, offset: number) => boolean,
 ): string {
-  const replaceAt = (re: RegExp, pick: (m: RegExpExecArray) => string | null): void => {
+  const replaceAt = (re: RegExp, pick: (m: RegExpExecArray, emittedPrefix: string) => string | null): void => {
     const subject = line
     let out = ''
     let cursor = 0
@@ -679,7 +681,7 @@ export function unwrapEmptyDestinations(
         re.lastIndex = m.index + 1
         continue
       }
-      const replacement = pick(m)
+      const replacement = pick(m, out + subject.slice(cursor, m.index))
       if (replacement === null) continue
       out += subject.slice(cursor, m.index) + replacement
       cursor = m.index + m[0].length
@@ -688,7 +690,7 @@ export function unwrapEmptyDestinations(
   }
   let imageSubject: string | undefined
   let imageRanges: Array<[number, number]> = []
-  const unwrap = (m: RegExpExecArray, title: string, subject: string) => {
+  const unwrap = (m: RegExpExecArray, title: string, subject: string, emittedPrefix: string) => {
     if (subject !== imageSubject) {
       imageSubject = subject
       imageRanges = []
@@ -706,23 +708,23 @@ export function unwrapEmptyDestinations(
     }
     const image = m[0][0] === '!'
     const label = image ? m[1]! : prepareLabel?.(m[1]!) ?? m[1]!
-    return unwrapEmptyDestination(label, image, title, subject.slice(0, m.index), placeholders, protect, decodeEntity, !insideImage && (keepBoundaryAt?.(subject, m.index) ?? true))
+    return unwrapEmptyDestination(label, image, title, emittedPrefix, placeholders, protect, decodeEntity, !insideImage && (keepBoundaryAt?.(subject, m.index) ?? true))
   }
   if (references.empty.size > 0) {
-    const byReference = (m: RegExpExecArray, reference: string, subject: string): string | null => {
+    const byReference = (m: RegExpExecArray, reference: string, subject: string, emittedPrefix: string): string | null => {
       const key = normalizeReferenceLabel(decodeLinkTitle(reference, decodeEntity, placeholders))
       const title = references.empty.get(key)
-      return title === undefined ? null : unwrap(m, title, subject)
+      return title === undefined ? null : unwrap(m, title, subject, emittedPrefix)
     }
     let subject = line
-    replaceAt(new RegExp(String.raw`!?\[${LABEL}\](?:\[\]|\[([^[\]\n]+)\])`, 'g'), (m) => byReference(m, m[2] ?? m[1]!, subject))
+    replaceAt(new RegExp(String.raw`!?\[${LABEL}\](?:\[\]|\[([^[\]\n]+)\])`, 'g'), (m, before) => byReference(m, m[2] ?? m[1]!, subject, before))
     subject = line
-    replaceAt(/!?\[([^[\]\n]+)\](?![[(:\x00])/g, (m) => byReference(m, m[1]!, subject))
+    replaceAt(/!?\[([^[\]\n]+)\](?![[(:\x00])/g, (m, before) => byReference(m, m[1]!, subject, before))
   }
   const subject = line
   replaceAt(
     new RegExp(String.raw`!?\[${LABEL}\]\([ \t]*(?:<>(?:[ \t]+("[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*)?\)`, 'g'),
-    (m) => unwrap(m, m[2] !== undefined ? decodeLinkTitle(m[2].slice(1, -1), decodeEntity, placeholders) : '', subject),
+    (m, before) => unwrap(m, m[2] !== undefined ? decodeLinkTitle(m[2].slice(1, -1), decodeEntity, placeholders) : '', subject, before),
   )
   return line
 }

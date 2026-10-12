@@ -103,6 +103,11 @@ export function linkMarkdownEmailText(document: Document, boundaryKey?: string):
           for (const child of rewritten) value.push(child)
         }
       } else if (record(value)) {
+        const attrs = record(value['attrs']) ? value['attrs'] : undefined
+        const keys = attrs && record(attrs['keyValues']) ? attrs['keyValues'] : undefined
+        if (keys?.[boundaryKey] !== undefined || value['type'] === 'raw_inline' && value['format'] === 'html' && value['content'] === `<!--${boundaryKey}-->`) {
+          throw new Error('Markdown import could not remove its internal empty-destination boundary')
+        }
         for (const field of ownedChildFields(value)) cleanup.push(value[field])
       }
     }

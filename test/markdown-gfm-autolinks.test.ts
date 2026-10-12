@@ -159,3 +159,46 @@ it.each([
   expect(result.value).not.toContain('carve-md-empty-')
   expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(false)
 })
+
+it('does not mistake joined authored text for a surviving private attribute', () => {
+  const result = migrateMarkdown('carve-md-empty-[]()0=x a@b.test')
+  expect(carveToHtml(result.value)).toContain('carve-md-empty-0=x')
+  expect(carveToHtml(result.value)).toContain('mailto:a@b.test')
+})
+
+it('keeps an empty heading after consecutive empty destinations', () => {
+  const result = migrateMarkdown('# []()[]()\n\na@b.test')
+  expect(carveToHtml(result.value)).toContain('<h1></h1>')
+  expect(carveToHtml(carveToCarve(result.value))).toContain('<h1></h1>')
+})
+
+it.each(['| a |\n|---|\n| []()[]() |\n\na@b.test', '[]()[]()\n\na@b.test', '- []()[]()\n\na@b.test'])('handles blocks emptied by consecutive destinations: %s', source => {
+  const result = migrateMarkdown(source)
+  expect(result.value).not.toContain('carve-md-empty-')
+  expect(carveToHtml(result.value)).toContain('mailto:a@b.test')
+  expect(carveToHtml(carveToCarve(result.value))).toContain('mailto:a@b.test')
+})
+
+it('keeps native code conversion across empty comments', () => {
+  const result = migrateMarkdown('<code>a<!---->[b]()</code> x@y.z')
+  const paragraph = parse(result.value).children[0]
+  expect(paragraph?.type).toBe('paragraph')
+  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'code', value: 'ab' })
+  expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(false)
+})
+
+it.each(['a[^1][^2]', '[x][^1]', '[ref][^1]'])('keeps footnote references after a closing bracket: %s', label => {
+  const result = migrateMarkdown(`${label}\n\n[^1]: one\n\n[^2]: two`)
+  const count = label.startsWith('a') ? 2 : 1
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    expect((carveToHtml(value).match(/role="doc-noteref"/g) ?? []).length).toBe(count)
+  }
+})
+
+it.each(['', '\n\n[^x]: n'])('keeps a caret empty-link label literal without aborting: %s', definition => {
+  const result = migrateMarkdown(`[^x]() a@b.test${definition}`)
+  expect(carveToHtml(result.value)).toContain('^x')
+  expect(carveToHtml(result.value)).toContain('mailto:a@b.test')
+  expect(carveToHtml(result.value)).not.toContain('doc-noteref')
+  expect(carveToHtml(carveToCarve(result.value))).toBe(carveToHtml(result.value))
+})

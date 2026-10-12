@@ -1558,7 +1558,7 @@ function convertInline(
       opaqueSubject = subject
       opaqueRanges = []
       scalarBoundaryRanges = []
-      for (const scalar of subject.matchAll(/<code>([^<]*)<\/code>|<span\s+class\s*=\s*"critic-comment"\s*>([^<]*)<\/span>/gi)) {
+      for (const scalar of subject.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>|<span\s+class\s*=\s*"critic-comment"\s*>([^<]*)<\/span>/gi)) {
         const body = scalar[1] ?? scalar[2]!
         if (!decodeHtmlEntitiesRaw(referenceSourceText(body, protectedSources)).includes('@')) {
           scalarBoundaryRanges.push([scalar.index! + scalar[0].indexOf('>') + 1, scalar.index! + scalar[0].lastIndexOf('</')])
@@ -1819,6 +1819,23 @@ function convertInline(
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
+  if (line.includes('][^')) {
+    const footnotePrefixSource = line
+    const opaque = opaqueHtmlScanner(line)
+    let cursor = 0
+    line = line.replace(/(?<!\\)\[([^[\]\n^]+)\](?=\[\^)/g, (match, label: string, offset: number) => {
+      while (cursor < offset) {
+        const end = footnotePrefixSource[cursor] === '<' ? opaque(cursor) ?? scanHtmlTag(footnotePrefixSource, cursor)?.end : undefined
+        if (end !== undefined) { cursor = end; continue }
+        if (dialect.math && footnotePrefixSource[cursor] === '$') {
+          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(footnotePrefixSource.slice(cursor))
+          if (math) { cursor += math[0].length; continue }
+        }
+        cursor++
+      }
+      return cursor > offset ? match : protect('\\[') + label + protect('\\]')
+    })
+  }
   const referenceSubject = line
   const referenceOpeners = new Map<number, number>()
   const referenceStack: number[] = []
@@ -1838,6 +1855,7 @@ function convertInline(
   }
   line = line.replace(/(?<=\])\[([^\]]*)\]/g, (match, reference: string, offset: number, source: string) => {
     if (referenceHtml.has(offset)) return match
+    if (reference.startsWith('^')) return protect(match, match)
     const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
@@ -5313,7 +5331,7 @@ export function markdownToCarveWithLosses(
         if (!trailingNewline) value = value.replace(/\n$/, '')
       }
     }
-    if (usedBoundaryKey !== undefined && (value.includes(`${usedBoundaryKey}=`) || value.includes(`<!--${usedBoundaryKey}-->`))) {
+    if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
       throw new Error('Markdown import could not remove its internal empty-destination boundary')
     }
     return { value, losses }
