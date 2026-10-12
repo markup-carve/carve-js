@@ -2611,7 +2611,7 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return
     if (Array.isArray(value)) {
-      const definitions: Array<{ depth: number; defined: boolean }> = []
+      const definitions: Array<{ depth: number }> = []
       let depth = 0
       for (let i = 0; i < value.length; i++) {
         const node = value[i] as BlockNode
@@ -2625,15 +2625,13 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
             if (carrierFenceWidth(payload) > 0) depth += carrierIsCloser(payload) ? -1 : 1
             if (/^::[ \t]/.test(payload)) {
               const last = definitions.at(-1)
-              if (!last || last.depth !== depth) definitions.push({ depth, defined: false })
-              else last.defined = false
+              if (!last || last.depth !== depth) definitions.push({ depth })
             } else if (payload === ':') {
               const last = definitions.at(-1)
               if (!last || last.depth !== depth) valid = false
-              else last.defined = true
             } else if (payload === '') {
               const last = definitions.pop()
-              if (!last?.defined || last.depth !== depth) valid = false
+              if (!last || last.depth !== depth) valid = false
             }
             const next = value[i + 1] as BlockNode | undefined
             const previous = value[i - 1] as BlockNode | undefined
