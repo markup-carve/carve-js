@@ -84,6 +84,6 @@ describe('shared migration result', () => {
     ])
     expect(result.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(false)
     const incomplete = migrateMarkdown('<code>http://example.org</code>\n\n1. [x] done\n')
-    expect(incomplete.report.diagnostics.map(row => row.code)).toEqual(['fidelity-unverified', 'structure-unspellable'])
+    expect(incomplete.report.diagnostics.map(row => row.code)).toEqual(['fidelity-unverified', 'raw-code-fallback', 'structure-unspellable'])
   })
 })

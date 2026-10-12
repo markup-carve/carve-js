@@ -1,12 +1,12 @@
-import type { InlineNode } from './ast.js'
+import type { BlockNode, Document, InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
-import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels } from './markdown-link-scopes.js'
+import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis } from './markdown-emphasis.js'
-import { markdownBareLinks } from './markdown-gfm-autolinks.js'
+import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
  * Markdown -> Carve converter.
@@ -496,7 +496,7 @@ function writeMarkdownDestination(url: string, protectedSpans: readonly string[]
   // carries it literally, balanced or not, so encoding changed the address the
   // Markdown writer had emitted verbatim. Same ruling as the Djot side,
   // carve#2854.
-  return decoded.replace(/[^\x21-\x7e]|["<>\\`{|}]/gu, (char) => {
+  return decoded.replace(/[^\x21-\x7e]|["<>\\`^{|}]/gu, (char) => {
     const point = char.codePointAt(0)!
     return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
   }).replace(/[()]/g, '\\$&')
@@ -850,14 +850,22 @@ function opaqueHtmlScanner(s: string): (start: number) => number | undefined {
  * double-quoted attribute and no other, and a body that cannot break out of the
  * construct. Anything else falls back to the raw span the importer wrote before.
  */
-function attributedNative(tag: string, open: string, body: string, protect: (s: string) => string): string | undefined {
+function attributedNative(tag: string, open: string, body: string, protect: (s: string) => string, sources: readonly string[] = []): string | undefined {
   if (body.includes('<')) return undefined
   if (tag === 'span') {
     // CARVE-P3-016 makes a comment's content literal, so the whole construct is
     // protected: no later inline pass may read markup inside it.
     if (!/^<span\s+class\s*=\s*"critic-comment"\s*>$/i.test(open)) return undefined
-    const value = decodeHtmlEntitiesRaw(body)
-    return /[#{}\\\n]/.test(value) ? undefined : protect(`{#${value}#}`)
+    const escapesAndEntities = new RegExp(String.raw`\x00P(\d+)\x00|\\([!-/:-@\[-\x60{-~])|${RE_HTML_ENTITY.source}`, 'g')
+    let rawHtml = false
+    const value = body.replace(escapesAndEntities, (match, index: string | undefined, escaped: string | undefined) => {
+      if (index === undefined) return escaped ?? decodeHtmlEntitiesRaw(match)
+      const source = referenceSourceText(match, sources)
+      if (/^\\[!-/:-@\[-`{-~]$/.test(source)) return source.slice(1)
+      if (source.includes('<')) rawHtml = true
+      return source
+    })
+    return rawHtml || /[{}\\\n]/.test(value) ? undefined : protect(`{#${value}#}`)
   }
   if (tag !== 'abbr') return undefined
   const title = /^<abbr\s+title\s*=\s*"([^"]*)"\s*>$/i.exec(open)
@@ -908,7 +916,7 @@ function criticDeletion(
   return { carve: protect('{-') + body + protect('-}'), end }
 }
 
-function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[]): string {
+function convertInlineHtml(input: string, protect: (s: string) => string, placeholders: readonly string[], sources: readonly string[] = placeholders): string {
   let out = ''
   let i = 0
   const opaqueEnd = opaqueHtmlScanner(input)
@@ -946,7 +954,7 @@ function convertInlineHtml(input: string, protect: (s: string) => string, placeh
             i = deletion.end
             continue
           }
-          const carve = attributedNative(tag.name, input.slice(i, tag.end), body, protect)
+          const carve = attributedNative(tag.name, input.slice(i, tag.end), body, protect, sources)
           if (carve !== undefined) {
             out += carve
             i = end
@@ -1273,19 +1281,46 @@ function convertInline(
     protectedSources.push(source)
     return `\x00P${protectedSpans.length - 1}\x00`
   }
+  const codeTokens = new Map<string, string>()
+  const protectCode = (value: string, source = value): string => {
+    const token = protect(value, source)
+    codeTokens.set(token, source)
+    return token
+  }
   let codeCursor = 0, codeLine = 0
-  let line = protectCodeSpans(input, (span, offset) => {
+  const writeCodeSpan = (span: string, offset: number, trackLines = true): string => {
     const fence = /^`+/.exec(span)?.[0] ?? ''
-    if (fence.length > 2 || !span.includes('\n')) return protect(span)
-    if (joinedLines) {
-      while (codeCursor < offset) if (input[codeCursor++] === '\n') codeLine++
-      while (codeCursor < offset + span.length) if (input[codeCursor++] === '\n') joinedLines.add(++codeLine)
+    if (fence.length > 2 || !span.includes('\n')) return protectCode(span)
+    if (joinedLines && trackLines) {
+      while (codeCursor < offset) if (rawLine[codeCursor++] === '\n') codeLine++
+      while (codeCursor < offset + span.length) if (rawLine[codeCursor++] === '\n') joinedLines.add(++codeLine)
     }
     let value = span.slice(fence.length, -fence.length).replace(/\n[ \t]*/g, ' ')
     if (value.startsWith(' ') && value.endsWith(' ') && /[^ ]/.test(value)) value = value.slice(1, -1)
     const rendered = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
-    return protect(rendered.replace(/\n$/, ''), span)
-  })
+    return protectCode(rendered.replace(/\n$/, ''), span)
+  }
+  let rawLine = input
+  const rawDefinition = /^\s*\[([^^\]][^\]]*)\]:/.exec(input)
+  const isReferenceDefinition = rawDefinition !== null && referenceDestinationLabel(rawDefinition[1]!, decodeHtmlEntitiesRaw, [], table) !== undefined
+  if (!holdsFenceBody && !isReferenceDefinition && (input.includes(':') || input.includes('www.'))) {
+    let cursor = 0
+    let captured = ''
+    const rawOpaqueEnd = opaqueHtmlScanner(input)
+    const rawAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+    for (const link of markdownRawBareLinks(input, at => {
+      const opaque = rawOpaqueEnd(at) ?? scanHtmlTag(input, at)?.end
+      if (opaque !== undefined) return opaque
+      rawAutolink.lastIndex = at
+      const angle = rawAutolink.exec(input)
+      return angle === null ? undefined : at + angle[0].length
+    })) {
+      captured += input.slice(cursor, link.start) + protect(writeLiteralAutolink(input.slice(link.start, link.end), link.prefix, true), input.slice(link.start, link.end))
+      cursor = link.end
+    }
+    rawLine = captured + input.slice(cursor)
+  }
+  let line = protectCodeSpans(rawLine, writeCodeSpan)
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
   // Keep empty and multiline values in HTML where a source slot may fold them.
   let unchangedHtmlCode: Set<number> | undefined
@@ -1420,14 +1455,14 @@ function convertInline(
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
-  const writeLiteralAutolink = (body: string, hrefPrefix = '', bare = false): string => {
+  function writeLiteralAutolink(body: string, hrefPrefix = '', bare = false): string {
     for (let pass = 0; pass < protectedSpans.length; pass++) {
       const restored = body.replace(/\x00P(\d+)\x00/g, (_token, index: string) => protectedSpans[Number(index)] ?? _token)
       if (restored === body) break
       body = restored
     }
     let href = hrefPrefix + body.replace(table ? /[\\[\]`|]/g : /[\\[\]`]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())
-    if (bare) href = href.replace(/[^\x21-\x7e]|["<>`{|}]/gu, char => {
+    if (bare) href = href.replace(/[^\x21-\x7e]|["<>`^{|}]/gu, char => {
       const point = char.codePointAt(0)!
       return encodeURIComponent(point >= 0xd800 && point <= 0xdfff ? '\ufffd' : char)
     })
@@ -1604,7 +1639,8 @@ function convertInline(
     return `![${rawImageBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : escapeUnclosedImageEditorialOpeners(alt.replace(/[\\[\]`]/g, '\\$&'))}]`
   }
   const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
-    const encoded = encodeDest(dest)
+    const sourceDest = referenceSourceText(dest, protectedSources)
+    const encoded = markdownInlineDestinationEnd(sourceDest, 0) === sourceDest.length - 1 ? encodeDest(dest) : undefined
     return encoded === undefined
       ? (alt === '' ? '' : protect(alt, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
       : protect(alt + encoded, source)
@@ -1885,7 +1921,7 @@ function convertInline(
     return escaped
   }
   if (line.includes('/') && /[*_]|<(?:em|i)\b/i.test(line)) line = escapeLabelSlashes(line, true)
-  line = convertInlineHtml(line, protect, protectedSpans)
+  line = convertInlineHtml(line, protect, protectedSpans, protectedSources)
 
   const referenceUrls = plainMarkdownUrlRanges(line, protectedSpans, protectedSources)
   let referenceUrlAt = 0
@@ -1925,9 +1961,10 @@ function convertInline(
     let activeLabelAt = 0
     let cursor = 0
     let protectedUrls = ''
+    let reparseCode = false
     for (const link of markdownBareLinks(line, token => {
       const index = Number(token.slice(2, -1))
-      return isPlainMarkdownUrlToken(index, protectedSpans) ? protectedSources[index] : undefined
+      return markdownUrlTokenSource(index, protectedSpans, protectedSources)
     }, 'url')) {
       const offset = link.start
       while (activeLabelAt < activeLabelRanges.length && activeLabelRanges[activeLabelAt]!.end <= offset) activeLabelAt++
@@ -1935,10 +1972,15 @@ function convertInline(
       if (label && offset >= label.start && offset < label.end) {
         continue
       }
+      if (/\x00P\d+\x00/g.test(line.slice(offset, link.end)) && [...line.slice(offset, link.end).matchAll(/\x00P\d+\x00/g)].some(token => codeTokens.has(token[0]))) reparseCode = true
       protectedUrls += line.slice(cursor, offset) + protect(writeLiteralAutolink(link.body ?? line.slice(offset, link.end), link.prefix, true)) + (link.tail ?? '')
       cursor = link.end
     }
     line = protectedUrls + line.slice(cursor)
+    if (reparseCode) {
+      line = line.replace(/\x00P\d+\x00/g, token => codeTokens.get(token) ?? token)
+      line = protectCodeSpans(line, (span, offset) => writeCodeSpan(span, offset, false))
+    }
   }
 
   // Math, converted and protected before the emphasis passes so a formula
@@ -2305,7 +2347,7 @@ export type MarkdownImportLoss = {
  * PART 11 §10s: the carrier payloads this conversion lifted out of the source,
  * in the order their marker lines appeared.
  */
-let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean }> = []
+let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string }> = []
 
 /** The placeholder a lifted marker line stands in as, unique in the source. */
 let carrierToken = ''
@@ -2344,35 +2386,106 @@ function carrierFallbackLines(payload: string): number {
  */
 function carrierSetBalances(payloads: readonly string[]): boolean {
   const open: number[] = []
-  let prelude = false
-  let closed = false
   for (const payload of payloads) {
-    if (carrierIsCaption(payload)) {
-      // A caption line belongs to the container the marker before it closed,
-      // so one standing anywhere else records nothing.
-      if (prelude || !closed) return false
-      closed = false
+    if (/^::[ \t]/.test(payload) || payload === ':' || payload === '') continue
+    if (carrierIsCaption(payload)) continue
+    if (/^\{.*\}$/.test(payload)) {
+      if (!isValidAttrPayload(payload.slice(1, -1))) return false
       continue
     }
     const width = carrierFenceWidth(payload)
-    if (width === 0) {
-      // An attribute line belongs to the opener on the next marker.
-      prelude = true
-      closed = false
-      continue
-    }
+    if (width === 0) return false
     if (carrierIsCloser(payload)) {
-      if (prelude || open.length === 0 || open.pop() !== width) return false
-      closed = true
-      continue
+      if (open.length === 0 || open.pop() !== width) return false
+    } else {
+      if (open.length > 0 && width <= open[open.length - 1]!) return false
+      open.push(width)
     }
-    prelude = false
-    closed = false
-    if (open.length > 0 && width <= open[open.length - 1]!) return false
-    open.push(width)
   }
+  return open.length === 0
+}
 
-  return !prelude && open.length === 0
+function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, string>, hosts: ReadonlyMap<number, string>): boolean {
+  let token = 'CARVEPROBE'
+  while (lines.some(line => line.includes(token))) token += 'X'
+  const probe = lines.map((line, at) => {
+    if (!payloads.has(at)) return line
+    const host = hosts.get(at)!
+    const continuation = host.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+    const before = host === continuation ? `${continuation.trimEnd()}\n` : ''
+    return `${before}${host}${token}${at}Z\n${continuation.trimEnd()}`
+  }).join('\n')
+  const openers: Array<{ payload: string; host: string }> = []
+  let hostsValid = true
+  const captionClosers = new Set<number>()
+  for (const [at, payload] of payloads) {
+    if (carrierFenceWidth(payload) === 0) continue
+    if (carrierIsCloser(payload)) {
+      const opener = openers.pop()
+      if (opener?.host !== hosts.get(at)) hostsValid = false
+      if (/^:{3,}[ \t]+figure(?:[ \t]|$)/.test(opener?.payload ?? '')) captionClosers.add(at)
+    } else openers.push({ payload, host: hosts.get(at)!.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ') })
+  }
+  const savedLosses = importLosses
+  importLosses = []
+  let tree: Document
+  try { tree = parse(convertMarkdown(probe, COMMONMARK_GFM)) } finally { importLosses = savedLosses }
+  const found = new Set<number>()
+  let valid = true
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      const definitions: Array<{ depth: number; defined: boolean }> = []
+      let depth = 0
+      for (let i = 0; i < value.length; i++) {
+        const node = value[i] as BlockNode
+        if (node?.type === 'paragraph') {
+          const text = node.children.map(child => child.type === 'text' ? child.value : '').join('')
+          const match = new RegExp(`^${token}(\\d+)Z$`).exec(text)
+          if (match) {
+            const at = Number(match[1])
+            found.add(at)
+            const payload = payloads.get(at)!
+            if (carrierFenceWidth(payload) > 0) depth += carrierIsCloser(payload) ? -1 : 1
+            if (/^::[ \t]/.test(payload)) {
+              const last = definitions.at(-1)
+              if (!last || last.depth !== depth) definitions.push({ depth, defined: false })
+              else last.defined = false
+            } else if (payload === ':') {
+              const last = definitions.at(-1)
+              if (!last || last.depth !== depth) valid = false
+              else last.defined = true
+            } else if (payload === '') {
+              const last = definitions.pop()
+              if (!last?.defined || last.depth !== depth) valid = false
+            }
+            const next = value[i + 1] as BlockNode | undefined
+            const previous = value[i - 1] as BlockNode | undefined
+            const following = withoutCarrierHost(lines[at + 1] ?? '', hosts.get(at)!)
+            if (/^\{.*\}$/.test(payload)) {
+              const nextPayload = payloads.get(at + 1)
+              const listPrelude = nextPayload !== undefined && /^::[ \t]/.test(nextPayload) && definitions.length === 0
+              if (!following || !next || (nextPayload !== undefined && !listPrelude && (carrierFenceWidth(nextPayload) === 0 || carrierIsCloser(nextPayload)))) valid = false
+            }
+            if (carrierIsCaption(payload) || /^::[ \t]/.test(payload)) {
+              if (!following || next?.type !== 'paragraph' || payloads.has(at + 1)) valid = false
+            }
+            if (carrierIsCaption(payload)) {
+              let before = at - 1
+              while (before >= 0 && withoutCarrierHost(lines[before]!, hosts.get(at)!) === '') before--
+              const equation = /^\$\$[^$]+\$\$$/.test(carrierEquationContent(lines[before] ?? '', hosts.get(at)!))
+              const captionable = previous && (['block_quote', 'table', 'image', 'code_block'].includes(previous.type) || (previous.type === 'paragraph' && equation))
+              if (!captionable && !captionClosers.has(before)) valid = false
+            }
+          }
+        }
+        visit(value[i])
+      }
+      if (definitions.length > 0) valid = false
+    } else for (const child of Object.values(value)) visit(child)
+  }
+  visit(tree.children)
+  return valid && hostsValid && found.size === payloads.size
 }
 
 /**
@@ -2406,7 +2519,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     }
   }
   if (payloads.size === 0) return markdown
-  if (!carrierSetBalances([...payloads.values()])) {
+  if (!carrierSetBalances([...payloads.values()]) || !carrierPlacementsValid(lines, payloads, hosts)) {
     importLosses.push({
       code: 'carrier-markers-damaged',
       message: CARRIER_MARKERS_DAMAGED,
@@ -2449,9 +2562,19 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     host = hosts.get(at)!
     // The placeholder keeps the host prefix, so a marker inside a list item or
     // a block quote stays in that host when the lifted source is read.
+    const continuation = host.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+    const replaces = carrierIsCaption(payload) || /^::[ \t]/.test(payload)
+    const fallback = withoutCarrierHost(lines[at + 1] ?? '', host)
+    const afterFallback = withoutCarrierHost(lines[at + 2] ?? '', host)
+    const droppedBold = replaces && /^\*\*.+\*\*$/.test(fallback) && (afterFallback === '' || payloads.has(at + 2))
+    if (!droppedBold && carrierIsCaption(payload) && at > 0 && withoutCarrierHost(lines[at - 1]!, host) !== '' && !payloads.has(at - 1)) out.push(continuation.trimEnd())
+    if (host === continuation) out.push(continuation.trimEnd())
     out.push(`${host}${token}${carrierSlots.length}Z`)
-    carrierSlots.push({ payload, closer: carrierIsCloser(payload), caption: carrierIsCaption(payload) })
-    drop = carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
+    out.push(continuation.trimEnd())
+    const equationLine = carrierEquationContent(lines[at - 1] ?? '', host)
+    const equation = carrierIsCaption(payload) && /^\$\$[^$]+\$\$$/.test(equationLine) ? equationLine : undefined
+    carrierSlots.push({ payload, closer: carrierIsCloser(payload) || payload === '', caption: carrierIsCaption(payload), replaceParagraph: replaces && !droppedBold, ...(equation !== undefined ? { equation } : {}) })
+    drop = droppedBold ? 1 : carrierIsCaption(payload) || carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
   }
 
   return out.join('\n')
@@ -2478,6 +2601,10 @@ function withoutCarrierHost(line: string, host: string): string {
   return line.replace(/^[ \t>]+/, '')
 }
 
+function carrierEquationContent(line: string, host: string): string {
+  return withoutCarrierHost(line, host).replace(/^(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/, '')
+}
+
 /**
  * Give every restored marker line the blank lines the canonical writer puts
  * around it: a container's opener and closer hug its body, and what follows a
@@ -2494,6 +2621,27 @@ function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
     while (before >= 0 && blank(items[before]!)) before--
     const above = before >= 0 ? items[before]!.kind : undefined
     const below = end < items.length ? items[end]!.kind : undefined
+    // Placeholder separators at a host's edges do not separate its blocks.
+    // Keep the final empty line for the newline, and one separator when the
+    // next block remains in the same host.
+    const openingHost = below === 'open' ? items[end]!.lead.trimEnd() : undefined
+    if (openingHost !== undefined && (before < 0 || (
+      openingHost.includes('>') && !items[before]!.lead.trimEnd().startsWith(openingHost)
+      && items.slice(at, end).every(item => item.lead.trimEnd() === openingHost)
+    ))) {
+      for (let dropAt = at; dropAt < end; dropAt++) hugged.add(dropAt)
+    }
+    if (above === 'close' || above === 'caption') {
+      const closingHost = items[before]!.lead
+      const leavesHost = end === items.length || (
+        !items[end]!.lead.startsWith(closingHost)
+      )
+      const dropStart = leavesHost ? at : at + 1
+      const dropEnd = end === items.length ? end - 1 : end
+      for (let dropAt = dropStart; dropAt < dropEnd; dropAt++) {
+        hugged.add(dropAt)
+      }
+    }
     // A blank above a closer and one below an opener are both inside the
     // container, where the canonical writer puts none. A caption line hugs the
     // closer above it the same way, because its slot hangs on that fence.
@@ -2504,7 +2652,7 @@ function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
     // to a marker standing at column 0 belongs to a block quote of its own.
     if (marker !== undefined) {
       for (let dropAt = at; dropAt < end; dropAt++) {
-        if (items[dropAt]!.lead.trimEnd() !== marker.lead.trimEnd()) {
+        if (items[dropAt]!.lead.trimEnd() !== marker.lead.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ').trimEnd()) {
           marker = undefined
           break
         }
@@ -2572,6 +2720,50 @@ function anchorCarrierClosers(items: CarrierLine[]): CarrierLine[] {
   return items
 }
 
+function restoreDefinitionBodies(items: CarrierLine[]): CarrierLine[] {
+  const lists: Array<{ lead: string; active: boolean; first: boolean }> = []
+  const out: CarrierLine[] = []
+  for (const item of items) {
+    const term = item.kind === 'open' && /^::[ \t]/.test(item.text)
+    const definition = item.kind === 'open' && item.text === ':'
+    const closing = item.kind === 'close' && item.text === ''
+    const last = lists.at(-1)
+    const normalizedLead = item.lead.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+    if ((term || definition || closing) && last?.first && last.lead === normalizedLead) {
+      out.push({ lead: last.lead, text: ': {empty}', kind: 'open' })
+      last.first = false
+    }
+    if (term) {
+      if (last?.lead === normalizedLead) { last.active = false; last.first = false }
+      else lists.push({ lead: normalizedLead, active: false, first: false })
+    } else if (definition && last) {
+      last.active = true
+      last.first = true
+      continue
+    } else if (closing) {
+      lists.pop()
+      // The list closer carries no Carve text; its surrounding separator is
+      // already retained by separateCarrierLines.
+      continue
+    }
+    const active = lists.filter(list => list.active)
+    const current = active.at(-1)
+    if (current?.first && item.text === '') continue
+    if (item.text === '' && item.lead.trim() === '') {
+      out.push(item)
+      continue
+    }
+    let lead = item.lead
+    for (const list of [...active].reverse()) {
+      const insertion = list.first ? ': ' : '  '
+      lead = lead.slice(0, list.lead.length) + insertion + lead.slice(list.lead.length)
+      if (item.text !== '') list.first = false
+    }
+    out.push({ ...item, lead })
+  }
+  return out
+}
+
 /** Write every lifted payload back as the Carve line it is. */
 function restoreCarrierMarkers(carve: string): string {
   if (carrierSlots.length === 0) return carve
@@ -2584,7 +2776,46 @@ function restoreCarrierMarkers(carve: string): string {
   // `-`, and leaving the token in the output would be corruption rather than a
   // missed restore. It is taken off the CARVE line, because the Markdown host
   // the placeholder was lifted from spells its prefix differently.
-  const items: CarrierLine[] = carve.split('\n').map((line) => {
+  const sourceLines = carve.split('\n')
+  const removed = new Set<number>()
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (let at = 0; at < value.length; at++) {
+        const node = value[at] as BlockNode
+        if (node?.type === 'paragraph') {
+          const text = node.children.map(child => child.type === 'text' ? child.value : '').join('')
+          const slots = [...text.matchAll(new RegExp(`${carrierToken}(\\d+)Z`, 'g'))].map(match => carrierSlots[Number(match[1])])
+          const equation = slots.find(slot => slot?.equation !== undefined)?.equation
+          const previous = value[at - 1] as BlockNode | undefined
+          if (equation !== undefined && previous?.type === 'paragraph' && previous.pos) {
+            const savedLosses = importLosses
+            importLosses = []
+            let restored: string
+            try { restored = convertMarkdown(equation, { math: true }).replace(/\n+$/, '') } finally { importLosses = savedLosses }
+            for (let line = previous.pos.startLine - 1; line < previous.pos.endLine; line++) {
+              const source = sourceLines[line]!
+              if (!source.includes(carrierToken) && /\$\$[^$]+\$\$/.test(source)) {
+                sourceLines[line] = source.replace(/\$\$[^$]+\$\$/, () => restored)
+                break
+              }
+            }
+          }
+          if (slots.some(slot => slot?.replaceParagraph)) {
+            const paragraph = value[at + 1] as BlockNode | undefined
+            if (paragraph?.type === 'paragraph' && paragraph.pos) {
+              for (let line = (node.pos?.endLine ?? paragraph.pos.startLine) + 1; line <= paragraph.pos.endLine; line++) removed.add(line - 1)
+              const after = paragraph.pos.endLine
+              if (after < sourceLines.length - 1 && /^[ \t>]*$/.test(sourceLines[after]!)) removed.add(after)
+            }
+          }
+        }
+        visit(value[at])
+      }
+    } else for (const child of Object.values(value)) visit(child)
+  }
+  visit(parse(carve).children)
+  const items: CarrierLine[] = sourceLines.filter((_line, at) => !removed.has(at)).map((line) => {
     const at = line.indexOf(carrierToken)
     const match = at === -1 ? null : pattern.exec(line.slice(at).trimEnd())
     if (match === null) {
@@ -2597,7 +2828,7 @@ function restoreCarrierMarkers(carve: string): string {
     return { lead: line.slice(0, at), text: slot.payload, kind }
   })
 
-  return separateCarrierLines(anchorCarrierClosers(items)).map((item) => item.lead + item.text).join('\n')
+  return restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items))).map((item) => item.lead + item.text).join('\n')
 }
 
 let importLosses: MarkdownImportLoss[] = []
@@ -6547,13 +6778,17 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   return output
 }
 
-function isPlainMarkdownUrlToken(index: number, spans: readonly string[]): boolean {
-  return /^\\[!-/:-@\[-`{-~]$/.test(spans[index] ?? '')
+function markdownUrlTokenSource(index: number, spans: readonly string[], sources: readonly string[]): string | { source: string; opaque: boolean } | undefined {
+  const span = spans[index] ?? ''
+  const source = sources[index] ?? span
+  if (/^\\[!-/:-@\[-`{-~]$/.test(span) || span === '\\') return source
+  if (/^!?`/.test(span) || span.startsWith('(') || span.startsWith('![') || span.startsWith('[')) return { source, opaque: true }
+  return undefined
 }
 
 function plainMarkdownUrlRanges(line: string, spans: readonly string[], sources: readonly string[]): { start: number; end: number }[] {
   return markdownBareLinks(line, token => {
     const index = Number(token.slice(2, -1))
-    return isPlainMarkdownUrlToken(index, spans) ? sources[index] : undefined
+    return markdownUrlTokenSource(index, spans, sources)
   }, 'url')
 }

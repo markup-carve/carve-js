@@ -27,11 +27,12 @@ export function unescapeCarrierPayload(payload: string): string {
 
 /** Write a payload into a marker line. */
 export function carrierLine(payload: string): string {
-  return `${CARRIER_PREFIX}${escapeCarrierPayload(payload)}${CARRIER_SUFFIX}`
+  return payload === '' ? '<!-- carve: -->' : `${CARRIER_PREFIX}${escapeCarrierPayload(payload)}${CARRIER_SUFFIX}`
 }
 
 /** The payload a marker line carries, or undefined when the line is not one. */
 export function carrierPayload(line: string): string | undefined {
+  if (line === '<!-- carve: -->') return ''
   if (!line.startsWith(CARRIER_PREFIX) || !line.endsWith(CARRIER_SUFFIX)) return undefined
   const inner = line.slice(CARRIER_PREFIX.length, line.length - CARRIER_SUFFIX.length)
   // An unescaped `-->` inside would have ended the comment at that point, so
@@ -82,6 +83,11 @@ export function spellCarrierMarkers(
   node: BlockNode,
   depth: number,
 ): { prelude: string[]; opener: string; closer: string; postlude: string[] } | undefined {
+  if (node.type === 'div' && node.attrs?.classes?.includes('hardbreaks')) {
+    const attrs = { ...node.attrs, classes: node.attrs.classes.filter(name => name !== 'hardbreaks') }
+    const prelude = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [], attrs }] }).split('\n').filter(line => line.startsWith('{'))
+    return { prelude, opener: `${':'.repeat(3 + depth)} \\`, closer: ':'.repeat(3 + depth), postlude: [] }
+  }
   const bodyless = { ...node, children: [] } as BlockNode
   const document: Document = { type: 'document', children: [bodyless] }
   let lines: string[]
