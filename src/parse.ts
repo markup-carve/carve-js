@@ -12448,6 +12448,9 @@ class ParseSession {
       let descendantOpaque: DescendantOpaque | null = null
       let closedDescendantFence = false
       let descendantNoteBody = false
+      // A later fence in the same nested note body is its code as well.
+      let noteBodyHeldCode = false
+      let openedLaterNoteFence = false
       let descendantNoteParagraphBefore = false
       let nestedNoteBodyColumn: number | undefined
       let consumedNoteCloserBodyColumn: number | undefined
@@ -12604,8 +12607,11 @@ class ParseSession {
         // inline verbatim span inside that paragraph, which stays open - so a
         // below-column line still folds there and nothing ends.
         if (followsBlank || !lazyState.lazyFoldable || closerAhead) {
-          descendantNoteBody = lazyState.lazyFoldable && !followsBlank && nestedNoteBodyColumn !== undefined && sourceBase === nestedNoteBodyColumn &&
-            !lazyState.ownedAuthored && lazyState.ownedColumn > base
+          const laterNoteFence = noteBodyHeldCode && nestedNoteBodyColumn !== undefined && sourceBase === nestedNoteBodyColumn
+          descendantNoteBody = laterNoteFence || (nestedNoteBodyColumn !== undefined && sourceBase === nestedNoteBodyColumn &&
+            lazyState.lazyFoldable && !followsBlank && !lazyState.ownedAuthored && lazyState.ownedColumn > base)
+          openedLaterNoteFence = laterNoteFence
+          if (descendantNoteBody) noteBodyHeldCode = true
           descendantNoteParagraphBefore = lazyState.lazyFoldable
           descendantOpaque = { close: fenceCloseRe(marker), base }
         }
@@ -12731,7 +12737,10 @@ class ParseSession {
           if (!isBlankLine(l) && indentColumns(l, consumedNoteCloserBodyColumn) >= consumedNoteCloserBodyColumn) lazyState.lazyFoldable = consumedNoteParagraphBefore
           consumedNoteCloserBodyColumn = undefined
         }
-        if (nestedNoteBodyColumn !== undefined && !isBlankLine(l) && indentColumns(l, nestedNoteBodyColumn) < nestedNoteBodyColumn) nestedNoteBodyColumn = undefined
+        if (nestedNoteBodyColumn !== undefined && !isBlankLine(l) && indentColumns(l, nestedNoteBodyColumn) < nestedNoteBodyColumn) {
+          nestedNoteBodyColumn = undefined
+          noteBodyHeldCode = false
+        }
         if (isBlankLine(l)) {
           pendingBlanks++
           pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -13040,8 +13049,10 @@ class ParseSession {
             lazyState.inDefList === false && RE_DEFLIST_DEF.test(trackedContent)
           // The note's CODE closer was consumed by its descendant frame.
           // Reading it again would invent a paragraph in the item.
-          const skipConsumedCloser = closedDescendantFence
+          // The descendant frame holds this fence, so the item must not open it too.
+          const skipConsumedCloser = closedDescendantFence || openedLaterNoteFence
           closedDescendantFence = false
+          openedLaterNoteFence = false
           if (!skipConsumedCloser) trackItemLazyState(
             trackedContent,
             lazyState,
