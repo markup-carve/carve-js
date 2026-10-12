@@ -7505,6 +7505,10 @@ function rebaseOverindentedBlocks(
           let k = j + 1
           while (k < lines.length && isBlankLine(lines[k]!)) k++
           if (k >= lines.length || indentColumns(lines[k]!, runColumn) < runColumn) break
+          // Past an unmarked blank only a marked line or the quote's caption
+          // is still the quote's.
+          if (quoted !== null && !RE_BLOCKQUOTE.test(lines[k]!.replace(/^[ \t]+/, '')) &&
+              !RE_CAPTION.test(sliceColumns(lines[k]!, base, true))) break
           end = j
           continue
         }
@@ -7518,6 +7522,9 @@ function rebaseOverindentedBlocks(
           const marked = RE_BLOCKQUOTE.exec(local.replace(/^[ \t]+/, ''))
           if (marked) trackBlockQuoteLazyState(marked[1] ?? '', quoted, () => true, () => true)
           else if (!blockQuoteParagraphOpen(quoted)) break
+          // An unmarked opener at the run's own column interrupts the quote
+          // and is a rebase group of its own, with its own payload and closer.
+          else if (leadingWhitespace(local) === 0 && (lineOpensItemBlock(local) || RE_CAPTION.test(local))) break
           else trackBlockQuoteLazyState(local, quoted, () => true, () => true, undefined, undefined, false)
         }
         end = j
