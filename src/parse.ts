@@ -13550,7 +13550,7 @@ class ParseSession {
       // Parent separators do not belong to fences on child marker lines.
       if (pendingBlanks > 0 && (
         lazyState.opaque !== null || authoredCodeFenceOpen || descendantOpaque !== null ||
-        ((firstBlockIdx >= 0 || leadIsMarker) && trailingDescendantFence)
+        (trailingDescendantFence && (firstBlockIdx >= 0 || leadIsMarker || RE_DEFLIST_TERM.test(content)))
       )) {
         hasBlank = true
         for (let k = 0; k < pendingBlanks; k++) {
