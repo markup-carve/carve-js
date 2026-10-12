@@ -1,3 +1,4 @@
+import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
@@ -76,7 +77,7 @@ export function djotImportLosses(
     const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(content)
     const previous = lines[n - 1] ?? ''
     const previousContent = previous.slice(contentStart(previous)).trim()
-    const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(line.slice(0, at))
+    const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(djotItemPrefix(line, at))
     const boundary =
       previousContent === '' ||
       rows[n - 1] ||
@@ -85,7 +86,7 @@ export function djotImportLosses(
       /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\{|\[[^\]]+\]:)/.test(previousContent) ||
       /^(?:[*-][ \t]*){3,}$/.test(previousContent) ||
       (contentStart(previous) > at &&
-        /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(previous.slice(0, contentStart(previous))))
+        /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(djotItemPrefix(previous, contentStart(previous))))
     if (definition && contentMask.startsWith('[') && boundary) {
       let destination = definition[2]!
       for (
@@ -112,7 +113,7 @@ export function djotImportLosses(
         const prefix = following.slice(0, contentStart(following))
         if (
           (prefix.match(/>/g) ?? []).length !== (line.slice(0, at).match(/>/g) ?? []).length ||
-          /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(prefix)
+          /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(djotItemPrefix(following, contentStart(following)))
         )
           break
         const part = following.slice(contentStart(following))

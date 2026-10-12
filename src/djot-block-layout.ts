@@ -30,7 +30,7 @@ function compactDjotListPrefix(text: string): string {
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
 export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%'): string {
   const lines = source.split('\n')
-  const maskedSource = maskDjotCodeAndDestinations(source)
+  const maskedSource = maskDjotCodeAndDestinations(source, false)
   const hasDefinitionSyntax = /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(maskedSource)
   const mask = maskedSource.split('\n')
   const divClosers = new Map<number, number[]>()
@@ -184,6 +184,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         continue
       }
     } else if (noteOwner) delete noteOwner.fenceColumn
+    if (/^\[(?!\^)[^\]\n]*\]:/.test(text) && out.at(-1)?.includes(emptyNote)) out.push(quoteForCarve() + ' '.repeat(Math.max(0, indent)))
     if (opaqueQuoteOwner && text && (quoteDepth < opaqueQuoteOwner.depth || (quoteDepth === opaqueQuoteOwner.depth ? indent : quoteColumns[opaqueQuoteOwner.depth] ?? 0) < opaqueQuoteOwner.column + 1)) opaqueQuoteOwner = undefined
     const embeddedParent = lists.at(-1)
     if (text && fences[n] === original && embeddedOwners.length && embeddedParent && quoteDepth > embeddedParent.depth && ownerColumn(embeddedParent) <= embeddedParent.column) {

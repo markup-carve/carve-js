@@ -1,3 +1,4 @@
+import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 import { attributeContext, continuesParagraph, resetParagraphContext } from './djot-attributes.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
@@ -264,6 +265,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   const item = String.raw`(?:[.#][A-Za-z0-9_:-]+|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
   const pattern = new RegExp(String.raw`\{[ \t]*${item}(?:[ \t]+${item})*[ \t]*\}`, 'g')
   const lines = source.split('\n')
+  const tableRows = source.includes('|') ? djotTableRows(source, masked.join('\n')) : []
   const dangling = new Set<number>()
   const wholeAttribute = new RegExp(`^(?:${pattern.source})$`)
   let followsBlank = true, nextDepth: number | undefined
@@ -286,6 +288,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   const quoteScopeChanges = new Uint8Array(lines.length)
   const targetPrefixes: string[] = []
   let previousDepth = 0, previousNonblankDepth = 0
+  const blockOwners: Array<{ start: number; depth: number }> = []
   for (let index = 0; index < lines.length; index++) {
     const prefix = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(lines[index]!)![0]
     const body = lines[index]!.slice(prefix.length).trimEnd()
@@ -298,15 +301,29 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
     if (opens) for (let count = 0; count <= previousDepth; count++) marker = prefix.indexOf('>', marker + 1)
     targetPrefixes[index] = opens ? prefix.slice(0, marker) : prefix
     previousDepth = depth
-    if (masked[index]![prefix.length] !== '{' || !wholeAttribute.test(body)) continue
     const previousLine = lines[index - 1] ?? ''
     const previous = previousLine.replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
+    const blockOwner = blockOwners.at(-1)
+    const ownerOutdent = blockOwner !== undefined && (depth < blockOwner.depth || depth === blockOwner.depth && prefix.length < blockOwner.start)
+    const canOpenOwner = index === 0 || previous === '' || ownerOutdent || blockAttributes[index - 1] === 1
+    const rowEnd = lines[index]!.trimEnd().length - 1
+    const exitsAtRow = ownerOutdent && body.startsWith('|') && rowEnd > prefix.length && masked[index]![prefix.length] === '|' && masked[index]![rowEnd] === '|' && lines[index]![rowEnd - 1] !== '\\'
+    const closesOwner = exitsAtRow || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[-*][ \t]*){3,}$)/.test(body) && masked[index]![prefix.length] !== ' ' || tableRows[index] || /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(body)
+    if (previous === '' || wholeAttribute.test(body) || closesOwner || ownerOutdent && tableRows[index - 1]) {
+      while (blockOwners.at(-1) && (depth < blockOwners.at(-1)!.depth || depth === blockOwners.at(-1)!.depth && prefix.length < blockOwners.at(-1)!.start)) blockOwners.pop()
+    }
+    const contentStart = djotContentStart(lines[index]!)
+    const ownerPrefix = lines[index]!.slice(0, contentStart)
+    const ownerNote = ownerPrefix.indexOf('[^')
+    const ownerMarker = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.exec(ownerNote < 0 ? ownerPrefix : ownerPrefix.slice(0, ownerNote))
+    if (canOpenOwner && ownerMarker && masked[index]![ownerMarker.index] !== ' ' && (blockOwners.at(-1)?.start !== ownerMarker.index + 1 || blockOwners.at(-1)?.depth !== depth)) blockOwners.push({ start: ownerMarker.index + 1, depth })
+    if (masked[index]![prefix.length] !== '{' || !wholeAttribute.test(body)) continue
     const previousStart = djotContentStart(previousLine)
     const noteAt = previousLine.slice(0, previousStart).indexOf('[^')
     const ownerStart = noteAt < 0 ? previousStart : noteAt + 1
     const previousQuotes = /^(?:(?:[ \t]*>)+[ \t]*)?/.exec(previousLine)![0]
     const outdented = depth < (previousQuotes.match(/>/g) ?? []).length || prefix.length < ownerStart && (noteAt >= 0 || /(?:[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(previousLine.slice(0, previousStart)))
-    blockAttributes[index] = Number(index === 0 || previous === '' || outdented || blockAttributes[index - 1] === 1 ||
+    blockAttributes[index] = Number(index === 0 || previous === '' || outdented || ownerOutdent || blockAttributes[index - 1] === 1 ||
       /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[(?!\^)[^\]]+\]:|\[\^[^\]]+\]:[ \t]*$)/.test(previous))
   }
   let following = -1
@@ -642,11 +659,9 @@ function convertDjotDocument(djot: string): string {
   const noteSourceWidths = new Map<string, number>()
   const normalizedBody = normalizeDjotFootnotes(
     djotReferenceLayout(
-      foldDjotReferences(
-        djotCodePadding(normalizeDjotFences(
-          normalizeDjotAttributeLines(djotInlineLayout(normalizeDjotAttributeLines(invalidAttributes.source))),
-        )),
-      ),
+      djotCodePadding(normalizeDjotFences(foldDjotReferences(
+        normalizeDjotAttributeLines(djotInlineLayout(normalizeDjotAttributeLines(invalidAttributes.source))),
+      ))),
       djotContentStart,
     ),
     strippedDefinitions.isBoundary,
@@ -960,6 +975,8 @@ function foldDjotReferences(source: string): string {
   const rows = djotTableRows(source, mask)
   const removed = new Set<number>()
   let offset = 0, previous = '', previousDepth = 0, previousAttributeBlock = false
+  const definitionOwners: Array<{ start: number; depth: number }> = []
+  let fenceMask: string | undefined
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n]!,
       [depth] = quoted(line),
@@ -969,9 +986,30 @@ function foldDjotReferences(source: string): string {
     const previousLine = lines[n - 1] ?? '', previousAt = djotContentStart(previousLine)
     const previousNote = previousLine.slice(0, previousAt).indexOf('[^')
     const previousOwner = previousNote < 0 ? previousAt : previousNote + 1
-    const outdented = at < previousOwner && (previousNote >= 0 || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousLine.slice(0, previousAt)))
+    const prefix = line.slice(0, at)
+    const noteAt = prefix.indexOf('[^')
+    const ownerMarker = noteAt < 0 ? /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.exec(prefix) : null
+    const physicalPrefix = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(line)![0]
+    const definitionOwner = definitionOwners.at(-1)
+    const ownerExit = definitionOwner !== undefined && (depth < definitionOwner.depth || depth === definitionOwner.depth && physicalPrefix.length < definitionOwner.start)
+    const metadata = definition !== null || content.startsWith('{') && readAttributes(content, 0)?.end === content.trimEnd().length
+    if (ownerExit && metadata && mask[offset + at] === ' ') fenceMask ??= maskDjotFences(source, undefined, rows, true)
+    const metadataExit = ownerExit && metadata && (mask[offset + at] !== ' ' || fenceMask?.[offset + at] !== ' ')
+    const outdented = metadataExit || at < previousOwner && (previousNote >= 0 || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(previousLine.slice(0, previousAt)))
     const boundary: boolean = previous === '' || previousAttributeBlock || rows[n - 1] || depth !== previousDepth || /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*][ \t]*){3,}$/.test(previousLine) || outdented || /^(?:#{1,6} |:{3,}|[`~]{3,}|\[[^\]]*\]:|(?:[-*][ \t]*){3,}$)/.test(previous)
-    const marker = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
+    const marker = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(noteAt < 0 ? prefix : prefix.slice(0, noteAt))
+    const rowEnd = line.trimEnd().length - 1
+    const boundaryRow = (ownerExit || rows[n - 1]) && line[physicalPrefix.length] === '|' && rowEnd > physicalPrefix.length && mask[offset + physicalPrefix.length] === '|' && mask[offset + rowEnd] === '|' && line[rowEnd - 1] !== '\\'
+    const rowEntry = boundaryRow && ownerExit && !rows[n]
+    if (boundaryRow) rows[n] = true
+    const closesOwner = boundaryRow || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[-*][ \t]*){3,}$)/.test(line.slice(physicalPrefix.length)) && mask[offset + physicalPrefix.length] !== ' ' || rows[n] || /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(line.slice(physicalPrefix.length))
+    if (ownerExit && (metadataExit || previous === '' || closesOwner || rows[n - 1])) while (definitionOwners.at(-1) && (depth < definitionOwners.at(-1)!.depth || depth === definitionOwners.at(-1)!.depth && physicalPrefix.length < definitionOwners.at(-1)!.start)) definitionOwners.pop()
+    if (boundary && (noteAt >= 0 || ownerMarker !== null)) {
+      const start = noteAt >= 0 ? noteAt : ownerMarker!.index
+      if (mask[offset + start] !== ' ' && (definitionOwners.at(-1)?.start !== start + 1 || definitionOwners.at(-1)?.depth !== depth)) definitionOwners.push({ start: start + 1, depth })
+    }
+    const separator = (metadataExit && !marker || rowEntry || definition !== null && rows[n - 1] && !marker && (ownerExit || definitionOwner === undefined)) && previous !== '' ? physicalPrefix + '\n' : ''
+    if (separator) lines[n] = separator + line
     if (definition && mask[offset + at] === '[' && (boundary || marker)) {
       let target = definition[2] ?? '',
         end = n
@@ -984,7 +1022,7 @@ function foldDjotReferences(source: string): string {
         end++
       }
       if (end > n) {
-        lines[n] = line.slice(0, at) + `[${definition[1]}]: ${target}`
+        lines[n] = separator + line.slice(0, at) + `[${definition[1]}]: ${target}`
         for (let k = n + 1; k <= end; k++) {
           offset += lines[k]!.length + 1
           removed.add(k)
@@ -1517,7 +1555,7 @@ function renameDjotPipeFootnotes(source: string): string {
     const at = djotContentStart(line),
       end = line.trimEnd().length - 1
     const content = line.slice(at)
-    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
+    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(djotItemPrefix(line, at))
     const row: boolean =
       (previousBlock || previousRow || opensItem) &&
       line[at] === '|' &&
@@ -2044,7 +2082,7 @@ function normalizeDjotTablePipes(source: string): string {
       previousAt = djotContentStart(previousLine)
     const previous = previousLine.slice(previousAt).trim()
     const quoteDepth = (value: string) => value.split('>').length - 1
-    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
+    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(djotItemPrefix(line, at))
     const previousAttrs = previous.startsWith('{') ? readAttributes(previous, 0) : undefined
     if (
       previous !== '' &&

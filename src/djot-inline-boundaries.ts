@@ -22,12 +22,17 @@ export function djotContentStart(line: string): number {
     return at
   }
 
+export function djotItemPrefix(line: string, at: number): string {
+  return line.slice(0, at).replace(/\[\^[^\]\n]+\]:[ \t]*/g, '')
+}
+
 export function djotTableRows(source: string, mask: string): boolean[] {
   let offset = 0, previousRow = false, previousBlock = true, footnoteColumn = -1, noteContainerColumn = -1, noteContainerDepth = 0, noteItemColumn = -1, noteItemDepth = 0, noteItemPrefix = 0
   let inlineNote: { depth: number; column: number } | undefined
   return source.split('\n').map(line => {
     const at = djotContentStart(line), end = line.trimEnd().length - 1, content = line.slice(at)
-    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
+    const prefix = line.slice(0, at), noteAt = prefix.indexOf('[^')
+    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(noteAt < 0 ? prefix : prefix.slice(0, noteAt))
     const closesNote = footnoteColumn >= 0 && at < footnoteColumn
     if (closesNote) { footnoteColumn = -1; noteContainerColumn = -1 }
     const physicalDepth = (/^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0].match(/>/g) ?? []).length
@@ -40,7 +45,6 @@ export function djotTableRows(source: string, mask: string): boolean[] {
     const closesInlineNote = inlineNote && content.trim() !== '' && (physicalDepth < inlineNote.depth || physicalDepth === inlineNote.depth && /^[ \t]*/.exec(line.slice(physicalPrefix.length))![0].length <= inlineNote.column)
     if (closesInlineNote) inlineNote = undefined
     const allowed = previousBlock || previousRow || opensItem || closesNote || closesContainer || closesNoteItem || !!closesInlineNote
-    const noteAt = line.slice(0, at).indexOf('[^')
     const noteHead = noteAt >= 0 && mask[offset + noteAt] === '[' ? /^\[\^[^\]\n]+\]:/.exec(line.slice(noteAt)) : null
     const note = noteHead ? line.slice(0, noteAt + noteHead[0].length) : undefined
     if (note !== undefined && allowed) {
