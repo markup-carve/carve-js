@@ -5897,7 +5897,7 @@ function trackItemLazyState(
         return
       }
       if (facts?.descendantFrames === true && !wasDescendantColumn) {
-        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: run! }
+        state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: indentColumns(content) }
         state.lazyFoldable = false
         state.inDefList = false
         return
@@ -7019,8 +7019,9 @@ function rebasedCodeFenceEnd(
     if (isBlankLine(candidate)) continue
     const source = sourceLines?.[j]
     if (authoredBase !== undefined && source !== undefined &&
-        indentColumns(source) === authoredBase && close.test(candidate.trimStart())) {
-      lines[j] = ' '.repeat(base) + candidate.trimStart()
+        indentColumns(source) === authoredBase && !takenBelowColumn?.has(j) &&
+        close.test(candidate.slice(leadingWhitespace(candidate)))) {
+      lines[j] = ' '.repeat(base) + candidate.slice(leadingWhitespace(candidate))
       closed = true
       break
     }
@@ -7184,6 +7185,7 @@ function rebaseOverindentedBlocks(
   takenBelowColumn?: ReadonlySet<number>,
   markerColonOwnsExtent = false,
   sourceLines?: readonly (string | undefined)[],
+  tabFenceLines?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7366,7 +7368,7 @@ function rebaseOverindentedBlocks(
     const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
     const comment = code ? undefined : commentFenceRun(opener)
     const colon = code || comment !== undefined ? null : colonBlockOpenerRun(opener)
-    const source = code ? sourceLines?.[i] : undefined
+    const source = code && tabFenceLines?.has(i) ? sourceLines?.[i] : undefined
     const sourceCodeBase = source !== undefined && source.slice(0, leadingWhitespace(source)).includes('\t')
       ? indentColumns(source) : undefined
 
@@ -7507,9 +7509,10 @@ function rebaseOverindentedBlocks(
       for (let j = i; j <= end; j++) {
         // A payload line below the base keeps the residue the collector left it.
         const sourceLine = sourceCodeBase === undefined ? undefined : sourceLines?.[j]
-        if (sourceLine !== undefined && indentColumns(sourceLine, sourceCodeBase!) >= sourceCodeBase! &&
-            !heldFoldedLines.has(j)) {
-          lines[j] = sliceColumns(sourceLine, sourceCodeBase!, true)
+        if (sourceLine !== undefined) {
+          if (indentColumns(sourceLine, sourceCodeBase!) >= sourceCodeBase! && !heldFoldedLines.has(j)) {
+            lines[j] = sliceColumns(sourceLine, sourceCodeBase!, true)
+          }
         } else if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
           lines[j] = sliceColumns(lines[j]!, base, true)
         }
@@ -12335,17 +12338,17 @@ class ParseSession {
       const nestedLineNumbers: number[] = []
       // Collection can later rebase or frame a line; consumers check its text before reuse.
       const nestedOrigins = new Map<number, StrippedLineOrigin>()
-      let tabLineFacts: Map<string, ItemLineFacts> | undefined
-      const lineFacts = (text: string, origin?: StrippedLineOrigin): ItemLineFacts | undefined => {
-        const tabFacts = tabLineFacts?.get(text)
-        if (tabFacts !== undefined) return tabFacts
-        if (!origin || origin.text !== text) return undefined
-        const remaining = lexer.lineLeadingWhitespace(origin.parentIndex) - origin.prefix
-        return {
+      let tabLineFacts: Map<number, { text: string; facts: ItemLineFacts }> | undefined
+      const lineFacts = (text: string, origin?: StrippedLineOrigin, index?: number): ItemLineFacts | undefined => {
+        const remaining = origin && origin.text === text
+          ? lexer.lineLeadingWhitespace(origin.parentIndex) - origin.prefix : -1
+        const inherited: ItemLineFacts | undefined = origin && origin.text === text ? {
           terminatorFree: lexer.lineTerminatorFree(origin.parentIndex),
           whitespace: remaining >= 0 ? remaining : undefined,
           prefixMemo: this.markerPrefixMemo(lexer, origin.parentIndex),
-        }
+        } : undefined
+        const tab = index === undefined ? undefined : tabLineFacts?.get(index)
+        return tab?.text === text ? { ...inherited, ...tab.facts } : inherited
       }
       const itemFrameFacts = (facts: ItemLineFacts | undefined): ItemLineFacts | undefined =>
         facts === undefined ? undefined : { ...facts, descendantFrames: true }
@@ -12883,11 +12886,11 @@ class ParseSession {
               opensCodeFence(opener)
             if (mayOpenFence && l.slice(0, lexer.lineLeadingWhitespace(lexer.pos)).includes('\t')) {
               const facts = tabLineFacts ??= new Map()
-              facts.set(dedented, {
+              facts.set(nested.length - 1, { text: dedented, facts: {
                 terminatorFree: lexer.lineTerminatorFree(lexer.pos),
                 whitespace: leadingWhitespace(dedented),
                 fenceColumns: indentColumns(l) - contentCol,
-              })
+              } })
             }
             ownerPending.push({
               line: dedented,
@@ -12956,7 +12959,7 @@ class ParseSession {
             // in the descendant's own frame (carve#2884). The flag rides on the
             // facts, and the arm needs the measured run anyway, so a line with
             // no facts opts in to nothing.
-            itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
+            itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1), nested.length - 1)),
             (width, extra = 0) => {
               const closes = literalCommentHasCloser(lexer, width, fenceLineIndex, -1, contentCol + extra)
               const owner = lazyState.literalColon?.sourceLine
@@ -13243,7 +13246,7 @@ class ParseSession {
         const commentClosers = new Map<number, number>()
         for (let index = 0; index < nested.length; index++) {
           const line = nested[index]!
-          const facts = lineFacts(line, nestedOrigins.get(index))
+          const facts = lineFacts(line, nestedOrigins.get(index), index)
           const text = line.slice(facts?.whitespace ?? 0).trimStart()
           const run = commentFenceRun(markerLineBottomBlock(text, facts?.prefixMemo))
           commentRuns.push(run)
@@ -13294,7 +13297,7 @@ class ParseSession {
             continue
           }
           if (markerFence === null && isListMarkerLine(bodyLine)) {
-            const frame = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex))?.prefixMemo)
+            const frame = markerFenceAt(opener, column, lineFacts(bodyLine, nestedOrigins.get(bodyIndex), bodyIndex)?.prefixMemo)
             frameBase = frame.base
             markerFence = frame.close === null ? null : { close: frame.close, base: frame.base }
           }
@@ -13346,7 +13349,10 @@ class ParseSession {
           () => { authoredCodeFenceOpen = true },
           rebaseTakenBelowColumn,
           leadColon !== null,
-          leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
+          tabLineFacts === undefined ? undefined
+            : leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
+          tabLineFacts === undefined ? undefined
+            : new Set(Array.from(tabLineFacts.keys(), (index) => leadOwnsExtent ? index + 1 : index)),
         )
         : new Set<number>()
       if (leadOwnsExtent) {
@@ -13416,7 +13422,7 @@ class ParseSession {
       const sourceLines = [line, ...nestedSourceLines]
       restoreVerbatimBlanks(restoredLines, sourceLines, bufferedBlanks, (index) =>
         index === 0 ? contentCol : indentColumns(sourceLines[index] ?? ''),
-        (index) => lineFacts(restoredLines[index]!, index === 0 ? leadOrigin : nestedOrigins.get(index - 1)),
+        (index) => lineFacts(restoredLines[index]!, index === 0 ? leadOrigin : nestedOrigins.get(index - 1), index - 1),
       )
       for (let index = 0; index < nested.length; index++) nested[index] = restoredLines[index + 1]!
 
@@ -13506,7 +13512,7 @@ class ParseSession {
       // later line and a genuinely CLOSED code fence below it went unmarked, so a
       // blank inside that code loosened the item.
       const closerLines = fenceLines.map((line, index) => index === 0 ? line :
-        line.slice(lineFacts(line, nestedOrigins.get(index - 1))?.whitespace ?? 0))
+        line.slice(lineFacts(line, nestedOrigins.get(index - 1), index - 1)?.whitespace ?? 0))
       const closers = buildCloserIndex(closerLines)
       // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
       // `:::` container that IS the item's first block is the item's own body:

@@ -6,7 +6,7 @@ describe('tab-authored list code fences', () => {
   for (const fixture of cases) {
     it(fixture.id, () => {
       for (const html of [carveToHtml(fixture.source), renderHtml(parse(fixture.source))]) {
-        expect(html.replace(/>\s+</g, '><').trim()).toBe(fixture.html)
+        expect(html.replace(/>\s+</g, '><').replace(/&nbsp;/g, '\u00a0').trim()).toBe(fixture.html.replace(/&nbsp;/g, '\u00a0'))
       }
     })
   }

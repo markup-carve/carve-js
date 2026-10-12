@@ -803,5 +803,395 @@
     "id": "extended-tab-95",
     "source": "> > - a\n> >   \t```=html\n> > \tcode\n> >   ```\n> > after\n",
     "html": "<blockquote><blockquote><ul><li>a\n        code\n      </li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-0",
+    "source": "- a\n\t\t```\n          code\n\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-1",
+    "source": "- a\n\t\t```\n\t\t\t\tcode\n\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>\t\tcode\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-2",
+    "source": "- a\n\t\t```\n\t\t\t\t\n\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code></code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-3",
+    "source": "- a\n\t\t```\n\t ```\n\tcode\n\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-4",
+    "source": "- a\n\t\t```\n\t\f```\n\tcode\n\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-5",
+    "source": "- a\n\t\t```\n\t\u000b```\n\tcode\n\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-6",
+    "source": "- a\n\t\t\t```\n          code\n\t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>        code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-7",
+    "source": "- a\n\t\t\t```\n\t\t\t\tcode\n\t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-8",
+    "source": "- a\n\t\t\t```\n\t\t\t\t\n\t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code></code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-9",
+    "source": "- a\n\t\t\t```\n\t ```\n\tcode\n\t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-10",
+    "source": "- a\n\t\t\t```\n\t\f```\n\tcode\n\t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-11",
+    "source": "- a\n\t\t\t```\n\t\u000b```\n\tcode\n\t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-12",
+    "source": "- a\n  \t\t\t```\n          code\n  \t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>        code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-13",
+    "source": "- a\n  \t\t\t```\n\t\t\t\tcode\n  \t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>\tcode\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-14",
+    "source": "- a\n  \t\t\t```\n\t\t\t\t\n  \t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code></code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-15",
+    "source": "- a\n  \t\t\t```\n\t ```\n\tcode\n  \t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-16",
+    "source": "- a\n  \t\t\t```\n\t\f```\n\tcode\n  \t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-17",
+    "source": "- a\n  \t\t\t```\n\t\u000b```\n\tcode\n  \t\t\t```\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "review-tabs-18",
+    "source": "> - a\n> \t\t```\n>           code\n> \t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-19",
+    "source": "> - a\n> \t\t```\n> \t\t\t\tcode\n> \t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>\t\tcode\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-20",
+    "source": "> - a\n> \t\t```\n> \t\t\t\t\n> \t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-21",
+    "source": "> - a\n> \t\t```\n> \t ```\n> \tcode\n> \t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-22",
+    "source": "> - a\n> \t\t```\n> \t\f```\n> \tcode\n> \t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-23",
+    "source": "> - a\n> \t\t```\n> \t\u000b```\n> \tcode\n> \t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-24",
+    "source": "> - a\n> \t\t\t```\n>           code\n> \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>        code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-25",
+    "source": "> - a\n> \t\t\t```\n> \t\t\t\tcode\n> \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-26",
+    "source": "> - a\n> \t\t\t```\n> \t\t\t\t\n> \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-27",
+    "source": "> - a\n> \t\t\t```\n> \t ```\n> \tcode\n> \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-28",
+    "source": "> - a\n> \t\t\t```\n> \t\f```\n> \tcode\n> \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-29",
+    "source": "> - a\n> \t\t\t```\n> \t\u000b```\n> \tcode\n> \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-30",
+    "source": "> - a\n>   \t\t\t```\n>           code\n>   \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>        code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-31",
+    "source": "> - a\n>   \t\t\t```\n> \t\t\t\tcode\n>   \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-32",
+    "source": "> - a\n>   \t\t\t```\n> \t\t\t\t\n>   \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code></code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-33",
+    "source": "> - a\n>   \t\t\t```\n> \t ```\n> \tcode\n>   \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-34",
+    "source": "> - a\n>   \t\t\t```\n> \t\f```\n> \tcode\n>   \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-35",
+    "source": "> - a\n>   \t\t\t```\n> \t\u000b```\n> \tcode\n>   \t\t\t```\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "review-tabs-36",
+    "source": "> > - a\n> > \t\t```\n> >           code\n> > \t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-37",
+    "source": "> > - a\n> > \t\t```\n> > \t\t\t\tcode\n> > \t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\t\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-38",
+    "source": "> > - a\n> > \t\t```\n> > \t\t\t\t\n> > \t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-39",
+    "source": "> > - a\n> > \t\t```\n> > \t ```\n> > \tcode\n> > \t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-40",
+    "source": "> > - a\n> > \t\t```\n> > \t\f```\n> > \tcode\n> > \t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-41",
+    "source": "> > - a\n> > \t\t```\n> > \t\u000b```\n> > \tcode\n> > \t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-42",
+    "source": "> > - a\n> > \t\t\t```\n> >           code\n> > \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>        code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-43",
+    "source": "> > - a\n> > \t\t\t```\n> > \t\t\t\tcode\n> > \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-44",
+    "source": "> > - a\n> > \t\t\t```\n> > \t\t\t\t\n> > \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-45",
+    "source": "> > - a\n> > \t\t\t```\n> > \t ```\n> > \tcode\n> > \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-46",
+    "source": "> > - a\n> > \t\t\t```\n> > \t\f```\n> > \tcode\n> > \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-47",
+    "source": "> > - a\n> > \t\t\t```\n> > \t\u000b```\n> > \tcode\n> > \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-48",
+    "source": "> > - a\n> >   \t\t\t```\n> >           code\n> >   \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>        code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-49",
+    "source": "> > - a\n> >   \t\t\t```\n> > \t\t\t\tcode\n> >   \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>\tcode\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-50",
+    "source": "> > - a\n> >   \t\t\t```\n> > \t\t\t\t\n> >   \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-51",
+    "source": "> > - a\n> >   \t\t\t```\n> > \t ```\n> > \tcode\n> >   \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>   ```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-52",
+    "source": "> > - a\n> >   \t\t\t```\n> > \t\f```\n> > \tcode\n> >   \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \f```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "review-tabs-53",
+    "source": "> > - a\n> >   \t\t\t```\n> > \t\u000b```\n> > \tcode\n> >   \t\t\t```\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>  \u000b```\n  code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-0",
+    "source": "- a\n  \t```\n  \tone\n  \t```\n  \t~~~\n  \ttwo\n  \t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-1",
+    "source": "- a\n\t\t```\n\t\tone\n\t\t```\n\t\t~~~\n\t\ttwo\n\t\t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-2",
+    "source": "- a\n  \t```\n  \tone\n  \t```\n\n  \t~~~\n  \ttwo\n  \t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-3",
+    "source": "- a\n\t\t```\n\t\tone\n\t\t```\n\n\t\t~~~\n\t\ttwo\n\t\t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-4",
+    "source": "- a\n  \t```\n  \tone\n  \t```\n  text\n  \t~~~\n  \ttwo\n  \t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre>\n    text\n    <pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-5",
+    "source": "- a\n\t\t```\n\t\tone\n\t\t```\n  text\n\t\t~~~\n\t\ttwo\n\t\t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre>\n    text\n    <pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-6",
+    "source": "- a\n  \t```\n  \tone\n  \t```\n  %% c\n  \t~~~\n  \ttwo\n  \t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-7",
+    "source": "- a\n\t\t```\n\t\tone\n\t\t```\n  %% c\n\t\t~~~\n\t\ttwo\n\t\t~~~\nafter\n",
+    "html": "<ul><li>a\n    <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p>"
+  },
+  {
+    "id": "tab-adjacent-8",
+    "source": "> - a\n>   \t```\n>   \tone\n>   \t```\n>   \t~~~\n>   \ttwo\n>   \t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-9",
+    "source": "> - a\n> \t\t```\n> \t\tone\n> \t\t```\n> \t\t~~~\n> \t\ttwo\n> \t\t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-10",
+    "source": "> - a\n>   \t```\n>   \tone\n>   \t```\n> \n>   \t~~~\n>   \ttwo\n>   \t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-11",
+    "source": "> - a\n> \t\t```\n> \t\tone\n> \t\t```\n> \n> \t\t~~~\n> \t\ttwo\n> \t\t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-12",
+    "source": "> - a\n>   \t```\n>   \tone\n>   \t```\n>   text\n>   \t~~~\n>   \ttwo\n>   \t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre>\n      text\n      <pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-13",
+    "source": "> - a\n> \t\t```\n> \t\tone\n> \t\t```\n>   text\n> \t\t~~~\n> \t\ttwo\n> \t\t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre>\n      text\n      <pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-14",
+    "source": "> - a\n>   \t```\n>   \tone\n>   \t```\n>   %% c\n>   \t~~~\n>   \ttwo\n>   \t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-15",
+    "source": "> - a\n> \t\t```\n> \t\tone\n> \t\t```\n>   %% c\n> \t\t~~~\n> \t\ttwo\n> \t\t~~~\n> after\n",
+    "html": "<blockquote><ul><li>a\n      <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-16",
+    "source": "> > - a\n> >   \t```\n> >   \tone\n> >   \t```\n> >   \t~~~\n> >   \ttwo\n> >   \t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-17",
+    "source": "> > - a\n> > \t\t```\n> > \t\tone\n> > \t\t```\n> > \t\t~~~\n> > \t\ttwo\n> > \t\t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-18",
+    "source": "> > - a\n> >   \t```\n> >   \tone\n> >   \t```\n> > \n> >   \t~~~\n> >   \ttwo\n> >   \t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-19",
+    "source": "> > - a\n> > \t\t```\n> > \t\tone\n> > \t\t```\n> > \n> > \t\t~~~\n> > \t\ttwo\n> > \t\t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-20",
+    "source": "> > - a\n> >   \t```\n> >   \tone\n> >   \t```\n> >   text\n> >   \t~~~\n> >   \ttwo\n> >   \t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre>\n        text\n        <pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-21",
+    "source": "> > - a\n> > \t\t```\n> > \t\tone\n> > \t\t```\n> >   text\n> > \t\t~~~\n> > \t\ttwo\n> > \t\t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre>\n        text\n        <pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-22",
+    "source": "> > - a\n> >   \t```\n> >   \tone\n> >   \t```\n> >   %% c\n> >   \t~~~\n> >   \ttwo\n> >   \t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+  },
+  {
+    "id": "tab-adjacent-23",
+    "source": "> > - a\n> > \t\t```\n> > \t\tone\n> > \t\t```\n> >   %% c\n> > \t\t~~~\n> > \t\ttwo\n> > \t\t~~~\n> > after\n",
+    "html": "<blockquote><blockquote><ul><li>a\n        <pre><code>one\n</code></pre><pre><code>two\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   }
 ]
