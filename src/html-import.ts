@@ -44,7 +44,7 @@ import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
-import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RESERVED_CARRIER_ATTRIBUTES, readCarrier } from './roundtrip-carriers.js'
+import { CARRIER_CHAR, CARRIER_MARKER, EXT_SECTION, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './roundtrip-carriers.js'
 import type { PrefixedCarrier } from './roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
@@ -667,6 +667,17 @@ function fallbackImage(math: P5Node): P5Node | undefined {
  */
 const ROUND_TRIP_MARKER_ATTRIBUTES = RESERVED_CARRIER_ATTRIBUTES
 
+/**
+ * Whether a `data-carve-ref` value can name a reference definition.
+ *
+ * A LEADING `^` SPELLS A FOOTNOTE DEFINITION, not a reference one: the
+ * `[^r]: /u` line this would write is read back as a footnote and the link is
+ * gone, so the carrier cannot be honored.
+ */
+function isReferenceLabel(label: string): boolean {
+  return label.trim() !== '' && !/[[\]\r\n]/.test(label) && !label.startsWith('^')
+}
+
 /** What one element's §13a carriers were read as (`HtmlImporter.carrierReads`). */
 interface CarrierRead {
   names: Set<PrefixedCarrier>
@@ -864,6 +875,8 @@ function restoreHoistedSectionId(
   blocks: BlockNode[],
   explicitId: boolean,
   writing: boolean,
+  slot: number,
+  elementSlots: (held: Attrs) => string[],
 ): Attrs | undefined {
   if (tag !== 'section' || attrs?.id === undefined) return attrs
   // The heading the wrapper was built around is its FIRST block. Anything else
@@ -882,12 +895,12 @@ function restoreHoistedSectionId(
   const kept = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
   if (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children))) return kept
   heading.attrs = { ...(heading.attrs ?? {}), id }
-  if (writing) {
-    const slots = heading.attrs.order ?? [
-      ...(heading.attrs.classes?.length ? ['.class'] : []),
-      ...Object.keys(heading.attrs.keyValues ?? {}),
-    ]
-    heading.attrs.order = ['#id', ...slots.filter(slot => slot !== '#id')]
+  // The carrier says the id was authored, and `attrs.order` is where a tree
+  // records that, so a carried id publishes its slot on both exits.
+  if (writing || explicitId) {
+    const slots = (heading.attrs.order ?? elementSlots(heading.attrs)).filter((entry) => entry !== '#id')
+    slots.splice(Math.min(slot, slots.length), 0, '#id')
+    heading.attrs.order = slots
   }
   return kept
 }
@@ -988,6 +1001,8 @@ class Importer {
    * `data-delim` is, where one left unreadable is still refused by ruling 5.
    */
   private readonly carrierReads = new Map<P5Node, CarrierRead>()
+  /** Reserved names a contradiction row (§13d) already covers on an element. */
+  private readonly contradicted = new Map<P5Node, Set<string>>()
   /**
    * The reference definitions `data-carve-ref` asks for, first-seen order. A
    * resolved reference writes back as `[text][label]`, which needs the
@@ -1245,7 +1260,7 @@ class Importer {
         // Where the importer REBUILT what it holds it is consumed in silence,
         // exactly as `data-delim` is: a row here would name a loss that did
         // not happen.
-        if (!this.isReconstructedCarrier(node, domTag(node) ?? '', name)) {
+        if (!this.isReconstructedCarrier(node, domTag(node) ?? '', name) && !this.contradicted.get(node)?.has(name)) {
           this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
         }
       } else if (styleSlots.has(name) && (rawKept || !this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name))) {
@@ -1774,6 +1789,18 @@ class Importer {
     return readCarrier((attribute) => this.attr(node, attribute), name)
   }
 
+  /** `data-carve-col-widths` where every entry is in its grammar, else `undefined`. */
+  private carriedSeparatorWidths(node: P5Node): number[] | undefined {
+    const raw = this.carrierValue(node, 'col-widths')
+    if (raw === undefined) return undefined
+    const widths = raw.split(',').map((part) => {
+      if (!/^[0-9]+$/.test(part)) return undefined
+      const width = Number(part)
+      return Number.isSafeInteger(width) && width >= 1 && width <= MAX_CARRIED_SEPARATOR_WIDTH ? width : undefined
+    })
+    return widths.length > 0 && widths.every((width) => width !== undefined) ? (widths as number[]) : undefined
+  }
+
   /** A presence carrier: §13a reads PRESENCE and does not compare the value. */
   private hasCarrier(node: P5Node, name: PrefixedCarrier): boolean {
     return this.carrierValue(node, name) !== undefined
@@ -1817,6 +1844,43 @@ class Importer {
     return false
   }
 
+  /**
+   * §13d: two carriers that contradict each other restore neither meaning. One
+   * row covers the pair, and `attrs()` then drops both names without another.
+   */
+  private refuseContradiction(node: P5Node, path: string, first: PrefixedCarrier, second: PrefixedCarrier): void {
+    const names = [first, second]
+      .flatMap((name) => [carrier(name), legacyCarrier(name)])
+      .filter((spelling) => this.attr(node, spelling) !== undefined)
+    this.contradicted.set(node, new Set(names))
+    this.report.refuseAttribute(
+      node,
+      path,
+      `contradictory carriers ${names.join(' and ')}`,
+      ': neither meaning is restored',
+      'warning',
+      names.some((spelling) => destinationIsDenied(this.attr(node, spelling) ?? '')),
+    )
+  }
+
+  /**
+   * The carriers a `<section id>` wrapper holds (§13a). `explicit-id` says the
+   * id was authored and `ext="section"` says it was generated, so the two on
+   * one wrapper contradict; an id slot is read only beside an authored id.
+   */
+  private readSectionCarriers(node: P5Node, path: string): void {
+    const explicit = this.hasCarrier(node, 'explicit-id')
+    const generated = this.carrierValue(node, 'ext') === EXT_SECTION
+    if (explicit && generated) {
+      this.refuseContradiction(node, path, 'explicit-id', 'ext')
+      return
+    }
+    if (generated) this.recordCarrier(node, 'ext')
+    if (!explicit) return
+    this.recordCarrier(node, 'explicit-id')
+    if (RE_ID_SLOT.test(this.carrierValue(node, 'id-slot') ?? '')) this.recordCarrier(node, 'id-slot')
+  }
+
   private recordCarrier(node: P5Node, name: PrefixedCarrier, read: Omit<CarrierRead, 'names'> = {}): void {
     const existing = this.carrierReads.get(node)
     if (existing) {
@@ -1851,10 +1915,7 @@ class Importer {
    */
   private readsRef(node: P5Node, href: string, title: string | undefined): string | undefined {
     const label = this.carrierValue(node, 'ref')
-    // A LEADING `^` SPELLS A FOOTNOTE DEFINITION, not a reference one: the
-    // `[^r]: /u` line this would write is read back as a footnote and the
-    // link is gone, so the carrier cannot be honored.
-    if (label === undefined || label.trim() === '' || /[[\]\r\n]/.test(label) || label.startsWith('^')) return undefined
+    if (label === undefined || !isReferenceLabel(label)) return undefined
     // KEYED ON THE RESOLUTION KEY, not on the spelling: `r` and ` r ` are one
     // label to the resolver, so comparing the spellings let two carriers bind
     // two destinations under one key and sent both links to the second one.
@@ -1886,7 +1947,7 @@ class Importer {
    * The arms below then only spend the answer, which keeps one decision in one
    * place and lets the attribute pass know which names were consumed.
    */
-  private readInlineCarriers(node: P5Node, tag: string, children: InlineNode[]): void {
+  private readInlineCarriers(node: P5Node, tag: string, children: InlineNode[], path: string): void {
     if (tag === 'span') {
       // NEITHER A RAW INLINE NOR AN ESCAPE HAS AN ATTRIBUTE SLOT its writer
       // emits, so rebuilding one over an element carrying anything else
@@ -1922,6 +1983,12 @@ class Importer {
       return
     }
     if (tag !== 'a' && tag !== 'img') return
+    // §13d: an autolink has no label and a reference is not an autolink. An
+    // invalid label is not a carrier (§13e) and contradicts nothing.
+    if (tag === 'a' && this.hasCarrier(node, 'autolink') && isReferenceLabel(this.carrierValue(node, 'ref') ?? '')) {
+      this.refuseContradiction(node, path, 'autolink', 'ref')
+      return
+    }
     const destination = this.attr(node, tag === 'a' ? 'href' : 'src')
     // A destination §25 blanked or the source never had stays blanked: no
     // carrier routes a value back past a security rule, and no node is built
@@ -2411,8 +2478,16 @@ class Importer {
       this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
-    if ((tag === 'section' || /^h[1-6]$/.test(tag)) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
+    if (tag === 'section' && this.attr(node, 'id') !== undefined) {
+      this.readSectionCarriers(node, path)
+    } else if (/^h[1-6]$/.test(tag) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
       this.recordCarrier(node, 'explicit-id')
+    }
+    // Read in `table()`; recorded here so `attrs()` does not report it as dropped.
+    if (tag === 'table' && this.carriedSeparatorWidths(node) !== undefined) this.recordCarrier(node, 'col-widths')
+    // §13a: `true` or `false`; any other value is not a carrier (§13e).
+    if ((tag === 'ul' || tag === 'ol') && ['true', 'false'].includes(this.carrierValue(node, 'tight') ?? '')) {
+      this.recordCarrier(node, 'tight')
     }
     const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
     const label = carriedLabel !== undefined && carriedLabel !== '' && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
@@ -2762,15 +2837,27 @@ class Importer {
         const mapped = heading?.type === 'heading' && firstHeading !== undefined &&
           this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
         if (!mapped) hoistedChildren = []
-        if (!mapped && this.carrierReads.get(node)?.names.delete('explicit-id')) {
-          const name = this.carrierName(node, 'explicit-id')!
+        // No heading took the id, so nothing was rebuilt from the wrapper's carriers.
+        for (const read of ['explicit-id', 'id-slot', 'ext'] as const) {
+          if (mapped || !this.carrierReads.get(node)?.names.delete(read)) continue
+          const name = this.carrierName(node, read)!
           this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(this.attr(node, name) ?? ''))
         }
       }
+      const sectionReads = this.carrierReads.get(node)?.names
+      const headingElement = tag === 'section' ? this.firstHeadingWithin(node) : undefined
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          restoreHoistedSectionId(tag, attrs, hoistedChildren, this.hasCarrier(node, 'explicit-id'), this.writing),
+          restoreHoistedSectionId(
+            tag,
+            attrs,
+            hoistedChildren,
+            sectionReads?.has('explicit-id') === true,
+            this.writing,
+            sectionReads?.has('id-slot') ? Number(this.carrierValue(node, 'id-slot')) : 0,
+            (held) => (headingElement ? slotOrderFromElement(headingElement, held) : []),
+          ),
           tag,
           path,
           unwrapped,
@@ -2951,9 +3038,12 @@ class Importer {
     // consumed into the `[x]` marker rather than imported, so it does not vote
     // either.
     // Seen through the unsupported wrappers `blocks()` splices away.
-    const tight = !listItems.some((li) =>
-      this.spliceUnsupported(domChildren(li) ?? [], path).some((entry) => !entry.splice && domTag(entry.node) === 'p'),
-    )
+    // §13a `data-carve-tight` wins over what the items' `<p>` elements imply.
+    const tight = this.carrierReads.get(node)?.names.has('tight')
+      ? this.carrierValue(node, 'tight') === 'true'
+      : !listItems.some((li) =>
+        this.spliceUnsupported(domChildren(li) ?? [], path).some((entry) => !entry.splice && domTag(entry.node) === 'p'),
+      )
     const start = this.listStart(node, path, ordered)
     // The delimiter the renderer wrote (PART 10 §12), which is the only place
     // it survives: `1)` and `1.` rendered the same bytes before that clause.
@@ -3972,14 +4062,8 @@ class Importer {
    * means.
    */
   private separatorWidths(node: P5Node, path: string): number[] | undefined {
-    const raw = readCarrier((name) => this.attr(node, name), 'col-widths')
-    if (raw === undefined) return undefined
-    const widths = raw.split(',').map((part) => {
-      if (!/^[0-9]+$/.test(part)) return undefined
-      const width = Number(part)
-      return Number.isSafeInteger(width) && width >= 1 && width <= MAX_CARRIED_SEPARATOR_WIDTH ? width : undefined
-    })
-    if (widths.length > 0 && widths.every(width => width !== undefined)) return widths as number[]
+    const widths = this.carriedSeparatorWidths(node)
+    if (widths !== undefined || this.carrierValue(node, 'col-widths') === undefined) return widths
     this.report.add('attribute-dropped', 'Dropped invalid col-widths carrier on <table>', 'warning', path, node)
     return undefined
   }
@@ -4612,7 +4696,7 @@ class Importer {
     const walked = this.mark()
     // BEFORE `attrs()`, which asks what was rebuilt here before deciding
     // whether a reserved name is a consumed carrier or a refused one.
-    this.readInlineCarriers(node, tag, children)
+    this.readInlineCarriers(node, tag, children, path)
     const carried = this.carrierReads.get(node)
     const attrs = this.attrs(node, path)
     if (tag === 'span' && carried?.names.has('raw')) {

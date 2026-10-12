@@ -373,6 +373,127 @@ describe('a carrier that cannot be honored is not one', () => {
   })
 })
 
+describe('the section 13a rows added for markup-carve/carve#2894', () => {
+  const modes = ['safe', 'semantic', 'roundtrip'] as const
+  const rows = (html: string, mode: (typeof modes)[number] = 'safe') =>
+    htmlToAst(html, { mode }).report.diagnostics.map((row) => `${row.code} ${row.severity} ${row.message}`)
+  const first = (html: string, mode: (typeof modes)[number] = 'safe') =>
+    htmlToAst(html, { mode }).value.children[0] as unknown as Record<string, any>
+
+  it('returns the id slot, the tight flag and a generated id through a round trip', () => {
+    for (const src of ['# C\n', '{.c #mine}\n# H\n', '{data-x=1 #mine .c}\n# H\n', '{#mine .c}\n# H\n', '- {.x}\n  a\n- b\n', '1) {.x}\n   a\n2) b\n']) {
+      for (const mode of modes) expect(htmlToCarve(rt(src), { mode }).value, `${mode} ${src}`).toBe(src)
+    }
+  })
+
+  it('places the id at its slot, last where the heading has fewer attributes', () => {
+    const section = (slot: string) => `<section id="mine" data-carve-explicit-id${slot}><h1 data-x="1" class="c">H</h1></section>`
+    expect(first(section(' data-carve-id-slot="1"')).attrs.order).toEqual(['data-x', '#id', '.class'])
+    expect(first(section(' data-carve-id-slot="99"')).attrs.order).toEqual(['data-x', '.class', '#id'])
+    expect(first(section(' data-djot-id-slot="2"')).attrs.order).toEqual(['data-x', '.class', '#id'])
+    expect(first(section('')).attrs.order).toEqual(['#id', 'data-x', '.class'])
+    expect(rows(section(' data-carve-id-slot="1"'))).toEqual(['element-unwrapped info Unwrapped unsupported <section> element'])
+  })
+
+  it('reads no slot from a value outside the grammar, or without an authored id', () => {
+    for (const value of ['x', '-1', '1.0', ' 1', '']) {
+      const html = `<section id="mine" data-carve-explicit-id data-carve-id-slot="${value}"><h1 class="c">H</h1></section>`
+      expect(first(html).attrs.order, value).toEqual(['#id', '.class'])
+      expect(rows(html), value).toContain('attribute-dropped info Dropped round-trip marker attribute data-carve-id-slot on <section>')
+    }
+    const bare = '<section id="mine" data-carve-id-slot="1"><h1 class="c">H</h1></section>'
+    expect(htmlToCarve(bare).value).toBe('{#mine .c}\n# H\n')
+    expect(rows(bare)).toContain('attribute-dropped info Dropped round-trip marker attribute data-carve-id-slot on <section>')
+  })
+
+  it('takes either tight value over what the item paragraphs imply', () => {
+    for (const mode of modes) {
+      expect(first('<ul data-carve-tight="true"><li><p>a</p></li></ul>', mode).tight).toBe(true)
+      expect(first('<ul data-carve-tight="false"><li>a</li></ul>', mode).tight).toBe(false)
+      expect(first('<ol data-djot-tight="false"><li>a</li></ol>', mode).tight).toBe(false)
+      // Controls: what the items imply with no carrier.
+      expect(first('<ul><li><p>a</p></li></ul>', mode).tight).toBe(false)
+      expect(first('<ul><li>a</li></ul>', mode).tight).toBe(true)
+    }
+    expect(rows('<ul data-carve-tight="false"><li>a</li></ul>')).toEqual([])
+  })
+
+  it('reads no tight carrier from another value or another element', () => {
+    for (const value of ['yes', 'TRUE', '1', '']) {
+      const html = `<ul data-carve-tight="${value}"><li><p>a</p></li></ul>`
+      expect(first(html).tight, value).toBe(false)
+      expect(first(html).attrs, value).toBeUndefined()
+      expect(rows(html), value).toEqual(['attribute-dropped info Dropped round-trip marker attribute data-carve-tight on <ul>'])
+    }
+    expect(htmlToCarve('<p data-carve-tight="true" data-carve-ext="section" data-carve-id-slot="1">x</p>').value).toBe('x\n')
+  })
+
+  it('consumes `section` on a wrapper and refuses any other value', () => {
+    expect(rows('<section id="C" data-carve-ext="section"><h1>C</h1></section>')).toEqual(['element-unwrapped info Unwrapped unsupported <section> element'])
+    expect(rows('<section id="C" data-carve-ext="tabs"><h1>C</h1></section>')).toContain(
+      'attribute-dropped info Dropped round-trip marker attribute data-carve-ext on <section>',
+    )
+    // A wrapper with no heading to take the id rebuilt nothing from the carrier.
+    expect(rows('<section id="C" data-carve-ext="section"><p>x</p></section>')).toContain(
+      'attribute-dropped info Dropped round-trip marker attribute data-carve-ext on <section>',
+    )
+  })
+
+  it('keeps reading data-carve-explicit-id by presence, whatever its value', () => {
+    for (const value of ['0', '1', '']) {
+      const html = `<section id="H" data-carve-explicit-id="${value}"><h1>H</h1></section>`
+      for (const mode of modes) expect(htmlToCarve(html, { mode }).value, `${mode} ${value}`).toBe('{#H}\n# H\n')
+    }
+  })
+
+  it('reports a consumed column-width carrier as no loss', () => {
+    const src = '| a |\n|---|\n| b |\n'
+    expect(htmlToCarve(rt(src)).report.diagnostics).toEqual([])
+    expect(rows('<table data-carve-col-widths="0"><tr><th>a</th></tr></table>')).toContain(
+      'attribute-dropped warning Dropped invalid col-widths carrier on <table>',
+    )
+  })
+})
+
+describe('contradictory carriers restore neither meaning (§13d)', () => {
+  const modes = ['safe', 'semantic', 'roundtrip'] as const
+  const dropped = (html: string, mode: (typeof modes)[number]) =>
+    htmlToAst(html, { mode }).report.diagnostics.filter((row) => row.code === 'attribute-dropped').map((row) => `${row.severity} ${row.message}`)
+
+  it('imports an autolink carrier beside a reference carrier as an inline link, with one row', () => {
+    for (const mode of modes) {
+      for (const [auto, ref] of [['data-carve-autolink', 'data-carve-ref'], ['data-djot-autolink', 'data-carve-ref'], ['data-carve-autolink', 'data-djot-ref']]) {
+        const html = `<p><a href="https://e.com" ${auto} ${ref}="r">https://e.com</a></p>`
+        expect(htmlToCarve(html, { mode }).value, `${mode} ${auto}`).toBe('[https://e.com](https://e.com)\n')
+        expect(dropped(html, mode), `${mode} ${auto}`).toEqual([
+          `warning Dropped contradictory carriers ${auto} and ${ref} on <a>: neither meaning is restored`,
+        ])
+      }
+    }
+  })
+
+  it('keeps each carrier working alone, and an invalid label contradicts nothing', () => {
+    for (const mode of modes) {
+      expect(htmlToCarve('<p><a href="https://e.com" data-carve-autolink>https://e.com</a></p>', { mode }).value).toBe('<https://e.com>\n')
+      expect(htmlToCarve('<p><a href="/u" data-carve-ref="r">t</a></p>', { mode }).value).toBe('[t][r]\n\n[r]: /u\n')
+      const invalid = '<p><a href="https://e.com" data-carve-autolink data-carve-ref="[bad">https://e.com</a></p>'
+      expect(htmlToCarve(invalid, { mode }).value).toBe('<https://e.com>\n')
+      expect(dropped(invalid, mode)).toEqual(['info Dropped round-trip marker attribute data-carve-ref on <a>'])
+    }
+  })
+
+  it('imports an authored-id carrier beside a generated-id carrier as an ordinary section', () => {
+    const html = '<section id="mine" data-carve-explicit-id data-carve-ext="section"><h1>H</h1></section>'
+    const plain = '<section id="mine"><h1>H</h1></section>'
+    for (const mode of modes) {
+      expect(htmlToAst(html, { mode }).value, mode).toEqual(htmlToAst(plain, { mode }).value)
+      expect(dropped(html, mode), mode).toEqual([
+        'warning Dropped contradictory carriers data-carve-explicit-id and data-carve-ext on <section>: neither meaning is restored',
+      ])
+    }
+  })
+})
+
 describe('reconstruction is not a trust decision (§13b)', () => {
   it('rebuilds the carriers in safe mode exactly as in roundtrip', () => {
     for (const [, src] of DOCUMENTS) {
