@@ -69,12 +69,13 @@ export function djotImportLosses(
   const definitionLines = new Set<number>()
   const headingLines = new Set<number>()
   for (let n = 0; n < lines.length; n++) {
+    if (definitionLines.has(n)) continue
     const line = lines[n]!,
       visible = masked.slice(offsets[n]!, offsets[n]! + line.length).join('')
     const at = contentStart(line),
       content = line.slice(at),
       contentMask = visible.slice(at)
-    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(content)
+    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(content)
     const previous = lines[n - 1] ?? ''
     const previousContent = previous.slice(contentStart(previous)).trim()
     const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(djotItemPrefix(line, at))
@@ -89,14 +90,11 @@ export function djotImportLosses(
         /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(djotItemPrefix(previous, contentStart(previous))))
     if (definition && contentMask.startsWith('[') && boundary) {
       let destination = definition[2]!
-      for (
-        let next = n + 1;
-        next < lines.length &&
-        contentStart(lines[next]!) > at &&
-        /^\S+$/.test(lines[next]!.slice(contentStart(lines[next]!)));
-        next++
-      ) {
-        destination += lines[next]!.slice(contentStart(lines[next]!))
+      for (let next = n + 1; next < lines.length; next++) {
+        const nextAt = contentStart(lines[next]!), prefix = lines[next]!.slice(0, nextAt)
+        const token = lines[next]!.slice(nextAt).replace(/\r$/, '')
+        if (quoteDepths[next] !== quoteDepths[n] || nextAt <= at || prefix.includes('[^') || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(prefix) || !/^[^ \t\r\n]+$/.test(token)) break
+        destination += token
         definitionLines.add(next)
       }
       definitions.set(definitionKey(definition[1]!), destination)

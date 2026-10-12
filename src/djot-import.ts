@@ -1046,7 +1046,7 @@ function foldDjotReferences(source: string): string {
       [depth] = quoted(line),
       at = djotContentStart(line),
       content = line.slice(at)
-    const definition = /^\[(?!\^)([^\]\n]*)\]:(?:[ \t]+(\S*)[ \t]*|)$/.exec(content)
+    const definition = /^\[(?!\^)([^\]\n]*)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(content)
     const previousLine = lines[n - 1] ?? '', previousAt = djotContentStart(previousLine)
     const previousNote = previousLine.slice(0, previousAt).indexOf('[^')
     const previousOwner = previousNote < 0 ? previousAt : previousNote + 1
@@ -1081,12 +1081,15 @@ function foldDjotReferences(source: string): string {
         const next = lines[end + 1]!,
           [nextDepth] = quoted(next),
           nextAt = djotContentStart(next)
-        if (nextDepth !== depth || nextAt <= at || !/^\S+$/.test(next.slice(nextAt))) break
-        target += next.slice(nextAt)
+        const nextPrefix = next.slice(0, nextAt), nextToken = next.slice(nextAt).replace(/\r$/, '')
+        if (nextDepth !== depth || nextAt <= at || nextPrefix.includes('[^') || /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(nextPrefix) || !/^[^ \t\r\n]+$/.test(nextToken)) break
+        target += nextToken
         end++
       }
+      const nextByte = content[definition[1]!.length + 3]
+      if (end > n || target !== '' && nextByte !== ' ')
+        lines[n] = separator + line.slice(0, at) + `[${definition[1]}]:${target ? ' ' + target : ''}`
       if (end > n) {
-        lines[n] = separator + line.slice(0, at) + `[${definition[1]}]: ${target}`
         for (let k = n + 1; k <= end; k++) {
           offset += lines[k]!.length + 1
           removed.add(k)
@@ -1094,7 +1097,8 @@ function foldDjotReferences(source: string): string {
         n = end
       }
     }
-    if (definition && mask[offset + at] === '[' && !(boundary || marker)) lines[n] = line.replace(']:', ']\\:')
+    const invalidDefinition = definition === null && /^\[(?!\^)[^\]\n]*\]:/.test(content)
+    if ((invalidDefinition || definition && !(boundary || marker)) && mask[offset + at] === '[') lines[n] = line.slice(0, at) + line.slice(at).replace(']:', ']\\:')
     const attrs = content[0] === '{' ? readAttributes(content, 0) : undefined
     previousAttributeBlock = !!(boundary || marker) && attrs?.end === content.trimEnd().length
     previous = content.trim(); previousDepth = depth; offset += line.length + 1
@@ -2140,7 +2144,7 @@ function normalizeDjotTablePipes(source: string): string {
     const line = lines[n]!,
       at = djotContentStart(line)
     if (mask[offsets[n]! + at] !== '[') continue
-    const definition = /^\[([^\[\]\n^][^\[\]\n]*)\]:[ \t]*(\S*)[ \t]*$/.exec(line.slice(at))
+    const definition = /^\[([^\[\]\n^][^\[\]\n]*)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(line.slice(at))
     if (!definition || !definition[1]!.includes('|')) continue
     const previousLine = lines[n - 1] ?? '',
       previousAt = djotContentStart(previousLine)

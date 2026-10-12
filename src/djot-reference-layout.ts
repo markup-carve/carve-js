@@ -91,7 +91,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   const tableRows = source.includes('|') ? djotTableRows(source, pipeMask.join('\n')) : []
   for (let n = 0; n < lines.length; n++) {
     const start = contentStart(lines[n]!)
-    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(lines[n]!.slice(start))
+    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(lines[n]!.slice(start))
     if (!definition || definitionMask[n]![start] !== '[') continue
     let first = n, cursor = n
     const attrs: string[] = []
