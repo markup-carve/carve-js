@@ -708,7 +708,11 @@ export function unwrapEmptyDestinations(
     }
     const image = m[0][0] === '!'
     const label = image ? m[1]! : prepareLabel?.(m[1]!) ?? m[1]!
-    return unwrapEmptyDestination(label, image, title, emittedPrefix, placeholders, protect, decodeEntity, !insideImage && (keepBoundaryAt?.(subject, m.index) ?? true))
+    const next = subject[m.index + m[0].length]
+    const isolatedPlainLabel = /^[A-Za-z0-9 ]+$/.test(m[1]!)
+      && (emittedPrefix === '' || /\s$/.test(emittedPrefix))
+      && (next === undefined || /\s/.test(next))
+    return unwrapEmptyDestination(label, image, title, emittedPrefix, placeholders, protect, decodeEntity, !insideImage && !isolatedPlainLabel && (keepBoundaryAt?.(subject, m.index) ?? true))
   }
   if (references.empty.size > 0) {
     const byReference = (m: RegExpExecArray, reference: string, subject: string, emittedPrefix: string): string | null => {
@@ -719,7 +723,11 @@ export function unwrapEmptyDestinations(
     let subject = line
     replaceAt(new RegExp(String.raw`!?\[${LABEL}\](?:\[\]|\[([^[\]\n]+)\])`, 'g'), (m, before) => byReference(m, m[2] ?? m[1]!, subject, before))
     subject = line
-    replaceAt(/!?\[([^[\]\n]+)\](?![[(:\x00])/g, (m, before) => byReference(m, m[1]!, subject, before))
+    replaceAt(/!?\[([^[\]\n]+)\](?![[(:])/g, (m, before) => {
+      const next = /^\x00P(\d+)\x00/.exec(subject.slice(m.index + m[0].length))
+      if (next && placeholders[Number(next[1])] !== '\\]') return null
+      return byReference(m, m[1]!, subject, before)
+    })
   }
   const subject = line
   replaceAt(

@@ -5,7 +5,7 @@ import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
-import { markdownEmphasis } from './markdown-emphasis.js'
+import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
@@ -1517,6 +1517,19 @@ function convertInline(
 
 
   const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
+  if (line.includes('[') && line.includes(']')) {
+    const subject = line
+    const opaque = opaqueHtmlScanner(subject)
+    const auto = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+    line = escapeInactiveMarkdownLinkBrackets(subject, value => protect(value, value.slice(1)),
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+        || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+      offset => {
+        auto.lastIndex = offset
+        const link = auto.exec(subject)
+        return link ? offset + link[0].length : opaque(offset) ?? scanHtmlTag(subject, offset)?.end
+      })
+  }
   let opaqueSubject: string | undefined
   let opaqueRanges: Array<[number, number]> = []
   let activeEmptyDestinationOpeners = new Set<number>()
@@ -1594,7 +1607,44 @@ function convertInline(
     }
     return opaqueRanges.some(([start, end]) => offset > start && offset < end)
       || !activeEmptyDestinationOpeners.has(subject[offset] === '!' ? offset + 1 : offset)
-  }, label => markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 1, undefined, true, value => protect(value)),
+  }, label => {
+    const masked = new Map<string, string>()
+    if (label.includes('<') || dialect.math && label.includes('$')) {
+      const source = label
+      const opaque = opaqueHtmlScanner(source)
+      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+      let output = ''
+      for (let at = 0; at < source.length;) {
+        let end: number | undefined
+        if (source[at] === '<') {
+          autolink.lastIndex = at
+          const angle = autolink.exec(source)
+          end = angle ? at + angle[0].length : opaque(at) ?? scanHtmlTag(source, at, protectedSpans)?.end
+        } else if (dialect.math && source[at] === '$') {
+          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(source.slice(at))
+          if (math) end = at + math[0].length
+        }
+        if (end === undefined) { output += source[at++]; continue }
+        const scalar = source.slice(at, end)
+        const token = protect(scalar, scalar)
+        masked.set(token, scalar)
+        output += token
+        at = end
+      }
+      label = output
+    }
+    let depth = 0
+    const converted = markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, peak => { depth = peak }, true, value => protect(value))
+    if (depth > 0) {
+      for (const match of converted.matchAll(/\x00P(\d+)\x00/g)) {
+        if (/^\{[*/~]/.test(protectedSpans[Number(match[1])] ?? '')) {
+          recordMarkdownProtectedDepth(protectedSpans, match[0], depth)
+          break
+        }
+      }
+    }
+    return masked.size === 0 ? converted : converted.replace(/\x00P\d+\x00/g, token => masked.get(token) ?? token)
+  },
   (_subject, offset) => !scalarBoundaryRanges.some(([start, end]) => offset >= start && offset < end))
 
   const encodeDest = (paren: string): string | undefined => {
@@ -1823,7 +1873,7 @@ function convertInline(
     const footnotePrefixSource = line
     const opaque = opaqueHtmlScanner(line)
     let cursor = 0
-    line = line.replace(/(?<!\\)\[([^[\]\n^]+)\](?=\[\^)/g, (match, label: string, offset: number) => {
+    line = line.replace(/(?<!\\)\[((?!\^)(?:[^\[\]\n]|\[[^\]\n]*\])+)\](?=\[\^)/g, (match, label: string, offset: number) => {
       while (cursor < offset) {
         const end = footnotePrefixSource[cursor] === '<' ? opaque(cursor) ?? scanHtmlTag(footnotePrefixSource, cursor)?.end : undefined
         if (end !== undefined) { cursor = end; continue }
@@ -1833,6 +1883,7 @@ function convertInline(
         }
         cursor++
       }
+      if (footnotePrefixSource[offset - 1] === ']' && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined) return match
       return cursor > offset ? match : protect('\\[') + label + protect('\\]')
     })
   }
@@ -1853,6 +1904,7 @@ function convertInline(
     if (referenceSubject[at] === '[') referenceStack.push(at)
     else if (referenceSubject[at] === ']' && referenceStack.length) referenceOpeners.set(at, referenceStack.pop()!)
   }
+  let literalReferenceOpeners: Set<string> | undefined
   line = line.replace(/(?<=\])\[([^\]]*)\]/g, (match, reference: string, offset: number, source: string) => {
     if (referenceHtml.has(offset)) return match
     if (reference.startsWith('^')) return protect(match, match)
@@ -1874,7 +1926,9 @@ function convertInline(
       const precedingOpener = referenceOpeners.get(offset - 1)
       const precedingLabel = precedingOpener === undefined ? '' : source.slice(precedingOpener + 1, offset - 1)
       if (!tablePipe && !/[*_`\\\x00<&~"'=^]/.test(reference + precedingLabel)) return protect(match, match)
-      return protect('\\[', '[') + reference + protect('\\]', ']')
+      const opener = protect('\\[', '[')
+      ;(literalReferenceOpeners ??= new Set()).add(opener)
+      return opener + reference + protect('\\]', ']')
     }
     return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`, match)
   })
@@ -2002,6 +2056,7 @@ function convertInline(
     if (destinationOpeners.has(offset + match.length)) return match
     const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
     if (following) {
+      if (literalReferenceOpeners?.has(following[0])) return match
       const protectedTail = protectedSpans[Number(following[1])] ?? ''
       if (protectedTail.startsWith('(') || protectedTail.startsWith('{title=')) return match
       const reference = /^\[([^\]]*)\]$/.exec(protectedTail)

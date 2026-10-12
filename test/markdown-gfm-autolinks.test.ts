@@ -24,7 +24,7 @@ const htmlTree = (html: string): unknown => {
 }
 
 // Native HTML comes from cmark-gfm with unsafe HTML and the GFM extensions enabled.
-it.each(controls)('preserves GFM bare autolinks and surrounding emphasis: $source', ({ source: markdown, html }) => {
+it.each(controls)('preserves GFM bare autolinks and surrounding emphasis: $source', ({ source: markdown, html, emptyDestinationLoss }) => {
   const source = markdownToCarve(markdown)
   const migration = migrateMarkdown(markdown)
   expect(migration.value).toBe(source)
@@ -33,6 +33,7 @@ it.each(controls)('preserves GFM bare autolinks and surrounding emphasis: $sourc
     expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(true)
   }
   for (const row of migration.report.diagnostics) {
+    if (emptyDestinationLoss && row.code === 'structure-unspellable' && row.message.includes('empty destination')) continue
     expect(row.confidence === 'exact' && row.fidelity === 'dropped').toBe(false)
     if (row.code === 'fidelity-unverified') {
       expect(row).toMatchObject({ severity: 'warning', fidelity: 'dropped', confidence: 'fallback' })
@@ -187,7 +188,7 @@ it('keeps native code conversion across empty comments', () => {
   expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(false)
 })
 
-it.each(['a[^1][^2]', '[x][^1]', '[ref][^1]'])('keeps footnote references after a closing bracket: %s', label => {
+it.each(['a[^1][^2]', '[x][^1]', '[ref][^1]', '[2^n][^1]', '[a [b]][^1]'])('keeps footnote references after a closing bracket: %s', label => {
   const result = migrateMarkdown(`${label}\n\n[^1]: one\n\n[^2]: two`)
   const count = label.startsWith('a') ? 2 : 1
   for (const value of [result.value, carveToCarve(result.value)]) {
@@ -200,5 +201,21 @@ it.each(['', '\n\n[^x]: n'])('keeps a caret empty-link label literal without abo
   expect(carveToHtml(result.value)).toContain('^x')
   expect(carveToHtml(result.value)).toContain('mailto:a@b.test')
   expect(carveToHtml(result.value)).not.toContain('doc-noteref')
+  expect(carveToHtml(carveToCarve(result.value))).toBe(carveToHtml(result.value))
+})
+
+it('keeps a full reference immediately before a footnote', () => {
+  const result = migrateMarkdown('[a][b][^1]\n\n[b]: /u\n\n[^1]: note')
+  for (const value of [result.value, carveToCarve(result.value)]) {
+    expect(carveToHtml(value)).toContain('href="/u"')
+    expect(carveToHtml(value)).toContain('role="doc-noteref"')
+  }
+})
+
+it.each(['[$a*b*c$]()', '[$$a*b*c$$]()'])('keeps opt-in math inside an empty label unchanged: %s', source => {
+  const result = migrateMarkdown(source, { dialect: { math: true } })
+  const paragraph = parse(result.value).children[0]
+  expect(paragraph?.type).toBe('paragraph')
+  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'math', content: 'a*b*c' })
   expect(carveToHtml(carveToCarve(result.value))).toBe(carveToHtml(result.value))
 })

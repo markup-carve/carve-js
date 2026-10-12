@@ -10314,5 +10314,113 @@
   {
     "source": "[unknown \"label\"][missing]",
     "html": "<p>[unknown &quot;label&quot;][missing]</p>\n"
+  },
+  {
+    "source": "*a [*b*]() c*",
+    "html": "<p><em>a <em>b</em> c</em></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "x[*b*]()y",
+    "html": "<p>x<em>b</em>y</p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "**a [**b**]() c**",
+    "html": "<p><strong>a <strong>b</strong> c</strong></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "*a [*b*]() c* x@y.z",
+    "html": "<p><em>a <em>b</em> c</em> <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "x[*b*]()y x@y.z",
+    "html": "<p>x<em>b</em>y <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[a [foo] b]() x@y.z\n\n[foo]: <>",
+    "html": "<p>[a foo b]() <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[a [foo] b](u) x@y.z\n\n[foo]: <>",
+    "html": "<p>[a foo b](u) <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[- *x*]()",
+    "html": "<p>- <em>x</em></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[# *x*]()",
+    "html": "<p># <em>x</em></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[> *x*]()",
+    "html": "<p>&gt; <em>x</em></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[1. *x*]()",
+    "html": "<p>1. <em>x</em></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "*[*b*]()*",
+    "html": "<p><em><em>b</em></em></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[^*x*]() a@b.test",
+    "html": "<p>^<em>x</em> <a href=\"mailto:a@b.test\">a@b.test</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[foo][don't]\n\n[foo]: /u",
+    "html": "<p>[foo][don't]</p>\n"
+  },
+  {
+    "source": "![foo][*missing*]\n\n[foo]: /u",
+    "html": "<p>![foo][<em>missing</em>]</p>\n"
+  },
+  {
+    "source": "[x [foo]](u) a@b.test\n\n[foo]: <>",
+    "html": "<p>[x foo](u) <a href=\"mailto:a@b.test\">a@b.test</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[<img src=\"my_image.png\">]()",
+    "html": "<p><img src=\"my_image.png\"></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[<span title=\"*a*\">x</span>]()",
+    "html": "<p><span title=\"*a*\">x</span></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[<https://a.b/x_y>]()",
+    "html": "<p><a href=\"https://a.b/x_y\">https://a.b/x_y</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[<https://a.b/*x*>]()",
+    "html": "<p><a href=\"https://a.b/*x*\">https://a.b/*x*</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[<img src=\"my_image.png\">]() c@d.test",
+    "html": "<p><img src=\"my_image.png\"> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n",
+    "emptyDestinationLoss": true
+  },
+  {
+    "source": "[<https://a.b/x_y>]() c@d.test",
+    "html": "<p><a href=\"https://a.b/x_y\">https://a.b/x_y</a> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n",
+    "emptyDestinationLoss": true
   }
 ]
