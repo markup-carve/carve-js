@@ -9,6 +9,14 @@ const cases = JSON.parse(readFileSync(new URL('./fixtures/descendant-comment-anc
 }>
 
 describe('descendant comments retain the enclosing item at a positive dedent', () => {
+  it.each(['x', '# h'])('retained %s text does not claim a following flush-left line', (text) => {
+    const document = parse(`- a\n  - b\n    %% c\n ${text}\ny\n`)
+    expect(document.children.map(({ type }) => type)).toEqual(['list', 'paragraph'])
+    const list = document.children[0]!
+    if (list.type !== 'list') throw new Error('expected outer list')
+    expect(list.items[0]!.children.at(-1)?.type).toBe('paragraph')
+  })
+
   it.each(cases)('$id matches the independent native ownership', ({ source, html }) => {
     expect(carveToHtml(source)).toBe(html)
   })

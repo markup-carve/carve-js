@@ -13007,6 +13007,8 @@ class ParseSession {
               indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart())))
         ) {
           bodyHasBelowColumnLine = true
+          const retainedCommentFrame = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
+            lazyState.opaque === null && lazyState.literalColon === undefined && indentColumns(l, contentCol) > 0
           let lazyLine = l
           if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
             lazyLine = l.replace(/^[ \t]+/, '')
@@ -13101,6 +13103,13 @@ class ParseSession {
           // behind it (corpus 183, 197, 358).
           trackItemLazyState(lazyLine, lazyState, () => true, false,
             lazyState.authoredColon ? (width) => commentBlockHasCloser(lexer, width) : undefined)
+          if (retainedCommentFrame) {
+            // A retained line below the column opens no claim for a flush-left follower.
+            lazyState.lazyFoldable = false
+            lazyState.commentAtColumn = true
+            lazyState.ownedColumn = -1
+            lazyState.deepest = null
+          }
           if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
           lexer.consume()
         } else if (
