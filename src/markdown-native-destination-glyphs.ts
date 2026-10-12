@@ -12,6 +12,7 @@ export function protectNativeMarkdownDestinationGlyphs(
   const codeEnds = backtickRunEnds(source)
   const opens: Array<{ at: number; image: boolean; generation: number; nested: boolean }> = []
   const glyphs = new Map<number, number>()
+  let lineCursor = 0, lineNumber = 0
   const tokenAt = /\x00P\d+\x00/y
   let generation = 0
   for (let at = 0; at < source.length; at++) {
@@ -55,7 +56,8 @@ export function protectNativeMarkdownDestinationGlyphs(
         if (pointy && source[pos] === '\\') {
           if (source[pos + 1] === '\n') {
             let end = pos + 2
-            if (typeof stripContinuationIndent === 'function' ? stripContinuationIndent(pos + 1) : stripContinuationIndent) while (/[ \t]/.test(source[end] ?? '')) end++
+            while (lineCursor <= pos + 1) if (source[lineCursor++] === '\n') lineNumber++
+            if (typeof stripContinuationIndent === 'function' ? stripContinuationIndent(lineNumber) : stripContinuationIndent) while (/[ \t]/.test(source[end] ?? '')) end++
             glyphs.set(pos, end - pos)
             onEscapedLineBreak?.(pos + 1)
           }

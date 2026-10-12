@@ -27,7 +27,7 @@ it.each(controls as Array<{ source: string; html: string; carveHtml?: string; dr
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.confidence === 'exact' && row.fidelity === 'dropped')).toHaveLength(dropped)
 })
 
-it.each(['[a](<a\\\nb>)\n---', '> [a](<a\\\n> b>)\n> ---', '- [a](<a\\\n  b>)\n  ---'])('preserves the escaped destination newline in a setext heading: %s', source => {
+it.each(['[a](<a\\\nb>)\n---', '[a]( <a\\\nb>)\n---', '> [a](<a\\\n> b>)\n> ---', '- [a](<a\\\n  b>)\n  ---'])('preserves the escaped destination newline in a setext heading: %s', source => {
   const written = markdownToCarve(source)
   for (const rendered of [written, carveToCarve(written)]) {
     const html = carveToHtml(rendered)
@@ -35,4 +35,29 @@ it.each(['[a](<a\\\nb>)\n---', '> [a](<a\\\n> b>)\n> ---', '- [a](<a\\\n  b>)\n 
     expect(html).toMatch(/<h2(?: [^>]*)?><a /)
   }
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.confidence === 'exact' && row.fidelity === 'dropped')).toHaveLength(0)
+})
+
+it.each(['> [a](<a\\\n> b>)\n> ---\n> tail', '- [a](<a\\\n  b>)\n  ---\n  tail'])('keeps the paragraph after a multiline destination heading: %s', source => {
+  const written = markdownToCarve(source)
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html).toContain('<a href="a%5C%0Ab">a</a>')
+    expect(html).toContain('tail')
+    expect(html.match(/<h2(?: |>)/g)).toHaveLength(1)
+  }
+})
+
+it.each(['<http://x/[a>](<b\\\nc>)\n---', '[o [r] p](<a\\\nb>)\n---\n\n[r]: /u'])('keeps an inactive destination inside one heading: %s', source => {
+  const written = markdownToCarve(source)
+  for (const rendered of [written, carveToCarve(written)]) {
+    const html = carveToHtml(rendered)
+    expect(html.match(/<h2(?: |>)/g)).toHaveLength(1)
+    expect(html).not.toContain('<p>')
+  }
+})
+
+it('keeps spaces in a lazy quote continuation inside a heading', () => {
+  const written = markdownToCarve('> [a](<a\\\n   b>)\n> ---')
+  expect(carveToHtml(written)).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
+  expect(carveToHtml(carveToCarve(written))).toContain('<a href="a%5C%0A%20%20%20b">a</a>')
 })

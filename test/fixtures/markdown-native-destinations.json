@@ -498,5 +498,17 @@
   {
     "source": "> [a](<a\\\n>    b>)",
     "html": "<blockquote>\n<p><a href=\"a%5C%0Ab\">a</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "> see https://example.com/some/long/path [a](<a\\\n   b>)",
+    "html": "<blockquote>\n<p>see <a href=\"https://example.com/some/long/path\">https://example.com/some/long/path</a> <a href=\"a%5C%0A%20%20%20b\">a</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "> x\nlazy https://example.com/long [a](<a\\\n>    b>)",
+    "html": "<blockquote>\n<p>x\nlazy <a href=\"https://example.com/long\">https://example.com/long</a> <a href=\"a%5C%0Ab\">a</a></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- - [a](<a\\\n   b>)",
+    "html": "<ul>\n<li>\n<ul>\n<li><a href=\"a%5C%0A%20b\">a</a></li>\n</ul>\n</li>\n</ul>\n"
   }
 ]
