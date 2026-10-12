@@ -5613,6 +5613,10 @@ function trackItemLazyState(
     )
     state.lazyFoldable = inner.lazyFoldable
     state.inTable = inner.inTable
+    // An invisible descendant comment ends its paragraph, not the enclosing item.
+    if (inner.literalColon && RE_COMMENT_LINE.test(sliceColumns(content, offset, true).trimStart())) {
+      state.commentAtColumn = true
+    }
     state.inDefList = false
     return
   }
