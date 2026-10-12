@@ -5,7 +5,7 @@ import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
 import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
-import { markdownEmphasis } from './markdown-emphasis.js'
+import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
@@ -26,11 +26,13 @@ import {
   plainAltText,
   referenceDestinationLabel,
   referenceInlineTarget,
+  isEmptyDestinationReference,
   referenceSourceLabel,
   referenceSourceText,
   referenceLiteralText,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
+  useEmptyDestinationBoundaryKey,
 } from './markdown-empty-destination.js'
 import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
@@ -1514,9 +1516,32 @@ function convertInline(
 
 
 
+  const opaqueMathEnd = (subject: string, offset: number): number | undefined => {
+    if (!dialect.math || subject[offset] !== '$') return undefined
+    const match = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(subject.slice(offset))
+    return match ? offset + match[0].length : undefined
+  }
   const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
+  if (line.includes('[') && line.includes(']')) {
+    const subject = line
+    const opaque = opaqueHtmlScanner(subject)
+    const auto = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+    line = escapeInactiveMarkdownLinkBrackets(subject, value => protect(value, value.slice(1)),
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+        || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+      offset => {
+        const mathEnd = opaqueMathEnd(subject, offset)
+        if (mathEnd !== undefined) return mathEnd
+        auto.lastIndex = offset
+        const link = auto.exec(subject)
+        return link ? offset + link[0].length : opaque(offset) ?? scanHtmlTag(subject, offset)?.end
+      })
+  }
   let opaqueSubject: string | undefined
   let opaqueRanges: Array<[number, number]> = []
+  let activeEmptyDestinationOpeners = new Set<number>()
+  let scalarBoundaryRanges: Array<[number, number]> = []
+  let activeImageLabelRanges: Array<[number, number]> = []
   line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before, subject) => {
     if (!reportEmptyLosses) return
     let counts = sourceLineCounts.get(subject)
@@ -1553,6 +1578,31 @@ function convertInline(
     if (subject !== opaqueSubject) {
       opaqueSubject = subject
       opaqueRanges = []
+      scalarBoundaryRanges = []
+      activeImageLabelRanges = []
+      for (const scalar of subject.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>|<span\s+class\s*=\s*"critic-comment"\s*>([^<]*)<\/span>/gi)) {
+        const body = scalar[1] ?? scalar[2]!
+        if (!decodeHtmlEntitiesRaw(referenceSourceText(body, protectedSources)).includes('@')) {
+          scalarBoundaryRanges.push([scalar.index! + scalar[0].indexOf('>') + 1, scalar.index! + scalar[0].lastIndexOf('</')])
+        }
+      }
+      if (dialect.math) {
+        for (const math of subject.matchAll(/\$\$([^$]+)\$\$|\$([^$\s][^$]*[^$\s]|\S)\$(?!\d)/g)) {
+          if (math[1] !== undefined || !/^[\d.,]+$/.test(math[2]!)) opaqueRanges.push([math.index!, math.index! + math[0].length])
+        }
+      }
+      activeEmptyDestinationOpeners = new Set<number>()
+      const emptyDestinationOpaque = opaqueHtmlScanner(subject)
+      escapeInactiveMarkdownLinkBrackets(subject, value => value,
+        label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+          || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+        offset => opaqueMathEnd(subject, offset) ?? emptyDestinationOpaque(offset) ?? scanHtmlTag(subject, offset)?.end,
+        (open, close, image) => {
+          activeEmptyDestinationOpeners.add(open)
+          if (image) activeImageLabelRanges.push([open, close])
+          const end = markdownInlineDestinationEnd(subject, close + 1)
+          if (end !== undefined) opaqueRanges.push([close + 1, end + 1])
+        })
       const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
       for (let cursor = 0; cursor < subject.length; cursor++) {
         if (subject[cursor] !== '<') continue
@@ -1566,7 +1616,69 @@ function convertInline(
       }
     }
     return opaqueRanges.some(([start, end]) => offset > start && offset < end)
-  })
+      || !activeEmptyDestinationOpeners.has(subject[offset] === '!' ? offset + 1 : offset)
+  }, label => {
+    const masked = new Map<string, string>()
+    if (label.includes('<') || label.includes('![') || label.includes('[^') || dialect.math && label.includes('$')) {
+      const source = label
+      const opaque = opaqueHtmlScanner(source)
+      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+      const bracketEnd = (open: number): number | undefined => {
+        let depth = 0
+        for (let at = open; at < source.length; at++) {
+          if (source[at] === '\\') { at++; continue }
+          if (source[at] === '[') depth++
+          else if (source[at] === ']' && --depth === 0) return at
+        }
+        return undefined
+      }
+      let output = ''
+      for (let at = 0; at < source.length;) {
+        let end: number | undefined
+        if (source[at] === '!' && source[at + 1] === '[') {
+          const close = bracketEnd(at + 1)
+          if (close !== undefined) {
+            const label = source.slice(at + 2, close)
+            const inline = markdownInlineDestinationEnd(source, close + 1)
+            const reference = /^\[([^\[\]\n]*)\]/.exec(source.slice(close + 1))
+            if (inline !== undefined) end = inline + 1
+            else if (reference && (referenceDestinationLabel(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans))) end = close + 1 + reference[0].length
+            else if (referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans)) end = close + 1
+          }
+        } else if (source[at] === '[' && source[at + 1] === '^') {
+          const close = bracketEnd(at)
+          if (close !== undefined) end = close + 1
+        } else if (source[at] === '<') {
+          autolink.lastIndex = at
+          const angle = autolink.exec(source)
+          end = angle ? at + angle[0].length : opaque(at) ?? scanHtmlTag(source, at, protectedSpans)?.end
+        } else if (dialect.math && source[at] === '$') {
+          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(source.slice(at))
+          if (math) end = at + math[0].length
+        }
+        if (end === undefined) { output += source[at++]; continue }
+        const scalar = source.slice(at, end)
+        const token = protect(scalar, scalar)
+        masked.set(token, scalar)
+        output += token
+        at = end
+      }
+      label = output
+    }
+    let depth = 0
+    const converted = markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, peak => { depth = peak }, true, value => protect(value), { before: '[', after: ']' })
+    if (depth > 0) {
+      for (const match of converted.matchAll(/\x00P(\d+)\x00/g)) {
+        if (/^\{[*/~]/.test(protectedSpans[Number(match[1])] ?? '')) {
+          recordMarkdownProtectedDepth(protectedSpans, match[0], depth)
+          break
+        }
+      }
+    }
+    return masked.size === 0 ? converted : converted.replace(/\x00P\d+\x00/g, token => masked.get(token) ?? token)
+  },
+  (_subject, offset) => !scalarBoundaryRanges.some(([start, end]) => offset >= start && offset < end),
+  (_subject, offset) => activeImageLabelRanges.some(([start, end]) => offset > start && offset < end))
 
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
@@ -1604,6 +1716,8 @@ function convertInline(
   line = escapeInactiveMarkdownLinkBrackets(activationSource, value => protect(value, value.slice(1)),
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     offset => {
+      const mathEnd = opaqueMathEnd(activationSource, offset)
+      if (mathEnd !== undefined) return mathEnd
       const opaque = activationOpaque(offset)
       if (opaque !== undefined) return opaque
       activationAutolink.lastIndex = offset
@@ -1790,7 +1904,50 @@ function convertInline(
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
+  let literalReferenceOpeners: Set<string> | undefined
+  if (line.includes('][^') || /\]\x00P\d+\x00/.test(line)) {
+    const footnotePrefixSource = line
+    const opaque = opaqueHtmlScanner(line)
+    let cursor = 0
+    line = line.replace(/(?<!\\)\[((?!\^)(?:[^\[\]\n]|\[[^\]\n]*\])+)\](?=\[\^|\x00P\d+\x00)/g, (match, label: string, offset: number) => {
+      const following = /^\x00P(\d+)\x00/.exec(footnotePrefixSource.slice(offset + match.length))
+      if (following && !protectedSpans[Number(following[1])]?.startsWith('[^')) return match
+      while (cursor < offset) {
+        const end = footnotePrefixSource[cursor] === '<' ? opaque(cursor) ?? scanHtmlTag(footnotePrefixSource, cursor)?.end : undefined
+        if (end !== undefined) { cursor = end; continue }
+        if (dialect.math && footnotePrefixSource[cursor] === '$') {
+          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(footnotePrefixSource.slice(cursor))
+          if (math) { cursor += math[0].length; continue }
+        }
+        cursor++
+      }
+      if (footnotePrefixSource[offset - 1] === ']' && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined) return match
+      if (cursor > offset) return match
+      const opener = protect('\\[', '[')
+      ;(literalReferenceOpeners ??= new Set()).add(opener)
+      return opener + label + protect('\\]', ']')
+    })
+  }
+  const referenceSubject = line
+  const referenceOpeners = new Map<number, number>()
+  const referenceStack: number[] = []
+  const referenceHtml = new Set<number>()
+  const hasReferencePairs = referenceSubject.includes('][')
+  for (let at = 0; hasReferencePairs && at < referenceSubject.length; at++) {
+    if (referenceSubject[at] === '<') {
+      const tag = scanHtmlTag(referenceSubject, at)
+      if (tag) {
+        for (; at < tag.end; at++) referenceHtml.add(at)
+        at--
+        continue
+      }
+    }
+    if (referenceSubject[at] === '[') referenceStack.push(at)
+    else if (referenceSubject[at] === ']' && referenceStack.length) referenceOpeners.set(at, referenceStack.pop()!)
+  }
   line = line.replace(/(?<=\])\[([^\]]*)\]/g, (match, reference: string, offset: number, source: string) => {
+    if (referenceHtml.has(offset)) return match
+    if (reference.startsWith('^')) return protect(match, match)
     const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
@@ -1804,8 +1961,14 @@ function convertInline(
     }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
     if (canonical === undefined || /[\[\]]/.test(canonical)) {
-      if (!referenceSourceText(reference, protectedSpans).includes('|')) return protect(match, match)
-      return protect(`\\[${writeLiteralReference(reference)}\\]`, match)
+      const tablePipe = table && referenceSourceText(reference, protectedSpans).includes('|')
+      if (sourceLabel !== undefined && !tablePipe) return protect(match, match)
+      const precedingOpener = referenceOpeners.get(offset - 1)
+      const precedingLabel = precedingOpener === undefined ? '' : source.slice(precedingOpener + 1, offset - 1)
+      if (!tablePipe && !/[*_`\\\x00<&~"'=^]/.test(reference + precedingLabel)) return protect(match, match)
+      const opener = protect('\\[', '[')
+      ;(literalReferenceOpeners ??= new Set()).add(opener)
+      return opener + reference + protect('\\]', ']')
     }
     return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`, match)
   })
@@ -1933,6 +2096,7 @@ function convertInline(
     if (destinationOpeners.has(offset + match.length)) return match
     const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
     if (following) {
+      if (literalReferenceOpeners?.has(following[0])) return match
       const protectedTail = protectedSpans[Number(following[1])] ?? ''
       if (protectedTail.startsWith('(') || protectedTail.startsWith('{title=')) return match
       const reference = /^\[([^\]]*)\]$/.exec(protectedTail)
@@ -2046,6 +2210,12 @@ function convertInline(
   // brace that ATTACHES to the construct before it, and one alone on a line;
   // mid-prose, attaching to nothing, was the position neither reached.
   if (!dialect.attributes) line = escapeAttributeBlockOpener(line)
+  if (dialect.attributes && !holdsFenceBody) {
+    const wholeLine = line.trim()
+    line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+      (match, inner: string, offset: number, source: string) =>
+        (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
+  }
   line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
   // Numeric references are decoded below. Keep their hash available to that
   // pass even though the standalone escaper freezes it.
@@ -2103,14 +2273,15 @@ function convertInline(
     line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
   }
 
+  if (dialect.attributes && !holdsFenceBody) {
+    const wholeLine = line.trim()
+    line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+      (match, inner: string, offset: number, source: string) =>
+        (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
+  }
+
 
   if (!holdsFenceBody) {
-    if (dialect.attributes) {
-      const wholeLine = line.trim()
-      line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
-        (match, inner: string, offset: number, source: string) =>
-          (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
-    }
     line = line.replace(/["']/g, '\\$&')
   }
   // In a table cell a `#` run is literal text, not a heading marker, so the
@@ -5235,6 +5406,16 @@ export function markdownToCarveWithLosses(
 ): { value: string; losses: MarkdownImportLoss[] } {
   const losses: MarkdownImportLoss[] = []
   importLosses = losses
+  const decoded = markdown.includes('&') ? decodeHtmlEntitiesRaw(markdown) : markdown
+  let emptyDestinationKey: string | undefined
+  if (decoded.includes('@')) {
+    const keySource = decoded.includes('\\') ? decoded.replace(/\\([!-\/:-@\[-`{-~])/g, '$1') : decoded
+    const occupied = new Set([...keySource.toLowerCase().matchAll(/carve-md-empty-(\d+)/g)].map(match => match[1]))
+    let slot = 0
+    while (occupied.has(String(slot))) slot++
+    emptyDestinationKey = `carve-md-empty-${slot}`
+  }
+  useEmptyDestinationBoundaryKey(emptyDestinationKey)
   try {
     // PART 11 §10s: a carrier marker is lifted to a placeholder before the
     // conversion and written back as the Carve line it is afterwards, so the
@@ -5243,19 +5424,24 @@ export function markdownToCarveWithLosses(
     const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
 
     let value = restoreCarrierMarkers(convertMarkdown(prepared, dialect))
-    if (value.includes('@')) {
+    const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
+    if (value.includes('@') || usedBoundaryKey !== undefined) {
       const document = parse(value)
-      if (linkMarkdownEmailText(document)) {
+      if (linkMarkdownEmailText(document, usedBoundaryKey)) {
         const trailingNewline = value.endsWith('\n')
         value = renderCarve(document, { onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }) })
         if (!trailingNewline) value = value.replace(/\n$/, '')
       }
+    }
+    if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
+      throw new Error('Markdown import could not remove its internal empty-destination boundary')
     }
     return { value, losses }
   } finally {
     carrierSlots = []
     carrierToken = ''
     useEmptyDestinationReferences(null)
+    useEmptyDestinationBoundaryKey()
     importLosses = []
     inlineRunSourceLine = undefined
     importSourceLine = undefined
@@ -6522,7 +6708,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (isHeading && /^[ \t]*(#{1,6})(?:[ \t]+#*)?[ \t]*$/.test(line)) {
       const level = /^#+/.exec(trimmed)![0].length
       if (out.length && out.at(-1)!.trim() !== '') out.push('')
-      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text), '')
+      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text))
       prevType = 'heading'
       continue
     }
@@ -6676,7 +6862,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // the migrated document grew a table the author never saw
     // (markup-carve/carve-js#1061). Escaping only the opening pipe keeps the
     // line in the paragraph it belongs to.
-    out.push(
+    if (isHeading && /^[ \t]*#{1,6}[ \t]*$/.test(converted)) {
+      const level = /^#+/.exec(trimmed)![0].length
+      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text))
+    } else out.push(
       !inGfmTable[i] && isStandardTableRow(converted) ? keepPipeRowLiteral(converted) : converted,
     )
     itemParagraph = listCols.length > 0 && indentColumns(line) >= contentCol && !isHeading && opensParagraph(held)

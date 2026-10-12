@@ -145,8 +145,8 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('[_id_]: /u "*title*"')).toBe('[_id_]: /u "*title*"')
   })
 
-  it('does not rewrite a reference label at the use site', () => {
-    expect(conv('[link][_id_]')).toBe('[link][_id_]')
+  it('converts emphasis in an undefined reference label', () => {
+    expect(carveToHtml(conv('[link][_id_]'))).toBe('<p>[link][<em>id</em>]</p>')
   })
 
   it('still converts emphasis in link text', () => {
