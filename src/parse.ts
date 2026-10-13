@@ -7402,6 +7402,28 @@ function rebasedColonGroupEnd(
   let authoredChildColumn = -1
   let authoredChildBlank = false
   let authoredChildBlockBoundary = false
+  // CARVE-P0-009: a child that leaves no paragraph open lets a fence below its column leave it.
+  let authoredChildState: ItemLazyState | undefined
+  const childFenceCloses = (j: number) => (marker: string, extraColumns = 0): boolean => {
+    const group = opaqueGroupCloser(marker)
+    if (group === null) return false
+    const column = authoredChildColumn + extraColumns
+    let memo = childCloserMemos.get(column)
+    if (memo === undefined) childCloserMemos.set(column, memo = { verbatim: new Map(), comment: new Map() })
+    return opaqueGroupCloses(group, lines, j + 1, column, takenBelowColumn, memo)
+  }
+  const childCloserMemos = new Map<number, GroupCloserMemo>()
+  // PART 2 "A CLOSER IS REQUIRED": an unclosed fence that would take this
+  // group's closer opens nothing. One forward pointer keeps the lookahead linear.
+  let groupCloserAt = start
+  const groupCloserAhead = (j: number): boolean => {
+    if (groupCloserAt <= j) {
+      groupCloserAt = j + 1
+      while (groupCloserAt < lines.length && !(indentColumns(lines[groupCloserAt]!, base + 1) === base &&
+        RE_ADMONITION_CLOSE.exec(groupLineContent(lines[groupCloserAt]!, base))?.[1]?.length === width)) groupCloserAt++
+    }
+    return groupCloserAt < lines.length
+  }
   for (let j = start + 1; j < lines.length; j++) {
     let candidate = lines[j]!
     let authoredColumn: number | undefined
@@ -7413,10 +7435,15 @@ function rebasedColonGroupEnd(
       if (isBlankLine(candidate)) authoredChildBlank = true
       else if (opaque === null && (authoredChildBlank || hostedAuthoredBlockOpener(candidate.trimStart()) || RE_ADMONITION_CLOSE.test(candidate.trimStart()))) {
         const column = authoredColumn = indentColumns(candidate, authoredChildColumn)
+        const childClosed = authoredChildState !== undefined && !authoredChildState.lazyFoldable && !insideOpenFence(authoredChildState)
         if (column < authoredChildColumn && (authoredChildBlank ||
             ((column === authored.at(-1)!.column && lineOpensItemBlock(candidate.trimStart())) ||
               (column > authored.at(-1)!.column && (colonFenceOpenerLen(candidate.trimStart()) !== null ||
-                (authoredChildBlockBoundary && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
+                ((authoredChildBlockBoundary || (childClosed && (childFenceCloses(j)(candidate.trimStart(), column - authoredChildColumn) ||
+                  !groupCloserAhead(j)))) && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
+        else if (column >= authoredChildColumn && authoredChildState !== undefined) {
+          trackItemLazyState(sliceColumns(candidate, authoredChildColumn, true), authoredChildState, childFenceCloses(j))
+        }
       }
     }
     if (authoredCodeClose) {
@@ -7441,6 +7468,8 @@ function rebasedColonGroupEnd(
         authoredChildColumn = childColumn
         authoredChildBlank = false
         authoredChildBlockBoundary = false
+        authoredChildState = verbatimOnlyLazyState()
+        trackItemLazyState(text.slice(markerColumn), authoredChildState, childFenceCloses(j))
       }
       const code = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
       if (rebasesHere && code && column === owner.column && owner.paragraph &&
@@ -7631,6 +7660,42 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
         opensCodeFence(lines[index + 1]?.trimStart() ?? '')) openers.push(index + 1)
   }
   return openers
+}
+
+// CARVE-P2-017's AT band: a non-list, non-fence block opener at or past a
+// marker-line note's body column opens inside the note. 'open' means no line
+// has dropped below that column since, so nothing may continue the note lazily.
+function markerNoteOpenerReach(lines: readonly string[], absorbedMarkers: ReadonlySet<number>): 'open' | 'closed' | null {
+  let closer: RegExp | null = null
+  let openerColumn = -1
+  let childColumn = -1
+  let found = false
+  for (const [index, line] of lines.entries()) {
+    if (isBlankLine(line)) continue
+    const column = indentColumns(line)
+    if (column < FOOTNOTE_BODY_COLUMN) return found ? 'closed' : null
+    const text = line.trimStart()
+    if (closer !== null) {
+      if (column === openerColumn && closer.test(text)) closer = null
+      continue
+    }
+    if (childColumn >= 0 && column >= childColumn) continue
+    childColumn = -1
+    if (RE_FOOTNOTE_DEF.test(text)) return found ? 'closed' : null
+    const fence = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
+    if (fence !== null) {
+      closer = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
+      openerColumn = column
+      continue
+    }
+    if (isListMarkerLine(text)) {
+      if (!absorbedMarkers.has(index)) childColumn = column + markerContentColumn(text)
+      continue
+    }
+    if (RE_COMMENT_LINE.test(text) || commentFenceRun(text) !== undefined) continue
+    if (lineOpensItemBlock(text)) found = true
+  }
+  return found ? 'open' : null
 }
 
 /**
@@ -13401,6 +13466,8 @@ class ParseSession {
           if (!isBlankLine(nested[index]!)) { lastNoteLine = nested[index]!.trimStart(); break }
         }
         const afterNoteBody = noteBodyLast || noteReach === 'unclosed' ||
+          (markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
+            markerNoteOpenerReach(nested, noteParagraphMarkers) === 'open') ||
           (noteReach === 'closed' && lastNoteLine !== '' && !opensCodeFence(lastNoteLine) &&
             !RE_COMMENT_LINE.test(lastNoteLine))
         const fenceBoundaryTail = noteReach === 'boundary'
@@ -14360,7 +14427,8 @@ class ParseSession {
         orderedMatch(content, terminatorFree) !== null ||
         taskMatch(content, terminatorFree) !== null ||
         extractItemAttr(content, terminatorFree) !== null
-      const markerNoteFenceOwnsExtent = markerNoteItem && markerNoteFenceReach(nested, noteParagraphMarkers) !== null
+      const markerNoteFenceOwnsExtent = markerNoteItem && (markerNoteFenceReach(nested, noteParagraphMarkers) !== null ||
+        markerNoteOpenerReach(nested, noteParagraphMarkers) !== null)
       // Include marker-line containers whose continuation keeps its own extent.
       const leadOwnsExtent = (leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)) || markerLineTerm || markerNoteFenceOwnsExtent ||
         (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&

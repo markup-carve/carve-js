@@ -1,6 +1,5 @@
 import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
 import { normalizeRefLabel } from './label-key.js'
-import { definitionListFlattened } from './render-loss.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { renderCellContent } from './render-cell-content.js'
@@ -135,7 +134,6 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     roundtrip: opts.roundtrip === true,
     carrierDepth: 0,
     definitionListDepth: 0,
-    flattenedDefinitionLists: new WeakSet(),
     abbrBudget: budget,
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
@@ -186,7 +184,6 @@ interface MarkdownContext {
    */
   carrierDepth: number
   definitionListDepth: number
-  flattenedDefinitionLists: WeakSet<object>
   /** Inside a block quote, whose every line this target prefixes with `> `. */
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
@@ -403,7 +400,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
 }
 
 function attributeMarker(node: BlockNode, ctx: MarkdownContext): string {
-  if (!ctx.roundtrip || !node.attrs || (node.type === 'definition_list' && ctx.definitionListDepth > 0)) return ''
+  if (!ctx.roundtrip || !node.attrs) return ''
   let attrs = node.attrs
   if (node.type === 'heading' && !attrs.order?.includes('#id')) {
     const { id: _generated, ...authored } = attrs
@@ -764,26 +761,24 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
  */
 function renderDefinitionList(node: Extract<BlockNode, { type: 'definition_list' }>, ctx: MarkdownContext): string {
   const items = node.items
-  if (ctx.roundtrip && ctx.definitionListDepth > 0 && !ctx.flattenedDefinitionLists.has(node)) {
-    ctx.flattenedDefinitionLists.add(node)
-    definitionListFlattened(ctx.options, node)
-  }
-  const carried = ctx.roundtrip && ctx.definitionListDepth === 0
+  const carried = ctx.roundtrip
+  // A nested list's markers carry its depth so the import can pair them (CARVE-P11-067).
+  const depth = ctx.definitionListDepth + 1
   let out = ''
   ctx.definitionListDepth++
   try {
     for (const item of items) {
       for (const term of item.terms) {
-        if (carried) out += `${carrierLine(`:: ${canonicalInline(term)}`)}\n`
+        if (carried) out += `${carrierLine(`:: ${canonicalInline(term)}`, depth)}\n`
         out += renderWrappedInlines(term, ctx, '**', 'strong')
         ctx.lastList = undefined
       }
       for (const def of item.definitions) {
-        if (carried) out += `${carrierLine(':')}\n`
+        if (carried) out += `${carrierLine(':', depth)}\n`
         out += renderBlocks(def, ctx)
       }
     }
-    if (carried) out += `${carrierLine('')}\n\n`
+    if (carried) out += `${carrierLine('', depth)}\n\n`
   } finally {
     ctx.definitionListDepth--
   }

@@ -170,13 +170,3 @@ export function checkedRender(
   if (opts.strictLosses && totalLosses > 0) throw new RenderLossError(result)
   return result
 }
-
-export function definitionListFlattened(opts: RenderLossSinkOptions, node: { pos?: Position }): void {
-  opts.onRenderLoss?.({
-    code: 'definition-list-flattened',
-    target: 'markdown',
-    nodeType: 'block',
-    message: 'Flattened a nested definition list without roundtrip markers',
-    ...(node.pos ? { pos: node.pos } : {}),
-  })
-}

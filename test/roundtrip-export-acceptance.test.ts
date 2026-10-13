@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { isDeepStrictEqual } from 'node:util'
 import { test } from 'vitest'
 import { parseFragment, serialize } from 'parse5'
 import { parse, carveToHtml, carveToHtmlWithReport, htmlToAst, htmlToCarve, carveToMarkdown, carveToMarkdownWithReport, migrateMarkdown } from '../src/index.js'
@@ -168,27 +169,31 @@ test('task hooks remain ordinary output without preservation export', () => {
   for (const state of ['x', '-', '_', '>', '?']) assert.ok(htmlAttributes(html).some((attr) => attr.name === 'data-task-state' && attr.value === state), state)
 })
 
-const pendingNestedDefinitionCarriers = new Set(['nested-definition-list', 'nested-definition-list-two-levels'])
-for (const fixture of fixtures.markdownExportImport) {
-  const check = fixture.aheadOfPin && pendingNestedDefinitionCarriers.has(fixture.id) ? test.todo : test
-  check(`shared Markdown export: ${fixture.id}`, () => {
-    assertProjection(parse(fixture.source), fixture.expectedNodes)
-    const ordinary = carveToMarkdown(fixture.source)
-    assert.equal(carveToMarkdown(fixture.source, { roundtrip: false }), ordinary)
-    assert.ok(!ordinary.includes('<!-- carve:'))
-    const exported = carveToMarkdown(fixture.source, { roundtrip: true })
-    if (fixture.inlineMarkers) assert.equal(exported.replace(/<!-- carve: [\s\S]*? -->/g, ''), ordinary)
-    for (const fragment of fixture.carrierFragments) assert.ok(exported.includes(fragment), fragment)
-    const codes = carveToMarkdownWithReport(fixture.source, { roundtrip: true }).losses.map((row) => row.code)
-    for (const code of fixture.lossCodes ?? []) assert.ok(codes.includes(code), code)
-    const imported = migrateMarkdown(exported)
-    assertProjection(parse(imported.value), fixture.expectedNodes)
-    // A flattened nested list is the loss the row reports, so its HTML cannot come back equal.
-    // The upstream harness still asserts equality for that row (markup-carve/carve#2996).
-    if ((fixture.lossCodes ?? []).includes('definition-list-flattened')) return assert.notEqual(carveToHtml(imported.value).trim(), carveToHtml(fixture.source).trim())
-    assert.equal(carveToHtml(imported.value).trim(), carveToHtml(fixture.source).trim())
-  })
-}
+for (const fixture of fixtures.markdownExportImport) test(`shared Markdown export: ${fixture.id}`, () => {
+  assertProjection(parse(fixture.source), fixture.expectedNodes)
+  const ordinary = carveToMarkdown(fixture.source)
+  assert.equal(carveToMarkdown(fixture.source, { roundtrip: false }), ordinary)
+  assert.ok(!ordinary.includes('<!-- carve:'))
+  const exported = carveToMarkdown(fixture.source, { roundtrip: true })
+  if (fixture.inlineMarkers) assert.equal(exported.replace(/<!-- carve: [\s\S]*? -->/g, ''), ordinary)
+  for (const fragment of fixture.carrierFragments) assert.ok(exported.includes(fragment), fragment)
+  const codes = carveToMarkdownWithReport(fixture.source, { roundtrip: true }).losses.map((row) => row.code)
+  for (const code of fixture.lossCodes ?? []) assert.ok(codes.includes(code), code)
+  const imported = migrateMarkdown(exported)
+  assertProjection(parse(imported.value), fixture.expectedNodes)
+  assert.equal(carveToHtml(imported.value).trim(), carveToHtml(fixture.source).trim())
+})
+
+for (const fixture of fixtures.markdownImportNegative ?? []) test(`shared Markdown import rejection: ${fixture.id}`, () => {
+  const imported = migrateMarkdown(fixture.markdown)
+  const tree = parse(imported.value)
+  const codes = imported.report.diagnostics.map((row) => row.code as string)
+  if (fixture.expectedDiagnostic) assert.ok(codes.includes(fixture.expectedDiagnostic.code), fixture.expectedDiagnostic.code)
+  for (const [code, count] of Object.entries(fixture.expectedDiagnostics ?? {})) assert.equal(codes.filter((row) => row === code).length, count, code)
+  assertProjection(tree, fixture.expectedNodes ?? [])
+  for (const projection of fixture.forbiddenNodes ?? []) assert.ok(!nodes(tree).some((node) => Object.entries(projection).every(([key, value]) => isDeepStrictEqual(field(node, key), value))), JSON.stringify(projection))
+  for (const type of fixture.forbiddenTypes ?? []) assert.ok(!nodes(tree).some((node) => node.type === type), type)
+})
 
 test('shared acceptance cases have distinct identities and explicit assertions', () => {
   const ids = new Set()
