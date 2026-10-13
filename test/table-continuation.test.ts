@@ -76,10 +76,19 @@ describe('table `+` multi-line cell continuation', () => {
     )
   })
 
-  it('drops the continuation on a blocked marker, which renders empty', () => {
-    expect(h('| a | < |\n| ^ | b |\n+ x | y |')).toBe(
-      '<table>\n  <tbody>\n    <tr><td colspan="2">a</td></tr>\n    <tr><td></td><td>b y</td></tr>\n  </tbody>\n</table>',
-    )
+  // carve#3151: a blocked marker is a cell of its own, and `+` text on it is its content.
+  it.each([
+    ['| a | b |\n| < | c |\n+ x | y |', '<tr><td>a</td><td>b</td></tr>\n    <tr><td>x</td><td>c y</td></tr>'],
+    ['| ^ | b |\n+ x | y |', '<tr><td>x</td><td>b y</td></tr>'],
+    ['| a | < |\n| ^ | b |\n+ x | y |', '<tr><td colspan="2">a</td></tr>\n    <tr><td>x</td><td>b y</td></tr>'],
+    [
+      '| a | b |\n| ^ | c |\n| < | d |\n+ x | y |',
+      '<tr><td rowspan="2">a</td><td>b</td></tr>\n    <tr><td>c</td></tr>\n    <tr><td>x</td><td>d y</td></tr>',
+    ],
+    ['| ^ | < |\n+ x | y |', '<tr><td colspan="2">x y</td></tr>'],
+    ['| ^ | < |\n+ | y |', '<tr><td colspan="2">y</td></tr>'],
+  ])('keeps the continuation on a blocked marker in its cell: %j', (src, rows) => {
+    expect(h(src)).toBe(`<table>\n  <tbody>\n    ${rows}\n  </tbody>\n</table>`)
   })
 
   it('joins a continuation after a caret into the spanning cell', () => {

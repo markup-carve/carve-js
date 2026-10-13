@@ -15467,20 +15467,33 @@ class ParseSession {
       })
     }
     if (rawRows.some((rc) => rc.some((c) => c.joins))) {
-      // A marker's continuation text joins the cell it resolves into; a blocked
-      // marker renders empty and keeps none of it (T5, T6).
+      // A marker's continuation text joins the cell it resolves into. A blocked
+      // marker is a cell of its own: it renders no marker, and the text joined
+      // to it is its content (T5, T6, carve#3151).
       const grid = rawRows.map((rc, rowIndex) => rc.map((cell) => ({ cell, rowIndex, rowspan: 1, colspan: 1, skip: false })))
+      const keepBlocked = (cell: RawCell): void => {
+        if (!cell.span) return
+        delete cell.span
+        delete cell.anchors
+        delete cell.wraps
+        cell.raw = ''
+        cell.openRun = 0
+        for (const { frag, at, marker: point, line } of cell.joins ?? []) joinFragment(cell, frag, at, line, undefined, point)
+      }
       resolveSpanGrid(
         grid,
         (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
         (origin, marker) => {
-          if (origin.rowIndex !== marker.rowIndex && marker.cell.joins?.length) {
+          if (!marker.cell.joins?.length) return
+          if (origin.rowIndex !== marker.rowIndex) {
             origin.cell.crossRowJoin = true
             marker.cell.crossRowJoin = true
           }
-          for (const { frag, at, marker: point, line, rowIndex } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex, point)
+          keepBlocked(origin.cell)
+          for (const { frag, at, marker: point, line, rowIndex } of marker.cell.joins) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex, point)
         },
       )
+      for (const row of grid) for (const e of row) if (!e.skip && e.cell.joins?.length) keepBlocked(e.cell)
     }
     const rows: TableRow[] = rawRows.map((rc, idx) => {
       const row: TableRow = {
