@@ -23,8 +23,11 @@ describe('an authored footnote reference id replaces the generated one', () => {
     expect(html).toContain('<a href="#q&amp;r" role="doc-backlink"')
   })
 
-  it('imports the reference inside link text as a footnote again', () => {
-    expect(htmlToCarve(carveToHtml(source)).value).toBe('a [t[^1]](/u) [^1] [^1]\n\n[^1]: n\n')
+  it('imports the references back with their authored ids, and leaves generated ones implicit', () => {
+    const carve = htmlToCarve(carveToHtml(source)).value
+    expect(carve).toBe('a [t[^1]{#z}](/u) [^1]{#y} [^1]\n\n[^1]: n\n')
+    expect(carveToHtml(carve)).toBe(carveToHtml(source))
+    expect(htmlToCarve(carveToHtml('a [^1] [^1]\n\n[^1]: n\n')).value).toBe('a [^1] [^1]\n\n[^1]: n\n')
   })
 
   it('reads only a fragment href as a backlink target', () => {
