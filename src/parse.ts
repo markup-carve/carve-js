@@ -4728,10 +4728,6 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     (leadingWhitespace(line) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||
-    // A caption line (`^ …`) ends the item's lazy continuation rather than
-    // folding in, matching carve-php / carve-rs (a caption is a heading/figure
-    // terminator, not plain prose the item absorbs).
-    RE_CAPTION.test(line) ||
     peekBlockAttributes(lexer) ||
     RE_DEFLIST_TERM.test(line) ||
     RE_BLOCKQUOTE.test(line) ||
