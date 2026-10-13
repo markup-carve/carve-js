@@ -7714,8 +7714,9 @@ function rebaseOverindentedBlocks(
         const local = sliceColumns(candidate, base, true)
         const description = column === base ? RE_DEFLIST_DEF.exec(local) : null
         if (column === base && (RE_DEFLIST_TERM.test(local) || description !== null)) {
-          // After floor text, measure the next entry from its own authored base.
-          if (termFloorText) break
+          // A description still belongs to the term after ordinary term text.
+          // A following term starts a separate authored block.
+          if (termFloorText && description === null) break
           end = j
           termOpen = description === null
           if (description) descriptionColumn = base + 1 + description[1]!.length
