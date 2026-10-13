@@ -73,6 +73,11 @@ export function carrierIsCaption(payload: string): boolean {
   return /^\^[ \t]/.test(payload)
 }
 
+/** Whether a payload is a code fence's opener, carrying its title and label (CARVE-P11-067). */
+export function carrierIsCodeFence(payload: string): boolean {
+  return /^(?:`{3,}|~{3,})/.test(payload)
+}
+
 /** Whether a colon-fence payload is a bare closer. */
 export function carrierIsCloser(payload: string): boolean {
   return /^:{3,}$/.test(payload)

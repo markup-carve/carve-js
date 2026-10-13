@@ -496,7 +496,7 @@ function withoutIdSlot(attrs: Attrs | undefined): Attrs | undefined {
 }
 
 /** A copy of `attrs` without one key-value, dropping the slot from `order`. */
-function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
+export function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
   if (!attrs?.keyValues || !(key in attrs.keyValues)) return attrs
   const keyValues = { ...attrs.keyValues }
   delete keyValues[key]
