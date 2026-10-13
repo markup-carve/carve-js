@@ -15138,11 +15138,15 @@ class ParseSession {
         const contCanPosition = lexer.hasDocumentOffsets
         splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
           const frag = trimCellPadding(src)
-          const target = lastRaw![idx]
-          // A fragment on a span (`^`/`<`) column is skipped: the spec's
-          // "Combined: Rowspan + Multi-line" example always places the `+`
-          // rows *before* the `^` row, so they extend the real origin cell
-          // (verified). A `+` after the span row is not a spec'd ordering.
+          let target: RawCell | undefined = lastRaw![idx]
+          if (target?.span === 'rowspan') {
+            // A caret carries this column from an earlier row. Follow a chain of
+            // carets to the cell that owns the text before joining the fragment.
+            let above = rawRows.length - 2
+            while (above >= 0 && rawRows[above]?.[idx]?.span === 'rowspan') above--
+            if (above === 1 && isGfmDelimiterRow(rawRows[1]!) && !isGfmDelimiterRow(rawRows[0]!)) above = 0
+            target = above >= 0 ? rawRows[above]?.[idx] : undefined
+          }
           if (!frag || !target || target.span) return
           const fragStart = target.raw ? target.raw.length + 1 : 0
           target.raw = target.raw ? `${target.raw} ${frag}` : frag
