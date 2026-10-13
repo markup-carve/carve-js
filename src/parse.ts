@@ -3592,7 +3592,7 @@ function trackQuoteHostFence(
   if (literal?.literal && column >= literal.floor) {
     if (literal.opaque) {
       const closedPayload = literal.opaque.closes(text)
-      if (literal.floor === 0 && text !== '') {
+      if (text !== '') {
         state.mode = { kind: 'paragraph', absorbingFence: false }
       } else closeBlockQuoteParagraph(state)
       if (closedPayload) delete literal.opaque
@@ -3608,7 +3608,7 @@ function trackQuoteHostFence(
       if (literal.floor === 0) state.colonWidths.pop()
     }
     // Line-block payload is inline content, whatever its block shape.
-    if (literal.floor === 0 && host.colons?.at(-1) === literal && text !== '') {
+    if (host.colons?.at(-1) === literal && text !== '') {
       state.mode = { kind: 'paragraph', absorbingFence: false }
     } else closeBlockQuoteParagraph(state)
     return true
@@ -4791,7 +4791,7 @@ interface ItemLazyState {
   // and not absorbable text - which is why a malformed fence INSIDE an open
   // container arms nothing: the closer below it still has a container to close.
   divDepth: number
-  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; markerFrame?: ItemLazyState; absorbing?: boolean; belowComment?: number }
+  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; absorbing?: boolean; belowComment?: number }
   authoredColon?: { width: number; column: number; depth: number; belowComment?: number }
   // The lines so far of a `{…}` block-attribute block that has not closed yet,
   // newline-joined, or null when the tracker is not inside one. §15 A5 lets the
@@ -5723,9 +5723,8 @@ function trackItemLazyState(
     }
     if (state.divDepth === 0 && open.opaque === undefined && RE_COMMENT_LINE.test(text)) state.divDepth = 1
     if (open.opaque) {
-      if (open.markerFrame) trackItemLazyState(content, open.markerFrame, hasFenceCloser, true, hasCommentCloser, facts, hasLiteralCommentCloser)
       const closedPayload = open.opaque.closes(text)
-      state.lazyFoldable = closedPayload && !open.opaque.belowBaseCloses && column > open.column
+      state.lazyFoldable = !open.opaque.belowBaseCloses && text !== ''
       if (closedPayload) delete open.opaque
       state.inDefList = false
       return
@@ -5750,18 +5749,11 @@ function trackItemLazyState(
     } else {
       const marked = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 || quotedLineText(text, facts?.terminatorFree ?? false) !== null
       if (marked) open.absorbing = false
-      const layoutContent = open.column > 0 && column >= open.column ? sliceColumns(content, open.column, true) : content
       if ((column === 0 || column === open.column) && /^:{3,}/.test(text) && colonFenceOpenerLen(text) === null) open.absorbing = true
-      if ((marked && state.divDepth === 0) || open.markerFrame) {
-        const frame = open.markerFrame ??= { ...verbatimOnlyLazyState(), literalLayout: true }
-        trackItemLazyState(content, frame, hasFenceCloser, true, hasCommentCloser, facts, hasLiteralCommentCloser)
-      }
-      state.lazyFoldable = open.opaque === undefined && !RE_COMMENT_LINE.test(text) && !RE_FOOTNOTE_DEF.test(text) &&
-        (close === null || (column > 0 && column !== open.column) || open.absorbing === true) &&
-        (open.absorbing && close ? true : open.markerFrame ? open.markerFrame.lazyFoldable :
-          marked ? markerLineState(text, facts?.prefixMemo).leavesParagraphOpen :
-          opensCodeFence(text) ? (codeAtBase ? state.lazyFoldable || open.awaitingBody === true : true) :
-            (close !== null && column > 0 && column < open.column) || (!lineOpensBlock(layoutContent) && bottomBlockLeavesParagraphOpen(layoutContent)))
+      // Payload shapes open no blocks; span and definition boundaries still apply.
+      state.lazyFoldable = !(group?.belowBaseCloses && hasCommentCloser(group.run)) &&
+        open.opaque?.belowBaseCloses !== true && text !== '' && !RE_FOOTNOTE_DEF.test(text) &&
+        (close === null || (column > 0 && column !== open.column) || open.absorbing === true)
     }
     if (!RE_COMMENT_LINE.test(text)) delete open.awaitingBody
     state.inDefList = false
@@ -5790,7 +5782,8 @@ function trackItemLazyState(
       {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true},
       (width, extra = 0) => hasLiteralCommentCloser?.(width, offset + extra) ?? false,
     )
-    state.lazyFoldable = inner.lazyFoldable
+    // The checker keeps a descendant line block outside this item's paragraph.
+    state.lazyFoldable = inner.literalColon === undefined && inner.lazyFoldable
     state.inTable = inner.inTable
     // An invisible descendant comment ends its paragraph, not the enclosing item.
     if (inner.literalColon && RE_COMMENT_LINE.test(sliceColumns(content, offset, true).trimStart())) {
@@ -10920,11 +10913,12 @@ class ParseSession {
     }
     const stanzas: StanzaLine[][] = []
     let stanza: StanzaLine[] = []
-    for (const { text: ln, lineIndex } of collectLiteralColonFenceBody(lexer, {
+    for (const { text, lineIndex } of collectLiteralColonFenceBody(lexer, {
       kind: 'line block',
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })) {
+      const ln = stripLazyFrame(text)
       if (isBlankLine(ln)) {
         if (stanza.length) {
           stanzas.push(stanza)

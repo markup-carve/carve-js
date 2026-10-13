@@ -237,17 +237,17 @@
   {
     "id": "review8-older-o01-overindented-verse-001",
     "source": "- a\n    ::: |\n    # h\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p># h</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p># h<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o01-overindented-verse-002",
     "source": "- a\n    ::: |\n    | a |\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>| a |</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>| a |<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o01-overindented-verse-003",
     "source": "- a\n    ::: |\n    ---\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>—</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>—<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-older-o01-overindented-verse-004",
@@ -267,7 +267,7 @@
   {
     "id": "review8-older-o01-overindented-verse-007",
     "source": "- a\n    ::: |\n    [a]: u\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>[a]: u</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>[a]: u<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review8-c01-authored-div-base-033",

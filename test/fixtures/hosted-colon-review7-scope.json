@@ -62,17 +62,17 @@
   {
     "id": "review7-c02-shifted-block-after-marker-01",
     "source": "- ::: |\n  - m\n    # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- m<br>\n&nbsp;&nbsp;# h</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- m<br>\n&nbsp;&nbsp;# h<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-02",
     "source": "- ::: |\n  - m\n    ---\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- m<br>\n&nbsp;&nbsp;—</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- m<br>\n&nbsp;&nbsp;—<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-03",
     "source": "- ::: |\n  - m\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- m<br>\n&nbsp;&nbsp;::: box</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- m<br>\n&nbsp;&nbsp;::: box<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-04",
@@ -82,27 +82,27 @@
   {
     "id": "review7-c02-shifted-block-after-marker-05",
     "source": "- ::: |\n  - ::: in\n      # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;&nbsp;&nbsp;# h</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;&nbsp;&nbsp;# h<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-06",
     "source": "- ::: |\n  - ::: in\n      ---\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;&nbsp;&nbsp;—</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;&nbsp;&nbsp;—<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-07",
     "source": "- ::: |\n  - ::: in\n      ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;&nbsp;&nbsp;::: box</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;&nbsp;&nbsp;::: box<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-08",
     "source": "- ::: |\n  - ::: in\n    {.c}\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;{.c}</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- ::: in<br>\n&nbsp;&nbsp;{.c}<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-09",
     "source": "- ::: |\n  1. m\n      ---\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>1. m<br>\n&nbsp;&nbsp;&nbsp;&nbsp;—</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>1. m<br>\n&nbsp;&nbsp;&nbsp;&nbsp;—<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-10",
@@ -112,32 +112,32 @@
   {
     "id": "review7-c02-shifted-block-after-marker-11",
     "source": "- ::: |\n  - - ::: |\n    | a |\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;| a |</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;| a |<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-12",
     "source": "- ::: |\n  - - ::: |\n      :::\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;&nbsp;&nbsp;:::</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;&nbsp;&nbsp;:::<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-13",
     "source": "- ::: |\n  - - ::: |\n      ::: |\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;&nbsp;&nbsp;::: |</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;&nbsp;&nbsp;::: |<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-14",
     "source": "- ::: |\n  - - ::: |\n      {.c}\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;&nbsp;&nbsp;{.c}</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- - ::: |<br>\n&nbsp;&nbsp;&nbsp;&nbsp;{.c}<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-15",
     "source": "- ::: |\n  - %%%\n    ---\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-<br>\n&nbsp;&nbsp;—</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-<br>\n&nbsp;&nbsp;—<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-16",
     "source": "- ::: |\n  - %%%\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-<br>\n&nbsp;&nbsp;::: box</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-<br>\n&nbsp;&nbsp;::: box<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c02-shifted-block-after-marker-17",
@@ -147,7 +147,7 @@
   {
     "id": "review7-c02-shifted-block-after-marker-18",
     "source": "- ::: |\n  - %%%\n      ```\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-<br>\n&nbsp;&nbsp;&nbsp;&nbsp;<code></code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-<br>\n&nbsp;&nbsp;&nbsp;&nbsp;<code>\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review7-c03-overindented-div-body-01",
