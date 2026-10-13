@@ -4,7 +4,7 @@ import { carveToAstJson, carveToHtml } from '../src/index.js'
 describe('a bracket run bounds its trailing comment (#2359)', () => {
   it.each([
     ['[a %% hidden]', '<p>[a]</p>'],
-    ['[a\t%% hidden] tail', '<p>[a] tail</p>'],
+    ['[a\t%% hidden] tail', '<p>[a\t%% hidden] tail</p>'],
     ['[a %% h1] and [b %% h2]', '<p>[a] and [b]</p>'],
     ['[see [t] %% hidden]', '<p>[see [t]]</p>'],
     ['[see [t %% hidden] x]', '<p>[see [t] x]</p>'],
@@ -20,7 +20,7 @@ describe('a bracket run bounds its trailing comment (#2359)', () => {
     ['*[a %% hidden]* tail', '<p><strong>[a]</strong> tail</p>'],
     ['_[a %% hidden]_', '<p><u>[a]</u></p>'],
     ['*a %% hidden*', '<p>*a</p>'],
-    ['::: {.box} [a\t%% hidden]', '<p>::: {.box} [a]</p>'],
+    ['::: {.box} [a\t%% hidden]', '<p>::: {.box} [a\t%% hidden]</p>'],
     ['[a %% hidden](u)', '<p><a href="u">a</a></p>'],
     ['[a %% hidden]{.c}', '<p><span class="c">a</span></p>'],
     ['[see [t](u) %% hidden]', '<p>[see <a href="u">t</a>]</p>'],
@@ -53,7 +53,7 @@ describe('a bracket run bounds its trailing comment (#2359)', () => {
 
   it('keeps a valid container and its children', () => {
     expect(carveToHtml('::: note [a\t%% hidden]\nx\n:::')).toBe(
-      '<aside class="admonition note" aria-label="Note">\n  <p class="div-label">a</p>\n  <p>x</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p class="div-label">a\t%% hidden</p>\n  <p>x</p>\n</aside>',
     )
   })
 

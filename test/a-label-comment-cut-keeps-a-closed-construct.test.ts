@@ -44,8 +44,9 @@ describe('a label comment cut keeps a closed construct', () => {
     expect(labelHtml('%% whole')).toBe('')
   })
 
-  it('cuts the whole separating run, tab as well as space', () => {
-    expect(labelHtml('plain\t%% secret')).toBe('plain')
+  it('cuts separating spaces and keeps tabs', () => {
+    expect(labelHtml('plain\t%% secret')).toBe('plain\t%% secret')
+    expect(labelHtml('plain\t %% secret')).toBe('plain\t')
     expect(labelHtml('plain   %% secret')).toBe('plain')
   })
 

@@ -702,13 +702,8 @@ const RE_COMMENT_LINE = /^[ \t]*%%/
 /**
  * Whether the `%%` at `i` opens the trailing inline comment form.
  *
- * ONE RULE FOR EVERY HOST (CARVE-P9-041, markup-carve/carve#2552). A tab
- * separates as a space does, a line break separates, and `%%` that begins the
- * HOST's own inline run needs no separator at all - a definition term, a table
- * cell, a figure caption, a div label and a link label each start mid-line, so
- * nothing at the block layer covers the marker there. The spec deleted its two
- * heading-only rules over this, and a heading now reads the same rule as a
- * paragraph.
+ * A marker needs an immediately preceding SPACE or the start of its host run.
+ * A line break also starts a run; tabs are content (CARVE-P9-041).
  *
  * A balanced bracket label starts a host run at `runStart`. Inside emphasis the marker
  * has the opening delimiter in front of it, which is not a separator, so
@@ -718,7 +713,6 @@ const opensInlineComment = (text: string, i: number, atRunStart = false, runStar
   text[i] === '%' &&
   text[i + 1] === '%' &&
   (text[i - 1] === ' ' ||
-    text[i - 1] === '\t' ||
     text[i - 1] === '\n' ||
     (atRunStart && i === runStart))
 
@@ -747,7 +741,7 @@ const stripTrailingComment = (text: string): string => {
   const last = nodes[nodes.length - 1]
   if (last?.type !== 'comment' || last.block) return text
   const start = last.pos?.startOffset
-  return start === undefined ? text : trimEndSpaceTab(text.slice(0, start))
+  return start === undefined ? text : text.slice(0, start).replace(/ +$/, '')
 }
 // A bare uniform fence closer, shared by native and prepass lookahead.
 const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_TRAILING_WS)
@@ -8544,7 +8538,7 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
     if (text[at] === '\\') { at++; continue }
     const protectedEnd = destinations.get(at) ?? (text[at] === '`' && (codeEnds?.[at] ?? -1) !== -1 ? codeEnds![at] : undefined)
     if (protectedEnd !== undefined) { at = protectedEnd - 1; continue }
-    if (text.startsWith('%%', at) && (at === 0 || /[ \t\n]/.test(text[at - 1]!) || text[at - 1] === '[' && brackets?.(at - 1) !== undefined)) {
+    if (text.startsWith('%%', at) && (at === 0 || /[ \n]/.test(text[at - 1]!) || text[at - 1] === '[' && brackets?.(at - 1) !== undefined)) {
       const newline = text.indexOf('\n', at)
       const end = Math.min(newline === -1 ? text.length : newline, labels.at(-1) ?? text.length)
       lineComments.set(at, end)
@@ -15777,11 +15771,9 @@ class ParseSession {
       // one dropped it on the first line and not the second (carve#574).
       const commentRun = bracketRuns[bracketRuns.length - 1]
       if (opensInlineComment(text, i, atHostRunStart || commentRun !== undefined, commentRun?.start)) {
-        // Absorb the WHOLE separating run so the visible text keeps no trailing
-        // whitespace (CARVE-P9-041, markup-carve/carve#2552). Flush the trimmed
-        // buffer with a source span that ends where the run begins, and start the
-        // comment node there too, keeping inline source spans contiguous.
-        const trimmed = trimEndSpaceTab(buf)
+        // Absorb the separating SPACE run; a tab stays content (CARVE-P9-041).
+        // The flushed text ends where the run begins, keeping source spans contiguous.
+        const trimmed = buf.replace(/ +$/, '')
         const commentStart = i - (buf.length - trimmed.length)
         if (trimmed) {
           const node = { type: 'text', value: trimmed } as Text
