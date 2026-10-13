@@ -43,3 +43,15 @@ it('ignores comment-looking text inside a closed note fence', () => {
   expect(html).toContain('<p>after <a id="fnref1"')
   expect(html).not.toContain('<li>after')
 })
+
+it('keeps a fence below the note body column in the item after a note comment', () => {
+  const html = carveToHtml('- [^n]: text\n    %% c\n  ```\n  code\n  ```\nafter [^n]')
+  expect(html).toContain('<li>\n    <pre><code>code\n</code></pre>\n  </li>')
+  expect(html).toContain('<p>after <a id="fnref1"')
+})
+
+for (const tail of ['> q', '- li']) it(`leaves the following paragraph after a note fence and ${tail}`, () => {
+  const html = carveToHtml(`- [^n]: text\n    \`\`\`\n    code\n    \`\`\`\n    ${tail}\nafter [^n]`)
+  expect(html).toContain('<p>after <a id="fnref1"')
+  expect(html).not.toContain('<li>after')
+})

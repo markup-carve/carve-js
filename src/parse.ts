@@ -7605,10 +7605,12 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
   let closer: RegExp | null = null
   let openerColumn = -1
   let childColumn = -1
+  let belowNoteBody = false
   for (const [index, line] of lines.entries()) {
     if (isBlankLine(line)) continue
     const column = indentColumns(line)
     const text = line.trimStart()
+    if (column < FOOTNOTE_BODY_COLUMN) belowNoteBody = true
     if (closer !== null) {
       if (column === openerColumn && closer.test(text)) closer = null
       continue
@@ -7621,7 +7623,8 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
     }
     if (childColumn >= 0 && column >= childColumn) continue
     if (isListMarkerLine(text) && !absorbedMarkers.has(index)) childColumn = column + markerContentColumn(text)
-    if (column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
+    if (!belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
+        indentColumns(lines[index + 1] ?? '') >= FOOTNOTE_BODY_COLUMN &&
         opensCodeFence(lines[index + 1]?.trimStart() ?? '')) openers.push(index + 1)
   }
   return openers
@@ -13395,7 +13398,8 @@ class ParseSession {
           if (!isBlankLine(nested[index]!)) { lastNoteLine = nested[index]!.trimStart(); break }
         }
         const afterNoteBody = noteBodyLast || noteReach === 'unclosed' ||
-          (noteReach === 'closed' && !opensCodeFence(lastNoteLine) && !RE_COMMENT_LINE.test(lastNoteLine))
+          (noteReach === 'closed' && lastNoteLine !== '' && !opensCodeFence(lastNoteLine) &&
+            !RE_COMMENT_LINE.test(lastNoteLine))
         const fenceBoundaryTail = noteReach === 'boundary'
         const commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
           markerNoteCommentFenceOpeners(nested, noteParagraphMarkers).length > 0
