@@ -7638,6 +7638,7 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
   let openerColumn = -1
   let childColumn = -1
   let belowNoteBody = false
+  let nestedMarkerSeen = false
   for (const [index, line] of lines.entries()) {
     if (isBlankLine(line)) continue
     const column = indentColumns(line)
@@ -7654,8 +7655,13 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
       openerColumn = column
     }
     if (childColumn >= 0 && column >= childColumn) continue
-    if (isListMarkerLine(text) && !absorbedMarkers.has(index)) childColumn = column + markerContentColumn(text)
-    if (!belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
+    if (RE_FOOTNOTE_DEF.test(text) || (isListMarkerLine(text) && !absorbedMarkers.has(index))) {
+      // A later comment and fence belong to the nested marker's body. They do
+      // not give the outer item's flush-left follower a continuation claim.
+      nestedMarkerSeen = true
+      if (isListMarkerLine(text)) childColumn = column + markerContentColumn(text)
+    }
+    if (!nestedMarkerSeen && !belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
         indentColumns(lines[index + 1] ?? '') >= FOOTNOTE_BODY_COLUMN &&
         opensCodeFence(lines[index + 1]?.trimStart() ?? '')) openers.push(index + 1)
   }
@@ -13471,7 +13477,7 @@ class ParseSession {
           (noteReach === 'closed' && lastNoteLine !== '' && !opensCodeFence(lastNoteLine) &&
             !RE_COMMENT_LINE.test(lastNoteLine))
         const fenceBoundaryTail = noteReach === 'boundary'
-        const commentFenceTail = markerNoteItem && noteReach === 'boundary' && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
+        const commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
           markerNoteCommentFenceOpeners(nested, noteParagraphMarkers).length > 0
         const noteParagraphOpen = markerNoteParagraph
         if (!isBlankLine(l)) {

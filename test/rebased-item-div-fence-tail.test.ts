@@ -8,3 +8,12 @@ it.each(['', '  text\n'])('releases a column-zero tail after a closed fence in a
   if (before) expect(html).toContain('<p>text</p>')
   expect(html).toMatch(/<\/ul>\s*<p>after<\/p>$/)
 })
+
+it.each([
+  ['a closed line block', '    ::: |\n    x\n    :::', '<div class="line-block">'],
+  ['an unclosed code fence', '    ```\n    code', '<pre><code>code\n</code></pre>'],
+])('releases a column-zero tail after %s in an item div', (_name, body, rendered) => {
+  const html = carveToHtml(`- a\n  ::: box\n${body}\nafter`)
+  expect(html).toContain(rendered)
+  expect(html).toMatch(/<\/ul>\s*<p>after<\/p>$/)
+})
