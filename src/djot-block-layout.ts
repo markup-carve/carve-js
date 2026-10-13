@@ -68,12 +68,12 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
       for (let level = 0; level < previousDepth; level++) end += /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(end))![0].length
       openingColumn = /^[ \t]*/.exec(prefix.slice(end))![0].length
     }
-    const endsItem = text === '' && masks[row]![prefix.lastIndexOf('>')] === '>' && frames.get(previousDepth)?.some(owner => owner.column >= openingColumn)
+    const endsItem = masks[row]![prefix.lastIndexOf('>')] === '>' && frames.get(previousDepth)?.some(owner => owner.column >= openingColumn)
     if (literalDepth !== undefined && depth <= literalDepth) literalDepth = undefined
     if (depth > previousDepth && previousParagraph && !endsItem) literalDepth = previousDepth
     for (const level of frames.keys()) if (level > depth) frames.delete(level)
     if (depth > previousDepth) {
-      if ((text === '' || !previousParagraph) && masks[row]![prefix.lastIndexOf('>')] === '>') {
+      if ((endsItem || !previousParagraph) && masks[row]![prefix.lastIndexOf('>')] === '>') {
         const retained = frames.get(previousDepth)?.filter(owner => owner.column < openingColumn)
         if (retained?.length) frames.set(previousDepth, retained)
         else frames.delete(previousDepth)
