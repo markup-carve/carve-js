@@ -45,12 +45,12 @@ const cases = [
   {
     "id": "empty nested container: comment 3, follower 1",
     "source": "- :::: box\n  - ::: in\n %%%\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><pre><code>    ```\n</code></pre></div></li></ul><p>TAILX</p>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p><code></code>\nTAILX</p>"
   },
   {
     "id": "empty nested container: comment 3, follower 2",
     "source": "- :::: box\n  - ::: in\n %%%\n  x\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><p>x\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p>x\nTAILX</p>"
   },
   {
     "id": "empty nested container: comment 3, follower 3",
@@ -60,17 +60,17 @@ const cases = [
   {
     "id": "empty nested container: comment 3, follower 4",
     "source": "- :::: box\n  - ::: in\n %%%\n%%%\n  y\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><p>y\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p>y\nTAILX</p>"
   },
   {
     "id": "empty nested container: comment 4, follower 1",
     "source": "- :::: box\n  - ::: in\n %% c\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><pre><code>    ```\n</code></pre></div></li></ul><p>TAILX</p>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p><code></code>\nTAILX</p>"
   },
   {
     "id": "empty nested container: comment 4, follower 2",
     "source": "- :::: box\n  - ::: in\n %% c\n  x\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><p>x\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p>x\nTAILX</p>"
   },
   {
     "id": "empty nested container: comment 4, follower 3",
@@ -125,12 +125,12 @@ const cases = [
   {
     "id": "empty container with a continuation claim: comment 3, follower 1",
     "source": "- ::: box\n %%%\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><pre><code>    ```\n</code></pre></div></li></ul><p>TAILX</p>"
+    "html": "<ul><li><div class=\"box\"></div></li></ul><p><code></code>\nTAILX</p>"
   },
   {
     "id": "empty container with a continuation claim: comment 3, follower 2",
     "source": "- ::: box\n %%%\n  x\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><p>x\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"></div></li></ul><p>x\nTAILX</p>"
   },
   {
     "id": "empty container with a continuation claim: comment 3, follower 3",
@@ -140,17 +140,17 @@ const cases = [
   {
     "id": "empty container with a continuation claim: comment 3, follower 4",
     "source": "- ::: box\n %%%\n%%%\n  y\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><p>y\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"></div></li></ul><p>y\nTAILX</p>"
   },
   {
     "id": "empty container with a continuation claim: comment 4, follower 1",
     "source": "- ::: box\n %% c\n  ```\n      ```\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><pre><code>    ```\n</code></pre></div></li></ul><p>TAILX</p>"
+    "html": "<ul><li><div class=\"box\"></div></li></ul><p><code></code>\nTAILX</p>"
   },
   {
     "id": "empty container with a continuation claim: comment 4, follower 2",
     "source": "- ::: box\n %% c\n  x\nTAILX\n",
-    "html": "<ul><li><div class=\"box\"><p>x\nTAILX</p></div></li></ul>"
+    "html": "<ul><li><div class=\"box\"></div></li></ul><p>x\nTAILX</p>"
   },
   {
     "id": "empty container with a continuation claim: comment 4, follower 3",
@@ -365,12 +365,12 @@ const cases = [
   {
     "id": "quoted empty nested container: comment 3, follower 1",
     "source": "> - :::: box\n>   - ::: in\n>  %%%\n>   ```\n>       ```\nTAILX\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><pre><code>    ```\n</code></pre></div></li></ul></blockquote><p>TAILX</p>"
+    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p><code></code></p></blockquote><p>TAILX</p>"
   },
   {
     "id": "quoted empty nested container: comment 3, follower 2",
     "source": "> - :::: box\n>   - ::: in\n>  %%%\n>   x\nTAILX\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><p>x\nTAILX</p></div></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p>x\nTAILX</p></blockquote>"
   },
   {
     "id": "quoted empty nested container: comment 3, follower 3",
@@ -380,17 +380,17 @@ const cases = [
   {
     "id": "quoted empty nested container: comment 3, follower 4",
     "source": "> - :::: box\n>   - ::: in\n>  %%%\n> %%%\n>   y\nTAILX\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><p>y\nTAILX</p></div></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p>y\nTAILX</p></blockquote>"
   },
   {
     "id": "quoted empty nested container: comment 4, follower 1",
     "source": "> - :::: box\n>   - ::: in\n>  %% c\n>   ```\n>       ```\nTAILX\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><pre><code>    ```\n</code></pre></div></li></ul></blockquote><p>TAILX</p>"
+    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p><code></code></p></blockquote><p>TAILX</p>"
   },
   {
     "id": "quoted empty nested container: comment 4, follower 2",
     "source": "> - :::: box\n>   - ::: in\n>  %% c\n>   x\nTAILX\n",
-    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul><p>x\nTAILX</p></div></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><div class=\"box\"><ul><li><div class=\"in\"></div></li></ul></div></li></ul><p>x\nTAILX</p></blockquote>"
   },
   {
     "id": "quoted empty nested container: comment 4, follower 3",
@@ -404,7 +404,7 @@ const cases = [
   }
 ]
 
-describe('below-column comments require a continuation claim or earlier retention', () => {
+describe('below-column comments require an open paragraph or earlier retention', () => {
   it.each(cases)('$id', ({ source, html }) => {
     expect(carveToHtml(source).replace(/>\s+</g, '><').trim()).toBe(html)
   })

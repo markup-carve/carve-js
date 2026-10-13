@@ -122,14 +122,14 @@ describe('other container boundaries', () => {
 })
 
 describe('fence ownership after earlier blocks', () => {
-  it('an inline fence after a sublist', () => {
+  it('a fence after a paragraph that ended the sublist', () => {
     expect(carveToHtml('- head\n\n  - sub\n\n  para\n\n      ```\n      a\n      ```\ntext\n')).toBe(
-      '<ul>\n  <li><p>head</p>\n    <ul>\n      <li>sub</li>\n    </ul>\n    <p>para</p>\n    <p><code>\na\n</code>\ntext</p>\n  </li>\n</ul>',
+      '<ul>\n  <li><p>head</p>\n    <ul>\n      <li>sub</li>\n    </ul>\n    <p>para</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
-  it('an unfinished inline fence after a sublist', () => {
+  it('an unfinished fence after a paragraph that ended the sublist', () => {
     expect(carveToHtml('- head\n\n  - sub\n\n  para\n\n      ```\n      a\ntext\n')).toBe(
-      '<ul>\n  <li><p>head</p>\n    <ul>\n      <li>sub</li>\n    </ul>\n    <p>para</p>\n    <p><code>\na\ntext</code></p>\n  </li>\n</ul>',
+      '<ul>\n  <li><p>head</p>\n    <ul>\n      <li>sub</li>\n    </ul>\n    <p>para</p>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('a heading after a sublist', () => {
