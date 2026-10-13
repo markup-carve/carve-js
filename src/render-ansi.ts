@@ -271,7 +271,10 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return ''
     case 'link_reference_definition': {
       if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
-      return `${style(stripControls(renderLinkReferenceDefinition(node)), DIM)}\n\n`
+      const authored = stripControls(node.href)
+      const href = blankDeniedDestination(authored)
+      destinationDenied(ctx.options, 'link', 'ansi', authored, href, node.pos)
+      return `${style(stripControls(renderLinkReferenceDefinition({ ...node, href })), DIM)}\n\n`
     }
     case 'citation_definition':
       // Renders nothing: a definition line is not prose. PART 12 §18 gave the

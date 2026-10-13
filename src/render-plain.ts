@@ -12,7 +12,8 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { blankDeniedDestination } from './deny-listed-destination.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -204,7 +205,10 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return ''
     case 'link_reference_definition': {
       if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
-      return `${stripControls(renderLinkReferenceDefinition(node))}\n\n`
+      const authored = stripControls(node.href)
+      const href = blankDeniedDestination(authored)
+      destinationDenied(ctx.options, 'link', 'plain', authored, href, node.pos)
+      return `${stripControls(renderLinkReferenceDefinition({ ...node, href }))}\n\n`
     }
     case 'citation_definition':
       // Renders nothing: a definition line is not prose. PART 12 §18 gave the
