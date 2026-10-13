@@ -121,7 +121,9 @@ const range = previous ? `${previous}..${at}` : at;
 // What merged, and what of it touched shipped source.
 
 const RECORD = '\u001f';
-const commits = git('log', `--format=%H${RECORD}%s`, range).split('\n').filter(Boolean)
+// First parent only: a merge commit stands for its whole pull request, and the
+// commits it brought in are not separate changes owing their own line.
+const commits = git('log', '--first-parent', `--format=%H${RECORD}%s`, range).split('\n').filter(Boolean)
     .map((l) => { const [sha, subject] = l.split(RECORD); return { sha, subject }; });
 
 const touchesShipped = (sha) =>
@@ -129,9 +131,10 @@ const touchesShipped = (sha) =>
         .split('\n').filter(Boolean)
         .some((f) => SHIPPED.some((re) => re.test(f)) && !NOT_SHIPPED.some((re) => re.test(f)));
 
-// A squash merge carries its pull request as a trailing `(#N)`, the only
-// number on the commit that can lead anywhere.
-const pullRequest = (subject) => (subject.match(/\(#(\d+)\)\s*$/) ?? [])[1];
+// A squash merge carries its pull request as a trailing `(#N)`, a merge commit
+// as `Merge pull request #N from ...`.
+const MERGE_SUBJECT = /^Merge pull request #(\d+) from /;
+const pullRequest = (subject) => (subject.match(/\(#(\d+)\)\s*$/) ?? subject.match(MERGE_SUBJECT) ?? [])[1];
 
 const shipping = new Map(); // number -> title
 const unattributed = [];
