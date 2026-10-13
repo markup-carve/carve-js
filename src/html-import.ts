@@ -6140,7 +6140,8 @@ class Importer {
     for (const backlink of elements) {
       if (domTag(backlink) !== 'a' || this.attr(backlink, 'role') !== 'doc-backlink') continue
       const href = this.attr(backlink, 'href') ?? ''
-      if (!/^#fnref\d+(?:-\d+)?$/.test(href)) continue
+      // An authored id can replace `fnref{n}` (PART 9 §16), so the target decides, not the spelling.
+      if (href.length < 2) continue
       const reference = targets.get(href.slice(1))
       if (reference === undefined || domTag(reference) !== 'sup') continue
       let target = domParent(backlink)

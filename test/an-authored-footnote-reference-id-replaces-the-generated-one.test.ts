@@ -1,0 +1,29 @@
+import { describe, expect, it } from 'vitest'
+import { carveToHtml, htmlToCarve, parse, renderHtml } from '../src/index.js'
+
+// PART 9 §16: an authored `{#id}` on a footnote reference replaces `fnref{n}` /
+// `fnref{n}-{k}`, and the note's backlink targets it.
+const source = 'a [t[^1]{#z}][r] [^1]{#y} [^1]\n\n[r]: /u\n\n[^1]: n\n'
+
+describe('an authored footnote reference id replaces the generated one', () => {
+  for (const [name, render] of [
+    ['carveToHtml', carveToHtml],
+    ['renderHtml', (s: string) => renderHtml(parse(s))],
+  ] as const) {
+    it(name, () => {
+      const html = render(source)
+      expect(html.split('\n')[0]).toBe('<p>a <a href="/u">t<sup id="z">1</sup></a> <a id="y" href="#fn1" role="doc-noteref"><sup>1</sup></a> <a id="fnref1-3" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>')
+      expect([...html.matchAll(/<a href="([^"]*)" role="doc-backlink"/g)].map((m) => m[1])).toEqual(['#z', '#y', '#fnref1-3'])
+    })
+  }
+
+  it('escapes an authored id in the backlink', () => {
+    const html = carveToHtml('a [^1]{id="q&r"}\n\n[^1]: n\n')
+    expect(html).toContain('<a id="q&amp;r" href="#fn1" role="doc-noteref">')
+    expect(html).toContain('<a href="#q&amp;r" role="doc-backlink"')
+  })
+
+  it('imports the reference inside link text as a footnote again', () => {
+    expect(htmlToCarve(carveToHtml(source)).value).toBe('a [t[^1]](/u) [^1] [^1]\n\n[^1]: n\n')
+  })
+})
