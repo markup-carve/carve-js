@@ -48,7 +48,8 @@ function compactDjotListPrefix(text: string): string {
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
 function deepQuotedItemAttributes(source: string, hold: (attributes: string, block?: boolean) => string): string {
   if (!source.includes('{') || !source.includes('>')) return source
-  const lines = source.split('\n'), masks = maskDjotCodeAndDestinations(source).split('\n')
+  const lines = source.split('\n'), maskedSource = maskDjotCodeAndDestinations(source), masks = maskedSource.split('\n')
+  const tableRows = source.includes('|') ? djotTableRows(source, maskedSource) : []
   type Frame = { column: number; start: number; kind: string; attributes: { row: number; wire: string }[] }
   const frames = new Map<number, Frame[]>()
   const before = new Map<number, string[]>()
@@ -61,16 +62,28 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
     const text = body.slice(indent), visible = masks[row]!.slice(prefix.length + indent)
     const at = offset + prefix.length + indent
     offset += line.length + 1
+    let openingColumn = 0
+    if (depth > previousDepth) {
+      let end = 0
+      for (let level = 0; level < previousDepth; level++) end += /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(end))![0].length
+      openingColumn = /^[ \t]*/.exec(prefix.slice(end))![0].length
+    }
+    const endsItem = text === '' && masks[row]![prefix.lastIndexOf('>')] === '>' && frames.get(previousDepth)?.some(owner => owner.column >= openingColumn)
     if (literalDepth !== undefined && depth <= literalDepth) literalDepth = undefined
-    if (depth > previousDepth && previousParagraph) literalDepth = previousDepth
+    if (depth > previousDepth && previousParagraph && !endsItem) literalDepth = previousDepth
     for (const level of frames.keys()) if (level > depth) frames.delete(level)
     if (depth > previousDepth) {
+      if ((text === '' || !previousParagraph) && masks[row]![prefix.lastIndexOf('>')] === '>') {
+        const retained = frames.get(previousDepth)?.filter(owner => owner.column < openingColumn)
+        if (retained?.length) frames.set(previousDepth, retained)
+        else frames.delete(previousDepth)
+      }
       const owner = frames.get(previousDepth)?.at(-1)
       if (owner) owner.attributes = []
     }
     const priorDepth = previousDepth, priorParagraph = previousParagraph
     previousDepth = depth
-    previousParagraph = text !== '' && !/^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|\[(?:\^)?[^\]\n]*\]:)/.test(visible) && !(visible.startsWith('{') && readAttributes(body, indent)?.end === body.trimEnd().length)
+    previousParagraph = text !== '' && !tableRows[row] && !/^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(text) && !/^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|\[(?:\^)?[^\]\n]*\]:)/.test(visible) && !(visible.startsWith('{') && readAttributes(body, indent)?.end === body.trimEnd().length)
     if (literalDepth !== undefined && depth > literalDepth) continue
     if (depth < 1 || text === '') continue
     const item = /^([-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(visible)
