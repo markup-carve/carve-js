@@ -888,13 +888,42 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
   if (!omitQuoteDelimiters && source.includes('![') && /\{"|\{'|"\}|'\}/.test(source)) {
     source = replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), (image, label, _at, completeTarget) => {
       if (completeTarget || label.includes('![') || !/\{"|\{'|"\}|'\}/.test(label)) return image
-      return '![' + djotInlineLayout('DJOTALT ' + label).slice(8) + ']'
+      const comments = new Map<number, number>()
+      maskDjotCodeAndDestinations(label, true, true, true, undefined, [], {
+        onComment: (start, end) => comments.set(start, end),
+      })
+      for (const [start, end] of [...comments].reverse()) {
+        const attrs = readAttributes(label, start)
+        if (attrs && attrs.source !== '{}') continue
+        label = label.slice(0, start) + '{%%}' + label.slice(attrs?.end ?? end)
+      }
+      const mask = maskDjotCodeAndDestinations(label).split('')
+      for (let i = 0; i < label.length; i++) {
+        if (mask[i] !== '{' || isDjotEscaped(label, i)) continue
+        const attrs = readAttributes(label, i)
+        if (!attrs) continue
+        if (attrs.source !== '{}') for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
+        i = attrs.end - 1
+      }
+      const quotes: Record<string, string> = { "{'": '‘', "'}": '’', '{"': '“', '"}': '”' }
+      const text = label.replace(/\{["']|["']\}|\{\}/g, (token: string, at: number) => {
+        if (mask[at] !== label[at] || isDjotEscaped(label, at)) return token
+        if (token === '{}') return label[at - 1] === ']' ? token : '{%%}'
+        return quotes[token]!
+      })
+      return '![' + text + ']'
     }, true)
   }
   const imageQuotes = new Set<number>()
   if (!omitQuoteDelimiters && source.includes('![') && /\{"|\{'|"\}|'\}/.test(source)) {
-    replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), (image, label, at) => {
-      if (source.startsWith('[]', at + image.length)) return image
+    const mask = maskDjotCodeAndDestinations(source)
+    const imageLines = djotImageLineOwners(source, mask)
+    let line = 0
+    replaceDjotImageLabels(source, mask, (image, label, at) => {
+      if (source.startsWith('[]', at + image.length) || label.startsWith('^') || /\n[ \t]*\n/.test(label)) return image
+      while (imageLines[line]!.end <= at) line++
+      const owner = imageLines[line]!
+      if (!djotImageAltLayout(label, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div).valid) return image
       for (let i = 0; i < label.length; i++) if (label[i] === '"' || label[i] === "'") {
         imageQuotes.add(at + 2 + i)
         imageQuotes.add(at + 1 + i)
