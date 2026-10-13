@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markdownToCarve } from '../src/index.js'
+import { carveToHtml, markdownToCarve } from '../src/index.js'
 
 // A fence's three columns of slack count from its list item's content column,
 // for the opener and the closer alike (carve-js#1825).
@@ -27,6 +27,13 @@ describe('a Markdown fence measured from its item', () => {
 
   it('adds a blank line before a line that stays in the same item', () => {
     expect(markdownToCarve('- a\n  - b\n\n    ```\n    code\n    ```\n    *in*')).toBe('- a\n  - b\n\n    ```\n    code\n    ```\n\n    /in/')
+  })
+
+  it('keeps a nested item tight when no source blank precedes its fence', () => {
+    const source = '- a\n  - b\n    ```\n    x\n    ```\n    more\n  - c\n'
+    const imported = markdownToCarve(source)
+    expect(imported).not.toContain('{loose}')
+    expect(carveToHtml(imported)).toBe(carveToHtml(source))
   })
 
   it('adds a blank line before a line at column 0', () => {

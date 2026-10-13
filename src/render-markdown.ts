@@ -635,7 +635,7 @@ function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
  * EMITTED LINE. A node kind cannot answer it: `thematic_break` emits `---`,
  * which under a paragraph line is a SETEXT HEADING and changes what that
  * paragraph is rather than interrupting it, and an empty bullet is a setext
- * underline too. `***` and `___` would interrupt, and no node emits them.
+ * underline too. A tight item's rule after a paragraph uses `***` instead.
  */
 const PARAGRAPH_INTERRUPTERS = [
   /^>/, // a block quote
@@ -643,6 +643,7 @@ const PARAGRAPH_INTERRUPTERS = [
   /^(?:`{3,}|~{3,})/, // a fenced code block
   /^[-*+][ \t]+\S/, // a bullet item, content and all
   /^1[.)][ \t]+\S/, // an ordered item - only a `1` interrupts a paragraph
+  /^(?:\*[ \t]*){3,}$/, // a thematic break with no setext ambiguity
 ]
 
 /** A GFM delimiter row, which is what promotes the row above it to a header. */
@@ -668,6 +669,8 @@ function separatorCanGo(rendered: string, above: BlockNode | undefined, aboveRen
     // another row of its own.
     return DELIMITER_ROW.test(secondLine) && above !== undefined && A_TABLE_MAY_FOLLOW.has(above.type)
   }
+  // These blocks have closed before the following line begins.
+  if (above?.type === 'code_block' || above?.type === 'thematic_break' || above?.type === 'heading') return true
   // An unseparated `>` under an open quote continues THAT quote.
   if (firstLine.startsWith('>') && lastNonBlankLine(aboveRendered).startsWith('>')) return false
   return PARAGRAPH_INTERRUPTERS.some((opener) => opener.test(firstLine))
@@ -724,7 +727,9 @@ function renderListItem(item: ListItem, tight: boolean, ctx: MarkdownContext): s
     let above: BlockNode | undefined
     let aboveRendered = ''
     for (const child of item.children) {
-      const rendered = renderTracked(child, ctx)
+      let rendered = renderTracked(child, ctx)
+      // A star rule interrupts the preceding paragraph without a loose-list blank.
+      if (tight && child.type === 'thematic_break' && above?.type === 'paragraph') rendered = '***\n\n'
       // A blank between a tight item's blocks makes the item loose in
       // CommonMark, so drop the separator the block above left wherever the
       // child below opens a construct of its own under it.

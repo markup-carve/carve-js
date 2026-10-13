@@ -73,7 +73,7 @@ Markdown target writes a list table as a pipe table either way.
 ## What the importer does not model
 
 
-Six decisions are deliberate, so a diagnostic naming them is the whole answer
+These decisions are deliberate, so a diagnostic naming them is the whole answer
 rather than a placeholder for a mapping still to come:
 
 - **MathML is read for the TeX it already carries, never converted.** A
@@ -101,6 +101,13 @@ rather than a placeholder for a mapping still to come:
   `cite`, `dfn` - import as `[text]{kbd}` and friends. These two are not among
   them: each already has its own syntax (`=text=` and a code span), so importing
   them as span attributes as well would give one input two spellings.
+- **A bare `<div>` unwraps to its content, including when it is empty.** A
+  div with no attributes or grouping label adds no container to the imported
+  source. An empty one therefore contributes no block, including inside a
+  list or quote. This applies in every import mode, as approved in
+  [carve#1578](https://github.com/markup-carve/carve/issues/1578#issuecomment-5386143152).
+  Attributes or a grouping label retain the div and its fence.
+
 - **An empty `<code>` is written only where its backtick run ends.** A code
   span with nothing in it is a run nothing closes, and the run ends at the end
   of a block, at the braced closer of an emphasis, or at the end of a table

@@ -2486,7 +2486,7 @@ class Importer {
       this.recordCarrier(node, 'tight')
     }
     const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
-    const label = carriedLabel !== undefined && carriedLabel !== '' && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
+    const label = carriedLabel !== undefined && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
     if (label !== undefined) this.recordCarrier(node, 'label')
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
@@ -4488,6 +4488,18 @@ class Importer {
     nodes.forEach((node, index) => {
       const path = paths?.[index] ?? this.childPath(parentPath, node, index)
       const produced = this.inline(node, path, depths?.[index] ?? depth)
+      const previous = nodes[index - 1]
+      const last = out.at(-1)
+      const terminal = index === nodes.length - 1 || index === nodes.length - 2
+        && nodes[index + 1]?.nodeName === '#text' && /^[ \t\r\n]*$/.test(domValue(nodes[index + 1]!) ?? '')
+      if (terminal && this.cellDepth === 0 && produced.length === 1
+          && produced[0]?.type === 'code' && produced[0].value === ''
+          && previous?.nodeName === '#text' && /\n[ \t]*$/.test(domValue(previous) ?? '')
+          && last?.type === 'text' && last.value.trim() !== '') {
+        // The terminal empty run starts on its own line in the exported paragraph.
+        last.value = last.value.replace(/ +$/, '')
+        out.push({ type: 'soft_break' })
+      }
       for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) {
@@ -4828,8 +4840,13 @@ class Importer {
     if (tag === 'carve-footnote-ref') {
       const label = this.attr(node, 'label') ?? ''
       const inline = this.inlineFootnoteBodies.get(label)
-      if (inline !== undefined) return [{ type: 'inline_footnote', inline }]
-      return [{ type: 'footnote_ref', label }]
+      if (attrs?.keyValues) {
+        delete attrs.keyValues.label
+        if (Object.keys(attrs.keyValues).length === 0) delete attrs.keyValues
+      }
+      const authored = attrs && (attrs.id !== undefined || attrs.classes || attrs.keyValues) ? { attrs } : {}
+      if (inline !== undefined) return [{ type: 'inline_footnote', inline, ...authored }]
+      return [{ type: 'footnote_ref', label, ...authored }]
     }
     if (tag === 'abbr') {
       // A use of an abbreviation the document DEFINED is prose: the expansion
@@ -5805,7 +5822,12 @@ class Importer {
       for (const reference of definition.refs) {
         const site = this.footnoteReferenceSite(reference)
         const replacement = defaultTreeAdapter.createElement(
-          'carve-footnote-ref', p5html.NS.HTML, [{ name: 'label', value: label }],
+          'carve-footnote-ref', p5html.NS.HTML, [
+            { name: 'label', value: label },
+            ...(domTag(reference) === 'sup' ? (domAttrs(site) ?? []).filter(attr =>
+              attr.name !== 'id' && !RESERVED_CARRIER_ATTRIBUTES.has(attr.name.toLowerCase()),
+            ) : []),
+          ],
         )
         replacement.parentNode = domParent(site) ?? null
         this.replaceP5Node(site, replacement)
@@ -6065,7 +6087,7 @@ class Importer {
       used.add(fragment)
     }
 
-    const candidates: FootnoteCandidate[] = []
+    const bareSites: Array<{ reference: P5Node; target: P5Node; fragment: string }> = []
     for (const backlink of elements) {
       if (domTag(backlink) !== 'a' || this.attr(backlink, 'role') !== 'doc-backlink') continue
       const href = this.attr(backlink, 'href') ?? ''
@@ -6080,6 +6102,11 @@ class Importer {
       if (endnotes === undefined) continue
       const fragment = this.attr(target, 'id')!
       used.add(fragment)
+      bareSites.push({ reference, target, fragment })
+    }
+    const candidates: FootnoteCandidate[] = []
+    // Register every bare target before counting notes under shared wrappers.
+    for (const { reference, target, fragment } of bareSites) {
       const block = this.resolveFootnoteDefinitionBlock(target, targetsIndex)
       if (block === null || this.p5Contains(block, reference, targetsIndex)) continue
       candidates.push({ ref: reference, block, fragment, mutual: true })
