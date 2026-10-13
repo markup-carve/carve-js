@@ -3783,6 +3783,10 @@ function trackQuoteHostFence(
   }
   if (!blockStart && at === floor && host.terms.length > 0) host.terms[host.terms.length - 1] = false
   if (floor > 0 && at >= floor && !blockStart && !host.terms.at(-1)) {
+    if (RE_BLOCKQUOTE.test(inner) && !markerLineState(inner).leavesParagraphOpen) {
+      closeBlockQuoteParagraph(state)
+      return true
+    }
     const row = isTableRow(inner) || (wasInTable && RE_TABLE_CONT.test(inner))
     if (row || RE_HEADING.test(inner) || RE_HR.test(inner) || isLinkDefLine(inner) ||
         (host.kinds.at(-1) === 'item' && (RE_DEFLIST_TERM.test(inner) ||
@@ -6022,7 +6026,7 @@ function trackItemLazyState(
   if (state.inDefList === 'description' && state.descriptionHasTerm && state.descriptionColumn !== undefined &&
       run !== undefined && runColumns !== undefined && runColumns >= state.descriptionColumn) {
     const text = content.slice(run)
-    if (RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) || colonFenceOpenerLen(text) !== null) {
+    if (RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) || colonFenceOpenerLen(text) !== null || RE_BLOCKQUOTE.test(text)) {
       state.ownedColumn = state.descriptionColumn
       state.ownedAuthored = false
       const inner = state.deepest = verbatimOnlyLazyState()
