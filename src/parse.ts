@@ -398,7 +398,7 @@ function isContinuationMarker(line: string): boolean {
   return RE_CONTINUATION_MARKER.test(line)
 }
 
-const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
+const RE_BLOCKQUOTE = /^>(?: (.*)|[\t][ \t]*|)$/
 const RE_VALID_ADMONITION_OPEN = balancedLabelMatcher(
   /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\n]*\]))?[ \t]*$/,
   [4],
@@ -577,7 +577,7 @@ function isLinkDefLine(line: string): boolean {
  * grammar and rejected `[^my note]`, which the parser reads and the exporter
  * writes.
  */
-export const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +([^]+)$/
+export const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:(?=[ \t]*[^ \t]) +([^]+)$/
 
 // A footnote body's own column: the indent §16 requires of a continuation line.
 // The body is dedented by exactly this much, never by the first continuation
@@ -3929,7 +3929,7 @@ function quotedLineText(content: string, terminatorFree: boolean): string | null
     const quoted = RE_BLOCKQUOTE.exec(content)
     return quoted ? (quoted[1] ?? '') : null
   }
-  if (content === '>') return ''
+  if (content === '>' || (content.startsWith('>\t') && isBlankLine(content.slice(1)))) return ''
 
   return content.startsWith('> ') ? content.slice(2) : null
 }
@@ -5204,20 +5204,17 @@ function prefixWalkBound(content: string): number {
   return nl === -1 ? content.length : nl + 1
 }
 
-/**
- * The length of the block quote marker at `from`, or 0 when there is none.
- *
- * `RE_BLOCKQUOTE` takes `>` plus at most one space, so a two-character window
- * already decides it; the window is only ever short when the line itself is,
- * and `>` alone at the end of the line consumes the whole remainder exactly as
- * `quoted[1] ?? ''` did.
- */
+// Read the quote prefix without mistaking a partial window for the end of the line.
 function quotePrefixLength(content: string, from: number, bound: number): number {
-  const window = content.slice(from, Math.min(from + PREFIX_WINDOW, bound))
-  const quoted = RE_BLOCKQUOTE.exec(window)
-  if (!quoted) return 0
-
-  return window.length - (quoted[1]?.length ?? 0)
+  if (content[from] !== '>') return 0
+  if (from + 1 === bound) return 1
+  if (content[from + 1] === ' ') return 2
+  if (content[from + 1] !== '\t') return 0
+  // A tab starts no quote separator unless the entire remainder is line-final layout.
+  for (let at = from + 1; at < bound; at++) {
+    if (content[at] !== ' ' && content[at] !== '\t') return 0
+  }
+  return bound - from
 }
 
 /**
@@ -7537,6 +7534,7 @@ function rebaseOverindentedBlocks(
   tabFenceColumns?: ReadonlyMap<number, number>,
   markerDescriptionCodeOpeners?: ReadonlySet<number>,
   noteParagraph?: { markers?: ReadonlySet<number>, markerBody?: boolean },
+  itemParagraphFences?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7652,10 +7650,10 @@ function rebaseOverindentedBlocks(
             if (close.test(lines[j]!)) break
           }
         } else {
-          for (let j = i + 1; j < lines.length; j++) {
-            end = j
-            if (commentFenceRun(lines[j]!) === comment) break
-          }
+          // An unmatched fence is one comment line and owns no successor (§28).
+          const close = (commentCloser ??= commentCloserLookup(lines))(comment!, i)
+          if (close < 0) continue
+          end = close
         }
         i = end
         continue
@@ -7758,8 +7756,19 @@ function rebaseOverindentedBlocks(
       ? indentColumns(source) : undefined
 
     if (code) {
+      // Only the item's own paragraph releases a differently indented list marker.
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
-      end = sourceCodeBase === undefined
+      if (itemParagraphFences?.has(i) && sourceCodeBase === undefined) {
+        onUnclosedCodeFence?.()
+        for (let j = i + 1; j < lines.length; j++) {
+          const candidate = lines[j]!
+          const column = indentColumns(candidate)
+          if (column > 0 && column !== base && isListMarkerLine(candidate.trimStart())) break
+          end = j
+          onFenceBodyLine?.(j)
+          if (takenBelowColumn?.has(j)) heldFoldedLines.add(j)
+        }
+      } else end = sourceCodeBase === undefined
         ? rebasedCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
           onFenceBodyLine, onUnclosedCodeFence)
         : sourceCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
@@ -13141,6 +13150,7 @@ class ParseSession {
       // opens is read by its own leaf instead, as before.
       const markerNoteFloor = contentCol + FOOTNOTE_BODY_COLUMN
       const noteParagraphMarkers = new Set<number>()
+      const itemParagraphFences = new Set<number>()
       let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
         !RE_COMMENT_LINE.test(RE_FOOTNOTE_DEF.exec(content)![2]!)
       let noteBodyLast = false
@@ -13391,6 +13401,12 @@ class ParseSession {
           if (strippedPrefix !== undefined && dedented === placed) {
             nestedOrigins.set(nested.length, { text: dedented, parentIndex: lexer.pos, prefix: strippedPrefix })
           }
+          const continuesItemParagraph = !followsBlank && lazyState.lazyFoldable && lazyState.opaque === null &&
+              lazyState.inDefList === false && !lazyState.inFootnoteBody &&
+              lazyState.quoteInner === null && lazyState.deepest == null &&
+              lazyState.ownedColumn < 0 && lazyState.literalColon === undefined &&
+              lazyState.authoredColon === undefined && lazyState.divDepth === 0 && !markerNoteItem &&
+              opensCodeFence(dedented.trimStart())
           nested.push(dedented)
           nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -13634,6 +13650,8 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (continuesItemParagraph && !skipConsumedCloser && lazyState.opaque === null &&
+              lazyState.inlineFenceParagraph) itemParagraphFences.add(nested.length - 1)
           if (lazyState.invisibleAtColumn && RE_FOOTNOTE_DEF.test(dedented.trimStart())) {
             nestedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
             nestedNoteParagraph = true
@@ -14074,6 +14092,7 @@ class ParseSession {
           tabRebaseColumns,
           markerDescriptionCodeOpeners,
           { markers: noteParagraphMarkers },
+          leadOwnsExtent ? undefined : itemParagraphFences,
         )
         : new Set<number>()
       if (leadOwnsExtent) {
