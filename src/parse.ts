@@ -6130,7 +6130,9 @@ function trackItemLazyState(
   // container and an open description entry hold the run for the same reason:
   // each is the innermost container and reads its body flush.
   if (
-    readFlush && (state.divDepth === 0 || (state.authoredColon !== undefined && runColumns! > state.authoredColon.column && hostedAuthoredBlockOpener(content.slice(run!)))) &&
+    readFlush && (state.divDepth === 0 || (state.divDepth > 0 && state.literalColon === undefined && !state.literalLayout &&
+      (opensCodeFence(content.slice(run!)) || RE_LINE_BLOCK_OPEN.test(content.slice(run!)))) ||
+      (state.authoredColon !== undefined && runColumns! > state.authoredColon.column && hostedAuthoredBlockOpener(content.slice(run!)))) &&
     state.inDefList === false && !state.unrebasedColonBody &&
     (wasQuote === null || !blockQuoteParagraphOpen(wasQuote) ||
       (state.unclosedFenceBase !== undefined && runColumns === state.unclosedFenceBase) ||
@@ -6138,7 +6140,8 @@ function trackItemLazyState(
   ) {
     const overIndented = content.slice(run!)
     const inlineCode = RE_FENCE.exec(overIndented) ?? RE_RAW_FENCE.exec(overIndented)
-    if (inlineCode && state.authoredColon !== undefined && runColumns! > state.authoredColon.column) {
+    if (inlineCode && state.divDepth > 0 && state.literalColon === undefined && !state.literalLayout &&
+        (state.authoredColon === undefined || runColumns! > state.authoredColon.column)) {
       const marker = RE_FENCE.test(overIndented) ? inlineCode[2]! : inlineCode[1]!
       state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: authoredFenceColumns ?? run! }
       state.lazyFoldable = false
@@ -7635,6 +7638,7 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
   let openerColumn = -1
   let childColumn = -1
   let belowNoteBody = false
+  let nestedMarkerSeen = false
   for (const [index, line] of lines.entries()) {
     if (isBlankLine(line)) continue
     const column = indentColumns(line)
@@ -7651,8 +7655,13 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
       openerColumn = column
     }
     if (childColumn >= 0 && column >= childColumn) continue
-    if (isListMarkerLine(text) && !absorbedMarkers.has(index)) childColumn = column + markerContentColumn(text)
-    if (!belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
+    if (RE_FOOTNOTE_DEF.test(text) || (isListMarkerLine(text) && !absorbedMarkers.has(index))) {
+      // A later comment and fence belong to the nested marker's body. They do
+      // not give the outer item's flush-left follower a continuation claim.
+      nestedMarkerSeen = true
+      if (isListMarkerLine(text)) childColumn = column + markerContentColumn(text)
+    }
+    if (!nestedMarkerSeen && !belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
         indentColumns(lines[index + 1] ?? '') >= FOOTNOTE_BODY_COLUMN &&
         opensCodeFence(lines[index + 1]?.trimStart() ?? '')) openers.push(index + 1)
   }

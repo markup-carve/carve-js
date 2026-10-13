@@ -460,19 +460,19 @@ describe('the include-security corpus is answered as a contract, not a bag of fi
   })
 
   it('produces every observable the corpus expects', () => {
-    const unknown = [
-      ...new Set(corpus.vectors.flatMap((vector) => Object.keys(vector.expected))),
-    ]
-      .filter((key) => !KNOWN_EXPECTED_KEYS.has(key))
-      .sort()
+    const used = new Set(corpus.vectors.flatMap((vector) => Object.keys(vector.expected)))
+    const unknown = [...used].filter((key) => !KNOWN_EXPECTED_KEYS.has(key)).sort()
     expect(unknown).toEqual([])
+    const stale = [...KNOWN_EXPECTED_KEYS].filter((key) => !used.has(key)).sort()
+    expect(stale, 'delete stale KNOWN_EXPECTED_KEYS entries').toEqual([])
   })
 
   it('reads every member the corpus puts on a vector', () => {
-    const unread = [...new Set(corpus.vectors.flatMap((vector) => Object.keys(vector)))]
-      .filter((key) => !KNOWN_VECTOR_KEYS.has(key))
-      .sort()
+    const used = new Set(corpus.vectors.flatMap((vector) => Object.keys(vector)))
+    const unread = [...used].filter((key) => !KNOWN_VECTOR_KEYS.has(key)).sort()
     expect(unread).toEqual([])
+    const stale = [...KNOWN_VECTOR_KEYS].filter((key) => !used.has(key)).sort()
+    expect(stale, 'delete stale KNOWN_VECTOR_KEYS entries').toEqual([])
   })
 
   it('drives every kind the corpus uses', () => {
