@@ -183,8 +183,6 @@ export function djotImportLosses(
         end++
       if (!rows[end]) report('A table containing only separator rows cannot be spelled in Carve.', n + 1)
     }
-    if (/^\|(?:[ \t]*\|)+[ \t]*$/.test(content))
-      report('A table row whose cells are all blank cannot be spelled in Carve.', n + 1)
   }
   const escaped = new Uint8Array(source.length)
   let slashes = 0

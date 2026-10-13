@@ -45,9 +45,8 @@ describe("a table cell's marker run", () => {
 
   it('is not terminated by the closing pipe, and not by a tab', () => {
     expect(cells('|= h |')).toContain('<th scope="col">h</th>')
-    // An all-blank header row is a paragraph, not an empty-header table
-    // (markup-carve/carve#1954); a header cell needs content to be one.
-    expect(carveToHtml('|= |')).toBe('<p>|= |</p>')
+    // `|= |` is an empty header cell (CARVE-P9-082).
+    expect(cells('|= |')).toContain('<th scope="col"></th>')
     expect(cells('|=|')).toContain('<td>=</td>')
     // Read off the raw HTML: the `cells` helper folds whitespace, and the tab
     // surviving INSIDE the content is the half worth asserting.

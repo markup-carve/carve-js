@@ -49,7 +49,6 @@ it.each([
   ],
   ['|a|b|\n|:-|---:|\n|c|d|\n|cc|dd|\n|-:|:-:|\n|e|f|\n|g|h|\n', 'A separator inside a table', 5],
   ['|--|--|\n', 'A table containing only separator rows', 1],
-  ['| |\n', 'A table row whose cells are all blank', 1],
 ] as const)('names the loss in %s at its source line', (source, message, line) => {
   const result = migrateDjot(source)
   expect(result.value).toBe(djotToCarve(source))
@@ -97,6 +96,12 @@ it.each(['***', '*-*-*', '# h', '> q', '- li', '1. li', '```\nc\n```', '| t |', 
     }
   },
 )
+
+it('keeps a row of blank cells as a row and reports no loss for it', () => {
+  const result = migrateDjot('| a |\n| |\n| b |\n')
+  expect(result.value).toBe('| a |\n| |\n| b |\n')
+  expect(result.report.diagnostics.filter(d => d.code === 'structure-unspellable')).toEqual([])
+})
 
 it('keeps a reference-looking line in an open paragraph unresolved', () => {
   expect(djotToCarveWithLosses('[r][]\n\npara\n[r]: /u\n').losses).toContainEqual(

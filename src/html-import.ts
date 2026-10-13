@@ -5457,7 +5457,7 @@ class Importer {
       dropped.add(row)
       this.report.add(
         'structure-unspellable',
-        'Dropped a row whose every cell is empty: Carve reads such a row as text',
+        'Dropped a row with no cells: Carve has no spelling for it',
         'warning',
         origin.path,
         origin.node,

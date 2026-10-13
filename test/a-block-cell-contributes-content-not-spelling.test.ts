@@ -83,9 +83,6 @@ describe('a block cell contributes content, not spelling', () => {
  * the flatten invent no character, and `conversion-diagnostics` already reports
  * the whole `blocks` field as `field-unspellable` on this target, so a kind with
  * no inline content contributes nothing rather than a spelling.
- *
- * The rows below carry a second cell because `renderCarve` refuses a row whose
- * every cell is blank, which a one-cell row would become.
  */
 describe('a block cell contributes no invented spelling to Carve', () => {
   const pair = (blocks: unknown[]) => fromAstJson({

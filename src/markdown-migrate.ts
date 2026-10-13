@@ -38,7 +38,7 @@ import {
   useEmptyDestinationBoundaryKey,
 } from './markdown-empty-destination.js'
 import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
-import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
+import { isScaffoldHeaderRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
@@ -3451,31 +3451,23 @@ function reportOrderedTask(line: string, sourceLine?: number): void {
 }
 
 /**
- * Whether `row` is a row the parser reads back as a table row - the same
- * predicate `parseTable` gates on, so the importer cannot drop a row Carve
- * would have accepted or keep one it refuses.
+ * Whether a converted GFM header row is kept. An all-blank header with no
+ * alignment is the scaffolding the Markdown writer adds to a headerless table,
+ * so it is omitted and reported (PART 11 CARVE-P11-056); keeping it would give
+ * every headerless table an empty header row on its way back. Body rows are
+ * always kept: a row of empty cells is a row (PART 9 CARVE-P9-082).
  *
- * A row whose every cell is blank is not a table row (markup-carve/carve#1954).
- * GFM reads one as an empty row, and written out as `| | |` Carve reads a
- * paragraph, which splits the table in two (carve-js#1919). The row is dropped
- * and reported rather than filled with a cell the author never wrote: an
- * invented value round-trips back out as if it were theirs, and an honest
- * omission with a report beats a wrong value.
- *
- * `sourceLine` is the line of the INPUT the dropped row stood on, which carve-php
- * and carve-rs both report and which the ruling on carve-js#2668 settled: a
- * diagnostic naming what was dropped needs the one field that says where. It is
+ * `sourceLine` is the line of the INPUT the dropped row stood on (carve-js#2668),
  * an index into the source, never into the stripped array the importer writes
- * from (markup-carve/carve#2792), and the row goes out pathless where the
- * caller cannot name one rather than carrying a guess.
+ * from (markup-carve/carve#2792).
  */
-function keepTableRow(row: string, sourceLine?: number): boolean {
-  if (isTableRow(row)) return true
+function keepHeaderRow(row: string, sourceLine?: number): boolean {
+  if (!isScaffoldHeaderRow(row)) return true
   // No cell of a blank row can hold an escaped pipe, so splitting counts them.
   const cells = row.split('|').length - 2
   importLosses.push({
     code: 'structure-unspellable',
-    message: `Dropped a table row of ${cells} blank cells; Carve spells no row whose every cell is blank`,
+    message: `Dropped an empty header row of ${cells} cells; a headerless GFM table has no Carve header`,
     ...(sourceLine === undefined ? {} : { line: sourceLine }),
   })
   return false
@@ -4131,7 +4123,7 @@ function restorePrefixedInlineRun(
         inlineRunSourceLine = runPartSourceLine(part)
         const header = writeTableRow(splitTableRow(body.trim()), headers, dialect)
         inlineRunSourceLine = previousLine
-        if (keepTableRow(header, runPartSourceLine(part))) out.push(part.prefix + marker + header)
+        if (keepHeaderRow(header, runPartSourceLine(part))) out.push(part.prefix + marker + header)
         idx++ // consume the delimiter row
         continue
       }
@@ -4139,7 +4131,7 @@ function restorePrefixedInlineRun(
       inlineRunSourceLine = runPartSourceLine(part)
       const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth)
       inlineRunSourceLine = previousLine
-      if (keepTableRow(row, runPartSourceLine(part))) out.push(part.prefix + marker + row)
+      out.push(part.prefix + marker + row)
       continue
     }
     // The same containers `held` peeled, so a row a quoted item holds is
@@ -7050,7 +7042,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
           // At the container's content column, so the converted header keeps
           // the item that holds it. Written at column 0 it left the item while
           // the body rows stayed behind, splitting one table into two blocks.
-          if (keepTableRow(header, sourceLine(i))) out.push(containerPad + header)
+          if (keepHeaderRow(header, sourceLine(i))) out.push(containerPad + header)
           i++ // consume the delimiter row
           prevType = 'text'
           inTableBody = true
@@ -7064,7 +7056,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // padding matches the formatter's and a pipeless row stays in the table.
     if (inTableBody && inGfmTable[i] && trimmed !== '') {
       const row = writeTableRow(splitTableRow(trimmed), [], dialect, tableWidth)
-      if (keepTableRow(row, sourceLine(i))) out.push(containerPad + row)
+      out.push(containerPad + row)
       continue
     }
     inTableBody = false

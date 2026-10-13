@@ -643,18 +643,20 @@ const RE_TABLE_ROW = /^\|/
 export const isTableRow = (line: string): boolean => {
   if (!RE_TABLE_ROW.test(line)) return false
   if (!/\|[ \t]*$/.test(line) && rowAttrsFromLine(line).attrs === undefined) return false
-  const cells = splitTableRow(rowAttrsFromLine(line).body)
-  return cells.some((cell) => {
-    const parsed = parseCellMarkers(cell)
-    return (
-      parsed.content.trim().length > 0 ||
-      parsed.attrs !== undefined ||
-      parsed.align !== undefined ||
-      parsed.valign !== undefined ||
-      parsed.span !== undefined
-    )
-  })
+  // CARVE-P9-082: a cell slot is counted, not weighed. `||` and `| |` are one
+  // empty cell; only a lone `|` has no slot.
+  return splitTableRow(rowAttrsFromLine(line).body).length > 0
 }
+/**
+ * A row whose every cell is empty and carries no marker beyond `=`: the empty
+ * header the Markdown writer adds to a headerless table (PART 11 CARVE-P11-056).
+ */
+export const isScaffoldHeaderRow = (line: string): boolean =>
+  splitTableRow(rowAttrsFromLine(line).body).every((cell) => {
+    const parsed = parseCellMarkers(cell)
+    return parsed.content.trim() === '' && parsed.attrs === undefined && parsed.align === undefined &&
+      parsed.valign === undefined && parsed.span === undefined
+  })
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
 // it from a `+ ` list item (which never ends with `|`). Only consumed

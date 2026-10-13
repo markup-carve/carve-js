@@ -2945,7 +2945,7 @@ class CarveRenderSession {
     if (this.refusedTableRows.length > 0) {
       throw new SourceUnspellableError(
         'table_row',
-        'a table row whose every cell is blank has no Carve source spelling',
+        'a table row with no cells has no Carve source spelling',
         this.refusedTableRows[0],
         this.rowsBeforeFirstSpan > 0 ? this.refusedTableRows.slice(0, this.rowsBeforeFirstSpan) : this.refusedTableRows,
       )
@@ -3813,9 +3813,10 @@ class CarveRenderSession {
         const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < node.separatorWidths!.length
         cells.push(this.renderTableCell(cell, ctx, asHeader, colonSpelled))
       })
-      // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
-      // so no source spells one and the writer refuses the tree (carve-js#1822).
-      if (cells.every((cell) => cell === ' ' || cell === '= ')) {
+      // A row of empty cells is written as a row, one slot per cell (PART 11
+      // CARVE-P11-014). Only a row with no cell at all has no spelling: `|`
+      // alone is prose.
+      if (cells.length === 0) {
         if (this.collectRefusedSpans && this.refusedTableRows.length === 0 && this.refusedSpans.length > 0 && this.spansBeforeFirstRow === undefined) this.spansBeforeFirstRow = this.refusedSpans.length
         this.refusedTableRows.push(row)
         return

@@ -106,7 +106,8 @@ it('keeps empty heading and blank-table normalization with email elsewhere', () 
   expect(carveToHtml(markdownToCarve('# []()\n\nmail c@d.test'))).toContain('<h1></h1>')
   const result = migrateMarkdown('| a |\n|---|\n| []() |\n\nmail c@d.test')
   expect(result.value).not.toContain('carve-md-empty-')
-  expect(result.report.diagnostics.some(row => row.message.includes('blank cell'))).toBe(true)
+  expect(result.value).toContain('|= a |\n| |\n')
+  expect(result.report.diagnostics.some(row => row.message.includes('empty destination'))).toBe(true)
 })
 
 it.each(['[foo]()\n\nmail a@b.test\n\n[foo]: /url', '*a [b*]() c@d.test', '- [ ]()\n\na@b.test', 'x [ ]() a@b.test', 'a@b.test *[]()*', '[[]()](u) a@b.test', '<code>[a]()</code> a@b.test', '<code>[a@b.test]()</code>', 'para\n# []()\n\na@b.test', '- para\n  # []()\n\na@b.test', '[]()\n===\n\na@b.test', '~~[]()~~ a@b.test', '<mark>[]()</mark> a@b.test', '<u>[]()</u> a@b.test', '<s>[]()</s> a@b.test', '<sup>[]()</sup> a@b.test', '<sub>[]()</sub> a@b.test', '<ins>[]()</ins> a@b.test', '![x [a]() y](u) m@n.o', '[x](u "t [a]() t") c@d.e'])('does not expose private empty-link scopes: %s', source => {

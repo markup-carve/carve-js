@@ -65,7 +65,7 @@ it('bounds array removal work when many empty code spans are dropped', () => {
 })
 
 it('keeps the first refusal when row and span repairs reach the diagnostic cap', () => {
-  const blank = '<table><tr><td></td></tr></table>'
+  const blank = '<table><tr></tr><tr><td>a</td></tr></table>'
   const nested = '<p><ins><ins><code>x</code></ins><ins><code>y</code></ins></ins></p>'
   for (const [html, message] of [[blank + nested, 'Dropped a row'], [nested + blank, 'Unwrapped <ins>'], [blank + nested + blank, 'Dropped a row'], [nested + blank + nested, 'Unwrapped <ins>']] as const) {
     const result = htmlToCarve(html, { maxDiagnostics: 2 })

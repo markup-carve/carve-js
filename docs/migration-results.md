@@ -27,13 +27,11 @@ trailing line endings. When the imported text matches and no known loss was
 reported, `literal-text-verified` records preserved/exact evidence. All other
 inputs retain the dropped/fallback `fidelity-unverified` warning.
 
-Markdown adds the construct-level losses it can prove beside that row. A table
-row whose every cell is blank has no Carve spelling, so it is dropped and
-reported as `structure-unspellable`, dropped/exact - the same code and the same
-fidelity the HTML importer spends on that row. The row carries no `path` or
-`line`: the Markdown importer folds and re-spells a container's lines before it
-writes a row, so it has no position it could stand behind, and one drop is one
-diagnostic. The `fidelity-unverified` row stays: it still stands for the
+Markdown adds the construct-level losses it can prove beside that row. An
+all-blank GFM header row with no alignment is the scaffolding of a headerless
+table, so it is dropped and reported as `structure-unspellable`, dropped/exact,
+at the source line it stood on. An all-blank body row is kept as a row of empty
+cells and reports no loss. The `fidelity-unverified` row stays: it still stands for the
 constructs the Markdown importer has no answer for.
 Markdown also reports `frontmatter-synthesized`, info/normalized at `line:1`,
 on every leading `---` block it carries over as Carve front matter. Confidence
