@@ -13251,7 +13251,7 @@ class ParseSession {
       // opens below that child's column - the one place the answer is read. Both
       // reads it needs walk an indentation run, so a body with no such fence pays
       // nothing for the tracking (markup-carve/carve#752).
-      const ownerPending: {line: string, followsBlank: boolean, foldable: boolean, framed: boolean}[] = []
+      const ownerPending: {line: string, index: number, followsBlank: boolean, foldable: boolean, framed: boolean}[] = []
       const walkOwnership = (): boolean => {
         let opensFence = false
         for (const entry of ownerPending) {
@@ -13261,8 +13261,14 @@ class ParseSession {
           // block boundary returns ownership to this item.
           if (nestedOwnerColumn < 0 || column < nestedOwnerColumn) {
             const markerColumn = markerContentColumn(entry.line)
+            const opener = entry.line.trimStart()
+            const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+            const closedFence = fence !== null && itemFenceHasCloser(
+              lexer, RE_FENCE.test(opener) ? fence[2]! : fence[1]!, entry.index,
+              contentCol + column, new Map(), itemEndsAt,
+            )
             if (nestedOwnerColumn < 0 || entry.followsBlank || markerColumn >= 0 ||
-              lineOpensItemBlock(entry.line)) {
+              lineOpensItemBlock(entry.line) || closedFence) {
               nestedOwnerColumn = markerColumn
               // Track a new fence at its authored base so a later dedent cannot
               // fold into its body as paragraph text. Deeper items track their own
@@ -13299,7 +13305,7 @@ class ParseSession {
           if (indentColumns(line, descendantOpaque.base) < descendantOpaque.base) descendantOpaque = null
         }
         const child = nestedOwnerColumn
-        if (child < 0 && opener === line.replace(/^[ \t]+/, '')) return
+        if (child < 0 && opener === line.replace(/^[ \t]+/, '') && !opensCodeFence(opener)) return
         // BELOW A CHILD'S COLUMN THE CHILD IS OVER, and so is any fence it held:
         // the base is at or past that column, so such a line is never payload.
         // What a later below-column line reads is whether an ANCESTOR is left
@@ -13972,6 +13978,7 @@ class ParseSession {
             }
             ownerPending.push({
               line: dedented,
+              index: fenceLineIndex,
               followsBlank,
               foldable: lazyState.lazyFoldable,
               framed: insideOpenFence(lazyState),

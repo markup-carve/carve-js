@@ -36,6 +36,20 @@ const tailIsTopLevel = (src: string): boolean => {
 }
 
 describe('a block at a container content column ends the paragraph', () => {
+  it('ends the outer item after a closed fence below an open sublist column', () => {
+    expect(html('- a\n    - child\n    ```\n    code\n    ```\nafter\n')).toBe(
+      '<ul>\n  <li>a\n    <ul>\n      <li>child</li>\n    </ul>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>',
+    )
+  })
+
+  it('ends a quote after the same closed fence', () => {
+    expect(html('> - a\n>     - child\n>     ```\n>     code\n>     ```\nafter\n'))
+      .toMatch(/<\/blockquote>\n<p>after<\/p>$/)
+  })
+
+  it('keeps an unclosed fence below the sublist column inline', () => {
+    expect(html('- a\n    - child\n    ```\n    code\nafter\n')).not.toContain('<p>after</p>')
+  })
   /**
    * THE PLAINEST SPELLING, and the one the whole family reduces to. No quote,
    * no table, no continuation row: an invisible line at the item's content
