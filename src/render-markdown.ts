@@ -555,7 +555,14 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       return ''
     case 'link_reference_definition': {
       if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
-      const destination = neutralizeCharRefs(stripControls(node.href).replace(/[\\()<>]/g, '\\$&'))
+      const authored = deniedProbeInput(node.href)
+      const probed = sanitizeMdUrl(authored)
+      destinationDenied(ctx.options, 'link', 'markdown', authored, probed, node.pos)
+      // `<>` keeps a blanked line a definition, with an empty destination.
+      const destination =
+        probed === '' && authored !== ''
+          ? '<>'
+          : neutralizeCharRefs(stripControls(node.href).replace(/[\\()<>]/g, '\\$&'))
       const title = node.title === undefined ? '' : ` "${escapeMdTitle(node.title)}"`
       return `[${node.label}]: ${destination}${title}\n\n`
     }
