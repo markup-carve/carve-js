@@ -3296,6 +3296,21 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
   return nodes
 }
 
+function stripPositionsOutsideRow(nodes: InlineNode[], start: number, end: number): InlineNode[] {
+  for (const node of nodes) {
+    if (node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
+      (node.pos.startOffset < start || node.pos.endOffset > end)) delete node.pos
+    if (node.type === 'citation_group') {
+      for (const item of node.items) {
+        if (item.pos && item.pos.startOffset !== undefined && item.pos.endOffset !== undefined &&
+          (item.pos.startOffset < start || item.pos.endOffset > end)) delete item.pos
+      }
+    }
+    visitInlineChildren(node, children => stripPositionsOutsideRow(children, start, end), undefined)
+  }
+  return nodes
+}
+
 interface ColonFenceBodyLine {
   text: string
   lineIndex: number
@@ -6736,7 +6751,8 @@ interface RawCell {
    */
   anchors?: AnchorRange[]
   /** Continuation text on a span marker, joined to its origin after the span walk. */
-  joins?: Array<{ frag: string; at: FragmentPlace | null }>
+  joins?: Array<{ frag: string; at: FragmentPlace | null; line: number; rowIndex: number }>
+  wraps?: Array<{ offset: number; line: number; row?: number }>
 }
 
 interface FragmentPlace {
@@ -6746,8 +6762,9 @@ interface FragmentPlace {
 }
 
 /** Appends one `+` continuation fragment to a cell's collected source. */
-function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null): void {
+function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, line?: number, row?: number): void {
   const fragStart = target.raw ? target.raw.length + 1 : 0
+  if (target.raw && line !== undefined) (target.wraps ??= []).push({ offset: fragStart - 1, line, ...(row ? { row } : {}) })
   target.raw = target.raw ? `${target.raw} ${frag}` : frag
   // Only the NEW fragment is read; the joining space is not a run
   // character, so resuming from the cell's own state is exact.
@@ -8509,6 +8526,7 @@ const ATTR_INERT_PREV = new Set([
   'non_breaking_space',
   'soft_break',
   'hard_break',
+  'cell_wrap',
   'mention',
   'tag',
   'heading_ref',
@@ -9130,7 +9148,7 @@ function lastEmittedGlyph(previous: InlineNode): string {
   if (previous && previous.type === 'escaped_text') return previous.value
   if (previous.type === 'text') return previous.value.slice(-1)
   // A line break is whitespace to quote flanking, so a quote starting a line opens (carve#2822).
-  if (previous && (previous.type === 'soft_break' || previous.type === 'hard_break')) return '\n'
+  if (previous && (previous.type === 'soft_break' || previous.type === 'hard_break' || previous.type === 'cell_wrap')) return '\n'
   return 'x'
 }
 
@@ -9230,6 +9248,8 @@ interface InlineSource {
    * also carries markup.
    */
   rangeShift?: number
+  cellWraps?: ReadonlyMap<number, { line: number; row?: number }>
+  wrapShift?: number
 }
 
 /**
@@ -9257,6 +9277,8 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
   if (overrides.anchorShift) source.anchorShift = overrides.anchorShift
   if (overrides.anchoredRanges) source.anchoredRanges = overrides.anchoredRanges
   if (overrides.rangeShift) source.rangeShift = overrides.rangeShift
+  if (overrides.cellWraps) source.cellWraps = overrides.cellWraps
+  if (overrides.wrapShift) source.wrapShift = overrides.wrapShift
   if (overrides.anchored === false) source.anchored = false
   return source
 }
@@ -15248,6 +15270,7 @@ class ParseSession {
     // construct spanning the line boundary is one logical cell. Inline
     // parsing happens once, after merging.
     const rawRows: RawCell[][] = []
+    const continuationCounts: number[] = []
     const rowAttrsList: (Attrs | undefined)[] = []
     /** Where a row BEGINS, by row index - its own line, not its first cell's. */
     const rowStarts: Array<{ line: number; column: number; offset: number } | undefined> = []
@@ -15270,6 +15293,7 @@ class ParseSession {
         )
           break
         lexer.consume()
+        const continuationLine = ++continuationCounts[rawRows.length - 1]!
         // A row that continues still occupies a CONTIGUOUS run of lines, and no
         // sibling row overlaps it - so unlike its cells, the row can be placed.
         // Recording where it now ends is what makes that possible.
@@ -15295,10 +15319,10 @@ class ParseSession {
             // The text belongs to the cell the marker resolves into, which only
             // the span walk below can name (T6).
             target.openRun = openVerbatimRun(frag, target.openRun)
-            ;(target.joins ??= []).push({ frag, at })
+            ;(target.joins ??= []).push({ frag, at, line: continuationLine, rowIndex: rawRows.length - 1 })
             return
           }
-          joinFragment(target, frag, at)
+          joinFragment(target, frag, at, continuationLine)
         })
         continue
       }
@@ -15346,6 +15370,7 @@ class ParseSession {
         return c
       })
       rawRows.push(raw)
+      continuationCounts.push(0)
       rowAttrsList.push(rowAttrs)
       // The row's own extent, independent of whether its cells keep theirs. A row
       // whose every cell continues has no cell span to start from, and it still
@@ -15398,6 +15423,7 @@ class ParseSession {
         return t.length - (t.startsWith(':') ? 1 : 0) - (t.endsWith(':') ? 1 : 0)
       })
       rawRows.splice(1, 1)
+      continuationCounts.splice(1, 1)
       rowAttrsList.splice(1, 1)
       rowStarts.splice(1, 1)
       rowEnds.splice(1, 1)
@@ -15420,37 +15446,38 @@ class ParseSession {
     if (rawRows.some((rc) => rc.some((c) => c.joins))) {
       // A marker's continuation text joins the cell it resolves into; a blocked
       // marker renders empty and keeps none of it (T5, T6).
-      const grid = rawRows.map((rc) => rc.map((cell) => ({ cell, rowspan: 1, colspan: 1, skip: false })))
+      const grid = rawRows.map((rc, rowIndex) => rc.map((cell) => ({ cell, rowIndex, rowspan: 1, colspan: 1, skip: false })))
       resolveSpanGrid(
         grid,
         (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
         (origin, marker) => {
-          for (const { frag, at } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at)
+          for (const { frag, at, line, rowIndex } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex)
         },
       )
     }
     const rows: TableRow[] = rawRows.map((rc, idx) => {
       const row: TableRow = {
         type: 'table_row',
+        ...(continuationCounts[idx] ? { continuationLines: continuationCounts[idx] } : {}),
         cells: rc.map((c) => {
+          const cellWraps = c.wraps?.length
+            ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) }]))
+            : undefined
+          const children = c.span ? [] : c.anchors?.length
+            ? this.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
+                baseOffset: c.anchors[0]!.offset,
+                startLine: c.anchors[0]!.line,
+                startColumn: c.anchors[0]!.column,
+                anchoredRanges: c.anchors,
+                ...(cellWraps ? { cellWraps } : {}),
+              }))
+            : this.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
+                ...(cellWraps ? { cellWraps } : {}),
+              }))
           const cell: TableCell = {
             type: 'table_cell',
             header: c.header,
-            children: c.span
-              ? []
-              : c.anchors?.length
-                ? this.parseInline(
-                    c.raw,
-                    lexer.abbrDefs,
-                    lexer.linkDefs,
-                    inlineSource({
-                      baseOffset: c.anchors[0]!.offset,
-                      startLine: c.anchors[0]!.line,
-                      startColumn: c.anchors[0]!.column,
-                      anchoredRanges: c.anchors,
-                    }),
-                  )
-                : stripPositions(this.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs)),
+            children: !c.anchors?.length ? stripPositions(children) : children,
           }
           if (c.span) cell.span = c.span
           if (c.align) cell.align = c.align
@@ -15516,6 +15543,9 @@ class ParseSession {
       }
       const ra = rowAttrsList[idx]
       if (ra) row.attrs = ra
+      if (row.pos?.startOffset !== undefined && row.pos.endOffset !== undefined) {
+        for (const cell of row.cells) stripPositionsOutsideRow(cell.children ?? [], row.pos.startOffset, row.pos.endOffset)
+      }
       return row
     })
     const table: Table = { type: 'table', rows }
@@ -16188,7 +16218,7 @@ class ParseSession {
   ): InlineNode[] {
     // Non-ASCII text and ASCII letters/digits have no core inline openers.
     // Extension matchers can claim ordinary text, so they retain the full scan.
-    if (this.activeMatchers.length === 0 && /^[A-Za-z0-9 \t\u0080-\uFFFF]+$/.test(text)) {
+    if (!source.cellWraps && this.activeMatchers.length === 0 && /^[A-Za-z0-9 \t\u0080-\uFFFF]+$/.test(text)) {
       return [this.withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
     }
     const out: InlineNode[] = []
@@ -16288,6 +16318,13 @@ class ParseSession {
 
     while (i < text.length) {
       const c = text[i]!
+      const wrap = c === ' ' ? source.cellWraps?.get(i + (source.wrapShift ?? 0)) : undefined
+      if (wrap) {
+        flush()
+        out.push({ type: 'cell_wrap', line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+        i++
+        continue
+      }
       while (bracketRuns.length && i >= bracketRuns[bracketRuns.length - 1]!.close) {
         bracketRuns.pop()
       }
@@ -16320,6 +16357,7 @@ class ParseSession {
         do {
           i++
           if (i >= text.length) break
+          if (source.cellWraps?.has(i + (source.wrapShift ?? 0))) break
           const next = text.charCodeAt(i)
           if (
             !(
@@ -17342,6 +17380,10 @@ class ParseSession {
     if (source.anchoredRanges) {
       shifted.anchoredRanges = source.anchoredRanges
       shifted.rangeShift = (source.rangeShift ?? 0) + by
+    }
+    if (source.cellWraps) {
+      shifted.cellWraps = source.cellWraps
+      shifted.wrapShift = (source.wrapShift ?? 0) + by
     }
     if (source.lineAnchors) {
       // CARRIED INWARD, which is the whole defect: the anchors reached the

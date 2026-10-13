@@ -164,6 +164,7 @@ export const FOLDED_NODE_TYPES: Readonly<Record<string, string>> = {
   literal_inline: 'code',
   // carve-php treats `#tag` under the mention feature.
   tag: 'mention',
+  cell_wrap: 'soft_break',
 }
 
 const BLOCK_SET: ReadonlySet<string> = new Set(CANONICAL_BLOCK_TYPES)
@@ -290,6 +291,8 @@ export function canonicalType(type: string): string {
     case 'image':
       return 'image'
     case 'soft_break':
+      return 'soft_break'
+    case 'cell_wrap':
       return 'soft_break'
     case 'hard_break':
       return 'hard_break'

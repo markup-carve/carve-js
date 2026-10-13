@@ -308,6 +308,8 @@ export interface TableColumn {
 export interface TableRow extends BaseNode {
   type: 'table_row'
   cells: TableCell[]
+  /** Number of source `+` lines following this row. */
+  continuationLines?: number
 }
 
 export interface TableCell extends BaseNode {
@@ -960,6 +962,12 @@ export interface SoftBreak extends BaseNode {
   type: 'soft_break'
 }
 
+export interface CellWrap extends BaseNode {
+  type: 'cell_wrap'
+  line: number
+  row?: number
+}
+
 export interface HardBreak extends BaseNode {
   type: 'hard_break'
 }
@@ -1034,6 +1042,7 @@ export type InlineNode =
   | InlineFootnote
   | NonBreakingSpace
   | SoftBreak
+  | CellWrap
   | HardBreak
   | CriticInsert
   | CriticDelete

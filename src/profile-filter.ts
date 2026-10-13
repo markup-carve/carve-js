@@ -334,6 +334,7 @@ class ProfileFilter {
   ): void {
     const snapshot = [...list]
     for (const child of snapshot) {
+      if (child.type === 'cell_wrap') continue
       const index = list.indexOf(child)
       if (index === -1) continue // already removed by a prior step
       const slot: ChildSlot = wrap
@@ -979,6 +980,8 @@ function extractTextContent(node: NodeLike): string {
     case 'non_breaking_space':
       return '\u00a0'
     case 'soft_break':
+      return ' '
+    case 'cell_wrap':
       return ' '
     case 'hard_break':
       return '\n'

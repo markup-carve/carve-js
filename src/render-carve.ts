@@ -3773,6 +3773,8 @@ class CarveRenderSession {
    */
   private renderTable(node: Table, ctx: CarveContext): string {
     const rows: string[] = []
+    const continuations = node.rows.map(row => Array.from({ length: row.continuationLines ?? 0 }, () =>
+      Array.from({ length: row.cells.length }, () => ' ')))
     const first = node.rows[0]
     // [CARVE-P11-066]: a separator row is written where the AUTHOR wrote one,
     // which `separatorWidths` is the record of. `tableNeedsDelimiterHeader` is
@@ -3797,12 +3799,38 @@ class CarveRenderSession {
         // cell marker would be a second spelling of it and the bytes would not
         // be the ones the author wrote. Both re-parse to the same alignment.
         const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < node.separatorWidths!.length
-        cells.push(this.renderTableCell(cell, ctx, asHeader, colonSpelled))
+        const rendered = this.renderTableCell(cell, ctx, asHeader, colonSpelled)
+        const marker = /\u0002([0-9]+),([0-9]+)\u0003/g
+        const firstMarker = marker.exec(rendered)
+        if (!firstMarker) {
+          cells.push(rendered)
+          return
+        }
+        cells.push(`${rendered.slice(0, firstMarker.index)} `)
+        let current: RegExpExecArray | null = firstMarker
+        while (current) {
+          const start = marker.lastIndex
+          const next = marker.exec(rendered)
+          const end = next?.index ?? rendered.length
+          const targetRow = rowIndex + Number(current[1])
+          const targetLine = Number(current[2]) - 1
+          const line = continuations[targetRow]?.[targetLine]
+          if (!line || cellIndex >= line.length) throw new SourceUnspellableError('table_row', 'cell_wrap points outside its continuation row', row)
+          const part = rendered.slice(start, end)
+          // A colspan marker may carry another fragment into this cell on the
+          // same continuation line. The schema records its row and line but no
+          // column, so place successive fragments in successive free slots.
+          const slot = line.findIndex((value, index) => index >= cellIndex && value === ' ')
+          if (slot < 0) throw new SourceUnspellableError('table_row', 'cell_wrap has no free continuation cell', row)
+          line[slot] = padCell('', next ? part : part.endsWith(' ') ? part.slice(0, -1) : part)
+          current = next ?? null
+        }
       })
       rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
+      for (const line of continuations[rowIndex]!) rows.push(`+${line.join('|')}|`)
     })
     if (needsDelimiter) {
-      rows.splice(1, 0, authored ?? `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
+      rows.splice(1 + (first?.continuationLines ?? 0), 0, authored ?? `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
     }
     const caption = node.caption === undefined ? undefined : this.captionRow(node.caption, ctx)
     if (caption !== undefined) rows.push(caption)
@@ -4472,6 +4500,8 @@ class CarveRenderSession {
         return renderSession.inlineAttrs(node.attrs, node) ? `[${renderSession.sentinels[3]}]${renderSession.inlineAttrs(node.attrs, node)}` : renderSession.sentinels[3]!
       case 'soft_break':
         return '\n'
+      case 'cell_wrap':
+        return ctx.tableCellDepth > 0 ? `\u0002${node.row ?? 0},${node.line}\u0003` : ' '
       case 'hard_break':
         return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
       case 'insert':

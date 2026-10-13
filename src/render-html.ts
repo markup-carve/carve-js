@@ -2452,6 +2452,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
   switch (node.type) {
     case 'text':
       return escapeHtml(node.value)
+    case 'cell_wrap':
+      return ' '
     case 'escaped_text':
       // The backslash is authoring syntax; the reader sees the character. §13a
       // carries ONE escape per element (ruling 4): a multi-character value
