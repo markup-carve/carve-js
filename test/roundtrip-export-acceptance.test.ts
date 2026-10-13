@@ -182,7 +182,8 @@ for (const fixture of fixtures.markdownExportImport) test(`shared Markdown expor
   for (const code of fixture.forbiddenLossCodes ?? []) assert.ok(!codes.includes(code), code)
   const imported = migrateMarkdown(exported)
   assertProjection(parse(imported.value), fixture.expectedNodes)
-  assert.equal(carveToHtml(imported.value).trim(), carveToHtml(fixture.source).trim())
+  // A declared loss moves the output by definition; the spec harness skips the comparison too.
+  if ((fixture.lossCodes ?? []).length === 0) assert.equal(carveToHtml(imported.value).trim(), carveToHtml(fixture.source).trim())
 })
 
 for (const fixture of fixtures.markdownImportNegative ?? []) test(`shared Markdown import rejection: ${fixture.id}`, () => {

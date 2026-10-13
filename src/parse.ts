@@ -23,6 +23,7 @@ import { applyAbbreviations, applyLinkDefs } from './inline-resolution.js'
 import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
 import { referenceLink, referenceImage } from './reference-resolution.js'
 import { definitionLinePosition, dropPositions, toCodepointPositions } from './source-positions.js'
+import { resolveSpanGrid } from './table-spans.js'
 import type {
   SmartPunctuation,
   AbbreviationDef,
@@ -813,6 +814,8 @@ export const layoutWork = {
 
 class Lexer {
   attachmentBoundaries: Set<number>
+  /** Per document line whose quote chain ends in a lone `+`: text length at each depth to the levels below it. */
+  quoteChainEndsInPlus: Map<number, Map<number, number>>
   prefixMemoLines?: boolean[]
   private storedLines: readonly string[] = []
   private lineView: { lexer: Lexer; start: number; length: number } | undefined
@@ -1121,6 +1124,7 @@ class Lexer {
     inherited?: Lexer,
   ) {
     this.attachmentBoundaries = inherited?.attachmentBoundaries ?? new Set()
+    this.quoteChainEndsInPlus = inherited?.quoteChainEndsInPlus ?? new Map()
     this.abbrDefs = inherited?.abbrDefs ?? new Map()
     this.linkDefs = inherited?.linkDefs ?? new Map()
     this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()
@@ -3886,6 +3890,13 @@ const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean => {
   return level.mode.kind === 'paragraph'
 }
 
+/** How many quotes are open below the one `state` tracks. */
+const openQuoteDepth = (state: BlockQuoteLazyState): number => {
+  let depth = 0
+  for (let mode = state.mode; mode.kind === 'quote'; mode = mode.inner.mode) depth++
+  return depth
+}
+
 const closeBlockQuoteParagraph = (state: BlockQuoteLazyState): void => {
   state.mode = { kind: 'closed' }
 }
@@ -3964,6 +3975,13 @@ function trackBlockQuoteLazyState(
  * terminator the regex's `.*` cannot fail, so the marker alone decides and the
  * rest of the line is not re-read at every level of a deep quote chain.
  */
+/** Whether the last character before trailing spaces and tabs is `+`, without a scan past them. */
+function endsInPlus(text: string): boolean {
+  let end = text.length - 1
+  while (end >= 0 && (text[end] === ' ' || text[end] === '\t' || text[end] === '\n' || text[end] === '\r')) end--
+  return end >= 0 && text[end] === '+'
+}
+
 function quotedLineText(content: string, terminatorFree: boolean): string | null {
   if (!terminatorFree) {
     const quoted = RE_BLOCKQUOTE.exec(content)
@@ -6725,6 +6743,41 @@ interface RawCell {
    * reaching across a row boundary are not (markup-carve/carve-js#1153).
    */
   anchors?: AnchorRange[]
+  /** Continuation text on a span marker, joined to its origin after the span walk. */
+  joins?: Array<{ frag: string; at: FragmentPlace | null }>
+}
+
+interface FragmentPlace {
+  offset: number
+  line: number
+  column: number
+}
+
+/** Appends one `+` continuation fragment to a cell's collected source. */
+function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null): void {
+  const fragStart = target.raw ? target.raw.length + 1 : 0
+  target.raw = target.raw ? `${target.raw} ${frag}` : frag
+  // Only the NEW fragment is read; the joining space is not a run
+  // character, so resuming from the cell's own state is exact.
+  target.openRun = openVerbatimRun(frag, target.openRun)
+  // The CELL keeps no span. Its content sits in two column ranges on
+  // non-adjacent lines, and one range covering both would swallow the
+  // neighbouring column's content on the lines between - so cell 1 would
+  // CONTAIN cell 0, and an offset would map to two sibling cells at once.
+  // A construct that is not one contiguous range cannot honestly be one.
+  delete target.pos
+  if (at) {
+    const range: AnchorRange = { from: fragStart, to: fragStart + frag.length, ...at }
+    if (target.anchors) target.anchors.push(range)
+    else target.anchors = [range]
+  }
+  // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
+  // range's `to` is the length `raw` had when it was appended, and the
+  // next fragment starts one past that, so the joining space is already
+  // the only offset between them and an unplaced fragment simply leaves a
+  // wider gap. `to` is inclusive so an exclusive span end may land on it;
+  // the space itself belongs to no range, which is what makes a node
+  // reaching across the boundary unplaceable.
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
@@ -10997,7 +11050,28 @@ class ParseSession {
     let pendingBlankSources: string[] = []
     const noteSpanScan = newCommentSpanScan()
     const lazyState = verbatimOnlyLazyState()
-    trackItemLazyState(m[2]!, lazyState, () => false)
+    // First-block form (`[^a]: +`, as `- +` and `:  +`): a lone `+` as the whole
+    // marker-line content, with a non-blank line at document column 0 below it,
+    // is a marker, and that line's block is the body. An invisible line (a
+    // definition or a comment) is passed over as under `- +`, so a further
+    // footnote definition is no boundary here. Otherwise the `+` stays text.
+    let firstBlockAttached = false
+    const below = lexer.peek()
+    if (/^\+[ \t]*$/.test(m[2]!) && below !== undefined && !isBlankLine(below) && attachesAtDocumentColumnZero(lexer)) {
+      const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+        lexer,
+        (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a),
+      )
+      firstBlockAttached = true
+      bodyLines[0] = ''
+      bodySourceLines[0] = undefined
+      for (const a of attached) {
+        bodyLines.push(a)
+        bodySourceLines.push(a)
+      }
+      bodyLineNumbers.push(...attachedLineNumbers)
+    }
+    if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
     let retainedBelowComment = false
     while (!lexer.eof()) {
       const ln = lexer.peek()!
@@ -12588,6 +12662,38 @@ class ParseSession {
         const lineIndex = lexer.pos
         lexer.consume()
         const content = quoted
+        // First-block form (`> +`, as `- +` and `:  +`): a lone `+` as the whole
+        // first line of a quote, at any depth, is a marker when a flush-left line
+        // outside the quote follows, and that line's block is the innermost
+        // quote's body. Before a blank, a quoted line or the end it stays text.
+        if (endsInPlus(content) && this.opensFirstBlockQuote(lexer, lineIndex, content, lineIndex === firstLineIndex ? 0 : -1, () => {
+          trackUntracked()
+          return openQuoteDepth(state)
+        })) {
+          const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+            lexer,
+            (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
+          )
+          if (/^\+[ \t]*$/.test(content)) {
+            if (attached.length > 0) lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
+          } else {
+            // A nested quote keeps its `+` line and receives the block raw behind
+            // it, so its own parse takes this same branch one level down.
+            if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
+            inner.push(content)
+            innerLineNumbers.push(lexer.lineNumber(lineIndex))
+          }
+          for (const attachedLine of attached) inner.push(attachedLine)
+          innerLineNumbers.push(...attachedLineNumbers)
+          if (attached.length > 0) {
+            inner.push('')
+            innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
+          }
+          trackUntracked()
+          closeBlockQuoteParagraph(state)
+          handDown = null
+          continue
+        }
         if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
         inner.push(content)
         untracked.push([content, lineIndex])
@@ -12880,6 +12986,44 @@ class ParseSession {
     } finally {
       this.activeMatchers = matchers
     }
+  }
+
+  /**
+   * Whether the quote line at `lineIndex` (already consumed, quoted text
+   * `content`) is the first-block form: its quote chain ends in a lone `+`, the
+   * innermost quote opens on this line, and the next line is a non-blank,
+   * unquoted line at document column 0. `openDepth` is how many quotes below
+   * this one are already open (0 on the quote's first line), or -1 to ask
+   * `readOpenDepth` lazily.
+   */
+  private opensFirstBlockQuote(
+    lexer: Lexer,
+    lineIndex: number,
+    content: string,
+    openDepth: number,
+    readOpenDepth: () => number,
+  ): boolean {
+    const next = lexer.peek()
+    if (next === undefined || isBlankLine(next) || quotedLineText(next, lexer.lineTerminatorFree(lexer.pos)) !== null) return false
+    const lineNumber = lexer.lineNumber(lineIndex)
+    let chain = lexer.quoteChainEndsInPlus.get(lineNumber)
+    // A probe that parsed a nested quote first measured a shorter chain.
+    if (chain !== undefined && chain.size > 0 && !chain.has(content.length) && content.length > Math.max(...chain.keys())) chain = undefined
+    if (chain === undefined) {
+      // Asked once per source line: every nested quote's text is a suffix of
+      // this one, so its levels are looked up by length instead of rescanned.
+      const suffixes = [content]
+      for (let deeper = quotedLineText(content, false); deeper !== null; deeper = quotedLineText(deeper, false)) suffixes.push(deeper)
+      chain = new Map()
+      if (/^\+[ \t]*$/.test(suffixes[suffixes.length - 1]!)) {
+        for (let k = 0; k < suffixes.length; k++) chain.set(suffixes[k]!.length, suffixes.length - 1 - k)
+      }
+      lexer.quoteChainEndsInPlus.set(lineNumber, chain)
+    }
+    const levels = chain.get(content.length)
+    if (levels === undefined) return false
+    if (levels === 0 ? openDepth !== 0 : (openDepth < 0 ? readOpenDepth() : openDepth) >= levels) return false
+    return attachesAtDocumentColumnZero(lexer)
   }
 
   private collectAttachedBlock(
@@ -15148,46 +15292,21 @@ class ParseSession {
         const contCanPosition = lexer.hasDocumentOffsets
         splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
           const frag = trimCellPadding(src)
-          let target: RawCell | undefined = lastRaw![idx]
-          if (target?.span === 'rowspan') {
-            // A caret carries this column from an earlier row. Follow a chain of
-            // carets to the cell that owns the text before joining the fragment.
-            let above = rawRows.length - 2
-            while (above >= 0 && rawRows[above]?.[idx]?.span === 'rowspan') above--
-            if (above === 1 && isGfmDelimiterRow(rawRows[1]!) && !isGfmDelimiterRow(rawRows[0]!)) above = 0
-            target = above >= 0 ? rawRows[above]?.[idx] : undefined
-          }
-          if (!frag || !target || target.span) return
-          const fragStart = target.raw ? target.raw.length + 1 : 0
-          target.raw = target.raw ? `${target.raw} ${frag}` : frag
-          // Only the NEW fragment is read; the joining space is not a run
-          // character, so resuming from the cell's own state is exact.
-          target.openRun = openVerbatimRun(frag, target.openRun)
-          // The CELL keeps no span. Its content sits in two column ranges on
-          // non-adjacent lines, and one range covering both would swallow the
-          // neighbouring column's content on the lines between - so cell 1 would
-          // CONTAIN cell 0, and an offset would map to two sibling cells at once.
-          // A construct that is not one contiguous range cannot honestly be one.
-          delete target.pos
+          const target: RawCell | undefined = lastRaw![idx]
+          if (!frag || !target) return
           const within = contCanPosition ? src.indexOf(frag) : -1
-          if (within >= 0 && line.slice(start + within, start + within + frag.length) === frag) {
-            const range: AnchorRange = {
-              from: fragStart,
-              to: fragStart + frag.length,
-              offset: contOffset + start + within,
-              line: contLine,
-              column: contColumn + start + within,
-            }
-            if (target.anchors) target.anchors.push(range)
-            else target.anchors = [range]
+          const at =
+            within >= 0 && line.slice(start + within, start + within + frag.length) === frag
+              ? { offset: contOffset + start + within, line: contLine, column: contColumn + start + within }
+              : null
+          if (target.span) {
+            // The text belongs to the cell the marker resolves into, which only
+            // the span walk below can name (T6).
+            target.openRun = openVerbatimRun(frag, target.openRun)
+            ;(target.joins ??= []).push({ frag, at })
+            return
           }
-          // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
-          // range's `to` is the length `raw` had when it was appended, and the
-          // next fragment starts one past that, so the joining space is already
-          // the only offset between them and an unplaced fragment simply leaves a
-          // wider gap. `to` is inclusive so an exclusive span end may land on it;
-          // the space itself belongs to no range, which is what makes a node
-          // reaching across the boundary unplaceable.
+          joinFragment(target, frag, at)
         })
         continue
       }
@@ -15305,6 +15424,18 @@ class ParseSession {
         const a = aligns[i]
         if (a && !c.align) c.align = a
       })
+    }
+    if (rawRows.some((rc) => rc.some((c) => c.joins))) {
+      // A marker's continuation text joins the cell it resolves into; a blocked
+      // marker renders empty and keeps none of it (T5, T6).
+      const grid = rawRows.map((rc) => rc.map((cell) => ({ cell, rowspan: 1, colspan: 1, skip: false })))
+      resolveSpanGrid(
+        grid,
+        (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
+        (origin, marker) => {
+          for (const { frag, at } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at)
+        },
+      )
     }
     const rows: TableRow[] = rawRows.map((rc, idx) => {
       const row: TableRow = {

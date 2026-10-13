@@ -783,6 +783,9 @@ const IMPLEMENTED = new Set([
   // markup-carve/carve#1828. A container reached by its own marker does not
   // also honor a LEADING continuation marker, so that marker stays text.
   'a-leading-continuation-marker-in-a-footnote-body-or-a-quote-is-text',
+  // markup-carve/carve#3105. The leading marker above is a marker when a
+  // flush-left block follows it: a quote and a note take the first-block form.
+  'a-block-quote-and-a-footnote-body-take-the-first-block-form',
   // markup-carve/carve#1833. An empty description body is written with the
   // `{empty}` sentinel rather than dropped, which keeps the list whole.
   'an-empty-description-body-is-written-with-the-empty-sentinel',
