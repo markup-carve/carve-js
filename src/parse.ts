@@ -6004,6 +6004,21 @@ function trackItemLazyState(
   if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
       runColumns !== undefined && runColumns > 0 && runColumns < state.descriptionColumn &&
       colonBlockOpenerRun(content.slice(run!)) !== null) state.inDefList = false
+  if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
+      run !== undefined && runColumns !== undefined && runColumns >= state.descriptionColumn) {
+    const text = content.slice(run)
+    if (RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) || colonFenceOpenerLen(text) !== null) {
+      state.ownedColumn = state.descriptionColumn
+      state.ownedAuthored = false
+      const inner = state.deepest = verbatimOnlyLazyState()
+      inner.definitionBody = true
+      trackItemLazyState(text, inner)
+      state.lazyFoldable = inner.lazyFoldable
+      state.inTable = inner.inTable
+      state.inDefList = false
+      return
+    }
+  }
   let readFlush = false
   let readDescendant = false
   if (run !== undefined && runColumns !== undefined) {
