@@ -7738,6 +7738,19 @@ function rebaseOverindentedBlocks(
           end = j
           continue
         }
+        if (descriptionColumn !== null && descriptionState?.lazyFoldable && !descriptionState.inlineFenceParagraph && column < descriptionColumn &&
+            opensCodeFence(candidate.trimStart())) {
+          let memo = groupCloserMemos.get(column)
+          if (memo === undefined) {
+            memo = { verbatim: new Map(), comment: new Map() }
+            groupCloserMemos.set(column, memo)
+          }
+          const group = opaqueGroupCloser(candidate.trimStart())!
+          if (!opaqueGroupCloses(group, lines, j + 1, column, takenBelowColumn, memo)) {
+            end = j
+            continue
+          }
+        }
         if (descriptionColumn !== null && descriptionState?.lazyFoldable &&
             column < descriptionColumn && RE_COMMENT_LINE.test(candidate.trimStart())) {
           // X1 admits a below-column comment without ending its description.

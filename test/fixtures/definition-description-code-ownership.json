@@ -3592,7 +3592,7 @@
   {
     "id": "review-final-0",
     "source": "- :: t\n  :   q\n     ```\n        ```\n        ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>q\n<code>\n</code>\n<code></code></dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>q\n<code></code></p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-final-1",
@@ -3622,7 +3622,7 @@
   {
     "id": "review-final-6",
     "source": "- :: t\n  :  p2\n    ```\n     ```\n     ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>p2\n<code>\n</code>\n<code></code></dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>p2\n<code></code></p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-final-7",
