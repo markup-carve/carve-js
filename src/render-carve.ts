@@ -2413,14 +2413,19 @@ function firstBoundary(node: InlineNode | undefined): string {
 function markVerbatimCellWraps(content: string, cellWraps: readonly VerbatimCellWrap[], nodeType: string): string {
   const chars = [...content]
   let previous = -1
+  let leading: string | undefined
+  let trailing: string | undefined
   for (const wrap of cellWraps) {
-    if (wrap.offset <= previous || chars[wrap.offset] !== ' ') {
+    if (wrap.offset <= previous || (chars[wrap.offset] !== ' ' && wrap.offset !== 0 && wrap.offset !== chars.length)) {
       throw new SourceUnspellableError(nodeType, 'a cellWraps offset does not name a joining space in ascending order')
     }
-    chars[wrap.offset] = `\u0002${wrap.row ?? 0},${wrap.line}\u0003`
+    const marker = `\u0002${wrap.row ?? 0},${wrap.line}\u0003`
+    if (wrap.offset === chars.length) trailing = marker
+    else if (wrap.offset === 0 && chars[0] !== ' ') leading = marker
+    else chars[wrap.offset] = marker
     previous = wrap.offset
   }
-  return chars.join('')
+  return (leading ?? '') + chars.join('') + (trailing ?? '')
 }
 
 function lastBoundary(node: InlineNode | undefined): string {
@@ -4727,7 +4732,10 @@ class CarveRenderSession {
     if (unspellable !== undefined) throw new SourceUnspellableError(nodeType, unspellable)
     // The pad is decided on the joined value above; only then does each joining
     // space become the marker `renderTable` cuts the row at.
-    if (cellWraps && ctx && ctx.tableCellDepth > 0) content = markVerbatimCellWraps(content, cellWraps, nodeType)
+    const inTableCell = ctx !== undefined && ctx.tableCellDepth > 0
+    const leadingBoundary = inTableCell && (cellWraps?.some(wrap => wrap.offset === 0 && [...content][0] !== ' ') ?? false)
+    const trailingBoundary = inTableCell && (cellWraps?.some(wrap => wrap.offset === [...content].length) ?? false)
+    if (cellWraps && inTableCell) content = markVerbatimCellWraps(content, cellWraps, nodeType)
     if (content.includes('\r')) content = content.replace(/\r\n?/g, '\n')
     // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
     // the closed form has no spelling and the bare opener is the one that does
@@ -4741,7 +4749,9 @@ class CarveRenderSession {
     }
     if (hidesLineBlockCloser) content = content.replace(/\n([ \t\u00a0]*)$/, (_, indent: string) => '\n' + indent.replace(/\u00a0/g, ' '))
     const closer = descriptionFence ? `${this.sentinels[6]}${fence}` : fence
-    return needsPad ? `${fence} ${content} ${closer}` : `${fence}${content}${closer}`
+    return needsPad || leadingBoundary || trailingBoundary
+      ? `${fence}${leadingBoundary ? '' : ' '}${content}${trailingBoundary ? '' : ' '}${closer}`
+      : `${fence}${content}${closer}`
   }
 
   private lineBlockLayoutWhitespace(body: string): string {
