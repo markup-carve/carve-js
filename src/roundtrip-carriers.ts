@@ -64,6 +64,9 @@ const PREFIXED = [
   'tight',
   'xref',
   'caption-number',
+  'div',
+  'line-block',
+  'substitution',
 ] as const
 
 export type PrefixedCarrier = (typeof PREFIXED)[number]
