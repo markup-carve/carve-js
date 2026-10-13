@@ -100,9 +100,9 @@ describe('an inline attribute block interior is space-only', () => {
     expect(carveToHtml("*y*{k='a" + TAB + "b'}")).toBe('<p><strong k="a\tb">y</strong></p>')
   })
 
-  it('CONTROL the block-attribute LINE keeps whitespace at all three slots', () => {
+  it('a tab in a block-attribute line is content at all three slots', () => {
     expect(carveToHtml('{' + TAB + '.a' + TAB + '.b' + TAB + '}\n\nparagraph')).toBe(
-      '<p class="a b">paragraph</p>',
+      '<p>{\t.a\t.b\t}</p>\n<p>paragraph</p>',
     )
   })
 

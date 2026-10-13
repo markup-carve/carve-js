@@ -165,7 +165,7 @@ describe("a decoded space at a heading's head", () => {
   })
 
   it('drops the separator too when the decode WAS the content', () => {
-    expect(convert('# &#32;\n').value).toBe('#\n')
+    expect(carveToHtml(convert('# &#32;\n').value)).toBe('<h1></h1>')
   })
 
   // Raised by codex review: a `#` run in a table cell is literal text, so the

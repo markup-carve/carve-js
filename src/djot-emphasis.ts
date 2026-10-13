@@ -401,6 +401,8 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
       content.startsWith(delimiter) ||
       content.endsWith(delimiter) ||
+      // A bare slash beside a slash neither opens nor reads as one pair.
+      (delimiter === '/' && (source[pair.start - 1] === '/' || source[pair.end] === '/')) ||
       (delimiter === '/' && content.startsWith('*') && content.endsWith('*'))
     const protect = (value: string): string => {
       const token = `${literalPrefix}${literals.length}\0`

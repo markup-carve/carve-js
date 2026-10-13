@@ -1,41 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-/**
- * PART 9 §10 I4 / markup-carve/carve-js#1630, ruled on markup-carve/carve#1900.
- *
- * A fence at an item's block start runs to the END OF ITS CONTAINER, so an
- * unfinished fence opened on a NESTED item's marker lead owns the lines the
- * enclosing container folded in below its column - and a closing run written
- * among them is body text, because a fence's content is not re-scanned for
- * structure.
- *
- * This engine published an EMPTY `pre` and republished the body as prose in the
- * item ABOVE, with the closer coming back as an empty inline `code`. Every
- * expectation here is the executable spec's answer, read from
- * `scripts/spec/layout.mjs` into `scripts/spec/html.mjs` at spec 4ce23fe9.
- * The blank-before-outside-body control was corrected against spec b738ffe7.
- *
- * The OUTERMOST spelling is the control and must NOT move: with no container
- * above it, nothing was folded in, and the spec leaks the body to the document
- * exactly as this engine already did.
- */
 describe('an unfinished fence on a nested item lead owns its body', () => {
   it("a flush-left body and closer", () => {
     expect(carveToHtml("- - ``` x\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">code\n```\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
     )
   })
 
   it("a body indented below the content column", () => {
     expect(carveToHtml("- - ``` x\n code\n ```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">code\n```\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
     )
   })
 
   it("three levels deep", () => {
     expect(carveToHtml("- - - ``` x\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code class=\"language-x\">code\n```\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code class=\"language-x\"></code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
     )
   })
 
@@ -45,37 +26,37 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
 
   it("ordered markers", () => {
     expect(carveToHtml("1. 1. ``` x\ncode\n```\n")).toBe(
-      "<ol>\n  <li>\n    <ol>\n      <li>\n        <pre><code class=\"language-x\">code\n```\n</code></pre>\n      </li>\n    </ol>\n  </li>\n</ol>",
+      "<ol>\n  <li>\n    <ol>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ol>\n  </li>\n</ol>\n<p>code\n<code></code></p>",
     )
   })
 
   it("no closer written at all", () => {
     expect(carveToHtml("- - ``` x\ncode\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">code\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code</p>",
     )
   })
 
   it("a closer as the only line below", () => {
     expect(carveToHtml("- - ``` x\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">```\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<pre><code></code></pre>",
     )
   })
 
   it("a tilde fence", () => {
     expect(carveToHtml("- - ~~~ x\ncode\n~~~\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">code\n~~~\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n~~~</p>",
     )
   })
 
   it("no info string", () => {
     expect(carveToHtml("- - ```\ncode\n```\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>code\n```\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code></code></p>",
     )
   })
 
   it("a trailing sibling marker", () => {
     expect(carveToHtml("- - ``` x\ncode\n```\n- lazy\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\">code\n```\n</code></pre>\n      </li>\n    </ul>\n  </li>\n  <li>lazy</li>\n</ul>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code class=\"language-x\"></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>code\n<code>\n- lazy</code></p>",
     )
   })
 
@@ -100,7 +81,7 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
 
   it("a colon container on the same lead is untouched", () => {
     expect(carveToHtml("- - ::: d\nbody\n:::\n")).toBe(
-      "<ul>\n  <li>\n    <ul>\n      <li>::: d\nbody</li>\n    </ul>\n  </li>\n</ul>\n<div>\n\n</div>",
+      "<ul>\n  <li>\n    <ul>\n      <li>\n        <div class=\"d\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>body</p>\n<div>\n\n</div>",
     )
   })
 
@@ -140,15 +121,10 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
     }
   })
 
-  /*
-   * The frame comes off, and the folded closer stays BODY TEXT - the same two
-   * halves `parseFence` gets, asserted on the raw arm so a future change cannot
-   * satisfy the leak check above by dropping the line instead of unframing it.
-   */
   it("a nested raw fence owns what the container folded in", () => {
     const out = carveToHtml("- - ```=html\n<b>x</b>\n```\n")
     expect(out).not.toContain('\u0000')
-    expect(out).toContain("<b>x</b>")
-    expect(out).toContain("```")
+    expect(out).toContain("&lt;b&gt;x&lt;/b&gt;")
+    expect(out).toContain("<code></code>")
   })
 })

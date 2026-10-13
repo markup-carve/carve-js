@@ -107,3 +107,9 @@ describe('roundtrip carriers stay on their defined hosts', () => {
     expect(htmlToAst(html, { mode: 'roundtrip' }).value.children[0].attrs?.id).toBeUndefined()
   })
 })
+
+it('publishes an unwrapped explicit id in its element slot order', () => {
+  for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+    expect(htmlToAst('<h1 class="c" id="C" data-carve-explicit-id>C</h1>', { mode }).value.children[0].attrs?.order).toEqual(['.class', '#id'])
+  }
+})

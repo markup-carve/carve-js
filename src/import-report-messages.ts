@@ -74,3 +74,9 @@ export const RAW_SPAN_WHITESPACE_TRIMMED =
  */
 export const CARRIER_MARKERS_DAMAGED =
   'Carrier markers no longer record a structure; read the source as plain Markdown'
+
+export const CARRIER_MARKER_DROPPED =
+  'Dropped carrier marker with an invalid payload'
+
+export const CARRIER_MARKER_PAIR_DROPPED =
+  'Dropped carrier marker pair with an invalid opener'

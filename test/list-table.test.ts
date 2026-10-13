@@ -637,13 +637,10 @@ describe('list-table Tier-3 extension', () => {
     expect(stripPad(h(listLines.join('\n')))).toBe(stripPad(plain(pipeLines.join('\n'))))
   })
 
-  it('resolves a ^ below a ragged row with the positional span model', () => {
-    // carve-js's span model is positional (per source column), matching its pipe
-    // tables: a `^` extends the nearest non-skipped cell above in its column even
-    // across a ragged gap, so B gains a rowspan. This deliberately differs from
-    // carve-php, whose model requires column contiguity (no rowspan there). The
-    // binding invariant is parity with the equivalent carve-js pipe table's
-    // rowspan resolution; the trailing empty cell is list-table ragged padding.
+  it('renders a ^ below a ragged row as an empty cell, as a pipe table does', () => {
+    // The position above the `^` has no cell and no span covers it, so T5 finds
+    // no origin (carve#3047) and the marker renders empty, never reaching past
+    // the gap to B.
     const src = [
       '::: list-table',
       '- - A',
@@ -653,20 +650,9 @@ describe('list-table Tier-3 extension', () => {
       '  - ^',
       ':::',
     ].join('\n')
-    expect(h(src)).toBe(
-      [
-        '<table>',
-        '  <tbody>',
-        '    <tr><td>A</td><td rowspan="2">B</td></tr>',
-        '    <tr><td>C</td></tr>',
-        '    <tr><td>X</td><td></td></tr>',
-        '  </tbody>',
-        '</table>',
-      ].join('\n'),
-    )
-    // B's rowspan matches what the equivalent pipe table resolves for the markers.
+    expect(h(src)).not.toContain('rowspan')
     const pipe = ['| A | B |', '|---|---|', '| C |', '| X | ^ |'].join('\n')
-    expect(plain(pipe)).toContain('rowspan="2"')
+    expect(plain(pipe)).not.toContain('rowspan')
   })
 
   it('renders a ^ below a ragged gap as an empty cell, not a rowspan', () => {

@@ -2,7 +2,7 @@ import { describe } from 'vitest'
 import { bbcodeToCarve } from '../src/bbcode-migrate.js'
 import { escapePlainCarveInlineSyntax } from '../src/carve-escape.js'
 import { completeDestinationOpeners } from '../src/link-destination.js'
-import { carveToCarve } from '../src/index.js'
+import { carveToCarve, djotToCarve } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 /*
@@ -17,10 +17,9 @@ import { expectScansLinearly, perfIt } from './helpers/scaling.js'
  * shapes below are lines that take many escapes, which is the input the splice
  * was quadratic on.
  *
- * A line of UNCLOSED braced openers is quadratic here for a different and older
- * reason - the pair pattern rescans to the line end from every opener, exactly
- * as it does in carve-php - so it is not guarded here. It predates this file
- * and is a separate scan to fix.
+ * A line of braced openers whose closer is missing or sits behind a blank was
+ * quadratic for a second reason: the pair search reread the line from every
+ * opener. The last two shapes guard the single pass that replaced it.
  */
 describe('escaper perf: inserting many escapes stays linear', () => {
   perfIt('a line of braced pairs scales near-linearly', () => {
@@ -33,6 +32,34 @@ describe('escaper perf: inserting many escapes stays linear', () => {
   perfIt('a post of backslashes and backticks scales near-linearly', () => {
     expectScansLinearly((input) => void bbcodeToCarve(input), 'a \\ then `t` here ', {
       label: 'bbcode literal text',
+      smallRepeats: 2_000,
+    })
+  })
+
+  perfIt('a line of braced openers with no closer scales near-linearly', () => {
+    expectScansLinearly((input) => void escapePlainCarveInlineSyntax(input), '{,x ', {
+      label: 'unclosed braced openers',
+      smallRepeats: 4_000,
+    })
+  })
+
+  perfIt('a line of bare openers with no closer scales near-linearly', () => {
+    expectScansLinearly((input) => void escapePlainCarveInlineSyntax(input), '=x *y ~z _w ', {
+      label: 'unclosed bare openers',
+      smallRepeats: 4_000,
+    })
+  })
+
+  perfIt('a line of bare pairs behind backslash runs scales near-linearly', () => {
+    expectScansLinearly((input) => void escapePlainCarveInlineSyntax(input), '\\\\=a=b= ', {
+      label: 'bare pairs behind backslashes',
+      smallRepeats: 4_000,
+    })
+  })
+
+  perfIt('a Djot line of braced openers with a padded closer scales near-linearly', () => {
+    expectScansLinearly((input) => void djotToCarve(input), '{,x ,} ', {
+      label: 'djot padded braced closers',
       smallRepeats: 2_000,
     })
   })

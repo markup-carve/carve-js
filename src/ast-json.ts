@@ -751,6 +751,15 @@ function constOf(kind: string): unknown {
  * expressed a second time.
  */
 function matchesKind(value: unknown, kind: string): boolean {
+  if (kind.startsWith('string>=')) {
+    if (typeof value !== 'string') return false
+    const minimum = Number(kind.slice(8))
+    let length = 0
+    for (const _ of value) {
+      if (++length >= minimum) return true
+    }
+    return length >= minimum
+  }
   if (kind.startsWith('const:')) {
     // ONE legal value, compared by identity against the schema's own. The
     // schema writes `const` where the field's presence IS the fact and there is

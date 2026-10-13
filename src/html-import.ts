@@ -43,8 +43,8 @@ import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
-import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
-import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RESERVED_CARRIER_ATTRIBUTES, readCarrier } from './roundtrip-carriers.js'
+import { trimEndMatchingEdges, trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
+import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './roundtrip-carriers.js'
 import type { PrefixedCarrier } from './roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
@@ -249,12 +249,12 @@ function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
  * overindented lazy continuation.
  * Each leaves a space at a boundary where the re-parse does not keep it.
  */
-function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean {
+function textEdge(node: InlineNode | undefined, side: 'start' | 'end', preserveTabs = false): boolean {
   if (node === undefined || node.type !== 'text') return false
   // NOT the whitespace class: JavaScript counts U+00A0 as whitespace and a
   // non-breaking space is CONTENT - it is the one character here whose whole
   // point is that the renderer does not collapse it.
-  return (side === 'start' ? /^[ 	]/ : /[ 	]$/).test(node.value)
+  return (preserveTabs ? (side === 'start' ? /^ / : / $/) : (side === 'start' ? /^[ \t]/ : /[ \t]$/)).test(node.value)
 }
 
 /**
@@ -262,12 +262,12 @@ function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean 
  * merges with whitespace already there (carve#2361). Whitespace-only content
  * stays, and so does U+00A0, which is content rather than layout.
  */
-function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNode[] {
+function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false, preserveTabs = false): InlineNode[] {
   const out: InlineNode[] = []
   let owed = false
   // Through nested inlines: a strong ending in a space already has one there.
   const blankEdge = (node: InlineNode | undefined, side: 'start' | 'end'): boolean => {
-    if (node === undefined || textEdge(node, side)) return node !== undefined
+    if (node === undefined || textEdge(node, side, preserveTabs)) return node !== undefined
     const children = 'children' in node && Array.isArray(node.children) ? (node.children as InlineNode[]) : undefined
     return children !== undefined && blankEdge(side === 'start' ? children[0] : children.at(-1), side)
   }
@@ -288,17 +288,17 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
       continue
     }
     // Nested links and spans have already hoisted their children.
-    node.children = dropSpaceAfterHardBreak(hoistEdgeSpace(node.children, true))
-    if (!node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
+    node.children = dropSpaceAfterHardBreak(hoistEdgeSpace(node.children, true, preserveTabs), preserveTabs)
+    if (!node.children.some((c) => c.type !== 'text' || !(preserveTabs ? /^ *$/ : /^[ \t]*$/).test(c.value))) {
       pay(node)
       out.push(node)
       continue
     }
     let children = [...node.children]
-    const lead = textEdge(children[0], 'start')
+    const lead = textEdge(children[0], 'start', preserveTabs)
     let leadingCount = 0
-    while (textEdge(children[leadingCount], 'start')) {
-      const value = (children[leadingCount] as { value: string }).value.replace(/^[ \t]+/, '')
+    while (textEdge(children[leadingCount], 'start', preserveTabs)) {
+      const value = (children[leadingCount] as { value: string }).value.replace(preserveTabs ? /^ +/ : /^[ \t]+/, '')
       if (value === '') leadingCount++
       else {
         children[leadingCount] = { ...(children[leadingCount] as object), value } as InlineNode
@@ -306,9 +306,9 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
       }
     }
     if (leadingCount > 0) children = children.slice(leadingCount)
-    const trail = textEdge(children.at(-1), 'end')
-    while (textEdge(children.at(-1), 'end')) {
-      const value = trimEndSpaceTab((children.at(-1) as { value: string }).value)
+    const trail = textEdge(children.at(-1), 'end', preserveTabs)
+    while (textEdge(children.at(-1), 'end', preserveTabs)) {
+      const value = trimInlineEnd((children.at(-1) as { value: string }).value, preserveTabs)
       if (value === '') children.pop()
       else {
         children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
@@ -335,11 +335,11 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
  * a `<strong>`, the closer is written first on the new line, so a space behind
  * it is mid-line content and stays.
  */
-function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
+function dropSpaceAfterHardBreak(nodes: InlineNode[], preserveTabs = false): InlineNode[] {
   const out: InlineNode[] = []
   for (const node of nodes) {
     if (node.type === 'text' && out.at(-1)?.type === 'hard_break') {
-      const value = node.value.replace(/^[ 	]+/, '')
+      const value = node.value.replace(preserveTabs ? /^ +/ : /^[ \t]+/, '')
       if (value === '') continue
       out.push({ ...node, value })
       continue
@@ -369,18 +369,22 @@ function isLayoutOnlyText(node: P5Node): boolean {
   return node.nodeName === '#text' && trimNonNbsp(domValue(node) ?? '') === ''
 }
 
-/** Trim block-edge padding and redundant padding inside formatting. */
-function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
-  return trimFormattingEdges(nodes, true, true)
+function trimInlineEnd(text: string, preserveTabs: boolean): string {
+  return preserveTabs ? trimEndMatchingEdges(text, code => code === 0x20) : trimEndSpaceTab(text)
 }
 
-function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: boolean): InlineNode[] {
+/** Trim block-edge padding and redundant padding inside formatting. */
+function trimBlockEdges(nodes: InlineNode[], preserveTabs = false): InlineNode[] {
+  return trimFormattingEdges(nodes, true, true, preserveTabs)
+}
+
+function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: boolean, preserveTabs = false): InlineNode[] {
   let out = [...nodes]
   let leadingCount = 0
   while (leading) {
     const first = out[leadingCount]
     if (first?.type !== 'text') break
-    const value = first.value.replace(/^[ \t]+/, '')
+    const value = first.value.replace(preserveTabs ? /^ +/ : /^[ \t]+/, '')
     if (value === '') leadingCount++
     else {
       out[leadingCount] = { ...first, value }
@@ -390,7 +394,7 @@ function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: bo
   if (leadingCount > 0) out = out.slice(leadingCount)
   while (trailing && out.at(-1)?.type === 'text') {
     const last = out.at(-1) as { type: 'text'; value: string }
-    const value = trimEndSpaceTab(last.value)
+    const value = trimInlineEnd(last.value, preserveTabs)
     if (value === '') out.pop()
     else {
       out[out.length - 1] = { ...last, value }
@@ -399,18 +403,19 @@ function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: bo
   }
   const endsWithSpace = (node: InlineNode | undefined): boolean => {
     if (node === undefined) return false
-    if (textEdge(node, 'end')) return true
+    if (textEdge(node, 'end', preserveTabs)) return true
     if (node.type === 'link' || node.type === 'span' || isFormatting(node)) return endsWithSpace(node.children.at(-1))
     return false
   }
   for (let index = 0; index < out.length; index++) {
     const node = out[index]!
-    if (!isFormatting(node) || node.children.every((child) => child.type === 'text' && /^[ \t]*$/.test(child.value))) continue
+    if (!isFormatting(node) || node.children.every((child) => child.type === 'text' && (preserveTabs ? /^ *$/ : /^[ \t]*$/).test(child.value))) continue
     const next = out[index + 1]
     node.children = trimFormattingEdges(
       node.children,
       index === 0 ? leading : out[index - 1]?.type === 'hard_break' || endsWithSpace(out[index - 1]),
-      next === undefined ? trailing : next.type === 'hard_break' || textEdge(next, 'start'),
+      next === undefined ? trailing : next.type === 'hard_break' || textEdge(next, 'start', preserveTabs),
+      preserveTabs,
     )
   }
   return out
@@ -667,6 +672,17 @@ function fallbackImage(math: P5Node): P5Node | undefined {
  */
 const ROUND_TRIP_MARKER_ATTRIBUTES = RESERVED_CARRIER_ATTRIBUTES
 
+/**
+ * Whether a `data-carve-ref` value can name a reference definition.
+ *
+ * A LEADING `^` SPELLS A FOOTNOTE DEFINITION, not a reference one: the
+ * `[^r]: /u` line this would write is read back as a footnote and the link is
+ * gone, so the carrier cannot be honored.
+ */
+function isReferenceLabel(label: string): boolean {
+  return label.trim() !== '' && !/[[\]\r\n]/.test(label) && !label.startsWith('^')
+}
+
 /** What one element's §13a carriers were read as (`HtmlImporter.carrierReads`). */
 interface CarrierRead {
   names: Set<PrefixedCarrier>
@@ -818,20 +834,6 @@ function slotOrderFromElement(node: P5Node, held: Attrs): string[] {
 }
 
 /**
- * Whether `id` sits where `renderHtml` writes a GENERATED one: after every
- * authored attribute.
- *
- * `data-source-line` is the one thing allowed to follow it, because that is a
- * render annotation rather than an authored attribute and the renderer appends
- * it last on purpose (`injectSourceLine`).
- */
-function idInGeneratedPosition(node: P5Node): boolean {
-  const names = (domAttrs(node) ?? []).map((attr) => attr.name.toLowerCase())
-  while (names[names.length - 1] === 'data-source-line') names.pop()
-  return names[names.length - 1] === 'id'
-}
-
-/**
  * Whether `id` is a value the renderer would derive for a heading whose
  * plain-text projection is `text`.
  *
@@ -863,7 +865,10 @@ function restoreHoistedSectionId(
   attrs: Attrs | undefined,
   blocks: BlockNode[],
   explicitId: boolean,
+  generatedId: boolean,
   writing: boolean,
+  slot: number,
+  elementSlots: (held: Attrs) => string[],
 ): Attrs | undefined {
   if (tag !== 'section' || attrs?.id === undefined) return attrs
   // The heading the wrapper was built around is its FIRST block. Anything else
@@ -880,14 +885,14 @@ function restoreHoistedSectionId(
   // and nothing is what `reportUnwrappedAttributes` reads as "no row" - an
   // empty object would write a row naming no attribute at all.
   const kept = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
-  if (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children))) return kept
+  if (generatedId || (!explicitId && isGeneratedHeadingId(id, inlineText(heading.children)))) return kept
   heading.attrs = { ...(heading.attrs ?? {}), id }
-  if (writing) {
-    const slots = heading.attrs.order ?? [
-      ...(heading.attrs.classes?.length ? ['.class'] : []),
-      ...Object.keys(heading.attrs.keyValues ?? {}),
-    ]
-    heading.attrs.order = ['#id', ...slots.filter(slot => slot !== '#id')]
+  // The carrier says the id was authored, and `attrs.order` is where a tree
+  // records that, so a carried id publishes its slot on both exits.
+  if (writing || explicitId) {
+    const slots = (heading.attrs.order ?? elementSlots(heading.attrs)).filter((entry) => entry !== '#id')
+    slots.splice(slot, 0, '#id')
+    heading.attrs.order = slots
   }
   return kept
 }
@@ -988,6 +993,8 @@ class Importer {
    * `data-delim` is, where one left unreadable is still refused by ruling 5.
    */
   private readonly carrierReads = new Map<P5Node, CarrierRead>()
+  /** Reserved names a contradiction row (§13d) already covers on an element. */
+  private readonly contradicted = new Map<P5Node, Set<string>>()
   /**
    * The reference definitions `data-carve-ref` asks for, first-seen order. A
    * resolved reference writes back as `[text][label]`, which needs the
@@ -1245,7 +1252,7 @@ class Importer {
         // Where the importer REBUILT what it holds it is consumed in silence,
         // exactly as `data-delim` is: a row here would name a loss that did
         // not happen.
-        if (!this.isReconstructedCarrier(node, domTag(node) ?? '', name)) {
+        if (!this.isReconstructedCarrier(node, domTag(node) ?? '', name) && !this.contradicted.get(node)?.has(name)) {
           this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
         }
       } else if (styleSlots.has(name) && (rawKept || !this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name))) {
@@ -1774,6 +1781,18 @@ class Importer {
     return readCarrier((attribute) => this.attr(node, attribute), name)
   }
 
+  /** `data-carve-col-widths` where every entry is in its grammar, else `undefined`. */
+  private carriedSeparatorWidths(node: P5Node): number[] | undefined {
+    const raw = this.carrierValue(node, 'col-widths')
+    if (raw === undefined) return undefined
+    const widths = raw.split(',').map((part) => {
+      if (!/^[0-9]+$/.test(part)) return undefined
+      const width = Number(part)
+      return Number.isSafeInteger(width) && width >= 1 && width <= MAX_CARRIED_SEPARATOR_WIDTH ? width : undefined
+    })
+    return widths.length > 0 && widths.every((width) => width !== undefined) ? (widths as number[]) : undefined
+  }
+
   /** A presence carrier: §13a reads PRESENCE and does not compare the value. */
   private hasCarrier(node: P5Node, name: PrefixedCarrier): boolean {
     return this.carrierValue(node, name) !== undefined
@@ -1817,6 +1836,39 @@ class Importer {
     return false
   }
 
+  /**
+   * §13d: two carriers that contradict each other restore neither meaning. One
+   * row covers the pair, and `attrs()` then drops both names without another.
+   */
+  private refuseContradiction(node: P5Node, path: string, first: PrefixedCarrier, second: PrefixedCarrier): void {
+    const names = [first, second]
+      .flatMap((name) => [carrier(name), legacyCarrier(name)])
+      .filter((spelling) => this.attr(node, spelling) !== undefined)
+    this.contradicted.set(node, new Set(names))
+    this.report.refuseAttribute(
+      node,
+      path,
+      `contradictory carriers ${names.join(' and ')}`,
+      ': neither meaning is restored',
+      'warning',
+      names.some((spelling) => destinationIsDenied(this.attr(node, spelling) ?? '')),
+    )
+  }
+
+  private readIdCarriers(node: P5Node, path: string, wrapper: boolean): void {
+    const explicit = this.hasCarrier(node, 'explicit-id')
+    const generated = this.hasCarrier(node, 'generated-id')
+    if (explicit && generated) {
+      this.refuseContradiction(node, path, 'explicit-id', 'generated-id')
+      return
+    }
+    if (generated) this.recordCarrier(node, 'generated-id')
+    if (!explicit) return
+    this.recordCarrier(node, 'explicit-id')
+    const slot = this.carrierValue(node, 'id-slot') ?? ''
+    if (wrapper && RE_ID_SLOT.test(slot)) this.recordCarrier(node, 'id-slot')
+  }
+
   private recordCarrier(node: P5Node, name: PrefixedCarrier, read: Omit<CarrierRead, 'names'> = {}): void {
     const existing = this.carrierReads.get(node)
     if (existing) {
@@ -1851,10 +1903,7 @@ class Importer {
    */
   private readsRef(node: P5Node, href: string, title: string | undefined): string | undefined {
     const label = this.carrierValue(node, 'ref')
-    // A LEADING `^` SPELLS A FOOTNOTE DEFINITION, not a reference one: the
-    // `[^r]: /u` line this would write is read back as a footnote and the
-    // link is gone, so the carrier cannot be honored.
-    if (label === undefined || label.trim() === '' || /[[\]\r\n]/.test(label) || label.startsWith('^')) return undefined
+    if (label === undefined || !isReferenceLabel(label)) return undefined
     // KEYED ON THE RESOLUTION KEY, not on the spelling: `r` and ` r ` are one
     // label to the resolver, so comparing the spellings let two carriers bind
     // two destinations under one key and sent both links to the second one.
@@ -1886,7 +1935,26 @@ class Importer {
    * The arms below then only spend the answer, which keeps one decision in one
    * place and lets the attribute pass know which names were consumed.
    */
-  private readInlineCarriers(node: P5Node, tag: string, children: InlineNode[]): void {
+  private readInlineCarriers(node: P5Node, tag: string, children: InlineNode[], path: string): void {
+    if (tag === 'a' && this.hasCarrier(node, 'xref') && /^#[^> \n\r]+$/.test(this.attr(node, 'href') ?? '')) {
+      const footnoteLabel = this.carrierValue(node, 'footnote-label')
+      const validFootnoteLabel = footnoteLabel !== undefined && !/[\r\n\u2028\u2029]/u.test(footnoteLabel)
+        && RE_FOOTNOTE_DEF.exec(`[^${footnoteLabel}]: x`)?.[1] === footnoteLabel
+      const other = isReferenceLabel(this.carrierValue(node, 'ref') ?? '') ? 'ref'
+        : this.hasCarrier(node, 'autolink') ? 'autolink'
+        : validFootnoteLabel ? 'footnote-label'
+        : undefined
+      if (other) {
+        this.refuseContradiction(node, path, 'xref', other)
+        return
+      }
+      this.recordCarrier(node, 'xref')
+      return
+    }
+    if (tag === 'span' && this.hasCarrier(node, 'caption-number')) {
+      const bare = (domAttrs(node) ?? []).every(attribute => [carrier('caption-number'), legacyCarrier('caption-number')].includes(attribute.name))
+      if (bare && (domChildren(node) ?? []).every(child => child.nodeName === '#text')) this.recordCarrier(node, 'caption-number')
+    }
     if (tag === 'span') {
       // NEITHER A RAW INLINE NOR AN ESCAPE HAS AN ATTRIBUTE SLOT its writer
       // emits, so rebuilding one over an element carrying anything else
@@ -1895,33 +1963,27 @@ class Importer {
       // dangerous name this still has to see.
       const bare = (domAttrs(node) ?? []).every((attribute) => RESERVED_CARRIER_ATTRIBUTES.has(attribute.name.toLowerCase()))
       const format = this.carrierValue(node, 'raw')
-      if (format !== undefined) {
-        const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
-        // A format the parser would not read is not a format: the writer
-        // NORMALIZES what it is given, so `h t m l` came back as `{=html}` and
-        // walked markup past the mode gate below. An empty raw inline has no
-        // Carve spelling at all. And `html` is markup every HTML render emits
-        // verbatim, so only `roundtrip` - which already preserves input markup
-        // wholesale - rebuilds one (§13b); every other format is inert here.
-        const spellable = bare && RE_RAW_INLINE_FORMAT.test(format)
-          && (holdsElements || this.flatText(node) !== '')
-          && (this.mode === 'roundtrip' || (format.toLowerCase() !== 'html' && !holdsElements))
-        if (spellable) this.recordCarrier(node, 'raw')
+      const holdsElements = (domChildren(node) ?? []).some((child) => domTag(child) !== undefined)
+      const value = bare && !holdsElements ? this.flatText(node) : ''
+      const escaped = this.hasCarrier(node, 'escaped') && [...value].length === 1 && RE_ESCAPABLE_PUNCTUATION.test(value)
+      // The writer normalizes a format, so one the parser would not read is not a carrier.
+      const raw = format !== undefined && bare && RE_RAW_INLINE_FORMAT.test(format)
+        && (holdsElements || this.flatText(node) !== '')
+      if (escaped && raw) {
+        this.refuseContradiction(node, path, 'escaped', 'raw')
         return
       }
-      if (this.hasCarrier(node, 'escaped')) {
-        // ONE ESCAPABLE CHARACTER, TEXT-ONLY (ruling 4). A multi-character
-        // value came back as `\a\b\c`, which is not Carve; `a` is not an
-        // escape at all, it is a backslash and a letter; and flattening a
-        // subtree would swallow whatever the children were.
-        const value = bare && (domChildren(node) ?? []).every((child) => domTag(child) === undefined)
-          ? this.flatText(node)
-          : ''
-        if ([...value].length === 1 && RE_ESCAPABLE_PUNCTUATION.test(value)) this.recordCarrier(node, 'escaped')
-      }
+      if (raw && (this.mode === 'roundtrip' || (format!.toLowerCase() !== 'html' && !holdsElements))) this.recordCarrier(node, 'raw')
+      if (escaped) this.recordCarrier(node, 'escaped')
       return
     }
     if (tag !== 'a' && tag !== 'img') return
+    // §13d: an autolink has no label and a reference is not an autolink. An
+    // invalid label is not a carrier (§13e) and contradicts nothing.
+    if (tag === 'a' && this.hasCarrier(node, 'autolink') && isReferenceLabel(this.carrierValue(node, 'ref') ?? '')) {
+      this.refuseContradiction(node, path, 'autolink', 'ref')
+      return
+    }
     const destination = this.attr(node, tag === 'a' ? 'href' : 'src')
     // A destination §25 blanked or the source never had stays blanked: no
     // carrier routes a value back past a security rule, and no node is built
@@ -1974,7 +2036,8 @@ class Importer {
     const suffix = this.carveAttributeSuffix(attrs)
     if (suffix === undefined) return {}
     this.referenceLabelsUsed.add(normalizeRefLabel(carried.ref))
-    return { ref: carried.ref, rawRef: `${carried.labelSource}[${carried.ref}]${suffix}` }
+    const collapsed = carried.labelSource === `[${carried.ref}]` || carried.labelSource === `![${carried.ref}]`
+    return { ref: carried.ref, rawRef: `${carried.labelSource}[${collapsed ? '' : carried.ref}]${suffix}` }
   }
 
   /** The reference definitions every rebuilt `data-carve-ref` needs beside it. */
@@ -2040,7 +2103,7 @@ class Importer {
     // downstream reads one out of it.
     if (tag === 'a') {
       if (name === 'href') return true
-      return name === 'title' && destinationIsCarried(this.attr(node, 'href'))
+      return name === 'title' && !this.carrierReads.get(node)?.names.has('xref') && destinationIsCarried(this.attr(node, 'href'))
     }
     if (tag === 'img') {
       // `alt` stays consumed either way: with a source it is the image node's
@@ -2411,11 +2474,19 @@ class Importer {
       this.report.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
-    if ((tag === 'section' || /^h[1-6]$/.test(tag)) && this.hasCarrier(node, 'explicit-id') && this.attr(node, 'id') !== undefined) {
-      this.recordCarrier(node, 'explicit-id')
+    if (tag === 'section' && this.attr(node, 'id') !== undefined) {
+      this.readIdCarriers(node, path, true)
+    } else if (/^h[1-6]$/.test(tag) && this.attr(node, 'id') !== undefined) {
+      this.readIdCarriers(node, path, false)
+    }
+    // Read in `table()`; recorded here so `attrs()` does not report it as dropped.
+    if (tag === 'table' && this.carriedSeparatorWidths(node) !== undefined) this.recordCarrier(node, 'col-widths')
+    // Tightness is read by presence, regardless of the value.
+    if ((tag === 'ul' || tag === 'ol') && this.hasCarrier(node, 'tight')) {
+      this.recordCarrier(node, 'tight')
     }
     const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
-    const label = carriedLabel !== undefined && carriedLabel !== '' && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
+    const label = carriedLabel !== undefined && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
     if (label !== undefined) this.recordCarrier(node, 'label')
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
@@ -2442,36 +2513,10 @@ class Importer {
       }
       let held = attrs
       if (held?.id !== undefined) {
-        /*
-         * A heading id from HTML is authored input, even when it equals the
-         * slug a fresh Carve parse would generate - EXCEPT where the element
-         * itself says the renderer wrote it. `roundtrip` mode's input is
-         * Carve-produced HTML BY DEFINITION, so there the id can be read back
-         * as generated rather than authored. A generated id follows every
-         * authored attribute, which is what `idInGeneratedPosition` recognizes
-         * (markup-carve/carve-js#1459).
-         */
-        if (
-          this.mode === 'roundtrip' &&
-          !this.hasCarrier(node, 'explicit-id') &&
-          idInGeneratedPosition(node) &&
-          isGeneratedHeadingId(held.id, inlineText(children))
-        ) {
-          // The renderer derives it again from the same text, so dropping it is
-          // the no-op `dropDerived` documents for every other derived
-          // attribute. Carrying it would spell an authored slot the source
-          // never had - and an id that was the whole of `attrs` leaves the
-          // heading with none rather than an empty attribute block.
+        if (this.carrierReads.get(node)?.names.has('generated-id')) {
           const { id: _dropped, ...rest } = held
           held = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
-        } else if (this.writing) {
-          // Authored. Attribute order is exhaustive when present, so retain
-          // every populated slot.
-          //
-          // ON THE WRITING EXIT ONLY. `order` is a source-layout field and an
-          // import read no source, so the published tree records none of them
-          // (markup-carve/carve#1647); see `writing` above for why the writer
-          // still needs the slot.
+        } else if (this.writing || this.carrierReads.get(node)?.names.has('explicit-id')) {
           held.order = slotOrderFromElement(node, held)
         }
       }
@@ -2762,15 +2807,36 @@ class Importer {
         const mapped = heading?.type === 'heading' && firstHeading !== undefined &&
           this.headingOrigins.get(heading) === firstHeading && heading.attrs?.id === undefined
         if (!mapped) hoistedChildren = []
-        if (!mapped && this.carrierReads.get(node)?.names.delete('explicit-id')) {
-          const name = this.carrierName(node, 'explicit-id')!
+        // No heading took the id, so nothing was rebuilt from the wrapper's carriers.
+        for (const read of ['explicit-id', 'id-slot', 'generated-id'] as const) {
+          if (mapped || !this.carrierReads.get(node)?.names.delete(read)) continue
+          const name = this.carrierName(node, read)!
           this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(this.attr(node, name) ?? ''))
+        }
+      }
+      const sectionReads = this.carrierReads.get(node)?.names
+      const headingElement = tag === 'section' ? this.firstHeadingWithin(node) : undefined
+      const heading = hoistedChildren[0]
+      if (sectionReads?.has('id-slot') && heading?.type === 'heading' && headingElement) {
+        const slots = slotOrderFromElement(headingElement, heading.attrs ?? {}).filter((slot) => slot !== '#id')
+        if (Number(this.carrierValue(node, 'id-slot')) > slots.length) {
+          sectionReads.delete('id-slot')
+          this.report.refuseAttribute(node, path, `round-trip marker attribute ${this.carrierName(node, 'id-slot')!}`, '', 'info', false)
         }
       }
       if (tag !== 'div') {
         this.reportUnwrappedAttributes(
           node,
-          restoreHoistedSectionId(tag, attrs, hoistedChildren, this.hasCarrier(node, 'explicit-id'), this.writing),
+          restoreHoistedSectionId(
+            tag,
+            attrs,
+            hoistedChildren,
+            sectionReads?.has('explicit-id') === true,
+            sectionReads?.has('generated-id') === true,
+            this.writing,
+            sectionReads?.has('id-slot') ? Number(this.carrierValue(node, 'id-slot')) : 0,
+            (held) => (headingElement ? slotOrderFromElement(headingElement, held) : []),
+          ),
           tag,
           path,
           unwrapped,
@@ -2951,9 +3017,12 @@ class Importer {
     // consumed into the `[x]` marker rather than imported, so it does not vote
     // either.
     // Seen through the unsupported wrappers `blocks()` splices away.
-    const tight = !listItems.some((li) =>
-      this.spliceUnsupported(domChildren(li) ?? [], path).some((entry) => !entry.splice && domTag(entry.node) === 'p'),
-    )
+    // §13a `data-carve-tight` wins over what the items' `<p>` elements imply.
+    const tight = this.carrierReads.get(node)?.names.has('tight')
+      ? true
+      : !listItems.some((li) =>
+        this.spliceUnsupported(domChildren(li) ?? [], path).some((entry) => !entry.splice && domTag(entry.node) === 'p'),
+      )
     const start = this.listStart(node, path, ordered)
     // The delimiter the renderer wrote (PART 10 §12), which is the only place
     // it survives: `1)` and `1.` rendered the same bytes before that clause.
@@ -3427,21 +3496,8 @@ class Importer {
     }
   }
 
-  /**
-   * Whether the writer can put these inlines in the quoted title slot.
-   *
-   * The slot is delimited by `"` and the grammar gives it no escape, so a
-   * double quote ends the title early and the opener stops being one. A line
-   * break does the same thing for the same reason: the opener is a LINE.
-   *
-   * The question is asked of the WRITTEN form, not of the text nodes. A quote
-   * reaches the title through more than its own text - an attribute VALUE is
-   * written quoted, so `<span title='a"b'>hi</span>` is spelled
-   * `[hi]{title="a\"b"}` and carries three of them - and enumerating the
-   * spellings that can produce one is the kind of second copy of the grammar
-   * that goes stale the next time a spelling is added. Rendering the inlines
-   * asks the writer itself.
-   */
+  private preserveLabelTabs = false
+
   /**
    * A container label's source, written from the inline content of the
    * `<p class="div-label">` the renderer degraded it to, or `undefined` when the
@@ -3457,10 +3513,14 @@ class Importer {
   private containerLabelSource(kids: P5Node[], labelPath: string, depth: number): string | undefined {
     const rewind = this.mark()
     const nodes = this.nodes
+    const preserveTabs = this.preserveLabelTabs
+    this.preserveLabelTabs = true
     try {
       const inlines = this.blockInlines(kids, labelPath, depth + 2)
-
-      return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: inlines }] }).trimEnd()
+      // Flanking text keeps label-edge tabs inside the writer's paragraph.
+      const children: InlineNode[] = [{ type: 'text', value: 'x ' }, ...inlines, { type: 'text', value: ' x' }]
+      const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children }] })
+      return written.startsWith('x ') && written.endsWith(' x\n') ? written.slice(2, -3) : undefined
     } catch (error) {
       // NO SPELLING IS A REFUSAL, NOT A CRASH. An empty `<code>` has no Carve
       // source while its open run does not end, and the writer says so; the
@@ -3469,6 +3529,7 @@ class Importer {
       if (error instanceof SourceUnspellableError) return undefined
       throw error
     } finally {
+      this.preserveLabelTabs = preserveTabs
       this.nodes = nodes
       this.restore(rewind)
     }
@@ -3489,6 +3550,21 @@ class Importer {
     return first?.type === 'div' && first.label === label
   }
 
+  /**
+   * Whether the writer can put these inlines in the quoted title slot.
+   *
+   * The slot is delimited by `"` and the grammar gives it no escape, so a
+   * double quote ends the title early and the opener stops being one. A line
+   * break does the same thing for the same reason: the opener is a LINE.
+   *
+   * The question is asked of the WRITTEN form, not of the text nodes. A quote
+   * reaches the title through more than its own text - an attribute VALUE is
+   * written quoted, so `<span title='a"b'>hi</span>` is spelled
+   * `[hi]{title="a\"b"}` and carries three of them - and enumerating the
+   * spellings that can produce one is the kind of second copy of the grammar
+   * that goes stale the next time a spelling is added. Rendering the inlines
+   * asks the writer itself.
+   */
   private spellableTitle(title: InlineNode[]): boolean {
     const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: title }] })
     return !written.includes('"') && !written.trimEnd().includes('\n')
@@ -3972,14 +4048,8 @@ class Importer {
    * means.
    */
   private separatorWidths(node: P5Node, path: string): number[] | undefined {
-    const raw = readCarrier((name) => this.attr(node, name), 'col-widths')
-    if (raw === undefined) return undefined
-    const widths = raw.split(',').map((part) => {
-      if (!/^[0-9]+$/.test(part)) return undefined
-      const width = Number(part)
-      return Number.isSafeInteger(width) && width >= 1 && width <= MAX_CARRIED_SEPARATOR_WIDTH ? width : undefined
-    })
-    if (widths.length > 0 && widths.every(width => width !== undefined)) return widths as number[]
+    const widths = this.carriedSeparatorWidths(node)
+    if (widths !== undefined || this.carrierValue(node, 'col-widths') === undefined) return widths
     this.report.add('attribute-dropped', 'Dropped invalid col-widths carrier on <table>', 'warning', path, node)
     return undefined
   }
@@ -4418,6 +4488,18 @@ class Importer {
     nodes.forEach((node, index) => {
       const path = paths?.[index] ?? this.childPath(parentPath, node, index)
       const produced = this.inline(node, path, depths?.[index] ?? depth)
+      const previous = nodes[index - 1]
+      const last = out.at(-1)
+      const terminal = index === nodes.length - 1 || index === nodes.length - 2
+        && nodes[index + 1]?.nodeName === '#text' && /^[ \t\r\n]*$/.test(domValue(nodes[index + 1]!) ?? '')
+      if (terminal && this.cellDepth === 0 && produced.length === 1
+          && produced[0]?.type === 'code' && produced[0].value === ''
+          && previous?.nodeName === '#text' && /\n[ \t]*$/.test(domValue(previous) ?? '')
+          && last?.type === 'text' && last.value.trim() !== '') {
+        // The terminal empty run starts on its own line in the exported paragraph.
+        last.value = last.value.replace(/ +$/, '')
+        out.push({ type: 'soft_break' })
+      }
       for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) {
@@ -4438,13 +4520,13 @@ class Importer {
       if (produced.length > 0) previousWasBlock = isFlattenedBlock(node)
     })
     const merged: InlineNode[] = []
-    for (const node of hoistEdgeSpace(out)) {
+    for (const node of hoistEdgeSpace(out, false, this.preserveLabelTabs)) {
       const last = merged.at(-1)
       if (node.type === 'text' && last?.type === 'text') last.value += node.value
       else merged.push(node)
     }
 
-    return dropSpaceAfterHardBreak(merged)
+    return dropSpaceAfterHardBreak(merged, this.preserveLabelTabs)
   }
 
   /**
@@ -4453,7 +4535,7 @@ class Importer {
    * edges is not content and the re-parse will not keep it.
    */
   private blockInlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[], depths?: number[]): InlineNode[] {
-    return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths, depths))
+    return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths, depths), this.preserveLabelTabs)
   }
 
   private codeText(node: P5Node, path: string, depth: number, block = false, languageWrapper?: P5Node, lang?: string): string {
@@ -4542,7 +4624,12 @@ class Importer {
     // way round - a no-break space is CONTENT - so the collapse names the
     // characters HTML actually collapses and leaves every other one alone.
     if (node.nodeName === '#text') {
-      return [{ type: 'text', value: (domValue(node) ?? '').replace(/[ \t\n\r\f]+/g, ' ') }]
+      const text = domValue(node) ?? ''
+      // A literal tab in roundtrip text is content, including unresolved links.
+      const value = this.preserveLabelTabs || this.mode === 'roundtrip'
+        ? text.replace(/[ \t\n\r\f]+/g, run => /[\n\r\f]/.test(run) ? ' ' : run.replace(/ +/g, ' '))
+        : text.replace(/[ \t\n\r\f]+/g, ' ')
+      return [{ type: 'text', value }]
     }
     /*
      * AN HTML COMMENT IS A CARVE COMMENT, and this is the INLINE position of it
@@ -4612,9 +4699,13 @@ class Importer {
     const walked = this.mark()
     // BEFORE `attrs()`, which asks what was rebuilt here before deciding
     // whether a reserved name is a consumed carrier or a refused one.
-    this.readInlineCarriers(node, tag, children)
+    this.readInlineCarriers(node, tag, children, path)
     const carried = this.carrierReads.get(node)
     const attrs = this.attrs(node, path)
+    if (tag === 'a' && carried?.names.has('xref')) {
+      return [{ type: 'heading_ref', target: this.attr(node, 'href')!.slice(1), ...(attrs ? { attrs } : {}) }]
+    }
+    if (tag === 'span' && carried?.names.has('caption-number')) return [{ type: 'caption_number' }]
     if (tag === 'span' && carried?.names.has('raw')) {
       // §13a `data-carve-raw`. Without this the carrier span was read as raw
       // HTML, so `` `x`{=tex} `` came back as
@@ -4749,8 +4840,13 @@ class Importer {
     if (tag === 'carve-footnote-ref') {
       const label = this.attr(node, 'label') ?? ''
       const inline = this.inlineFootnoteBodies.get(label)
-      if (inline !== undefined) return [{ type: 'inline_footnote', inline }]
-      return [{ type: 'footnote_ref', label }]
+      if (attrs?.keyValues) {
+        delete attrs.keyValues.label
+        if (Object.keys(attrs.keyValues).length === 0) delete attrs.keyValues
+      }
+      const authored = attrs && (attrs.id !== undefined || attrs.classes || attrs.keyValues) ? { attrs } : {}
+      if (inline !== undefined) return [{ type: 'inline_footnote', inline, ...authored }]
+      return [{ type: 'footnote_ref', label, ...authored }]
     }
     if (tag === 'abbr') {
       // A use of an abbreviation the document DEFINED is prose: the expansion
@@ -4770,6 +4866,7 @@ class Importer {
       if (math) return [math]
     }
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
+    if (tag === 'span' && this.mode === 'roundtrip' && this.contradicted.has(node)) return children
     /*
      * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
      *
@@ -5725,7 +5822,12 @@ class Importer {
       for (const reference of definition.refs) {
         const site = this.footnoteReferenceSite(reference)
         const replacement = defaultTreeAdapter.createElement(
-          'carve-footnote-ref', p5html.NS.HTML, [{ name: 'label', value: label }],
+          'carve-footnote-ref', p5html.NS.HTML, [
+            { name: 'label', value: label },
+            ...(domTag(reference) === 'sup' ? (domAttrs(site) ?? []).filter(attr =>
+              attr.name !== 'id' && !RESERVED_CARRIER_ATTRIBUTES.has(attr.name.toLowerCase()),
+            ) : []),
+          ],
         )
         replacement.parentNode = domParent(site) ?? null
         this.replaceP5Node(site, replacement)
@@ -5985,8 +6087,30 @@ class Importer {
       used.add(fragment)
     }
 
-    if (anchors.length === 0 || (!heuristic && !anchors.some(({ anchor }) => this.attr(anchor, 'role') === 'doc-noteref'))) return []
+    const bareSites: Array<{ reference: P5Node; target: P5Node; fragment: string }> = []
+    for (const backlink of elements) {
+      if (domTag(backlink) !== 'a' || this.attr(backlink, 'role') !== 'doc-backlink') continue
+      const href = this.attr(backlink, 'href') ?? ''
+      if (!/^#fnref\d+(?:-\d+)?$/.test(href)) continue
+      const reference = targets.get(href.slice(1))
+      if (reference === undefined || domTag(reference) !== 'sup') continue
+      let target = domParent(backlink)
+      while (target !== undefined && !this.attr(target, 'id')) target = domParent(target)
+      if (target === undefined) continue
+      let endnotes: P5Node | undefined = target
+      while (endnotes !== undefined && this.attr(endnotes, 'role') !== 'doc-endnotes') endnotes = domParent(endnotes)
+      if (endnotes === undefined) continue
+      const fragment = this.attr(target, 'id')!
+      used.add(fragment)
+      bareSites.push({ reference, target, fragment })
+    }
     const candidates: FootnoteCandidate[] = []
+    // Register every bare target before counting notes under shared wrappers.
+    for (const { reference, target, fragment } of bareSites) {
+      const block = this.resolveFootnoteDefinitionBlock(target, targetsIndex)
+      if (block === null || this.p5Contains(block, reference, targetsIndex)) continue
+      candidates.push({ ref: reference, block, fragment, mutual: true })
+    }
     for (const { anchor, fragment } of anchors) {
       if (!heuristic && this.attr(anchor, 'role') !== 'doc-noteref') continue
       const block = this.resolveFootnoteDefinitionBlock(targets.get(fragment)!, targetsIndex)

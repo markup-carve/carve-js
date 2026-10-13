@@ -107,14 +107,14 @@ describe('the controls that keep the band marker folding', () => {
     [
       'a line comment',
       '- t\n  %% c\n - b\n',
-      '<ul>\n  <li>t\n    - b\n  </li>\n</ul>',
+      "<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>",
     ],
     [
       'a closed comment span',
       '- t\n  %%%\n  h\n  %%%\n - b\n',
-      '<ul>\n  <li>t\n    - b\n  </li>\n</ul>',
+      "<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>",
     ],
-  ])('a band marker after %s stays text', (_name, source, expected) => {
+  ])('a band marker after %s leaves the item', (_name, source, expected) => {
     expect(carveToHtml(source)).toBe(expected)
   })
 

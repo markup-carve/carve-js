@@ -9,14 +9,8 @@ import { carveToHtml } from '../src/index.js'
  *   NOTHING closes. Otherwise close the unmatched containers and re-classify
  *   the residue in the surviving context."
  *
- * A heading, table row and thematic break were already handled. Two constructs
- * that also leave no paragraph were not: a definition TERM, which is bounded
- * like a heading, and an invisible definition, which leaves nothing on the page
- * at all (carve-js#554).
- *
- * carve-rs applies the condition in every case; carve-php shared these two plus
- * the heading (carve-php#652). The majority was wrong here, so these assert
- * against S4 rather than against the other engines.
+ * Invisible definitions leave no leaf that accepts lazy text. A term does
+ * accept it, ruled on markup-carve/carve-js#2860 under PART 0.
  */
 const squash = (html: string) => html.replace(/\s+/g, ' ').trim()
 
@@ -26,11 +20,9 @@ describe('lazy continuation into a block quote', () => {
     expect(squash(carveToHtml('> a\nb\n'))).toBe('<blockquote><p>a b</p></blockquote>')
   })
 
-  it('does not fold after a definition term', () => {
-    // A term holds inline content, not a paragraph, so there is nothing to
-    // extend. This produced `<dt>t ~</dt>`.
+  it('folds after a definition term', () => {
     expect(squash(carveToHtml('> :: t\n~\n'))).toBe(
-      '<blockquote> <dl> <dt>t</dt> </dl> </blockquote> <p>~</p>',
+      '<blockquote> <dl> <dt>t ~</dt> </dl> </blockquote>',
     )
   })
 

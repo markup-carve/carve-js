@@ -91,7 +91,34 @@ describe('the HTML carriers', () => {
 
   it('data-carve-explicit-id: presence says the id was authored', () => {
     expect(rt('{#ex}\n# C\n')).toBe('<section id="ex" data-carve-explicit-id="1">\n  <h1>C</h1>\n</section>')
-    expect(rt('# C\n')).toBe('<section id="C">\n  <h1>C</h1>\n</section>')
+    expect(rt('# C\n')).not.toContain('data-carve-explicit-id')
+  })
+
+  it('data-carve-generated-id: presence on the wrapper or heading holding a generated id', () => {
+    expect(rt('# C\n')).toBe('<section id="C" data-carve-generated-id="1">\n  <h1>C</h1>\n</section>')
+    expect(rt('{#ex}\n# C\n')).not.toContain('data-carve-generated-id')
+    expect(renderHtml(resolve(parse('# C\n')), { roundtrip: true, sections: false })).toBe('<h1 id="C" data-carve-generated-id="1">C</h1>')
+  })
+
+  it('data-carve-id-slot: the authored id\u2019s slot, omitted where the id leads', () => {
+    expect(rt('{.c #mine}\n# H\n')).toBe(
+      '<section id="mine" data-carve-explicit-id="1" data-carve-id-slot="1">\n  <h1 class="c">H</h1>\n</section>',
+    )
+    expect(rt('{data-x=1 .c #mine}\n# H\n')).toContain('data-carve-id-slot="2"')
+    expect(rt('{#mine .c}\n# H\n')).not.toContain('data-carve-id-slot')
+    // The slot rides the wrapper. A heading that keeps its own id keeps its
+    // attributes in authored order, so there is nothing to carry.
+    expect(rt('> {.c #mine}\n> # H\n')).toContain('<h1 class="c" id="mine" data-carve-explicit-id="1">H</h1>')
+  })
+
+  it('data-carve-tight: only a tight list whose item paragraph keeps its <p>', () => {
+    expect(rt('- {.x}\n  a\n- b\n')).toBe(
+      '<ul data-carve-tight="1">\n  <li><p class="x">a</p></li>\n  <li>b</li>\n</ul>',
+    )
+    expect(rt('1) {.x}\n   a\n2) b\n')).toContain('<ol data-delim=")" data-carve-tight="1">')
+    expect(rt('* {.x}\n  a\n')).toContain('<ul data-marker="*" data-carve-tight="1">')
+    expect(rt('{.l}\n- {.x}\n  a\n')).toContain('<ul data-carve-tight="1" class="l">')
+    for (const src of ['- a\n- b\n', '- {.x}\n  a\n\n- b\n']) expect(rt(src), src).not.toContain('data-carve-tight')
   })
 
   it('data-carve-explicit-id rides the element that carries the id', () => {
@@ -292,12 +319,10 @@ describe('an authored attribute colliding with a carrier', () => {
     expect(report.losses[0]!.message).toContain('data-char')
   })
 
-  it('leaves the authored attribute alone where the carrier is not written', () => {
-    // No collision without a carrier: a `-` break writes no `data-char`, so the
-    // authored one is ordinary content and the default bytes are unchanged.
+  it('drops a reserved authored attribute where no carrier is written', () => {
     const report = carveToHtmlWithReport('{data-char=Z}\n---\n', { roundtrip: true })
-    expect(report.value).toBe('<hr data-char="Z">')
-    expect(report.losses).toEqual([])
+    expect(report.value).toBe('<hr>')
+    expect(report.losses).toEqual([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: 'data-char' })])
   })
 
   it('leaves the authored attribute alone with the option OFF', () => {
@@ -358,6 +383,56 @@ describe('export does not select an import mode (§13b)', () => {
   })
 })
 
+describe('the section 13a rows added for markup-carve/carve#2894', () => {
+  const sources = [
+    '# C\n',
+    '{.c #mine}\n# H\n',
+    '- {.x}\n  a\n- b\n',
+    '{data-carve-src=Z}\ntext\n',
+  ]
+
+  it('leaves the default export byte-identical', () => {
+    expect(sources.map((src) => carveToHtml(src))).toEqual([
+      '<section id="C">\n  <h1>C</h1>\n</section>',
+      '<section id="mine">\n  <h1 class="c">H</h1>\n</section>',
+      '<ul>\n  <li><p class="x">a</p></li>\n  <li>b</li>\n</ul>',
+      '<p data-carve-src="Z">text</p>',
+    ])
+    for (const src of sources) expect(carveToHtmlWithReport(src).losses, src).toEqual([])
+  })
+
+  it('drops an authored carrier name the wrapper or the list writes', () => {
+    const slot = carveToHtmlWithReport('{data-carve-id-slot=9 .c #mine}\n# H\n', { roundtrip: true })
+    expect(slot.value.match(/data-carve-id-slot/g)).toHaveLength(1)
+    expect(slot.losses.map((row) => row.code === 'carrier-attribute-dropped' && row.attribute)).toEqual(['data-carve-id-slot'])
+    const ext = carveToHtmlWithReport('{data-carve-ext=zz}\n# H\n', { roundtrip: true })
+    expect(ext.value).toBe('<section id="H" data-carve-generated-id="1">\n  <h1 data-carve-ext="zz">H</h1>\n</section>')
+    expect(ext.losses).toEqual([])
+    const tight = carveToHtmlWithReport('{data-carve-tight=false}\n- {.x}\n  a\n', { roundtrip: true })
+    expect(tight.value).toContain('<ul data-carve-tight="1">')
+    expect(tight.losses.map((row) => row.code === 'carrier-attribute-dropped' && row.attribute)).toEqual(['data-carve-tight'])
+  })
+
+  it('drops an authored data-carve-src under roundtrip export, on a block and on an inline', () => {
+    const result = carveToHtmlWithReport('{data-carve-src=Z}\n[t](/u){data-carve-src=Y .k}\n', { roundtrip: true })
+    expect(result.value).toBe('<p><a href="/u" class="k">t</a></p>')
+    expect(result.losses).toMatchObject([
+      { code: 'carrier-attribute-dropped', attribute: 'data-carve-src', nodeType: 'block' },
+      { code: 'carrier-attribute-dropped', attribute: 'data-carve-src', nodeType: 'inline' },
+    ])
+    // Positive control: the name beside it is not reserved and stays.
+    expect(rt('{data-carve-source=Z}\ntext\n')).toBe('<p data-carve-source="Z">text</p>')
+  })
+
+  it('reports a raw inline of another format with the option on or off', () => {
+    for (const roundtrip of [false, true]) {
+      const result = carveToHtmlWithReport('`a<b`{=latex}\n', { roundtrip })
+      expect(result.losses.map((row) => row.code), String(roundtrip)).toEqual(['raw-format-dropped'])
+      expect(result.value).toBe(roundtrip ? '<p><span data-carve-raw="latex">a&lt;b</span></p>' : '<p></p>')
+    }
+  })
+})
+
 describe('Markdown roundtrip export', () => {
   it('carries containers and no more on the Markdown target', () => {
     // §13: "A Markdown export carries containers and no more, and is not a
@@ -365,4 +440,37 @@ describe('Markdown roundtrip export', () => {
     const md = renderMarkdown(parse('***\n'), { roundtrip: true })
     expect(md).not.toContain('data-char')
   })
+})
+
+it.each([
+  ['onclick=x .c #mine', '1'],
+  ['.c onclick=x #mine', '1'],
+  ['onclick=x #mine .c', undefined],
+  ['.c #mine', '1'],
+])('counts only rendered heading attributes for {%s}', (attrs, slot) => {
+  const html = rt(`{${attrs}}\n# H\n`)
+  const carrier = slot === undefined ? '' : ` data-carve-id-slot="${slot}"`
+  expect(html).toContain(`<section id="mine" data-carve-explicit-id="1"${carrier}>`)
+  expect(html).toContain('<h1 class="c">H</h1>')
+  if (attrs === 'onclick=x .c #mine') {
+    expect(htmlToCarve(html, { mode: 'roundtrip' }).value).toBe('{.c #mine}\n# H\n')
+  }
+})
+
+it.each([
+  { order: ['onclick', 'bad name', 'data-carve-id-slot', 'missing', '.class', '#id'], keyValues: { onclick: 'x', 'bad name': 'x', 'data-carve-id-slot': '9' }, classes: [] },
+  { order: ['onclick', 'bad name', 'data-carve-id-slot', 'missing', '.class', '#id'], keyValues: { onclick: 'x', 'bad name': 'x', 'data-carve-id-slot': '9' }, classes: ['c'] },
+])('ignores empty and sanitized heading slots %j', (attrs) => {
+  const html = renderHtml({
+    type: 'document',
+    children: [{ type: 'heading', level: 1, attrs: { ...attrs, id: 'mine' }, children: [{ type: 'text', value: 'H' }] }],
+  }, { roundtrip: true })
+  if (attrs.classes.length) expect(html).toContain('data-carve-id-slot="1"')
+  else expect(html).not.toContain('data-carve-id-slot')
+})
+
+it('counts a heading alignment slot after converting it to style', () => {
+  const html = rt('{align=right #mine}\n# H\n')
+  expect(html).toContain('data-carve-id-slot="1"')
+  expect(html).toContain('<h1 style="text-align: right;">H</h1>')
 })

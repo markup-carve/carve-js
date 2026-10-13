@@ -63,9 +63,9 @@ export function protectMarkdownLinkLabels(
           // an opener it generated (markup-carve/carve#2877 made such a nested
           // opener reachable in the first place).
           let depth = 0
-          const preview = label.includes('/') ? markdownEmphasis(label, () => {}, undefined, spans, false, false, 1) : label
+          const preview = label.includes('/') ? markdownEmphasis(label, () => {}, undefined, spans, false, false, 1, undefined, false, undefined, undefined, true) : label
           const italic = label.includes('/') && ((preview.match(/\//g)?.length ?? 0) > (label.match(/\//g)?.length ?? 0) || /<(?:em|i)(?:\s|>)/i.test(label))
-          const converted = markdownEmphasis(italic ? prepareLabel(label) : label, () => { flattened = true }, undefined, spans, false, false, 1, peak => { depth = peak }, true)
+          const converted = markdownEmphasis(italic ? prepareLabel(label) : label, () => { flattened = true }, undefined, spans, false, false, 1, peak => { depth = peak }, true, undefined, undefined, true)
             .replace(/[*_]/g, char => protect(char))
             .replace(/\{(?=\x00P\d+\x00)|(?<=\x00P\d+\x00)\}/g, char => protect(char))
           const depthToken = protect('')
@@ -88,7 +88,8 @@ export function escapeInactiveMarkdownLinkBrackets(
   protect: (value: string) => string,
   isReference: (label: string) => boolean,
   opaqueEnd: (offset: number) => number | undefined,
-  onActiveLink: (opener: number, closer: number) => void = () => {},
+  onActiveLink: (opener: number, closer: number, image: boolean) => void = () => {},
+  validDestination: (open: number, end: number) => boolean = () => true,
 ): string {
   if (!source.includes('[')) return source
   const opaque = new Map<number, number>()
@@ -104,7 +105,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       const token = tokenAt.exec(source)
       if (token) { i += token[0].length - 1; continue }
     }
-    if (source[i] === '<') {
+    if (source[i] === '<' || source[i] === '$') {
       const end = opaqueEnd(i)
       if (end !== undefined) { opaque.set(i, end); i = end - 1; continue }
     }
@@ -162,8 +163,8 @@ export function escapeInactiveMarkdownLinkBrackets(
       continue
     }
     const end = markdownInlineDestinationEnd(source, i + 1)
-    if (end !== undefined) {
-      onActiveLink(opener.at, i)
+    if (end !== undefined && validDestination(i + 1, end)) {
+      onActiveLink(opener.at, i, opener.image)
       if (!opener.image) generation++
       i = end
       continue
@@ -176,7 +177,7 @@ export function escapeInactiveMarkdownLinkBrackets(
       referenceEnd = close
     }
     if (label !== null && isReference(label)) {
-      onActiveLink(opener.at, i)
+      onActiveLink(opener.at, i, opener.image)
       if (!opener.image) generation++
       i = referenceEnd
     }
@@ -211,18 +212,17 @@ export function markdownInlineDestinationEnd(source: string, open: number): numb
         const token = tokenAt.exec(source)
         if (token) { at += token[0].length - 1; continue }
       }
-      if (source[at] === '\\') { at++; continue }
+      if (source[at] === '\\' && /[!-/:-@\[-`{-~]/.test(source[at + 1] ?? '')) { at++; continue }
       if (source[at] === '(') {
         if (++depth > 32) return undefined
       } else if (source[at] === ')') {
         if (depth === 0) break
         depth--
       } else if (/[\x00-\x20\x7f]/.test(source[at]!)) {
-        if (depth > 0) return undefined
         break
       }
     }
-    if (depth > 0) return undefined
+    if (depth > 0 && at >= source.length) return undefined
   }
   const spaced = skipSpace()
   if (source[at] === ')') return at

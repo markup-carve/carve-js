@@ -118,10 +118,10 @@ describe('a container prefix is walked by offset', () => {
     expect(carveToHtml('- > q\ntail\n')).not.toMatch(/<p>tail<\/p>/)
   })
 
-  it('folds the line below a colon fence written on a marker', () => {
-    // Not in the paragraph-less list, deliberately: the fence holds a container
-    // the line below folds INTO rather than out of.
-    expect(carveToHtml('- ::: note\ntail\n:::\n')).not.toMatch(/^<p>tail<\/p>/m)
+  it('ends the item below an empty colon fence written on a marker', () => {
+    expect(carveToHtml('- ::: note\ntail\n:::\n')).toBe(
+      '<ul>\n  <li>\n    <aside class="admonition note" aria-label="Note">\n\n    </aside>\n  </li>\n</ul>\n<p>tail</p>\n<div>\n\n</div>',
+    )
   })
 
   it('declines a brace that is not a valid attribute payload', () => {

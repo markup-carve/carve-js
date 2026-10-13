@@ -1,5 +1,6 @@
+import type { Document } from '../src/ast.js'
 import { describe, expect, it } from 'vitest'
-import { carveToAnsi, carveToHtml, carveToMarkdown, carveToPlainText } from '../src/index.js'
+import { carveToAnsi, carveToHtml, carveToMarkdown, carveToPlainText, renderAnsi, renderHtml, renderMarkdown } from '../src/index.js'
 
 /*
  * The ANSI target blanks a destination PART 9 §25 denies.
@@ -65,10 +66,6 @@ describe('the ANSI target and the URL-scheme denylist', () => {
     // carve#385 was a local list of four schemes in the Markdown writer letting
     // the twenty OS protocol-handler schemes through. Whatever Markdown blanks,
     // this blanks.
-    //
-    // Whitespace obfuscation has its own case below - not in an inline
-    // destination, which cannot start with whitespace at all, but in a reference
-    // DEFINITION, which can.
     const destinations = [
       'javascript:alert(1)',
       'JAVASCRIPT:alert(1)',
@@ -87,18 +84,24 @@ describe('the ANSI target and the URL-scheme denylist', () => {
   })
 
   it('strips obfuscating whitespace before deciding the scheme', () => {
-    // The real shape, and the one corpus 121 pins for HTML: an inline `(...)`
-    // destination cannot begin with whitespace, so the probe never mattered
-    // there - a reference DEFINITION can, and that path reaches this target.
-    //
-    // A reader ignores the leading U+202F when it decides the scheme, so a check
-    // that did not strip it would pass a URL the terminal still resolves.
     const NNBSP = String.fromCharCode(0x202f)
-    const source = `[click][a]\n\n[a]: ${NNBSP}javascript:alert(1)\n`
+    const source = `[click][a]
 
-    expect(ansi(source)).toBe('click ()')
-    // Markdown already blanked this one, which is how the asymmetry was found.
-    expect(carveToMarkdown(source).trim()).toBe('[click]()')
+[a]: ${NNBSP}javascript:alert(1)
+`
+    const ast = {
+      type: 'document',
+      children: [{
+        type: 'paragraph',
+        children: [{ type: 'link', href: `${NNBSP}javascript:alert(1)`, children: [{ type: 'text', value: 'click' }] }],
+      }],
+    } satisfies Document
+
+    expect(strip(renderAnsi(ast)).trim()).toBe('click ()')
+    expect(renderMarkdown(ast).trim()).toBe('[click]()')
+    expect(renderHtml(ast)).toContain('href=""')
+    expect(carveToHtml(source)).toBe(`<p>[click][a]</p>
+<p>[a]: ${NNBSP}javascript:alert(1)</p>`)
   })
 
   it('leaves an ordinary destination alone', () => {

@@ -12,11 +12,11 @@ import { carveToHtml } from '../src/index.js'
 // (carve-js#2330, via carve-js#2300).
 describe('a band paragraph after an invisible line leaves the item loose', () => {
   it.each([
-    ['the narrowest band', '- t\n\n  %% c\n z\n', '<ul>\n  <li><p>t</p>\n    <p>z</p>\n  </li>\n</ul>'],
+    ['the narrowest band', '- t\n\n  %% c\n z\n', "<ul>\n  <li>t</li>\n</ul>\n<p>z</p>"],
     [
       'a three-column band under a four-wide marker',
       '10. t\n\n    %% c\n   z\n',
-      '<ol start="10">\n  <li><p>t</p>\n    <p>z</p>\n  </li>\n</ol>',
+      "<ol start=\"10\">\n  <li>t</li>\n</ol>\n<p>z</p>",
     ],
     [
       "that band's content-column twin",
@@ -26,21 +26,21 @@ describe('a band paragraph after an invisible line leaves the item loose', () =>
     [
       'the span spelling of the invisible line',
       '- t\n\n  %%%\n  c\n  %%%\n z\n',
-      '<ul>\n  <li><p>t</p>\n    <p>z</p>\n  </li>\n</ul>',
+      "<ul>\n  <li>t</li>\n</ul>\n<p>z</p>",
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it('a retained marker starts a second paragraph and leaves the list loose', () => {
+  it('a band marker after an at-column comment starts a separate list', () => {
     expect(carveToHtml('- t\n\n  %% c\n - b\n- s\n')).toBe(
-      '<ul>\n  <li><p>t</p>\n    <p>- b</p>\n  </li>\n  <li><p>s</p></li>\n</ul>',
+      "<ul>\n  <li>t</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>\n<ul>\n  <li>s</li>\n</ul>",
     )
   })
 
-  it('a following sibling marker is not what the blank has to separate', () => {
+  it('a band paragraph after an at-column comment owns the following marker', () => {
     expect(carveToHtml('- t\n\n  %% c\n z\n- s\n')).toBe(
-      '<ul>\n  <li><p>t</p>\n    <p>z</p>\n  </li>\n  <li><p>s</p></li>\n</ul>',
+      "<ul>\n  <li>t</li>\n</ul>\n<p>z\n- s</p>",
     )
   })
 })

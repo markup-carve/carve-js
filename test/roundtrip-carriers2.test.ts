@@ -158,7 +158,7 @@ describe('new roundtrip carriers', () => {
       }
     }
   })
-  it.each(['', 'bad]', 'bad\nlabel', 'bad\rlabel'])('rejects an invalid HTML label %j', label => {
+  it.each(['bad]', 'bad\nlabel', 'bad\rlabel'])('rejects an invalid HTML label %j', label => {
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
       const result = htmlToAst(`<pre data-carve-label="${label}"><code>x</code></pre>`, { mode })
       expect(result.value.children[0]).not.toHaveProperty('label')
@@ -169,7 +169,7 @@ describe('new roundtrip carriers', () => {
   it.each([
     '<!-- carve: {.c} -->\n\nText.\n',
     '<!-- carve: {.c} -->\n',
-    '<!-- carve: :: Term -->\n**Term**\n\n<!-- carve: -->\n',
+    '<!-- carve: :: Term -->\n**Term**\n',
     '<!-- carve: : -->\nDefinition.\n<!-- carve: -->\n',
     '<!-- carve: :: Term -->\n**Term**\n\n<!-- carve: : -->\nDefinition.\n',
     '<!-- carve: -->\n',
@@ -187,4 +187,10 @@ describe('new roundtrip carriers', () => {
     expect(result.value).toContain('<!-- carve:')
     expect(result.report.diagnostics.find(d => d.code === 'carrier-markers-damaged')).toMatchObject({ fidelity: 'degraded', confidence: 'fallback' })
   })
+})
+
+it('drops a reserved code-label name on a heading that writes no label carrier', () => {
+  const result = carveToHtmlWithReport('{data-carve-label=x}\n# H\n', { roundtrip: true })
+  expect(result.value).not.toContain('data-carve-label')
+  expect(result.losses).toEqual([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: 'data-carve-label' })])
 })

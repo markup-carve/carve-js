@@ -54,8 +54,10 @@ describe('a verse closer belongs to its quote depth', () => {
     expect(html).not.toContain('href="/hidden"')
   })
 
-  it('ends quoted verse when a code fence prevents lazy continuation', () => {
-    expect(carveToHtml('> ::: |\n> ```\n> verse\nlazy\n> [r]: /target\n\n[t][r]\n')).toContain('href="/target"')
+  it('keeps a fence-shaped line-block payload open for lazy continuation', () => {
+    const html = carveToHtml('> ::: |\n> ```\n> verse\nlazy\n> [r]: /target\n\n[t][r]\n')
+    expect(html).toContain('[r]: /target')
+    expect(html).not.toContain('href="/target"')
   })
 
   for (const source of [

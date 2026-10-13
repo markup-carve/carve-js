@@ -55,10 +55,12 @@ import {
   CARRIER_CHAR,
   CARRIER_MARKER,
   carrier,
-  dropCollidingAuthored,
+  isReservedExportName,
   MAX_CARRIED_SEPARATOR_WIDTH,
+  reportReservedAuthoredNames,
   roundtripExport,
 } from './roundtrip-carriers.js'
+import { CANONICAL_INLINE_TYPES, FOLDED_NODE_TYPES } from './profile.js'
 
 export type SocialLinkKind = 'mention' | 'tag'
 
@@ -657,6 +659,9 @@ export function renderHtml(
   docIdSource = docIds ? null : ast
   activeRenderOptions = opts
   admonitionCount = 0
+  if (roundtripExport(opts)) {
+    reportReservedAuthoredNames(ast, new Set([...CANONICAL_INLINE_TYPES, ...Object.keys(FOLDED_NODE_TYPES)]), opts)
+  }
   try {
     return renderDocumentBody(ast, opts)
   } finally {
@@ -755,6 +760,19 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       const explicitId = roundtripExport(opts) && authoredId(node.attrs)
         ? ` ${carrier('explicit-id')}="1"`
         : ''
+      // §13a carriers that ride the wrapper only: the authored id's slot where
+      // it does not lead, and presence where the id is generated.
+      let wrapperCarriers = ''
+      if (wrapSections && roundtripExport(opts)) {
+        // Count only slots that emit an attribute on the heading.
+        const headingAttrs = node.attrs ? withTextAlignDeclaration(node.attrs, `h${node.level}`) : undefined
+        const slot = explicitId === '' ? -1 : headingAttrs!.order!.filter((entry) => renderAttrSlot(headingAttrs!, entry) !== '').indexOf('#id')
+        if (slot > 0) {
+          wrapperCarriers = ` ${carrier('id-slot')}="${slot}"`
+        } else if (explicitId === '' && node.attrs?.id !== undefined) {
+          wrapperCarriers = ` ${carrier('generated-id')}="1"`
+        }
+      }
       if (wrapSections) {
         // The id moves to <section>; any other heading attrs (classes,
         // key-values) stay on the <h*>.
@@ -762,7 +780,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
         // <section> (it already suppressed the auto-slug in resolveHeadingIds).
         const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
-        out.push(`${indent(depth)}<section${sectionId}${explicitId}>`)
+        out.push(`${indent(depth)}<section${sectionId}${explicitId}${wrapperCarriers}>`)
         sectionStack.push(node.level)
       }
       // Where the <h*> sits: one level in when a wrapper opened above it,
@@ -778,18 +796,11 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         continue
       }
       const headingAttrs = wrapSections ? stripId(node.attrs) : node.attrs
-      const explicit = explicitIdAttr(node.attrs, headingAttrs, opts)
-      // The carrier wins the collision wherever it is written, and on a wrapped
-      // heading it is written on the `<section>` while the authored attribute
-      // sits on the `<h*>` - so the drop has to happen on the heading's own
-      // attributes either way.
-      const ownAttrs = explicit === '' && explicitId === ''
-        ? headingAttrs
-        : dropCollidingAuthored(headingAttrs, [carrier('explicit-id')], opts, node, 'block')
+      const explicit = headingIdCarrierAttr(node.attrs, headingAttrs, opts)
       const inner = renderInlines(node.children, opts)
-      const slAttr = sourceLineAttr(opts, node.pos?.startLine, ownAttrs)
+      const slAttr = sourceLineAttr(opts, node.pos?.startLine, headingAttrs)
       out.push(
-        `${indent(headingLevel)}<h${node.level}${renderAttrs(ownAttrs, `h${node.level}`)}${explicit}${slAttr}>${inner}</h${node.level}>`,
+        `${indent(headingLevel)}<h${node.level}${renderAttrs(headingAttrs, `h${node.level}`)}${explicit}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
@@ -825,19 +836,14 @@ function authoredId(attrs: Attrs | undefined): boolean {
   return attrs?.id !== undefined && attrs.order?.includes('#id') === true
 }
 
-/**
- * §13a's `data-carve-explicit-id` RIDES THE ELEMENT THAT CARRIES THE ID: the
- * `<section>` where PART 9 §13 wraps one, the heading where it does not. So it
- * is emitted here only when the id stayed on the `<h*>`.
- */
-function explicitIdAttr(
+function headingIdCarrierAttr(
   nodeAttrs: Attrs | undefined,
   renderedAttrs: Attrs | undefined,
   opts: RenderOptions,
 ): string {
   if (!roundtripExport(opts)) return ''
   if (renderedAttrs?.id === undefined) return ''
-  return authoredId(nodeAttrs) ? ` ${carrier('explicit-id')}="1"` : ''
+  return ` ${carrier(authoredId(nodeAttrs) ? 'explicit-id' : 'generated-id')}="1"`
 }
 
 /**
@@ -1183,32 +1189,21 @@ function withTextAlignDeclaration(attrs: Attrs, tag?: string): Attrs {
   return result
 }
 
+function renderAttrSlot(attrs: Attrs, slot: string): string {
+  if (slot === '.class') {
+    return attrs.classes?.length ? `class="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"` : ''
+  }
+  if (slot === '#id') return attrs.id !== undefined ? `id="${escapeAttr(attrs.id)}"` : ''
+  if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return ''
+  if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return ''
+  const value = attrs.keyValues?.[slot]
+  return value !== undefined ? `${slot}="${escapeAttr(sanitizeAttrValue(slot, value))}"` : ''
+}
+
 function renderAttrs(raw?: Attrs, tag?: string): string {
   if (!raw) return ''
   const attrs = withTextAlignDeclaration(raw, tag)
   const parts: string[] = []
-  const classAttr = () =>
-    attrs.classes && attrs.classes.length
-      ? // Merge into one class attribute, deduping repeats keeping first-
-        // occurrence order (`{.a .a}` -> `class="a"`), matching carve-php (§15).
-        `class="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"`
-      : ''
-  // Escape the id value: an `#id` is identifier-restricted (escaping is a
-  // no-op), but `id=value` (which now also feeds this slot, last-wins §15) can
-  // carry arbitrary quoted text and must not inject markup.
-  // `!== undefined`, not truthiness: an explicit `id=""` is a real (empty) id
-  // and must render `id=""` (matches carve-php), the same last-wins slot as
-  // `#id`/`id=value`. Escape the value: `#id` is identifier-restricted (escape
-  // is a no-op), but `id=value` can carry arbitrary quoted text.
-  const idAttr = () => (attrs.id !== undefined ? `id="${escapeAttr(attrs.id)}"` : '')
-  const kvAttr = (k: string) => {
-    // Always strip event-handler / injection-sink attribute names, and blank a
-    // dangerous-scheme or CSS-expression value, regardless of render options.
-    if (isDangerousAttrName(k)) return ''
-    if (!HTML_ATTR_NAME_RE.test(k)) return ''
-    const v = attrs.keyValues?.[k]
-    return v !== undefined ? `${k}="${escapeAttr(sanitizeAttrValue(k, v))}"` : ''
-  }
   // Emit the recorded source order first (matches djot + carve-php),
   // then append any populated slot not covered by `order` -- so an attr
   // added programmatically after parse() (with stale/no `order`) still
@@ -1216,22 +1211,22 @@ function renderAttrs(raw?: Attrs, tag?: string): string {
   const seen = new Set(attrs.order ?? [])
   if (attrs.order) {
     for (const slot of attrs.order) {
-      const p = slot === '.class' ? classAttr() : slot === '#id' ? idAttr() : kvAttr(slot)
+      const p = renderAttrSlot(attrs, slot)
       if (p) parts.push(p)
     }
   }
   if (!seen.has('.class')) {
-    const c = classAttr()
+    const c = renderAttrSlot(attrs, '.class')
     if (c) parts.push(c)
   }
   if (!seen.has('#id')) {
-    const i = idAttr()
+    const i = renderAttrSlot(attrs, '#id')
     if (i) parts.push(i)
   }
   if (attrs.keyValues) {
     for (const k of Object.keys(attrs.keyValues)) {
       if (!seen.has(k)) {
-        const p = kvAttr(k)
+        const p = renderAttrSlot(attrs, k)
         if (p) parts.push(p)
       }
     }
@@ -1561,11 +1556,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     }
     case 'heading': {
       const inner = renderInlines(node.children, opts)
-      const explicit = explicitIdAttr(node.attrs, node.attrs, opts)
-      const attrs = explicit === ''
-        ? node.attrs
-        : dropCollidingAuthored(node.attrs, [carrier('explicit-id')], opts, node, 'block')
-      return `${pad}<h${node.level}${renderAttrs(attrs, `h${node.level}`)}${explicit}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
+      const explicit = headingIdCarrierAttr(node.attrs, node.attrs, opts)
+      return `${pad}<h${node.level}${renderAttrs(node.attrs, `h${node.level}`)}${explicit}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
     }
     case 'paragraph': {
       const inner = renderInlines(node.children, opts)
@@ -1579,10 +1571,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       const charAttr = roundtripExport(opts) && node.marker !== undefined && node.marker !== '-'
         ? ` ${CARRIER_CHAR}="${escapeAttr(node.marker)}"`
         : ''
-      const hrAttrs = charAttr === ''
-        ? node.attrs
-        : dropCollidingAuthored(node.attrs, [CARRIER_CHAR], opts, node, 'block')
-      return `${pad}<hr${charAttr}${renderAttrs(hrAttrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      return `${pad}<hr${charAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
     }
     case 'code_block': {
       // The opener header becomes a title attribute at parse time, including in code groups.
@@ -1728,8 +1717,7 @@ function renderCodeBlockCore(
   const escaped = escapeHtml(node.content)
   const labelAttr = roundtripExport(opts) && node.label !== undefined
     ? ` ${carrier('label')}="${escapeAttr(node.label)}"` : ''
-  const attrs = labelAttr === '' ? node.attrs : dropCollidingAuthored(node.attrs, [carrier('label')], opts, { type: 'code_block', ...(node.pos ? { pos: node.pos } : {}) }, 'block')
-  return `${pad}<pre${labelAttr}${renderAttrs(attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
+  return `${pad}<pre${labelAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}</code></pre>`
 }
 
 /**
@@ -1780,16 +1768,19 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
   const markerAttr = roundtripExport(opts) && authoredMarker !== undefined
     ? ` ${CARRIER_MARKER}="${escapeAttr(authoredMarker)}"`
     : ''
-  const listOwnAttrs = markerAttr === ''
-    ? node.attrs
-    : dropCollidingAuthored(node.attrs, [CARRIER_MARKER], opts, node, 'block')
+  // §13a: a tight item's paragraph keeps its `<p>` for its own attributes, and
+  // an importer reads a `<p>` there as a loose list.
+  const tightAttr = roundtripExport(opts) && node.tight
+    && node.items.some((it) => it.children.some((child) => child.type === 'paragraph' && child.attrs))
+    ? ` ${carrier('tight')}="1"`
+    : ''
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
   // PART 19 §1: a task list's mandatory base class leads the authored ones.
   const isTaskList = !node.ordered && node.items.length > 0 && node.items.every((it) => it.checked !== undefined)
-  const listAttrs = isTaskList ? renderAttrs2(listOwnAttrs, { baseClass: 'task-list' }) : renderAttrs(listOwnAttrs)
-  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${markerAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
+  const listAttrs = isTaskList ? renderAttrs2(node.attrs, { baseClass: 'task-list' }) : renderAttrs(node.attrs)
+  return `${pad}<${tag}${typeAttr}${startAttr}${delimAttr}${markerAttr}${tightAttr}${listAttrs}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(
@@ -1919,7 +1910,6 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const widthsAttr = roundtripExport(opts) && carriable
     ? ` ${carrier('col-widths')}="${escapeAttr(node.separatorWidths!.join(','))}"`
     : ''
-  if (widthsAttr !== '') tableAttrs = dropCollidingAuthored(tableAttrs, [carrier('col-widths')], opts, node, 'block')
   const lines: string[] = [
     `${pad}<table${renderAttrs(tableAttrs)}${widthsAttr}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
   ]
@@ -2341,7 +2331,6 @@ function renderImage(img: Image, opts: RenderOptions): string {
   const refAttr = roundtripExport(opts) && img.ref !== undefined
     ? ` ${carrier('ref')}="${escapeAttr(img.ref)}"`
     : ''
-  if (refAttr !== '') attrs = dropCollidingAuthored(attrs, [carrier('ref')], opts, img, 'inline')
   // The sanitized structural src wins; never re-emit an author-supplied
   // `src` from an attribute block, which would bypass sanitization.
   return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${refAttr}${renderAttrs(attrs)}>`
@@ -2355,7 +2344,7 @@ function renderImage(img: Image, opts: RenderOptions): string {
  * Is the renderer inside a link's text right now?
  *
  * Module-scoped rather than threaded through every signature: rendering is
- * synchronous and single-threaded, and the only reader is the crossref arm.
+ * synchronous and single-threaded, and crossrefs and footnotes read the flag.
  * A footnote body renders outside any anchor, so the flag is cleared for it.
  */
 let insideLink = false
@@ -2514,7 +2503,6 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       const refAttr = roundtripExport(opts) && node.ref !== undefined
         ? ` ${carrier('ref')}="${escapeAttr(node.ref)}"`
         : ''
-      if (refAttr !== '') attrs = dropCollidingAuthored(attrs, [carrier('ref')], opts, node, 'inline')
       return `<a href="${href}"${titleAttr}${refAttr}${renderAttrs(attrs)}>${label}</a>`
     }
     case 'image':
@@ -2619,8 +2607,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // `<https://e>` from `[https://e](https://e)`, and the AST does - the
       // autolink is its own node type.
       const autoAttr = roundtripExport(opts) ? ` ${carrier('autolink')}="1"` : ''
-      let autoAttrs = stripKeyValue(node.attrs, 'href')
-      if (autoAttr !== '') autoAttrs = dropCollidingAuthored(autoAttrs, [carrier('autolink')], opts, node, 'inline')
+      const autoAttrs = stripKeyValue(node.attrs, 'href')
       return `<a href="${href}"${autoAttr}${renderAttrs(autoAttrs)}>${escapeHtml(display)}</a>`
     }
     case 'mention': {
@@ -2682,10 +2669,9 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
         const labelAttr = roundtripExport(opts) && node.label !== undefined
           ? ` ${carrier('footnote-label')}="${escapeAttr(node.label)}"`
           : ''
-        const refAttrs = labelAttr === ''
-          ? node.attrs
-          : dropCollidingAuthored(node.attrs, [carrier('footnote-label')], opts, node, 'inline')
-        return `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(refAttrs, { dropId: true })}><sup>${node.number}</sup></a>`
+        if (insideLink)
+          return `<sup id="${node.refId}"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}>${node.number}</sup>`
+        return `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
       }
     case 'non_breaking_space':
       return node.attrs ? `<span${renderAttrs(node.attrs)}>&nbsp;</span>` : '&nbsp;'
@@ -2729,7 +2715,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
           () => withinLink(() => renderInlines(node.resolvedText ?? [], opts)),
           node.target,
         )
-        return `<a href="${crossrefHref}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
+        const xrefAttr = roundtripExport(opts) ? ` ${carrier('xref')}` : ''
+        return `<a href="${crossrefHref}"${xrefAttr}${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
       }
       // Unresolved: literal source, the same as an unresolved reference link.
       return `&lt;/#${escapeHtml(node.target)}&gt;`
@@ -2740,7 +2727,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // Markdown/plain/ANSI arms already do. A composite figure's PANEL
       // caption keeps its placeholder un-numbered by design (PART 9 §4c), so
       // this arm is what makes it render as the literal `#` the author wrote.
-      return node.n === undefined ? '#' : String(node.n)
+      return node.n === undefined ? '#' : roundtripExport(opts) ? `<span ${carrier('caption-number')}>${node.n}</span>` : String(node.n)
     case 'citation_group': {
       // Extension-produced node: per-extension resolution in registration order
       // (mirrors the block path). For each extension, static mode tries its

@@ -34,6 +34,29 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-closed-fence-at-a-marker-line-note-s-body-column-opens-in-the-note',
+  'a-titled-footnotes-marker-names-the-endnotes-section',
+  'an-at-sign-before-a-space-and-a-doubled-delimiter-inside-bold-italic-are-text',
+  'a-description-marker-followed-by-a-no-break-space-has-content',
+  'a-closed-fence-in-a-quoted-sub-item-after-a-lazy-line-leaves-no-paragraph',
+  'a-quoted-term-takes-a-lazy-line',
+  'an-opener-past-a-hosted-container-s-column-interrupts-its-open-paragraph',
+  'a-footnote-reference-in-link-text-keeps-its-id-on-the-sup',
+  'a-head-row-alignment-marker-sets-the-whole-column',
+  'a-line-block-takes-a-lazy-line-whatever-its-last-payload-line',
+  'an-at-column-comment-retains-nothing',
+  'a-line-final-run-of-spaces-and-tabs-is-dropped-before-the-line-is-read',
+  'a-tab-is-content-in-a-heading-key-and-in-a-cross-reference-id',
+  'a-closed-block-leaves-no-frame-for-the-line-below',
+  'a-container-boundary-is-read-at-the-container-s-own-column',
+  'an-opener-past-a-hosted-container-s-column-opens-there',
+  'a-shifted-fence-in-a-quoted-container-s-body-stores-no-continuation-claim',
+  'a-description-keeps-a-block-at-its-body-column-whatever-leads-the-item',
+  'a-line-block-payload-span-pairs-past-the-content-column',
+  'a-line-retained-after-a-comment-opens-a-paragraph',
+  'a-paragraph-in-a-held-container-does-not-loosen-the-item',
+  'a-quoted-item-that-ends-on-a-block-past-its-column-holds-no-paragraph',
+  'a-tab-inside-a-line-is-content-in-a-label-and-after-a-definition-marker',
   'an-unterminated-raw-fence-keeps-literal-payload-termination',
   'a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run',
   'a-link-destination-is-opaque-to-the-bracket-scan',
@@ -43,6 +66,7 @@ const IMPLEMENTED = new Set([
   'a-table-with-no-bodies-keeps-its-head-and-foot',
   'invalid-table-body-metadata-stays-ordinary',
   'a-span-across-bodies-keeps-their-header-semantics',
+  'a-span-never-covers-another-cell',
   'a-head-and-foot-consuming-all-rows-leave-no-implicit-body',
   'explicit-body-counts-include-native-header-cells',
 
@@ -971,7 +995,8 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it

@@ -135,8 +135,8 @@ It is **off by default** on every surface, and enabling it neither removes nor
 reorders an attribute the default output writes.
 
 **The target decides the carrier.** HTML writes the named attributes PART 10
-§13a lists; Markdown writes the container carrier comments below. A Markdown
-export carries containers and no more.
+§13a lists; Markdown writes the carrier comments below, and none of the HTML
+names.
 
 What it guarantees is **recovery of the named distinctions, not byte-identical
 source**.
@@ -148,6 +148,7 @@ source**.
 | `data-marker` | `<ul>` | the authored bullet marker, only where it is not `-` |
 | `data-char` | `<hr>` | the authored thematic-break character, only where it is not `-` |
 | `data-carve-explicit-id` | `<section>`, `<h1>`-`<h6>` | presence: the identifier was authored, not generated |
+| `data-carve-generated-id` | `<section>`, `<h1>`-`<h6>` | presence: the identifier was generated |
 | `data-carve-ref` | `<a>`, `<img>` | the reference label the link or image resolved by |
 | `data-carve-autolink` | `<a>` | presence: the link was authored as an autolink |
 | `data-carve-footnote-label` | `<a>`, `<li>` | the authored footnote label, on the reference and on the endnote item |
@@ -155,21 +156,40 @@ source**.
 | `data-carve-raw` | `<span>` | the raw inline's format; the span holds its content |
 | `data-carve-escaped` | `<span>` | presence; the span holds one escaped character |
 | `data-carve-abbreviations` | `<template>` | the document's abbreviation definitions, one per line |
+| `data-carve-col-widths` | `<table>` | the authored separator-row dash widths, comma-joined; omitted for a table with no separator row or a width outside 1 to 1000 |
+| `data-carve-label` | `<pre>` | a code block's authored label, the text between the fence label's brackets |
+| `data-carve-id-slot` | `<section>` | the authored identifier's slot among the heading's attributes, counted from 0; omitted at 0, where the identifier leads |
+| `data-carve-tight` | `<ul>`, `<ol>` | presence: the list is tight although an item's paragraph keeps its `<p>` for its own attributes |
 
-Two names in the inventory are **not written by this engine**:
-`data-carve-col-widths` needs a table's separator-row dash widths, which this
-parser does not keep, and raw blocks have no carrier at all - the contract does
-not promise them.
+```carve
+| a | b |
+|:--|-----:|
+| 1 | 2 |
+```
 
-An **authored attribute that collides** with a carrier is dropped and the drop
-is reported as a `carrier-attribute-dropped` render loss naming it. The carrier
-wins because it is structural; emitting both would be invalid HTML.
+```html
+<table data-carve-col-widths="2,5">
+```
 
-`data-carve-*` is the serializer's protocol, not an author's content. An import
-**consumes** these names and never writes one back out as an authored
-attribute, in `safe` mode exactly as in `roundtrip`; the deprecated
-`data-djot-*` spelling that earlier releases wrote is read too, so a document
-exported before the rename still imports.
+**A raw block has no carrier.** One whose format the target cannot write is
+dropped with the option on exactly as with it off, and the render reports
+`raw-format-dropped` either way.
+
+Under roundtrip export, every authored attribute whose name is reserved is
+dropped on every node, even when that node writes no carrier of that name.
+Each drop reports one `carrier-attribute-dropped` render loss naming the
+authored key. A carrier still writes its own value. Default export passes
+these authored attributes through and reports no carrier loss.
+
+The reserved export names are the table's names plus `data-carve-src` and
+`data-djot-src`. Neither source name has a carrier or is written by the core.
+Matching is case-insensitive. Other names, including `data-carve-ext`,
+`data-djot-ext`, and unlisted `data-carve-*` names, are ordinary authored
+attributes. The other `data-djot-*` aliases are also passed through on export.
+
+An import consumes the reserved names and accepts the table's deprecated
+`data-djot-*` aliases in every mode. It never puts those names into authored
+attributes.
 
 ### What the import rebuilds
 
@@ -178,7 +198,9 @@ the authored bullet and ordered delimiter, the thematic-break character, an
 authored identifier, a link's or image's reference label (with the
 `[label]: /url` definition written beside it), an `autolink` node, a footnote's
 authored label, an inline footnote, an `escaped_text` node, a `raw_inline` with
-its own format, and the abbreviation definitions - so a use of a defined
+its own format, a table's separator-row widths, a code block's label, the slot
+an authored identifier held among a heading's attributes, a tight list whose
+item paragraph kept its `<p>`, and the abbreviation definitions - so a use of a defined
 abbreviation comes back as prose rather than as `[HTML]{abbr="..."}` on every
 occurrence.
 
@@ -187,12 +209,32 @@ htmlToCarve(carveToHtml('`\\x`{=tex}\n', { roundtrip: true })).value
 // => '`\\x`{=tex}\n'
 ```
 
-A carrier that cannot be honored is **not** a carrier: a value outside its
-enumeration, a reference label no Carve source could spell, an escape longer
-than one character, an autolink whose text is not its own destination, or a
-label and an inline-note carrier contradicting each other on one endnote.
-Those are dropped and reported, not guessed at, and the reserved name is still
-never written back out.
+An unmarked identifier on a heading is authored in every import mode.
+An unmarked section-wrapper identifier matching its heading's default slug,
+including a generated deduplication suffix, is generated and dropped. Any
+other wrapper identifier moves to the heading as authored. The
+`data-carve-generated-id` presence carrier drops the identifier regardless of
+its value; `data-carve-explicit-id` keeps it as authored.
+
+An identifier slot is read only on a wrapper with `data-carve-explicit-id`,
+only as decimal digits, and only up to the number of the heading's other
+attribute slots. An invalid or oversized slot is dropped and reported, and
+the identifier leads. Without an explicit-id carrier, no attribute order is
+published. An unwrapped heading with explicit-id publishes the element's own
+attribute order. Tightness is read by presence on lists, whatever the
+carrier's value.
+
+A carrier that cannot be honored is dropped and reported. Examples include
+a reference label no Carve source could spell, an escape longer than one
+character, and an autolink whose text differs from its destination. A reserved
+name never becomes an authored attribute.
+
+Exactly four pairs contradict on one element: footnote-label with
+inline-footnote, autolink with ref, explicit-id with generated-id, and escaped
+with raw. Neither meaning is restored; the ordinary element imports, one
+`attribute-dropped` warning covers the pair, and both names are consumed.
+This applies to the `data-djot-*` aliases too. Value validation comes first:
+an invalid value is not a carrier and contradicts nothing.
 
 One carrier's answer depends on the import mode. A raw inline of format `html`
 is markup every HTML render emits verbatim, so rebuilding one would hand the
@@ -205,7 +247,8 @@ target and rebuilds in every mode.
 
 One distinction is not recovered. A collapsed reference `[r][]` and the full
 `[r][r]` render identical bytes, carrier included, so the import writes the
-full form. The label, the destination and the rendering survive; the spelling
+collapsed form `[r][]`. A reference with distinct label text stays `[t][r]`.
+The label, the destination and the rendering survive; the spelling
 is not in the HTML to read.
 
 ### Export is not an import mode
@@ -245,6 +288,11 @@ An admonition body.
 container. Programmatically the mode is the `roundtrip` option on
 `carveToMarkdown` and `renderMarkdown`.
 
+A definition list nested inside a carried definition list takes no markers.
+Its visible Markdown stays unchanged, and roundtrip export reports one
+`definition-list-flattened` render loss per nested list, in document order.
+Default export reports no such loss.
+
 The mode is **off by default**, and the default output is unchanged: a renderer
 with raw HTML turned off shows the comment as text, so the carrier is a choice
 the host makes for files it will re-import. Markers are only ever *added* - the
@@ -269,21 +317,64 @@ where that escape would land grows by one, so the transform reverses exactly.
 Nothing else is escaped: the payload is Carve source, and Carve's own escape is
 the one the reader already has.
 
+### Attribute lines, definition lists and captions
+
+Three constructs that are not containers take markers too (`CARVE-P11-067`).
+
+An attribute line this target drops - a heading's `#id`, a class on a paragraph,
+a block quote, a list or a table - takes one marker directly above its block. A
+generated heading id is not authored and takes none.
+
+```markdown
+<!-- carve: {#start} -->
+# Roundtrip Test
+```
+
+A definition list is carried term by term: a marker holding the term line above
+the term's paragraph, a `:` marker above each definition's first block, and one
+marker with an empty payload after the list's last block.
+
+```markdown
+<!-- carve: :: Carve -->
+**Carve**
+
+<!-- carve: : -->
+A markup language.
+
+<!-- carve: -->
+```
+
+A caption - on a block quote, a table, an image, a code listing, an equation or
+a composite figure - takes a marker holding the `^` line, directly above the
+paragraph the caption renders as. For a composite figure that is the line after
+the closer's marker.
+
+```markdown
+> Stay hungry.
+
+<!-- carve: ^ Steve Jobs -->
+Steve Jobs
+```
+
+The import replaces a term's or a caption's rendered paragraph, so neither
+appears twice.
+
 ### What takes no marker
 
 - A container this target already spells. An attributes-only opener
   (`::: {.warning}`) is written verbatim and a list table becomes a pipe table,
   so neither is element-less.
-- A container inside a line-prefixing host - a list item, a block quote, a table
-  cell. The comment would sit at the host's content column or behind its `>`,
-  where the import does not read it, so writing one would look like a carry and
-  not be. Such a container degrades exactly as it does with the mode off.
+- A container inside a table cell. This target flattens a cell to one line, so
+  there is no line for a marker to stand on. A container inside a list item or a
+  block quote does take its markers, at the item's content column or behind the
+  `>`, and the import restores it in that host.
+- A definition list nested inside a definition. Only the outermost list is
+  carried.
+- An attribute on a list item's marker line or on an inline construct. Only an
+  attribute line is carried.
 - A marker-shaped line inside a fenced code block, on the way back in: a code
   block's payload is verbatim content, so a page like this one holds lines that
   record no container.
-
-A composite figure group's own caption is not restored either. The caption slot
-hangs on the closing fence, outside the container the markers bracket.
 
 ### A damaged marker set is never guessed
 
@@ -292,4 +383,11 @@ unbalanced has destroyed the structure the markers recorded, and a
 reconstruction that is wrong is worse than a fallback that is honest. The import
 then reads the file as ordinary Markdown, comments and all, and reports one
 `carrier-markers-damaged` diagnostic at `degraded` fidelity and `fallback`
-confidence. There is no partial reconstruction and no per-marker recovery.
+confidence. There is no partial reconstruction of a set whose pairing breaks.
+
+A marker whose payload it cannot stand for is a different case. Pairing is read
+on marker shapes first, so an invalid opener still pairs with its closer and the
+two drop together; any other invalid marker drops alone. A dropped marker stays
+in the output as the ordinary HTML comment it is, the rest of the set restores,
+and each dropped marker or pair is reported as `carrier-marker-dropped` at the
+marker's line.

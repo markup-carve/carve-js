@@ -64,9 +64,9 @@ describe('an EMPTY footnote label is not a footnote at all', () => {
     ])
   })
 
-  it('emits nothing on the non-HTML targets, like every link definition', () => {
-    expect(carveToMarkdown('[^]: %\n').trim()).toBe('')
-    expect(carveToPlainText('[^]: %\n').trim()).toBe('')
+  it('keeps the unused link definition on the non-HTML targets', () => {
+    expect(carveToMarkdown('[^]: %\n').trim()).toBe('[^]: %')
+    expect(carveToPlainText('[^]: %\n').trim()).toBe('[^]: %')
   })
 
   it('a label of one SPACE is still a footnote', () => {

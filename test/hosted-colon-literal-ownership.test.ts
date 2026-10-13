@@ -44,7 +44,7 @@ for (const quote of ['', '> ', '> > ']) {
   for (const body of [':::', '# h']) {
     it(`rebases ${body} after a real marker-line div closer, quote ${quote}`, () => {
       const source = `${quote}- ::: box\n${quote}  :::\n${quote}    ${body}\nTAILX\n`
-      expect(parse(source).children.map(node => node.type)).toEqual(quote && body === '# h' ? ['block_quote'] : [quote ? 'block_quote' : 'list', 'paragraph'])
+      expect(parse(source).children.map(node => node.type)).toEqual([quote ? 'block_quote' : 'list', 'paragraph'])
       expect(carveToHtml(source)).toContain(body === '# h' ? '<h1 id="h">h</h1>' : '<div>\n\n')
       expect(carveToHtml(source)).toContain('<p>TAILX</p>')
     })
@@ -55,11 +55,12 @@ for (const depth of [1, 2]) {
   const quote = '> '.repeat(depth)
   for (const run of ['```', '~~~']) {
     for (const type of ['', ' box']) {
-      it(`keeps shifted colon and ${run} as paragraph text in div${type} at depth ${depth}`, () => {
+      it(`opens shifted line blocks containing ${run} in div${type} at depth ${depth}`, () => {
         const source = `${quote}- b\n${quote.trimEnd()}\n${quote}  :::${type}\n${quote}    ::: |\n${quote}    ${run}\n${quote}  :::\n${quote}  para\n${quote}  ${run}\nlazy\n`
-        expect(parse(source).children).toHaveLength(1)
-        expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['paragraph', type ? 'admonition' : 'div', 'paragraph'])
-        expect(carveToHtml(source)).toContain(run === '```' ? 'lazy</code>' : 'para\n~~~\nlazy')
+        expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
+        expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['paragraph', type ? 'admonition' : 'div'])
+        expect(carveToHtml(source)).toContain('class="line-block"')
+        expect(carveToHtml(source)).toContain('<br>\nlazy</p>')
       })
     }
     it(`admits descendant ${run} code inside a div at depth ${depth}`, () => {
@@ -74,10 +75,11 @@ for (const depth of [1, 2]) {
       expect(carveToHtml(source)).toContain('class="line-block"')
     })
   }
-  it(`keeps shifted line-block text literal without a blank at depth ${depth}`, () => {
+  it(`opens a shifted line block without a blank at depth ${depth}`, () => {
     const source = `${quote}- b\n${quote}  ::: box\n${quote}    ::: |\n${quote}    \`\`\`\n${quote}  :::\n${quote}  para\n${quote}  \`\`\`\nlazy\n`
-    expect(parse(source).children).toHaveLength(1)
-    expect(carveToHtml(source)).toContain('lazy</code>')
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote'])
+    expect(carveToHtml(source)).toContain('class="line-block"')
+    expect(carveToHtml(source)).toContain('<br>\nlazy</p>')
   })
 }
 
@@ -114,7 +116,7 @@ for (const depth of [1, 2]) {
   })
   it(`retains an overindented bare colon run as line-block payload at depth ${depth}`, () => {
     const source = `${quote}- ::: |\n${quote}  a\n${quote}    :::\n${quote}  b\n- tail\n`
-    expect(parse(source).children).toHaveLength(2)
+    expect(parse(source).children).toHaveLength(1)
     const list = quotedList(source, depth)
     expect(list.items[0]!.children).toHaveLength(1)
     expect(list.items[0]!.children[0]!.type).toBe('line_block')
@@ -145,7 +147,7 @@ for (const depth of [1, 2]) for (const fence of ['%%%', '```']) {
 for (const [name, source, html] of [
   ['mismatched literal run', '- ::: |\n  ::::\ntail\n', '<ul>\n  <li>\n    <div class="line-block">\n      <p>::::</p>\n    </div>\n  </li>\n</ul>\n<p>tail</p>'],
   ['unclosed code payload', '> - ::: box\n>   ```\n- tail\n', '<blockquote>\n  <ul>\n    <li>\n      <div class="box">\n        <pre><code></code></pre>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>'],
-  ['below-column demoted opener', '1. ::: box\n  %% c\n  - tail\n', '<ol>\n  <li>::: box\n    - tail\n  </li>\n</ol>'],
+  ['below-column line after an empty container', '1. ::: box\n  %% c\n  - tail\n', "<ol>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ol>\n<ul>\n  <li>tail</li>\n</ul>"],
   ['nested mismatched widths', '- :::\n  :::: box\n  :::\n      :::\n   :::\n', '<ul>\n  <li>\n    <div>\n      <div class="box">\n        <div>\n          <p>:::\n:::</p>\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>'],
 ] as const) it(`preserves reader behavior for ${name}`, () => {
   expect(carveToHtml(source)).toBe(html)
@@ -160,13 +162,13 @@ for (const depth of [1, 2]) for (const fence of ['%%%', '```', '~~~']) {
     expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['line_block', 'paragraph'])
     expect(carveToHtml(source)).toContain(':::bad\n:::\n- tail')
   })
-  it(`leaves no lazy quote claim after a closed ${fence} span in verse at depth ${depth}`, () => {
+  it(`keeps the lazy tail in verse after a closed ${fence} span at depth ${depth}`, () => {
     const source = `${quote}- ::: |\n${quote}  ${fence}\n${quote}  :::\n${quote}  ${fence}\n${quote}  x\ntail\n`
     const doc = parse(source)
-    expect(doc.children.map(node => node.type)).toEqual(['block_quote', 'paragraph'])
+    expect(doc.children.map(node => node.type)).toEqual(['block_quote'])
     expect(quotedList(source, depth).items[0]!.children.map(node => node.type)).toEqual(['line_block'])
     expect(carveToHtml(source)).not.toContain('&nbsp;L&nbsp;')
-    expect(carveToHtml(source)).toContain('</blockquote>\n<p>tail</p>')
+    expect(carveToHtml(source)).toContain('x<br>\ntail</p>')
   })
 }
 

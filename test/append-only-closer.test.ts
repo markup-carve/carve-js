@@ -46,7 +46,8 @@ describe('append-only nested lead closer', () => {
     expect(comment).toContain('</dl>\n<p>' + body.trimEnd() + '</p>')
     const output = carveToHtml(':: t\n: - ```\n' + '~~~\n'.repeat(200))
     expect(output).toContain('<pre><code>')
-    expect(output).toContain('~~~\n'.repeat(200))
+    expect(output).toContain('</dl>\n<pre><code></code></pre>')
+    expect(output.match(/<pre><code><\/code><\/pre>/g)).toHaveLength(101)
   })
 })
 

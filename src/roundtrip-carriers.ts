@@ -38,6 +38,15 @@ export const MAX_CARRIED_SEPARATOR_WIDTH = 1000
 export const CARRIER_MARKER = 'data-marker'
 export const CARRIER_CHAR = 'data-char'
 
+/**
+ * Reserved without an inventory row (§13a): no writer emits it and every
+ * importer consumes it, so an authored one cannot survive a round trip.
+ */
+export const RETIRED_SOURCE_CARRIER = 'data-carve-src'
+
+/** `data-carve-id-slot`: a run of decimal digits (§13a). */
+export const RE_ID_SLOT = /^[0-9]+$/
+
 /** The carriers a writer can emit under the reserved prefix, without it. */
 const PREFIXED = [
   'explicit-id',
@@ -50,6 +59,11 @@ const PREFIXED = [
   'raw',
   'escaped',
   'abbreviations',
+  'generated-id',
+  'id-slot',
+  'tight',
+  'xref',
+  'caption-number',
 ] as const
 
 export type PrefixedCarrier = (typeof PREFIXED)[number]
@@ -74,7 +88,7 @@ export const RESERVED_CARRIER_ATTRIBUTES: ReadonlySet<string> = new Set<string>(
   ...PREFIXED.map(carrier),
   ...PREFIXED.map(legacyCarrier),
   // Verbatim-source names remain reserved on import but are excluded from §13a export.
-  'data-carve-src',
+  RETIRED_SOURCE_CARRIER,
   'data-djot-src',
 ])
 
@@ -94,37 +108,47 @@ export function readCarrier(
 
 export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.roundtrip === true
 
-/**
- * An authored attribute colliding with a carrier is DROPPED, and the drop is
- * reported (ruling 1).
- *
- * Emitting both is what carve-php does today and it is invalid HTML; refusing
- * the export was the alternative, and it lets one authored attribute veto a
- * mode the caller asked for. Only the carriers this element actually writes are
- * passed in, so an authored `data-marker` on a `<p>` is ordinary content.
- */
-export function dropCollidingAuthored(
-  attrs: Attrs | undefined,
-  names: readonly string[],
+export function isReservedExportName(key: string): boolean {
+  const name = key.toLowerCase()
+  return name === CARRIER_MARKER || name === CARRIER_CHAR || name === RETIRED_SOURCE_CARRIER
+    || name === 'data-djot-src' || PREFIXED.some((entry) => carrier(entry) === name || legacyCarrier(entry) === name)
+}
+
+export function reportReservedAuthoredNames(
+  tree: unknown,
+  inlineTypes: ReadonlySet<string>,
   opts: RenderLossSinkOptions,
-  node: { type: string; pos?: Position },
-  nodeType: 'block' | 'inline',
-): Attrs | undefined {
-  if (!attrs?.keyValues) return attrs
-  let next = attrs
-  for (const name of names) {
-    const match = Object.keys(next.keyValues ?? {}).find((key) => key.toLowerCase() === name)
-    if (match === undefined) continue
-    const { [match]: _dropped, ...keyValues } = next.keyValues!
-    next = { ...next, keyValues, ...(next.order ? { order: next.order.filter((slot) => slot !== match) } : {}) }
-    opts.onRenderLoss?.({
-      code: 'carrier-attribute-dropped',
-      target: 'html',
-      nodeType,
-      attribute: match,
-      message: `Dropped the authored attribute ${match}: the roundtrip carrier of the same name owns it`,
-      ...(node.pos ? { pos: node.pos } : {}),
-    })
+): void {
+  if (!opts.onRenderLoss) return
+  const seen = new Set<object>()
+  const visit = (value: unknown, inline: boolean, position?: Position): void => {
+    if (value === null || typeof value !== 'object' || seen.has(value)) return
+    seen.add(value)
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry, inline, position)
+      return
+    }
+    const node = value as { type?: unknown; pos?: Position; keyValues?: Attrs['keyValues'] }
+    const within = typeof node.type === 'string' ? inlineTypes.has(node.type) : inline
+    for (const key of Object.keys(node.keyValues ?? {})) {
+      if (!isReservedExportName(key)) continue
+      opts.onRenderLoss!({
+        code: 'carrier-attribute-dropped',
+        target: 'html',
+        nodeType: within ? 'inline' : 'block',
+        attribute: key,
+        message: `Dropped the authored attribute ${key}: the name is reserved for roundtrip import`,
+        ...(position ? { pos: position } : {}),
+      })
+    }
+    const entries = Object.entries(value)
+    for (const [key, child] of entries) {
+      if (key === 'attrs' || key.endsWith('Attrs')) visit(child, within, node.pos ?? position)
+    }
+    for (const [key, child] of entries) {
+      if (key !== 'attrs' && !key.endsWith('Attrs') && key !== 'pos' && key !== 'keyValues') visit(child, within, node.pos ?? position)
+    }
+    if (node.keyValues && node.type === undefined) seen.delete(value)
   }
-  return next
+  visit(tree, false)
 }

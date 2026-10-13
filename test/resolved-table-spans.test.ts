@@ -13,7 +13,7 @@ const cellsOf = (source: string) => {
 
 describe('PART 12 §26: a spanning cell publishes its resolved extent', () => {
   it('puts the counts on the origin and leaves the markers where the author wrote them', () => {
-    expect(cellsOf('| a | < | b |\n| ^ | c | d |\n')).toEqual([
+    expect(cellsOf('| a | < | b |\n| ^ | < | d |\n')).toEqual([
       [
         { span: undefined, colspan: 2, rowspan: 2 },
         { span: 'colspan', colspan: undefined, rowspan: undefined },
@@ -21,7 +21,7 @@ describe('PART 12 §26: a spanning cell publishes its resolved extent', () => {
       ],
       [
         { span: 'rowspan', colspan: undefined, rowspan: undefined },
-        { span: undefined, colspan: undefined, rowspan: undefined },
+        { span: 'colspan', colspan: undefined, rowspan: undefined },
         { span: undefined, colspan: undefined, rowspan: undefined },
       ],
     ])
@@ -43,11 +43,11 @@ describe('PART 12 §26: a spanning cell publishes its resolved extent', () => {
   })
 
   it('renders the same HTML the walk produced before it was shared', () => {
-    expect(carveToHtml('| a | < | b |\n| ^ | c | d |\n')).toContain('rowspan="2" colspan="2"')
+    expect(carveToHtml('| a | < | b |\n| ^ | < | d |\n')).toContain('rowspan="2" colspan="2"')
   })
 
   it('survives its own ingest and is re-emitted rather than dropped', () => {
-    const tree = carveToAstJson('| a | < | b |\n| ^ | c | d |\n')
+    const tree = carveToAstJson('| a | < | b |\n| ^ | < | d |\n')
     const again = toAstJson(fromAstJson(JSON.parse(JSON.stringify(tree)))) as unknown as {
       children: Array<{ rows: Array<{ cells: Array<Record<string, unknown>> }> }>
     }

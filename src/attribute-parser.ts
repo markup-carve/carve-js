@@ -10,7 +10,16 @@ import { setOwn } from './own-property.js'
  */
 export function isValidAttrPayload(inner: string): boolean {
   if (quotedRunSpansLines(inner)) return false
-  return ATTR_PAYLOAD.test(inner)
+  const lines = inner.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    let start = 0
+    let end = line.length
+    if (i > 0) while (start < end && (line[start] === ' ' || line[start] === '\t')) start++
+    if (i < lines.length - 1) while (end > start && (line[end - 1] === ' ' || line[end - 1] === '\t' || line[end - 1] === '\r')) end--
+    lines[i] = line.slice(start, end)
+  }
+  return ATTR_PAYLOAD.test(lines.join('\n'))
 }
 
 /**
@@ -25,7 +34,7 @@ export function isValidAttrPayload(inner: string): boolean {
 const ATTR_ITEM_SRC =
   '(?:#[a-zA-Z0-9_][\\w-]*)|(?:\\.[a-zA-Z0-9_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^}|"\'\\\\ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z][\\w-]*)'
 const ATTR_PAYLOAD = new RegExp(
-  `^[ \\t\\n\\r]*(?:(?:${ATTR_ITEM_SRC})(?:[ \\t\\n\\r]+(?:${ATTR_ITEM_SRC}))*[ \\t\\n\\r]*)?$`,
+  `^[ \\n\\r]*(?:(?:${ATTR_ITEM_SRC})(?:[ \\n\\r]+(?:${ATTR_ITEM_SRC}))*[ \\n\\r]*)?$`,
 )
 
 /**

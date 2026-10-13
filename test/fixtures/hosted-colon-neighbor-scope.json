@@ -32,32 +32,32 @@
   {
     "id": "literal-comment-span-shift0",
     "source": "- a\n  ::: |\n  %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-comment-line-shift0",
     "source": "- a\n  ::: |\n  %% c\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-code-shift0",
     "source": "- ::: |\n  :::: \n  ```\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::<br>\n<code></code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::<br>\n<code>\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "continuation-fence-text-code-shift0",
     "source": "- a\n  ::: |\n  ```\n  x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\nx</code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\nx\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-tilde-shift0",
     "source": "- ::: |\n  :::: \n  ~~~\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::<br>\n~~~</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>::::<br>\n~~~<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "continuation-fence-text-tilde-shift0",
     "source": "- a\n  ::: |\n  ~~~\n  x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\nx</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\nx<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "nested-bare-heading-shift0",
@@ -117,12 +117,12 @@
   {
     "id": "literal-comment-span-shift1",
     "source": "- a\n  ::: |\n   %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;%%%</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;%%%<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-comment-line-shift1",
     "source": "- a\n  ::: |\n   %% c\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;%% c<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-code-shift1",
@@ -132,7 +132,7 @@
   {
     "id": "continuation-fence-text-code-shift1",
     "source": "- a\n  ::: |\n  ```\n   x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;x</code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;x\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-tilde-shift1",
@@ -142,22 +142,22 @@
   {
     "id": "continuation-fence-text-tilde-shift1",
     "source": "- a\n  ::: |\n  ~~~\n   x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\n&nbsp;x</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\n&nbsp;x<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "nested-bare-heading-shift1",
     "source": "- :::: box\n  :::\n   # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p># h\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <h1 id=\"h\">h</h1>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-table-shift1",
     "source": "- :::: box\n  :::\n   | a |\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>| a |\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <table>\n          <tbody>\n            <tr><td>a</td></tr>\n          </tbody>\n        </table>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-rule-shift1",
     "source": "- :::: box\n  :::\n   ---\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>—\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <hr>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-bare-shift1",
@@ -167,7 +167,7 @@
   {
     "id": "nested-bare-named-shift1",
     "source": "- :::: box\n  :::\n   ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>::: box\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <div class=\"box\">\n\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "literal-marker-bullet-shift2",
@@ -202,12 +202,12 @@
   {
     "id": "literal-comment-span-shift2",
     "source": "- a\n  ::: |\n    %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%%%</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%%%<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-comment-line-shift2",
     "source": "- a\n  ::: |\n    %% c\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;%% c<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-code-shift2",
@@ -217,7 +217,7 @@
   {
     "id": "continuation-fence-text-code-shift2",
     "source": "- a\n  ::: |\n  ```\n    x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;x</code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;x\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-tilde-shift2",
@@ -227,22 +227,22 @@
   {
     "id": "continuation-fence-text-tilde-shift2",
     "source": "- a\n  ::: |\n  ~~~\n    x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\n&nbsp;&nbsp;x</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\n&nbsp;&nbsp;x<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "nested-bare-heading-shift2",
     "source": "- :::: box\n  :::\n    # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p># h\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <h1 id=\"h\">h</h1>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-table-shift2",
     "source": "- :::: box\n  :::\n    | a |\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>| a |\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <table>\n          <tbody>\n            <tr><td>a</td></tr>\n          </tbody>\n        </table>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-rule-shift2",
     "source": "- :::: box\n  :::\n    ---\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>—\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <hr>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-bare-shift2",
@@ -252,7 +252,7 @@
   {
     "id": "nested-bare-named-shift2",
     "source": "- :::: box\n  :::\n    ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>::: box\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <div class=\"box\">\n\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "literal-marker-bullet-shift4",
@@ -287,12 +287,12 @@
   {
     "id": "literal-comment-span-shift4",
     "source": "- a\n  ::: |\n      %%%\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;&nbsp;&nbsp;%%%</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;&nbsp;&nbsp;%%%<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-comment-line-shift4",
     "source": "- a\n  ::: |\n      %% c\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;&nbsp;&nbsp;%% c</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>&nbsp;&nbsp;&nbsp;&nbsp;%% c<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-code-shift4",
@@ -302,7 +302,7 @@
   {
     "id": "continuation-fence-text-code-shift4",
     "source": "- a\n  ::: |\n  ```\n      x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;&nbsp;&nbsp;x</code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;&nbsp;&nbsp;x\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-after-bare-tilde-shift4",
@@ -312,22 +312,22 @@
   {
     "id": "continuation-fence-text-tilde-shift4",
     "source": "- a\n  ::: |\n  ~~~\n      x\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\n&nbsp;&nbsp;&nbsp;&nbsp;x</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p>~~~<br>\n&nbsp;&nbsp;&nbsp;&nbsp;x<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "nested-bare-heading-shift4",
     "source": "- :::: box\n  :::\n      # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p># h\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <h1 id=\"h\">h</h1>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-table-shift4",
     "source": "- :::: box\n  :::\n      | a |\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>| a |\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <table>\n          <tbody>\n            <tr><td>a</td></tr>\n          </tbody>\n        </table>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-rule-shift4",
     "source": "- :::: box\n  :::\n      ---\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>—\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <hr>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-bare-shift4",
@@ -337,7 +337,7 @@
   {
     "id": "nested-bare-named-shift4",
     "source": "- :::: box\n  :::\n      ::: box\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>::: box\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <div class=\"box\">\n\n        </div>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "literal-quote-payload-depth0",
@@ -347,12 +347,12 @@
   {
     "id": "literal-heading-control-depth0",
     "source": "- ::: |\n  - # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- # h</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>- # h<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "literal-comment-marker-control-depth0",
     "source": "- ::: |\n  - %%%\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-</p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>-<br>\nTAILX</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "marker-fence-body-control-depth0",
@@ -362,12 +362,12 @@
   {
     "id": "nested-named-heading-depth0",
     "source": "- :::: box\n  ::: in\n    # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div class=\"in\">\n        <p># h\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div class=\"in\">\n        <h1 id=\"h\">h</h1>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-prose-heading-depth0",
     "source": "- :::: box\n  :::\n  x\n    # h\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>x\n# h\nTAILX</p>\n      </div>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <div>\n        <p>x</p>\n        <h1 id=\"h\">h</h1>\n      </div>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-footnote-depth0",
@@ -387,32 +387,32 @@
   {
     "id": "literal-quote-payload-depth1",
     "source": "> - ::: |\n>   > q\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>&gt; q</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>&gt; q<br>\nTAILX</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "literal-heading-control-depth1",
     "source": "> - ::: |\n>   - # h\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>- # h</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>- # h<br>\nTAILX</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "literal-comment-marker-control-depth1",
     "source": "> - ::: |\n>   - %%%\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>-</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>-<br>\nTAILX</p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "marker-fence-body-control-depth1",
     "source": "> - ::: |\n>   ```\n>   x\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p><code>\nx</code></p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p><code>\nx\nTAILX</code></p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "nested-named-heading-depth1",
     "source": "> - :::: box\n>   ::: in\n>     # h\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div class=\"in\">\n          <p># h\nTAILX</p>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div class=\"in\">\n          <h1 id=\"h\">h</h1>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-prose-heading-depth1",
     "source": "> - :::: box\n>   :::\n>   x\n>     # h\nTAILX\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div>\n          <p>x\n# h\nTAILX</p>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <div>\n          <p>x</p>\n          <h1 id=\"h\">h</h1>\n        </div>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-footnote-depth1",
@@ -432,32 +432,32 @@
   {
     "id": "literal-quote-payload-depth2",
     "source": "> > - ::: |\n> >   > q\nTAILX\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>&gt; q</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>&gt; q<br>\nTAILX</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "literal-heading-control-depth2",
     "source": "> > - ::: |\n> >   - # h\nTAILX\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>- # h</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>- # h<br>\nTAILX</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "literal-comment-marker-control-depth2",
     "source": "> > - ::: |\n> >   - %%%\nTAILX\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>-</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>-<br>\nTAILX</p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "marker-fence-body-control-depth2",
     "source": "> > - ::: |\n> >   ```\n> >   x\nTAILX\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p><code>\nx</code></p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p><code>\nx\nTAILX</code></p>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "nested-named-heading-depth2",
     "source": "> > - :::: box\n> >   ::: in\n> >     # h\nTAILX\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div class=\"in\">\n            <p># h\nTAILX</p>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div class=\"in\">\n            <h1 id=\"h\">h</h1>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-prose-heading-depth2",
     "source": "> > - :::: box\n> >   :::\n> >   x\n> >     # h\nTAILX\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div>\n            <p>x\n# h\nTAILX</p>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <div>\n            <p>x</p>\n            <h1 id=\"h\">h</h1>\n          </div>\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<p>TAILX</p>"
   },
   {
     "id": "nested-bare-footnote-depth2",
@@ -492,11 +492,11 @@
   {
     "id": "continuation-fence-shifted-heading",
     "source": "- a\n  ::: |\n  ```\n    # h\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;# h</code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;# h\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "continuation-fence-shifted-table",
     "source": "- a\n  ::: |\n  ```\n    | a |\nTAILX\n",
-    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;| a |</code></p>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>a\n    <div class=\"line-block\">\n      <p><code>\n&nbsp;&nbsp;| a |\nTAILX</code></p>\n    </div>\n  </li>\n</ul>"
   }
 ]

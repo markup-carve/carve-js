@@ -24,12 +24,14 @@ export function recordMarkdownProtectedDepth(spans: readonly string[], token: st
 }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }, extensionDelimiters = strikethrough): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
   const literalEscapes = new Set<number>()
   const neighbor = (index: number, left: boolean): string => {
+    if (index < 0 && edgeNeighbors) return edgeNeighbors.before
+    if (index >= source.length && edgeNeighbors) return edgeNeighbors.after
     if (source[index] === '\x00') {
       const other = left ? source.lastIndexOf('\x00', index - 1) : source.indexOf('\x00', index + 1)
       const token = other < 0 ? '' : source.slice(Math.min(index, other), Math.max(index, other) + 1)
@@ -41,15 +43,22 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     if (unit < 0xd800 || unit > 0xdfff) return source[index]!
     return left ? Array.from(source.slice(Math.max(0, index - 1), index + 1)).at(-1) ?? '' : Array.from(source.slice(index, index + 2))[0] ?? ''
   }
-  const punctuation = (s: string): boolean => /[\p{P}\p{S}]/u.test(s)
+  const punctuation = (s: string): boolean => /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\p{P}]/u.test(s)
   const whitespace = (s: string): boolean => s === '' || /\s/u.test(s)
   for (const m of source.matchAll(strikethrough ? /\*+|_+|~+/g : /\*+|_+/g)) {
     const start = m.index
     const end = start + m[0].length
     if (m[0][0] === '~' && m[0].length > 2) continue
     if (source[start - 1] === '\\') continue
-    const before = neighbor(start - 1, true)
-    const after = neighbor(end, false)
+    let beforeIndex = start - 1
+    let afterIndex = end
+    // cmark-gfm skips registered extension delimiters in emphasis flank scans.
+    if (extensionDelimiters && m[0][0] !== '~') {
+      while (source[beforeIndex] === '~') beforeIndex--
+      while (source[afterIndex] === '~') afterIndex++
+    }
+    const before = neighbor(beforeIndex, true)
+    const after = neighbor(afterIndex, false)
     const left = !whitespace(after) && (!punctuation(after) || whitespace(before) || punctuation(before))
     const right = !whitespace(before) && (!punctuation(before) || whitespace(after) || punctuation(after))
     runs.push({ start, end, scope: -1, char: m[0][0]!, open: left && (m[0][0] !== '_' || !right || punctuation(before)),
@@ -138,8 +147,22 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
   for (const run of runs) {
     const before = source[run.start - 1] ?? '', after = source[run.end] ?? ''
     const partiallyClaimed = claimed.has(run.start) || claimed.has(run.end - 1)
-    if (partiallyClaimed || (run.char === '_' && /[^\x00-\x7f]/u.test(before + after)) || /\u00a0/u.test(before + after)) {
+    if ((extensionDelimiters && run.char !== '~' && (before === '~' || after === '~')) || partiallyClaimed || (run.char === '_' && /[^\x00-\x7f]/u.test(before + after)) || /\u00a0/u.test(before + after)) {
       for (let i = run.start; i < run.end; i++) if (!claimed.has(i)) literalEscapes.add(i)
+    }
+  }
+  // Only a singleton can open bare Carve strike; index possible closers once.
+  const tildeEscapes = new Set<number>()
+  if (strikethrough) {
+    let closer = false
+    for (let i = source.length - 1; i >= 0; i--) {
+      const ch = source[i]!
+      if (ch === '\n') { closer = false; continue }
+      if (ch !== '~' || source[i - 1] === '\\') continue
+      const before = source[i - 1] ?? '', after = source[i + 1] ?? ''
+      if (!claimed.has(i) && before !== '~' && after !== '~' &&
+          !/[A-Za-z0-9_]/.test(before) && after !== '' && !whitespace(after) && closer) tildeEscapes.add(i)
+      if (before !== '' && !whitespace(before) && !/[A-Za-z0-9]/.test(after)) closer = true
     }
   }
   const bracketEnds = new Map<number, number>()
@@ -154,14 +177,14 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       bracketStarts.set(i, start)
     }
   }
-  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; repeated: boolean; keep: boolean; peak: number }
+  interface Frame { i: number; end: number; kind: string; pair?: Pair; parent: string; slot: number; first: string; last: string; strong: boolean; italic: boolean; strike: boolean; literalTilde: boolean; repeated: boolean; keep: boolean; peak: number }
   const output: string[] = []
   const stack: Frame[] = []
   const active = new Map<string, number>()
   let flattened = false
   const hostPeaks = protectedDepths.get(protectedSpans)
   const protectedToken = /\x00P(\d+)\x00/y
-  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true, peak: 0 }
+  let frame: Frame = { i: 0, end: source.length, kind: '', parent: '', slot: -1, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0 }
   const record = (first: string, last: string): void => {
     if (frame.first === '') frame.first = first
     if (last !== '') frame.last = last
@@ -173,7 +196,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
         frame.i = pair.close + pair.width
         stack.push(frame)
         frame = { i: pair.open + pair.width, end: pair.close, kind: pair.kind, pair, parent: frame.kind,
-          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, repeated: false, keep: true, peak: 0 }
+          slot: output.length, first: '', last: '', strong: false, italic: false, strike: false, literalTilde: false, repeated: false, keep: true, peak: 0 }
         frame.repeated = (active.get(pair.kind) ?? 0) > 0
         // `hostDepth` is the inline nesting this text already sits under - a
         // link label is converted on its own, so its own levels are not here.
@@ -192,7 +215,10 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
           ch === '[' && (bracketEnds.get(at) ?? -1) >= frame.end
           || ch === ']' && (bracketStarts.get(at) ?? at) < frame.pair.open
         )
-        output.push(literalEscapes.has(at) || crossesBracket ? `\\${ch}` : ch)
+        if (ch === '~') frame.literalTilde = true
+        const literalTilde = tildeEscapes.has(at)
+        const literal = literalEscapes.has(at) || crossesBracket || literalTilde || ((active.get('~') ?? 0) > 0 && /[*_]/.test(ch) && !claimed.has(at)) ? `\\${ch}` : ch
+        output.push(protectOutput !== undefined && /[*_~]/.test(ch) ? protectOutput(`\\${ch}`) : literal)
         record(ch, ch)
       }
       continue
@@ -204,9 +230,9 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     frame.keep &&= hostDepth + stack.length + frame.peak < MAX_NESTING_DEPTH
     if (frame.keep) {
       const intraword = /[\p{L}\p{N}]/u.test(neighbor(pair.open - 1, true)) || /[\p{L}\p{N}]/u.test(neighbor(pair.close + pair.width, false))
-      const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => /[*_]/.test(source[i] ?? '') && !claimed.has(i))
+      const besideLiteral = [pair.open - 1, pair.close + pair.width].some(i => (/[*_]/.test(source[i] ?? '') || pair.kind === '~' && source[i] === '~') && !claimed.has(i))
       const besideSlash = braceSlashBoundaries && pair.kind === '/' && (neighbor(pair.open - 1, true) === '/' || source[pair.close + pair.width] === '/' || source.slice(pair.close + pair.width, pair.close + pair.width + 2) === '\\/')
-      const braced = besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
+      const braced = (frame.kind === '~' && frame.literalTilde) || protectOutput !== undefined || besideSlash || frame.repeated || (frame.kind === '*' && strong) || (frame.kind === '/' && italic) || (frame.kind === '~' && strike) || intraword || besideLiteral || first === pair.kind || last === pair.kind || (frame.parent === '/' && italic) || (pair.kind === '/' && (first === '*' || last === '*' || (frame.parent === '*' && strong)))
       strong ||= pair.kind === '*'
       italic ||= pair.kind === '/'
       strike ||= pair.kind === '~'
@@ -214,14 +240,18 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
       // braced opener of this kind, which nests since markup-carve/carve#2877.
       const tail = output.length - 1
       if (tail > frame.slot && output[tail] === '{') output[tail] = '\\{'
-      output[frame.slot] = braced ? `{${pair.kind}` : pair.kind
-      output.push(braced ? `${pair.kind}}` : pair.kind)
+      const opener = braced ? `{${pair.kind}` : pair.kind
+      const closer = braced ? `${pair.kind}}` : pair.kind
+      output[frame.slot] = protectOutput?.(opener) ?? opener
+      output.push(protectOutput?.(closer) ?? closer)
       first = braced ? '{' : pair.kind
       last = braced ? '}' : pair.kind
     } else flattened = true
     active.set(pair.kind, active.get(pair.kind)! - 1)
     const peak = frame.peak + (frame.keep ? 1 : 0)
+    const literalTilde = frame.literalTilde
     frame = stack.pop()!
+    frame.literalTilde ||= literalTilde
     frame.peak = Math.max(frame.peak, peak)
     frame.strong ||= strong
     frame.italic ||= italic

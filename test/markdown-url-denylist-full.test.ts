@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, carveToMarkdown } from '../src/index.js'
+import type { Document } from '../src/ast.js'
+import { carveToHtml, carveToMarkdown, renderHtml, renderMarkdown } from '../src/index.js'
 
 const NNBSP = ' '
 
@@ -15,7 +16,18 @@ const NNBSP = ' '
 const destinationOf = (src: string): string =>
   (carveToMarkdown(src).match(/\]\(([^)]*)\)/) ?? [, '<none>'])[1] ?? ''
 
-const linkTo = (url: string): string => `[click][a]\n\n[a]: ${url}\n`
+const linkTo = (url: string): string => `[click][a]
+
+[a]: ${url}
+`
+
+const linkAst = (href: string): Document => ({
+  type: 'document',
+  children: [{
+    type: 'paragraph',
+    children: [{ type: 'link', href, children: [{ type: 'text', value: 'click' }] }],
+  }],
+})
 
 describe('the Markdown target applies the full URL denylist', () => {
   it.each([
@@ -47,14 +59,18 @@ describe('the Markdown target applies the full URL denylist', () => {
   })
 
   it('blanks a scheme hidden behind Unicode whitespace', () => {
-    expect(destinationOf(linkTo(`${NNBSP}javascript:alert(1)`))).toBe('')
+    expect(renderMarkdown(linkAst(`${NNBSP}javascript:alert(1)`)).trim()).toBe('[click]()')
+    const source = linkTo(`${NNBSP}javascript:alert(1)`)
+    expect(carveToHtml(source)).toBe(`<p>[click][a]</p>
+<p>[a]: ${NNBSP}javascript:alert(1)</p>`)
+    expect(destinationOf(source)).toBe('<none>')
   })
 
   it('agrees with the HTML target, which is the point', () => {
     for (const url of ['ms-msdt:/id', `${NNBSP}javascript:alert(1)`]) {
-      const src = linkTo(url)
-      expect(carveToHtml(src)).toContain('href=""')
-      expect(destinationOf(src)).toBe('')
+      const ast = linkAst(url)
+      expect(renderHtml(ast)).toContain('href=""')
+      expect(renderMarkdown(ast).trim()).toBe('[click]()')
     }
   })
 

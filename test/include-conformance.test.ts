@@ -84,8 +84,7 @@ const files = readdirSync(vectorDir)
  * DECLARED, NEVER TOLERATED: an entry whose vector already matches its own
  * golden fails too, so a stale line cannot outlive the fix as slack.
  */
-const AHEAD_OF_PIN = new Map<string, { field: string; value: string; reason: string }>()
-
+const AHEAD_OF_PIN = new Map<string, Array<{ field: string; value: unknown; reason: string }>>()
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.
   it('vendors the full vector corpus', () => {
@@ -100,16 +99,17 @@ describe('include-conformance vectors (spec §19)', () => {
   for (const file of files) {
     const vector = JSON.parse(readFileSync(join(vectorDir, file), 'utf8')) as Vector
     const ahead = AHEAD_OF_PIN.get(vector.name)
-    it(`${vector.name} [${vector.rules.join(', ')}]${ahead ? ` AHEAD OF PIN: ${ahead.reason}` : ''}`, () => {
+    it(`${vector.name} [${vector.rules.join(', ')}]${ahead ? ` AHEAD OF PIN: ${ahead.map((entry) => entry.reason).join('; ')}` : ''}`, () => {
       const result = runVector(vector, carve) as VectorResult
 
-      if (ahead) {
-        expect(vector.expected[ahead.field], `${vector.name}: golden already regenerated - delete its entry`)
-          .not.toEqual(ahead.value)
+      for (const entry of ahead ?? []) {
+        expect(vector.expected[entry.field], `${vector.name}: golden already regenerated - delete its entry`)
+          .not.toEqual(entry.value)
       }
       for (const field of EXPECTED_FIELDS as string[]) {
+        const override = ahead?.find((entry) => entry.field === field)
         expect(result[field as keyof VectorResult], `${vector.name}: ${field} mismatch`).toEqual(
-          ahead && ahead.field === field ? ahead.value : vector.expected[field],
+          override ? override.value : vector.expected[field],
         )
       }
 

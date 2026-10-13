@@ -1,11 +1,12 @@
+import { protectNativeMarkdownDestinationGlyphs } from './markdown-native-destination-glyphs.js'
 import type { BlockNode, Document, InlineNode } from './ast.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
-import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
+import { isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
-import { markdownEmphasis } from './markdown-emphasis.js'
+import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
@@ -16,6 +17,7 @@ import {
   escapeAttributeBlockOpener,
   escapeUnclosedImageEditorialOpeners,
   escapePlainCarveInlineSyntax,
+  escapePlainCarveInlineSyntaxAround,
   escapeVerbatimDelimiter,
   HANDLED_MARKDOWN,
 } from './carve-escape.js'
@@ -26,13 +28,15 @@ import {
   plainAltText,
   referenceDestinationLabel,
   referenceInlineTarget,
+  isEmptyDestinationReference,
   referenceSourceLabel,
   referenceSourceText,
   referenceLiteralText,
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
+  useEmptyDestinationBoundaryKey,
 } from './markdown-empty-destination.js'
-import { CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
+import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
 import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
@@ -675,6 +679,17 @@ const NATIVE_INLINE_HTML_TAGS = new Set([
   'i',
 ])
 
+const RE_NATIVE_INLINE_TAG = new RegExp(`</?(?:${[...NATIVE_INLINE_HTML_TAGS].join('|')})>`, 'gi')
+
+/** Offsets of the native tags that the tag rules turn into Carve markers. */
+function nativeInlineTagOffsets(line: string): Set<number> {
+  const offsets = new Set<number>()
+  for (const tag of line.matchAll(RE_NATIVE_INLINE_TAG)) {
+    for (let at = tag.index; at < tag.index + tag[0].length; at++) offsets.add(at)
+  }
+  return offsets
+}
+
 const HTML_BLOCK_TAGS = new Set([
   'address',
   'article',
@@ -1244,6 +1259,130 @@ function escapeAttributeListsThatAttach(input: string): string {
  *   fence, so its backticks are that fence rather than literal prose text. See
  *   `restorePrefixedInlineRun`, the only caller that passes it.
  */
+function markdownDestinationOpaqueEnd(source: string, dialect: MarkdownDialect): (offset: number) => number | undefined {
+  const opaque = opaqueHtmlScanner(source)
+  const angle = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/y
+  const math = /(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/y
+  return offset => {
+    if (dialect.math && source[offset] === '$') {
+      math.lastIndex = offset
+      const match = math.exec(source)
+      if (match) return offset + match[0].length
+    }
+    angle.lastIndex = offset
+    const match = angle.exec(source)
+    return match ? offset + match[0].length : opaque(offset) ?? scanHtmlTag(source, offset)?.end
+  }
+}
+
+let inlineCarriersEnabled = false
+let inlineCarriersDamaged = false
+
+// Read adjacency after Markdown links, including references, have become AST nodes.
+function restoreInlineCarriers(source: string): string {
+  if (!inlineCarriersEnabled || !source.includes(CARRIER_PREFIX)) return source
+  const tree = parse(source)
+  let changed = false
+  const restore = (nodes: InlineNode[]): InlineNode[] => {
+    const out: InlineNode[] = []
+    const stack: InlineNode[][] = []
+    let current = out
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]!
+      if (node.type === 'raw_inline' && node.format === 'html' && node.content.startsWith(CARRIER_PREFIX)) {
+        const payload = carrierPayload(node.content)
+        if (payload === '[') {
+          stack.push(current)
+          current = []
+          changed = true
+          continue
+        }
+        const closer = payload?.startsWith(']') ? payload.slice(1) : undefined
+        const attrsSource = closer ?? payload
+        const attrsValid = attrsSource !== undefined && /^\{.*\}$/.test(attrsSource) && isValidInlineAttrPayload(attrsSource.slice(1, -1))
+        if (closer !== undefined && attrsValid) {
+          const parent = stack.pop()
+          if (!parent) { inlineCarriersDamaged = true; return nodes }
+          const parsed = parse(`[x]${attrsSource}`).children[0]
+          const span = parsed?.type === 'paragraph' ? parsed.children[0] : undefined
+          if (span?.type === 'span') {
+            const child = current.length === 1 ? current[0] : undefined
+            const attrs = span.attrs
+            const childAttrs = child?.attrs
+            const sameAttrs = attrs?.id === childAttrs?.id
+              && (attrs?.classes ?? []).length === (childAttrs?.classes ?? []).length
+              && (attrs?.classes ?? []).every((value, index) => value === childAttrs?.classes?.[index])
+              && Object.keys(attrs?.keyValues ?? {}).length === Object.keys(childAttrs?.keyValues ?? {}).length
+              && Object.entries(attrs?.keyValues ?? {}).every(([key, value]) => value === childAttrs?.keyValues?.[key])
+            // Markdown's abbr element omits the span's other attributes.
+            const abbreviationOnly = childAttrs?.id === undefined
+              && !(childAttrs?.classes?.length)
+              && Object.keys(childAttrs?.keyValues ?? {}).length === 1
+              && childAttrs?.keyValues?.abbr !== undefined
+              && childAttrs.keyValues.abbr === attrs?.keyValues?.abbr
+            if (child?.type === 'span' && (sameAttrs || abbreviationOnly)) {
+              if (span.attrs) child.attrs = span.attrs
+              else delete child.attrs
+              parent.push(child)
+            } else parent.push({ ...span, children: current })
+          }
+          current = parent
+          changed = true
+          continue
+        }
+        const previous = current.at(-1)
+        if (closer === undefined && attrsValid && (previous?.type === 'link' || previous?.type === 'image' || previous?.type === 'autolink')) {
+          const parsed = parse(`[x]${attrsSource}`).children[0]
+          const span = parsed?.type === 'paragraph' ? parsed.children[0] : undefined
+          if (span?.type === 'span') {
+            if (span.attrs) previous.attrs = span.attrs
+            else delete previous.attrs
+          }
+          if (previous.type === 'link' || previous.type === 'image') {
+            delete previous.ref
+            delete previous.rawRef
+          }
+          changed = true
+          continue
+        }
+        if (payload?.startsWith('</#') && payload.endsWith('>') && (nodes[i + 1]?.type === 'link' || nodes[i + 1]?.type === 'autolink')) {
+          const parsed = parse(payload).children[0]
+          const ref = parsed?.type === 'paragraph' ? parsed.children[0] : undefined
+          if (parsed?.type === 'paragraph' && parsed.children.length === 1 && ref?.type === 'heading_ref') {
+            current.push(ref)
+            i++
+            changed = true
+            continue
+          }
+        }
+        // A container, term or caption payload is the block pass's to report.
+        if (!/^(?::|\^|$)/.test(payload ?? '')) importLosses.push({
+          code: 'carrier-markers-damaged',
+          message: `${CARRIER_MARKER_DROPPED}: ${node.content}`,
+          ...(node.pos === undefined ? {} : { line: node.pos.startLine }),
+          fidelity: 'degraded',
+          confidence: 'fallback',
+        })
+      }
+      if ('children' in node && Array.isArray(node.children)) node.children = restore(node.children)
+      current.push(node)
+    }
+    if (stack.length) inlineCarriersDamaged = true
+    return out
+  }
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach(visit); return }
+    const node = value as BlockNode
+    if (node.type === 'table' || node.type === 'code_block' || node.type === 'raw_block' || node.type === 'image') return
+    if (node.type === 'paragraph' || node.type === 'heading') node.children = restore(node.children)
+    else Object.values(value).forEach(visit)
+  }
+  visit(tree)
+  if (!changed || inlineCarriersDamaged) return source
+  return renderCarve(tree)
+}
+
 function convertInline(
   input: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
@@ -1256,6 +1395,7 @@ function convertInline(
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
   unwrapEmptyLinks = true,
   nativeCode = false,
+  stripDestinationIndent: boolean | ((line: number) => boolean | string) = false,
 ): string {
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
@@ -1288,11 +1428,23 @@ function convertInline(
     return token
   }
   let codeCursor = 0, codeLine = 0
+  const codeSourceToken = /\x00P(\d+)\x00/y
   const writeCodeSpan = (span: string, offset: number, trackLines = true): string => {
     const fence = /^`+/.exec(span)?.[0] ?? ''
     if (fence.length > 2 || !span.includes('\n')) return protectCode(span)
     if (joinedLines && trackLines) {
-      while (codeCursor < offset) if (rawLine[codeCursor++] === '\n') codeLine++
+      while (codeCursor < offset) {
+        if (rawLine[codeCursor] === '\x00') {
+          codeSourceToken.lastIndex = codeCursor
+          const token = codeSourceToken.exec(rawLine)
+          if (token) {
+            codeLine += (referenceSourceText(token[0], protectedSpans).match(/\n/g) ?? []).length
+            codeCursor += token[0].length
+            continue
+          }
+        }
+        if (rawLine[codeCursor++] === '\n') codeLine++
+      }
       while (codeCursor < offset + span.length) if (rawLine[codeCursor++] === '\n') joinedLines.add(++codeLine)
     }
     let value = span.slice(fence.length, -fence.length).replace(/\n[ \t]*/g, ' ')
@@ -1306,19 +1458,19 @@ function convertInline(
   if (!holdsFenceBody && !isReferenceDefinition && (input.includes(':') || input.includes('www.'))) {
     let cursor = 0
     let captured = ''
-    const rawOpaqueEnd = opaqueHtmlScanner(input)
-    const rawAutolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
-    for (const link of markdownRawBareLinks(input, at => {
-      const opaque = rawOpaqueEnd(at) ?? scanHtmlTag(input, at)?.end
-      if (opaque !== undefined) return opaque
-      rawAutolink.lastIndex = at
-      const angle = rawAutolink.exec(input)
-      return angle === null ? undefined : at + angle[0].length
-    })) {
+    const rawOpaqueEnd = markdownDestinationOpaqueEnd(input, dialect)
+    for (const link of markdownRawBareLinks(input, rawOpaqueEnd)) {
       captured += input.slice(cursor, link.start) + protect(writeLiteralAutolink(input.slice(link.start, link.end), link.prefix, true), input.slice(link.start, link.end))
       cursor = link.end
     }
     rawLine = captured + input.slice(cursor)
+  }
+  if (rawLine.includes('](') && (rawLine.includes('`') || rawLine.includes('<') || dialect.math && rawLine.includes('$'))) {
+    const rawSubject = rawLine
+    rawLine = protectNativeMarkdownDestinationGlyphs(rawSubject, (value, source) => protect(value, source),
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+        || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+      markdownDestinationOpaqueEnd(rawSubject, dialect), stripDestinationIndent)
   }
   let line = protectCodeSpans(rawLine, writeCodeSpan)
   // Bare HTML code uses CommonMark character-reference decoding, then written with a safe Carve fence.
@@ -1431,6 +1583,12 @@ function convertInline(
         if (!(error instanceof SourceUnspellableError)) throw error
       }
     }
+    // An empty code run is spellable on the final line of its paragraph.
+    if (value === '' && terminal && !table &&
+        /(?:^|\n)[ \t]*$/.test(line.slice(0, offset)) &&
+        /^[ \t]*$/.test(line.slice(offset + match.length))) {
+      return protect('``', referenceSourceText(match, protectedSources))
+    }
     if (value === '' || value.includes('\n') || value.includes('\r')) {
       importLosses.push({
         code: 'raw-code-fallback',
@@ -1514,9 +1672,38 @@ function convertInline(
 
 
 
+  const opaqueMathEnd = (subject: string, offset: number): number | undefined => {
+    if (!dialect.math || subject[offset] !== '$') return undefined
+    const match = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(subject.slice(offset))
+    return match ? offset + match[0].length : undefined
+  }
+  const validDestinationSource = (subject: string, open: number, end: number): boolean => {
+    const destination = subject.slice(open, end + 1)
+    if (!destination.includes('\x00')) return true
+    const original = referenceSourceText(destination, protectedSources)
+    return markdownInlineDestinationEnd(original, 0) === original.length - 1
+  }
   const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
+  if (line.includes('[') && line.includes(']')) {
+    const subject = line
+    const opaque = opaqueHtmlScanner(subject)
+    const auto = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+    line = escapeInactiveMarkdownLinkBrackets(subject, value => protect(value, value.slice(1)),
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+        || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+      offset => {
+        const mathEnd = opaqueMathEnd(subject, offset)
+        if (mathEnd !== undefined) return mathEnd
+        auto.lastIndex = offset
+        const link = auto.exec(subject)
+        return link ? offset + link[0].length : opaque(offset) ?? scanHtmlTag(subject, offset)?.end
+      }, undefined, (open, end) => validDestinationSource(subject, open, end))
+  }
   let opaqueSubject: string | undefined
   let opaqueRanges: Array<[number, number]> = []
+  let activeEmptyDestinationOpeners = new Set<number>()
+  let scalarBoundaryRanges: Array<[number, number]> = []
+  let activeImageLabelRanges: Array<[number, number]> = []
   line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before, subject) => {
     if (!reportEmptyLosses) return
     let counts = sourceLineCounts.get(subject)
@@ -1553,6 +1740,31 @@ function convertInline(
     if (subject !== opaqueSubject) {
       opaqueSubject = subject
       opaqueRanges = []
+      scalarBoundaryRanges = []
+      activeImageLabelRanges = []
+      for (const scalar of subject.matchAll(/<code>((?:[^<\n]|<!---->)*)<\/code>|<span\s+class\s*=\s*"critic-comment"\s*>([^<]*)<\/span>/gi)) {
+        const body = scalar[1] ?? scalar[2]!
+        if (!decodeHtmlEntitiesRaw(referenceSourceText(body, protectedSources)).includes('@')) {
+          scalarBoundaryRanges.push([scalar.index! + scalar[0].indexOf('>') + 1, scalar.index! + scalar[0].lastIndexOf('</')])
+        }
+      }
+      if (dialect.math) {
+        for (const math of subject.matchAll(/\$\$([^$]+)\$\$|\$([^$\s][^$]*[^$\s]|\S)\$(?!\d)/g)) {
+          if (math[1] !== undefined || !/^[\d.,]+$/.test(math[2]!)) opaqueRanges.push([math.index!, math.index! + math[0].length])
+        }
+      }
+      activeEmptyDestinationOpeners = new Set<number>()
+      const emptyDestinationOpaque = opaqueHtmlScanner(subject)
+      escapeInactiveMarkdownLinkBrackets(subject, value => value,
+        label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined
+          || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans),
+        offset => opaqueMathEnd(subject, offset) ?? emptyDestinationOpaque(offset) ?? scanHtmlTag(subject, offset)?.end,
+        (open, close, image) => {
+          activeEmptyDestinationOpeners.add(open)
+          if (image) activeImageLabelRanges.push([open, close])
+          const end = markdownInlineDestinationEnd(subject, close + 1)
+          if (end !== undefined && validDestinationSource(subject, close + 1, end)) opaqueRanges.push([close + 1, end + 1])
+        }, (open, end) => validDestinationSource(subject, open, end))
       const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[a-zA-Z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
       for (let cursor = 0; cursor < subject.length; cursor++) {
         if (subject[cursor] !== '<') continue
@@ -1566,7 +1778,69 @@ function convertInline(
       }
     }
     return opaqueRanges.some(([start, end]) => offset > start && offset < end)
-  })
+      || !activeEmptyDestinationOpeners.has(subject[offset] === '!' ? offset + 1 : offset)
+  }, label => {
+    const masked = new Map<string, string>()
+    if (label.includes('<') || label.includes('![') || label.includes('[^') || dialect.math && label.includes('$')) {
+      const source = label
+      const opaque = opaqueHtmlScanner(source)
+      const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[A-Za-z0-9.!#$%&\x27*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+)>/y
+      const bracketEnd = (open: number): number | undefined => {
+        let depth = 0
+        for (let at = open; at < source.length; at++) {
+          if (source[at] === '\\') { at++; continue }
+          if (source[at] === '[') depth++
+          else if (source[at] === ']' && --depth === 0) return at
+        }
+        return undefined
+      }
+      let output = ''
+      for (let at = 0; at < source.length;) {
+        let end: number | undefined
+        if (source[at] === '!' && source[at + 1] === '[') {
+          const close = bracketEnd(at + 1)
+          if (close !== undefined) {
+            const label = source.slice(at + 2, close)
+            const inline = markdownInlineDestinationEnd(source, close + 1)
+            const reference = /^\[([^\[\]\n]*)\]/.exec(source.slice(close + 1))
+            if (inline !== undefined && validDestinationSource(source, close + 1, inline)) end = inline + 1
+            else if (reference && (referenceDestinationLabel(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(reference[1] || label, decodeHtmlEntitiesRaw, protectedSpans))) end = close + 1 + reference[0].length
+            else if (referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans)) end = close + 1
+          }
+        } else if (source[at] === '[' && source[at + 1] === '^') {
+          const close = bracketEnd(at)
+          if (close !== undefined) end = close + 1
+        } else if (source[at] === '<') {
+          autolink.lastIndex = at
+          const angle = autolink.exec(source)
+          end = angle ? at + angle[0].length : opaque(at) ?? scanHtmlTag(source, at, protectedSpans)?.end
+        } else if (dialect.math && source[at] === '$') {
+          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(source.slice(at))
+          if (math) end = at + math[0].length
+        }
+        if (end === undefined) { output += source[at++]; continue }
+        const scalar = source.slice(at, end)
+        const token = protect(scalar, scalar)
+        masked.set(token, scalar)
+        output += token
+        at = end
+      }
+      label = output
+    }
+    let depth = 0
+    const converted = markdownEmphasis(label, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, peak => { depth = peak }, true, value => protect(value), { before: '[', after: ']' })
+    if (depth > 0) {
+      for (const match of converted.matchAll(/\x00P(\d+)\x00/g)) {
+        if (/^\{[*/~]/.test(protectedSpans[Number(match[1])] ?? '')) {
+          recordMarkdownProtectedDepth(protectedSpans, match[0], depth)
+          break
+        }
+      }
+    }
+    return masked.size === 0 ? converted : converted.replace(/\x00P\d+\x00/g, token => masked.get(token) ?? token)
+  },
+  (_subject, offset) => !scalarBoundaryRanges.some(([start, end]) => offset >= start && offset < end),
+  (_subject, offset) => activeImageLabelRanges.some(([start, end]) => offset > start && offset < end))
 
   const encodeDest = (paren: string): string | undefined => {
     // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
@@ -1589,7 +1863,8 @@ function convertInline(
     if (table) {
       const quoted = RE_QUOTED_TITLE.exec(title)
       if (quoted) {
-        const decoded = unescapeAttrValue(quoted[3]!)
+        const restored = quoted[3]!.replace(/\x00P(\d+)\x00/g, (token, index: string) => protectedSpans[Number(index)] ?? token)
+        const decoded = unescapeAttrValue(restored)
         const escaped = decoded.replace(/\\/g, '\\\\').split(quoted[2]!).join('\\' + quoted[2]).replaceAll('`', '\\`')
         title = `${quoted[1]}${quoted[2]}${escaped}${quoted[2]}${quoted[4]}`
       }
@@ -1604,12 +1879,15 @@ function convertInline(
   line = escapeInactiveMarkdownLinkBrackets(activationSource, value => protect(value, value.slice(1)),
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     offset => {
+      const mathEnd = opaqueMathEnd(activationSource, offset)
+      if (mathEnd !== undefined) return mathEnd
       const opaque = activationOpaque(offset)
       if (opaque !== undefined) return opaque
       activationAutolink.lastIndex = offset
       const autolink = activationAutolink.exec(activationSource)
       return autolink ? offset + autolink[0].length : scanHtmlTag(activationSource, offset)?.end
-    }, (opener, closer) => { activeLinkBoundaries.add(opener); activeLinkBoundaries.add(closer) })
+    }, (opener, closer) => { activeLinkBoundaries.add(opener); activeLinkBoundaries.add(closer) },
+    (open, end) => validDestinationSource(activationSource, open, end))
   if (activeLinkBoundaries.size > 0) {
     activationOriginalSource = referenceSourceText(activationSource, protectedSources)
     let activationSourceOffset = 0
@@ -1635,24 +1913,31 @@ function convertInline(
   }
 
   const imageLabel = (label: string): string => {
-    const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw)
+    const alt = plainAltText(label.slice(2, -1), protectedSpans, decodeHtmlEntitiesRaw, protectedSources)
     return `![${rawImageBracketRunCloses(alt) && unescapeAttrValue(alt) === alt ? alt : escapeUnclosedImageEditorialOpeners(alt.replace(/[\\[\]`]/g, '\\$&'))}]`
   }
-  const protectDestination = (alt: string, dest: string, source = alt + dest): string => {
+  const protectDestination = (alt: string, dest: string, source = alt + dest, imageSourceLabel?: string): string => {
     const sourceDest = referenceSourceText(dest, protectedSources)
-    const encoded = markdownInlineDestinationEnd(sourceDest, 0) === sourceDest.length - 1 ? encodeDest(dest) : undefined
-    return encoded === undefined
-      ? (alt === '' ? '' : protect(alt, source.slice(0, source.length - dest.length))) + protect('\\(', '(') + dest.slice(1)
-      : protect(alt + encoded, source)
+    const nativeValid = markdownInlineDestinationEnd(sourceDest, 0) === sourceDest.length - 1
+    const encoded = nativeValid ? encodeDest(dest) : undefined
+    if (encoded !== undefined) return protect(alt + encoded, source)
+    const canonical = nativeValid || imageSourceLabel === undefined ? undefined : referenceDestinationLabel(imageSourceLabel, decodeHtmlEntitiesRaw, protectedSpans, table)
+    const referenceTarget = canonical === undefined ? undefined : referenceInlineTarget(canonical, table)
+    const referenceEncoded = referenceTarget === undefined ? undefined : encodeDest(`(${referenceTarget})`)
+    const sourceLabel = source.slice(0, source.length - dest.length)
+    const label = canonical === undefined || /[\[\]]/.test(canonical)
+      ? sourceLabel : protect(alt + (referenceEncoded ?? `[${canonical}]`), sourceLabel)
+    return label + protect('\\(', '(') + dest.slice(1)
   }
-  const protectDestinations = (pattern: RegExp): void => {
+  type NativeDestination = { offset: number; label: string; dest: string }
+  const protectDestinations = (pattern: RegExp | readonly NativeDestination[]): void => {
     const subject = line
     let cursor = 0, depth = 0, pairedEnd = -1
     let lineCursor = 0, lineNumber = 0
     const origins = joinedLines ? input.split('\n').map((_text, index) => index).filter(index => !joinedLines.has(index)) : []
     let commentEnd = subject.indexOf('-->')
     const autolink = /<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s]+)>/y
-    line = subject.replace(pattern, (match, label: string, dest: string, offset: number) => {
+    const replaceDestination = (match: string, label: string, dest: string, offset: number): string => {
       while (cursor < offset) {
         if (subject[cursor] === '<') {
           autolink.lastIndex = cursor
@@ -1669,33 +1954,85 @@ function convertInline(
       }
       if (cursor > offset || (label === '' && pairedEnd !== offset - 1)) return match
       const image = label.startsWith('!')
-      const written = protectDestination(image ? imageLabel(label) : '', dest, image ? label + dest : dest)
+      const written = protectDestination(image ? imageLabel(label) : '', dest, image ? label + dest : dest, image ? label.slice(2, -1) : undefined)
       if (written.startsWith('\x00P')) cursor = offset + match.length
-      if (joinedLines && written.startsWith('\x00P')) {
+      const destinationToken = /^\x00P(\d+)\x00$/.exec(written)
+      if (joinedLines && destinationToken) {
         while (lineCursor < offset) {
           if (subject[lineCursor] === '\x00') {
             const token = /^\x00P(\d+)\x00/.exec(subject.slice(lineCursor))
             if (token) {
-              lineNumber += (protectedSpans[Number(token[1])]!.match(/\n/g) ?? []).length
+              lineNumber += (referenceSourceText(token[0], protectedSpans).match(/\n/g) ?? []).length
               lineCursor += token[0].length
               continue
             }
           }
           if (subject[lineCursor++] === '\n') lineNumber++
         }
-        const token = /^\x00P(\d+)\x00$/.exec(written)!
-        const result = (image ? '' : label) + protectedSpans[Number(token[1])]!
-        const removed = (match.match(/\n/g) ?? []).length - (result.match(/\n/g) ?? []).length
+        const result = (image ? '' : label) + protectedSpans[Number(destinationToken[1])]!
+        const removed = (referenceSourceText(match, protectedSpans).match(/\n/g) ?? []).length - (result.match(/\n/g) ?? []).length
         for (let n = 1; n <= removed; n++) {
           const origin = origins[lineNumber + n]
           if (origin !== undefined) joinedLines.add(origin)
         }
       }
       return (image ? '' : label) + written
-    })
+    }
+    if (pattern instanceof RegExp) line = subject.replace(pattern, replaceDestination)
+    else {
+      const output: string[] = []
+      let at = 0
+      for (const { offset, label, dest } of pattern) {
+        const match = label + dest
+        output.push(subject.slice(at, offset), replaceDestination(match, label, dest, offset))
+        at = offset + match.length
+      }
+      output.push(subject.slice(at))
+      line = output.join('')
+    }
     line = line.replace(/\[\^([^\[\]\n]+)\](?=\x00P(\d+)\x00)/g, (match, label: string, index: string) =>
       protectedSpans[Number(index)]?.startsWith('(') ? '[' + protect('\\^', '^') + label + ']' : match,
     )
+  }
+
+  if (line.includes('](') && /\]\([ \t\n]*(?:\\.|[^ \t\n()\\])*\(/.test(line)) {
+    const subject = line
+    const opaque = opaqueHtmlScanner(subject)
+    const tokenAt = /\x00P\d+\x00/y
+    const opens: { at: number; image: boolean }[] = []
+    const destinations: NativeDestination[] = []
+    let escapedPosition = -1
+    for (let at = 0; at < subject.length; at++) {
+      if (subject[at] === '\x00') {
+        tokenAt.lastIndex = at
+        const token = tokenAt.exec(subject)
+        if (token) { at += token[0].length - 1; continue }
+      }
+      let htmlEnd: number | undefined
+      if (subject[at] === '<') {
+        activationAutolink.lastIndex = at
+        const auto = activationAutolink.exec(subject)
+        htmlEnd = opaque(at) ?? (auto ? at + auto[0].length : scanHtmlTag(subject, at)?.end)
+      }
+      const end = opaqueMathEnd(subject, at) ?? htmlEnd
+      if (end !== undefined) { at = end - 1; continue }
+      if (subject[at] === '\\') { escapedPosition = at + 1; at++; continue }
+      if (subject[at] === '[') {
+        opens.push({ at, image: subject[at - 1] === '!' && escapedPosition !== at - 1 })
+        continue
+      }
+      if (subject[at] !== ']' || opens.length === 0) continue
+      const opener = opens.pop()!
+      const through = markdownInlineDestinationEnd(subject, at + 1)
+      if (through === undefined || !validDestinationSource(subject, at + 1, through)) continue
+      const offset = opener.image ? opener.at - 1 : at + 1
+      if (opener.image) {
+        while (destinations.length && destinations.at(-1)!.offset >= offset) destinations.pop()
+      }
+      destinations.push({ offset, label: opener.image ? subject.slice(offset, at + 1) : '', dest: subject.slice(at + 1, through + 1) })
+      at = through
+    }
+    protectDestinations(destinations)
   }
 
   const pointyDestination = String.raw`\([ \t]*<[^<>\n]*>(?:[ \t]+(?:"(?:[^"\n]|\n(?![ \t]*\n))*"|'(?:[^'\n]|\n(?![ \t]*\n))*'))?[ \t]*\)`
@@ -1748,7 +2085,9 @@ function convertInline(
 
   line = line.replace(/(?<!\\)!\[((?:[^\[\]]|\[[^[\]]*\])*)\](?:\[([^\]\n]*)\])?/g,
     (match, label: string, reference: string | undefined, offset: number, source: string) => {
-      if (source[offset + match.length] === '(') return match
+      const open = offset + match.length
+      const inlineEnd = markdownInlineDestinationEnd(source, open)
+      if (inlineEnd !== undefined && validDestinationSource(source, open, inlineEnd)) return match
       const canonical = referenceDestinationLabel(reference || label, decodeHtmlEntitiesRaw, protectedSpans, table)
       if (canonical === undefined) return table && match.includes('|') ? protect(match.replace(/[\[\]]/g, '\\$&'), match) : match
       if (/[\[\]]/.test(canonical)) return match
@@ -1790,7 +2129,50 @@ function convertInline(
 
   // Reference-link use site `[text][label]`: the trailing `[label]` is a
   // literal reference key, not inline markup, so protect it too.
+  let literalReferenceOpeners: Set<string> | undefined
+  if (line.includes('][^') || /\]\x00P\d+\x00/.test(line)) {
+    const footnotePrefixSource = line
+    const opaque = opaqueHtmlScanner(line)
+    let cursor = 0
+    line = line.replace(/(?<!\\)\[((?!\^)(?:[^\[\]\n]|\[[^\]\n]*\])+)\](?=\[\^|\x00P\d+\x00)/g, (match, label: string, offset: number) => {
+      const following = /^\x00P(\d+)\x00/.exec(footnotePrefixSource.slice(offset + match.length))
+      if (following && !protectedSpans[Number(following[1])]?.startsWith('[^')) return match
+      while (cursor < offset) {
+        const end = footnotePrefixSource[cursor] === '<' ? opaque(cursor) ?? scanHtmlTag(footnotePrefixSource, cursor)?.end : undefined
+        if (end !== undefined) { cursor = end; continue }
+        if (dialect.math && footnotePrefixSource[cursor] === '$') {
+          const math = /^(?:\$\$[^$]+\$\$|\$(?:[^$\s][^$]*[^$\s]|\S)\$(?!\d))/.exec(footnotePrefixSource.slice(cursor))
+          if (math) { cursor += math[0].length; continue }
+        }
+        cursor++
+      }
+      if (footnotePrefixSource[offset - 1] === ']' && referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined) return match
+      if (cursor > offset) return match
+      const opener = protect('\\[', '[')
+      ;(literalReferenceOpeners ??= new Set()).add(opener)
+      return opener + label + protect('\\]', ']')
+    })
+  }
+  const referenceSubject = line
+  const referenceOpeners = new Map<number, number>()
+  const referenceStack: number[] = []
+  const referenceHtml = new Set<number>()
+  const hasReferencePairs = referenceSubject.includes('][')
+  for (let at = 0; hasReferencePairs && at < referenceSubject.length; at++) {
+    if (referenceSubject[at] === '<') {
+      const tag = scanHtmlTag(referenceSubject, at)
+      if (tag) {
+        for (; at < tag.end; at++) referenceHtml.add(at)
+        at--
+        continue
+      }
+    }
+    if (referenceSubject[at] === '[') referenceStack.push(at)
+    else if (referenceSubject[at] === ']' && referenceStack.length) referenceOpeners.set(at, referenceStack.pop()!)
+  }
   line = line.replace(/(?<=\])\[([^\]]*)\]/g, (match, reference: string, offset: number, source: string) => {
+    if (referenceHtml.has(offset)) return match
+    if (reference.startsWith('^')) return protect(match, match)
     const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
@@ -1804,8 +2186,14 @@ function convertInline(
     }
     const keepCollapsed = reference === '' && label === canonical && /^[\w\s-]+$/u.test(label ?? '')
     if (canonical === undefined || /[\[\]]/.test(canonical)) {
-      if (!referenceSourceText(reference, protectedSpans).includes('|')) return protect(match, match)
-      return protect(`\\[${writeLiteralReference(reference)}\\]`, match)
+      const tablePipe = table && referenceSourceText(reference, protectedSpans).includes('|')
+      if (sourceLabel !== undefined && !tablePipe) return protect(match, match)
+      const precedingOpener = referenceOpeners.get(offset - 1)
+      const precedingLabel = precedingOpener === undefined ? '' : source.slice(precedingOpener + 1, offset - 1)
+      if (!tablePipe && !/[*_`\\\x00<&~"'=^]/.test(reference + precedingLabel)) return protect(match, match)
+      const opener = protect('\\[', '[')
+      ;(literalReferenceOpeners ??= new Set()).add(opener)
+      return opener + reference + protect('\\]', ']')
     }
     return referenceTail(canonical, keepCollapsed ? match : `[${canonical}]`, match)
   })
@@ -1915,7 +2303,12 @@ function convertInline(
       }
       const tagEnd = label[at] === '<' ? opaqueEnd(at) ?? scanHtmlTag(label, at)?.end : undefined
       if (tagEnd !== undefined) { escaped += label.slice(at, tagEnd); at = tagEnd; continue }
-      escaped += label[at] === '/' ? (guard ? protect('\\/', '/') : '\\/') : label[at]!
+      // An intraword slash, or one with whitespace on both sides, neither opens nor closes emphasis.
+      const before = label[at - 1], next = label[at + 1]
+      const delimiter = label[at] === '/' && (
+        (next !== undefined && !/[ \t\n]/.test(next) && !/[A-Za-z0-9]/.test(before ?? ''))
+        || (before !== undefined && !/[ \t\n]/.test(before) && !/[A-Za-z0-9]/.test(next ?? '')))
+      escaped += delimiter ? (guard ? protect('\\/', '/') : '\\/') : label[at]!
       at++
     }
     return escaped
@@ -1933,6 +2326,7 @@ function convertInline(
     if (destinationOpeners.has(offset + match.length)) return match
     const following = /^\x00P(\d+)\x00/.exec(source.slice(offset + match.length))
     if (following) {
+      if (literalReferenceOpeners?.has(following[0])) return match
       const protectedTail = protectedSpans[Number(following[1])] ?? ''
       if (protectedTail.startsWith('(') || protectedTail.startsWith('{title=')) return match
       const reference = /^\[([^\]]*)\]$/.exec(protectedTail)
@@ -2046,32 +2440,28 @@ function convertInline(
   // brace that ATTACHES to the construct before it, and one alone on a line;
   // mid-prose, attaching to nothing, was the position neither reached.
   if (!dialect.attributes) line = escapeAttributeBlockOpener(line)
-  line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
+  if (dialect.attributes && !holdsFenceBody) {
+    const wholeLine = line.trim()
+    line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+      (match, inner: string, offset: number, source: string) =>
+        (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
+  }
+  // A native tag becomes a marker below, so its `/` is no text delimiter.
+  const nativeTags = nativeInlineTagOffsets(line)
+  line = nativeTags.size === 0
+    ? escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
+    : escapePlainCarveInlineSyntaxAround(line, offset => nativeTags.has(offset), HANDLED_MARKDOWN)
   // Numeric references are decoded below. Keep their hash available to that
   // pass even though the standalone escaper freezes it.
   line = line.replace(/&\\#(?=(?:[0-9]+|[xX][0-9A-Fa-f]+);)/g, '&#')
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
   if (!holdsFenceBody) line = escapeTypographicDashes(line)
 
-  // Whether a run at `offset` has an alphanumeric neighbor, so it opens or
-  // closes INTRAWORD. Carve's bare markers do not open there and its braced
-  // forms do, so that is the spelling Markdown's intraword emphasis takes
-  // (carve-js#2031). `*` can open intraword in Markdown and `_` cannot, which
-  // is why only the star passes below drop their boundary guard.
-  const intraword = (full: string, offset: number, length: number): boolean =>
-    /[A-Za-z0-9]/.test(full[offset - 1] ?? '') || /[A-Za-z0-9]/.test(full[offset + length] ?? '')
-  const wrap = (open: string, body: string, close: string, braced: boolean): string =>
-    braced ? `{${open}${body}${close}}` : `${open}${body}${close}`
-
   line = protectMarkdownLinkLabels(line, protectedSpans, protect,
     label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) !== undefined,
     reportFlattenedEmphasis, escapeLabelSlashes)
-  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans)
-
-  // ~~strikethrough~~ -> ~strikethrough~, braced intraword: bare there it was no
-  // strikethrough and the run lost a tilde as well.
-  line = line.replace(/~~([^~]+)~~/g, (match, body: string, at: number, full: string) =>
-    wrap('~', body, '~', intraword(full, at, match.length)))
+  line = line.replace(/\n([ \t]{4,}~{3,}[ \t]*)(?=\n|$)/g, (_match, run: string) => `\n${protect(run)}`)
+  line = markdownEmphasis(line, reportFlattenedEmphasis, undefined, protectedSpans, false, true, 0, undefined, true)
 
   // ==highlight== -> =highlight=. Carve highlight is a single `=`; a literal
   // `==x==` renders as plain text in Carve (corpus 74-two-char-delimiter-runs),
@@ -2103,14 +2493,15 @@ function convertInline(
     line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
   }
 
+  if (dialect.attributes && !holdsFenceBody) {
+    const wholeLine = line.trim()
+    line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
+      (match, inner: string, offset: number, source: string) =>
+        (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
+  }
+
 
   if (!holdsFenceBody) {
-    if (dialect.attributes) {
-      const wholeLine = line.trim()
-      line = line.replace(/(?<!\\)\{((?:[^{}"'\\]|\\.|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/g,
-        (match, inner: string, offset: number, source: string) =>
-          (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
-    }
     line = line.replace(/["']/g, '\\$&')
   }
   // In a table cell a `#` run is literal text, not a heading marker, so the
@@ -2333,7 +2724,7 @@ import {
 
 export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized' | 'raw-span-whitespace-trimmed'
-    | 'carrier-markers-damaged' | 'raw-code-fallback'
+    | 'carrier-marker-dropped' | 'carrier-markers-damaged' | 'raw-code-fallback'
   message: string
   line?: number
   /** Overrides the code's default, for a reading the importer derived. */
@@ -2435,7 +2826,7 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return
     if (Array.isArray(value)) {
-      const definitions: Array<{ depth: number; defined: boolean }> = []
+      const definitions: Array<{ depth: number }> = []
       let depth = 0
       for (let i = 0; i < value.length; i++) {
         const node = value[i] as BlockNode
@@ -2449,15 +2840,13 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
             if (carrierFenceWidth(payload) > 0) depth += carrierIsCloser(payload) ? -1 : 1
             if (/^::[ \t]/.test(payload)) {
               const last = definitions.at(-1)
-              if (!last || last.depth !== depth) definitions.push({ depth, defined: false })
-              else last.defined = false
+              if (!last || last.depth !== depth) definitions.push({ depth })
             } else if (payload === ':') {
               const last = definitions.at(-1)
               if (!last || last.depth !== depth) valid = false
-              else last.defined = true
             } else if (payload === '') {
               const last = definitions.pop()
-              if (!last?.defined || last.depth !== depth) valid = false
+              if (!last || last.depth !== depth) valid = false
             }
             const next = value[i + 1] as BlockNode | undefined
             const previous = value[i - 1] as BlockNode | undefined
@@ -2489,7 +2878,7 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
 }
 
 /**
- * Lift every carrier marker line out of the source, leaving a placeholder.
+ * Drop invalid payloads and lift valid carrier lines to placeholders.
  *
  * A set that does not balance is NEVER reconstructed: the source comes back
  * untouched, the markers import as the raw HTML they are, and one
@@ -2501,6 +2890,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   if (!markdown.includes(CARRIER_PREFIX)) return markdown
 
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const dropped: MarkdownImportLoss[] = []
   const payloads = new Map<number, string>()
   const hosts = new Map<number, string>()
   // A MARKER IS A LINE THE BLOCK STRUCTURE READ AS HTML. The payload of a code
@@ -2514,12 +2904,53 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     const host = carrierHostPrefix(line)
     const payload = carrierPayload(line.slice(host.length))
     if (payload !== undefined) {
+      if (inlineCarriersEnabled && (payload === '[' || payload.startsWith(']{') || payload.startsWith('</#'))) continue
       payloads.set(at, payload)
       hosts.set(at, host)
     }
   }
-  if (payloads.size === 0) return markdown
-  if (!carrierSetBalances([...payloads.values()]) || !carrierPlacementsValid(lines, payloads, hosts)) {
+  if (payloads.size === 0 && dropped.length === 0) return markdown
+  // Pair by shape before checking whether each payload can be restored.
+  const pairs = new Map<number, number>()
+  const open: number[] = []
+  let balanced = true
+  for (const [at, payload] of payloads) {
+    const width = carrierFenceWidth(payload)
+    if (width === 0) continue
+    if (carrierIsCloser(payload)) {
+      const opener = open.pop()
+      if (opener === undefined || carrierFenceWidth(payloads.get(opener)!) !== width) balanced = false
+      else pairs.set(opener, at)
+    } else {
+      if (open.length > 0 && width <= carrierFenceWidth(payloads.get(open.at(-1)!)!)) balanced = false
+      open.push(at)
+    }
+  }
+  balanced &&= open.length === 0
+  if (balanced) {
+    for (const [at, payload] of payloads) {
+      const width = carrierFenceWidth(payload)
+      const isOpener = width > 0 && !carrierIsCloser(payload)
+      const closer = pairs.get(at)
+      const tree = isOpener ? parse(`${payload}\n${payloads.get(closer!)!}\n`) : undefined
+      const valid = tree
+        ? tree.children.length === 1 && tree.children[0]!.type !== 'paragraph'
+        : /^\{.*\}$/.test(payload)
+          ? isValidAttrPayload(payload.slice(1, -1))
+          : width > 0 || carrierIsCaption(payload) || /^::[ \t]/.test(payload) || payload === ':' || payload === ''
+      if (valid) continue
+      payloads.delete(at)
+      if (closer !== undefined) payloads.delete(closer)
+      dropped.push({
+        code: 'carrier-marker-dropped',
+        message: `${isOpener ? CARRIER_MARKER_PAIR_DROPPED : CARRIER_MARKER_DROPPED}: ${lines[at]!.slice(hosts.get(at)!.length)}`,
+        line: at + 1,
+        fidelity: 'degraded',
+        confidence: 'fallback',
+      })
+    }
+  }
+  if (!balanced || !carrierSetBalances([...payloads.values()]) || !carrierPlacementsValid(lines, payloads, hosts)) {
     importLosses.push({
       code: 'carrier-markers-damaged',
       message: CARRIER_MARKERS_DAMAGED,
@@ -2529,6 +2960,8 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
 
     return markdown
   }
+
+  importLosses.push(...dropped)
 
   let token = 'CARVECARRIER'
   while (markdown.includes(token)) token += 'X'
@@ -3079,6 +3512,9 @@ type PrefixedInlineLine = {
   // Continues the paragraph above lazily or from four columns past its
   // container, so it cannot be the delimiter row of a table.
   continued?: boolean | undefined
+  lazyQuote?: boolean | undefined
+  continuationIndents?: Array<boolean | string> | undefined
+  nativeContinuationIndent?: string | undefined
   // The paragraph body the collector escaped, without that escape, for a setext
   // fold to write instead: the escape guards a marker at the start of a line,
   // and a folded heading is one line with the marker in its middle, where it
@@ -3499,6 +3935,7 @@ function restorePrefixedInlineRun(
     offset += part.text.length + 1
     return entries
   })
+  const continuationIndents = run.flatMap(part => part.continuationIndents ?? part.text.split('\n').map(() => part.nativeContinuationIndent ?? !part.lazyQuote))
   const converted = convertInline(
     run.map((part) => part.text).join('\n'),
     dialect,
@@ -3517,8 +3954,15 @@ function restorePrefixedInlineRun(
       }
       return sourceSegments[low - 1]?.line
     },
+    true, false, line => continuationIndents[line] ?? false,
   ).split('\n')
-  run = run.filter((_, index) => !joinedLines.has(index))
+  let physicalLine = 0
+  run = run.flatMap(part => part.continuationIndents === undefined ? [part] : part.text.split('\n').map(text => ({ ...part, text })))
+    .filter(part => {
+      const keep = !joinedLines.has(physicalLine)
+      physicalLine += countNewlines(part.text) + 1
+      return keep
+    })
   const held = heldByItem(run)
   // Only a run whose lines this function can place in a container gets the
   // escape at all. What `prefix` holds is up to the collector, and a run can
@@ -3680,6 +4124,30 @@ function headingLine(line: string, last = false): string {
   return trimEndSpaceTab(backslashes % 2 === 1 ? trimmed.slice(0, -1) : trimmed)
 }
 
+function headingParagraphParts(lines: string[], dialect: MarkdownDialect, lazyLines: boolean[] = []): { parts: string[]; joined: string; retainedLines: number[] } {
+  const source = lines.join('\n')
+  const retained = new Set<number>()
+  if (source.includes('](') && source.includes('<') && source.includes('\\\n')) {
+    const opaque = markdownDestinationOpaqueEnd(source, dialect)
+    const bareLinks = source.includes(':') || source.includes('www.') ? markdownRawBareLinks(source, opaque) : []
+    protectNativeMarkdownDestinationGlyphs(source, value => value,
+      label => referenceDestinationLabel(label, decodeHtmlEntitiesRaw, [], false) !== undefined || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, []),
+      opaque, false, at => retained.add(at), bareLinks)
+  }
+  let offset = 0
+  const separators: string[] = []
+  const retainedLines = [0]
+  const parts = lines.map((line, index) => {
+    const keep = retained.has(offset + line.length)
+    offset += line.length + 1
+    separators.push(keep ? '\n' : ' ')
+    if (keep) retainedLines.push(index + 1)
+    return index > 0 && separators[index - 1] === '\n' && lazyLines[index]
+      ? /^[ \t]*/.exec(line)![0] + headingLine(line, index === lines.length - 1 || keep) : headingLine(line, index === lines.length - 1 || keep)
+  })
+  return { parts, joined: parts.map((part, index) => part + (index + 1 < parts.length ? separators[index] : '')).join(''), retainedLines }
+}
+
 /** The indent and item markers a line opens with (`- - `, `  1. `). */
 const RE_ITEM_LEAD = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*/
 
@@ -3708,7 +4176,7 @@ const RE_ITEM_LEAD = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*/
  * Folding needs no blank line after it: a heading interrupts a paragraph
  * inside a quote and inside a list item alike.
  */
-function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInlineLine[] {
+function foldContainerSetext(run: readonly PrefixedInlineLine[], dialect: MarkdownDialect): PrefixedInlineLine[] {
   const out: PrefixedInlineLine[] = []
   // Where the paragraph each entry of `out` is a line of starts, or -1.
   const starts: number[] = []
@@ -3752,7 +4220,9 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
         const quote = heldInContainer(part).quote
         const indent = lead !== '' ? lead : /^[ \t]*/.exec(first)![0]
         const entries = out.slice(start)
-        const parts = entries.map((entry, index) => headingLine(entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body, index === entries.length - 1))
+        const { parts, joined, retainedLines } = headingParagraphParts(entries.map(entry => entry.nativeContinuationIndent !== undefined
+          ? entry.text.replace(/^[ \t]*/, entry.nativeContinuationIndent)
+          : entry.lazyQuote ? entry.text : entry.bareBody ?? paragraphLine(entry, heldInContainer(entry).text)!.body), dialect, entries.map(entry => !!entry.lazyQuote))
         const head = `${held.lead}${quote}${indent}${rule[1]![0] === '=' ? '#' : '##'} `
         let offset = head.length
         const sourceSegments = parts.map((text, index) => {
@@ -3760,7 +4230,7 @@ function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInline
           offset += text.length + 1
           return entry
         })
-        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: head + parts.join(' '), source: out[start]!.source, sourceSegments })
+        out.splice(start, out.length - start, { prefix: out[start]!.prefix, text: head + joined, source: out[start]!.source, sourceSegments, continuationIndents: retainedLines.map(index => entries[index]!.nativeContinuationIndent ?? !entries[index]!.lazyQuote) })
         starts.splice(start, starts.length - start, -1)
         continue
       }
@@ -3949,7 +4419,7 @@ function collectBlockquoteInlineRun(
     if (!parsed && paragraph && line.trim() !== '' && (plain || over)) {
       const text = over && !plain ? escapeBlockOpener(strip(line).trimStart()) : strip(line)
       lazyPrefix ??= lazyQuotePrefix(run)
-      run.push({ prefix: lazyPrefix, text, continued: true, source: end })
+      run.push({ prefix: lazyPrefix, text, continued: true, lazyQuote: true, source: end })
       end++
       continue
     }
@@ -4061,7 +4531,7 @@ function collectBlockquoteInlineRun(
   }
   const quoteEnds = end === lines.length || quotedLine(lines[end]!, contentCol) === null
   return {
-    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run)), markers, quoteEnds), dialect)
+    lines: restorePrefixedInlineRun(respellQuotedBlocks(foldContainerSetext(canonicalQuotedFences(run), dialect), markers, quoteEnds), dialect)
       .map((l) => pad + (/^(?:> )+$/.test(l) ? l.trimEnd() : l)),
     end,
   }
@@ -4267,7 +4737,7 @@ function respellQuotedBlocks(
             !RE_LIST_MARKER.test(trimmed) &&
             (isParagraphRunLine([trimmed], 0, 'text') || isStandardTableRow(trimmed))))
       if (lazy) {
-        out.push({ prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true, source: part.source })
+        out.push({ ...part, prefix: prev.prefix, text: ' '.repeat(indentColumns(held)) + (over ? escapeBlockOpener(trimmed) : trimmed), continued: true, lazyQuote: true, nativeContinuationIndent: /^[ \t]*/.exec(part.text)![0] })
         prevTable = false
         continue
       }
@@ -4690,6 +5160,9 @@ function collectListInlineRun(
     if (!continues && !orderedText && RE_ITEM_LINE.test(line)) break
     if (indent < contentCol) { terminal = !lazyText; break }
 
+    // Star and underscore rules interrupt the paragraph; dashes may be setext.
+    if (RE_MD_THEMATIC.test(text) && !/^[ \t]*-/.test(text)) break
+
     // Leave fenced code blocks inside list items to the main fence handler.
     //
     // Measured from the innermost item that holds the line, not from the
@@ -4708,9 +5181,8 @@ function collectListInlineRun(
     if (quotedFence !== null) {
       if (openFence !== null && quotedFence.test(openFence.text)) quotedFence = null
     } else if (
-      quote !== null &&
       openFence !== null &&
-      openFence.prefix === quote &&
+      (quote === null || openFence.prefix === quote) &&
       indentColumns(openFence.text) < 4 &&
       isMarkdownFenceLine(openFence.text.trimStart())
     ) break
@@ -4738,7 +5210,7 @@ function collectListInlineRun(
     // prose (markup-carve/carve-js#1947, markup-carve/carve-js#1952).
     if (end > start && over >= 4 && !continues && quote === null && !lazyText && !opensParagraph(above)) {
       const code = collectIndentedCode(lines, end, base)
-      const written = restorePrefixedInlineRun(foldContainerSetext(run), dialect)
+      const written = restorePrefixedInlineRun(foldContainerSetext(run, dialect), dialect)
       return { lines: [...written, ...code.lines], end: code.end, verbatimFrom: written.length }
     }
     const trimmed = orderedText ? escapeBlockOpener(text.trimStart()) : text.trimStart()
@@ -4772,7 +5244,7 @@ function collectListInlineRun(
       run.push({ prefix, text: pad + quote + (over >= 4 ? escapeBlockOpener(trimmed) : trimmed), continued: true, bareBody: plain, source: end })
     } else if (lazyText && opensParagraph(above) && indent < itemCols.at(-1)!) {
       // A lazy line of the innermost item's paragraph, at that item's column.
-      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true, source: end })
+      run.push({ prefix, text: ' '.repeat(itemCols.at(-1)! - contentCol) + trimmed, continued: true, lazyQuote: true, nativeContinuationIndent: /^[ \t]*/.exec(text)![0], source: end })
     } else if (over > 0 && over < 4) run.push({ prefix, text: pad + respellHeldQuoteMarkers(trimmed), source: end })
     // A later line the item holds, at the column the quote opens at. As text
     // the marker is escaped above, so a `>` arriving here is structural.
@@ -4781,7 +5253,7 @@ function collectListInlineRun(
     end++
   }
 
-  return { lines: restorePrefixedInlineRun(foldContainerSetext(run), dialect, terminal), end }
+  return { lines: restorePrefixedInlineRun(foldContainerSetext(run, dialect), dialect, terminal), end }
 }
 
 /**
@@ -4907,6 +5379,10 @@ function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | nu
   const first = lines[start]!
   if (/^(?: {4,}|\t)/.test(first)) return null
   const trimmed = first.replace(/^ {0,3}/, '')
+  if (inlineCarriersEnabled && trimmed.startsWith(CARRIER_PREFIX)) {
+    const end = trimmed.indexOf(' -->')
+    if (/^<!-- carve: (?:\[|\]\{|<\/#)/.test(trimmed) || end >= 0 && trimmed.slice(end + 4).trim() !== '') return null
+  }
   const collectUntil = (endRe: RegExp, fallbackBlank: boolean, interrupts = true): HtmlBlockRun => {
     const block: string[] = []
     for (let i = start; i < lines.length; i++) {
@@ -5235,27 +5711,54 @@ export function markdownToCarveWithLosses(
 ): { value: string; losses: MarkdownImportLoss[] } {
   const losses: MarkdownImportLoss[] = []
   importLosses = losses
+  const decoded = markdown.includes('&') ? decodeHtmlEntitiesRaw(markdown) : markdown
+  let emptyDestinationKey: string | undefined
+  if (decoded.includes('@')) {
+    const keySource = decoded.includes('\\') ? decoded.replace(/\\([!-\/:-@\[-`{-~])/g, '$1') : decoded
+    const occupied = new Set([...keySource.toLowerCase().matchAll(/carve-md-empty-(\d+)/g)].map(match => match[1]))
+    let slot = 0
+    while (occupied.has(String(slot))) slot++
+    emptyDestinationKey = `carve-md-empty-${slot}`
+  }
+  useEmptyDestinationBoundaryKey(emptyDestinationKey)
   try {
     // PART 11 §10s: a carrier marker is lifted to a placeholder before the
     // conversion and written back as the Carve line it is afterwards, so the
     // Markdown reading in between never sees a comment it would carry across as
     // raw HTML.
+    inlineCarriersEnabled = !Object.values(dialect).some(Boolean)
+    inlineCarriersDamaged = false
     const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
+    if (losses.some(loss => loss.message === CARRIER_MARKERS_DAMAGED)) inlineCarriersEnabled = false
 
-    let value = restoreCarrierMarkers(convertMarkdown(prepared, dialect))
-    if (value.includes('@')) {
+    let value = restoreInlineCarriers(restoreCarrierMarkers(convertMarkdown(prepared, dialect)))
+    if (inlineCarriersDamaged) {
+      inlineCarriersEnabled = false
+      carrierSlots = []
+      losses.length = 0
+      losses.push({ code: 'carrier-markers-damaged', message: CARRIER_MARKERS_DAMAGED, fidelity: 'degraded', confidence: 'fallback' })
+      value = convertMarkdown(markdown, dialect)
+    }
+    const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
+    if (value.includes('@') || usedBoundaryKey !== undefined) {
       const document = parse(value)
-      if (linkMarkdownEmailText(document)) {
+      if (linkMarkdownEmailText(document, usedBoundaryKey)) {
         const trailingNewline = value.endsWith('\n')
         value = renderCarve(document, { onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }) })
         if (!trailingNewline) value = value.replace(/\n$/, '')
       }
     }
+    if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
+      throw new Error('Markdown import could not remove its internal empty-destination boundary')
+    }
     return { value, losses }
   } finally {
+    inlineCarriersEnabled = false
+    inlineCarriersDamaged = false
     carrierSlots = []
     carrierToken = ''
     useEmptyDestinationReferences(null)
+    useEmptyDestinationBoundaryKey()
     importLosses = []
     inlineRunSourceLine = undefined
     importSourceLine = undefined
@@ -6159,11 +6662,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         fenceStrip = 0
         shiftBy = 0
         out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol + fenceShift), fenceInfoText))
-        // A blank line before a line that returns to an enclosing item would
-        // make that item loose.
+        // A source blank before the fence makes a following line in that item
+        // a separate block. Without it, keep the item tight.
         const next = lines[i + 1]
         const nextIndent = next === undefined ? 0 : indentColumns(next)
-        if (next !== undefined && next.trim() !== '' && !/^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t]|$)/.test(next) && !(nextIndent > 0 && nextIndent < fenceCol)) out.push('')
+        const nextIsItem = next !== undefined && /^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t]|$)/.test(next)
+        const staysTight = nextIndent > 0 &&
+          (nextIndent < fenceCol || !fenceAfterBlank)
+        if (next !== undefined && next.trim() !== '' && !nextIsItem && !staysTight) out.push('')
         prevType = 'code_fence'
       } else {
         out.push(dedented)
@@ -6375,7 +6881,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         // this fence stands when the item's own marker line opened that quote:
         // `prevInItem` cannot see that line, since a marker line sits LEFT of
         // the content column it establishes (carve-js#2028).
-        (afterLazy >= 0 || prevInItem || lazyQuote !== null) &&
+        (afterLazy >= 0 || prevInItem || lazyQuote !== null || listCols.includes(contentCol)) &&
         indentColumns(line) >= contentCol &&
         slack < 4 &&
         quoted !== null &&
@@ -6522,7 +7028,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (isHeading && /^[ \t]*(#{1,6})(?:[ \t]+#*)?[ \t]*$/.test(line)) {
       const level = /^#+/.exec(trimmed)![0].length
       if (out.length && out.at(-1)!.trim() !== '') out.push('')
-      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text), '')
+      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text))
       prevType = 'heading'
       continue
     }
@@ -6628,14 +7134,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
       if (heading !== null) {
         if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-        const parts = bare.map((text, index) => headingLine(text, index === bare.length - 1))
+        const { parts, joined } = headingParagraphParts(bare, dialect, bare.map((text, index) => index > 0 && listCols.length > 0 && indentColumns(text) < contentCol))
         let offset = heading.length + 1
         const sourceLines = parts.map((text, index) => {
           const entry = { offset, line: sourceLine(i + index) }
           offset += text.length + 1
           return entry
         })
-        out.push(containerPad + convertInline(`${heading} ${parts.join(' ')}`, dialect, false, false, undefined, true, false, true, at => {
+        out.push(containerPad + convertInline(`${heading} ${joined}`, dialect, false, false, undefined, true, false, true, at => {
           let line = sourceLines[0]?.line
           for (const entry of sourceLines) {
             if (entry.offset > at) break
@@ -6659,7 +7165,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
                   inItem && indentColumns(text) < contentCol && !RE_LIST_MARKER.test(text) ? containerPad + text.trimStart() : text,
                 )
                 .join('\n'),
-              dialect,
+              dialect, false, false, undefined, true, false, true, undefined, true, false,
+              listCols.length === 0 && !/^[ \t]*>/.test(line),
             ),
           ),
         )
@@ -6676,7 +7183,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // the migrated document grew a table the author never saw
     // (markup-carve/carve-js#1061). Escaping only the opening pipe keeps the
     // line in the paragraph it belongs to.
-    out.push(
+    if (isHeading && /^[ \t]*#{1,6}[ \t]*$/.test(converted)) {
+      const level = /^#+/.exec(trimmed)![0].length
+      out.push(...rawBlockHtml([`<h${level}></h${level}>`]).map(text => containerPad + text))
+    } else out.push(
       !inGfmTable[i] && isStandardTableRow(converted) ? keepPipeRowLiteral(converted) : converted,
     )
     itemParagraph = listCols.length > 0 && indentColumns(line) >= contentCol && !isHeading && opensParagraph(held)

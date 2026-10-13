@@ -1,3 +1,6 @@
+import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
+import { normalizeRefLabel } from './label-key.js'
+import { renderLinkReferenceDefinition } from './render-carve.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { renderCellContent } from './render-cell-content.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
@@ -9,7 +12,8 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
+import { blankDeniedDestination } from './deny-listed-destination.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -74,15 +78,17 @@ function renderPass(
     // (markup-carve/carve-js#892).
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    referencedLinks: referencedLinkLabels(ast),
     expandedDefinitions,
     expanded: new Set(),
   }
-  const out = renderBlocks(ast.children, ctx)
+  const out = renderBlocks(blocksWithLinkDefinitionsInSourceOrder(ast), ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return { text: stripBidiControls(normalize(`${out}${footnotes}`)), expanded: ctx.expanded }
 }
 
 interface PlainContext {
+  referencedLinks: ReadonlySet<string>
   options: PlainTextRenderOptions
   smartTypography: SmartTypographyOption
   listDepth: number
@@ -197,7 +203,13 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return ''
     case 'comment':
       return ''
-    case 'link_reference_definition':
+    case 'link_reference_definition': {
+      if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
+      const authored = stripControls(node.href)
+      const href = blankDeniedDestination(authored)
+      destinationDenied(ctx.options, 'link', 'plain', authored, href, node.pos)
+      return `${stripControls(renderLinkReferenceDefinition({ ...node, href }))}\n\n`
+    }
     case 'citation_definition':
       // Renders nothing: a definition line is not prose. PART 12 §18 gave the
       // citation line a node without moving output on any target.

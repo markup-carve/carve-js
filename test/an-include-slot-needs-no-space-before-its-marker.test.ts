@@ -25,12 +25,20 @@ describe('an include slot needs no whitespace before its marker', () => {
     ['a bare path', '{{ c.crv#Alpha }}'],
     ['a quoted path', '{{ "c.crv"#Alpha }}'],
     ['a curly-quoted path', '{{ “c.crv”#Alpha }}'],
-    ['a tab separator', '{{ c.crv\t#Alpha }}'],
     ['a quoted path holding a space', '{{ "my c.crv"#Alpha }}'],
   ])('%s takes an adjacent section name', (_label, source) => {
     const r = expand(source, files)
     expect(r.rules).toEqual([])
     expect(r.html).toBe(spaced.html)
+  })
+
+  it('a tab separator takes an adjacent section name', () => {
+    expect(parseDirective('{{ c.crv\t#Alpha }}')).toEqual({
+      raw: '{{ c.crv\t#Alpha }}', path: 'c.crv\t', section: 'Alpha', shift: 0,
+    })
+    const r = expand('{{ c.crv\t#Alpha }}', files)
+    expect(r.rules).toEqual(['include-unresolved'])
+    expect(r.html).toBe('<p>{{ c.crv\t<span class="tag"><strong>#Alpha</strong></span> }}</p>')
   })
 
   it.each([

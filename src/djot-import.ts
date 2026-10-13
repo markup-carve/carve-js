@@ -19,7 +19,7 @@ import { djotReferenceLayout } from './djot-reference-layout.js'
 import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
-import { escapePlainCarveInlineSyntax, HANDLED_DJOT } from './carve-escape.js'
+import { escapePlainCarveInlineSyntaxAround, HANDLED_DJOT } from './carve-escape.js'
 import { applyMigrationFixes, isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-migrate.js'
 
 const fencedLines = (lines: readonly string[]): boolean[] => {
@@ -331,6 +331,11 @@ function convertDjotBlockMarkers(source: string): string {
     while ((host = prefix.exec(view))) view = view.slice(host[0].length)
     view = view.replace(/^[ \t]+/, '')
     const containerOffset = lines[i]!.length - view.length
+    // Carve numbers a list from a bare period; Djot reads the same line as text.
+    if (/^\.(?=[ \t]|$|\{)/.test(view) && masked[i]![containerOffset] === '.') {
+      lines[i] = lines[i]!.slice(0, containerOffset) + '\\' + view
+      continue
+    }
     const container =
       view.startsWith(':::') && masked[i]!.slice(containerOffset).startsWith(':::')
         ? [view, lines[i]!.slice(0, containerOffset), view]
@@ -749,18 +754,9 @@ function escapePlainDjotText(source: string): string {
     }
     masked = chars.join('')
   }
-  let output = ''
-  let plain = ''
-  for (let i = 0; i < source.length; i++) {
-    if (masked[i] === ' ' && source[i] !== '\n') {
-      if (plain !== '') {
-        output += escapePlainCarveInlineSyntax(plain, HANDLED_DJOT)
-        plain = ''
-      }
-      output += source[i]
-    } else plain += source[i]
-  }
-  return output + escapePlainCarveInlineSyntax(plain, HANDLED_DJOT)
+  // The mask writes a space over each opaque character and keeps real spaces.
+  return escapePlainCarveInlineSyntaxAround(
+    source, at => masked[at] === ' ' && source[at] !== ' ' && source[at] !== '\n', HANDLED_DJOT)
 }
 
 function foldHeadingContinuations(source: string): string {

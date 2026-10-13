@@ -134,14 +134,13 @@ describe('a collapsed reference reaches a heading by its rendered text', () => {
     expect(href(withFootnoteInLabel)).toBe('#heading')
     expect(href(withFootnoteInBoth)).toBe('#heading')
 
-    // The resulting anchor nests, and that is a PRE-EXISTING defect of a
-    // footnote reference inside any link label rather than anything this rule
-    // introduces - an ordinary inline link with the same label nests
-    // identically, on this build and on the one before it. Pinned here so the
-    // day it is fixed, this row moves with it instead of being discovered.
-    const nests = (src: string) => /<a [^>]*>(?:(?!<\/a>)[\s\S])*<a /.test(carveToHtml(src))
-    expect(nests('[^x]: note\n\n[see [^x] here](/u)\n')).toBe(true)
-    expect(nests(withFootnoteInLabel)).toBe(true)
+    // The footnote keeps its ordinal inside inline and collapsed links.
+    expect(carveToHtml('[^x]: note\n\n[see [^x] here](/u)\n')).toContain(
+      '<a href="/u">see <sup id="fnref1">1</sup> here</a>',
+    )
+    expect(carveToHtml(withFootnoteInLabel)).toContain(
+      '<a href="#heading"><sup id="fnref1">1</sup> heading</a>',
+    )
 
     // CONTROL: a nested LINK is unwrapped, which is the rule that construct
     // does have, so the two are not the same case.
