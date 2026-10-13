@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, carveToHtmlWithReport, carveToMarkdown, htmlToAst, htmlToCarve, migrateMarkdown, parse, renderHtml, renderMarkdown } from '../src/index.js'
+import { carveToHtml, carveToHtmlWithReport, carveToMarkdown, htmlToAst, htmlToCarve, migrateMarkdown, parse } from '../src/index.js'
 
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures/roundtrip-carriers2.json', import.meta.url), 'utf8'))
 function nodes(value: unknown): Record<string, any>[] {
@@ -20,7 +20,7 @@ describe('new roundtrip carriers', () => {
   it('leaves blank lines empty when restoring a definition body', () => {
     const source = ':: Carve\n: A markup language.\n  :: inner\n  : def\n'
     expect(migrateMarkdown(carveToMarkdown(source, { roundtrip: true })).value)
-      .toBe(':: Carve\n: A markup language.\n\n  *inner*\n\n  def\n')
+      .toBe(':: Carve\n: A markup language.\n\n  :: inner\n  : def\n')
   })
   it.each([
     '{.c}\n:: Carve\n: A markup language.\n',
@@ -110,22 +110,15 @@ describe('new roundtrip carriers', () => {
     ':: Outer\n: One\n\n  :: Inner\n  : Two\n  :: Last\n  : Three\n',
     ':: Outer\n: > :: Inner\n  > : Definition\n',
     ':: Outer\n: One\n\n  {.nested}\n  :: Inner\n  : Two\n',
-  ])('carries only the outer definition list %j', source => {
+  ])('carries a nested definition list with depth markers %j', source => {
     const markdown = carveToMarkdown(source, { roundtrip: true })
     expect(markdown.match(/<!-- carve: :: /g)).toHaveLength(1)
-    expect(markdown.match(/<!-- carve: : -->/g)).toHaveLength(1)
-    expect(markdown.match(/<!-- carve: -->/g)).toHaveLength(1)
-    expect(markdown).not.toContain('<!-- carve: {.nested} -->')
+    expect(markdown).toMatch(/<!-- carve:2 :: Inner -->/)
+    expect(markdown.match(/<!-- carve:2 -->/g)).toHaveLength(1)
     const result = migrateMarkdown(markdown)
     expect(result.report.diagnostics.filter(d => d.code === 'carrier-markers-damaged')).toEqual([])
-    const restored = parse(result.value)
-    expect(nodes(restored).filter(node => node.type === 'definition_list')).toHaveLength(1)
-    expect(restored.children[0]).toMatchObject({ type: 'definition_list', items: [{ terms: [[{ type: 'text', value: 'Outer' }]] }] })
-    const outer = parse(source).children[0]
-    if (outer.type !== 'definition_list') throw new Error('Expected a definition list')
-    const degraded = migrateMarkdown(renderMarkdown({ type: 'document', children: outer.items[0]!.definitions[0]! })).value
-    const expected = parse(`:: Outer\n: ${degraded.trimEnd().replaceAll('\n', '\n  ')}\n`)
-    expect(carveToHtml(result.value)).toBe(renderHtml(expected))
+    expect(nodes(parse(result.value)).filter(node => node.type === 'definition_list')).toHaveLength(2)
+    expect(carveToHtml(result.value)).toBe(carveToHtml(source))
   })
   it.each([
     '{.c}\n:: Carve\n: A markup language.\n',

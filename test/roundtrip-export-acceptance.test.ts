@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { isDeepStrictEqual } from 'node:util'
 import { test } from 'vitest'
 import { parseFragment, serialize } from 'parse5'
 import { parse, carveToHtml, carveToHtmlWithReport, htmlToAst, htmlToCarve, carveToMarkdown, carveToMarkdownWithReport, migrateMarkdown } from '../src/index.js'
@@ -185,8 +186,13 @@ for (const fixture of fixtures.markdownExportImport) test(`shared Markdown expor
 
 for (const fixture of fixtures.markdownImportNegative ?? []) test(`shared Markdown import rejection: ${fixture.id}`, () => {
   const imported = migrateMarkdown(fixture.markdown)
-  assert.ok(imported.report.diagnostics.some((row) => row.code === fixture.expectedDiagnostic.code), fixture.expectedDiagnostic.code)
-  for (const type of fixture.forbiddenTypes) assert.ok(!nodes(parse(imported.value)).some((node) => node.type === type), type)
+  const tree = parse(imported.value)
+  const codes = imported.report.diagnostics.map((row) => row.code as string)
+  if (fixture.expectedDiagnostic) assert.ok(codes.includes(fixture.expectedDiagnostic.code), fixture.expectedDiagnostic.code)
+  for (const [code, count] of Object.entries(fixture.expectedDiagnostics ?? {})) assert.equal(codes.filter((row) => row === code).length, count, code)
+  assertProjection(tree, fixture.expectedNodes ?? [])
+  for (const projection of fixture.forbiddenNodes ?? []) assert.ok(!nodes(tree).some((node) => Object.entries(projection).every(([key, value]) => isDeepStrictEqual(field(node, key), value))), JSON.stringify(projection))
+  for (const type of fixture.forbiddenTypes ?? []) assert.ok(!nodes(tree).some((node) => node.type === type), type)
 })
 
 test('shared acceptance cases have distinct identities and explicit assertions', () => {
