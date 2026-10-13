@@ -75,7 +75,8 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
     if (depth < 1 || text === '') continue
     const item = /^([-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(visible)
     const stack = frames.get(depth) ?? []
-    while (stack.at(-1) && stack.at(-1)!.column > indent) stack.pop()
+    const lazy = depth === priorDepth && priorParagraph && previousParagraph && !item
+    while (!lazy && stack.at(-1) && stack.at(-1)!.column > indent) stack.pop()
     const frame = stack.at(-1)
     if (item) {
       if (depth === priorDepth && priorParagraph && (!frame || indent > frame.column)) {
@@ -96,13 +97,14 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
         const prefixEnds = [0]
         for (let level = 0; level < depth; level++) prefixEnds.push(prefixEnds[level]! + /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(prefixEnds[level]))![0].length)
         for (const [ownerDepth, owners] of frames) for (const owner of owners) {
-          if (!loose || ownerDepth > depth) continue
+          if (!loose || ownerDepth > depth || ownerDepth === depth && owner.column !== frame.column) continue
           const ownerIndent = /^[ \t]*/.exec(prefix.slice(prefixEnds[ownerDepth]))![0].length
           if (ownerDepth < depth && ownerIndent <= owner.column) continue
           const startPrefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(lines[owner.start]!)![0]
           if (!before.has(owner.start)) before.set(owner.start, [startPrefix + ' '.repeat(owner.column) + hold('{loose}', true), startPrefix.trimEnd()])
         }
       }
+      if (frame && indent > frame.column) frame.attributes = []
       if (frame && indent === frame.column) stack.pop()
       stack.push({ column: indent, start: same !== undefined ? frame!.start : row, kind: same ?? kind, attributes: [] })
       frames.set(depth, stack)
@@ -117,7 +119,7 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
       else if (frame && attrs?.end !== body.trimEnd().length) frame.attributes = []
     } else if (frame) {
       frame.attributes = []
-      if (indent <= frame.column) frames.delete(depth)
+      if (indent <= frame.column && !lazy) frames.delete(depth)
     }
   }
   return lines.flatMap((line, row) => removed.has(row) ? [] : [...(before.get(row) ?? []), line]).join('\n')
@@ -327,7 +329,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const quoteList = embeddedListOwner && embeddedListOwner.depth < quoteDepth && (!ordinaryQuoteList || embeddedListOwner.depth > ordinaryQuoteList.depth) ? embeddedListOwner : ordinaryQuoteList
     const outsideQuoteItem = quoteList && quoteDepth > quoteList.depth && ownerColumn(quoteList) < quoteList.column + 1
     if (returnedNoteItemAttributes.length) {
-      const retainedDepth = Math.max(0, (returnedNoteDestinationDepth ?? 0) - (noteOwner?.depth ?? 0))
+      const retainedDepth = Math.max(0, Math.min(returnedNoteDestinationDepth ?? 0, quoteDepth) - (noteOwner?.depth ?? 0))
       const prefix = retainedDepth ? closedQuoteBoundary(quoteForCarve(), retainedDepth - 1) + ' ' : ' '.repeat(noteOwner?.content ?? 0)
       for (const attributes of returnedNoteItemAttributes) out.push(prefix + attributes)
       returnedNoteItemAttributes.length = 0
