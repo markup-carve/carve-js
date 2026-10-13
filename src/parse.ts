@@ -14448,7 +14448,9 @@ class ParseSession {
         const index = openerIndex - 1
         if (index < 1) continue
         for (; priorChecked < index; priorChecked++) {
-          if (RE_FOOTNOTE_DEF.test(nested[priorChecked]!.trimStart())) nestedNoteSeen = true
+            const text = nested[priorChecked]!.trimStart()
+            if (RE_FOOTNOTE_DEF.test(text) ||
+                (isListMarkerLine(text) && !noteParagraphMarkers.has(priorChecked))) nestedNoteSeen = true
         }
         if (!isBlankLine(nested[index - 1]!)) continue
         if (nestedNoteSeen) continue

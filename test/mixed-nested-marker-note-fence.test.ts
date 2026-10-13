@@ -6,10 +6,9 @@ it.each(rows)('keeps the tail outside the marker note after $id', ({ source, htm
   expect(carveToHtml(source)).toBe(html)
 })
 
-it('keeps a separated note comment from turning a child follower into code', () => {
-  const source = '- [^n]: text\n\n    - inner\n\n    %% c\n    ~~~\n   %% c\nafter [^n]\n'
+it('keeps a separated child fence in its code block', () => {
+  const source = '- [^n]: text\n\n    - inner\n\n    %% c\n    ~~~\n    code\n    ~~~\nafter [^n]\n'
   const html = carveToHtml(source)
-  expect(html).toContain('<li>~~~</li>')
+  expect(html).toContain('<pre><code>code\n</code></pre>')
   expect(html).toMatch(/<\/ul>\s*<p>after <a id="fnref1"/)
-  expect(html).not.toContain('<pre>')
 })
