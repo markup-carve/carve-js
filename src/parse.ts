@@ -14024,6 +14024,10 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (isMarker && lazyState.literalColon === undefined &&
+              colonFenceShapeEndsLazyContinuation(markerLineBottomBlock(dedented))) {
+            lazyState.lazyFoldable = false
+          }
           if (descriptionCloserAnswer === false) {
             markerDescriptionInlineFence = true
             lazyState.inlineFenceParagraph = true
