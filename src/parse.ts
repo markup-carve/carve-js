@@ -7787,6 +7787,7 @@ function rebaseOverindentedBlocks(
         termOpen = false
         if (descriptionColumn !== null && column >= descriptionColumn) {
           const text = candidate.trimStart()
+          onFenceBodyLine?.(j)
           if (descriptionState) trackItemLazyState(text, descriptionState, () => {
             const group = opaqueGroupCloser(text)
             if (group === null) return false
