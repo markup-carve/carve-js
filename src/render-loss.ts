@@ -170,4 +170,3 @@ export function checkedRender(
   if (opts.strictLosses && totalLosses > 0) throw new RenderLossError(result)
   return result
 }
-
