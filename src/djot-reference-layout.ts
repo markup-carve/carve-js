@@ -1,9 +1,7 @@
 import { continuesParagraph } from './djot-attributes.js'
-import { djotEmphasis } from './djot-emphasis.js'
+import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
 import { djotTableRows, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
-import { parseRefLabelInlines } from './parse.js'
-import { djotReferenceText } from './djot-reference-label.js'
 import { parseAttrs } from './attribute-parser.js'
 import { djotInlineBoundaries } from './djot-inline-boundaries.js'
 
@@ -77,9 +75,9 @@ function normalizeMultilineLabels(
 }
 
 /** Normalize reference labels and share definition attributes. */
-export function djotReferenceLayout(source: string, contentStart: (line: string) => number, caretOnly = false, accepted?: ReadonlyMap<number, { label: string; target: string; end: number }>, imageChildText = false): string {
+export function djotReferenceLayout(source: string, contentStart: (line: string) => number, caretOnly = false, accepted?: ReadonlyMap<number, { label: string; target: string; end: number }>, imageChildText = false, aliasesOnly = false): string {
   let mask = referenceMask(source)
-  if (!caretOnly) {
+  if (!caretOnly && !aliasesOnly) {
   source = normalizeMultilineLabels(source, (at, label, image) =>
     !image && !imageChildText && mask[at] !== ' ' && !isDjotEscaped(source, at) && !label.startsWith('^') &&
     !label.includes('`') && !/\n[ \t]*\n/.test(label) && continuesReferenceQuote(source, at, label, contentStart)
@@ -97,6 +95,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       ? label.replace(/\s+/g, ' ').trim()
       : undefined, true, mask)
   }
+  const collapsedReferenceText = djotCollapsedReferenceCache()
   const lines = source.split('\n')
   let definitionOffset = 0
   const offsets = lines.map(line => { const at = definitionOffset; definitionOffset += line.length + 1; return at })
@@ -131,7 +130,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     const attrs: string[] = []
     const attributeLines: number[] = []
     let attributeDepth: number | undefined
-    while (cursor > 0 && !caretOnly) {
+    while (cursor > 0 && !caretOnly && !aliasesOnly) {
       const precedingStart = contentStart(lines[cursor - 1]!)
       const precedingPrefix = lines[cursor - 1]!.slice(0, precedingStart)
       const prefix = lines[n]!.slice(0, start)
@@ -258,7 +257,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
         explicit = referenceSource.slice(close + 2, labelEnd)
       if (content.startsWith('^') && content.length > 1) continue
       const key = explicit ? referenceKey(explicit) : definitionKey(
-        djotReferenceText(parseRefLabelInlines(djotEmphasis(content, (plain) => plain))),
+        collapsedReferenceText(content, (lines[n]!.slice(0, contentStart(lines[n]!)).match(/>/g) ?? []).length),
       )
       let end = labelEnd + 1,
         own = ''
@@ -276,7 +275,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
         label: referenceSource.slice(at, close + 1),
         own,
         ownSlots: referenceAttributeSlots(own),
-        formatted: !explicit && /[_*`{^~]/.test(content),
+        formatted: !explicit && /[_*`{^~"']/.test(content),
       })
       open = end - 1
     }
@@ -306,7 +305,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   const aliases = new Map<string, string>()
   if (source.includes('\\') || source.includes('|') || source.includes('[')) {
-    const aliasKeys = new Set([...definitions.keys()].filter(key => key.startsWith('^') || key.includes('\\') || key.includes('|') || key.includes('[')))
+    const aliasKeys = new Set([...definitions.keys()].filter(key => key.startsWith('^') || key.includes('\\') || key.includes('|') || key.includes('[') || key.includes('`')))
     for (const uses of references) for (const use of uses)
       if (use.rawKey !== use.key && definitions.has(use.key)) aliasKeys.add(use.key)
     if (aliasKeys.size) {
@@ -318,6 +317,24 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   const renamedLines = new Map<number, string>()
   const movedDefinitions: string[] = []
+  if (aliasesOnly) {
+    const edits: Array<[number, number, string]> = []
+    for (const n of definitionLines) {
+      const start = contentStart(lines[n]!)
+      const definition = /^\[([^\]\n]+)\]:/.exec(lines[n]!.slice(start))!
+      const alias = aliases.get(definitionKey(definition[1]!))
+      if (alias) edits.push([offsets[n]! + start + 1, offsets[n]! + start + 1 + definition[1]!.length, alias])
+    }
+    for (const uses of references) for (const use of uses) {
+      const alias = aliases.get(use.key)
+      if (alias) edits.push([use.at + use.label.length + 1, use.end - use.own.length - 1, alias])
+    }
+    edits.sort((a, b) => a[0] - b[0])
+    const parts: string[] = []
+    let cursor = 0
+    for (const [start, end, value] of edits) { parts.push(source.slice(cursor, start), value); cursor = end }
+    return parts.join('') + source.slice(cursor)
+  }
   const liftedAttributes = new Set<string>()
   for (const [key, definition] of definitions) {
     const line = lines[definition.line]!, start = contentStart(line)

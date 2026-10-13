@@ -1,10 +1,10 @@
+import { djotBlockLayout } from './djot-block-layout.js'
 import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
-import { parseRefLabelInlines } from './parse.js'
-import { djotReferenceText } from './djot-reference-label.js'
+import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
 
 export type DjotImportLoss = {
   code: 'structure-unspellable'
@@ -24,10 +24,13 @@ export function djotImportLosses(
   rawCode: readonly number[] = [],
   accepted: ReadonlyMap<number, { label: string; target: string; end: number }>,
 ): DjotImportLoss[] {
+  const collapsedReferenceText = djotCollapsedReferenceCache()
   const losses: DjotImportLoss[] = []
   const reported = new Set<string>()
   const lines = source.split('\n')
-  const quoteDepths = lines.map(line => (line.match(/^(?:[ \t]*>(?:[ \t]|$))*/)?.[0].match(/>/g) ?? []).length)
+  const quoteDepths = lines.map(line => (line.slice(0, contentStart(line)).match(/>/g) ?? []).length)
+  if (quoteDepths.some(depth => depth > 1))
+    djotBlockLayout(source, rows, undefined, undefined, undefined, undefined, (line, depth) => { quoteDepths[line] = depth })
   const offsets: number[] = []
   let offset = 0
   for (const line of lines) {
@@ -123,7 +126,7 @@ export function djotImportLosses(
         }
         headingLines.add(next)
       }
-      const label = djotReferenceText(parseRefLabelInlines(djotEmphasis(text, (text) => text)))
+      const label = collapsedReferenceText(text)
       const key = definitionKey(label)
       if (!definitions.has(key)) definitions.set(key, '#' + key)
     }
@@ -233,7 +236,7 @@ export function djotImportLosses(
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
       const key = explicit ? referenceKey(explicit) : definitionKey(
-        definitions.size === 0 ? '' : djotReferenceText(parseRefLabelInlines(djotEmphasis(label, (text) => text))),
+        definitions.size === 0 ? '' : collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!),
       )
       destination = definitions.get(key)
       end++
@@ -242,6 +245,11 @@ export function djotImportLosses(
     } else { carryNested(opener.nested); continue }
     if (destination === '')
       report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(open))
+    if (image && destination !== undefined && destination !== '') {
+      const label = source.slice(open + 1, at)
+      if (label.includes('\n') && /\n[ \t]*\n/.test(collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!)))
+        report('An image alternative text with a blank line cannot be spelled in Carve.', lineAt(open))
+    }
     if (!image) {
       if (opener.nested) report('A link inside another link cannot be spelled in Carve.', lineAt(open))
       const parent = stack.at(-1)
