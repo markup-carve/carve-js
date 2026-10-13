@@ -4227,7 +4227,7 @@ function classifyQuotedLine(
   // A marker in an existing paragraph is still ordinary paragraph text.
   if (!blockQuoteParagraphOpen(state) && isListMarkerLine(content)) {
     const nested = markerLineState(content, prefixMemo)
-    if (!nested.leavesParagraphOpen) {
+    if (!nested.leavesParagraphOpen || nested.bottomIsContinuationMarker) {
       closeBlockQuoteParagraph(state)
       return null
     }
