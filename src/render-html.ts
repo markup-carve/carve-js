@@ -1371,6 +1371,7 @@ function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderConte
     uniqueId,
     titleId: mintTitleId,
     mode: opts.mode ?? 'interactive',
+    roundtrip: opts.roundtrip === true,
     renderers: opts.renderers ?? {},
     labels: resolvedLabels(opts),
     sections: opts.sections !== false,
@@ -1386,6 +1387,7 @@ function inlineCtx(opts: RenderOptions): ExtensionRenderContext {
     renderAttrs,
     uniqueId,
     mode: opts.mode ?? 'interactive',
+    roundtrip: opts.roundtrip === true,
     renderers: opts.renderers ?? {},
     labels: resolvedLabels(opts),
   }
@@ -2453,6 +2455,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
   switch (node.type) {
     case 'text':
       return escapeHtml(node.value)
+    case 'cell_wrap':
+      return ' '
     case 'escaped_text':
       // The backslash is authoring syntax; the reader sees the character. §13a
       // carries ONE escape per element (ruling 4): a multi-character value

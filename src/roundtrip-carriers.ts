@@ -70,9 +70,10 @@ const PREFIXED = [
 ] as const
 
 export type PrefixedCarrier = (typeof PREFIXED)[number]
+export type CarrierName = PrefixedCarrier | 'ext' | 'selected'
 
 /** The canonical spelling a writer emits. */
-export const carrier = (name: PrefixedCarrier): string => `data-carve-${name}`
+export const carrier = (name: CarrierName): string => `data-carve-${name}`
 
 /** The deprecated spelling an importer still reads. */
 export const legacyCarrier = (name: PrefixedCarrier): string => `data-djot-${name}`
@@ -104,9 +105,9 @@ export const RESERVED_CARRIER_ATTRIBUTES: ReadonlySet<string> = new Set<string>(
  */
 export function readCarrier(
   get: (name: string) => string | undefined,
-  name: PrefixedCarrier,
+  name: CarrierName,
 ): string | undefined {
-  return get(carrier(name)) ?? get(legacyCarrier(name))
+  return get(carrier(name)) ?? (name === 'ext' || name === 'selected' ? undefined : get(legacyCarrier(name)))
 }
 
 export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.roundtrip === true

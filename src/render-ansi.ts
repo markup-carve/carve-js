@@ -668,6 +668,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return '\0'
     case 'soft_break':
       return ' '
+    case 'cell_wrap':
+      return ' '
     case 'hard_break':
       return '\n'
     case 'insert':
