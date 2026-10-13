@@ -452,7 +452,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       continue
     }
     const row: boolean = (rows[n] ?? false) && !(noteOwner && paragraph && quoteDepth >= depth && !(lists.at(-1) && indent <= lists.at(-1)!.column))
-    const rawFencedItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?[`~]{3,}/.test(text)
+    const rawFencedItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(text)
     const rawReferenceItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+\[(?!\^)[^\]\n]+\]:/.test(text)
     const fencedItemOpener = rawFencedItem && /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(visible)
     const wholeAttributes = visible.startsWith('{') && readAttributes(raw, rawIndent)?.end === raw.length
@@ -745,8 +745,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       continue
     }
     if (attributeLine && !paragraph && holdItemAttributes) {
-      const owner = lists.at(-1)
-      if (owner && owner.depth === quoteDepth && indent > owner.column && attrs!.source !== '{}') {
+      let owner: typeof lists[number] | undefined
+      for (let index = lists.length - 1; index >= 0; index--) {
+        const candidate = lists[index]!
+        if (candidate.depth === quoteDepth && indent > candidate.column) { owner = candidate; break }
+      }
+      if (owner && attrs!.source !== '{}') {
         const heldLoose = /\x00DJOTITEMATTR\x00(?:\d+\x00)?B\d+\x00$/.test(out[owner.start - 2] ?? '')
         if (blank && !heldLoose && !out[owner.start]!.includes('{loose}\n')) {
           const start = out[owner.start]!, noteItem = noteOwner ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(start) : null
