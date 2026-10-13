@@ -7779,7 +7779,11 @@ function rebaseOverindentedBlocks(
           continue
         }
         const column = indentColumns(candidate)
-        if (descriptionColumn !== null && descriptionState?.lazyFoldable && takenBelowColumn?.has(j) &&
+        // PART 0: a line that opens nothing continues the open description
+        // paragraph lazily, whether the host took it from below its column or
+        // it sits between the list's base and the description column.
+        if (descriptionColumn !== null && descriptionState?.lazyFoldable &&
+            (takenBelowColumn?.has(j) || (!termOpen && column >= base && column < descriptionColumn && !isContinuationMarker(candidate))) &&
             !lineOpensItemBlock(candidate.trimStart()) && !RE_COMMENT_LINE.test(candidate.trimStart())) {
           end = j
           continue

@@ -3087,7 +3087,7 @@
   {
     "id": "review-275",
     "source": "- :: t\n  :   payload\n     text\n      > ```\n     ```\n text\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>payload\ntext</dd>\n    </dl>\n    <blockquote>\n      <pre><code></code></pre>\n    </blockquote>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>text</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>payload\ntext</p>\n        <blockquote>\n          <pre><code></code></pre>\n        </blockquote>\n      </dd>\n    </dl>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>text</p>"
   },
   {
     "id": "review-276",
