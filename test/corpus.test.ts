@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-closed-fence-at-a-marker-line-note-s-body-column-opens-in-the-note',
   'a-titled-footnotes-marker-names-the-endnotes-section',
   'an-at-sign-before-a-space-and-a-doubled-delimiter-inside-bold-italic-are-text',
   'a-description-marker-followed-by-a-no-break-space-has-content',

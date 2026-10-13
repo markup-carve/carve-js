@@ -18,15 +18,15 @@ it('keeps the continued note and CODE in their source spans', () => {
   const list = ast.children[0]!
   expect(list.type).toBe('list')
   if (list.type !== 'list') throw new Error('Expected list')
-  expect(list.items[0]!.children).toMatchObject([{
+  expect(list.items[0]!.children).toEqual([])
+  expect(ast.footnoteDefs?.n).toMatchObject([{
+    type: 'paragraph', children: [{ type: 'text', value: 'text' }, { type: 'soft_break' }, { type: 'text', value: '- child' }],
+  }, {
     type: 'code_block', content: 'code\n',
     pos: { startLine: 3, endLine: 5, startOffset: 29, endOffset: 49 },
   }])
   expect(ast.children[1]).toMatchObject({ type: 'paragraph', pos: { startLine: 6 } })
-  expect(ast.footnoteDefs?.n).toMatchObject([{
-    type: 'paragraph', children: [{ type: 'text', value: 'text' }, { type: 'soft_break' }, { type: 'text', value: '- child' }],
-  }])
-  expect(ast.footnoteDefPos?.n).toMatchObject({ startOffset: 2, endOffset: 24, endLine: 2 })
+  expect(ast.footnoteDefPos?.n).toMatchObject({ startOffset: 2, endOffset: 49, endLine: 5 })
 })
 
 it('bounds repeated continued marker-note collection', () => {
