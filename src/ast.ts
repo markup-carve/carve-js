@@ -721,6 +721,17 @@ export interface Emphasis extends BaseNode {
 export interface InlineCode extends BaseNode {
   type: 'code'
   value: string
+  cellWraps?: VerbatimCellWrap[]
+}
+
+/**
+ * A `+` continuation join inside a verbatim payload (CARVE-P12-069):
+ * `offset` counts codepoints up to the joining space in `value` or `content`.
+ */
+export interface VerbatimCellWrap {
+  offset: number
+  line: number
+  row?: number
 }
 
 export interface Link extends BaseNode {
@@ -773,6 +784,7 @@ export interface Math extends BaseNode {
   content: string
   label?: string
   number?: number
+  cellWraps?: VerbatimCellWrap[]
 }
 
 /**
@@ -784,6 +796,7 @@ export interface RawInline extends BaseNode {
   type: 'raw_inline'
   format: string
   content: string
+  cellWraps?: VerbatimCellWrap[]
 }
 
 /**
