@@ -152,7 +152,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-0",
     "source": "- :: term\n  : payload\n    ```\n    code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-1",
@@ -172,12 +172,12 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-4",
     "source": "- :: term\n  : payload\n      ```\n      code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-5",
     "source": "- :: term\n  : payload\n      ```\n      code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-6",
@@ -192,12 +192,12 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-8",
     "source": "- :: term\n  : payload\n        ```\n        code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-9",
     "source": "- :: term\n  : payload\n        ```\n        code\n    ```\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code>code\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-10",
@@ -272,7 +272,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-24",
     "source": "> - :: term\n>   : payload\n>     ```\n>     code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-25",
@@ -292,12 +292,12 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-28",
     "source": "> - :: term\n>   : payload\n>       ```\n>       code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-29",
     "source": "> - :: term\n>   : payload\n>       ```\n>       code\n>     ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>payload</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-30",
@@ -312,12 +312,12 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-32",
     "source": "> - :: term\n>   : payload\n>         ```\n>         code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload</dd>\n      </dl>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-33",
     "source": "> - :: term\n>   : payload\n>         ```\n>         code\n>     ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>payload</p>\n          <pre><code>code\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-34",
@@ -392,7 +392,7 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-48",
     "source": "> > - :: term\n> >   : payload\n> >     ```\n> >     code\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n        </dl>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-49",
@@ -412,12 +412,12 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-52",
     "source": "> > - :: term\n> >   : payload\n> >       ```\n> >       code\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n        </dl>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-53",
     "source": "> > - :: term\n> >   : payload\n> >       ```\n> >       code\n> >     ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n        </dl>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>payload</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-54",
@@ -432,12 +432,12 @@
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-56",
     "source": "> > - :: term\n> >   : payload\n> >         ```\n> >         code\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload</dd>\n        </dl>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n        </dl>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-57",
     "source": "> > - :: term\n> >   : payload\n> >         ```\n> >         code\n> >     ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>payload\n<code>\ncode\n</code>\nafter</dd>\n        </dl>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <dl>\n          <dt>term</dt>\n          <dd>\n            <p>payload</p>\n            <pre><code>code\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "authored-code-host-controls.json:authored-code-hosts-58",
@@ -1112,22 +1112,22 @@
   {
     "id": "mixed-304",
     "source": "- :: term\n  : payload\n    ```\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-305",
     "source": "- :: term\n  : payload\n    ```\n    body\n  ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-306",
     "source": "- :: term\n  : payload\n    ```\n    body\n  ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-307",
     "source": "- :: term\n  : payload\n    ```\n    body\n  ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-308",
@@ -1152,22 +1152,22 @@
   {
     "id": "mixed-312",
     "source": "- :: term\n  : payload\n      ```\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-313",
     "source": "- :: term\n  : payload\n      ```\n      body\n  ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-314",
     "source": "- :: term\n  : payload\n      ```\n      body\n  ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-315",
     "source": "- :: term\n  : payload\n      ```\n      body\n  ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-316",
@@ -1192,22 +1192,22 @@
   {
     "id": "mixed-324",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-325",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n  ~~~\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~</dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-326",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n  ~~~\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~</dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-327",
     "source": "- :: term\n  : payload\n    ~~~\n    body\n  ~~~\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~</dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-328",
@@ -1232,22 +1232,22 @@
   {
     "id": "mixed-332",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-333",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n  ~~~\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~</dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-334",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n  ~~~\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~</dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-335",
     "source": "- :: term\n  : payload\n      ~~~\n      body\n  ~~~\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n~~~\nbody\n~~~</dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-336",
@@ -1272,22 +1272,22 @@
   {
     "id": "mixed-344",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-345",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n  ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-346",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n  ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-347",
     "source": "- :: term\n  : payload\n    ```=html\n    body\n  ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-348",
@@ -1312,22 +1312,22 @@
   {
     "id": "mixed-352",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-353",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n  ```\n\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<p>tail</p>"
   },
   {
     "id": "mixed-354",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n  ```\n# heading\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<section id=\"heading\">\n  <h1>heading</h1>\n</section>"
   },
   {
     "id": "mixed-355",
     "source": "- :: term\n  : payload\n      ```=html\n      body\n  ```\n> quote\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>payload\n<code>=html\nbody\n</code></dd>\n    </dl>\n  </li>\n</ul>\n<blockquote><p>quote</p></blockquote>"
   },
   {
     "id": "mixed-356",
@@ -1352,7 +1352,7 @@
   {
     "id": "mixed-364",
     "source": "- :: term\n  :::note\n  : payload\n    ```\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-368",
@@ -1362,7 +1362,7 @@
   {
     "id": "mixed-372",
     "source": "- :: term\n  :::note\n  : payload\n      ```\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-376",
@@ -1372,7 +1372,7 @@
   {
     "id": "mixed-384",
     "source": "- :: term\n  :::note\n  : payload\n    ~~~\n    body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n~~~\nbody\n~~~\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-388",
@@ -1382,7 +1382,7 @@
   {
     "id": "mixed-392",
     "source": "- :: term\n  :::note\n  : payload\n      ~~~\n      body\n  ~~~\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    <pre><code>body\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n~~~\nbody\n~~~\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-396",
@@ -1392,7 +1392,7 @@
   {
     "id": "mixed-404",
     "source": "- :: term\n  :::note\n  : payload\n    ```=html\n    body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>=html\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-408",
@@ -1402,7 +1402,7 @@
   {
     "id": "mixed-412",
     "source": "- :: term\n  :::note\n  : payload\n      ```=html\n      body\n  ```\ntail\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload</dd>\n    </dl>\n    body\n  </li>\n</ul>\n<p>tail</p>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term\n:::note</dt>\n      <dd>payload\n<code>=html\nbody\n</code>\ntail</dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "mixed-416",
@@ -3607,7 +3607,7 @@
   {
     "id": "review-final-3",
     "source": "- :: term\n  : payload\n      ```\n    ```\n    ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload\n<code></code></p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code></code></pre>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-final-4",
@@ -3627,7 +3627,7 @@
   {
     "id": "review-final-7",
     "source": "- [ ] :: t\n  : p\n      ```\n    ```\n    ```\n",
-    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>p\n<code></code></p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled> \n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>p</p>\n        <pre><code></code></pre>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-final-8",
@@ -3642,7 +3642,7 @@
   {
     "id": "review-final-10",
     "source": "- :: term\n  : more\n      ```\n    ```\n    ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>more\n<code></code></p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>more</p>\n        <pre><code></code></pre>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-final-11",
@@ -3692,32 +3692,32 @@
   {
     "id": "review-following-code-root-6",
     "source": "- :: t0\n  : p0\n    ```\n  ```\n     ```\n   - n1\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t0</dt>\n      <dd>p0</dd>\n    </dl>\n    <pre><code></code></pre>\n    <code></code>\n    <ul>\n      <li>n1</li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t0</dt>\n      <dd>p0\n<code>\n</code>\n<code>\n- n1</code></dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-quote-7",
     "source": "> - :: t0\n>   : p0\n>     ```\n>   ```\n>      ```\n>    - n1\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t0</dt>\n        <dd>p0</dd>\n      </dl>\n      <pre><code></code></pre>\n      <code></code>\n      <ul>\n        <li>n1</li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t0</dt>\n        <dd>p0\n<code>\n</code>\n<code>\n- n1</code></dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-8",
     "source": "- outer\n  - :: t0\n    : p0\n      ```\n    ```\n       ```\n     - n1\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t0</dt>\n          <dd>p0</dd>\n        </dl>\n        <pre><code></code></pre>\n        <code></code>\n        <ul>\n          <li>n1</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t0</dt>\n          <dd>p0\n<code>\n</code>\n<code>\n- n1</code></dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-9",
     "source": "- :: t\n  : p\n    ```\n  ```\n      ```\n text\n text\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>p</dd>\n    </dl>\n    <pre><code></code></pre>\n    <code>\ntext\ntext</code>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>p\n<code>\n</code>\n<code>\ntext\ntext</code></dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-quote-10",
     "source": "> - :: t\n>   : p\n>     ```\n>   ```\n>       ```\n>  text\n>  text\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>p</dd>\n      </dl>\n      <pre><code></code></pre>\n      <code>\ntext\ntext</code>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>p\n<code>\n</code>\n<code>\ntext\ntext</code></dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-11",
     "source": "- outer\n  - :: t\n    : p\n      ```\n    ```\n        ```\n   text\n   text\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>p</dd>\n        </dl>\n        <pre><code></code></pre>\n        <code>\ntext\ntext</code>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>p\n<code>\n</code>\n<code>\ntext\ntext</code></dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-12",
@@ -3752,17 +3752,17 @@
   {
     "id": "review-following-code-root-18",
     "source": "- :: t\n  : p\n      ```\n  : q\n    ~~~\n    c\n    ~~~\nafter\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>p\n<code></code></dd>\n      <dd>\n        <p>q</p>\n        <pre><code>c\n</code></pre>\n      </dd>\n    </dl>\n    after\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>p\n<code></code></dd>\n      <dd>\n        <p>q</p>\n        <pre><code>c\n</code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "review-following-code-quote-19",
     "source": "> - :: t\n>   : p\n>       ```\n>   : q\n>     ~~~\n>     c\n>     ~~~\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>p\n<code></code></dd>\n        <dd>\n          <p>q</p>\n          <pre><code>c\n</code></pre>\n        </dd>\n      </dl>\n      after\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>p\n<code></code></dd>\n        <dd>\n          <p>q</p>\n          <pre><code>c\n</code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-20",
     "source": "- outer\n  - :: t\n    : p\n        ```\n    : q\n      ~~~\n      c\n      ~~~\n  after\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>p\n<code></code></dd>\n          <dd>\n            <p>q</p>\n            <pre><code>c\n</code></pre>\n          </dd>\n        </dl>\n        after\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>p\n<code></code></dd>\n          <dd>\n            <p>q</p>\n            <pre><code>c\n</code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n    after\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-21",
@@ -3797,17 +3797,17 @@
   {
     "id": "review-following-code-root-27",
     "source": "- :: t\n  : p\n    ```\n  ```\n     ```\n  - n\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>p</dd>\n    </dl>\n    <pre><code></code></pre>\n    <code></code>\n    <ul>\n      <li>n</li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>p\n<code>\n</code>\n<code>\n- n</code></dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-quote-28",
     "source": "> - :: t\n>   : p\n>     ```\n>   ```\n>      ```\n>   - n\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>p</dd>\n      </dl>\n      <pre><code></code></pre>\n      <code></code>\n      <ul>\n        <li>n</li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>p\n<code>\n</code>\n<code>\n- n</code></dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-29",
     "source": "- outer\n  - :: t\n    : p\n      ```\n    ```\n       ```\n    - n\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>p</dd>\n        </dl>\n        <pre><code></code></pre>\n        <code></code>\n        <ul>\n          <li>n</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>p\n<code>\n</code>\n<code>\n- n</code></dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-30",

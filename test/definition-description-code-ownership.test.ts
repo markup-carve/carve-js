@@ -38,7 +38,7 @@ it('bounds collection of repeated marker-term descriptions and code', () => {
       const source = '- :: term\n  : payload\n    ```\n    body\n  ```\nafter\n\n'.repeat(count)
       layoutWork.reset()
       layoutWork.on = true
-      expect(carveToHtml(source).match(/<pre>/g)).toHaveLength(count)
+      expect(carveToHtml(source).match(/<code>/g)).toHaveLength(count)
       const total = layoutWork.gate + layoutWork.strip + layoutWork.seam + layoutWork.offsets + layoutWork.closerLines + layoutWork.geometryEntries
       expect(total).toBeLessThanOrEqual(source.length * 64)
       return total

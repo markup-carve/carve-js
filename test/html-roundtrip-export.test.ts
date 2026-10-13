@@ -441,3 +441,36 @@ describe('Markdown roundtrip export', () => {
     expect(md).not.toContain('data-char')
   })
 })
+
+it.each([
+  ['onclick=x .c #mine', '1'],
+  ['.c onclick=x #mine', '1'],
+  ['onclick=x #mine .c', undefined],
+  ['.c #mine', '1'],
+])('counts only rendered heading attributes for {%s}', (attrs, slot) => {
+  const html = rt(`{${attrs}}\n# H\n`)
+  const carrier = slot === undefined ? '' : ` data-carve-id-slot="${slot}"`
+  expect(html).toContain(`<section id="mine" data-carve-explicit-id="1"${carrier}>`)
+  expect(html).toContain('<h1 class="c">H</h1>')
+  if (attrs === 'onclick=x .c #mine') {
+    expect(htmlToCarve(html, { mode: 'roundtrip' }).value).toBe('{.c #mine}\n# H\n')
+  }
+})
+
+it.each([
+  { order: ['onclick', 'bad name', 'data-carve-id-slot', 'missing', '.class', '#id'], keyValues: { onclick: 'x', 'bad name': 'x', 'data-carve-id-slot': '9' }, classes: [] },
+  { order: ['onclick', 'bad name', 'data-carve-id-slot', 'missing', '.class', '#id'], keyValues: { onclick: 'x', 'bad name': 'x', 'data-carve-id-slot': '9' }, classes: ['c'] },
+])('ignores empty and sanitized heading slots %j', (attrs) => {
+  const html = renderHtml({
+    type: 'document',
+    children: [{ type: 'heading', level: 1, attrs: { ...attrs, id: 'mine' }, children: [{ type: 'text', value: 'H' }] }],
+  }, { roundtrip: true })
+  if (attrs.classes.length) expect(html).toContain('data-carve-id-slot="1"')
+  else expect(html).not.toContain('data-carve-id-slot')
+})
+
+it('counts a heading alignment slot after converting it to style', () => {
+  const html = rt('{align=right #mine}\n# H\n')
+  expect(html).toContain('data-carve-id-slot="1"')
+  expect(html).toContain('<h1 style="text-align: right;">H</h1>')
+})
