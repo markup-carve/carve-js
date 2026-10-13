@@ -34,6 +34,13 @@ describe('fmt keeps a lone span marker padded', () => {
     expect(carveToCarve(src)).toBe('| a | b |\n|---|---|\n| < | d |\n')
   })
 
+  it('reads a glued left marker followed by space as an empty aligned cell', () => {
+    expect(carveToHtml('| a |< |')).toContain('<td>a</td><td style="text-align: left;"></td>')
+    expect(carveToHtml('| a |<|')).toContain('<td colspan="2">a</td>')
+    expect(carveToHtml('| a | < |')).toContain('<td colspan="2">a</td>')
+    expect(carveToHtml('| a | <|')).toContain('<td>a</td><td>&lt;</td>')
+  })
+
   it('the table still says the same thing after formatting', () => {
     for (const src of [
       '| < | b |\n|---|---|\n| c | d |\n',

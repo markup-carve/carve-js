@@ -6566,11 +6566,9 @@ function parseCellMarkers(src: string): {
   attrs?: Attrs
   content: string
 } {
-  // A lone `<` is a colspan marker even when it is glued to the pipes (`|<|`).
-  // It may fail to merge later (for example in column 0), but it must still
-  // render as an empty structural marker cell rather than an empty left-aligned
-  // cell. Non-lone prefixes such as `|< text|` remain per-cell alignment.
-  if (trimCellPadding(src) === '<') return { header: false, span: 'colspan', content: '' }
+  // `|<|` and the padded `| < |` are colspan markers. A glued `<` followed
+  // by a space (`|< |`) is an alignment run on an empty cell.
+  if (trimCellPadding(src) === '<' && (src === '<' || (src.startsWith(' ') && src.endsWith(' ')))) return { header: false, span: 'colspan', content: '' }
 
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
@@ -6699,16 +6697,14 @@ function parseCellMarkers(src: string): {
  *     rowspan_marker = {space}, '^', {space} ;
  *     colspan_marker = {space}, '<', {space} ;
  *
- * so a cell whose whole payload is `^` or `<` re-reads as a span however it is
- * padded, and section 2 is what applies: omitting the escape changes the
- * re-parse.
+ * so a cell whose whole payload is `^` or `<` needs an escape when written
+ * with span padding. A glued `<` followed by a space reads as alignment, but
+ * the writer cannot rely on that spelling for every cell shape.
  *
  * The predicate is over the PAYLOAD, so it answers the question the writer can
  * ask before it has decided which prefix the cell takes. Both of the parser's
- * span decisions above are reached with `i === 0`, on the padding-trimmed
- * source, so a payload is a marker exactly when its trimmed form is one: a
- * leading `^` sets `invalidAxis`, and a lone `<` is caught ahead of the run
- * scan outright.
+ * span decisions above are reached with `i === 0`. A leading `^` sets
+ * `invalidAxis`; a padded `<` is caught before the alignment run scan.
  */
 export function cellPayloadIsSpanMarker(payload: string): boolean {
   const trimmed = trimCellPadding(payload)
