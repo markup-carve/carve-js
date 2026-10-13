@@ -34,6 +34,14 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-comment-between-a-heading-and-a-colon-fence-leaves-the-fence-an-opener',
+  'a-comment-closes-a-marker-line-note-s-paragraph-and-an-unclosed-fence-below-it-opens-in-the-note',
+  'a-comment-in-a-marker-line-note-changes-nothing',
+  'a-fence-past-the-column-after-an-attribute-line-opens-on-its-authored-base',
+  'a-fence-that-leaves-a-closed-nested-item-opens-in-the-host-it-lands-in',
+  'a-footnote-definition-past-a-box-s-column-is-hoisted',
+  'a-link-definition-or-an-attribute-line-past-a-box-s-column-opens-on-its-authored-base',
+  'a-quote-or-a-term-at-a-marker-line-note-s-body-column-opens-in-the-note',
   'a-closed-fence-at-a-marker-line-note-s-body-column-opens-in-the-note',
   'a-titled-footnotes-marker-names-the-endnotes-section',
   'an-at-sign-before-a-space-and-a-doubled-delimiter-inside-bold-italic-are-text',

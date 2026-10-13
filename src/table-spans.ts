@@ -50,7 +50,11 @@ export interface SpanEntry {
  * The T5 walk over any grid, so the pipe table and the list-table extension
  * resolve markers with one rule.
  */
-export function resolveSpanGrid<T extends SpanEntry>(grid: T[][], markerOf: (entry: T) => '^' | '<' | null): T[][] {
+export function resolveSpanGrid<T extends SpanEntry>(
+  grid: T[][],
+  markerOf: (entry: T) => '^' | '<' | null,
+  onAbsorb?: (origin: T, marker: T) => void,
+): T[][] {
   // Per position, the grid coordinates of the cell whose rectangle covers it,
   // so a marker resolves against its neighbor's cell in O(1). A span never
   // covers a position another cell owns (carve#3047).
@@ -70,6 +74,7 @@ export function resolveSpanGrid<T extends SpanEntry>(grid: T[][], markerOf: (ent
         if (at && at[0] === r) {
           grid[r]![at[1]]!.colspan++
           entry.skip = true
+          onAbsorb?.(grid[r]![at[1]]!, entry)
           own[c] = at
           continue
         }
@@ -81,7 +86,9 @@ export function resolveSpanGrid<T extends SpanEntry>(grid: T[][], markerOf: (ent
           for (let k = c; k < c + src.colspan; k++) {
             own[k] = at
             const strip = row[k]
-            if (strip) strip.skip = true
+            if (!strip) continue
+            strip.skip = true
+            onAbsorb?.(src, strip)
           }
           continue
         }

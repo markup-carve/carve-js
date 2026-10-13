@@ -20,4 +20,13 @@ describe('lint corpus parity', () => {
       expect(warnings[0]!.line).toBe(source.split('\n').length - 1)
     }
   })
+
+  // Corpus 581 and 581-3 (CARVE-P0-014): the `:::` sits inside the unclosed code
+  // fence, so the box on line 1 never closes.
+  it.each([
+    ['581', '> - ::: box\n>   - ::: |\n>     ```\n>     :::\n>    ```\n>    :::bad\n>    :::\n- tail\n', ['1:5 unclosed-container-fence', '5:6 list-item-block-overindented']],
+    ['581-3', '> - ::: box\n>   -   ::: |\n>       ```\n>       :::\n>     ```\n>     :::\n>     :::bad\n>     :::\n- tail\n', ['1:5 unclosed-container-fence', '5:7 list-item-block-overindented']],
+  ])('reports the box a code fence swallows the closer of: %s', (_row, source, expected) => {
+    expect(lintCarve(source).map((warning) => `${warning.line}:${warning.column} ${warning.rule}`).sort()).toEqual(expected)
+  })
 })

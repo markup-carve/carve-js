@@ -67,6 +67,33 @@ describe('table `+` multi-line cell continuation', () => {
     )
   })
 
+  it('joins a continuation on a colspan marker into the cell it widens', () => {
+    expect(h('| a | < |\n+ x | y |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td colspan="2">a x y</td></tr>\n  </tbody>\n</table>',
+    )
+    expect(h('| a | < | c |\n| ^ | ^ | d |\n+ x | y | z |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td rowspan="2" colspan="2">a x y</td><td>c</td></tr>\n    <tr><td>d z</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('drops the continuation on a blocked marker, which renders empty', () => {
+    expect(h('| a | < |\n| ^ | b |\n+ x | y |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td colspan="2">a</td></tr>\n    <tr><td></td><td>b y</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('joins a continuation after a caret into the spanning cell', () => {
+    expect(h('| a | b |\n| ^ | c |\n+ more | d |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td rowspan="2">a more</td><td>b</td></tr>\n    <tr><td>c d</td></tr>\n  </tbody>\n</table>',
+    )
+    expect(h('| a | b |\n+ more | d |\n| ^ | c |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td rowspan="2">a more</td><td>b d</td></tr>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>',
+    )
+    expect(h('| A |\n|---|\n| ^ |\n+ x |')).toBe(
+      '<table>\n  <tbody>\n    <tr><th scope="col" rowspan="2">A x</th></tr>\n    <tr></tr>\n  </tbody>\n</table>',
+    )
+  })
+
   it('keeps a header rowspan and its continuation in one tbody', () => {
     expect(h('|= A |\n| ^ |')).toBe(
       [

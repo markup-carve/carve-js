@@ -29,11 +29,11 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, listStyleDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
-import { renderCarve, renderCarrierAttributeBlock, withoutKey } from './render-carve.js'
+import { orderedMarker, renderCarve, renderCarrierAttributeBlock, withoutKey } from './render-carve.js'
 import { carrierLine, spellCarrierMarkers } from './carrier-markers.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -135,6 +135,8 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     roundtrip: opts.roundtrip === true,
     carrierDepth: 0,
     definitionListDepth: 0,
+    footnoteBlockDepth: undefined,
+    footnoteOpeningList: undefined,
     abbrBudget: budget,
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
@@ -185,6 +187,8 @@ interface MarkdownContext {
    */
   carrierDepth: number
   definitionListDepth: number
+  footnoteBlockDepth: number | undefined
+  footnoteOpeningList: List | undefined
   /** Inside a block quote, whose every line this target prefixes with `> `. */
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
@@ -270,12 +274,19 @@ function renderTracked(block: BlockNode, ctx: MarkdownContext): string {
   }
   let mark = block.ordered ? (block.delim === ')' ? ')' : '.') : (block.bulletChar ?? '-')
   const previous = ctx.lastList
-  if (previous !== undefined && previous.ordered === block.ordered && previous.mark === mark) {
+  if (previous !== undefined && previous.ordered === block.ordered && previous.mark === mark && !carriesListStyle(block, ctx)) {
     mark = block.ordered ? (mark === '.' ? ')' : '.') : mark === '-' ? '*' : '-'
   }
+  if (block.ordered) listDelimiterChanged(ctx.options, block, block.delim === ')' ? ')' : '.', mark as '.' | ')')
   const rendered = renderList(block, ctx, mark)
   if (rendered !== '') ctx.lastList = { ordered: block.ordered, mark }
   return attributeMarker(block, ctx) + rendered
+}
+
+function carriesListStyle(node: List, ctx: MarkdownContext): boolean {
+  if (!ctx.roundtrip || !node.ordered || node.olType === undefined) return false
+  if (ctx.footnoteBlockDepth === undefined) return true
+  return ctx.blockDepth === ctx.footnoteBlockDepth && ctx.listDepth === 0 && node !== ctx.footnoteOpeningList
 }
 
 /** Render inside a container that prefixes its lines, which starts a fresh run of lists. */
@@ -592,7 +603,8 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
 }
 
 function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
-  if (node.ordered) listStyleDropped(ctx.options, node)
+  const styleCarrier = carriesListStyle(node, ctx)
+  if (node.ordered && !styleCarrier) listStyleDropped(ctx.options, node)
   ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
@@ -648,7 +660,14 @@ function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
     out += withContinuation(prefix, content, pad)
   }
   ctx.listDepth--
-  return out + (ctx.listDepth === 0 ? '\n' : '')
+  const listDelim = node.delim === ')' ? ')' : '.'
+  const firstMarker = node.ordered && node.olType !== undefined ? orderedMarker(node.start ?? 1, node.olType) : ''
+  const secondMarker = /^[ivxlcdm]$/i.test(firstMarker) && node.items.length > 1
+    ? ` ${orderedMarker((node.start ?? 1) + 1, node.olType)}${listDelim}` : ''
+  const styleMarker = styleCarrier
+    ? `${carrierLine(`${firstMarker}${listDelim}${secondMarker}`)}\n`
+    : ''
+  return styleMarker + out + (ctx.listDepth === 0 ? '\n' : '')
 }
 
 /*
@@ -1036,7 +1055,17 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   for (const [label, blocks] of footnoteDefsInSourceOrder(ast)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
-    const content = containerContent(() => inOwnContainer(ctx, () => outsideLink(() => renderBlocks(blocks, ctx))))
+    const previousDepth = ctx.footnoteBlockDepth
+    const previousOpening = ctx.footnoteOpeningList
+    ctx.footnoteBlockDepth = ctx.blockDepth + 1
+    ctx.footnoteOpeningList = blocks[0]?.type === 'list' ? blocks[0] : undefined
+    let content: string
+    try {
+      content = containerContent(() => inOwnContainer(ctx, () => outsideLink(() => renderBlocks(blocks, ctx))))
+    } finally {
+      ctx.footnoteBlockDepth = previousDepth
+      ctx.footnoteOpeningList = previousOpening
+    }
     out += withContinuation(`[^${escapeMdHtml(stripControls(label))}]: `, content, 4)
   }
   return out

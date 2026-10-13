@@ -23,6 +23,7 @@ import { applyAbbreviations, applyLinkDefs } from './inline-resolution.js'
 import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
 import { referenceLink, referenceImage } from './reference-resolution.js'
 import { definitionLinePosition, dropPositions, toCodepointPositions } from './source-positions.js'
+import { resolveSpanGrid } from './table-spans.js'
 import type {
   SmartPunctuation,
   AbbreviationDef,
@@ -3348,29 +3349,29 @@ function consumeOpaqueColonFenceBodySpan(
   lineIndex: number,
   text: string,
   literalOwnerLine?: number,
+  canOpenUnclosed = false,
+  hostCloserAt?: (lineIndex: number) => boolean,
 ): boolean {
   const fenceText = literalOwnerLine === undefined ? text : text.replace(/^[ \t]+/, '')
   const rawOpen = RE_RAW_FENCE.exec(fenceText)
   const codeOpen = rawOpen === null ? RE_FENCE.exec(fenceText) : null
   const marker = rawOpen?.[1] ?? codeOpen?.[2]
   if (marker !== undefined) {
-    // A closer is required whether or not a paragraph is open. Only a fence
-    // that closes is opaque; an unterminated one would otherwise consume the
-    // container's own `:::` as content and run to the end of the document,
-    // dragging every following block inside (carve#515).
-    //
-    // The comment-fence branch below has always required its closer. This one
-    // asked only when a paragraph was open, so the rule held for a fence that
-    // interrupted prose and lapsed for one that opened a body - which is why
-    // the `paragraphOpen` argument is gone.
-    if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) || !fenceHasCloser(lexer, marker, literalOwnerLine !== undefined)) return false
+    // A fence that interrupts a paragraph needs a closer. After a closed child
+    // leaves no paragraph, an unclosed fence opens and runs to this host's edge.
+    // A closer below its authored column belongs to the host, not the fence.
+    const closes = fenceHasCloser(lexer, marker, literalOwnerLine !== undefined)
+    if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) || (!closes && !canOpenUnclosed)) return false
     const closeRe = fenceCloseRe(marker)
+    const openerColumn = indentColumns(text)
     const isCodeFence = codeOpen !== null
     lexer.consume()
     lines.push({ text, lineIndex })
     while (!lexer.eof()) {
       const innerLineIndex = lexer.pos
       const innerText = lexer.peek()!
+      if (!closes && hostCloserAt?.(innerLineIndex)) break
+      if (!closes && !isBlankLine(innerText) && indentColumns(innerText) < openerColumn) break
       lexer.consume()
       lines.push({ text: innerText, lineIndex: innerLineIndex })
       if (literalOwnerLine !== undefined ? closeRe.test(innerText.replace(/^[ \t]+/, '')) :
@@ -3434,13 +3435,37 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
   const lines: ColonFenceBodyLine[] = []
   const stack: ColonFenceOpener[] = [opener]
   let paragraphOpen: boolean = false
+  let markerLineLiteral: { width: number; column: number } | undefined
+  const authoredColonColumn = (at: number, width: number): number | undefined => {
+    const source = lexer.rootLines?.[lexer.lineNumber(at) - 1]
+    const markerAt = source?.indexOf(':'.repeat(width)) ?? -1
+    if (source === undefined || markerAt < 0) return undefined
+    let column = 0
+    for (const char of source.slice(0, markerAt)) column += char === '\t' ? 4 - (column % 4) : 1
+    return column
+  }
+  const hostCloserAt = (at: number): boolean => {
+    const candidate = lexer.lineAt(at) ?? ''
+    const width = RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length
+    if (width === undefined) return false
+    for (let frame = stack.length - 1; frame >= 0; frame--) {
+      const owner = stack[frame]!
+      if (owner.fenceWidth !== width) continue
+      const ownerColumn = authoredColonColumn(owner.lineIndex, width)
+      const column = authoredColonColumn(at, width)
+      if (ownerColumn === undefined || column === undefined
+        ? indentColumns(candidate) === indentColumns(lexer.lineAt(owner.lineIndex) ?? '')
+        : column === ownerColumn) return true
+    }
+    return false
+  }
 
   while (!lexer.eof()) {
     if (layoutWork.on) layoutWork.colonLines++
     const lineIndex = lexer.pos
     const text = lexer.peek()!
     const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) {
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, undefined, !paragraphOpen && markerLineLiteral === undefined, hostCloserAt)) {
       paragraphOpen = false
       continue
     }
@@ -3458,6 +3483,16 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
 
     lexer.consume()
     lines.push({ text, lineIndex })
+    const markerColumn = text.includes('|') ? markerContentColumn(text) : -1
+    const markerBody = markerColumn >= 0 ? markerFreeContent(text) : ''
+    if (markerColumn >= 0 && RE_LINE_BLOCK_OPEN.test(markerBody)) {
+      markerLineLiteral = { width: colonFenceOpenerLen(markerBody)!, column: markerColumn }
+    } else if (markerLineLiteral && indentColumns(text) === markerLineLiteral.column &&
+        RE_ADMONITION_CLOSE.exec(text.trimStart())?.[1]?.length === markerLineLiteral.width) {
+      markerLineLiteral = undefined
+      paragraphOpen = false
+      continue
+    }
     if (stack.at(-1)!.kind === 'line block') continue
     const openerLen = colonFenceOpenerLen(text)
     if (openerLen !== null) {
@@ -6691,6 +6726,41 @@ interface RawCell {
    * reaching across a row boundary are not (markup-carve/carve-js#1153).
    */
   anchors?: AnchorRange[]
+  /** Continuation text on a span marker, joined to its origin after the span walk. */
+  joins?: Array<{ frag: string; at: FragmentPlace | null }>
+}
+
+interface FragmentPlace {
+  offset: number
+  line: number
+  column: number
+}
+
+/** Appends one `+` continuation fragment to a cell's collected source. */
+function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null): void {
+  const fragStart = target.raw ? target.raw.length + 1 : 0
+  target.raw = target.raw ? `${target.raw} ${frag}` : frag
+  // Only the NEW fragment is read; the joining space is not a run
+  // character, so resuming from the cell's own state is exact.
+  target.openRun = openVerbatimRun(frag, target.openRun)
+  // The CELL keeps no span. Its content sits in two column ranges on
+  // non-adjacent lines, and one range covering both would swallow the
+  // neighbouring column's content on the lines between - so cell 1 would
+  // CONTAIN cell 0, and an offset would map to two sibling cells at once.
+  // A construct that is not one contiguous range cannot honestly be one.
+  delete target.pos
+  if (at) {
+    const range: AnchorRange = { from: fragStart, to: fragStart + frag.length, ...at }
+    if (target.anchors) target.anchors.push(range)
+    else target.anchors = [range]
+  }
+  // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
+  // range's `to` is the length `raw` had when it was appended, and the
+  // next fragment starts one past that, so the joining space is already
+  // the only offset between them and an unplaced fragment simply leaves a
+  // wider gap. `to` is inclusive so an exclusive span end may land on it;
+  // the space itself belongs to no range, which is what makes a node
+  // reaching across the boundary unplaceable.
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
@@ -7120,6 +7190,12 @@ function hostedAuthoredBlockOpener(text: string): boolean {
     (!RE_ADMONITION_CLOSE.test(text) && colonBlockOpenerRun(text) !== null)
 }
 
+// CARVE-P0-004, CARVE-P0-011: in a list item's colon body a link definition or an
+// attribute line past the box's column also opens on its authored base (carve#3087).
+function hostedColonBodyOpener(text: string): boolean {
+  return hostedAuthoredBlockOpener(text) || (isLinkDefLine(text) && !RE_FOOTNOTE_DEF.test(text)) || isBlockAttributeLine(text.trimEnd())
+}
+
 /** Whether a line starts an authored block outside the body's first sublist. */
 function isParentAuthoredBlock(line: string, firstMarkerColumn: number, followsBlank = false): boolean {
   const column = indentColumns(line, firstMarkerColumn)
@@ -7414,17 +7490,6 @@ function rebasedColonGroupEnd(
     return opaqueGroupCloses(group, lines, j + 1, column, takenBelowColumn, memo)
   }
   const childCloserMemos = new Map<number, GroupCloserMemo>()
-  // PART 2 "A CLOSER IS REQUIRED": an unclosed fence that would take this
-  // group's closer opens nothing. One forward pointer keeps the lookahead linear.
-  let groupCloserAt = start
-  const groupCloserAhead = (j: number): boolean => {
-    if (groupCloserAt <= j) {
-      groupCloserAt = j + 1
-      while (groupCloserAt < lines.length && !(indentColumns(lines[groupCloserAt]!, base + 1) === base &&
-        RE_ADMONITION_CLOSE.exec(groupLineContent(lines[groupCloserAt]!, base))?.[1]?.length === width)) groupCloserAt++
-    }
-    return groupCloserAt < lines.length
-  }
   for (let j = start + 1; j < lines.length; j++) {
     let candidate = lines[j]!
     let authoredColumn: number | undefined
@@ -7440,8 +7505,7 @@ function rebasedColonGroupEnd(
         if (column < authoredChildColumn && (authoredChildBlank ||
             ((column === authored.at(-1)!.column && lineOpensItemBlock(candidate.trimStart())) ||
               (column > authored.at(-1)!.column && (colonFenceOpenerLen(candidate.trimStart()) !== null ||
-                ((authoredChildBlockBoundary || (childClosed && (childFenceCloses(j)(candidate.trimStart(), column - authoredChildColumn) ||
-                  !groupCloserAhead(j)))) && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
+                ((authoredChildBlockBoundary || childClosed) && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
         else if (column >= authoredChildColumn && authoredChildState !== undefined) {
           trackItemLazyState(sliceColumns(candidate, authoredChildColumn, true), authoredChildState, childFenceCloses(j))
           // The line block closer still closes its child when an unmatched code
@@ -7467,7 +7531,7 @@ function rebasedColonGroupEnd(
       if (indentColumns(candidate, base + 1) === base && authoredCodeClose.test(groupLineContent(candidate, base))) authoredCodeClose = undefined
     } else if (nestedBodyLines && opaque === null && !authoredCodeClose && stack.length === authored.length && authoredChildColumn < 0 &&
         !stack.at(-1)!.literal && !authoredInlineFence) {
-      const column = authoredColumn ??= indentColumns(candidate, hostedAuthoredBlockOpener(candidate.trimStart()) ? Infinity : authored.at(-1)!.column + 4)
+      const column = authoredColumn ??= indentColumns(candidate, hostedColonBodyOpener(candidate.trimStart()) ? Infinity : authored.at(-1)!.column + 4)
       while (!isBlankLine(candidate) && authored.length > 1 && column < authored.at(-1)!.column) authored.pop()
       const owner = authored.at(-1)!
       const rebasesHere = !emptyHostMinimum || !owner.paragraph || column >= base
@@ -7496,7 +7560,7 @@ function rebasedColonGroupEnd(
         authored.push({ column, paragraph: false })
       }
       const current = authored.at(-1)!
-      const blockColumn = column > current.column && hostedAuthoredBlockOpener(text) && childColumn < 0 ? column : current.column
+      const blockColumn = column > current.column && hostedColonBodyOpener(text) && childColumn < 0 ? column : current.column
       if (rebasesHere && blockColumn !== base && column >= blockColumn && (blockColumn > base || usesHostMinimum && hostedAuthoredBlockOpener(text))) {
         candidate = blockColumn < base
           ? ' '.repeat(base - blockColumn) + candidate
@@ -7592,7 +7656,7 @@ function rebasedColonGroupEnd(
   return end
 }
 
-function markerNoteFenceReach(lines: readonly string[], absorbedMarkers: ReadonlySet<number>): 'closed' | 'unclosed' | 'boundary' | null {
+function markerNoteFenceReach(lines: readonly string[], absorbedMarkers: ReadonlySet<number>, comments: ReadonlySet<number>): 'closed' | 'unclosed' | 'boundary' | null {
   let closer: RegExp | null = null
   let openerColumn = -1
   let childColumn = -1
@@ -7600,6 +7664,7 @@ function markerNoteFenceReach(lines: readonly string[], absorbedMarkers: Readonl
   let childOpenerColumn = -1
   let afterBlank = false
   for (const [index, line] of lines.entries()) {
+    if (comments.has(index)) continue
     const column = indentColumns(line)
     if (column < FOOTNOTE_BODY_COLUMN && !isBlankLine(line)) {
       if (closer === null) return null
@@ -7642,7 +7707,7 @@ function markerNoteFenceReach(lines: readonly string[], absorbedMarkers: Readonl
   return closer === null ? null : 'unclosed'
 }
 
-function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers: ReadonlySet<number>, outerTailOnly = false): number[] {
+function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers: ReadonlySet<number>, comments: ReadonlySet<number>, outerTailOnly = false): number[] {
   const openers: number[] = []
   let closer: RegExp | null = null
   let openerColumn = -1
@@ -7650,7 +7715,7 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
   let belowNoteBody = false
   let nestedMarkerSeen = false
   for (const [index, line] of lines.entries()) {
-    if (isBlankLine(line)) continue
+    if (isBlankLine(line) || comments.has(index)) continue
     const column = indentColumns(line)
     const text = line.trimStart()
     if (column < FOOTNOTE_BODY_COLUMN) belowNoteBody = true
@@ -7678,16 +7743,36 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
   return openers
 }
 
+/**
+ * The last line of a comment at or past a marker-line note's body column that
+ * starts at the lexer, or -1. A `%%%` span counts only with its closer inside
+ * the note.
+ */
+function coveredNoteComment(lexer: Lexer, line: string, floor: number): number {
+  if (isBlankLine(line) || indentColumns(line, floor) < floor) return -1
+  const text = line.trimStart()
+  if (!RE_COMMENT_LINE.test(text)) return -1
+  const run = commentFenceRun(text)
+  if (run === undefined) return lexer.pos
+  for (let at = lexer.pos + 1; at < lexer.lineCount; at++) {
+    const candidate = lexer.lineAt(at)!
+    if (isBlankLine(candidate)) continue
+    if (indentColumns(candidate, floor) < floor) return -1
+    if (commentFenceRun(candidate.trimStart()) === run) return at
+  }
+  return -1
+}
+
 // CARVE-P2-017's AT band: a non-list, non-fence block opener at or past a
 // marker-line note's body column opens inside the note. 'open' means no line
 // has dropped below that column since, so nothing may continue the note lazily.
-function markerNoteOpenerReach(lines: readonly string[], absorbedMarkers: ReadonlySet<number>): 'open' | 'closed' | null {
+function markerNoteOpenerReach(lines: readonly string[], absorbedMarkers: ReadonlySet<number>, comments: ReadonlySet<number>): 'open' | 'closed' | null {
   let closer: RegExp | null = null
   let openerColumn = -1
   let childColumn = -1
   let found = false
   for (const [index, line] of lines.entries()) {
-    if (isBlankLine(line)) continue
+    if (isBlankLine(line) || comments.has(index)) continue
     const column = indentColumns(line)
     if (column < FOOTNOTE_BODY_COLUMN) return found ? 'closed' : null
     const text = line.trimStart()
@@ -10481,8 +10566,6 @@ class ParseSession {
       const declines =
         topLevelIndentedDef ||
         notAtContentColumn ||
-        (divs[divs.length - 1]?.host === 'list' &&
-          composed.column > divs[divs.length - 1]!.scope.contentCol) ||
         (collectsNothing && composed.peeled.some((one) => !one.quote))
       // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
       // reading the line as something other than a definition; the block parser
@@ -13168,6 +13251,8 @@ class ParseSession {
       let consumedNoteParagraphBefore = false
       let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
+      let nestedOwnerIsList = false
+      let closedListFence = false
       const markerLineTerm = RE_DEFLIST_TERM.test(content)
       let singleMarkerTerm = markerLineTerm
       let markerDescriptionColumn: number | undefined
@@ -13196,7 +13281,7 @@ class ParseSession {
       // opens below that child's column - the one place the answer is read. Both
       // reads it needs walk an indentation run, so a body with no such fence pays
       // nothing for the tracking (markup-carve/carve#752).
-      const ownerPending: {line: string, followsBlank: boolean, foldable: boolean, framed: boolean}[] = []
+      const ownerPending: {line: string, index: number, followsBlank: boolean, foldable: boolean, framed: boolean}[] = []
       const walkOwnership = (): boolean => {
         let opensFence = false
         for (const entry of ownerPending) {
@@ -13206,9 +13291,17 @@ class ParseSession {
           // block boundary returns ownership to this item.
           if (nestedOwnerColumn < 0 || column < nestedOwnerColumn) {
             const markerColumn = markerContentColumn(entry.line)
+            const opener = entry.line.trimStart()
+            const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+            const closedFence = !markerNoteItem && nestedOwnerIsList && fence !== null && itemFenceHasCloser(
+              lexer, RE_FENCE.test(opener) ? fence[2]! : fence[1]!, entry.index,
+              contentCol + column, new Map(), itemEndsAt,
+            )
             if (nestedOwnerColumn < 0 || entry.followsBlank || markerColumn >= 0 ||
-              lineOpensItemBlock(entry.line)) {
+              lineOpensItemBlock(entry.line) || closedFence) {
               nestedOwnerColumn = markerColumn
+              nestedOwnerIsList = isListMarkerLine(entry.line)
+              if (closedFence) closedListFence = true
               // Track a new fence at its authored base so a later dedent cannot
               // fold into its body as paragraph text. Deeper items track their own
               // fences when their collected content is parsed.
@@ -13218,6 +13311,7 @@ class ParseSession {
                 if (opener !== entry.line && opensCodeFence(opener)) {
                   authoredFenceBase = indentColumns(entry.line)
                   opensFence = true
+                  closedListFence = false
                 }
               }
             }
@@ -13244,7 +13338,7 @@ class ParseSession {
           if (indentColumns(line, descendantOpaque.base) < descendantOpaque.base) descendantOpaque = null
         }
         const child = nestedOwnerColumn
-        if (child < 0 && opener === line.replace(/^[ \t]+/, '')) return
+        if (child < 0 && opener === line.replace(/^[ \t]+/, '') && !closedListFence) return
         // BELOW A CHILD'S COLUMN THE CHILD IS OVER, and so is any fence it held:
         // the base is at or past that column, so such a line is never payload.
         // What a later below-column line reads is whether an ANCESTOR is left
@@ -13272,13 +13366,15 @@ class ParseSession {
           // A closer stands at its fence's base or at its container's content
           // column (CARVE-P0-004), never past the base.
           if (column <= base && descendantOpaque.close.test(opener)) {
-            closedDescendantFence = descendantNoteBody || descendantOpaque.markerLine === true
+            closedDescendantFence = descendantNoteBody || descendantOpaque.markerLine === true || closedListFence
+            if (closedListFence) lazyState.lazyFoldable = false
             if (descendantOpaque.markerLine) lazyState.lazyFoldable = false
             if (descendantNoteBody) {
               consumedNoteCloserBodyColumn = contentCol + FOOTNOTE_BODY_COLUMN
               consumedNoteParagraphBefore = descendantNoteParagraphBefore
             }
             descendantOpaque = null
+            closedListFence = false
             return
           }
           // ANY OTHER LINE BELOW THE BASE IS NOT PAYLOAD. It ends the fence
@@ -13348,6 +13444,11 @@ class ParseSession {
       let pendingBlanks = 0
       let pendingBlankLineNumbers: number[] = []
       let pendingBlankTexts: string[] = []
+      // A comment in a marker-line note changes nothing (CARVE-P9-053, carve#3060):
+      // it waits among the pending blanks without counting as one, and the note
+      // scans skip it once it is in `nested`.
+      let pendingNoteComments = new Set<number>()
+      const noteCommentLines = new Set<number>()
       // Indices in `nested` that hold a `+`-injected blank separator. These keep
       // the attached block parsing standalone but never loosen the list (Bug B).
       const plusSeparators = new Set<number>()
@@ -13481,12 +13582,26 @@ class ParseSession {
       let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
         !RE_COMMENT_LINE.test(RE_FOOTNOTE_DEF.exec(content)![2]!)
       let markerNoteClaimChecked = false
+      let markerNoteLeft = false
       let noteBodyLast = false
       let noteInlineFenceOpen = false
       let nestedNoteParagraph = false
       let nestedNoteContainer = false
       while (!lexer.eof()) {
         const l = lexer.peek()!
+        const noteCommentEnd = markerNoteItem && !markerNoteLeft ? coveredNoteComment(lexer, l, markerNoteFloor) : -1
+        if (noteCommentEnd >= 0 && lazyState.opaque === null && !insideOpenFence(lazyState)) {
+          for (let at = lexer.pos; at <= noteCommentEnd; at++) {
+            pendingNoteComments.add(pendingBlankTexts.length)
+            pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
+            pendingBlankTexts.push(lexer.peek()!)
+            lexer.consume()
+          }
+          // It still closes the note's paragraph, as it does in the note's own parse.
+          markerNoteParagraph = false
+          continue
+        }
+        if (markerNoteItem && !isBlankLine(l) && indentColumns(l, markerNoteFloor) < markerNoteFloor) markerNoteLeft = true
         // Keep the observed note-body paragraph permission separate from an
         // item tail after its CODE closer. The next body line consumes it.
         if (consumedNoteCloserBodyColumn !== undefined) {
@@ -13494,19 +13609,19 @@ class ParseSession {
           consumedNoteCloserBodyColumn = undefined
         }
         const noteReach = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol
-          ? markerNoteFenceReach(nested, noteParagraphMarkers) : null
+          ? markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines) : null
         let lastNoteLine = ''
         for (let index = nested.length - 1; index >= 0; index--) {
-          if (!isBlankLine(nested[index]!)) { lastNoteLine = nested[index]!.trimStart(); break }
+          if (!isBlankLine(nested[index]!) && !noteCommentLines.has(index)) { lastNoteLine = nested[index]!.trimStart(); break }
         }
         const afterNoteBody = noteBodyLast || noteReach === 'unclosed' ||
           (markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
-            markerNoteOpenerReach(nested, noteParagraphMarkers) === 'open') ||
+            markerNoteOpenerReach(nested, noteParagraphMarkers, noteCommentLines) === 'open') ||
           (noteReach === 'closed' && lastNoteLine !== '' && !opensCodeFence(lastNoteLine) &&
             !RE_COMMENT_LINE.test(lastNoteLine))
         const fenceBoundaryTail = noteReach === 'boundary'
         const commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
-          markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, true).length > 0
+          markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines, true).length > 0
         const noteParagraphOpen = markerNoteParagraph
         if (!isBlankLine(l)) {
           noteBodyLast = false
@@ -13548,6 +13663,7 @@ class ParseSession {
           pendingBlanks = 0
           pendingBlankLineNumbers = []
           pendingBlankTexts = []
+          pendingNoteComments = new Set()
           // Mark this blank as a `+`-injected separator: it lets the attached
           // block parse on its own but must NOT loosen the list (Bug B). A real
           // internal blank before a plain paragraph still loosens; a `+` one
@@ -13709,19 +13825,22 @@ class ParseSession {
           let strippedPrefix: number | undefined
           const placed = sliceColumns(l, contentCol, true, prefix => { strippedPrefix = prefix })
           const followsBlank = pendingBlanks > 0
-          for (let k = 0; k < pendingBlanks; k++) {
+          for (let k = 0; k < pendingBlankTexts.length; k++) {
+            const comment = pendingNoteComments.has(k)
+            if (comment) noteCommentLines.add(nested.length)
             // Emptied here, a nested item's own collector would have no residue
             // left to measure its opener against, so the container keeps what it
             // does not own.
-            bufferedBlanks.add(nested.length + 1)
+            else bufferedBlanks.add(nested.length + 1)
             nestedSourceLines.push(pendingBlankTexts[k])
             nested.push(sliceColumns(pendingBlankTexts[k] ?? '', contentCol, true))
             nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
-            trackItemLazyState('', lazyState)
+            if (!comment) trackItemLazyState('', lazyState)
           }
           pendingBlanks = 0
           pendingBlankLineNumbers = []
           pendingBlankTexts = []
+          pendingNoteComments = new Set()
           const isMarker =
             !(lazyState.inFootnoteBody && nestedNoteBodyColumn !== undefined &&
               indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) &&
@@ -13894,11 +14013,12 @@ class ParseSession {
             }
             ownerPending.push({
               line: dedented,
+              index: fenceLineIndex,
               followsBlank,
               foldable: lazyState.lazyFoldable,
               framed: insideOpenFence(lazyState),
             })
-            if (mayOpenFence && walkOwnership()) trackedContent = opener
+            if (mayOpenFence && descendantOpaque === null && walkOwnership()) trackedContent = opener
             // A COMMENT THE ITEM ALREADY HOLDS OWNS ITS PAYLOAD. §28 makes that
             // body verbatim, so a fence-shaped line inside it OPENS nothing. It
             // does not stop an open descendant fence CLOSING, though: the item's
@@ -14465,8 +14585,8 @@ class ParseSession {
         orderedMatch(content, terminatorFree) !== null ||
         taskMatch(content, terminatorFree) !== null ||
         extractItemAttr(content, terminatorFree) !== null
-      const markerNoteFenceOwnsExtent = markerNoteItem && (markerNoteFenceReach(nested, noteParagraphMarkers) !== null ||
-        markerNoteOpenerReach(nested, noteParagraphMarkers) !== null)
+      const markerNoteFenceOwnsExtent = markerNoteItem && (markerNoteFenceReach(nested, noteParagraphMarkers, noteCommentLines) !== null ||
+        markerNoteOpenerReach(nested, noteParagraphMarkers, noteCommentLines) !== null)
       // Include marker-line containers whose continuation keeps its own extent.
       const leadOwnsExtent = (leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)) || markerLineTerm || markerNoteFenceOwnsExtent ||
         (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&
@@ -14475,7 +14595,7 @@ class ParseSession {
       const blankBeforeCommentFence: number[] = []
       let nestedNoteSeen = false
       let priorChecked = 0
-      const commentFenceOpeners = markerNoteItem ? markerNoteCommentFenceOpeners(nested, noteParagraphMarkers) : []
+      const commentFenceOpeners = markerNoteItem ? markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, noteCommentLines) : []
       for (const openerIndex of commentFenceOpeners) {
         const index = openerIndex - 1
         if (index < 1) continue
@@ -14561,6 +14681,19 @@ class ParseSession {
       // this, attaching the comment consumed the signal and `- a` / blank /
       // `  %% n` / `- b` came out tight, where the same document without the
       // comment is loose.
+      // A marker-line note's body runs like a nested definition's, opened by the
+      // lead line; its blanks are the note's. A comment closes the note's
+      // paragraph, so the run ends with it.
+      let markerNoteRunEnd = -1
+      if (markerNoteItem) {
+        for (let j = 0; j < nested.length; j++) {
+          const next = nested[j]!
+          if (isBlankLine(next)) continue
+          if (indentColumns(next, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
+          markerNoteRunEnd = j
+          if (RE_COMMENT_LINE.test(next.trimStart())) break
+        }
+      }
       let blankBeforeInvisible = false
       // A comment BLOCK renders nothing either, and its payload is not an
       // invisible LINE, so the scan steps over the whole block. Only an item
@@ -14576,7 +14709,7 @@ class ParseSession {
           // makes for it. Without this the item went loose through the back door:
           // `- a` / `+` / `%% note` / `- b` came out loose where the identical
           // document without the comment is tight.
-          blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k)
+          blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd
           break
         }
         if (!invisibleNested(k)) break
@@ -14594,8 +14727,9 @@ class ParseSession {
         (trailingDescendantFence && (firstBlockIdx >= 0 || leadIsMarker || RE_DEFLIST_TERM.test(content)))
       )) {
         hasBlank = true
-        for (let k = 0; k < pendingBlanks; k++) {
-          bufferedBlanks.add(nested.length + 1)
+        for (let k = 0; k < pendingBlankTexts.length; k++) {
+          if (pendingNoteComments.has(k)) noteCommentLines.add(nested.length)
+          else bufferedBlanks.add(nested.length + 1)
           nestedSourceLines.push(pendingBlankTexts[k])
           nested.push(sliceColumns(pendingBlankTexts[k] ?? '', contentCol, true))
           nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
@@ -14629,13 +14763,17 @@ class ParseSession {
             ? orderedContinues(nextStripped, orderedKind, orderedDelim)
             : unorderedMarkerChar(nextStripped) === firstMarkerChar)
       }
-      if ((pendingBlanks > 0 || blankBeforeInvisible) && nextIsSibling()) {
+      // Blanks before the comment that closes the note are the note's.
+      const closingNoteComment = noteCommentLines.size === 0 && pendingNoteComments.size > 0 ? Math.min(...pendingNoteComments) : -1
+      const separatingBlanks = closingNoteComment < 0 ? pendingBlanks
+        : pendingBlankTexts.filter((_, index) => index > closingNoteComment && !pendingNoteComments.has(index)).length
+      if ((separatingBlanks > 0 || blankBeforeInvisible) && nextIsSibling()) {
         // A run of THREE OR MORE blank lines is a hard boundary (§11 N1): the
         // sibling marker after it opens a new list instead of joining this
         // one. One or two blank lines remain the ordinary loose separator
         // (§17 L1). `blankBeforeInvisible` is deliberately not counted here -
         // a run broken by a comment is not a run of blank lines.
-        if (pendingBlanks >= 3) hardBoundary = true
+        if (separatingBlanks >= 3) hardBoundary = true
         else loose = true
       }
 
@@ -14811,6 +14949,7 @@ class ParseSession {
         for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
         k = last
       }
+      for (let j = 0; j <= markerNoteRunEnd; j++) inFootnoteRun[j] = true
       for (let k = 0; k < nested.length; k++) {
         if (inFence[k + 1]!) continue
         if (inFootnoteRun[k]!) continue
@@ -15045,42 +15184,21 @@ class ParseSession {
         const contCanPosition = lexer.hasDocumentOffsets
         splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
           const frag = trimCellPadding(src)
-          const target = lastRaw![idx]
-          // A fragment on a span (`^`/`<`) column is skipped: the spec's
-          // "Combined: Rowspan + Multi-line" example always places the `+`
-          // rows *before* the `^` row, so they extend the real origin cell
-          // (verified). A `+` after the span row is not a spec'd ordering.
-          if (!frag || !target || target.span) return
-          const fragStart = target.raw ? target.raw.length + 1 : 0
-          target.raw = target.raw ? `${target.raw} ${frag}` : frag
-          // Only the NEW fragment is read; the joining space is not a run
-          // character, so resuming from the cell's own state is exact.
-          target.openRun = openVerbatimRun(frag, target.openRun)
-          // The CELL keeps no span. Its content sits in two column ranges on
-          // non-adjacent lines, and one range covering both would swallow the
-          // neighbouring column's content on the lines between - so cell 1 would
-          // CONTAIN cell 0, and an offset would map to two sibling cells at once.
-          // A construct that is not one contiguous range cannot honestly be one.
-          delete target.pos
+          const target: RawCell | undefined = lastRaw![idx]
+          if (!frag || !target) return
           const within = contCanPosition ? src.indexOf(frag) : -1
-          if (within >= 0 && line.slice(start + within, start + within + frag.length) === frag) {
-            const range: AnchorRange = {
-              from: fragStart,
-              to: fragStart + frag.length,
-              offset: contOffset + start + within,
-              line: contLine,
-              column: contColumn + start + within,
-            }
-            if (target.anchors) target.anchors.push(range)
-            else target.anchors = [range]
+          const at =
+            within >= 0 && line.slice(start + within, start + within + frag.length) === frag
+              ? { offset: contOffset + start + within, line: contLine, column: contColumn + start + within }
+              : null
+          if (target.span) {
+            // The text belongs to the cell the marker resolves into, which only
+            // the span walk below can name (T6).
+            target.openRun = openVerbatimRun(frag, target.openRun)
+            ;(target.joins ??= []).push({ frag, at })
+            return
           }
-          // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
-          // range's `to` is the length `raw` had when it was appended, and the
-          // next fragment starts one past that, so the joining space is already
-          // the only offset between them and an unplaced fragment simply leaves a
-          // wider gap. `to` is inclusive so an exclusive span end may land on it;
-          // the space itself belongs to no range, which is what makes a node
-          // reaching across the boundary unplaceable.
+          joinFragment(target, frag, at)
         })
         continue
       }
@@ -15198,6 +15316,18 @@ class ParseSession {
         const a = aligns[i]
         if (a && !c.align) c.align = a
       })
+    }
+    if (rawRows.some((rc) => rc.some((c) => c.joins))) {
+      // A marker's continuation text joins the cell it resolves into; a blocked
+      // marker renders empty and keeps none of it (T5, T6).
+      const grid = rawRows.map((rc) => rc.map((cell) => ({ cell, rowspan: 1, colspan: 1, skip: false })))
+      resolveSpanGrid(
+        grid,
+        (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
+        (origin, marker) => {
+          for (const { frag, at } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at)
+        },
+      )
     }
     const rows: TableRow[] = rawRows.map((rc, idx) => {
       const row: TableRow = {

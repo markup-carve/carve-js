@@ -8,7 +8,8 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
 
 /**
  * `CARVE-P2-024`'s `code` enum holds `raw-format-dropped`, `ruby-flattened`,
- * `destination-denied`, `editorial-comment-flattened`, and `carrier-attribute-dropped`
+ * `destination-denied`, `editorial-comment-flattened`, `carrier-attribute-dropped`,
+ * and `list-style-dropped`
  * (PART 11 §1d and PART 10 §13a). Each names something one selected renderer dropped
  * or blanked. A dropped FIELD, and a structure no Carve source spells, go to
  * the conversion-diagnostics channel
@@ -23,6 +24,8 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
 const schemaCodes = (): string[] => JSON.parse(
   readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'),
 ).properties.losses.items.properties.code.enum
+// carve#3098 adds this code to the published schema after the engine reports it.
+const aheadOfPinCodes = ['list-delimiter-changed']
 
 /** Every §1d shape at once: a section, a block cell, a labelled equation and an attributed partition. */
 const interchangeOnly = () => ({
@@ -50,7 +53,7 @@ const interchangeOnly = () => ({
   ],
 })
 
-/** A raw block, a ruby, a denied destination and an editorial comment: the four losses the enum does name. */
+/** A raw block, a ruby, a denied destination and an editorial comment. */
 const namedLosses = () => ({
   type: 'document',
   srcByteLength: 0,
@@ -74,7 +77,7 @@ const collect = (
 
 /*
  * An authored attribute under a name PART 10 §13a reserves for a roundtrip
- * carrier. It is DROPPED and the drop reported, which is the fifth code - and
+ * carrier. It is DROPPED and the drop reported, which is one code, and
  * the only one that needs an export option on to be reachable, so the sweep
  * below renders this one with `roundtrip` enabled.
  */
@@ -96,7 +99,7 @@ describe('the render-loss code enum', () => {
       'destination-denied',
       'editorial-comment-flattened',
       'carrier-attribute-dropped',
-      'definition-list-flattened',
+      'list-style-dropped',
     ])
   })
 
@@ -115,13 +118,13 @@ describe('the render-loss code enum', () => {
         ...collect(render as never, namedLosses()),
         ...collect(render as never, collidesWithCarrier(), { roundtrip: true }),
       ]) {
-        expect(schemaCodes(), `${target} emitted ${loss.code}`).toContain(loss.code)
+        expect([...schemaCodes(), ...aheadOfPinCodes], `${target} emitted ${loss.code}`).toContain(loss.code)
         seen.add(loss.code)
       }
     }
-    // CARVE-P11-067 now carries every nested definition list, so nothing reports
-    // `definition-list-flattened`, though the schema still names it.
-    expect([...seen].sort()).toEqual(schemaCodes().filter(code => code !== 'definition-list-flattened').sort())
+    for (const loss of carveToMarkdownWithReport('a. one\n').losses) seen.add(loss.code)
+    for (const loss of carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses) seen.add(loss.code)
+    expect([...seen].sort()).toEqual([...schemaCodes(), ...aheadOfPinCodes].sort())
   })
 
   it('reports every one of those shapes on the conversion-diagnostics channel', () => {
