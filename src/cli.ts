@@ -161,8 +161,7 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --allow-loss CODE           allow a loss code intentionally (repeatable;
                                 raw-format-dropped, ruby-flattened,
                                 editorial-comment-flattened,
-                                carrier-attribute-dropped,
-                                definition-list-flattened)
+                                carrier-attribute-dropped)
     --max-render-losses N       retain at most N loss rows (default 100); the
                                 report still carries the complete total
 
@@ -970,7 +969,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     opts.profileBaseHost = values['profile-base-host']
   }
   const allowedLosses = values['allow-loss'] ?? []
-  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped', 'definition-list-flattened']
+  const knownLosses: RenderLossCode[] = ['raw-format-dropped', 'ruby-flattened', 'editorial-comment-flattened', 'carrier-attribute-dropped']
   const unknownLoss = allowedLosses.find((code) => !(knownLosses as string[]).includes(code))
   if (unknownLoss !== undefined) {
     io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected ${knownLosses.join(', ')})\n`)

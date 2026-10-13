@@ -7,7 +7,6 @@ export type RenderLossCode =
   | 'destination-denied'
   | 'editorial-comment-flattened'
   | 'carrier-attribute-dropped'
-  | 'definition-list-flattened'
 
 interface RenderLossBase {
   target: RenderTarget
@@ -22,7 +21,6 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'destination-denied'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'editorial-comment-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'carrier-attribute-dropped'; attribute: string })
-  | (RenderLossBase & { code: 'definition-list-flattened'; target: 'markdown'; nodeType: 'block' })
 
 export interface RenderResult<T = string> {
   value: T
