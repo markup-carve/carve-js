@@ -7,6 +7,9 @@ export type RenderLossCode =
   | 'destination-denied'
   | 'editorial-comment-flattened'
   | 'carrier-attribute-dropped'
+  | 'list-style-dropped'
+
+export type ListStyle = 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman'
 
 interface RenderLossBase {
   target: RenderTarget
@@ -21,6 +24,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'destination-denied'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'editorial-comment-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'carrier-attribute-dropped'; attribute: string })
+  | (RenderLossBase & { code: 'list-style-dropped'; target: 'markdown'; nodeType: 'block'; style: ListStyle })
 
 export interface RenderResult<T = string> {
   value: T
@@ -138,6 +142,30 @@ export function rawFormatDropped(
     target,
     nodeType: node.type === 'raw_block' ? 'block' : 'inline',
     message: `Dropped ${node.type === 'raw_block' ? 'block' : 'inline'} raw format "${node.format}" while rendering ${target}`,
+    ...(node.pos ? { pos: node.pos } : {}),
+  })
+}
+
+const LIST_STYLES: Record<'a' | 'A' | 'i' | 'I', ListStyle> = {
+  a: 'lower-alpha',
+  A: 'upper-alpha',
+  i: 'lower-roman',
+  I: 'upper-roman',
+}
+
+/** Markdown numbers in decimal only, so an alpha or roman list keeps its start and delimiter and loses its style. */
+export function listStyleDropped(
+  opts: RenderLossSinkOptions,
+  node: { olType?: 'a' | 'A' | 'i' | 'I'; pos?: Position },
+): void {
+  if (node.olType === undefined) return
+  const style = LIST_STYLES[node.olType]
+  opts.onRenderLoss?.({
+    code: 'list-style-dropped',
+    target: 'markdown',
+    nodeType: 'block',
+    style,
+    message: `Wrote a ${style} ordered list as decimal while rendering markdown`,
     ...(node.pos ? { pos: node.pos } : {}),
   })
 }

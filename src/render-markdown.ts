@@ -28,7 +28,7 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, listStyleDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
@@ -576,6 +576,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
 }
 
 function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
+  if (node.ordered) listStyleDropped(ctx.options, node)
   ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
