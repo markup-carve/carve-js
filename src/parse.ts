@@ -7687,7 +7687,19 @@ function rebaseOverindentedBlocks(
       i = payload.pos - 1
       continue
     }
-    if (base === 0) {
+    // CARVE-P2-017 and section 10 I4: unmatched runs remain paragraph text.
+    // Inline code cannot hide later visible block openers in the description.
+    let descriptionParagraphFence = false
+    if (includeSublists && itemParagraphFences?.has(i) && opensCodeFence(line.trimStart())) {
+      const group = opaqueGroupCloser(line.trimStart())!
+      const closesAt = (column: number): boolean => {
+        let memo = groupCloserMemos.get(column)
+        if (memo === undefined) groupCloserMemos.set(column, memo = { verbatim: new Map(), comment: new Map() })
+        return opaqueGroupCloses(group, lines, i + 1, column, takenBelowColumn, memo)
+      }
+      descriptionParagraphFence = !closesAt(base) && !closesAt(0)
+    }
+    if (base === 0 && !descriptionParagraphFence) {
       // Opaque groups already at the container's minimum column still own
       // their payload. Without advancing past them, a payload line that looks
       // like a block opener is reconsidered as an authored base of its own.
@@ -7879,9 +7891,10 @@ function rebaseOverindentedBlocks(
           onFenceBodyLine, onUnclosedCodeFence, includeSublists && itemParagraphFences?.has(i) ? (line, index) => {
             const text = line.trimStart()
             if (RE_FENCE.test(opener) && indentColumns(line, base) < base && RE_COMMENT_LINE.test(text)) return true
-            return lazyParagraphFences?.has(i) === true && eligible?.has(index) === true &&
+            return (descriptionParagraphFence || lazyParagraphFences?.has(i) === true) && eligible?.has(index) === true &&
               (RE_HEADING.test(text) || RE_BLOCKQUOTE.test(text) || RE_HR.test(text) || isTableRow(text) ||
-                colonFenceOpenerLen(text) !== null)
+                colonFenceOpenerLen(text) !== null || (descriptionParagraphFence &&
+                  (RE_DEFLIST_TERM.test(text) || RE_DEFLIST_DEF.test(text) || isBlockAttributeLine(text))))
           } : undefined)
         : sourceCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
           onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines!,

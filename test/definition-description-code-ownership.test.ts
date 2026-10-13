@@ -21,7 +21,7 @@ const htmlTree = (html: string): unknown => {
   return visit(parseFragment(html))
 }
 
-// Controls use spec 2d473af7, with below-column comment retention updated for X1.
+// Controls follow CARVE-P2-028, CARVE-P2-017 and PART 0 X1.
 it.each(controls)('keeps description code and following blocks in their authored hosts: $id', control => {
   expect(htmlTree(carveToHtml(control.source))).toEqual(htmlTree(control.html))
   for (const positions of [false, true]) {
@@ -39,6 +39,18 @@ it('folds unmarked indented terms while keeping marked sibling terms', () => {
   }
   expect(carveToHtml('> - :: a\n>   :: b\n>   : p\n')).toContain('<dt>a</dt>\n        <dt>b</dt>')
   expect(carveToHtml('> - :: a\n  : b\n>   : p\n')).toContain('<dt>a\n: b</dt>')
+})
+
+// CARVE-P2-017 and section 10 I1/I4: inline code does not own layout lines.
+it('opens visible blocks after unmatched description fences', () => {
+  expect(carveToHtml('- :: t\n  :   p\n      ```\n        | a |\n')).toContain('<table>')
+  expect(carveToHtml('- :: a\n  : p\n    ```\n      > q\n')).toContain('<blockquote><p>q</p></blockquote>')
+  expect(carveToHtml('> - :: a\n>   : p\n>         ```\n>       | a |\n')).toContain('<table>')
+  const colon = carveToHtml('> - :: term\n>   : payload\n   code\n>       ```=html\n>         :::\n>  :: t2\n')
+  expect(colon).toContain('<div>')
+  expect(colon).toContain('<p>:: t2</p>')
+  expect(carveToHtml('- :: a\n  : p\n    ```\n      x\n')).toContain('<code>\nx</code>')
+  expect(carveToHtml('- :: term\n  : desc\n      ```\n      code\n      ```\nafter\n')).toContain('<pre><code>code\n</code></pre>')
 })
 
 it('bounds collection of repeated marker-term descriptions and code', () => {
