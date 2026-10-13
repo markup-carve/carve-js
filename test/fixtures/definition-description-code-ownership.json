@@ -3562,7 +3562,7 @@
   {
     "id": "review-370",
     "source": "> - :: term\n>   : payload\n   code\n>       ```=html\n>         :::\n>  :: t2\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>\n          <p>payload\ncode\n<code>=html</code></p>\n          <div>\n\n          </div>\n        </dd>\n        <dt>t2</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>term</dt>\n        <dd>payload\ncode\n<code>=html\n:::</code></dd>\n        <dt>t2</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-371",
@@ -3652,7 +3652,7 @@
   {
     "id": "review-final-12",
     "source": "> - :: a\n>   : p\n```js extra`\n>     ~~~\n>   ~~~\n>         ~~~\n>   ~~~\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dd>p\n<code>js extra`</code></dd>\n      </dl>\n      <pre><code></code></pre>\n      ~~~\n~~~\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dd>p\n<code>js extra`\n~~~</code></dd>\n      </dl>\n      <pre><code>      ~~~\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-final-13",
@@ -3722,32 +3722,32 @@
   {
     "id": "review-following-code-root-12",
     "source": "- :: w0\n  : w1\nw2\n    ```\n  ```\n   ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>w1\nw2</dd>\n    </dl>\n    <pre><code></code></pre>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>w1\nw2\n<code>\n</code>\n<code></code></dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-quote-13",
     "source": "> - :: w0\n>   : w1\n> w2\n>     ```\n>   ```\n>    ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>w1\nw2</dd>\n      </dl>\n      <pre><code></code></pre>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>w1\nw2\n<code>\n</code>\n<code></code></dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-14",
     "source": "- outer\n  - :: w0\n    : w1\n  w2\n      ```\n    ```\n     ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>w1\nw2</dd>\n        </dl>\n        <pre><code></code></pre>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>w1\nw2\n<code>\n</code>\n<code></code></dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-15",
     "source": "- :: w0\n  : w1\nw2\n     ```\n     ```\n   ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>w1\nw2</dd>\n    </dl>\n    <pre><code></code></pre>\n    <pre><code></code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>w0</dt>\n      <dd>\n        <p>w1\nw2</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n    <pre><code></code></pre>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-quote-16",
     "source": "> - :: w0\n>   : w1\n> w2\n>      ```\n>      ```\n>    ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>w1\nw2</dd>\n      </dl>\n      <pre><code></code></pre>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>w0</dt>\n        <dd>\n          <p>w1\nw2</p>\n          <pre><code></code></pre>\n        </dd>\n      </dl>\n      <pre><code></code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-following-code-list-17",
     "source": "- outer\n  - :: w0\n    : w1\n  w2\n       ```\n       ```\n     ```\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>w1\nw2</dd>\n        </dl>\n        <pre><code></code></pre>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>w0</dt>\n          <dd>\n            <p>w1\nw2</p>\n            <pre><code></code></pre>\n          </dd>\n        </dl>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-following-code-root-18",

@@ -7693,6 +7693,7 @@ function rebaseOverindentedBlocks(
       // mistake and swallowed below-description content.  Ownership belongs to
       // the innermost open body, so keep its exact column band here.
       let descriptionColumn: number | null = null
+      let descriptionState: ItemLazyState | undefined
       // A term has no content column of its own, so a line past the list's
       // base folds into an open term and is never an authored block
       // (carve#2411). Only a list marker still interrupts it (§24 C4).
@@ -7717,6 +7718,11 @@ function rebaseOverindentedBlocks(
           continue
         }
         const column = indentColumns(candidate)
+        if (descriptionColumn !== null && descriptionState?.lazyFoldable && takenBelowColumn?.has(j) &&
+            !lineOpensItemBlock(candidate.trimStart()) && !RE_COMMENT_LINE.test(candidate.trimStart())) {
+          end = j
+          continue
+        }
         if (column < base) break
         const local = sliceColumns(candidate, base, true)
         const description = column === base ? RE_DEFLIST_DEF.exec(local) : null
@@ -7726,7 +7732,11 @@ function rebaseOverindentedBlocks(
           if (termFloorText && description === null) break
           end = j
           termOpen = description === null
-          if (description) descriptionColumn = base + 1 + description[1]!.length
+          if (description) {
+            descriptionColumn = base + 1 + description[1]!.length
+            descriptionState = verbatimOnlyLazyState()
+            trackItemLazyState(description[2]!, descriptionState)
+          }
           continue
         }
         if (termOpen && column === base && opensWrappedAttributeBlock(local)) {
@@ -7748,6 +7758,20 @@ function rebaseOverindentedBlocks(
         }
         termOpen = false
         if (descriptionColumn !== null && column >= descriptionColumn) {
+          const text = candidate.trimStart()
+          if (descriptionState) trackItemLazyState(text, descriptionState, () => {
+            const group = opaqueGroupCloser(text)
+            if (group === null) return false
+            const closesAt = (atColumn: number): boolean => {
+              let memo = groupCloserMemos.get(atColumn)
+              if (memo === undefined) {
+                memo = { verbatim: new Map(), comment: new Map() }
+                groupCloserMemos.set(atColumn, memo)
+              }
+              return opaqueGroupCloses(group, lines, j + 1, atColumn, takenBelowColumn, memo)
+            }
+            return closesAt(column) || closesAt(descriptionColumn!)
+          }, true, width => (commentCloser ??= commentCloserLookup(lines))(width, j) > j)
           end = j
           continue
         }
