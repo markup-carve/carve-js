@@ -24,6 +24,8 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
 const schemaCodes = (): string[] => JSON.parse(
   readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'),
 ).properties.losses.items.properties.code.enum
+// carve#3098 adds this code to the published schema after the engine reports it.
+const aheadOfPinCodes = ['list-delimiter-changed']
 
 /** Every §1d shape at once: a section, a block cell, a labelled equation and an attributed partition. */
 const interchangeOnly = () => ({
@@ -116,12 +118,13 @@ describe('the render-loss code enum', () => {
         ...collect(render as never, namedLosses()),
         ...collect(render as never, collidesWithCarrier(), { roundtrip: true }),
       ]) {
-        expect(schemaCodes(), `${target} emitted ${loss.code}`).toContain(loss.code)
+        expect([...schemaCodes(), ...aheadOfPinCodes], `${target} emitted ${loss.code}`).toContain(loss.code)
         seen.add(loss.code)
       }
     }
     for (const loss of carveToMarkdownWithReport('a. one\n').losses) seen.add(loss.code)
-    expect([...seen].sort()).toEqual(schemaCodes().sort())
+    for (const loss of carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses) seen.add(loss.code)
+    expect([...seen].sort()).toEqual([...schemaCodes(), ...aheadOfPinCodes].sort())
   })
 
   it('reports every one of those shapes on the conversion-diagnostics channel', () => {

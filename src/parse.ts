@@ -13223,6 +13223,8 @@ class ParseSession {
       let consumedNoteParagraphBefore = false
       let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
+      let nestedOwnerIsList = false
+      let closedListFence = false
       const markerLineTerm = RE_DEFLIST_TERM.test(content)
       let singleMarkerTerm = markerLineTerm
       let markerDescriptionColumn: number | undefined
@@ -13251,7 +13253,7 @@ class ParseSession {
       // opens below that child's column - the one place the answer is read. Both
       // reads it needs walk an indentation run, so a body with no such fence pays
       // nothing for the tracking (markup-carve/carve#752).
-      const ownerPending: {line: string, followsBlank: boolean, foldable: boolean, framed: boolean}[] = []
+      const ownerPending: {line: string, index: number, followsBlank: boolean, foldable: boolean, framed: boolean}[] = []
       const walkOwnership = (): boolean => {
         let opensFence = false
         for (const entry of ownerPending) {
@@ -13261,9 +13263,17 @@ class ParseSession {
           // block boundary returns ownership to this item.
           if (nestedOwnerColumn < 0 || column < nestedOwnerColumn) {
             const markerColumn = markerContentColumn(entry.line)
+            const opener = entry.line.trimStart()
+            const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+            const closedFence = !markerNoteItem && nestedOwnerIsList && fence !== null && itemFenceHasCloser(
+              lexer, RE_FENCE.test(opener) ? fence[2]! : fence[1]!, entry.index,
+              contentCol + column, new Map(), itemEndsAt,
+            )
             if (nestedOwnerColumn < 0 || entry.followsBlank || markerColumn >= 0 ||
-              lineOpensItemBlock(entry.line)) {
+              lineOpensItemBlock(entry.line) || closedFence) {
               nestedOwnerColumn = markerColumn
+              nestedOwnerIsList = isListMarkerLine(entry.line)
+              if (closedFence) closedListFence = true
               // Track a new fence at its authored base so a later dedent cannot
               // fold into its body as paragraph text. Deeper items track their own
               // fences when their collected content is parsed.
@@ -13273,6 +13283,7 @@ class ParseSession {
                 if (opener !== entry.line && opensCodeFence(opener)) {
                   authoredFenceBase = indentColumns(entry.line)
                   opensFence = true
+                  closedListFence = false
                 }
               }
             }
@@ -13299,7 +13310,7 @@ class ParseSession {
           if (indentColumns(line, descendantOpaque.base) < descendantOpaque.base) descendantOpaque = null
         }
         const child = nestedOwnerColumn
-        if (child < 0 && opener === line.replace(/^[ \t]+/, '')) return
+        if (child < 0 && opener === line.replace(/^[ \t]+/, '') && !closedListFence) return
         // BELOW A CHILD'S COLUMN THE CHILD IS OVER, and so is any fence it held:
         // the base is at or past that column, so such a line is never payload.
         // What a later below-column line reads is whether an ANCESTOR is left
@@ -13327,13 +13338,15 @@ class ParseSession {
           // A closer stands at its fence's base or at its container's content
           // column (CARVE-P0-004), never past the base.
           if (column <= base && descendantOpaque.close.test(opener)) {
-            closedDescendantFence = descendantNoteBody || descendantOpaque.markerLine === true
+            closedDescendantFence = descendantNoteBody || descendantOpaque.markerLine === true || closedListFence
+            if (closedListFence) lazyState.lazyFoldable = false
             if (descendantOpaque.markerLine) lazyState.lazyFoldable = false
             if (descendantNoteBody) {
               consumedNoteCloserBodyColumn = contentCol + FOOTNOTE_BODY_COLUMN
               consumedNoteParagraphBefore = descendantNoteParagraphBefore
             }
             descendantOpaque = null
+            closedListFence = false
             return
           }
           // ANY OTHER LINE BELOW THE BASE IS NOT PAYLOAD. It ends the fence
@@ -13972,11 +13985,12 @@ class ParseSession {
             }
             ownerPending.push({
               line: dedented,
+              index: fenceLineIndex,
               followsBlank,
               foldable: lazyState.lazyFoldable,
               framed: insideOpenFence(lazyState),
             })
-            if (mayOpenFence && walkOwnership()) trackedContent = opener
+            if (mayOpenFence && descendantOpaque === null && walkOwnership()) trackedContent = opener
             // A COMMENT THE ITEM ALREADY HOLDS OWNS ITS PAYLOAD. §28 makes that
             // body verbatim, so a fence-shaped line inside it OPENS nothing. It
             // does not stop an open descendant fence CLOSING, though: the item's

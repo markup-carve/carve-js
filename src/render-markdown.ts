@@ -29,7 +29,7 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, listStyleDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, listDelimiterChanged, listStyleDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
@@ -277,6 +277,7 @@ function renderTracked(block: BlockNode, ctx: MarkdownContext): string {
   if (previous !== undefined && previous.ordered === block.ordered && previous.mark === mark && !carriesListStyle(block, ctx)) {
     mark = block.ordered ? (mark === '.' ? ')' : '.') : mark === '-' ? '*' : '-'
   }
+  if (block.ordered) listDelimiterChanged(ctx.options, block, block.delim === ')' ? ')' : '.', mark as '.' | ')')
   const rendered = renderList(block, ctx, mark)
   if (rendered !== '') ctx.lastList = { ordered: block.ordered, mark }
   return attributeMarker(block, ctx) + rendered

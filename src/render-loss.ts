@@ -8,6 +8,7 @@ export type RenderLossCode =
   | 'editorial-comment-flattened'
   | 'carrier-attribute-dropped'
   | 'list-style-dropped'
+  | 'list-delimiter-changed'
 
 export type ListStyle = 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman'
 
@@ -25,6 +26,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'editorial-comment-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'carrier-attribute-dropped'; attribute: string })
   | (RenderLossBase & { code: 'list-style-dropped'; target: 'markdown'; nodeType: 'block'; style: ListStyle })
+  | (RenderLossBase & { code: 'list-delimiter-changed'; target: 'markdown'; nodeType: 'block'; authored: '.' | ')'; emitted: '.' | ')' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -166,6 +168,24 @@ export function listStyleDropped(
     nodeType: 'block',
     style,
     message: `Wrote a ${style} ordered list as decimal while rendering markdown`,
+    ...(node.pos ? { pos: node.pos } : {}),
+  })
+}
+
+export function listDelimiterChanged(
+  opts: RenderLossSinkOptions,
+  node: { pos?: Position },
+  authored: '.' | ')',
+  emitted: '.' | ')',
+): void {
+  if (authored === emitted) return
+  opts.onRenderLoss?.({
+    code: 'list-delimiter-changed',
+    target: 'markdown',
+    nodeType: 'block',
+    authored,
+    emitted,
+    message: `Changed an ordered list delimiter from ${authored} to ${emitted} while rendering markdown`,
     ...(node.pos ? { pos: node.pos } : {}),
   })
 }
