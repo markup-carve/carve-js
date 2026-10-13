@@ -23,6 +23,7 @@ describe('a blank inside a marker-line note', () => {
     ['paragraph after a comment closed the note', '- [^n]: text\n    %% c\n\n    more\n- b\n'],
     ['paragraph after a blank, comment and blank', '- [^n]: text\n\n    %% c\n\n    more\n- b\n'],
     ['blank after the comment that closed the note', '- [^n]: text\n\n    %% c\n\n    %% d\n- b\n'],
+    ['blanks before the comment do not count toward a hard boundary', '- [^n]: text\n\n\n    %% c\n\n- b\n'],
   ])('still loosens: %s', (_name, src) => {
     expect(tight(src)).toBe(false)
   })

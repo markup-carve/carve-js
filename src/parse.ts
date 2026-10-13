@@ -14737,7 +14737,7 @@ class ParseSession {
         // one. One or two blank lines remain the ordinary loose separator
         // (§17 L1). `blankBeforeInvisible` is deliberately not counted here -
         // a run broken by a comment is not a run of blank lines.
-        if (pendingBlanks >= 3) hardBoundary = true
+        if (separatingBlanks >= 3) hardBoundary = true
         else loose = true
       }
 
