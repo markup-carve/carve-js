@@ -13337,7 +13337,8 @@ class ParseSession {
           // A closer stands at its fence's base or at its container's content
           // column (CARVE-P0-004), never past the base.
           if (column <= base && descendantOpaque.close.test(opener)) {
-            closedDescendantFence = descendantNoteBody || descendantOpaque.markerLine === true
+            closedDescendantFence = descendantNoteBody || descendantOpaque.markerLine === true || closedListFence
+            if (closedListFence) lazyState.lazyFoldable = false
             if (descendantOpaque.markerLine) lazyState.lazyFoldable = false
             if (descendantNoteBody) {
               consumedNoteCloserBodyColumn = contentCol + FOOTNOTE_BODY_COLUMN
@@ -13988,7 +13989,7 @@ class ParseSession {
               foldable: lazyState.lazyFoldable,
               framed: insideOpenFence(lazyState),
             })
-            if (mayOpenFence && walkOwnership()) trackedContent = opener
+            if (mayOpenFence && descendantOpaque === null && walkOwnership()) trackedContent = opener
             // A COMMENT THE ITEM ALREADY HOLDS OWNS ITS PAYLOAD. §28 makes that
             // body verbatim, so a fence-shaped line inside it OPENS nothing. It
             // does not stop an open descendant fence CLOSING, though: the item's

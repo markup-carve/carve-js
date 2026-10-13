@@ -50,6 +50,11 @@ describe('a block at a container content column ends the paragraph', () => {
   it('keeps an unclosed fence below the sublist column inline', () => {
     expect(html('- a\n    - child\n    ```\n    code\nafter\n')).not.toContain('<p>after</p>')
   })
+
+  it('continues the outer item after a paragraph follows the closed fence', () => {
+    expect(html('- a\n    - child\n    ```js\n    code\n    ```\n    tail\nafter\n'))
+      .toContain('tail\nafter\n  </li>')
+  })
   /**
    * THE PLAINEST SPELLING, and the one the whole family reduces to. No quote,
    * no table, no continuation row: an invisible line at the item's content
