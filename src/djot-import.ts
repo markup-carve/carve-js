@@ -303,7 +303,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
       if (markerOnly) return attrs
       const alone = at === first && at + attrs.length === last
       const previous = (lines[index - 1] ?? '').replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
-      const block = !continuesParagraph(source, lineOffsets[index]! + at) || index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous)
+      const block = alone && (index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous) || !continuesParagraph(source, lineOffsets[index]! + at))
       if (alone && block) { if (!dangling.has(index)) return attrs; dropLine = true }
       orphanEnd = at + attrs.length
       return prefix + (at === first ? 'L' : 'I')
@@ -599,9 +599,9 @@ function convertDjotDocument(djot: string): string {
   const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody, invalidAttributes.inherited)))
   const itemAttributePrefix = djotPlaceholderPrefix(links, '\x00DJOTITEMATTR\x00')
   const itemAttributeValues: string[] = []
-  const holdItemAttributes = (attributes: string): string => {
+  const holdItemAttributes = (attributes: string, block = false): string => {
     itemAttributeValues.push(attributes)
-    return `${itemAttributePrefix}${itemAttributeValues.length - 1}\x00`
+    return `${itemAttributePrefix}${block ? 'B' : ''}${itemAttributeValues.length - 1}\x00`
   }
   const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)), strippedDefinitions.isBoundary, noteSourceWidths, emptyNote, holdItemAttributes)
   const headingFolded = foldHeadingContinuations(dropLeadingDjotSeparators(escapeDjotNonTableRows(layout)))
@@ -643,7 +643,7 @@ function convertDjotDocument(djot: string): string {
   const restoreSpans = new RegExp(`${prefix}(\\d+)\x00`, 'g')
   const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
     .replaceAll(emptyNote, '%%%%')
-    .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, index: string, container: string, marker: string, whitespace: string) => `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
+    .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(B?)(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, block: string, index: string, container: string, marker: string, whitespace: string) => block ? `${container}${itemAttributeValues[Number(index)] ?? ''}\n${container}${marker}${whitespace}` : `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
     .replace(new RegExp(`([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
   return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
@@ -871,11 +871,14 @@ function carryDjotAttributesAcrossQuoteExits(source: string): string {
   const lines = source.split('\n'), mask = maskDjotCodeAndDestinations(source).split('\n')
   let offset = 0
   const offsets = lines.map(line => { const start = offset; offset += line.length + 1; return start })
+  let previousDepth = 0
   const contexts = lines.map((line, index) => {
     const prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
     const body = line.slice(prefix.length), indent = /^[ \t]*/.exec(body)![0].length
     const attrs = mask[index]![prefix.length + indent] === '{' ? readAttributes(body, indent) : undefined
-    return { prefix, depth: (prefix.match(/>/g) ?? []).length, body, indent, attributes: attrs?.end === body.trimEnd().length, continued: false, listOwned: false }
+    const depth = (prefix.match(/>/g) ?? []).length, opens = depth > previousDepth
+    previousDepth = depth
+    return { opens, prefix, depth: (prefix.match(/>/g) ?? []).length, body, indent, attributes: attrs?.end === body.trimEnd().length, continued: false, listOwned: false }
   })
   const listColumns = new Map<number, number[]>()
   for (let index = 0; index < contexts.length; index++) {
@@ -893,23 +896,28 @@ function carryDjotAttributesAcrossQuoteExits(source: string): string {
     } else if (context.indent <= (columns.at(-1) ?? -1) && !/^(?:[-*+]|[^ \t]+[.)])[ \t]+/.test(context.body.slice(context.indent))) listColumns.delete(context.depth)
   }
   const moved = new Map<number, string[]>()
-  let following: number | undefined, destinationDepth: number | undefined
+  let following: number | undefined, destinationDepth: number | undefined, nextContent: number | undefined
   for (let index = lines.length - 1; index >= 0; index--) {
     const context = contexts[index]!
     if (context.attributes) {
-      if (following !== undefined && destinationDepth !== undefined && context.depth > destinationDepth && !context.continued && !context.listOwned) {
+      if (following !== undefined && destinationDepth !== undefined && context.depth > destinationDepth && !(nextContent !== undefined && contexts[nextContent]!.opens) && !context.continued && !context.listOwned) {
         const target = lines[following]!
         let end = 0
         for (let level = 0; level < destinationDepth; level++) end += /^[ \t]*>(?:[ \t]|$)/.exec(target.slice(end))![0].length
         end += /^[ \t]*/.exec(target.slice(end))![0].length
         const attributes = moved.get(following) ?? []
-        attributes.push(target.slice(0, end) + context.body.slice(context.indent))
+        let ownerEnd = 0
+        for (let level = 0; level < destinationDepth; level++) ownerEnd += /^[ \t]*>(?:[ \t]|$)/.exec(context.prefix.slice(ownerEnd))![0].length
+        const ownerIndent = /^[ \t]*/.exec(context.prefix.slice(ownerEnd))![0].length
+        const targetPrefix = target.slice(0, end)
+        attributes.push((ownerIndent ? context.prefix.slice(0, ownerEnd) + ' '.repeat(ownerIndent) : targetPrefix) + context.body.slice(context.indent))
         moved.set(following, attributes)
         lines[index] = context.prefix.trimEnd()
-      }
+      } else if (destinationDepth !== undefined && context.depth <= destinationDepth) following = index
     } else if (context.body.trim() === '') {
       if (destinationDepth !== undefined) destinationDepth = Math.min(destinationDepth, context.depth)
     } else { following = index; destinationDepth = context.depth }
+    if (context.body.trim() !== '' || context.opens) nextContent = index
   }
   return lines.flatMap((line, index) => [...(moved.get(index)?.reverse() ?? []), line]).join('\n')
 }

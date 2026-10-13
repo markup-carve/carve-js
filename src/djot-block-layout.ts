@@ -2,7 +2,25 @@ import { isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotInlineB
 import { trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { rejectedCommentStartsBlock } from './djot-attributes.js'
+import { continuesParagraph } from './djot-attributes.js'
+import { djotTableRows } from './djot-migrate.js'
 import { backtickRunEnds } from './backtick-run-index.js'
+
+function djotListKind(marker: string): string {
+  const label = /[0-9A-Za-z]+/.exec(marker)?.[0]
+  if (!label) return marker
+  let mask = /^[0-9]+$/.test(label) ? 1 : label === label.toLowerCase() ? 2 : 8
+  if (/^[ivxlcdm]+$/i.test(label)) mask = (label.length === 1 ? mask : 0) | (label === label.toLowerCase() ? 4 : 16)
+  return `${mask}:${marker.replace(/[0-9A-Za-z]+/, '')}`
+}
+
+function sharedDjotListKind(prior: string | undefined, current: string): string | undefined {
+  if (prior === current) return current
+  const first = /^(\d+):(.*)$/.exec(prior ?? ''), second = /^(\d+):(.*)$/.exec(current)
+  if (!first || !second || first[2] !== second[2]) return undefined
+  const common = Number(first[1]) & Number(second[1])
+  return common ? `${common}:${first[2]}` : undefined
+}
 
 function compactDjotListPrefix(text: string): string {
   if (!text.includes('0') && !text.includes('(') && !text.includes('\t')) return text
@@ -28,7 +46,61 @@ function compactDjotListPrefix(text: string): string {
 }
 
 /** Preserve Djot paragraph boundaries and container columns in Carve. */
-export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%', holdItemAttributes?: (attributes: string) => string): string {
+function deepQuotedItemAttributes(source: string, hold: (attributes: string, block?: boolean) => string): string {
+  if (!source.includes('{') || !source.includes('>')) return source
+  const lines = source.split('\n'), masks = maskDjotCodeAndDestinations(source).split('\n')
+  const frames = new Map<number, { column: number; start: number; kind: string; attributes: { row: number; wire: string }[] }>()
+  const before = new Map<number, string[]>()
+  const removed = new Set<number>()
+  let offset = 0, previousDepth = 0, previousParagraph = false
+  let literalDepth: number | undefined
+  for (let row = 0; row < lines.length; row++) {
+    const line = lines[row]!, prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
+    const depth = (prefix.match(/>/g) ?? []).length, body = line.slice(prefix.length), indent = /^[ \t]*/.exec(body)![0].length
+    const text = body.slice(indent), visible = masks[row]!.slice(prefix.length + indent)
+    const at = offset + prefix.length + indent
+    offset += line.length + 1
+    if (literalDepth !== undefined && depth <= literalDepth) literalDepth = undefined
+    if (depth > previousDepth && previousParagraph) literalDepth = previousDepth
+    for (const level of frames.keys()) if (level > depth) frames.delete(level)
+    previousDepth = depth
+    previousParagraph = text !== '' && !/^(?:[-*+][ \t]|[0-9A-Za-z]+[.)][ \t]|#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|\[|\{)/.test(visible)
+    if (literalDepth !== undefined && depth > literalDepth) continue
+    if (depth < 1 || text === '') continue
+    const item = /^([-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(visible)
+    const frame = frames.get(depth)
+    if (item) {
+      let kind = djotListKind(item[1]!)
+      if (/^[-*+]/.test(item[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length))) kind += ':task'
+      const same = frame && indent === frame.column ? sharedDjotListKind(frame.kind, kind) : undefined
+      if (depth >= 2 && frame && same !== undefined && frame.attributes.length) {
+        const wire = '{' + frame.attributes.map(attr => attr.wire.slice(1, -1)).join(' ') + '}'
+        for (const attr of frame.attributes) removed.add(attr.row)
+        before.set(row, [prefix + ' '.repeat(indent) + hold(wire), prefix.trimEnd()])
+        const prefixEnds = [0]
+        for (let level = 0; level < depth; level++) prefixEnds.push(prefixEnds[level]! + /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(prefixEnds[level]))![0].length)
+        for (const [ownerDepth, owner] of frames) {
+          if (ownerDepth > depth) continue
+          const ownerIndent = /^[ \t]*/.exec(prefix.slice(prefixEnds[ownerDepth]))![0].length
+          if (ownerDepth < depth && ownerIndent <= owner.column) continue
+          const startPrefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(lines[owner.start]!)![0]
+          if (!before.has(owner.start)) before.set(owner.start, [startPrefix + ' '.repeat(owner.column) + hold('{loose}', true), startPrefix.trimEnd()])
+        }
+      }
+      frames.set(depth, { column: indent, start: same !== undefined ? frame!.start : row, kind: same ?? kind, attributes: [] })
+    } else if (visible.startsWith('{')) {
+      const attrs = readAttributes(body, indent)
+      if (depth >= 2 && frame && indent > frame.column && attrs?.end === body.trimEnd().length && !continuesParagraph(source, at)) frame.attributes.push({ row, wire: attrs.source })
+    } else if (frame && indent <= frame.column) frames.delete(depth)
+  }
+  return lines.flatMap((line, row) => removed.has(row) ? [] : [...(before.get(row) ?? []), line]).join('\n')
+}
+
+export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%', holdItemAttributes?: (attributes: string, block?: boolean) => string): string {
+  if (holdItemAttributes) {
+    const prepared = deepQuotedItemAttributes(source, holdItemAttributes)
+    if (prepared !== source) { source = prepared; rows = djotTableRows(source, maskDjotCodeAndDestinations(source)) }
+  }
   const lines = source.split('\n')
   const maskedSource = maskDjotCodeAndDestinations(source)
   const hasDefinitionSyntax = /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(maskedSource)
@@ -224,7 +296,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       if (quotedNoteItem) {
         const marker = quotedNoteItem[2]!
         const column = quotedNoteItem[1]!.length
-        const context = { sourcePrefix: physicalQuote.length, depth: physicalQuoteDepth, column, content: compactDjotListPrefix(marker).length, target: column, kind: marker.trim().replace(/[0-9A-Za-z]+/, '1'), bullet: marker[0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false }
+        const context = { sourcePrefix: physicalQuote.length, depth: physicalQuoteDepth, column, content: compactDjotListPrefix(marker).length, target: column, kind: djotListKind(marker.trim()), bullet: marker[0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false }
         lists.push(context)
         out.push(physicalQuote + quotedNoteItem[1] + compactDjotListPrefix(marker) + quotedNoteItem[3] + emptyNote)
         depth = quoteDepth
@@ -254,7 +326,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
       let childBody = body
       if (child) {
-        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: child[1]!.trim().replace(/[0-9A-Za-z]+/, '1'), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
+        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
         childBody = body.slice(child[1]!.length)
         if (/^[-*+]/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\][ \t]+/, '')
       }
@@ -511,7 +583,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const parent = lists.at(-1)
       const priorKind = parent?.kind
       if (parent && blank && indent === parent.column && endsNestedList && !parent.loose) {
-        while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '') out.pop()
+        while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '' && (out.at(-1)!.match(/>/g) ?? []).length <= quoteDepth) out.pop()
         if (!parent.continuation && out[previousList.start - 1]?.replace(/>/g, '').trim() === '') out.splice(previousList.start - 1, 1)
       } else if (parent && blank && indent === parent.column) parent.loose = true
       if (((parent && indent > parent.column) || !parent) && paragraph && !blank) {
@@ -522,9 +594,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         blank = false
         continue
       }
-      const kind = (item[1] ?? item[2]!.replace(/[0-9A-Za-z]+/, '1')) + (item[1] && /^\[[ xX]\][ \t]+/.test(text.slice(item[0].length - 1)) ? ':task' : '')
+      let kind = (item[1] ?? djotListKind(item[2]!)) + (item[1] && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length - 1)) ? ':task' : '')
       let context = parent
       const nested = parent && indent > parent.column
+      const sharedKind = sharedDjotListKind(priorKind, kind)
+      const sameKind = sharedKind !== undefined
+      if (parent && !nested && sharedKind !== undefined) { kind = sharedKind; parent.kind = kind }
       if (!parent || nested) {
         context = {
           sourcePrefix,
@@ -539,7 +614,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
           continuation: false,
         }
         lists.push(context)
-      } else if (kind !== parent.kind) {
+      } else if (!sameKind) {
         if (out.at(-1)?.trim() !== '') out.push(quoteForCarve().trimEnd())
         parent.kind = kind
         parent.bullet = parent.bullet === '-' ? '*' : '-'
@@ -551,14 +626,14 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       context!.continuation = false
       context!.empty = emptyItem
       headingMarker = ''
-      const itemOwned = parent && !nested && kind === priorKind
+      const itemOwned = parent && !nested && sameKind
       const attached = carriedAttributes.filter(attribute => itemOwned && attribute.depth === quoteDepth && attribute.owner >= indent)
       const attachedSet = new Set(attached)
       for (const attribute of carriedAttributes) {
         if (!attachedSet.has(attribute)) out.push(quoteForCarve() + ' '.repeat(context!.target) + attribute.attributes)
       }
       if (attached.length && holdItemAttributes) {
-        while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '') out.pop()
+        while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '' && (out.at(-1)!.match(/>/g) ?? []).length <= quoteDepth) out.pop()
         const attributes = '{' + attached.map(attribute => attribute.attributes.slice(1, -1)).join(' ') + '}'
         if (context!.loose) out.push(quoteForCarve().trimEnd())
         out.push(quoteForCarve() + ' '.repeat(context!.target) + holdItemAttributes(attributes), quoteForCarve().trimEnd())
@@ -611,7 +686,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     if (attributeLine && !paragraph && holdItemAttributes) {
       const owner = lists.at(-1)
       if (owner && owner.depth === quoteDepth && indent > owner.column && attrs!.source !== '{}') {
-        if (blank && !out[owner.start]!.includes('{loose}\n')) {
+        const heldLoose = /\x00DJOTITEMATTR\x00(?:\d+\x00)?B\d+\x00$/.test(out[owner.start - 2] ?? '')
+        if (blank && !heldLoose && !out[owner.start]!.includes('{loose}\n')) {
           out[owner.start] = quoteForCarve() + ' '.repeat(owner.target) + '{loose}\n' + out[owner.start]
           owner.loose = true
         }
