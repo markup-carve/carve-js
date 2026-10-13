@@ -7632,7 +7632,7 @@ function markerNoteFenceReach(lines: readonly string[], absorbedMarkers: Readonl
   return closer === null ? null : 'unclosed'
 }
 
-function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers: ReadonlySet<number>): number[] {
+function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers: ReadonlySet<number>, outerTailOnly = false): number[] {
   const openers: number[] = []
   let closer: RegExp | null = null
   let openerColumn = -1
@@ -7656,9 +7656,9 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
     }
     if (childColumn >= 0 && column >= childColumn) continue
     if (RE_FOOTNOTE_DEF.test(text) || (isListMarkerLine(text) && !absorbedMarkers.has(index))) {
-      // A later comment and fence belong to the nested marker's body. They do
-      // not give the outer item's flush-left follower a continuation claim.
-      nestedMarkerSeen = true
+      // A later comment and fence cannot grant the outer item a tail claim.
+      // The rebase scan still needs that fence opener at its authored column.
+      if (outerTailOnly) nestedMarkerSeen = true
       if (isListMarkerLine(text)) childColumn = column + markerContentColumn(text)
     }
     if (!nestedMarkerSeen && !belowNoteBody && column >= FOOTNOTE_BODY_COLUMN && RE_COMMENT_LINE.test(text) &&
@@ -13478,7 +13478,7 @@ class ParseSession {
             !RE_COMMENT_LINE.test(lastNoteLine))
         const fenceBoundaryTail = noteReach === 'boundary'
         const commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
-          markerNoteCommentFenceOpeners(nested, noteParagraphMarkers).length > 0
+          markerNoteCommentFenceOpeners(nested, noteParagraphMarkers, true).length > 0
         const noteParagraphOpen = markerNoteParagraph
         if (!isBlankLine(l)) {
           noteBodyLast = false
@@ -14448,7 +14448,9 @@ class ParseSession {
         const index = openerIndex - 1
         if (index < 1) continue
         for (; priorChecked < index; priorChecked++) {
-          if (RE_FOOTNOTE_DEF.test(nested[priorChecked]!.trimStart())) nestedNoteSeen = true
+            const text = nested[priorChecked]!.trimStart()
+            if (RE_FOOTNOTE_DEF.test(text) ||
+                (isListMarkerLine(text) && !noteParagraphMarkers.has(priorChecked))) nestedNoteSeen = true
         }
         if (!isBlankLine(nested[index - 1]!)) continue
         if (nestedNoteSeen) continue
