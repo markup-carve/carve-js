@@ -13153,6 +13153,7 @@ class ParseSession {
       const itemParagraphFences = new Set<number>()
       let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
         !RE_COMMENT_LINE.test(RE_FOOTNOTE_DEF.exec(content)![2]!)
+      let markerNoteClaimChecked = false
       let noteBodyLast = false
       let nestedNoteParagraph = false
       let nestedNoteContainer = false
@@ -13269,6 +13270,39 @@ class ParseSession {
         // A comment can retain the ancestor's frame after closing this leaf.
         if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) break
         const lw = indentColumns(l, contentCol)
+        // Check the rebased leaf once; collection-only note text stores no continuation claim.
+        if (markerNoteItem && lw < contentCol && !markerNoteClaimChecked) {
+          markerNoteClaimChecked = true
+          const claimLines = nested.slice()
+          rebaseOverindentedBlocks(claimLines, authoredBaseEligible, -1, false, false,
+            undefined, undefined, takenBelowColumn, false, undefined, undefined, undefined,
+            { markers: noteParagraphMarkers })
+          const claim = verbatimOnlyLazyState()
+          const claimClosers = buildCloserIndex(claimLines)
+          let definitionClaim = true
+          let blank = false
+          for (let index = 0; index < claimLines.length; index++) {
+            const text = claimLines[index]!
+            if (isBlankLine(text)) blank = true
+            else {
+              if (blank && isListMarkerLine(text.trimStart())) { claim.inFootnoteBody = false; definitionClaim = false }
+              blank = false
+            }
+            const definition = RE_FOOTNOTE_DEF.exec(text.trimStart())
+            if (definition) definitionClaim = true
+            else if ((index > 0 && noteParagraphMarkers.has(index) &&
+                indentColumns(nested[index]!) === FOOTNOTE_BODY_COLUMN) || RE_DEFLIST_DEF.test(text.trimStart())) definitionClaim = false
+            if (!definition && leadingWhitespace(text) === 0 && !lineOpensItemBlock(text) && !isBlankLine(text) &&
+                !claim.inFootnoteBody && claim.opaque === null) definitionClaim = false
+            if (definitionClaim && opensCodeFence(text)) claim.lazyFoldable = false
+            trackItemLazyState(text, claim, marker => codeCloserPossible(claimClosers, marker, index), true, () => false,
+              { whitespace: leadingWhitespace(text), descendantFrames: true, terminatorFree: true })
+            if (leadingWhitespace(text) === 0 && claim.lazyFoldable && !claim.inFootnoteBody &&
+                !opensCodeFence(text) && !isListMarkerLine(text) && !definition) definitionClaim = false
+          }
+          if (definitionClaim && (!claim.lazyFoldable || claimLines.every(text => isBlankLine(text) ||
+              (leadingWhitespace(text) > 0 && !lineOpensItemBlock(text.trimStart()))))) break
+        }
         // A MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT COLUMN HERE
         // (markup-carve/carve#1904). It carried no `>`, so it is not inside the
         // quote as a block at any column - it folds into the innermost open

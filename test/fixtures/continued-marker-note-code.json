@@ -1767,7 +1767,7 @@
   {
     "id": "review-B-unclosed4-more",
     "source": "- [^n]: text\n    more\n    ```\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>\n    <pre><code>code\nafter [^n]\n</code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\nmore<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-B-unclosed-sib",
@@ -2117,7 +2117,7 @@
   {
     "id": "review-L-child-unclosed-col0",
     "source": "- [^n]: text\n    - child\n    ```\n    code\nafter [^n]\n",
-    "html": "<ul>\n  <li>\n    <pre><code>code\nafter [^n]\n</code></pre>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text\n- child<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-L-more-fence-body0",
@@ -2147,7 +2147,7 @@
   {
     "id": "review-L-blank-more-tail0",
     "source": "- [^n]: text\n\n    more\nlazy tail\n\nafter [^n]\n",
-    "html": "<ul>\n  <li><p>lazy tail</p></li>\n</ul>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <p>more<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>lazy tail</p>\n<p>after <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>text</p>\n      <p>more<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "review-L-more-fence-tail0",
