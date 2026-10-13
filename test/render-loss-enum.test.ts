@@ -108,10 +108,7 @@ describe('the render-loss code enum', () => {
 
   it('emits only codes the schema permits, and emits every one of them', () => {
     const seen = new Set<string>()
-    for (const loss of carveToMarkdownWithReport(':: Outer\n: body\n\n  :: Inner\n  : inner body\n', { roundtrip: true }).losses) {
-      expect(schemaCodes()).toContain(loss.code)
-      seen.add(loss.code)
-    }
+    expect(carveToMarkdownWithReport(':: Outer\n: body\n\n  :: Inner\n  : inner body\n', { roundtrip: true }).losses).toEqual([])
     for (const [target, render] of Object.entries(targets)) {
       for (const loss of [
         ...collect(render as never, interchangeOnly()),
@@ -122,7 +119,9 @@ describe('the render-loss code enum', () => {
         seen.add(loss.code)
       }
     }
-    expect([...seen].sort()).toEqual([...schemaCodes()].sort())
+    // CARVE-P11-067 now carries every nested definition list, so nothing reports
+    // `definition-list-flattened`, though the schema still names it.
+    expect([...seen].sort()).toEqual(schemaCodes().filter(code => code !== 'definition-list-flattened').sort())
   })
 
   it('reports every one of those shapes on the conversion-diagnostics channel', () => {
