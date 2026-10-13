@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import type { InlineNode } from '../src/ast.js'
-import { carveToCarve, carveToHtml, htmlToCarve, renderCarve, SourceUnspellableError } from '../src/index.js'
+import type { Document, InlineNode } from '../src/ast.js'
+import { carveToCarve, carveToHtml, htmlToCarve, parse, renderCarve, SourceUnspellableError } from '../src/index.js'
 
 it('pairs overindented runs in a list line block', () => {
   const source = ['- ::: |', '    ```', '  :::', '    ```', '  :::', '  para', 'tail', ''].join('\n')
@@ -188,4 +188,31 @@ it.each([
 ])('formats %s whose value ends in a colon run, which its delimiter keeps off a bare line', (_label, source) => {
   const written = carveToCarve(source)
   expect(carveToHtml(written)).toBe(carveToHtml(source))
+})
+
+const lineBlockTree = (children: InlineNode[]): Document => ({
+  type: 'document',
+  children: [{ type: 'line_block', children: [{ type: 'paragraph', children }] }],
+})
+
+it.each([
+  [{ type: 'code', value: 'a\n:::\nb' }],
+  [{ type: 'code', value: '\n:::\n ' }],
+  [{ type: 'code', value: '\n:::\n\t' }],
+  [{ type: 'text', value: 'x ' }, { type: 'code', value: '\n:::\n' }],
+  [{ type: 'text', value: 'x' }, { type: 'code', value: '\n:::\nb' }, { type: 'text', value: ' y' }],
+  [{ type: 'code', value: '\n:::\n' }, { type: 'text', value: 'y' }],
+  [{ type: 'text', value: 'x' }, { type: 'soft_break' }, { type: 'code', value: '\n:::\n' }, { type: 'soft_break' }, { type: 'text', value: 'y' }],
+] satisfies InlineNode[][])('refuses glued line-block code fences %j', (...children) => {
+  expect(() => renderCarve(lineBlockTree(children))).toThrow(SourceUnspellableError)
+})
+
+it.each([
+  [{ type: 'code', value: '\n:::\n' }],
+  [{ type: 'text', value: 'x' }, { type: 'hard_break' }, { type: 'code', value: '\n:::\n' }, { type: 'hard_break' }, { type: 'text', value: 'y' }],
+] satisfies InlineNode[][])('round-trips standalone line-block code fences %j', (...children) => {
+  const tree = lineBlockTree(children)
+  const structural = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, item) =>
+    ['pos', 'srcByteLength', 'marker', 'termSpans', 'definitionLines', 'definitionSpans'].includes(key) ? undefined : item))
+  expect(structural(parse(renderCarve(tree)))).toEqual(structural(tree))
 })

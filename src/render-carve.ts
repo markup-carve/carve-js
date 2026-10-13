@@ -4096,6 +4096,7 @@ class CarveRenderSession {
     try {
       let out = ''
       let verbatimTail = false
+      let pairedCodeCloser = false
       const literalRanges: LiteralRange[] = []
       const noteCloses: number[] = []
       let firstLine = true
@@ -4107,6 +4108,7 @@ class CarveRenderSession {
       // growing accumulator per node is the quadratic shape this engine's scaling
       // guards exist to keep out. Two counters answer both questions in O(piece).
       let lineLength = 0
+      let lineOnlyIndentation = true
       /** The last up-to-two characters of the current output line. */
       let lineTail = ''
       // The end of `out`, for the boundary checks below: reading `out` itself
@@ -4142,6 +4144,15 @@ class CarveRenderSession {
         // character, not the backtick that actually ends the line.
         const atLineStart = lineLength === 0
 
+        const pairsLineBlockFence = node.type === 'code' && this.hidesLineBlockCloser(node.value, ctx)
+        // Parsed NBSP indentation survives paired fences without changing the tree.
+        if (node.type === 'code' && pairsLineBlockFence) {
+          if (!lineOnlyIndentation || ctx.inlineDepth > 1 || !node.value.startsWith('\n') || !/\n[\u00a0]*$/.test(node.value)
+            || nodes[idx - 1]?.type === 'soft_break' || nodes[idx + 1]?.type === 'soft_break') {
+            throw new SourceUnspellableError('code', 'paired code fence delimiters must stand alone', node)
+          }
+        }
+
         if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
 
         if (
@@ -4155,6 +4166,12 @@ class CarveRenderSession {
         ) {
           piece = '\\\n'
         }
+
+        if (pairedCodeCloser && piece !== '') {
+          if (!piece.startsWith('\n')) throw new SourceUnspellableError('code', 'a paired code fence closer must stand alone')
+          pairedCodeCloser = false
+        }
+        if (pairsLineBlockFence) pairedCodeCloser = true
 
         // The end of what is written can open a construct with the next node's
         // start: `^[` an inline note, `:name[` an inline extension, `$` plus a
@@ -4199,9 +4216,11 @@ class CarveRenderSession {
         const lastNewline = piece.lastIndexOf('\n')
         if (lastNewline === -1) {
           lineLength += piece.length
+          if (piece !== '' && !(node.type === 'non_breaking_space' && this.inlineAttrs(node.attrs, node) === '')) lineOnlyIndentation = false
           lineTail = (lineTail + piece).slice(-2)
         } else {
           lineLength = piece.length - lastNewline - 1
+          lineOnlyIndentation = lineLength === 0
           lineTail = piece.slice(lastNewline + 1).slice(-2)
         }
         if (node.type === 'soft_break') {
@@ -4624,6 +4643,11 @@ class CarveRenderSession {
     return written.replace(marker, `\n${guard}`)
   }
 
+  private hidesLineBlockCloser(content: string, ctx: CarveContext): boolean {
+    return ctx.lineBlockDepth > 0
+      && new RegExp(`(?:^|[\\r\\n])[ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
+  }
+
   private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true): string {
     // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
     // much as it is inside a fence - and `normalize()` would otherwise rewrite it
@@ -4631,8 +4655,7 @@ class CarveRenderSession {
     // (carve-js#688). Same sentinel as protectVerbatim uses; `restoreVerbatim`
     // puts the character back at the end of normalization. carve-rs already emits
     // it as itself here.
-    const hidesLineBlockCloser = ctx !== undefined && ctx.lineBlockDepth > 0
-      && new RegExp(`(?:^|[\\r\\n])[ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
+    const hidesLineBlockCloser = ctx !== undefined && this.hidesLineBlockCloser(content, ctx)
     if (hidesLineBlockCloser && (nodeType !== 'code' || !canPairFence)) {
       throw new SourceUnspellableError(nodeType, 'a prefixed or suffixed verbatim span cannot hide a line-block closer')
     }
