@@ -13283,6 +13283,7 @@ class ParseSession {
                 if (opener !== entry.line && opensCodeFence(opener)) {
                   authoredFenceBase = indentColumns(entry.line)
                   opensFence = true
+                  closedListFence = false
                 }
               }
             }

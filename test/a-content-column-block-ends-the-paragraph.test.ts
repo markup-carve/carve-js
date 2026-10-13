@@ -55,6 +55,13 @@ describe('a block at a container content column ends the paragraph', () => {
     expect(html('- a\n    - child\n    ```js\n    code\n    ```\n    tail\nafter\n'))
       .toContain('tail\nafter\n  </li>')
   })
+
+  it('continues a paragraph after a blank-separated fence and another fence', () => {
+    expect(html('- a\n    - child\n\n    ```\n    code\n    ```\n    para\n    ```\n    y\n    ```\n    tail\nafter\n'))
+      .toContain('tail\nafter\n  </li>')
+    expect(html('- a\n    - child\n\n    ```\n    code\n    ```\n\n    para\n    ```\n    y\n    ```\n    tail\nafter\n'))
+      .toContain('<p>tail\nafter</p>')
+  })
   /**
    * THE PLAINEST SPELLING, and the one the whole family reduces to. No quote,
    * no table, no continuation row: an invisible line at the item's content
