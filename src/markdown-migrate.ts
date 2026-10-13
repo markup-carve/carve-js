@@ -6007,6 +6007,26 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
   if (!/\n[ \t>]*\n/.test(source)) return source
   const lines = source.split('\n')
   const isBlank = (at: number): boolean => /^[ \t>]*$/.test(lines[at] ?? '')
+  // A list-style marker line and the blank lines around it go when the marker
+  // is restored, so looseness is read without them: the export writes those
+  // blanks, and they part nothing of the author's item.
+  const styleLines = new Set<number>()
+  if (carrierToken !== '') {
+    const token = new RegExp(`^[ \\t>]*${carrierToken}(\\d+)Z$`)
+    for (const [at, line] of lines.entries()) {
+      const slot = carrierSlots[Number(token.exec(line)?.[1] ?? -1)]
+      if (slot === undefined || carrierListStyle(slot.payload) === undefined) continue
+      styleLines.add(at)
+      for (let k = at - 1; k >= 0 && isBlank(k); k--) styleLines.add(k)
+      for (let k = at + 1; k < lines.length && isBlank(k); k++) styleLines.add(k)
+    }
+  }
+  const kept = [...lines.keys()].filter((at) => !styleLines.has(at))
+  const decide = styleLines.size === 0 ? source : kept.map((at) => lines[at]).join('\n')
+  const origin = (at: number): number => (styleLines.size === 0 ? at : kept[at]!)
+  const decideBlanks = styleLines.size === 0
+    ? sourceBlanks
+    : new Set(kept.flatMap((at, idx) => (sourceBlanks.has(at) ? [idx] : [])))
   const before: number[] = []
   const looseKeys = new Map<number, string>()
   const moved = new Map<number, string>()
@@ -6019,7 +6039,7 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
       (item.children ?? []).some((child, idx) => {
         const prev = item.children![idx - 1]
         if (idx === 0 || !prev?.pos || !child.pos) return false
-        for (let at = prev.pos.endLine; at < child.pos.startLine - 1; at++) if (sourceBlanks.has(at)) return true
+        for (let at = prev.pos.endLine; at < child.pos.startLine - 1; at++) if (decideBlanks.has(at)) return true
         return false
       }),
     )
@@ -6030,7 +6050,7 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
     if (block.type === 'list') {
       let loose = block.tight === false
       if (block.tight === true && block.pos && parted(block.items!)) {
-        const at = block.pos.startLine - 1
+        const at = origin(block.pos.startLine - 1)
         const lead = lines[at]!.slice(0, block.pos.startColumn - 1)
         // A list opening on an outer item's line (`- - a`) moves to the next
         // line under its key, as fmt writes it.
@@ -6045,13 +6065,13 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
       if (loose) {
         for (const [idx, item] of block.items!.entries()) {
           const starts = [...(idx > 0 ? [item] : []), ...(item.children ?? []).slice(1)]
-          for (const start of starts) if (start.pos) before.push(start.pos.startLine - 1)
+          for (const start of starts) if (start.pos) before.push(origin(start.pos.startLine - 1))
         }
       }
     }
     for (const child of [...(block.items ?? []), ...(block.children ?? [])]) visit(child)
   }
-  visit(parse(source))
+  visit(parse(decide))
   if (before.length === 0) return source
   const starts = new Set(before)
   const written: string[] = []
