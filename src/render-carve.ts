@@ -976,6 +976,7 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
         add([{ type: 'code', value: block.content }])
         break
       case 'thematic_break':
+        throw new SourceUnspellableError('thematic_break', 'a thematic break has no inline spelling in a table cell', block)
       case 'raw_block':
       case 'abbreviation_def':
       case 'link_reference_definition':
@@ -983,10 +984,8 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
       case 'comment':
         // No inline content to contribute, and PART 11 §1b lets this flatten
         // invent no character. The plain target's spelling reached the cell as
-        // text, which wrote `\-\-\-` for a break and an abbreviation
-        // definition's whole line (carve-js#2132). `table_cell.blocks` is
-        // already reported `field-unspellable` on this target, so the loss is
-        // declared rather than papered over with a marker.
+        // text for an abbreviation definition's whole line (carve-js#2132).
+        // `table_cell.blocks` is reported `field-unspellable` on this target.
         break
       default: {
         // Exhaustive on purpose: a new block kind must decide what it

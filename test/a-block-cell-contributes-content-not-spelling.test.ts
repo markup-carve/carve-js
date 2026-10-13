@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromAstJson, renderAnsi, renderCarve, renderMarkdown, renderPlainText } from '../src/index.js'
+import { fromAstJson, renderAnsi, renderCarve, renderMarkdown, renderPlainText, SourceUnspellableError } from '../src/index.js'
 
 // carve-js#2125. PART 12 §27 (CARVE-P12-049): a block in `table_cell.blocks`
 // contributes its inline content and no markers, and a code block contributes
@@ -82,7 +82,8 @@ describe('a block cell contributes content, not spelling', () => {
  * The Carve target had the same fallback arm (carve-js#2132). PART 11 §1b lets
  * the flatten invent no character, and `conversion-diagnostics` already reports
  * the whole `blocks` field as `field-unspellable` on this target, so a kind with
- * no inline content contributes nothing rather than a spelling.
+ * no inline content contributes nothing rather than a spelling, except a
+ * thematic break, which the writer refuses because dropping it loses a block.
  *
  * The rows below carry a second cell because `renderCarve` refuses a row whose
  * every cell is blank, which a one-cell row would become.
@@ -107,8 +108,8 @@ describe('a block cell contributes no invented spelling to Carve', () => {
   } as never)
   const bodyRow = (blocks: unknown[]) => renderCarve(pair(blocks)).split('\n')[1]
 
-  it('contributes nothing for a thematic break', () => {
-    expect(bodyRow([{ type: 'thematic_break' }])).toBe('| | z |')
+  it('refuses a thematic break even when the row has other content', () => {
+    expect(() => bodyRow([{ type: 'thematic_break' }])).toThrow(SourceUnspellableError)
   })
 
   it('contributes nothing for an abbreviation definition', () => {
@@ -133,7 +134,7 @@ describe('a block cell contributes no invented spelling to Carve', () => {
       middle,
       { type: 'paragraph', children: [{ type: 'text', value: 'two' }] },
     ])
-    expect(around({ type: 'thematic_break' })).toBe('| one two | z |')
+    expect(() => around({ type: 'thematic_break' })).toThrow(SourceUnspellableError)
     expect(around({ type: 'raw_block', format: 'html', content: '<b>x</b>\n' })).toBe('| one two | z |')
   })
 
