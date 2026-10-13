@@ -1011,7 +1011,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
   const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
     .replaceAll(emptyNote, '%%%%').replaceAll(imageParagraph, '{%%}')
     .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(B?)(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, block: string, index: string, container: string, marker: string, whitespace: string) => block ? `${container}${itemAttributeValues[Number(index)] ?? ''}\n${container}${marker}${whitespace}` : `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
-    .replace(new RegExp(`([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
+    .replace(new RegExp(`(?<![ \t])([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
   return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
 
