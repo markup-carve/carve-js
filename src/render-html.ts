@@ -764,8 +764,9 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       // it does not lead, and presence where the id is generated.
       let wrapperCarriers = ''
       if (wrapSections && roundtripExport(opts)) {
-        // Counted among the slots that survive the reserved-name drop.
-        const slot = explicitId === '' ? -1 : node.attrs!.order!.filter((entry) => !isReservedExportName(entry)).indexOf('#id')
+        // Count only slots that emit an attribute on the heading.
+        const headingAttrs = node.attrs ? withTextAlignDeclaration(node.attrs, `h${node.level}`) : undefined
+        const slot = explicitId === '' ? -1 : headingAttrs!.order!.filter((entry) => renderAttrSlot(headingAttrs!, entry) !== '').indexOf('#id')
         if (slot > 0) {
           wrapperCarriers = ` ${carrier('id-slot')}="${slot}"`
         } else if (explicitId === '' && node.attrs?.id !== undefined) {
@@ -1188,34 +1189,21 @@ function withTextAlignDeclaration(attrs: Attrs, tag?: string): Attrs {
   return result
 }
 
+function renderAttrSlot(attrs: Attrs, slot: string): string {
+  if (slot === '.class') {
+    return attrs.classes?.length ? `class="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"` : ''
+  }
+  if (slot === '#id') return attrs.id !== undefined ? `id="${escapeAttr(attrs.id)}"` : ''
+  if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return ''
+  if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return ''
+  const value = attrs.keyValues?.[slot]
+  return value !== undefined ? `${slot}="${escapeAttr(sanitizeAttrValue(slot, value))}"` : ''
+}
+
 function renderAttrs(raw?: Attrs, tag?: string): string {
   if (!raw) return ''
   const attrs = withTextAlignDeclaration(raw, tag)
   const parts: string[] = []
-  const classAttr = () =>
-    attrs.classes && attrs.classes.length
-      ? // Merge into one class attribute, deduping repeats keeping first-
-        // occurrence order (`{.a .a}` -> `class="a"`), matching carve-php (§15).
-        `class="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"`
-      : ''
-  // Escape the id value: an `#id` is identifier-restricted (escaping is a
-  // no-op), but `id=value` (which now also feeds this slot, last-wins §15) can
-  // carry arbitrary quoted text and must not inject markup.
-  // `!== undefined`, not truthiness: an explicit `id=""` is a real (empty) id
-  // and must render `id=""` (matches carve-php), the same last-wins slot as
-  // `#id`/`id=value`. Escape the value: `#id` is identifier-restricted (escape
-  // is a no-op), but `id=value` can carry arbitrary quoted text.
-  const idAttr = () => (attrs.id !== undefined ? `id="${escapeAttr(attrs.id)}"` : '')
-  const kvAttr = (k: string) => {
-    // Always strip event-handler / injection-sink attribute names, and blank a
-    // dangerous-scheme or CSS-expression value, regardless of render options.
-    if (isDangerousAttrName(k)) return ''
-    if (!HTML_ATTR_NAME_RE.test(k)) return ''
-    // The reporting walk owns authored reserved-name losses.
-    if (roundtripExport(activeRenderOptions) && isReservedExportName(k)) return ''
-    const v = attrs.keyValues?.[k]
-    return v !== undefined ? `${k}="${escapeAttr(sanitizeAttrValue(k, v))}"` : ''
-  }
   // Emit the recorded source order first (matches djot + carve-php),
   // then append any populated slot not covered by `order` -- so an attr
   // added programmatically after parse() (with stale/no `order`) still
@@ -1223,22 +1211,22 @@ function renderAttrs(raw?: Attrs, tag?: string): string {
   const seen = new Set(attrs.order ?? [])
   if (attrs.order) {
     for (const slot of attrs.order) {
-      const p = slot === '.class' ? classAttr() : slot === '#id' ? idAttr() : kvAttr(slot)
+      const p = renderAttrSlot(attrs, slot)
       if (p) parts.push(p)
     }
   }
   if (!seen.has('.class')) {
-    const c = classAttr()
+    const c = renderAttrSlot(attrs, '.class')
     if (c) parts.push(c)
   }
   if (!seen.has('#id')) {
-    const i = idAttr()
+    const i = renderAttrSlot(attrs, '#id')
     if (i) parts.push(i)
   }
   if (attrs.keyValues) {
     for (const k of Object.keys(attrs.keyValues)) {
       if (!seen.has(k)) {
-        const p = kvAttr(k)
+        const p = renderAttrSlot(attrs, k)
         if (p) parts.push(p)
       }
     }
