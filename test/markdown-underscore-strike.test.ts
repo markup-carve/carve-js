@@ -5,7 +5,8 @@ import fixtures from './fixtures/markdown-underscore-strike.json'
 
 const normalized = (html: string): string => serialize(parseFragment(html.replace(/ id="[^"]*"/g, '').replace(/>\s+</g, '><').trim()))
 
-// Native cmark-gfm 0.29.0.gfm.13, with the strikethrough extension enabled.
+// Native cmark-gfm 0.29.0.gfm.13, except row 22, where CommonMark's Unicode
+// symbol flanking rule applies to the emoji beside the underscore.
 it.each(fixtures)('keeps native underscore flanks beside strikes: $id', row => {
   expect(normalized(carveToHtml(markdownToCarve(row.source), { sections: false }))).toBe(normalized(row.html))
 })
