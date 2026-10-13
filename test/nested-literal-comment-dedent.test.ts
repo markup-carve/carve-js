@@ -15,16 +15,17 @@ describe('nested literal comments release payload to the enclosing item', () => 
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it.each(cases.filter(({ id }) => repaired.has(id)))('$id keeps the payload inside the outer item', ({ source }) => {
+  it.each(cases.filter(({ id }) => repaired.has(id)))('$id releases the payload after an at-column literal comment', ({ source }) => {
     const document = parse(source)
-    expect(document.children).toHaveLength(1)
+    expect(document.children).toHaveLength(source.startsWith('>') ? 1 : 4)
     const container = document.children[0]!
     expect(container.type).toBe(source.startsWith('>') ? 'block_quote' : 'list')
-    if (container.type === 'block_quote') expect(container.children).toHaveLength(1)
+    const siblings = container.type === 'block_quote' ? container.children : document.children
+    expect(siblings.map(({ type }) => type)).toEqual(['list', 'paragraph', 'comment', 'paragraph'])
     const list = container.type === 'block_quote' ? container.children[0]! : container
     expect(list.type).toBe('list')
     if (list.type !== 'list') throw new Error('expected outer list')
     expect(list.items).toHaveLength(1)
-    expect(list.items[0]!.children.map(({ type }) => type)).toEqual(['paragraph', 'list', 'paragraph', 'comment', 'paragraph'])
+    expect(list.items[0]!.children.map(({ type }) => type)).toEqual(['paragraph', 'list'])
   })
 })

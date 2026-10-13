@@ -97,7 +97,7 @@
   {
     "id": "review9-g7-sibling",
     "source": "- ::: |\n  %% c\n  ~~~\n   :::\n%%%\n",
-    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\n~~~<br>\n&nbsp;:::</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p><br>\n~~~<br>\n&nbsp;:::<br>\n</p>\n    </div>\n  </li>\n</ul>"
   },
   {
     "id": "review9-g8",
@@ -127,7 +127,7 @@
   {
     "id": "review10-quote-column",
     "source": "> - ::: |\n>     ```\n>   :::\n>   ```\n>   ```\n>   para\nTAIL\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>&nbsp;&nbsp;<code>\n:::\n</code><br>\n<code>\npara</code></p>\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<p>TAIL</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>&nbsp;&nbsp;<code>\n:::\n</code><br>\n<code>\npara\nTAIL</code></p>\n      </div>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review10-inline-blank",

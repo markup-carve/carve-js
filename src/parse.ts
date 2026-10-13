@@ -3547,6 +3547,7 @@ interface QuoteFenceHosts {
    */
   fence: { marker: string; column: number; floor: number } | null
   commentBoundary?: boolean
+  rejectedItemComment?: boolean
   commentBoundaryBelow?: boolean
 }
 
@@ -3558,6 +3559,8 @@ function trackQuoteHostFence(
   wasInTable: boolean,
 ): boolean {
   const host = state.hosts ??= { columns: [0], markers: [], kinds: [], terms: [], fence: null }
+  const rejectedItemComment = host.rejectedItemComment === true
+  delete host.rejectedItemComment
   const afterComment = host.commentBoundary === true
   const afterCommentBelow = host.commentBoundaryBelow === true
   delete host.commentBoundary
@@ -3592,7 +3595,7 @@ function trackQuoteHostFence(
   if (literal?.literal && column >= literal.floor) {
     if (literal.opaque) {
       const closedPayload = literal.opaque.closes(text)
-      if (literal.floor === 0 && text !== '') {
+      if (text !== '') {
         state.mode = { kind: 'paragraph', absorbingFence: false }
       } else closeBlockQuoteParagraph(state)
       if (closedPayload) delete literal.opaque
@@ -3608,12 +3611,19 @@ function trackQuoteHostFence(
       if (literal.floor === 0) state.colonWidths.pop()
     }
     // Line-block payload is inline content, whatever its block shape.
-    if (literal.floor === 0 && host.colons?.at(-1) === literal && text !== '') {
+    if (host.colons?.at(-1) === literal && text !== '') {
       state.mode = { kind: 'paragraph', absorbingFence: false }
     } else closeBlockQuoteParagraph(state)
     return true
   }
   if (RE_COMMENT_LINE.test(text)) {
+    if (!blockQuoteParagraphOpen(state) && host.markers.length > 0 && column < host.columns.at(-1)!) {
+      while (host.markers.length > 0 && host.markers.at(-1)! >= column) {
+        host.columns.pop(); host.markers.pop(); host.kinds.pop(); host.terms.pop()
+      }
+      if (host.colons) host.colons = host.colons.filter(open => open.floor <= host.columns.at(-1)!)
+      if (host.markers.length === 0) { host.rejectedItemComment = true; closeBlockQuoteParagraph(state); return true }
+    }
     let low = 0
     let high = host.columns.length
     while (low < high) {
@@ -3761,7 +3771,7 @@ function trackQuoteHostFence(
   const code = RE_FENCE.exec(inner)
   const raw = code ? null : RE_RAW_FENCE.exec(inner)
   const marker = code?.[2] ?? raw?.[1] ?? null
-  if (marker && floor > 0) {
+  if (marker && (floor > 0 || (rejectedItemComment && at > 0 && !paragraph))) {
     const colon = colons.at(-1)
     // AN OVER-INDENTED OPENER IS STILL THE HOST'S FENCE. §24 C3 asks a processor
     // to NAME a block opener past the item's canonical content column, not to
@@ -4791,7 +4801,7 @@ interface ItemLazyState {
   // and not absorbable text - which is why a malformed fence INSIDE an open
   // container arms nothing: the closer below it still has a container to close.
   divDepth: number
-  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; markerFrame?: ItemLazyState; absorbing?: boolean; belowComment?: number }
+  literalColon?: { width: number; column: number; sourceLine?: number; awaitingBody?: boolean; rejectedComment?: boolean; opaque?: OpaqueGroup; absorbing?: boolean; belowComment?: number }
   authoredColon?: { width: number; column: number; depth: number; belowComment?: number }
   // The lines so far of a `{…}` block-attribute block that has not closed yet,
   // newline-joined, or null when the tracker is not inside one. §15 A5 lets the
@@ -5723,9 +5733,8 @@ function trackItemLazyState(
     }
     if (state.divDepth === 0 && open.opaque === undefined && RE_COMMENT_LINE.test(text)) state.divDepth = 1
     if (open.opaque) {
-      if (open.markerFrame) trackItemLazyState(content, open.markerFrame, hasFenceCloser, true, hasCommentCloser, facts, hasLiteralCommentCloser)
       const closedPayload = open.opaque.closes(text)
-      state.lazyFoldable = closedPayload && !open.opaque.belowBaseCloses && column > open.column
+      state.lazyFoldable = !open.opaque.belowBaseCloses && text !== ''
       if (closedPayload) delete open.opaque
       state.inDefList = false
       return
@@ -5750,18 +5759,11 @@ function trackItemLazyState(
     } else {
       const marked = markerPrefixLength(text, 0, prefixWalkBound(text)) > 0 || quotedLineText(text, facts?.terminatorFree ?? false) !== null
       if (marked) open.absorbing = false
-      const layoutContent = open.column > 0 && column >= open.column ? sliceColumns(content, open.column, true) : content
       if ((column === 0 || column === open.column) && /^:{3,}/.test(text) && colonFenceOpenerLen(text) === null) open.absorbing = true
-      if ((marked && state.divDepth === 0) || open.markerFrame) {
-        const frame = open.markerFrame ??= { ...verbatimOnlyLazyState(), literalLayout: true }
-        trackItemLazyState(content, frame, hasFenceCloser, true, hasCommentCloser, facts, hasLiteralCommentCloser)
-      }
-      state.lazyFoldable = open.opaque === undefined && !RE_COMMENT_LINE.test(text) && !RE_FOOTNOTE_DEF.test(text) &&
-        (close === null || (column > 0 && column !== open.column) || open.absorbing === true) &&
-        (open.absorbing && close ? true : open.markerFrame ? open.markerFrame.lazyFoldable :
-          marked ? markerLineState(text, facts?.prefixMemo).leavesParagraphOpen :
-          opensCodeFence(text) ? (codeAtBase ? state.lazyFoldable || open.awaitingBody === true : true) :
-            (close !== null && column > 0 && column < open.column) || (!lineOpensBlock(layoutContent) && bottomBlockLeavesParagraphOpen(layoutContent)))
+      // Payload shapes open no blocks; span and definition boundaries still apply.
+      state.lazyFoldable = !(group?.belowBaseCloses && hasCommentCloser(group.run)) &&
+        open.opaque?.belowBaseCloses !== true && text !== '' && !RE_FOOTNOTE_DEF.test(text) &&
+        (close === null || (column > 0 && column !== open.column) || open.absorbing === true)
     }
     if (!RE_COMMENT_LINE.test(text)) delete open.awaitingBody
     state.inDefList = false
@@ -5790,7 +5792,8 @@ function trackItemLazyState(
       {terminatorFree: facts?.terminatorFree ?? false, whitespace: 0, descendantFrames: true, rebasedFrame: true},
       (width, extra = 0) => hasLiteralCommentCloser?.(width, offset + extra) ?? false,
     )
-    state.lazyFoldable = inner.lazyFoldable
+    // The checker keeps a descendant line block outside this item's paragraph.
+    state.lazyFoldable = inner.literalColon === undefined && inner.lazyFoldable
     state.inTable = inner.inTable
     // An invisible descendant comment ends its paragraph, not the enclosing item.
     if (inner.literalColon && RE_COMMENT_LINE.test(sliceColumns(content, offset, true).trimStart())) {
@@ -6355,6 +6358,7 @@ function trackItemLazyState(
       const nestedContent = (nestedTask ?? nestedBullet)!.at(-1)!
       const nestedColon = colonFenceOpenerLen(nestedContent)
       if (nestedColon !== null) {
+        frame.lazyFoldable = false
         frame.divDepth = 1
         if (RE_LINE_BLOCK_OPEN.test(nestedContent)) frame.literalColon = { width: nestedColon, column: 0 }
       }
@@ -7080,11 +7084,11 @@ function hostedAuthoredBlockOpener(text: string): boolean {
 }
 
 /** Whether a line starts an authored block outside the body's first sublist. */
-function isParentAuthoredBlock(line: string, firstMarkerColumn: number): boolean {
+function isParentAuthoredBlock(line: string, firstMarkerColumn: number, followsBlank = false): boolean {
   const column = indentColumns(line, firstMarkerColumn)
   if (column >= firstMarkerColumn) return false
   const opener = sliceColumns(line, column, true)
-  return markerContentColumn(opener) < 0 && (column === 0 ? hostedAuthoredBlockOpener(opener) && !opensCodeFence(opener) : lineOpensItemBlock(opener))
+  return markerContentColumn(opener) < 0 && (column === 0 ? (hostedAuthoredBlockOpener(opener) && !opensCodeFence(opener)) || (followsBlank && !RE_COMMENT_LINE.test(opener)) : lineOpensItemBlock(opener))
 }
 
 /**
@@ -7549,7 +7553,7 @@ function rebaseOverindentedBlocks(
   if (firstMarkerColumn >= 0) {
     const hasParentOwnedCandidate = lines.some((line, index) => {
       if (isBlankLine(line) || (eligible && !eligible.has(index))) return false
-      return isParentAuthoredBlock(line, firstMarkerColumn)
+      return isParentAuthoredBlock(line, firstMarkerColumn, index > 0 && isBlankLine(lines[index - 1]!))
     })
     if (!hasParentOwnedCandidate) return ownedBlanks
   }
@@ -10523,7 +10527,8 @@ class ParseSession {
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
-      if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
+      const folded = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
+      if (!folded && closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
         lexer.consume()
         break
       }
@@ -10533,7 +10538,8 @@ class ParseSession {
       // closing run the CONTAINER folded in from closing this block - and a
       // verbatim body is where a framed line becomes text, so it comes off here
       // (markup-carve/carve-js#1630).
-      const body = stripLazyFrame(ln)
+      // Below-column payload carries host alignment, not code indentation.
+      const body = folded ? stripLazyFrame(ln).replace(/^[ \t]+/, '') : stripLazyFrame(ln)
       // Strip the common indent of the opening fence (Djot rule)
       lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
     }
@@ -10920,11 +10926,12 @@ class ParseSession {
     }
     const stanzas: StanzaLine[][] = []
     let stanza: StanzaLine[] = []
-    for (const { text: ln, lineIndex } of collectLiteralColonFenceBody(lexer, {
+    for (const { text, lineIndex } of collectLiteralColonFenceBody(lexer, {
       kind: 'line block',
       lineIndex: openLineIndex,
       fenceWidth: fence,
     })) {
+      const ln = stripLazyFrame(text)
       if (isBlankLine(ln)) {
         if (stanza.length) {
           stanzas.push(stanza)
@@ -12993,6 +13000,7 @@ class ParseSession {
       }
       // Candidate sublist markers, resolved after authored fence bases are applied.
       const subListMarkers = new Set<number>()
+      let belowDescendantComment: { run: number; state: ItemLazyState } | undefined
       let pendingBlanks = 0
       let pendingBlankLineNumbers: number[] = []
       let pendingBlankTexts: string[] = []
@@ -13291,6 +13299,12 @@ class ParseSession {
           // Code, comment and established literal bodies keep their placement.
           // Lazy text in an ordinary colon body retains its paragraph frame.
           lazyState.opaque === null && lazyState.literalColon === undefined
+        const belowItemComment = lw < contentCol && RE_COMMENT_LINE.test(l.trimStart())
+        const heldCommentSpan = belowItemComment && commentFenceRun(l.trimStart()) !== undefined &&
+          bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
+        if (belowItemComment && !heldCommentSpan &&
+            !(lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== false) &&
+            !lazyState.commentAtColumn) break
         if (lw >= contentCol && !quoteLazyFramed &&
           // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
           // quote-lazy MARKER line never reaches the content-column arm, not even
@@ -13358,7 +13372,10 @@ class ParseSession {
             if (firstBodyMarkerColumn === undefined) {
               firstBodyMarkerColumn = markerContentColumn(nested.find((line) => !isBlankLine(line)) ?? dedented)
             }
-            if (firstBodyMarkerColumn >= 0 && !hasParentAuthoredBlock) parentBlockCandidates.push(dedented)
+            if (firstBodyMarkerColumn >= 0 && !hasParentAuthoredBlock) {
+              if (followsBlank && isParentAuthoredBlock(dedented, firstBodyMarkerColumn, true)) hasParentAuthoredBlock = true
+              else parentBlockCandidates.push(dedented)
+            }
           }
           if (strippedPrefix !== undefined && dedented === placed) {
             nestedOrigins.set(nested.length, { text: dedented, parentIndex: lexer.pos, prefix: strippedPrefix })
@@ -13610,6 +13627,10 @@ class ParseSession {
             nestedNoteParagraph = true
             nestedNoteContainer = false
           }
+          if (belowDescendantComment && commentFenceRun(l.trimStart()) === belowDescendantComment.run) {
+            Object.assign(lazyState, belowDescendantComment.state)
+            belowDescendantComment = undefined
+          }
           if (resumesMarkerDescriptionParagraph && lazyState.opaque === null) authoredBaseEligible.delete(nested.length - 1)
           if (wasMarkerDescriptionCode && lazyState.opaque === null && opensCodeFence(dedented.trimStart())) {
             markerDescriptionCodeClosedAtFloor = indentColumns(l) === contentCol
@@ -13628,6 +13649,7 @@ class ParseSession {
             tabFenceSourceColumn = undefined
             tabFenceOpenerIndex = undefined
           }
+          if (RE_COMMENT_LINE.test(trackedContent.trimStart()) && lazyState.opaque === null && !lazyState.closedBelowComment) lazyState.commentAtColumn = false
           if (confirmsLeadBody) leadColonAwaitingBody = false
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.inlineFenceParagraph) lazyState.inlineFenceBlock = true
           if (leadColonAwaitingBody && opensCodeFence(trackedContent) && lazyState.opaque === null) leadColonAwaitingBody = false
@@ -13689,6 +13711,7 @@ class ParseSession {
             (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
               indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart())))
         ) {
+          const commentState = belowItemComment && lazyState.literalColon === undefined && (lazyState.deepest != null || lazyState.authoredColon?.column === 0) && lazyState.opaque === null ? {...lazyState} : undefined
           const retainedComment = lazyState.commentAtColumn && !lazyState.lazyFoldable &&
             lazyState.opaque === null && lazyState.literalColon === undefined && RE_COMMENT_LINE.test(l.trimStart())
           let lazyLine = l
@@ -13794,6 +13817,18 @@ class ParseSession {
           // behind it (corpus 183, 197, 358).
           trackItemLazyState(lazyLine, lazyState, () => true, false,
             lazyState.authoredColon ? (width) => commentBlockHasCloser(lexer, width) : undefined)
+          if (commentState) {
+            const opaque = lazyState.opaque
+            Object.assign(lazyState, commentState, {lazyFoldable: commentState.lazyFoldable && commentState.deepest?.lazyFoldable !== false})
+            if (opaque?.kind === 'comment') {
+              belowDescendantComment = { run: opaque.length, state: commentState }
+              lazyState.opaque = opaque
+            }
+          }
+          if (belowDescendantComment && commentFenceRun(l.trimStart()) === belowDescendantComment.run && !commentState) {
+            Object.assign(lazyState, belowDescendantComment.state)
+            belowDescendantComment = undefined
+          }
           if (retainedComment || (lazyState.inDefList === 'description' && isRetainableLineComment(lexer, l))) {
             retainCommentBoundary(lazyState)
           }

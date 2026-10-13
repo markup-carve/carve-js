@@ -8,20 +8,18 @@ const cases = JSON.parse(readFileSync(new URL('./fixtures/ancestor-block-followe
   html: string
 }>
 
-describe('an invisible descendant comment retains the surviving ancestor item', () => {
+describe('a below-column descendant comment needs an open paragraph', () => {
   it.each(cases)('$id matches the independent native ownership', ({ source, html }) => {
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it.each(cases.filter(({ id }) => id.startsWith('d3-') && id.endsWith('# h')))('$id retains a literal heading in the outer item', ({ source }) => {
+  it.each(cases.filter(({ id }) => id.startsWith('d3-') && id.endsWith('# h')))('$id leaves heading-shaped text after the outer list', ({ source }) => {
     const document = parse(source)
-    expect(document.children).toHaveLength(1)
     const container = document.children[0]!
-    const list = container.type === 'block_quote' ? container.children[0]! : container
-    expect(list.type).toBe('list')
-    if (list.type !== 'list') throw new Error('expected outer list')
-    expect(list.items).toHaveLength(1)
-    expect(list.items[0]!.children.at(-1)?.type).toBe('paragraph')
+    const blocks = container.type === 'block_quote' ? container.children : document.children
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0]!.type).toBe('list')
+    expect(blocks[1]!.type).toBe('paragraph')
     expect(carveToHtml(source)).not.toContain('<h1>')
   })
 })

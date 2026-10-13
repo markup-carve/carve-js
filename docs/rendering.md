@@ -383,4 +383,11 @@ unbalanced has destroyed the structure the markers recorded, and a
 reconstruction that is wrong is worse than a fallback that is honest. The import
 then reads the file as ordinary Markdown, comments and all, and reports one
 `carrier-markers-damaged` diagnostic at `degraded` fidelity and `fallback`
-confidence. There is no partial reconstruction and no per-marker recovery.
+confidence. There is no partial reconstruction of a set whose pairing breaks.
+
+A marker whose payload it cannot stand for is a different case. Pairing is read
+on marker shapes first, so an invalid opener still pairs with its closer and the
+two drop together; any other invalid marker drops alone. A dropped marker stays
+in the output as the ordinary HTML comment it is, the rest of the set restores,
+and each dropped marker or pair is reported as `carrier-marker-dropped` at the
+marker's line.
