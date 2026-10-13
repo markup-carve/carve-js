@@ -7627,6 +7627,42 @@ function markerNoteCommentFenceOpeners(lines: readonly string[], absorbedMarkers
   return openers
 }
 
+// CARVE-P2-017's AT band: a non-list, non-fence block opener at or past a
+// marker-line note's body column opens inside the note. 'open' means no line
+// has dropped below that column since, so nothing may continue the note lazily.
+function markerNoteOpenerReach(lines: readonly string[], absorbedMarkers: ReadonlySet<number>): 'open' | 'closed' | null {
+  let closer: RegExp | null = null
+  let openerColumn = -1
+  let childColumn = -1
+  let found = false
+  for (const [index, line] of lines.entries()) {
+    if (isBlankLine(line)) continue
+    const column = indentColumns(line)
+    if (column < FOOTNOTE_BODY_COLUMN) return found ? 'closed' : null
+    const text = line.trimStart()
+    if (closer !== null) {
+      if (column === openerColumn && closer.test(text)) closer = null
+      continue
+    }
+    if (childColumn >= 0 && column >= childColumn) continue
+    childColumn = -1
+    if (RE_FOOTNOTE_DEF.test(text)) return found ? 'closed' : null
+    const fence = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
+    if (fence !== null) {
+      closer = fenceCloseRe(RE_FENCE.test(text) ? fence[2]! : fence[1]!)
+      openerColumn = column
+      continue
+    }
+    if (isListMarkerLine(text)) {
+      if (!absorbedMarkers.has(index)) childColumn = column + markerContentColumn(text)
+      continue
+    }
+    if (RE_COMMENT_LINE.test(text) || commentFenceRun(text) !== undefined) continue
+    if (lineOpensItemBlock(text)) found = true
+  }
+  return found ? 'open' : null
+}
+
 /**
  * Apply an over-indented list block opener's authored column as a temporary
  * local block base (PART 9 §24 C3, carve#1705).
@@ -13395,6 +13431,8 @@ class ParseSession {
           if (!isBlankLine(nested[index]!)) { lastNoteLine = nested[index]!.trimStart(); break }
         }
         const afterNoteBody = noteBodyLast || noteReach === 'unclosed' ||
+          (markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
+            markerNoteOpenerReach(nested, noteParagraphMarkers) === 'open') ||
           (noteReach === 'closed' && !opensCodeFence(lastNoteLine) && !RE_COMMENT_LINE.test(lastNoteLine))
         const fenceBoundaryTail = noteReach === 'boundary'
         const commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
@@ -14353,7 +14391,8 @@ class ParseSession {
         orderedMatch(content, terminatorFree) !== null ||
         taskMatch(content, terminatorFree) !== null ||
         extractItemAttr(content, terminatorFree) !== null
-      const markerNoteFenceOwnsExtent = markerNoteItem && markerNoteFenceReach(nested, noteParagraphMarkers) !== null
+      const markerNoteFenceOwnsExtent = markerNoteItem && (markerNoteFenceReach(nested, noteParagraphMarkers) !== null ||
+        markerNoteOpenerReach(nested, noteParagraphMarkers) !== null)
       // Include marker-line containers whose continuation keeps its own extent.
       const leadOwnsExtent = (leadColon !== null && !RE_LINE_BLOCK_OPEN.test(content)) || markerLineTerm || markerNoteFenceOwnsExtent ||
         (hasOverindentedBlockCandidate && RE_BLOCKQUOTE.test(content) &&

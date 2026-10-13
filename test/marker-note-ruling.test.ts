@@ -38,6 +38,23 @@ it('leaves a line below a closed note fence outside the item', () => {
   expect(html).not.toContain('<li>after')
 })
 
+for (const prefix of ['', '> ']) for (const opener of [['> q'], [':: t', ': d']]) {
+  it(`opens ${opener[0]} at the marker-note body column in the note at quote depth ${prefix.length / 2}`, () => {
+    const source = ['- [^n]: text', ...opener.map(line => `    ${line}`), 'after [^n]']
+      .map(line => prefix + line).join('\n')
+    const html = carveToHtml(source)
+    expect(html).toMatch(/<li id="fn1">\s*<p>text<\/p>\s*<(blockquote|dl)>/)
+    expect(html).toMatch(/<ul>\s*<li><\/li>\s*<\/ul>/)
+    expect(html).toContain('<p>after <a id="fnref1"')
+  })
+}
+
+it('keeps a quote below the marker-note body column in the item', () => {
+  const html = carveToHtml('- [^n]: text\n   > q\nafter [^n]')
+  expect(html).toMatch(/<ul>\s*<li>\s*<blockquote><p>q\nafter <a id="fnref1"/)
+  expect(html).toMatch(/<li id="fn1">\s*<p>text<a href="#fnref1"/)
+})
+
 it('ignores comment-looking text inside a closed note fence', () => {
   const html = carveToHtml('- [^n]: text\n     ~~~\n     %% c\n     ```\n     ~~~\nafter [^n]')
   expect(html).toContain('<p>after <a id="fnref1"')
