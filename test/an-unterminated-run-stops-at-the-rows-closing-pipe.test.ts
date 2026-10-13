@@ -80,12 +80,11 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
     )
   })
 
-  it('the empty-cell spellings are unchanged', () => {
-    // All-blank rows are paragraphs (markup-carve/carve#1954): `|||` is no
-    // longer a two-empty-cell table.
+  it('the empty-cell spellings count slots', () => {
+    // CARVE-P9-082: a lone `|` is prose, `||` one empty cell, `|||` two.
     expect(html('|')).toBe('<p>|</p>')
-    expect(html('||')).toBe('<p>||</p>')
-    expect(html('|||')).toBe('<p>|||</p>')
+    expect(html('||')).toBe('<table>\n  <tbody>\n    <tr><td></td></tr>\n  </tbody>\n</table>')
+    expect(html('|||')).toBe('<table>\n  <tbody>\n    <tr><td></td><td></td></tr>\n  </tbody>\n</table>')
   })
 
   it('a line with no closing pipe at all is still prose', () => {

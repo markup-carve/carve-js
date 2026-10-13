@@ -1386,35 +1386,26 @@ describe('table row groups on import', () => {
   })
 
   it.each([
-    ['leading', '<tbody></tbody><tbody><tr><td></td></tr></tbody><tbody><tr><td>a</td></tr></tbody>', [0, 0, 1]],
-    ['middle', '<tbody><tr><td>a</td></tr></tbody><tbody><tr><td></td></tr></tbody><tbody><tr><td>b</td></tr></tbody>', [1, 0, 1]],
-    ['head and foot', '<thead><tr><th></th></tr></thead><tbody></tbody><tbody><tr><td>a</td></tr></tbody><tfoot><tr><th></th></tr></tfoot>', [0, 1]],
-  ])('updates %s body counts when source conversion drops blank rows', (_, sections, counts) => {
-    const html = `<table>${sections}</table>`
-    const written = htmlToCarve(html)
+    ['leading', '<tbody></tbody><tbody><tr><td></td></tr></tbody><tbody><tr><td>a</td></tr></tbody>', '{body-rows=0,1,1}\n| |\n| a |\n', [0, 0, 1, 1, 0]],
+    ['middle', '<tbody><tr><td>a</td></tr></tbody><tbody><tr><td></td></tr></tbody><tbody><tr><td>b</td></tr></tbody>', '{body-rows=1,1,1}\n| a |\n| |\n| b |\n', [0, 1, 1, 1, 0]],
+    ['head and foot', '<thead><tr><th></th></tr></thead><tbody></tbody><tbody><tr><td>a</td></tr></tbody><tfoot><tr><th></th></tr></tfoot>', '{header-rows=1 footer-rows=1 body-rows=0,1}\n|= |\n| a |\n|= |\n', [1, 0, 1, 1]],
+  ])('keeps a blank row in the %s row group', (_, sections, carve, counts) => {
+    // CARVE-P9-082: a blank row is a row, so no body count has to move.
+    const written = htmlToCarve(`<table>${sections}</table>`)
+    expect(written.value).toBe(carve)
+    expect(written.report.diagnostics).toEqual([])
     const table = parse(written.value).children[0]
     if (table?.type !== 'table') throw new Error('not a table')
-    expect(table.rowGroups?.bodies.map(body => body.bodyRows)).toEqual(counts)
-    expect(table.rowGroups?.headRows).toBe(0)
-    expect(table.rowGroups?.footRows).toBe(0)
-    expect(written.report.diagnostics.every(d => d.code === 'structure-unspellable')).toBe(true)
-    expect(written.report.diagnostics.length).toBeGreaterThan(0)
-    expect(carveToHtml(written.value)).not.toContain('body-rows=')
-    expect((htmlToAst(html).value.children[0] as { rows: unknown[] }).rows.length).toBeGreaterThan(table.rows.length)
+    const groups = table.rowGroups!
+    expect([groups.headRows, ...groups.bodies.map(body => body.bodyRows), groups.footRows]).toEqual(counts)
   })
 
-  it('reports authored metadata that conflicts with the surviving body counts', () => {
-    const written = htmlToCarve('<table body-rows="1,1,1"><tbody><tr><td>a</td></tr></tbody><tbody><tr><td></td></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>')
-    expect(written.report.diagnostics).toContainEqual(expect.objectContaining({ code: 'table-degraded', message: expect.stringContaining('after removing blank rows') }))
-    expect(written.value).toContain('body-rows=1,1,1')
-  })
-
-  it('reports table and body attributes when every blank row is removed', () => {
+  it('keeps a table whose only row is blank, with its attributes', () => {
     const written = htmlToCarve('<p>x</p><table id="t"><tbody class="b"><tr><td></td></tr></tbody></table><p>y</p>')
-    expect(written.value).toBe('x\n\ny\n')
-    expect(written.report.diagnostics).toContainEqual(expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('id on <table>') }))
-    expect(written.report.diagnostics).toContainEqual(expect.objectContaining({ code: 'structure-unspellable', message: expect.stringContaining('rowGroups.bodies[0].attrs') }))
-    expect(written.report.diagnostics).toContainEqual(expect.objectContaining({ code: 'structure-unspellable', message: expect.stringContaining('every cell is empty') }))
+    expect(written.value).toBe('x\n\n{#t header-rows=0}\n| |\n\ny\n')
+    expect(written.report.diagnostics.map(d => d.message)).toEqual([
+      'Dropped rowGroups.bodies[0].attrs because Carve source cannot spell section attributes',
+    ])
   })
 
   it('imports thousands of empty bodies without repeated DOM searches', () => {

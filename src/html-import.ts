@@ -24,7 +24,6 @@ import { CANONICAL_ADMONITION_KINDS, GENERATED_CONTENT_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
-import { ownedChildFields } from './owned-child-fields.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve, renderCarveForHtmlImport } from './render-carve.js'
 import { mergeAttrs, parse } from './parse.js'
 import {
@@ -931,8 +930,6 @@ class Importer {
   private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** Fallback images of formulas that imported as math, dropped where they stand. */
   private readonly formulaImages = new Set<P5Node>()
-  /** The `<tr>` each row came from, for `dropUnspellableRow`. */
-  private readonly rowOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** The element each hard break came from, for `dropHardBreaksInTableCells`. */
   private readonly hardBreaks = new WeakMap<object, { node: P5Node; path: string }>()
   /**
@@ -3660,10 +3657,7 @@ class Importer {
       if (invented) {
         this.report.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
       }
-      const built: TableRow = { type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) }
-      const source = tr[r]
-      if (source !== undefined) this.rowOrigins.set(built, { node: source, path: `${path}/tr[${r + 1}]` })
-      rows.push(built)
+      rows.push({ type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) })
       carried = [...carried.map((entry) => ({ ...entry, rows: entry.rows - 1 })).filter((entry) => entry.rows > 0), ...opened]
     })
     return rows
@@ -3966,6 +3960,21 @@ class Importer {
       return own
     })
     const rows = this.spanGrid(tr, built, rowAttrs, path, depth)
+    // A row with no cell has no pipe spelling: `|` alone is prose and `||` is
+    // one empty cell (CARVE-P9-082), so writing it would invent a cell.
+    if (this.writing && !listForm) {
+      const hadRows = rows.length > 0
+      for (let r = rows.length - 1; r >= 0; r--) {
+        if (rows[r]!.cells.length > 0) continue
+        this.report.add('structure-unspellable', 'Dropped a row with no cells: Carve has no spelling for it', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
+        rows.splice(r, 1)
+        group.delete(tr[r]!)
+        tr.splice(r, 1)
+      }
+      if (hadRows && rows.length === 0) {
+        this.report.add('table-degraded', 'Dropped a rowless table, including its attributes and caption: Carve source cannot spell a table without rows', 'warning', path, node)
+      }
+    }
     const unspellableBefore = this.unspellable.length
     const rowGroups = this.rowGroups(node, tr, rows, group, leadingHeaderRows, path, sectionAttrs)
     if (rowGroups) {
@@ -5415,104 +5424,6 @@ class Importer {
    * Unwraps the node a writer refusal names and reports the loss. False when
    * the node is not in the tree or came from no element.
    */
-  /**
-   * Drops the row a writer refusal names, and the table with it when no row
-   * survives. False when the row is not in the tree.
-   */
-  dropUnspellableRow(document: Document, target: object, targets: readonly object[] = [target]): boolean {
-    if (this.rowOrigins.get(target) === undefined) return false
-    const refused = new Set(targets)
-    const owners = new Map<object, Table>()
-    const arrays: unknown[][] = []
-    const seen = new Set<object>()
-    const stack: unknown[] = [document, document.trailerBlocks]
-    for (const blocks of Object.values(document.footnoteDefs ?? {})) stack.push(blocks)
-    while (stack.length > 0) {
-      const node = stack.pop()
-      if (node === null || typeof node !== 'object' || seen.has(node)) continue
-      seen.add(node)
-      if (Array.isArray(node)) {
-        arrays.push(node)
-        for (const child of node) {
-          if (child !== null && typeof child === 'object' && (child as BlockNode).type === 'table') {
-            const table = child as Table
-            for (const row of table.rows) if (refused.has(row)) owners.set(row, table)
-          }
-          stack.push(child)
-        }
-        continue
-      }
-      const record = node as Record<string, unknown>
-      for (const field of ownedChildFields(record)) stack.push(record[field])
-    }
-
-    // A singleton table target cannot be removed by array compaction.
-    if (!owners.has(target)) return false
-    const remaining = new Map<Table, number>()
-    const dropped = new Set<object>()
-    for (const row of targets) {
-      const origin = this.rowOrigins.get(row)
-      const table = owners.get(row)
-      if (origin === undefined || table === undefined || dropped.has(row)) continue
-      dropped.add(row)
-      this.report.add(
-        'structure-unspellable',
-        'Dropped a row whose every cell is empty: Carve reads such a row as text',
-        'warning',
-        origin.path,
-        origin.node,
-      )
-      const left = (remaining.get(table) ?? table.rows.length) - 1
-      remaining.set(table, left)
-      if (left === 0) {
-        dropped.add(table)
-        const names = table.attrs ? this.attrNames(table.attrs) : []
-        if (names.length > 0) {
-          let owner = domParent(origin.node)
-          while (owner && domTag(owner) !== 'table') owner = domParent(owner)
-          this.report.add('attribute-dropped', `Dropped ${names.join(', ')} on <table>: no row survives source conversion`, 'warning', origin.path.replace(/\/tr\[\d+\]$/, ''), owner ?? origin.node)
-        }
-        if (table.caption !== undefined) {
-          this.report.add('element-dropped', 'Dropped a caption whose table has no row left', 'warning', origin.path, origin.node)
-        }
-      }
-    }
-    for (const table of remaining.keys()) {
-      if (!table.rowGroups) continue
-      const partitionPreserved = preservesTableRowGroups(table, tableSourceAttrs(table))
-      let cursor = 0
-      const keptCount = (count: number): number => {
-        const end = cursor + count
-        let kept = 0
-        for (; cursor < end; cursor++) if (!dropped.has(table.rows[cursor]!)) kept++
-        return kept
-      }
-      table.rowGroups.headRows = keptCount(table.rowGroups.headRows)
-      for (const body of table.rowGroups.bodies) {
-        body.headRows = keptCount(body.headRows)
-        body.bodyRows = keptCount(body.bodyRows)
-      }
-      table.rowGroups.footRows = keptCount(table.rowGroups.footRows)
-      const survivingTable = { ...table, rows: table.rows.filter(row => !dropped.has(row)) }
-      if (!dropped.has(table) && partitionPreserved && !preservesTableRowGroups(survivingTable, tableSourceAttrs(survivingTable))) {
-        const row = table.rows.find(row => dropped.has(row))!
-        const origin = this.rowOrigins.get(row)!
-        let owner = domParent(origin.node)
-        while (owner && domTag(owner) !== 'table') owner = domParent(owner)
-        this.report.add('table-degraded', 'The retained table attributes cannot preserve its explicit row-group partition after removing blank rows', 'warning', origin.path.replace(/\/tr\[\d+\]$/, ''), owner ?? origin.node)
-      }
-    }
-    for (const array of arrays) {
-      let write = 0
-      for (const node of array) {
-        if (node !== null && typeof node === 'object' && dropped.has(node)) continue
-        array[write++] = node
-      }
-      array.length = write
-    }
-    return dropped.size > 0
-  }
-
   unwrapUnspellable(document: Document, target: object, targets: readonly object[] = [target]): boolean {
     const wanted = new Set(targets.filter(node => this.inlineOrigins.has(node) && Array.isArray((node as { children?: unknown }).children)))
     const removed = new Set<object>()
@@ -6983,10 +6894,7 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
       return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
     } catch (error) {
       if (!(error instanceof SourceUnspellableError) || error.node === undefined) throw error
-      const dropped = error.nodeType === 'table_row'
-        ? importer.dropUnspellableRow(value, error.node, error.nodes)
-        : importer.unwrapUnspellable(value, error.node, error.nodes)
-      if (!dropped) throw error
+      if (!importer.unwrapUnspellable(value, error.node, error.nodes)) throw error
     }
   }
 }

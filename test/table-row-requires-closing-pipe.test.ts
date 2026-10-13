@@ -9,13 +9,12 @@ describe('a table row needs a closing pipe', () => {
     expect(html('| a | b')).toBe('<p>| a | b</p>')
   })
 
-  it('a single empty cell is paragraph text, but two empty cells are a table', () => {
-    // A ROW WHOSE EVERY CELL IS BLANK IS NOT A TABLE (markup-carve/carve#1954):
-    // the detector counts delimiter slots but must find one cell with content.
-    // `|` / `||` / `|||` are all all-blank rows, so all three are paragraphs.
+  it('a lone pipe is paragraph text, but a pipe pair is a row of one empty cell', () => {
+    // A cell slot is counted, not weighed (CARVE-P9-082): `|` has no slot,
+    // `||` has one and `|||` two, whatever they hold.
     expect(html('|')).toBe('<p>|</p>')
-    expect(html('||')).toBe('<p>||</p>')
-    expect(html('|||')).toBe('<p>|||</p>')
+    expect(html('||')).toBe('<table>\n  <tbody>\n    <tr><td></td></tr>\n  </tbody>\n</table>')
+    expect(html('|||')).toBe('<table>\n  <tbody>\n    <tr><td></td><td></td></tr>\n  </tbody>\n</table>')
   })
 
   it('a complete row (opens and closes with `|`) is a table', () => {
@@ -24,8 +23,8 @@ describe('a table row needs a closing pipe', () => {
     )
   })
 
-  it('a whitespace-only single cell is literal text', () => {
-    expect(html('| |')).toBe('<p>| |</p>')
+  it('a space-padded single cell is an empty cell', () => {
+    expect(html('| |')).toBe('<table>\n  <tbody>\n    <tr><td></td></tr>\n  </tbody>\n</table>')
   })
 
   it('an incomplete row does not interrupt a paragraph or heading', () => {
