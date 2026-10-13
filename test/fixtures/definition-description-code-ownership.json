@@ -1867,7 +1867,7 @@
   {
     "id": "review-31",
     "source": "  - :: a\n    :: b\n    : p\n      ::: note\n          ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p><code></code></p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-32",
@@ -2097,7 +2097,7 @@
   {
     "id": "review-77",
     "source": "- :: a\n  :: b\n  : p\n        ::: note\n      ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p><code></code></p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-78",
@@ -2292,7 +2292,7 @@
   {
     "id": "review-116",
     "source": "- :: a\n  :: b\n  : p\n      ::: note\n     ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p><code></code></p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-117",
@@ -2712,27 +2712,27 @@
   {
     "id": "review-200",
     "source": "- :: a\n  :: b\n  : p\n    ::: note\n        ```=html\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p><code>=html</code></p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          \n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-201",
     "source": "- :: a\n  :: b\n  : p\n    ::: note\n        ~~~\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p>~~~</p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-202",
     "source": "- :: a\n  :: b\n  : p\n    ::: note\n      ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p><code></code></p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-203",
     "source": "- :: a\n  :: b\n  : p\n    ::: note\n     ```\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p><code></code></p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-204",
     "source": "- :: a\n  :: b\n  : p\n    ::: note\n     ~~~\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p>~~~</p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>\n        <p>p</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ul>"
   },
   {
     "id": "review-205",
@@ -3207,7 +3207,7 @@
   {
     "id": "review-299",
     "source": "1. :: term\n  : more\n        ::: note\n      ```\n",
-    "html": "<ol>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>more</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <p><code></code></p>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ol>"
+    "html": "<ol>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>more</p>\n        <aside class=\"admonition note\" aria-label=\"Note\">\n          <pre><code></code></pre>\n        </aside>\n      </dd>\n    </dl>\n  </li>\n</ol>"
   },
   {
     "id": "review-300",
@@ -3287,7 +3287,7 @@
   {
     "id": "review-315",
     "source": "> - :: a\n>   :: b\n>   : more\n>      ::: note\n>       ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dt>b</dt>\n        <dd>\n          <p>more</p>\n          <aside class=\"admonition note\" aria-label=\"Note\">\n            <p><code></code></p>\n          </aside>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dt>b</dt>\n        <dd>\n          <p>more</p>\n          <aside class=\"admonition note\" aria-label=\"Note\">\n            <pre><code></code></pre>\n          </aside>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-316",
@@ -3442,7 +3442,7 @@
   {
     "id": "review-346",
     "source": "> - :: a\n>   :: b\n>   : p\n>     ::: note\n>         ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dt>b</dt>\n        <dd>\n          <p>p</p>\n          <aside class=\"admonition note\" aria-label=\"Note\">\n            <p><code></code></p>\n          </aside>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dt>b</dt>\n        <dd>\n          <p>p</p>\n          <aside class=\"admonition note\" aria-label=\"Note\">\n            <pre><code></code></pre>\n          </aside>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-347",

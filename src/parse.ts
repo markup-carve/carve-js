@@ -7335,6 +7335,7 @@ function rebasedColonGroupEnd(
   takenBelowColumn?: ReadonlySet<number>,
   onFenceBodyLine?: (index: number) => void,
   nestedBodyLines?: Set<number>,
+  usesHostMinimum = false,
 ): number {
   let end = start
   const stack = [{ width, literal: RE_LINE_BLOCK_OPEN.test(groupLineContent(lines[start]!, base)) }]
@@ -7343,8 +7344,10 @@ function rebasedColonGroupEnd(
   // consults it: a folded line inside a verbatim or comment payload is that
   // payload's, and its delimiter has to travel with the dedent.
   let opaque: OpaqueGroup | null = null
-  // Rebase child blocks during the existing scan, before the outer body skips them.
-  const authored = [{ column: base, paragraph: false }]
+  // Colon bodies keep the indentation host's minimum even when their opener
+  // has a deeper authored base. Child blocks use that minimum for ownership.
+  // Rebase them during the existing scan before the outer body skips them.
+  const authored = [{ column: usesHostMinimum ? 0 : base, paragraph: false }]
   let authoredInlineFence = false
   let authoredCodeClose: RegExp | undefined
   let authoredCodeAdjustment = 0
@@ -7369,8 +7372,10 @@ function rebasedColonGroupEnd(
       }
     }
     if (authoredCodeClose) {
-      if (authoredCodeAdjustment > 0 && indentColumns(candidate, authoredCodeAdjustment) >= authoredCodeAdjustment) {
-        candidate = sliceColumns(candidate, authoredCodeAdjustment, true)
+      if (authoredCodeAdjustment !== 0 && indentColumns(candidate, Math.max(0, authoredCodeAdjustment)) >= authoredCodeAdjustment) {
+        candidate = authoredCodeAdjustment < 0
+          ? ' '.repeat(-authoredCodeAdjustment) + candidate
+          : sliceColumns(candidate, authoredCodeAdjustment, true)
         lines[j] = candidate
       }
       if (indentColumns(candidate, base + 1) === base && authoredCodeClose.test(groupLineContent(candidate, base))) authoredCodeClose = undefined
@@ -7403,8 +7408,10 @@ function rebasedColonGroupEnd(
       }
       const current = authored.at(-1)!
       const blockColumn = column > current.column && hostedAuthoredBlockOpener(text) && childColumn < 0 ? column : current.column
-      if (blockColumn > base && column >= blockColumn) {
-        candidate = sliceColumns(candidate, blockColumn - base, true)
+      if (blockColumn !== base && column >= blockColumn && (blockColumn > base || usesHostMinimum && hostedAuthoredBlockOpener(text))) {
+        candidate = blockColumn < base
+          ? ' '.repeat(base - blockColumn) + candidate
+          : sliceColumns(candidate, blockColumn - base, true)
         lines[j] = candidate
         authoredColumn = undefined
       }
@@ -7787,6 +7794,7 @@ function rebaseOverindentedBlocks(
         if (j < closeAt) heldFoldedLines.add(j)
       }
     } else if (colon !== null) {
+      const typedContainer = RE_ADMONITION_OPEN.test(opener) && !RE_ADMONITION_CLOSE.test(opener)
       let closerMemo = groupCloserMemos.get(base)
       if (closerMemo === undefined) {
         closerMemo = { verbatim: new Map(), comment: new Map() }
@@ -7797,7 +7805,8 @@ function rebaseOverindentedBlocks(
         (width, index) => (colonCommentCloser ??= commentCloserLookup(lines, false))(width, index),
         closerMemo,
         takenBelowColumn, onFenceBodyLine,
-        !includeSublists && !absorbingColonParagraph ? markerColonNestedBody : undefined,
+        !absorbingColonParagraph && (!includeSublists || typedContainer) ? markerColonNestedBody : undefined,
+        includeSublists && typedContainer,
       )
       if (markerColonOwnsExtent && i === 0 && base === 0 && !RE_LINE_BLOCK_OPEN.test(opener)) {
         markerColonEnd = end
