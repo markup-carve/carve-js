@@ -24,6 +24,34 @@ import { renderCarveWithConversionReport } from '../src/conversion-diagnostics.j
 const schemaCodes = (): string[] => JSON.parse(
   readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'),
 ).properties.losses.items.properties.code.enum
+/**
+ * The pinned schema's `losses.items` rules a record must meet: no field outside
+ * `properties` (`additionalProperties: false`), the common `required` fields,
+ * and the `oneOf` branch for its code (its `required`, `const`, `enum` and
+ * forbidden `false` fields). Enough of JSON Schema for this one flat object.
+ */
+const schemaViolations = (loss: Record<string, unknown>): string[] => {
+  type Rule = { const?: unknown; enum?: unknown[] } | false
+  type Branch = { properties: Record<string, Rule>; required?: string[] }
+  const item = JSON.parse(
+    readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'),
+  ).properties.losses.items as { properties: Record<string, Rule>; required: string[]; oneOf: Branch[] }
+  const out: string[] = []
+  for (const key of Object.keys(loss)) if (!(key in item.properties)) out.push(`unknown field ${key}`)
+  for (const key of item.required) if (!(key in loss)) out.push(`missing ${key}`)
+  const matching = item.oneOf.filter((b) => (b.properties.code as { const?: unknown }).const === loss.code)
+  if (matching.length !== 1) return [...out, `no single branch for ${String(loss.code)}`]
+  const branch = matching[0]!
+  for (const key of branch.required ?? []) if (!(key in loss)) out.push(`missing ${key}`)
+  for (const [key, rule] of Object.entries({ ...item.properties, ...branch.properties })) {
+    if (!(key in loss)) continue
+    if (rule === false) out.push(`forbidden ${key}`)
+    else if ('const' in rule && rule.const !== loss[key]) out.push(`${key} is not ${String(rule.const)}`)
+    else if (rule.enum && !rule.enum.includes(loss[key])) out.push(`${key} outside its enum`)
+  }
+  return out
+}
+
 // carve#3098 adds this code to the published schema after the engine reports it.
 const aheadOfPinCodes: string[] = []
 
@@ -126,6 +154,23 @@ describe('the render-loss code enum', () => {
     for (const loss of carveToMarkdownWithReport('a. one\n').losses) seen.add(loss.code)
     for (const loss of carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses) seen.add(loss.code)
     expect([...seen].sort()).toEqual([...schemaCodes(), ...aheadOfPinCodes].sort())
+  })
+
+  it('writes every loss record in the shape the report schema accepts', () => {
+    const records: RenderLoss[] = []
+    for (const render of Object.values(targets)) {
+      records.push(
+        ...collect(render as never, interchangeOnly()),
+        ...collect(render as never, namedLosses()),
+        ...collect(render as never, collidesWithCarrier(), { roundtrip: true }),
+      )
+    }
+    records.push(...carveToMarkdownWithReport('a. one\n').losses)
+    records.push(...carveToMarkdownWithReport('a. one\n\n1. two\n', { roundtrip: true }).losses)
+    expect(records.map((loss) => loss.code)).toContain('list-delimiter-changed')
+    for (const loss of records) expect(schemaViolations(loss as unknown as Record<string, unknown>), loss.code).toEqual([])
+    // The checker sees a misnamed field.
+    expect(schemaViolations({ code: 'list-delimiter-changed', target: 'markdown', nodeType: 'block', message: 'm', authored: '.', emitted: ')' })).not.toEqual([])
   })
 
   it('reports every one of those shapes on the conversion-diagnostics channel', () => {
