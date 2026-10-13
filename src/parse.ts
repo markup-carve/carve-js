@@ -13404,7 +13404,7 @@ class ParseSession {
           (noteReach === 'closed' && lastNoteLine !== '' && !opensCodeFence(lastNoteLine) &&
             !RE_COMMENT_LINE.test(lastNoteLine))
         const fenceBoundaryTail = noteReach === 'boundary'
-        const commentFenceTail = markerNoteItem && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
+        const commentFenceTail = markerNoteItem && noteReach === 'boundary' && !isBlankLine(l) && indentColumns(l, contentCol) < contentCol &&
           markerNoteCommentFenceOpeners(nested, noteParagraphMarkers).length > 0
         const noteParagraphOpen = markerNoteParagraph
         if (!isBlankLine(l)) {
