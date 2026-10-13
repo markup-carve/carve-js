@@ -1,3 +1,4 @@
+import { continuesParagraph } from './djot-attributes.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotTableRows, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
@@ -76,6 +77,8 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       ? label.replace(/\s+/g, ' ').trim()
       : undefined, true)
   const lines = source.split('\n')
+  let definitionOffset = 0
+  const offsets = lines.map(line => { const at = definitionOffset; definitionOffset += line.length + 1; return at })
   const definitions = new Map<string, { target: string; attrs: string; slots: Map<string, string[]>; line: number; first: number }>()
   const definitionMask = referenceMask(source).split('\n')
   const definitionLines = new Set<number>()
@@ -88,22 +91,23 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     if (!definition || definitionMask[n]![start] !== '[') continue
     let first = n
     const attrs: string[] = []
-    while (first > 0) {
-      const precedingStart = contentStart(lines[first - 1]!)
-      const precedingPrefix = lines[first - 1]!.slice(0, precedingStart)
+    for (let at = n - 1; at >= 0; at--) {
+      const precedingStart = contentStart(lines[at]!)
+      const precedingPrefix = lines[at]!.slice(0, precedingStart)
       const prefix = lines[n]!.slice(0, start)
       const quoteDepth = (value: string) => value.split('>').length - 1
       if (/[-*+.):]/.test(prefix) || quoteDepth(prefix) > quoteDepth(precedingPrefix)) break
-      const preceding = lines[first - 1]!.slice(precedingStart),
+      const preceding = lines[at]!.slice(precedingStart),
         parsed = readAttributes(preceding, 0)
-      if (parsed?.end !== preceding.length) break
+      if (preceding.trim() === '') continue
+      if (parsed?.end !== preceding.length || (!/[-*+.):]/.test(precedingPrefix) && continuesParagraph(source, offsets[at]! + precedingStart))) break
       attrs.push(preceding)
-      first--
+      first = at
     }
     const previous = lines[first - 1] ?? ''
     const previousContent = previous.slice(contentStart(previous)).trim()
     if (
-      first > 0 &&
+      attrs.length === 0 && first > 0 &&
       previousContent !== '' &&
       !definitionLines.has(first - 1) &&
       !/^(?:#{1,6}(?: |$)|:{3,}|\|)/.test(previousContent) &&

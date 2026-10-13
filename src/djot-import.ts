@@ -268,6 +268,8 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
   const item = String.raw`(?:[.#][A-Za-z0-9_][A-Za-z0-9_-]*|[A-Za-z][A-Za-z0-9_-]*=(?:"(?:\\.|[^"\\\n])*"|[A-Za-z0-9_:-]+))`
   const pattern = new RegExp(String.raw`\{[ \t]*${item}(?:[ \t]+${item})*[ \t]*\}`, 'g')
   const lines = source.split('\n')
+  let lineOffset = 0
+  const lineOffsets = lines.map(line => { const start = lineOffset; lineOffset += line.length + 1; return start })
   const dangling = new Set<number>()
   const wholeAttribute = new RegExp(`^(?:${pattern.source})$`)
   let followsBlank = true, nextDepth: number | undefined
@@ -275,7 +277,10 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
     const line = lines[index]!
     const first = /^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/.exec(line)![0].length
     const depth = (line.slice(0, first).match(/>/g) ?? []).length
-    if (line.slice(first).trim() === '') { followsBlank = true; nextDepth = depth || undefined; continue }
+    if (line.slice(first).trim() === '') {
+      if (depth !== 0 && followsBlank) nextDepth = depth
+      continue
+    }
     if (masked[index]![first] === '{' && wholeAttribute.test(line.slice(first).trimEnd())) {
       if (nextDepth !== undefined && depth !== nextDepth) followsBlank = false
       if (followsBlank) dangling.add(index)
@@ -298,7 +303,7 @@ function consumeOrphanDjotAttributes(source: string): { source: string; restore:
       if (markerOnly) return attrs
       const alone = at === first && at + attrs.length === last
       const previous = (lines[index - 1] ?? '').replace(/^(?:(?:[ \t]*>)+[ \t]*)?[ \t]*/, '').trim()
-      const block = index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous)
+      const block = !continuesParagraph(source, lineOffsets[index]! + at) || index === 0 || previous === '' || /^\{.*\}$/.test(previous) || /^(?:`{3,}|~{3,}|:{3,}|#{1,6} |[-*+] |[0-9]+[.)] |> |:{1,2} |(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|\|.*\||\[[^\]]+\]:)/.test(previous)
       if (alone && block) { if (!dangling.has(index)) return attrs; dropLine = true }
       orphanEnd = at + attrs.length
       return prefix + (at === first ? 'L' : 'I')
@@ -570,7 +575,7 @@ function convertDjotDocument(djot: string): string {
   }
   const spans: string[] = []
   const prefix = djotPlaceholderPrefix(body, '\x00DJOTSTRONG')
-  const invalidAttributes = escapeInvalidDjotAttributes(body)
+  const invalidAttributes = escapeInvalidDjotAttributes(carryDjotAttributesAcrossQuoteExits(body))
   // Carve has no empty footnote body: `[^b]:` alone is a paragraph, not a
   // definition, so an empty Djot body needs a body that renders nothing - a
   // comment. It travels as a NUL token so the text escaper cannot reach it and
@@ -592,7 +597,13 @@ function convertDjotDocument(djot: string): string {
     noteSourceWidths,
   )
   const links = normalizeDjotTablePipes(normalizeDjotAutolinks(normalizeDjotLinks(normalizedBody, invalidAttributes.inherited)))
-  const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)), strippedDefinitions.isBoundary, noteSourceWidths, emptyNote)
+  const itemAttributePrefix = djotPlaceholderPrefix(links, '\x00DJOTITEMATTR\x00')
+  const itemAttributeValues: string[] = []
+  const holdItemAttributes = (attributes: string): string => {
+    itemAttributeValues.push(attributes)
+    return `${itemAttributePrefix}${itemAttributeValues.length - 1}\x00`
+  }
+  const layout = djotBlockLayout(links, djotTableRows(links, maskDjotCodeAndDestinations(links, false, true, false)), strippedDefinitions.isBoundary, noteSourceWidths, emptyNote, holdItemAttributes)
   const headingFolded = foldHeadingContinuations(dropLeadingDjotSeparators(escapeDjotNonTableRows(layout)))
   let collapsedMask = maskDjotCodeAndDestinations(headingFolded, false).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value)
 
@@ -632,6 +643,8 @@ function convertDjotDocument(djot: string): string {
   const restoreSpans = new RegExp(`${prefix}(\\d+)\x00`, 'g')
   const converted = invalidAttributes.restore(convert(words, chunk => chunk.replace(restoreSpans, (all, index: string) => spans[Number(index)] ?? all)))
     .replaceAll(emptyNote, '%%%%')
+    .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, index: string, container: string, marker: string, whitespace: string) => `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
+    .replace(new RegExp(`([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
   return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
 }
 
@@ -851,6 +864,32 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
     } else output.push(source[i++]!)
   }
   return output.join('')
+}
+
+function carryDjotAttributesAcrossQuoteExits(source: string): string {
+  if (!source.includes('>') || !source.includes('{')) return source
+  const lines = source.split('\n'), mask = maskDjotCodeAndDestinations(source).split('\n')
+  let offset = 0
+  const offsets = lines.map(line => { const start = offset; offset += line.length + 1; return start })
+  const contexts = lines.map((line, index) => {
+    const prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
+    const body = line.slice(prefix.length), indent = /^[ \t]*/.exec(body)![0].length
+    const attrs = mask[index]![prefix.length + indent] === '{' ? readAttributes(body, indent) : undefined
+    return { prefix, depth: (prefix.match(/>/g) ?? []).length, body, indent, attributes: attrs?.end === body.trimEnd().length }
+  })
+  let followingDepth: number | undefined
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const context = contexts[index]!
+    if (context.attributes) {
+      if (context.indent === 0 && context.depth > (followingDepth ?? context.depth) &&
+          !continuesParagraph(source, offsets[index]! + context.prefix.length)) {
+        const previous = contexts[index - 1]
+        const precedingMove = previous?.attributes && previous.indent === 0 && previous.depth === context.depth && !continuesParagraph(source, offsets[index - 1]! + previous.prefix.length)
+        lines[index] = (precedingMove ? '' : context.prefix.trimEnd() + '\n') + '> '.repeat(followingDepth!) + context.body
+      }
+    } else if (context.body.trim() !== '') followingDepth = context.depth
+  }
+  return lines.join('\n')
 }
 
 function normalizeDjotAttributeLines(source: string): string {
@@ -2217,7 +2256,7 @@ export function stripDjotFootnoteDefinitionAttributes(input: string): { source: 
           }
         }
       }
-      pending = []
+      if (content !== '') pending = []
     }
     const reference: boolean = blockAllowed && mask[offset + prefix.length] === '[' && /^\[(?!\^)[^\]\n]*\]:(?:[ \t]+\S*[ \t]*|)$/.test(content)
     if (reference) { referenceColumn = column; heading = false }
