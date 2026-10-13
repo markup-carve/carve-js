@@ -549,5 +549,127 @@
     "source": "- x\n\n> ![c\n> d][]\n\n[c d]: /2",
     "alt": "c\nd",
     "href": null
+  },
+  {
+    "name": "spaced-key-0-link",
+    "source": "[a  b][]\n\n[a  b]: /u",
+    "alt": null,
+    "href": "/u"
+  },
+  {
+    "name": "spaced-key-0-image",
+    "source": "![a  b][]\n\n[a  b]: /u",
+    "alt": "a  b",
+    "href": null
+  },
+  {
+    "name": "spaced-key-1-link",
+    "source": "[ a][]\n\n[ a]: /u",
+    "alt": null,
+    "href": "/u"
+  },
+  {
+    "name": "spaced-key-1-image",
+    "source": "![ a][]\n\n[ a]: /u",
+    "alt": " a",
+    "href": null
+  },
+  {
+    "name": "spaced-key-2-link",
+    "source": "[a\tb][]\n\n[a\tb]: /u",
+    "alt": null,
+    "href": "/u"
+  },
+  {
+    "name": "spaced-key-2-image",
+    "source": "![a\tb][]\n\n[a\tb]: /u",
+    "alt": "a\tb",
+    "href": null
+  },
+  {
+    "name": "spaced-key-3-link",
+    "source": "[a\nb][]\n\n[a\tb]: /u",
+    "alt": null,
+    "href": "/u"
+  },
+  {
+    "name": "spaced-key-3-image",
+    "source": "![a\nb][]\n\n[a\tb]: /u",
+    "alt": "a\nb",
+    "href": null
+  },
+  {
+    "name": "spaced-key-4-link",
+    "source": "[a  b][]\n\n[ a\tb ]: /u",
+    "alt": null,
+    "href": "/u"
+  },
+  {
+    "name": "spaced-key-4-image",
+    "source": "![a  b][]\n\n[ a\tb ]: /u",
+    "alt": "a  b",
+    "href": null
+  },
+  {
+    "name": "unattached-attribute-0",
+    "source": "![a {.x} b](img)",
+    "alt": "a  b",
+    "href": null
+  },
+  {
+    "name": "masked-close-False-link",
+    "source": "[a `c][]` d\n\n[a `c]: u",
+    "alt": null,
+    "href": null,
+    "code": "c][]"
+  },
+  {
+    "name": "masked-close-False-!",
+    "source": "![a `c][]` d\n\n[a `c]: u",
+    "alt": null,
+    "href": null,
+    "code": "c][]"
+  },
+  {
+    "name": "masked-close-True-link",
+    "source": "[a\n`c][]` d\n\n[a c]: u",
+    "alt": null,
+    "href": null,
+    "code": "c][]"
+  },
+  {
+    "name": "masked-close-True-!",
+    "source": "![a\n`c][]` d\n\n[a c]: u",
+    "alt": null,
+    "href": null,
+    "code": "c][]"
+  },
+  {
+    "name": "link-owner-break-0",
+    "source": "- [foo\n- bar][]\n\n[foo - bar]: /u",
+    "alt": null,
+    "href": null,
+    "text": "[foo bar][]"
+  },
+  {
+    "name": "link-owner-break-1",
+    "source": "> [foo\n# bar][]\n\n[foo # bar]: /u",
+    "alt": null,
+    "href": null,
+    "text": "[foo bar][]"
+  },
+  {
+    "name": "link-owner-break-2",
+    "source": "[foo\n# bar][]\n\n[foo # bar]: /u",
+    "alt": null,
+    "href": "/u",
+    "text": "foo # bar"
+  },
+  {
+    "name": "link-owner-break-3",
+    "source": "[foo\n- bar][]\n\n[foo - bar]: /u",
+    "alt": null,
+    "href": "/u",
+    "text": "foo - bar"
   }
 ]

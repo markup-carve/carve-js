@@ -29,6 +29,17 @@ function foldLabelLines(label: string): string {
   return [first, ...lines.map(line => line.trim()).filter(Boolean), last].join(' ')
 }
 
+function continuesReferenceQuote(source: string, at: number, label: string, contentStart: (line: string) => number): boolean {
+  const firstLine = source.slice(source.lastIndexOf('\n', at) + 1, at)
+  const depth = (firstLine.slice(0, contentStart(firstLine)).match(/>/g) ?? []).length
+  if (depth === 0) return true
+  return label.split('\n').slice(1).every(line => {
+    const prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
+    return (prefix.match(/>/g) ?? []).length >= depth ||
+      !/^(?:#{1,6} |[-*+](?:[ \t]|$)|[0-9A-Za-z]+[.)] |:{3,}|`{3,}|~{3,}|\||\{|\[[^\]]+\]:)/.test(line.slice(prefix.length).replace(/^[ \t]*/, ''))
+  })
+}
+
 function normalizeMultilineLabels(
   source: string,
   replace: (at: number, label: string, image: boolean) => string | undefined,
@@ -37,9 +48,9 @@ function normalizeMultilineLabels(
 ): string {
   let open = -1, multiline = false, copied = 0, consumed = 0, output = ''
   const images: boolean[] = []
-  const boundaries = source.includes('![') ? new Set(djotInlineBoundaries(source, mask)) : new Set<number>()
+  const boundaries = source.includes('\n') && source.includes('[') ? new Set(djotInlineBoundaries(source, mask)) : new Set<number>()
   for (let at = 0; at < source.length; at++) {
-    if (boundaries.has(at)) images.length = 0
+    if (boundaries.has(at)) { images.length = 0; open = -1; multiline = false }
     if (source[at] === '[') {
       if (mask[at] !== ' ') images.push((images.at(-1) ?? false) || source[at - 1] === '!' && !isDjotEscaped(source, at - 1))
       open = at; multiline = false
@@ -70,7 +81,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   if (!caretOnly) {
   source = normalizeMultilineLabels(source, (at, label, image) =>
     !image && !imageChildText && mask[at] !== ' ' && !isDjotEscaped(source, at) && !label.startsWith('^') &&
-    !label.includes('`') && !/\n[ \t]*\n/.test(label)
+    !label.includes('`') && !/\n[ \t]*\n/.test(label) && continuesReferenceQuote(source, at, label, contentStart)
       ? foldLabelLines(label)
       : undefined, false, mask)
   mask = referenceMask(source)

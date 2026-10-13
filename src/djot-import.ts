@@ -952,27 +952,23 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
   const previousDefinitionLines = new Map<number, string>()
   let definitionOffset = 0, previousDefinitionLine = ''
   for (const line of headingFolded.split('\n')) { previousDefinitionLines.set(definitionOffset, previousDefinitionLine); definitionOffset += line.length + 1; previousDefinitionLine = line }
-  const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!.trim().replace(/[ \t\r\n]+/g, ' ')))
+  const definitions = new Map(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => [match[1]!.trim().replace(/[ \t\r\n]+/g, ' '), match[1]!] as const))
   let collapsedImageLines: DjotImageLineOwner[] | undefined, collapsedImageLine = 0
   const rawFolded = headingFolded.replace(/(!?\[([^\[\]]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => {
-    if (collapsedMask[at] === ' ' || key.startsWith('^') && key.length > 1) return value
+    if (collapsedMask[at] === ' ' || collapsedMask[at + value.length - 3] !== ']' || key.startsWith('^') && key.length > 1) return value
     if (key.includes('\n')) {
-      const image = label.startsWith('!') && !isDjotEscaped(headingFolded, at)
       const bracketAt = at + (label.startsWith('!') ? 1 : 0)
       if (/\n[ \t]*\n/.test(key) || isDjotEscaped(headingFolded, bracketAt)) return value
-      const line = headingFolded.slice(headingFolded.lastIndexOf('\n', at) + 1, at)
-      const depth = (line.slice(0, djotContentStart(line)).match(/>/g) ?? []).length
-      let layout = djotImageAltLayout(key, depth)
-      if (image) {
-        collapsedImageLines ??= djotImageLineOwners(headingFolded, collapsedMask)
-        while (collapsedImageLines[collapsedImageLine]!.end <= at) collapsedImageLine++
-        const owner = collapsedImageLines[collapsedImageLine]!
-        layout = djotImageAltLayout(key, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div)
-        if (!layout.valid) return value
-      }
+      collapsedImageLines ??= djotImageLineOwners(headingFolded, collapsedMask)
+      while (collapsedImageLines[collapsedImageLine]!.end <= at) collapsedImageLine++
+      const owner = collapsedImageLines[collapsedImageLine]!
+      const layout = djotImageAltLayout(key, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div)
+      if (!layout.valid) return value
       key = imageChildText(layout.normalized).trim().replace(/[ \t\r\n]+/g, ' ')
     }
-    return definitions.has(key) ? `${label}[${key}]` : value
+    key = key.trim().replace(/[ \t\r\n]+/g, ' ')
+    const definition = definitions.get(key)
+    return definition !== undefined ? `${label}[${definition}]` : value
   })
   const imageParagraph = djotPlaceholderPrefix(body, '\x00DJOTIMAGEPARAGRAPH\x00')
   const imageMask = maskDjotCodeAndDestinations(rawFolded)
