@@ -31,6 +31,16 @@ it.each(controls)('keeps description code and following blocks in their authored
   }
 })
 
+// CARVE-P2-028 and PART 0 O1-O3: an unmarked line reaches the document,
+// whose column does not recognize this indented marker as an opener.
+it('folds unmarked indented terms while keeping marked sibling terms', () => {
+  for (const indent of [2, 3, 4]) {
+    expect(carveToHtml(`> - :: a\n${' '.repeat(indent)}:: b\n>   : p\n`)).toContain('<dt>a\n:: b</dt>')
+  }
+  expect(carveToHtml('> - :: a\n>   :: b\n>   : p\n')).toContain('<dt>a</dt>\n        <dt>b</dt>')
+  expect(carveToHtml('> - :: a\n  : b\n>   : p\n')).toContain('<dt>a\n: b</dt>')
+})
+
 it('bounds collection of repeated marker-term descriptions and code', () => {
   const previous = layoutWork.on
   try {

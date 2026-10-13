@@ -3781,7 +3781,9 @@ function trackQuoteHostFence(
       return true
     }
   }
-  if (!blockStart && at === floor && host.terms.length > 0) host.terms[host.terms.length - 1] = false
+  if (!blockStart && at === floor && host.terms.length > 0 &&
+      (!paragraph || lineOpensBlock(inner) || RE_DEFLIST_DEF.test(inner) || isBlockAttributeLine(inner)))
+    host.terms[host.terms.length - 1] = false
   if (floor > 0 && at >= floor && !blockStart && !host.terms.at(-1)) {
     if (RE_BLOCKQUOTE.test(inner) && !markerLineState(inner).leavesParagraphOpen) {
       closeBlockQuoteParagraph(state)
@@ -4000,6 +4002,7 @@ function classifyQuotedLine(
   }
   if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser, terminatorFree, hasLiteralCommentCloser, wasInTable)) return null
   const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
+  const wasTerm = state.mode.kind === 'paragraph' && state.mode.term && !RE_DEFLIST_DEF.test(content)
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
@@ -4194,7 +4197,7 @@ function classifyQuotedLine(
   // the prose line in between made the bare run open a real div here instead
   // (corpus 260). Absorption ends where the paragraph does, and every branch
   // that ends one returns above this point.
-  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing }
+  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing, ...(wasTerm ? { term: true } : {}) }
 
   return null
 }
@@ -12133,8 +12136,8 @@ class ParseSession {
           // The test is column-0 anchored, so an indented fence still folds in.
           if (
             isBlankLine(next) ||
-            RE_DEFLIST_TERM.test(nextEntry) ||
-            RE_DEFLIST_DEF.test(nextEntry) ||
+            (!lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+              (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
             endsHeadingOrQuote(lexer)
           )
@@ -12396,11 +12399,12 @@ class ParseSession {
       paragraphOpen ??= blockQuoteParagraphOpen(state)
       if (handDown && handDown.paragraphOpen === undefined) handDown.paragraphOpen = paragraphOpen
       if (!paragraphOpen) break
-      if (deflistMarkerLine(ln)) {
+      if (leadingWhitespace(ln) === 0 && deflistMarkerLine(ln) &&
+          !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
         let leaf = state
         while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
-        // A description marker opens a block; the ruling covers plain lazy text.
-        if (leaf.mode.kind === 'paragraph' && leaf.mode.term) break
+        // A marker at the surviving document column ends the open term.
+        if (leaf.mode.kind === 'paragraph' && (leaf.mode.term || leaf.hosts?.terms.at(-1))) break
       }
       const lineIndex = lexer.pos
       lexer.consume()
