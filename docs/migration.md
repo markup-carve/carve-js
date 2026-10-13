@@ -214,6 +214,13 @@ The CLI spelling reads a file or stdin and writes Carve to stdout:
 carve migrate --from djot document.djot > document.crv
 ```
 
+Djot derives collapsed image-reference keys from child text. Paired quote
+wrappers, footnotes, symbols and ignored attributes do not contribute to the
+key. An unresolved image without a destination has no Carve image spelling. The
+same applies when removing ignored markup leaves a blank line in the alternative
+text. The migration report records `structure-unspellable`. HTML rendered from
+the converted source does not preserve that image.
+
 To only flag delimiter collisions without importing the document, use
 `djotMigrationWarnings`; to rewrite only those collisions, use
 `applyMigrationFixes` (or the `carve fix` CLI below):

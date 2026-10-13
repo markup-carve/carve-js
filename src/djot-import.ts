@@ -7,6 +7,7 @@ import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { trimEndMatchingEdges, trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
 import { renderDjotImageChildText } from './djot-image-child-text.js'
+import { djotImageLabelAttributes } from './djot-collapsed-reference.js'
 import { escapeImageAlt } from './render-carve.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { attributedDjotWords } from './djot-word-attributes.js'
@@ -17,7 +18,7 @@ import { djotReferenceLayout } from './djot-reference-layout.js'
 import { djotImportLosses, type DjotImportLoss } from './djot-import-losses.js'
 /* Convert Djot source to Carve without treating it as already-Carve source. */
 
-import { escapePlainCarveInlineSyntaxAround, HANDLED_DJOT } from './carve-escape.js'
+import { escapePlainDjotText } from './djot-plain-text.js'
 import { applyMigrationFixes, isDjotEscaped, maskDjotCodeAndDestinations, maskDjotFences, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-migrate.js'
 
 const fencedLines = (lines: readonly string[]): boolean[] => {
@@ -743,40 +744,6 @@ function escapeInvalidDjotAttributes(source: string): { source: string; inherite
  * placeholder and Carve source carries no NUL of its own, so the byte is the
  * whole test.
  */
-function unmaskLiftedDjotAutolinkBodies(source: string, masked: string): string {
-  if (!source.includes('<') || !source.includes('\x00')) return masked
-  const visible = maskDjotCodeAndDestinations(source, true, true, true, undefined, [], {
-    autolinks: false,
-    comments: false,
-  })
-  const chars = masked.split('')
-  for (const match of source.matchAll(/<[^<>\s]+>/g)) {
-    const at = match.index!,
-      value = match[0]
-    if (!value.includes('\x00') || visible[at] !== '<' || masked.slice(at, at + value.length).trim() !== '') continue
-    for (let i = 0; i < value.length; i++) chars[at + i] = value[i]!
-  }
-  return chars.join('')
-}
-
-/** Escape plain Djot text while leaving code spans, fences and destinations opaque. */
-function escapePlainDjotText(source: string): string {
-  let masked = unmaskLiftedDjotAutolinkBodies(source, maskDjotCodeAndDestinations(source))
-  if (source.includes('{')) {
-    const chars = masked.split('')
-    for (let at = 0; at < source.length; at++) {
-      if (chars[at] !== '{' || isDjotEscaped(source, at)) continue
-      const attrs = readAttributes(source, at)
-      if (!attrs) continue
-      for (let i = at; i < attrs.end; i++) if (chars[i] !== '\n') chars[i] = ' '
-      at = attrs.end - 1
-    }
-    masked = chars.join('')
-  }
-  // The mask writes a space over each opaque character and keeps real spaces.
-  return escapePlainCarveInlineSyntaxAround(
-    source, at => masked[at] === ' ' && source[at] !== ' ' && source[at] !== '\n', HANDLED_DJOT)
-}
 
 function foldHeadingContinuations(source: string): string {
   const lines = source.split('\n')
@@ -920,7 +887,7 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
     const imageLines = djotImageLineOwners(source, mask)
     let line = 0
     replaceDjotImageLabels(source, mask, (image, label, at) => {
-      if (source.startsWith('[]', at + image.length) || label.startsWith('^') || /\n[ \t]*\n/.test(label)) return image
+      if (label.startsWith('^') || /\n[ \t]*\n/.test(label)) return image
       while (imageLines[line]!.end <= at) line++
       const owner = imageLines[line]!
       if (!djotImageAltLayout(label, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div).valid) return image
@@ -951,6 +918,8 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
   let body = escapeDjotTableAttributeBoundaries(sourceBody)
+  if (body.includes('`') && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*`[^\]\n]*\]:/.test(line.slice(djotContentStart(line)))))
+    body = djotReferenceLayout(body, djotContentStart, false, undefined, false, true)
   if (body.includes('[^') && body.includes(']:') && body.split('\n').some(line => /^\[\^[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) {
     const accepted = new Map<number, { label: string; target: string; end: number }>()
     foldDjotReferences(body, accepted)
@@ -976,7 +945,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     const key = `${omitQuotes ? 1 : 0}:${label}`
     const cached = childTextCache.get(key)
     if (cached !== undefined) return cached
-    const text = djotImageLabelText(label, source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes)))
+    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes)))
     childTextCache.set(key, text)
     return text
   }
@@ -1024,17 +993,17 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const definitions = new Map(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => [match[1]!.trim().replace(/[ \t\r\n]+/g, ' '), match[1]!] as const))
   let collapsedImageLines: DjotImageLineOwner[] | undefined, collapsedImageLine = 0
   const rawFolded = headingFolded.replace(/(!?\[([^\[\]]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => {
-    if (collapsedMask[at] === ' ' || collapsedMask[at + value.length - 3] !== ']' || key.startsWith('^') && key.length > 1) return value
+    const bracketAt = at + (label.startsWith('!') ? 1 : 0)
+    if (definitions.size === 0 || isDjotEscaped(headingFolded, bracketAt) || collapsedMask[at] === ' ' || collapsedMask[at + value.length - 3] !== ']' || key.startsWith('^') && key.length > 1) return value
     if (key.includes('\n')) {
-      const bracketAt = at + (label.startsWith('!') ? 1 : 0)
       if (/\n[ \t]*\n/.test(key) || isDjotEscaped(headingFolded, bracketAt)) return value
       collapsedImageLines ??= djotImageLineOwners(headingFolded, collapsedMask)
       while (collapsedImageLines[collapsedImageLine]!.end <= at) collapsedImageLine++
       const owner = collapsedImageLines[collapsedImageLine]!
       const layout = djotImageAltLayout(key, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div)
       if (!layout.valid) return value
-      key = imageChildText(layout.normalized, false).trim().replace(/[ \t\r\n]+/g, ' ')
-    }
+      key = imageChildText(layout.normalized).trim().replace(/[ \t\r\n]+/g, ' ')
+    } else key = imageChildText(key)
     key = key.trim().replace(/[ \t\r\n]+/g, ' ')
     const definition = definitions.get(key)
     return definition !== undefined ? `${label}[${definition}]` : value
@@ -1052,7 +1021,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
       const first = label.indexOf(quote)
       return first >= 0 && label.indexOf(quote, first + 1) >= 0
     })
-    if (!label.includes('\n') && !/[_*`{^~\[\]]/.test(label) && !pairedQuotes && !/["']\}/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
+    if (!label.includes('\n') && !/[_*`{^~\[\]<:]/.test(label) && !pairedQuotes && !/["']\}/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
       spans.push(label)
       return `${paragraph}![${prefix}${spans.length - 1}\x00]`
     }

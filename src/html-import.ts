@@ -896,6 +896,8 @@ function restoreHoistedSectionId(
   return kept
 }
 
+const GENERATED_FOOTNOTE_REF_ID = /^fnref\d+(?:-\d+)?$/
+
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
@@ -5870,9 +5872,13 @@ class Importer {
 
       for (const reference of definition.refs) {
         const site = this.footnoteReferenceSite(reference)
+        // An id other than the generated `fnref{n}` / `fnref{n}-{k}` was authored
+        // (PART 9 §16). A word processor's anchor ids are its own, never authored.
+        const id = heuristic ? undefined : this.attr(reference, 'id')
         const replacement = defaultTreeAdapter.createElement(
           'carve-footnote-ref', p5html.NS.HTML, [
             { name: 'label', value: label },
+            ...(id && !GENERATED_FOOTNOTE_REF_ID.test(id) ? [{ name: 'id', value: id }] : []),
             ...(domTag(reference) === 'sup' ? (domAttrs(site) ?? []).filter(attr =>
               attr.name !== 'id' && !RESERVED_CARRIER_ATTRIBUTES.has(attr.name.toLowerCase()),
             ) : []),
