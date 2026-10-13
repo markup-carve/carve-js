@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-// Expectations verified with the layout and HTML oracle at spec 8017328e.
+// Expectations verified with the layout and HTML checker at spec 32c0b881.
 const hosts = [
   ['item', 2, '- head\n\n', '', '<ul>\n  <li>head\n    ', '\n  </li>\n</ul>'],
   [
@@ -39,7 +39,7 @@ describe('list markers inside raised fences', () => {
                 [' '.repeat(base) + opener, ' '.repeat(base) + 'a', ' '.repeat(column) + payload]
                   .map((line) => quote + line + '\n')
                   .join('')
-              const residue = ' '.repeat(column < base ? column - cc : column - base)
+              const residue = ' '.repeat(column < base ? 0 : column - base)
               const body = 'a\n' + residue + payload + '\n'
               const block =
                 kind === 'raw' ? body.slice(0, -1) : '<pre><code>' + body + '</code></pre>'
@@ -85,7 +85,7 @@ describe('list markers inside raised fences', () => {
     [
       'raised fence closer "    ```" before marker',
       '- head\n\n      ```\n      a\n    ```\n  - second\n',
-      '<ul>\n  <li>head\n    <pre><code>a\n  ```\n- second\n</code></pre>\n  </li>\n</ul>',
+      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n    <ul>\n      <li>second</li>\n    </ul>\n  </li>\n</ul>',
     ],
     [
       'raised fence closer "        ```" before marker',

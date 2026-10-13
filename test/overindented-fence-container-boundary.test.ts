@@ -58,7 +58,7 @@ describe('over-indented fence boundary controls', () => {
   })
   it('run below the base', () => {
     expect(carveToHtml('- head\n\n      ```\n      a\n    ```\ntext\n')).toBe(
-      '<ul>\n  <li>head\n    <pre><code>a\n  ```\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
+      '<ul>\n  <li>head\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>text</p>',
     )
   })
   it('run above the base', () => {
