@@ -6075,7 +6075,7 @@ class Importer {
       used.add(fragment)
     }
 
-    const candidates: FootnoteCandidate[] = []
+    const bareSites: Array<{ reference: P5Node; target: P5Node; fragment: string }> = []
     for (const backlink of elements) {
       if (domTag(backlink) !== 'a' || this.attr(backlink, 'role') !== 'doc-backlink') continue
       const href = this.attr(backlink, 'href') ?? ''
@@ -6090,6 +6090,11 @@ class Importer {
       if (endnotes === undefined) continue
       const fragment = this.attr(target, 'id')!
       used.add(fragment)
+      bareSites.push({ reference, target, fragment })
+    }
+    const candidates: FootnoteCandidate[] = []
+    // Register every bare target before counting notes under shared wrappers.
+    for (const { reference, target, fragment } of bareSites) {
       const block = this.resolveFootnoteDefinitionBlock(target, targetsIndex)
       if (block === null || this.p5Contains(block, reference, targetsIndex)) continue
       candidates.push({ ref: reference, block, fragment, mutual: true })
