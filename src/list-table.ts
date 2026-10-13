@@ -9,6 +9,7 @@ import type {
 } from './ast.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
 import { parseContainerLabelInlines } from './parse.js'
+import { resolveSpanGrid } from './table-spans.js'
 
 /**
  * Render `::: list-table` admonitions as real HTML `<table>` markup, with the
@@ -407,18 +408,11 @@ function extractCells(rowItem: ListItem): CellEntry[] | null {
 }
 
 /**
- * Resolve `^` / `<` markers into a positional grid using the pipe-table span
- * walk. A caret below a consumed colspan position stays empty unless a visible
- * span already covers it.
- *
- * Each row becomes a positional list of grid entries (one per source cell). A
- * `^` cell grows the rowspan of the nearest non-skipped cell directly above it
- * in the same source column; a `<` cell grows the colspan of the nearest
- * non-skipped cell to its left. A merged marker is flagged `skip` and emits
- * nothing; an unmergeable marker (first row `^`, leading `<`, or a caret below
- * a consumed colspan position that is not covered by a span)
- * stays a rendered-empty cell. A cell carrying its own attribute block, or one
- * that owns trailing blocks, is never a bare marker (its `^`/`<` is literal).
+ * Resolve `^` / `<` markers with the pipe-table span walk (`resolveSpanGrid`).
+ * A merged marker is flagged `skip` and emits nothing; a marker with no origin,
+ * or whose span would cover another cell, stays a rendered-empty cell. A cell
+ * carrying its own attribute block, or one that owns trailing blocks, is never
+ * a bare marker (its `^`/`<` is literal).
  *
  * The renderer puts every row in one tbody when a resolved span crosses groups.
  */
@@ -434,54 +428,7 @@ function resolveSpans(rows: CellEntry[][]): GridEntry[][] {
     })),
   )
 
-  // Per source column, the last row index (above the current one) a `^`
-  // resolves against. Maintained incrementally so an all-`^` column resolves in
-  // O(1) (pipe-table parity).
-  const base: number[] = []
-  const colspanOrigins: Array<number[] | undefined> = []
-  for (let r = 0; r < grid.length; r++) {
-    let lastVisible = -1
-    for (let c = 0; c < grid[r]!.length; c++) {
-      const entry = grid[r]![c]!
-      if (entry.skip) continue
-
-      if (entry.marker === '^' && r > 0) {
-        const up = base[c]
-        const src = up !== undefined ? grid[up]?.[c] : undefined
-        let coveredByVisibleSpan = false
-        if (src?.skip && up !== undefined) {
-          const left = colspanOrigins[up]?.[c] ?? -1
-          const origin = left >= 0 ? grid[up]![left] : undefined
-          coveredByVisibleSpan = !!origin && left + origin.colspan > c && up + origin.rowspan > r
-        }
-        if (src && (!src.skip || coveredByVisibleSpan)) {
-          // A `^` under a merged `<` is absorbed and renders nothing: the
-          // origin's rowspan is grown by the mark at its own index, and the
-          // count this one adds lands on the merged `<`, which renders nothing
-          // either (pipe-table parity).
-          src.rowspan++
-          entry.skip = true
-        }
-      } else if (entry.marker === '<' && c > 0) {
-        const left = lastVisible
-        const src = left >= 0 ? grid[r]![left] : undefined
-        if (src) {
-          src.colspan++
-          entry.skip = true
-          const origins = (colspanOrigins[r] ??= [])
-          origins[c] = left
-        }
-      }
-      if (!entry.skip) lastVisible = c
-
-      // Any cell that is not a RESOLVED `^` is what the cells below it in this
-      // column resolve against - a merged `<` included, because the column it
-      // covers is still a column of the grid.
-      if (!entry.skip || entry.marker === '<') base[c] = r
-    }
-  }
-
-  return grid
+  return resolveSpanGrid(grid, (entry) => entry.marker)
 }
 
 /**
