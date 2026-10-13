@@ -35,6 +35,6 @@ it('collapses tab indentation around label HTML line breaks', () => {
   expect(htmlToCarve(html, { mode: 'roundtrip' }).value).toBe('::: [Label]\nbody\n:::\n')
 })
 
-it('collapses ordinary paragraph tabs in plain mode', () => {
-  expect(htmlToCarve('<p>a\tb</p>').value).toBe('a b\n')
+it('keeps ordinary paragraph tabs in plain mode', () => {
+  expect(htmlToCarve('<p>a\tb</p>').value).toBe('a\tb\n')
 })

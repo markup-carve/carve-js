@@ -68,6 +68,12 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w).toEqual([])
   })
 
+  it('does not pair table rowspan markers as Djot superscript', () => {
+    const source = '|= 2-col header|<|= header|\n|spans 3 rows|foo|bar|\n|^|spans 4 cells|<|\n|^|^|<|'
+    expect(djotMigrationWarnings(source).filter(x => x.rule === 'djot-superscript-caret')).toEqual([])
+    expect(rules('x^2^')).toContain('djot-superscript-caret')
+  })
+
   it('keeps unmatched varied backticks literal while detecting later emphasis', () => {
     const prefix = 'x' + Array.from({ length: 128 }, (_, i) => '`'.repeat(i + 1) + 'x').join('') + ' '
     const source = prefix + '_later_'

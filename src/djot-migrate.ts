@@ -1,4 +1,4 @@
-import { isDjotEscaped, djotContentStart } from './djot-inline-boundaries.js'
+import { isDjotEscaped, djotContentStart, djotTableRows } from './djot-inline-boundaries.js'
 export { isDjotEscaped, djotContentStart, djotTableRows, djotInlineBoundaries } from './djot-inline-boundaries.js'
 /*
  * Djot -> Carve migration warnings.
@@ -838,6 +838,21 @@ function scanHits(source: string, nativeDjotCode = false): ScanHit[] {
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
   let masked = maskDjotCodeAndDestinations(norm, true, nativeDjotCode, true, undefined, [], {}, nativeDjotCode)
+  if (masked.includes('^') && masked.includes('|')) {
+    const rows = djotTableRows(norm, masked)
+    const chars = masked.split('')
+    let offset = 0
+    norm.split('\n').forEach((line, row) => {
+      if (rows[row]) {
+        for (const match of line.matchAll(/\|[ \t]*(\^)[ \t]*(?=\|)/g)) {
+          const at = offset + match.index + match[0].indexOf('^')
+          if (chars[at] === '^') chars[at] = ' '
+        }
+      }
+      offset += line.length + 1
+    })
+    masked = chars.join('')
+  }
   if (nativeDjotCode && norm.includes('{')) {
     const chars = masked.split('')
     for (let at = 0; at < norm.length; at++) {

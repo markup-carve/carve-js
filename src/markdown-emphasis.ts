@@ -43,7 +43,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     if (unit < 0xd800 || unit > 0xdfff) return source[index]!
     return left ? Array.from(source.slice(Math.max(0, index - 1), index + 1)).at(-1) ?? '' : Array.from(source.slice(index, index + 2))[0] ?? ''
   }
-  const punctuation = (s: string): boolean => /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\p{P}]/u.test(s)
+  const punctuation = (s: string): boolean => /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\p{P}\p{S}]/u.test(s)
   const whitespace = (s: string): boolean => s === '' || /\s/u.test(s)
   for (const m of source.matchAll(strikethrough ? /\*+|_+|~+/g : /\*+|_+/g)) {
     const start = m.index

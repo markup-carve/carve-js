@@ -135,7 +135,7 @@
     "id": "underscore-strike-22",
     "source": "~😀~_b_~\n",
     "native_html": "<p><del>😀</del>_b_~</p>\n",
-    "html": "<p><s>😀</s>_b_~</p>"
+    "html": "<p><s>😀</s><em>b</em>~</p>"
   },
   {
     "id": "underscore-strike-23",
