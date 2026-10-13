@@ -919,7 +919,7 @@ function parentContains(lists: { column: number; content: number }[], indent: nu
 }
 
 /** Normalize inline forms that have no delimiter conversion rule. */
-export function djotInlineLayout(source: string): string {
+export function djotInlineLayout(source: string, preserveQuote?: (at: number) => boolean): string {
   const comments = new Map<number, number>()
   const mask = maskDjotCodeAndDestinations(source, true, true, true, undefined, [], {
     onComment: (start, end) => comments.set(start, end),
@@ -982,7 +982,7 @@ export function djotInlineLayout(source: string): string {
       continue
     }
     const quote = quotes[source.slice(i, i + 2)]
-    if (quote) {
+    if (quote && !preserveQuote?.(i)) {
       output.push(quote)
       i++
       continue

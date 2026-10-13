@@ -19,8 +19,8 @@ type Opener = { start: number; end: number; kind: string; forced: boolean }
 
 export { djotStructuralPrefixSteps, djotStructuralPrefixEnd } from './djot-structural-prefix.js'
 
-export function djotEmphasis(source: string, convert: (plain: string) => string, flattened?: (offset: number) => void): string {
-  return processDjotEmphasis(source, convert, undefined, flattened)
+export function djotEmphasis(source: string, convert: (plain: string) => string, flattened?: (offset: number) => void, omitQuoteDelimiters = false): string {
+  return processDjotEmphasis(source, convert, undefined, flattened, omitQuoteDelimiters)
 }
 
 export function djotPairedEmphasisOpeners(source: string): Map<number, number> {
@@ -29,7 +29,7 @@ export function djotPairedEmphasisOpeners(source: string): Map<number, number> {
   return paired
 }
 
-function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void): string {
+function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void, omitQuoteDelimiters = false): string {
   const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
   const cells = new Set<number>()
   if (source.includes('|')) {
@@ -139,9 +139,11 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       }
     }
   }
-  const openers = new Map<string, Opener[]>(['_', '*', '~', '^', '{_', '{*', '{~', '{^'].map(key => [key, []]))
+  const delimiterKinds = ['_', '*', '~', '^', ...(omitQuoteDelimiters ? ["'", '"'] : [])]
+  const openers = new Map<string, Opener[]>(delimiterKinds.flatMap(kind => [kind, '{' + kind]).map(key => [key, []]))
   const pairs: Pair[] = []
   const structural = new Set<number>()
+  const omittedQuoteBraces = new Set<number>()
   const brackets: number[] = []
   const braces: number[] = []
   const bracketPairs: Array<[number, number]> = []
@@ -215,7 +217,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       }
       continue
     }
-    if (ch !== '_' && ch !== '*' && ch !== '~' && ch !== '^') continue
+    if (!delimiterKinds.includes(ch)) continue
     if (ch === '^' && captionLine && i === structuralEnd && (i === lineStart || /[ \t]/.test(source[i - 1]!))
       && source[i + 1] !== undefined && /[ \t]/.test(source[i + 1]!)) {
       structural.add(i)
@@ -234,7 +236,11 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     }
     const forcedOpen = source[i - 1] === '{' && mask[i - 1] === '{' && !isDjotEscaped(source, i - 1)
     const forcedClose = source[i + 1] === '}'
-    const canOpen = forcedOpen || (!forcedClose && source[i + 1] !== undefined && !/[ \t\r\n]/.test(source[i + 1]!))
+    if (omitQuoteDelimiters && (ch === '"' || ch === "'")) {
+      if (forcedOpen) omittedQuoteBraces.add(i - 1)
+      if (forcedClose) omittedQuoteBraces.add(i + 1)
+    }
+    const canOpen = forcedOpen || (!forcedClose && source[i + 1] !== undefined && !/[ \t\r\n]/.test(source[i + 1]!) && (ch !== "'" || i === 0 || /[ \t\r\n"'\-(\[]/.test(source[i - 1]!)))
     const canClose = !forcedOpen && (forcedClose || (i > 0 && !/[ \t\r\n]/.test(source[i - 1]!)))
     const stack = openers.get((forcedClose ? '{' : '') + ch)!
     const opener = stack.at(-1)
@@ -324,6 +330,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
         i = attrs.end - 1
         continue
       }
+      if (omittedQuoteBraces.has(i)) continue
       const ch = source[i]!
       if (ch === '\\') { text += source.slice(i, Math.min(end, i + 2)); i++; continue }
       if (ch === '=' && (validBraceClosers.has(i) || validBraces.has(i - 1))) {
@@ -386,6 +393,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       pair.children,
       new Set([...outer, pair.kind]),
     )
+    if (pair.kind === '"' || pair.kind === "'") return content
     const delimiter = pair.kind === '=' ? '=' : pair.kind === '_' ? '/' : pair.kind === '~' ? ',' : pair.kind ==='^' ? '^' : '*'
     const emptyBoundary =
       (mask[pair.end] === '{' && source.startsWith('{}', pair.end)) ||

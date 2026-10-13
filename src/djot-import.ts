@@ -875,19 +875,33 @@ function djotImageLabelText(normalizedLabel: string, convert: (source: string) =
     .replace(new RegExp(`${whitespacePrefix}(\\d+)Z`, 'g'), (all, index: string) => whitespace[Number(index)] ?? all)
 }
 
+function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string {
+  const imageQuotes = new Set<number>()
+  if (!omitQuoteDelimiters && source.includes('![')) {
+    replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), (image, label, at) => {
+      for (let i = 0; i < label.length; i++) if (label[i] === '"' || label[i] === "'") {
+        imageQuotes.add(at + 2 + i)
+        imageQuotes.add(at + 1 + i)
+      }
+      return image
+    })
+  }
+  return djotInlineLayout(source, at => omitQuoteDelimiters || imageQuotes.has(at))
+}
+
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   resetParagraphContext()
   try { return convertDjotInput(djot) } finally { resetParagraphContext() }
 }
 
-function convertDjotInput(djot: string, preserveReferenceBreaks = false): string {
-  if (!djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks)
+function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false): string {
+  if (!djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters)
   const token = '\0U\0'
-  return convertDjotDocument(djot.replaceAll('\0', token), preserveReferenceBreaks).replaceAll(token, '\0')
+  return convertDjotDocument(djot.replaceAll('\0', token), preserveReferenceBreaks, omitQuoteDelimiters).replaceAll(token, '\0')
 }
 
-function convertDjotDocument(djot: string, preserveReferenceBreaks = false): string {
+function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false): string {
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
@@ -904,7 +918,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
     return attrs
       .restore(
         collapseFalseListBoundaries(
-          djotEmphasis(attrs.source, (plain) => applyMigrationFixes(escapePlainDjotText(plain), true).output),
+          djotEmphasis(attrs.source, (plain) => applyMigrationFixes(escapePlainDjotText(plain), true).output, undefined, omitQuoteDelimiters),
         ).replaceAll(emptyTerm, '%%'),
         transform,
       )
@@ -913,11 +927,12 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
   const prefix = djotPlaceholderPrefix(body, '\x00DJOTSTRONG')
   const invalidAttributes = escapeInvalidDjotAttributes(carryDjotAttributesAcrossQuoteExits(carryDjotAttributesAcrossDivClosers(body)))
   const childTextCache = new Map<string, string>()
-  const imageChildText = (label: string): string => {
-    const cached = childTextCache.get(label)
+  const imageChildText = (label: string, omitQuotes = true): string => {
+    const key = `${omitQuotes ? 1 : 0}:${label}`
+    const cached = childTextCache.get(key)
     if (cached !== undefined) return cached
-    const text = djotImageLabelText(label, source => invalidAttributes.restore(convertDjotInput(source, true)))
-    childTextCache.set(label, text)
+    const text = djotImageLabelText(label, source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes)))
+    childTextCache.set(key, text)
     return text
   }
   // Carve has no empty footnote body: `[^b]:` alone is a paragraph, not a
@@ -929,7 +944,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
   const normalizedBody = normalizeDjotFootnotes(
     djotReferenceLayout(
       djotCodePadding(normalizeDjotFences(foldDjotReferences(
-        normalizeDjotAttributeLines(djotInlineLayout(normalizeDjotAttributeLines(invalidAttributes.source))),
+        normalizeDjotAttributeLines(imageQuoteLayout(normalizeDjotAttributeLines(invalidAttributes.source), omitQuoteDelimiters)),
       ))),
       djotContentStart, false, undefined, preserveReferenceBreaks,
     ),
@@ -973,7 +988,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
       const owner = collapsedImageLines[collapsedImageLine]!
       const layout = djotImageAltLayout(key, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div)
       if (!layout.valid) return value
-      key = imageChildText(layout.normalized).trim().replace(/[ \t\r\n]+/g, ' ')
+      key = imageChildText(layout.normalized, false).trim().replace(/[ \t\r\n]+/g, ' ')
     }
     key = key.trim().replace(/[ \t\r\n]+/g, ' ')
     const definition = definitions.get(key)
@@ -988,7 +1003,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
     if (imageMask[at] !== '!' || imageMask[at + image.length - 1] !== ']' || /\n[ \t]*\n/.test(label) || isDjotEscaped(rawFolded, at)) return image
     const paragraph = imageStarts.has(at) ? imageParagraph : ''
     if (label.startsWith('^')) return image
-    if (!label.includes('\n') && !/[_*`{^~\[\]]/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
+    if (!label.includes('\n') && !/[_*`{^~\[\]"']/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
       spans.push(label)
       return `${paragraph}![${prefix}${spans.length - 1}\x00]`
     }
@@ -1350,7 +1365,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
       let destination = djotDestinationLines(rawDestination, owner.depth)
       if (owner.image && !authoredLabel.includes('\n') && label.includes('[')) {
         const definitions = Array.from(label.matchAll(/\[(carve-djot-pipe-target-\d+)\]/g), match => pipeDefinitions.get(match[1]!) ?? '').filter(Boolean).join('\n')
-        label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true)), label.includes('\n'))
+        label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true, true)), label.includes('\n'))
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
           .replace(/[\[\]\\]/g, (value) => '\\' + value)
