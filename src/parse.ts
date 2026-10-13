@@ -7723,6 +7723,19 @@ function rebaseOverindentedBlocks(
           end = j
           continue
         }
+        if (descriptionColumn !== null && descriptionState?.lazyFoldable &&
+            column < descriptionColumn && RE_COMMENT_LINE.test(candidate.trimStart())) {
+          // X1 admits a below-column comment without ending its description.
+          // The next line still chooses its owner by the description column.
+          descriptionState.lazyFoldable = false
+          const width = commentFenceRun(candidate.trimStart())
+          if (width !== undefined) {
+            const close = (commentCloser ??= commentCloserLookup(lines))(width, j)
+            if (close > j) j = close
+          }
+          end = j
+          continue
+        }
         if (column < base) break
         const local = sliceColumns(candidate, base, true)
         const description = column === base ? RE_DEFLIST_DEF.exec(local) : null
