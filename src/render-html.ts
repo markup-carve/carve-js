@@ -909,7 +909,8 @@ function collectFootnotes(ast: Document): FootnoteState {
   for (const { node: n, orderIndex } of refs) {
     const number = orderIndex + 1
     const occ = (seen[orderIndex] = (seen[orderIndex] ?? 0) + 1)
-    const refId = occ === 1 ? `fnref${number}` : `fnref${number}-${occ}`
+    // An authored id replaces the generated one, and the backlink follows it (PART 9 §16).
+    const refId = n.attrs?.id ?? (occ === 1 ? `fnref${number}` : `fnref${number}-${occ}`)
     n.refId = refId
     order[orderIndex]!.backrefs.push(refId)
   }
@@ -1068,7 +1069,7 @@ function renderFootnoteSectionInner(
     const blink = entry.backrefs
       .map((rid, k) => {
         const name = escapeAttr(multiRef ? `${backlinkLabel} ${k + 1}` : backlinkLabel)
-        return `<a href="#${rid}" role="doc-backlink" aria-label="${name}">↩${multiRef ? `<sup>${k + 1}</sup>` : ''}</a>`
+        return `<a href="#${escapeAttr(rid)}" role="doc-backlink" aria-label="${name}">↩${multiRef ? `<sup>${k + 1}</sup>` : ''}</a>`
       })
       .join(multiRef ? ' ' : '')
     const last = body.length - 1
@@ -2677,8 +2678,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
           ? ` ${carrier('footnote-label')}="${escapeAttr(node.label)}"`
           : ''
         if (insideLink)
-          return `<sup id="${node.refId}"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}>${node.number}</sup>`
-        return `<a id="${node.refId}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
+          return `<sup id="${escapeAttr(node.refId!)}"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}>${node.number}</sup>`
+        return `<a id="${escapeAttr(node.refId!)}" href="#fn${node.number}" role="doc-noteref"${labelAttr}${renderAttrs2(node.attrs, { dropId: true })}><sup>${node.number}</sup></a>`
       }
     case 'non_breaking_space':
       return node.attrs ? `<span${renderAttrs(node.attrs)}>&nbsp;</span>` : '&nbsp;'

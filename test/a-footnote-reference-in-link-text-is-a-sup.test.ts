@@ -39,12 +39,12 @@ describe('a footnote reference in link text renders as a sup', () => {
     expect(html).toContain('href="#fnref1-2" role="doc-backlink"')
   })
 
-  it('moves authored attributes to the sup and keeps its structural id', () => {
+  it('moves authored attributes to the sup and lets an authored id replace the generated one', () => {
     const html = carveToHtml(`[t[^1]{#author .x title="note"}](/u) [^1]{.outside}
 
 [^1]: n
 `)
-    expect(html.split('\n')[0]).toBe('<p><a href="/u">t<sup id="fnref1" class="x" title="note">1</sup></a> <a id="fnref1-2" href="#fn1" role="doc-noteref" class="outside"><sup>1</sup></a></p>')
+    expect(html.split('\n')[0]).toBe('<p><a href="/u">t<sup id="author" class="x" title="note">1</sup></a> <a id="fnref1-2" href="#fn1" role="doc-noteref" class="outside"><sup>1</sup></a></p>')
   })
 
   it('moves the roundtrip label carrier to the sup', () => {
