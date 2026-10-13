@@ -827,7 +827,7 @@
   {
     "id": "review8-c02-below-column-comment-043",
     "source": "- :::: box\n  - ::: in\n%%%\n  ```\n      ```\nTAILX\n",
-    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <div class=\"in\">\n\n          </div>\n        </li>\n      </ul>\n      <pre><code>    ```\n</code></pre>\n    </div>\n  </li>\n</ul>\n<p>TAILX</p>"
+    "html": "<ul>\n  <li>\n    <div class=\"box\">\n      <ul>\n        <li>\n          <div class=\"in\">\n\n          </div>\n        </li>\n      </ul>\n    </div>\n  </li>\n</ul>\n<p><code>\n</code>\nTAILX</p>"
   },
   {
     "id": "review8-older-o03-overindented-fence-colon-004",

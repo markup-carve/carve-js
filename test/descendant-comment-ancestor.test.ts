@@ -21,15 +21,17 @@ describe('descendant comments retain the enclosing item at a positive dedent', (
     expect(carveToHtml(source)).toBe(html)
   })
 
-  it.each(cases.filter(({ id }) => id.startsWith('comment-target-') && id.endsWith('# h')))('$id keeps the heading-shaped text in the outer item', ({ id, source }) => {
+  it.each(cases.filter(({ id }) => id.startsWith('comment-target-') && id.endsWith('# h')))('$id releases heading-shaped text after an at-column comment', ({ id, source }) => {
     const document = parse(source)
-    expect(document.children).toHaveLength(id === 'comment-target-d2-false-# h' ? 2 : 1)
+    expect(document.children).toHaveLength(id.includes('-false-') ? 2 : 1)
     const container = document.children[0]!
     const list = container.type === 'block_quote' ? container.children[0]! : container
     expect(list.type).toBe('list')
     if (list.type !== 'list') throw new Error('expected outer list')
     expect(list.items).toHaveLength(1)
-    expect(list.items[0]!.children.at(-1)?.type).toBe(id.startsWith('comment-target-d2-') ? 'list' : 'paragraph')
+    expect(list.items[0]!.children.at(-1)?.type).toBe('list')
+    const siblings = container.type === 'block_quote' ? container.children : document.children
+    expect(siblings.map(({ type }) => type)).toEqual(['list', 'paragraph'])
     expect(carveToHtml(source)).not.toContain('<h1>')
   })
 })
