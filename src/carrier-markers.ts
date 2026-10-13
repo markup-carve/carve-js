@@ -127,8 +127,8 @@ export function spellCarrierMarkers(
 
   return {
     prelude: lines.slice(0, open),
-    // A trailing space distinguishes a bare div opener from the closing payload.
-    opener: widen(lines[open]!) + (carrierIsCloser(lines[open]!) ? ' ' : ''),
+    // A bare div's opener is the same bytes as its closer (CARVE-P11-063).
+    opener: widen(lines[open]!),
     closer: widen(lines[close]!),
     postlude: lines.slice(close + 1).filter((line) => line !== ''),
   }

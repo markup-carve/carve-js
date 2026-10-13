@@ -35,7 +35,7 @@ Carve's blank-line-around-blocks rule:
 
 The default dialect is **CommonMark plus GFM, plus footnote references**, so a
 source construct none of those defines stays as written rather than becoming
-Carve markup. Seven flavor extensions are opt-in through the second argument:
+Carve markup. Six flavor extensions are opt-in through the second argument:
 
 ```ts
 markdownToCarve('a ==hi== ^up^ $x$', { highlight: true, superscript: true, math: true })
@@ -48,7 +48,6 @@ markdownToCarve('a ==hi== ^up^ $x$', { highlight: true, superscript: true, math:
 | `^x^`                 | Pandoc             | `superscript`     | literal                   | `{^x^}`               |
 | `$x$`                 | Pandoc, GitHub     | `math`            | literal                   | `` $`x` ``            |
 | `^[body]`             | Pandoc             | `inlineFootnotes` | `\^[body]`                | an inline footnote    |
-| `*[HTML]: HyperText`  | PHP Markdown Extra | `abbreviations`   | `\*[HTML]: HyperText`     | an abbreviation       |
 | `::: note`            | Pandoc, Quarto     | `fencedDivs`      | `\::: note`               | a div                 |
 | `[t]{.c}`, `{.c}`     | Pandoc, kramdown   | `attributes`      | `[t]\{.c}`, `\{.c}`       | attributes            |
 
@@ -58,10 +57,16 @@ and the emphasis family are all escaped with it off. A braced delimiter pair is
 not an attribute list and is never escaped as one - `{,x,}` is a subscript in
 Carve wherever it stands, and it is what `<sub>x</sub>` converts to.
 
-The last four differ from the first three in how they got here: Carve spells
+The last three differ from the first three in how they got here: Carve spells
 them the way the source does, so nothing had to be rewritten for a CommonMark
 document to grow markup its author never saw. Escaping is what keeps them
 literal, which is why the "off" column shows a backslash.
+
+**`*[HTML]: HyperText` is read by default** as an abbreviation definition
+(PHP Markdown Extra), because Carve's own Markdown export writes that line
+(CARVE-P11-033 T1). An `<abbr>` whose title is the expansion a definition in the
+same document gives its text comes back as the plain term. Pass
+`{ abbreviations: false }` to keep the line literal as `\*[HTML]: HyperText`.
 
 A handful of Carve constructs have no Markdown spelling in any flavor and are
 always escaped, with no flag: `` a $`x` `` and `` a $$`x` `` (math spans),

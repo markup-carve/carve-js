@@ -174,6 +174,9 @@ for (const fixture of fixtures.markdownExportImport) test(`shared Markdown expor
   const ordinary = carveToMarkdown(fixture.source)
   assert.equal(carveToMarkdown(fixture.source, { roundtrip: false }), ordinary)
   assert.ok(!ordinary.includes('<!-- carve:'))
+  for (const fragment of fixture.ordinaryFragments ?? []) assert.ok(ordinary.includes(fragment), fragment)
+  for (const fragment of fixture.forbiddenOrdinaryFragments ?? []) assert.ok(!ordinary.includes(fragment), fragment)
+  if (fixture.defaultExportOnly) return
   const exported = carveToMarkdown(fixture.source, { roundtrip: true })
   if (fixture.inlineMarkers) assert.equal(exported.replace(/<!-- carve: [\s\S]*? -->/g, ''), ordinary)
   for (const fragment of fixture.carrierFragments) assert.ok(exported.includes(fragment), fragment)
