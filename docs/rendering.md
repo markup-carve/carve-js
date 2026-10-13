@@ -336,6 +336,31 @@ where that escape would land grows by one, so the transform reverses exactly.
 Nothing else is escaped: the payload is Carve source, and Carve's own escape is
 the one the reader already has.
 
+A bare div's opener is `:::` with nothing after it, so its marker is
+`<!-- carve: ::: -->`, the same bytes as its closer's. The import tells them
+apart by the containers already open: a bare fence of the innermost opener's
+width closes it, any other opens one.
+
+A payload may span lines. A definition term the canonical writer spells over two
+lines is written across them, and the import reads the whole comment as one
+marker and restores the line break:
+
+```markdown
+<!-- carve: :: A term that
+wraps onto the next line -->
+**A term that
+wraps onto the next line**
+```
+
+### Reference links
+
+Under roundtrip export a link that resolved through a reference definition keeps
+its reference form, `[a][r]` or `[r][]`, and the definition writes its
+`[r]: /u` line where it stands (CARVE-P11-028). Markdown has the construct, so
+no marker is needed. Without the mode the link is written inline and a
+referenced definition writes no line. A label Markdown would case-fold onto
+another definition's stays inline.
+
 ### Attribute lines, definition lists, captions and fence titles
 
 Four constructs that are not containers take markers too (`CARVE-P11-067`).

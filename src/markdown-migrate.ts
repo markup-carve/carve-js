@@ -1097,7 +1097,10 @@ export interface MarkdownDialect {
   math?: boolean
   /** `^[body]` is an inline footnote (Pandoc). */
   inlineFootnotes?: boolean
-  /** `*[HTML]: HyperText` defines an abbreviation (PHP Markdown Extra). */
+  /**
+   * `*[HTML]: HyperText` defines an abbreviation (PHP Markdown Extra). On
+   * unless `false`: the Markdown target writes the line (CARVE-P11-033 T1).
+   */
   abbreviations?: boolean
   /** `::: note` opens a fenced div (Pandoc, Quarto). */
   fencedDivs?: boolean
@@ -1174,7 +1177,7 @@ function escapeCarveConstructsSpelledLikeText(
     out = out.replace(/(?<!\\)\^(?=\[)/g, '\\^')
   }
 
-  if (!dialect.abbreviations) {
+  if (dialect.abbreviations === false) {
     // `*[HTML]: HyperText` defines an abbreviation: the definition line
     // disappears from the render and every later `HTML` becomes an `<abbr>`.
     // Carve wants the space after the colon, so `*[A]:x` is already literal.
@@ -2942,7 +2945,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   carrierToken = ''
   if (!markdown.includes(CARRIER_HEAD)) return markdown
 
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const { lines, lineNumbers, markerLines, spanned } = joinSpannedCarrierMarkers(markdown.replace(/\r\n?/g, '\n').split('\n'), blockLines, sourceLineNumbers)
   const dropped: MarkdownImportLoss[] = []
   const payloads = new Map<number, string>()
   const hosts = new Map<number, string>()
@@ -2954,9 +2957,9 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   // derives answers that at every indent and behind every host prefix, which a
   // fence scan over the raw lines could not (markup-carve/carve#2850).
   for (const [at, line] of lines.entries()) {
-    if (!blockLines.has(at)) continue
+    if (!markerLines.has(at)) continue
     const host = carrierHostPrefix(line)
-    const marker = carrierMarker(line.slice(host.length))
+    const marker = carrierMarker(spanned.get(at) ?? line.slice(host.length))
     if (marker !== undefined) {
       const { payload, depth } = marker
       if (depth === 1 && inlineCarriersEnabled && (payload === '[' || payload.startsWith(']{') || payload.startsWith('</#'))) continue
@@ -2966,6 +2969,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     }
   }
   if (payloads.size === 0 && dropped.length === 0) return markdown
+  classifyBareFencePayloads(payloads)
   // Pair by shape before checking whether each payload can be restored.
   const pairs = new Map<number, number>()
   const reversePairs = new Map<number, number>()
@@ -3023,7 +3027,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
       dropped.push({
         code: 'carrier-marker-dropped',
         message: `${isOpener ? CARRIER_MARKER_PAIR_DROPPED : CARRIER_MARKER_DROPPED}: ${lines[at]!.slice(hosts.get(at)!.length)}`,
-        line: sourceLineNumbers?.[at] ?? at + 1,
+        line: lineNumbers[at]!,
         fidelity: 'degraded',
         confidence: 'fallback',
       })
@@ -3090,6 +3094,77 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   }
 
   return out.join('\n')
+}
+
+/**
+ * Join a marker whose payload spans lines into one entry (CARVE-P11-063). The
+ * entry keeps the raw lines, so an unlifted marker comes back verbatim, and
+ * `spanned` holds the comment with each later line's host prefix removed.
+ * The scan for the closing `-->` only moves forward, which keeps it linear.
+ */
+function joinSpannedCarrierMarkers(raw: readonly string[], blockLines: ReadonlySet<number>, sourceLineNumbers?: readonly number[]): {
+  lines: string[]
+  lineNumbers: number[]
+  markerLines: Set<number>
+  spanned: Map<number, string>
+} {
+  const lines: string[] = []
+  const lineNumbers: number[] = []
+  const markerLines = new Set<number>()
+  const spanned = new Map<number, string>()
+  let close = 0
+  for (let at = 0; at < raw.length; at++) {
+    const line = raw[at]!
+    const number = sourceLineNumbers?.[at] ?? at + 1
+    if (blockLines.has(at)) {
+      const host = carrierHostPrefix(line)
+      const head = line.slice(host.length)
+      if (head.startsWith(CARRIER_HEAD) && !head.includes('-->')) {
+        if (close <= at) close = at + 1
+        while (close < raw.length && !raw[close]!.includes('-->')) close++
+        const continuation = host.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+        const comment = close < raw.length ? [head, ...raw.slice(at + 1, close + 1).map(rest => withoutCarrierHost(rest, continuation))].join('\n') : ''
+        if (comment !== '' && carrierMarker(comment) !== undefined) {
+          markerLines.add(lines.length)
+          spanned.set(lines.length, comment)
+          lines.push(raw.slice(at, close + 1).join('\n'))
+          lineNumbers.push(number)
+          at = close
+          continue
+        }
+      }
+      markerLines.add(lines.length)
+    }
+    lines.push(line)
+    lineNumbers.push(number)
+  }
+  return { lines, lineNumbers, markerLines, spanned }
+}
+
+/**
+ * A bare div's opener and every closer are the same bytes, `:::` (CARVE-P11-063),
+ * so which one a payload is follows from the open containers: a bare fence of
+ * the innermost opener's width closes it, any other opens. An opener is given
+ * the trailing space it keeps through the rest of the import, the spelling an
+ * older export wrote, which is still read.
+ */
+function classifyBareFencePayloads(payloads: Map<number, string>): void {
+  const open: number[] = []
+  for (const [at, payload] of payloads) {
+    const width = carrierFenceWidth(payload)
+    if (width === 0) continue
+    if (!carrierIsCloser(payload)) {
+      open.push(width)
+      continue
+    }
+    const innermost = open.at(-1)
+    if (innermost !== undefined && width <= innermost) {
+      open.pop()
+      continue
+    }
+    payloads.set(at, `${payload} `)
+    open.push(width)
+  }
 }
 
 /**
@@ -3353,10 +3428,14 @@ function restoreCarrierMarkers(carve: string): string {
     const slot = carrierSlots[Number(match[1])]!
     const kind: CarrierLineKind = slot.caption ? 'caption' : slot.closer ? 'close' : 'open'
 
-    return { lead: line.slice(0, at), text: slot.payload, kind, ...(slot.depth > 1 ? { depth: slot.depth } : {}), ...(slot.fence ? { fence: true as const } : {}) }
+    // The space classifyBareFencePayloads gave a bare opener is not source.
+    const text = /^:{3,} $/.test(slot.payload) ? slot.payload.trimEnd() : slot.payload
+    return { lead: line.slice(0, at), text, kind, ...(slot.depth > 1 ? { depth: slot.depth } : {}), ...(slot.fence ? { fence: true as const } : {}) }
   })
 
-  return restoreFenceCarriers(restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items)))).map((item) => item.lead + item.text).join('\n')
+  // A payload spanning lines continues behind the lead's continuation (CARVE-P11-063).
+  return restoreFenceCarriers(restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items))))
+    .map((item) => item.lead + item.text.replace(/\n/g, `\n${item.lead.replace(/[^>\t]/g, ' ')}`)).join('\n')
 }
 
 /** The title and label a fence marker's opener holds, or undefined when it opens no fenced code block. */
@@ -5871,6 +5950,7 @@ export function markdownToCarveWithLosses(
       losses.push({ code: 'carrier-markers-damaged', message: CARRIER_MARKERS_DAMAGED, fidelity: 'degraded', confidence: 'fallback' })
       value = convertMarkdown(markdown, dialect)
     }
+    if (dialect.abbreviations !== false && value.includes('{abbr="')) value = foldDefinedAbbreviations(value)
     const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
     if (value.includes('@') || usedBoundaryKey !== undefined) {
       const document = parse(value)
@@ -5895,6 +5975,46 @@ export function markdownToCarveWithLosses(
     inlineRunSourceLine = undefined
     importSourceLine = undefined
   }
+}
+
+/**
+ * An `<abbr>` whose title is the expansion a definition in the document gives
+ * its text comes back as the plain term that definition resolves
+ * (CARVE-P11-033 T1). Only a span written exactly as the abbr import spells
+ * it is replaced.
+ */
+function foldDefinedAbbreviations(carve: string): string {
+  const document = parse(carve)
+  const expansions = new Map<string, string>()
+  const spans: Array<{ start: number; end: number; term: string }> = []
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child)
+      return
+    }
+    const node = value as Record<string, any>
+    if (node.type === 'abbreviation_def' && !expansions.has(node.abbr)) expansions.set(node.abbr, node.expansion)
+    // The span's text must itself resolve as the abbreviation, or the plain
+    // term would come back without one.
+    if (node.type === 'span' && node.pos?.startOffset !== undefined && node.children?.length === 1 && node.children[0].type === 'abbreviation') {
+      const attrs = node.attrs
+      const keys = Object.keys(attrs?.keyValues ?? {})
+      if (keys.length === 1 && keys[0] === 'abbr' && attrs.id === undefined && !(attrs.classes?.length) && node.children[0].expansion === attrs.keyValues.abbr) {
+        spans.push({ start: node.pos.startOffset, end: node.pos.endOffset, term: node.children[0].abbr })
+      }
+    }
+    for (const child of Object.values(node)) visit(child)
+  }
+  visit(document.children)
+  if (expansions.size === 0) return carve
+  let out = carve
+  for (const span of spans.sort((a, b) => b.start - a.start)) {
+    const expansion = expansions.get(span.term)
+    if (expansion === undefined || out.slice(span.start, span.end) !== `[${span.term}]{abbr="${expansion}"}`) continue
+    out = out.slice(0, span.start) + span.term + out.slice(span.end)
+  }
+  return out
 }
 
 /**

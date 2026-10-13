@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { carveToMarkdown, migrateMarkdown, parse } from '../src/index.js'
-import { carrierIsCloser, carrierPayload } from '../src/carrier-markers.js'
+import { carrierPayload } from '../src/carrier-markers.js'
 
 const tree = (source: string) =>
   JSON.parse(
@@ -41,7 +41,7 @@ it.each([
   // These existing losses are outside term grouping and fence ownership.
   const remainingLosses: Record<string, string> = {
     '227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace':
-      ':: term\n: {empty}\n\nsee [t](/u)\n',
+      ':: term\n: {empty}\n\nsee [t][r]\n\n[r]: /u\n',
     '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-5': '- x\n  :::\n  a\n  \\- m\n  b\n  :::\n',
   }
   expect(tree(result.value)).toEqual(tree(remainingLosses[slug] ?? source))
@@ -54,9 +54,8 @@ it('distinguishes a bare div opener from its single closer at each host', () => 
       const payload = carrierPayload(line.slice(line.indexOf('<!-- carve:')))
       return payload === undefined ? [] : [payload]
     })
-    expect(payloads.filter(carrierIsCloser)).toHaveLength(
-      payloads.filter((payload) => !carrierIsCloser(payload)).length,
-    )
+    // CARVE-P11-063: a bare opener is `:::` alone, the same bytes as a closer.
+    expect(payloads.filter((payload) => /\s$/.test(payload))).toEqual([])
     const result = migrateMarkdown(markdown)
     expect(result.report.diagnostics.filter((d) => d.code === 'carrier-markers-damaged')).toEqual([])
     expect(tree(result.value)).toEqual(tree(source))
