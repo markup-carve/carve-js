@@ -66,6 +66,23 @@ describe('a continuation join inside a verbatim inline', () => {
     expect(renderCarve(parse('| `a😀 |\n+ b` |\n'))).toBe('| `a😀 |\n+ b` |\n')
   })
 
+  it('keeps joins consumed as opening or closing code-span padding', () => {
+    for (const [source, value, offset] of [
+      ['| ` |\n+ b ` |\n', 'b', 0],
+      ['| ` a |\n+ ` |\n', 'a', 1],
+    ] as const) {
+      expect(cellOf(source)).toEqual([{ type: 'code', value, cellWraps: [{ offset, line: 1 }] }])
+      expect(withoutPos(parse(renderCarve(parse(source))).children)).toEqual(withoutPos(parse(source).children))
+    }
+  })
+
+  it('does not apply table boundary markers outside a table cell', () => {
+    const doc = parse('`b`\n')
+    const code = atPointer(doc, '/children/0/children/0') as { cellWraps?: Array<{ offset: number; line: number }> }
+    code.cellWraps = [{ offset: 0, line: 1 }]
+    expect(renderCarve(doc)).toBe('`b`\n')
+  })
+
   it('carries a join into an unclosed code span', () => {
     expect(cellOf('| `a |\n+ b |\n')).toEqual([{ type: 'code', value: 'a b', cellWraps: [{ offset: 1, line: 1 }] }])
   })
@@ -75,10 +92,10 @@ describe('a continuation join inside a verbatim inline', () => {
     expect(carveToHtml('| `a |\n+ b` |\n')).toBe(carveToHtml('| `a b` |\n'))
   })
 
-  it('refuses an offset that does not name a space', () => {
+  it('refuses an interior offset that does not name a space', () => {
     const doc = parse('| `a |\n+ b` |\n')
     const code = atPointer(doc, '/children/0/rows/0/cells/0/children/0') as { cellWraps: Array<{ offset: number }> }
-    code.cellWraps[0]!.offset = 0
+    code.cellWraps[0]!.offset = 2
     expect(() => renderCarve(doc)).toThrow(/cellWraps offset/)
   })
 })

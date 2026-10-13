@@ -16172,11 +16172,15 @@ class ParseSession {
    * The scanner skips the payload, so its joins would otherwise vanish; a
    * join consumed as padding has no space left to point at and is dropped.
    */
-  private verbatimCellWraps(text: string, source: InlineSource, start: number, payload: string): VerbatimCellWrap[] | undefined {
+  private verbatimCellWraps(text: string, source: InlineSource, start: number, payload: string, strippedPadding = false): VerbatimCellWrap[] | undefined {
     if (!source.cellWraps) return undefined
     const shift = source.wrapShift ?? 0
     let wraps: VerbatimCellWrap[] | undefined
     let codepoints = 0
+    if (strippedPadding) {
+      const wrap = source.cellWraps.get(start - 1 + shift)
+      if (wrap) (wraps ??= []).push({ offset: 0, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+    }
     for (let j = start; j < start + payload.length; j++) {
       const code = text.charCodeAt(j)
       if (code === 32) {
@@ -16184,6 +16188,10 @@ class ParseSession {
         if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
       }
       if (code < 0xdc00 || code > 0xdfff || j === start || (text.charCodeAt(j - 1) & 0xfc00) !== 0xd800) codepoints++
+    }
+    if (strippedPadding) {
+      const wrap = source.cellWraps.get(start + payload.length + shift)
+      if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
     }
     return wraps
   }
@@ -16632,7 +16640,7 @@ class ParseSession {
         }
         const padded = text.slice(i + openLen, end - openLen)
         const inner = stripVerbatimPadding(padded)
-        const cellWraps = this.verbatimCellWraps(text, source, i + openLen + (padded.length - inner.length) / 2, inner)
+        const cellWraps = this.verbatimCellWraps(text, source, i + openLen + (padded.length - inner.length) / 2, inner, padded.length !== inner.length)
         // A verbatim span tagged `{=format}` is raw inline passthrough.
         const raw = RE_RAW_INLINE.exec(text.slice(end))
         if (raw) {
