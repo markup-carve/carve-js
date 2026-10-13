@@ -13223,6 +13223,8 @@ class ParseSession {
       let consumedNoteParagraphBefore = false
       let descendantFenceMemos: Map<number, QuotedFenceCloserMemo> | undefined
       let nestedOwnerColumn = markerContentColumn(content, terminatorFree)
+      let nestedOwnerIsList = false
+      let closedListFence = false
       const markerLineTerm = RE_DEFLIST_TERM.test(content)
       let singleMarkerTerm = markerLineTerm
       let markerDescriptionColumn: number | undefined
@@ -13263,13 +13265,15 @@ class ParseSession {
             const markerColumn = markerContentColumn(entry.line)
             const opener = entry.line.trimStart()
             const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
-            const closedFence = fence !== null && itemFenceHasCloser(
+            const closedFence = !markerNoteItem && nestedOwnerIsList && fence !== null && itemFenceHasCloser(
               lexer, RE_FENCE.test(opener) ? fence[2]! : fence[1]!, entry.index,
               contentCol + column, new Map(), itemEndsAt,
             )
             if (nestedOwnerColumn < 0 || entry.followsBlank || markerColumn >= 0 ||
               lineOpensItemBlock(entry.line) || closedFence) {
               nestedOwnerColumn = markerColumn
+              nestedOwnerIsList = isListMarkerLine(entry.line)
+              if (closedFence) closedListFence = true
               // Track a new fence at its authored base so a later dedent cannot
               // fold into its body as paragraph text. Deeper items track their own
               // fences when their collected content is parsed.
@@ -13305,7 +13309,7 @@ class ParseSession {
           if (indentColumns(line, descendantOpaque.base) < descendantOpaque.base) descendantOpaque = null
         }
         const child = nestedOwnerColumn
-        if (child < 0 && opener === line.replace(/^[ \t]+/, '') && !opensCodeFence(opener)) return
+        if (child < 0 && opener === line.replace(/^[ \t]+/, '') && !closedListFence) return
         // BELOW A CHILD'S COLUMN THE CHILD IS OVER, and so is any fence it held:
         // the base is at or past that column, so such a line is never payload.
         // What a later below-column line reads is whether an ANCESTOR is left
@@ -13340,6 +13344,7 @@ class ParseSession {
               consumedNoteParagraphBefore = descendantNoteParagraphBefore
             }
             descendantOpaque = null
+            closedListFence = false
             return
           }
           // ANY OTHER LINE BELOW THE BASE IS NOT PAYLOAD. It ends the fence
