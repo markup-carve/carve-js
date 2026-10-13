@@ -123,6 +123,17 @@ describe('list-style-dropped on the Markdown target', () => {
     expect(parse(migrateMarkdown(exported.value).value).children.find(node => node.type === 'list')).toMatchObject({ olType: 'a' })
   })
 
+  it('reports an ordered delimiter changed to keep adjacent lists separate', () => {
+    const source = 'a. one\n\n1. two\n'
+    const exported = carveToMarkdownWithReport(source, { roundtrip: true })
+    expect(exported.value).toContain('1) two')
+    expect(exported.losses).toMatchObject([{
+      code: 'list-delimiter-changed', target: 'markdown', nodeType: 'block', authored: '.', emitted: ')',
+    }])
+    expect(exported.totalLosses).toBe(1)
+    expect(carveToMarkdownWithReport('a. one\n\n1) two\n', { roundtrip: true }).losses).toEqual([])
+  })
+
   it('rejects a separated list-style marker in a footnote body', () => {
     const markdown = '[^n]: text\n\n    <!-- carve: a. -->\n\n    1. one\n'
     expect(migrateMarkdown(markdown).report.diagnostics.filter(row => row.code === 'carrier-markers-damaged')).toHaveLength(1)
