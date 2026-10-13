@@ -14639,6 +14639,19 @@ class ParseSession {
       // this, attaching the comment consumed the signal and `- a` / blank /
       // `  %% n` / `- b` came out tight, where the same document without the
       // comment is loose.
+      // A marker-line note's body runs like a nested definition's, opened by the
+      // lead line; its blanks are the note's. A comment closes the note's
+      // paragraph, so the run ends with it.
+      let markerNoteRunEnd = -1
+      if (markerNoteItem) {
+        for (let j = 0; j < nested.length; j++) {
+          const next = nested[j]!
+          if (isBlankLine(next)) continue
+          if (indentColumns(next, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
+          markerNoteRunEnd = j
+          if (RE_COMMENT_LINE.test(next.trimStart())) break
+        }
+      }
       let blankBeforeInvisible = false
       // A comment BLOCK renders nothing either, and its payload is not an
       // invisible LINE, so the scan steps over the whole block. Only an item
@@ -14654,7 +14667,7 @@ class ParseSession {
           // makes for it. Without this the item went loose through the back door:
           // `- a` / `+` / `%% note` / `- b` came out loose where the identical
           // document without the comment is tight.
-          blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k)
+          blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k) && k > markerNoteRunEnd
           break
         }
         if (!invisibleNested(k)) break
@@ -14708,7 +14721,11 @@ class ParseSession {
             ? orderedContinues(nextStripped, orderedKind, orderedDelim)
             : unorderedMarkerChar(nextStripped) === firstMarkerChar)
       }
-      if ((pendingBlanks > 0 || blankBeforeInvisible) && nextIsSibling()) {
+      // Blanks before the comment that closes the note are the note's.
+      const closingNoteComment = noteCommentLines.size === 0 && pendingNoteComments.size > 0 ? Math.min(...pendingNoteComments) : -1
+      const separatingBlanks = closingNoteComment < 0 ? pendingBlanks
+        : pendingBlankTexts.filter((_, index) => index > closingNoteComment && !pendingNoteComments.has(index)).length
+      if ((separatingBlanks > 0 || blankBeforeInvisible) && nextIsSibling()) {
         // A run of THREE OR MORE blank lines is a hard boundary (§11 N1): the
         // sibling marker after it opens a new list instead of joining this
         // one. One or two blank lines remain the ordinary loose separator
@@ -14890,6 +14907,7 @@ class ParseSession {
         for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
         k = last
       }
+      for (let j = 0; j <= markerNoteRunEnd; j++) inFootnoteRun[j] = true
       for (let k = 0; k < nested.length; k++) {
         if (inFence[k + 1]!) continue
         if (inFootnoteRun[k]!) continue
