@@ -5137,6 +5137,7 @@ function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
   const root = lexer.rootLines ?? lexer.lines
   const line = root[lexer.lineNumber(lexer.pos) - 1]
   if (line === undefined) return true
+  if (/^[ \t]+>/.test(line)) return false
   let rest = line
   for (;;) {
     const m = /^[ \t]*>[ \t]?/.exec(rest)
