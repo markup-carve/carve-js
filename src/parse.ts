@@ -5976,7 +5976,7 @@ function trackItemLazyState(
     state.deepest = null
     const base = state.opaque.column ?? 0
     const column = indentColumns(content, base + 1)
-    if ((column === 0 || column === base) && state.opaque.close.test(column === 0 ? content : sliceColumns(content, base, true))) state.opaque = null
+    if (column <= base && state.opaque.close.test(content.trimStart())) state.opaque = null
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -14114,9 +14114,12 @@ class ParseSession {
             if (tabFenceSourceColumn === undefined || tabLineFacts?.has(tabFenceOpenerIndex!) !== true) {
               if (authoredFenceBase > 0 && indentColumns(dedented, authoredFenceBase) >= authoredFenceBase) {
                 trackedContent = sliceColumns(dedented, authoredFenceBase, true)
+              } else if (authoredFenceBase > 0) {
+                // Below the authored base the whole indent is available prefix, so a closer run still closes.
+                trackedContent = dedented.trimStart()
               }
             } else {
-              if ((indentColumns(l) === tabFenceSourceColumn || indentColumns(l) === contentCol) &&
+              if (indentColumns(l) >= contentCol && indentColumns(l) <= tabFenceSourceColumn &&
                   lazyState.opaque.close.test(l.slice(leadingWhitespace(l)))) {
                 lazyState.opaque = null
                 tabFenceSourceColumn = undefined
