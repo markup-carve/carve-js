@@ -2922,7 +2922,7 @@
   {
     "id": "review-242",
     "source": "- :: a\n  :: b\n  : p\n    ```\n  ::: note\n    {.x}\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>p\n<code></code></dd>\n    </dl>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>{.x}</p>\n    </aside>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>a</dt>\n      <dt>b</dt>\n      <dd>p\n<code></code></dd>\n    </dl>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ul>"
   },
   {
     "id": "review-243",

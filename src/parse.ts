@@ -7154,6 +7154,12 @@ function hostedAuthoredBlockOpener(text: string): boolean {
     (!RE_ADMONITION_CLOSE.test(text) && colonBlockOpenerRun(text) !== null)
 }
 
+// CARVE-P0-004, CARVE-P0-011: in a list item's colon body a link definition or an
+// attribute line past the box's column also opens on its authored base (carve#3087).
+function hostedColonBodyOpener(text: string): boolean {
+  return hostedAuthoredBlockOpener(text) || (isLinkDefLine(text) && !RE_FOOTNOTE_DEF.test(text)) || isBlockAttributeLine(text.trimEnd())
+}
+
 /** Whether a line starts an authored block outside the body's first sublist. */
 function isParentAuthoredBlock(line: string, firstMarkerColumn: number, followsBlank = false): boolean {
   const column = indentColumns(line, firstMarkerColumn)
@@ -7489,7 +7495,7 @@ function rebasedColonGroupEnd(
       if (indentColumns(candidate, base + 1) === base && authoredCodeClose.test(groupLineContent(candidate, base))) authoredCodeClose = undefined
     } else if (nestedBodyLines && opaque === null && !authoredCodeClose && stack.length === authored.length && authoredChildColumn < 0 &&
         !stack.at(-1)!.literal && !authoredInlineFence) {
-      const column = authoredColumn ??= indentColumns(candidate, hostedAuthoredBlockOpener(candidate.trimStart()) ? Infinity : authored.at(-1)!.column + 4)
+      const column = authoredColumn ??= indentColumns(candidate, hostedColonBodyOpener(candidate.trimStart()) ? Infinity : authored.at(-1)!.column + 4)
       while (!isBlankLine(candidate) && authored.length > 1 && column < authored.at(-1)!.column) authored.pop()
       const owner = authored.at(-1)!
       const rebasesHere = !emptyHostMinimum || !owner.paragraph || column >= base
@@ -7518,7 +7524,7 @@ function rebasedColonGroupEnd(
         authored.push({ column, paragraph: false })
       }
       const current = authored.at(-1)!
-      const blockColumn = column > current.column && hostedAuthoredBlockOpener(text) && childColumn < 0 ? column : current.column
+      const blockColumn = column > current.column && hostedColonBodyOpener(text) && childColumn < 0 ? column : current.column
       if (rebasesHere && blockColumn !== base && column >= blockColumn && (blockColumn > base || usesHostMinimum && hostedAuthoredBlockOpener(text))) {
         candidate = blockColumn < base
           ? ' '.repeat(base - blockColumn) + candidate
@@ -10524,8 +10530,6 @@ class ParseSession {
       const declines =
         topLevelIndentedDef ||
         notAtContentColumn ||
-        (divs[divs.length - 1]?.host === 'list' &&
-          composed.column > divs[divs.length - 1]!.scope.contentCol) ||
         (collectsNothing && composed.peeled.some((one) => !one.quote))
       // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
       // reading the line as something other than a definition; the block parser
