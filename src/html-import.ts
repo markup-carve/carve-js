@@ -3960,6 +3960,21 @@ class Importer {
       return own
     })
     const rows = this.spanGrid(tr, built, rowAttrs, path, depth)
+    // A row with no cell has no pipe spelling: `|` alone is prose and `||` is
+    // one empty cell (CARVE-P9-082), so writing it would invent a cell.
+    if (this.writing && !listForm) {
+      const hadRows = rows.length > 0
+      for (let r = rows.length - 1; r >= 0; r--) {
+        if (rows[r]!.cells.length > 0) continue
+        this.report.add('structure-unspellable', 'Dropped a row with no cells: Carve has no spelling for it', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
+        rows.splice(r, 1)
+        group.delete(tr[r]!)
+        tr.splice(r, 1)
+      }
+      if (hadRows && rows.length === 0) {
+        this.report.add('table-degraded', 'Dropped a rowless table, including its attributes and caption: Carve source cannot spell a table without rows', 'warning', path, node)
+      }
+    }
     const unspellableBefore = this.unspellable.length
     const rowGroups = this.rowGroups(node, tr, rows, group, leadingHeaderRows, path, sectionAttrs)
     if (rowGroups) {
