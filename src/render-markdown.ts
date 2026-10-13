@@ -33,7 +33,7 @@ import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from 
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
-import { renderCarve } from './render-carve.js'
+import { renderCarve, renderCarrierAttributeBlock } from './render-carve.js'
 import { carrierLine, spellCarrierMarkers } from './carrier-markers.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -109,6 +109,12 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
 }
 
 function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normalizeOutput: boolean, budget: AbbrBudget): string {
+  const markerNonces = treeSentinelNonces(ast)
+  for (const marker of ALL_CARRIERS) collectSentinelNonces(marker, markerNonces)
+  const markerTokens = shortSentinelTokens(markerNonces, 2)
+  inlineCarrierStart = markerTokens[0]!
+  inlineCarrierEnd = markerTokens[1]!
+  INLINE_CARRIER = new RegExp(`${inlineCarrierStart}<!--[\\s\\S]*?-->${inlineCarrierEnd}`, 'g')
   const smartTypography = normalizeSmartTypography(opts.smartTypography)
   // PART 11 section 11: GFM has no heading-id syntax, so a heading is linked by
   // the slug a GFM reader derives from its written text.
@@ -143,7 +149,7 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
   // A document that is only frontmatter has no body to separate it from, and
   // `normalize` returns a bare newline for one.
   if (frontmatter !== '' && body === '\n') return stripBidiControls(frontmatter.trimEnd() + '\n')
-  return stripBidiControls(`${frontmatter}${body}`)
+  return stripBidiControls(`${frontmatter}${body}`).replace(INLINE_CARRIER, marker => marker.slice(inlineCarrierStart.length, -inlineCarrierEnd.length))
 }
 
 /**
@@ -403,7 +409,7 @@ function attributeMarker(node: BlockNode, ctx: MarkdownContext): string {
     const { id: _generated, ...authored } = attrs
     attrs = authored
   }
-  const line = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [], attrs }] }).split('\n')[0]!
+  const line = renderCarrierAttributeBlock(attrs)
   return line.startsWith('{') ? `${carrierLine(line)}\n` : ''
 }
 
@@ -415,7 +421,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       // A folded heading's line join takes PART 7's four characters. The class
       // was `\s` with one carve-out, so it swallowed a vertical tab beside the
       // newline that the HTML target kept.
-      const text = trimNonNbsp(withinSingleLineSlot(() => renderInlines(node.children, ctx), false).replace(/[ \t\r\n]+/g, (run) => {
+      const text = trimInlineEdges(withinSingleLineSlot(() => renderInlines(node.children, ctx), false).replace(/[ \t\r\n]+/g, (run) => {
         const count = run.split('\n').length - 1
         return count === 0 ? run : ' '.repeat(count)
       }))
@@ -846,8 +852,9 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     const cells = row.cells.map((cell) =>
       escapeCellPipes(
         withinSingleLineSlot(() => {
-          if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], ctx))
-          return trimNonNbsp(renderCellBlocks(cell.blocks, ctx))
+          const cellCtx = { ...ctx, roundtrip: false }
+          if (cell.blocks === undefined) return trimNonNbsp(renderInlines(cell.children ?? [], cellCtx))
+          return trimNonNbsp(renderCellBlocks(cell.blocks, cellCtx))
         }),
       ),
     )
@@ -1046,7 +1053,80 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext, parentDelimite
   }
 }
 
+// Keep generated comments distinct from marker-shaped text in code or alt text.
+let inlineCarrierStart = ''
+let inlineCarrierEnd = ''
+let INLINE_CARRIER = /$^/g
+
+function inlineCarrierLine(payload: string): string {
+  return inlineCarrierStart + carrierLine(payload) + inlineCarrierEnd
+}
+
+function visibleInline(text: string): string {
+  return text.replace(INLINE_CARRIER, '')
+}
+
+function inlinePadding(text: string, space: (code: number) => boolean): { lead: string; core: string; trail: string } {
+  const visible = visibleInline(text)
+  let start = 0, end = visible.length
+  while (start < end && space(visible.charCodeAt(start))) start++
+  while (end > start && space(visible.charCodeAt(end - 1))) end--
+  let position = 0, cursor = 0, core = ''
+  for (const marker of text.matchAll(INLINE_CARRIER)) {
+    const part = text.slice(cursor, marker.index)
+    core += part.slice(Math.max(0, start - position), Math.max(0, end - position)) + marker[0]
+    position += part.length
+    cursor = marker.index + marker[0].length
+  }
+  core += text.slice(cursor).slice(Math.max(0, start - position), Math.max(0, end - position))
+  return { lead: visible.slice(0, start), core, trail: visible.slice(end) }
+}
+
+function restoreInlinePrefix(marked: string, before: string, after: string): string {
+  if (before === after) return marked
+  let start = 0, end = before.length, afterEnd = after.length
+  while (start < end && start < afterEnd && before[start] === after[start]) start++
+  while (end > start && afterEnd > start && before[end - 1] === after[afterEnd - 1]) { end--; afterEnd-- }
+  const markers = [...marked.matchAll(INLINE_CARRIER)]
+  const originalOffset = (position: number): number => {
+    let offset = position, removed = 0
+    for (const marker of markers) {
+      if (marker.index - removed > position) break
+      offset += marker[0].length
+      removed += marker[0].length
+    }
+    return offset
+  }
+  const from = originalOffset(start), to = originalOffset(end)
+  const carried = marked.slice(from, to).match(INLINE_CARRIER)?.join('') ?? ''
+  return marked.slice(0, from) + carried + after.slice(start, afterEnd) + marked.slice(to)
+}
+
+function trimInlineEdges(text: string): string {
+  return text.includes(inlineCarrierStart) ? inlinePadding(text, code => code === 32 || code === 9 || code === 10 || code === 13).core : trimNonNbsp(text)
+}
+
+function inlineAttributePayload(attrs: Attrs | undefined): string {
+  if (!attrs) return '{}'
+  const line = renderCarrierAttributeBlock(attrs)
+  return line.startsWith('{') ? line : '{}'
+}
+
 function renderInline(node: InlineNode, ctx: MarkdownContext): string {
+  const body = renderInlineBody(node, ctx)
+  if (!ctx.roundtrip) return body
+  if ((node.type === 'link' && !insideLink || node.type === 'image') && !isUnresolvedReference(node)) {
+    const attrs = inlineAttributePayload(node.attrs)
+    return attrs === '{}' ? body : body + inlineCarrierLine(attrs)
+  }
+  if (node.type === 'span') return inlineCarrierLine('[') + body + inlineCarrierLine(']' + inlineAttributePayload(node.attrs))
+  if (node.type === 'heading_ref' && node.href && !insideLink && ctx.headingSlugs.has(fragmentId(node.href) ?? '')) {
+    return inlineCarrierLine(canonicalInline([{ type: 'heading_ref', target: node.target }])) + body
+  }
+  return body
+}
+
+function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
   const originalNode = node
@@ -1795,7 +1875,7 @@ function trimParagraphLines(text: string): string {
   return text
     .split('\n')
     .map((line) => {
-      const trimmed = trimMatchingEdges(line, (code) => code === 32 || code === 9)
+      const trimmed = line.includes(inlineCarrierStart) ? inlinePadding(line, code => code === 32 || code === 9).core : trimMatchingEdges(line, (code) => code === 32 || code === 9)
       let backslashes = 0
       while (trimmed[trimmed.length - backslashes - 1] === '\\') backslashes++
       if (backslashes % 2 === 0) return trimmed
@@ -1817,6 +1897,9 @@ function protectParagraphListMarkers(text: string): string {
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     let line = lines[lineIndex]!
     if (codeFence === 0) {
+      const marked = line
+      line = visibleInline(line)
+      const visible = line
       line = line
         .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
         // A text `.` may still be a section 8i carrier; it opens a list all the same.
@@ -1825,6 +1908,7 @@ function protectParagraphListMarkers(text: string): string {
           : `^([ \\t]{0,3}\\d{1,9})([.)${CONTEXT_SENTINEL['.']}])(?=[ \\t])`), (_, lead: string, mark: string) => `${lead}\\${sentinelCharacter(mark)}`)
         .replace(/^([ \t]{0,3})>/, '$1\\>')
       line = protectBlockShapes(line, lineIndex === 0)
+      if (marked !== visible) line = restoreInlinePrefix(marked, visible, line)
       lines[lineIndex] = line
     }
 
@@ -2119,11 +2203,12 @@ function sentinelCharacter(s: string): string {
 
 /** Map marker offsets to the character view used by positional escape checks. */
 function carrierView(text: string, pattern: RegExp): { line: string; offset: (position: number) => number } {
-  if (!MULTI_CHARACTER_CARRIERS) return { line: text.replace(pattern, sentinelCharacter), offset: position => position }
+  if (!MULTI_CHARACTER_CARRIERS && !text.includes(inlineCarrierStart)) return { line: text.replace(pattern, sentinelCharacter), offset: position => position }
   const shifts: Array<{ end: number; removed: number }> = []
   let removed = 0
-  const line = text.replace(pattern, (marker: string, at: number) => {
-    const character = sentinelCharacter(marker)
+  const combined = new RegExp(`${INLINE_CARRIER.source}|${pattern.source}`, 'g')
+  const line = text.replace(combined, (marker: string, at: number) => {
+    const character = marker.startsWith(inlineCarrierStart) ? '' : sentinelCharacter(marker)
     removed += marker.length - character.length
     shifts.push({ end: at + marker.length, removed })
     return character
@@ -2147,7 +2232,8 @@ function resolveContextEscapes(text: string): string {
   const view = carrierView(text, RE_ANY_SENTINEL)
   const line = view.line
 
-  return text.replace(RE_CONTEXT_SENTINEL, (s, offset: number) => {
+  return text.replace(new RegExp(`${INLINE_CARRIER.source}|${RE_CONTEXT_SENTINEL.source}`, 'g'), (s, offset: number) => {
+    if (s.startsWith(inlineCarrierStart)) return s
     const ch = CONTEXT_CHARACTER[s]!
     const position = view.offset(offset)
     // Section 8i E1: the email form takes an empty comment, since both readers
@@ -2161,7 +2247,7 @@ function resolveContextEscapes(text: string): string {
     else if (ch === '.') keep = opensWwwAutolink(line, position)
     // A `[` still standing in the output is markup: a text bracket is a carrier
     // here and an authored one is behind its backslash.
-    else keep = text[offset + s.length] === '['
+    else keep = line[position + 1] === '['
 
     return keep ? `\\${ch}` : ch
   })
@@ -2476,7 +2562,8 @@ function resolveNarrowedEscapes(text: string): string {
   const line = view.line
   const pairs = line.includes('_') ? pairableUnderscoresPerBlock(line) : null
 
-  return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
+  return text.replace(new RegExp(`${INLINE_CARRIER.source}|${RE_NARROWED_SENTINEL.source}`, 'g'), (s, offset: number) => {
+    if (s.startsWith(inlineCarrierStart)) return s
     const ch = character(s)
     const position = view.offset(offset)
     // TWO FAMILIES, TWO TESTS, AND A THIRD CASE THAT IS ALREADY SETTLED. M1b
@@ -2517,6 +2604,8 @@ function decideAuthoredHashes(text: string): string {
  * sequence and drops it.
  */
 function escapeTrailingAtxRun(line: string): string {
+  const visible = visibleInline(line)
+  if (visible !== line) return restoreInlinePrefix(line, visible, escapeTrailingAtxRun(visible))
   const undecided = AUTHORED_SENTINEL['#']!
   let i = line.length
   while (i > 0 && (line.endsWith(undecided, i) || line.endsWith(AUTHORED_KEPT, i))) i -= undecided.length
@@ -2580,19 +2669,22 @@ const PAD_SPACE = /^([\p{White_Space}]*)([\s\S]*?)([\p{White_Space}]*)$/u
  * rather than being trimmed away.
  */
 function padOutside(inner: string, delimiter: string, tag: string): string {
-  const match = PAD_SPACE.exec(inner)
+  const padding = inner.includes(inlineCarrierStart)
+    ? inlinePadding(inner, code => /[\p{White_Space}]/u.test(String.fromCharCode(code)))
+    : undefined
+  const match = padding ? [inner, padding.lead, padding.core, padding.trail] : PAD_SPACE.exec(inner)
   if (!match) return `${delimiter}${inner}${delimiter}`
   const [, lead = '', core = '', trail = ''] = match
   // Keep a final hard break inside the HTML wrapper. After a Markdown
   // closing delimiter it can become a paragraph-final break, which
   // CommonMark reads as a literal backslash.
-  if (trail.startsWith('\n') && /(?:^|[^\\])(?:\\\\)*\\$/.test(core)) {
+  if (trail.startsWith('\n') && /(?:^|[^\\])(?:\\\\)*\\$/.test(visibleInline(core))) {
     return lead.includes('\n') ? `${lead}<${tag}>${core}${trail}</${tag}>` : `<${tag}>${inner}</${tag}>`
   }
-  if (core !== '') return `${lead}${delimiter}${core}${delimiter}${trail}`
+  if (visibleInline(core) !== '') return `${lead}${delimiter}${core}${delimiter}${trail}`
   // Whitespace-only content has no delimiter form; every other inline this
   // renderer cannot spell falls back to inline HTML, so this one does too.
-  return inner === '' ? '' : `<${tag}>${inner}</${tag}>`
+  return visibleInline(inner) === '' ? core : `<${tag}>${inner}</${tag}>`
 }
 
 /**
@@ -2619,6 +2711,7 @@ const FLANK_SPACE = /[\p{White_Space}]/u
 const FLANK_PUNCT = /[\p{P}\p{S}]/u
 
 const lastCharacter = (s: string): string => {
+  s = visibleInline(s)
   if (s.charCodeAt(s.length - 1) < 128) return s.slice(-1)
   if (MULTI_CHARACTER_CARRIERS) {
     const marker = ALL_CARRIERS.find(marker => s.endsWith(marker))
@@ -2628,6 +2721,7 @@ const lastCharacter = (s: string): string => {
 }
 
 const firstCharacter = (s: string): string => {
+  s = visibleInline(s)
   if (s.charCodeAt(0) < 128) return s.slice(0, 1)
   if (MULTI_CHARACTER_CARRIERS) {
     const marker = ALL_CARRIERS.find(marker => s.startsWith(marker))
@@ -2989,25 +3083,25 @@ const mergedRunFlanks = (inner: string, outer: string): boolean =>
   flanks(inner, outer) && flanks(outer, inner)
 
 function nextRendered(parts: string[], i: number): number {
-  for (let j = i + 1; j < parts.length; j++) if (parts[j] !== '') return j
+  for (let j = i + 1; j < parts.length; j++) if (visibleInline(parts[j]!) !== '') return j
 
   return -1
 }
 
 function previousRendered(parts: string[], i: number): number {
-  for (let j = i - 1; j >= 0; j--) if (parts[j] !== '') return j
+  for (let j = i - 1; j >= 0; j--) if (visibleInline(parts[j]!) !== '') return j
 
   return -1
 }
 
 function neighbourBefore(parts: string[], i: number): string {
-  for (let j = i - 1; j >= 0; j--) if (parts[j] !== '') return lastCharacter(parts[j]!)
+  for (let j = i - 1; j >= 0; j--) if (visibleInline(parts[j]!) !== '') return lastCharacter(parts[j]!)
 
   return ''
 }
 
 function neighbourAfter(parts: string[], i: number): string {
-  for (let j = i + 1; j < parts.length; j++) if (parts[j] !== '') return firstCharacter(parts[j]!)
+  for (let j = i + 1; j < parts.length; j++) if (visibleInline(parts[j]!) !== '') return firstCharacter(parts[j]!)
 
   return ''
 }

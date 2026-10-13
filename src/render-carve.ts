@@ -1285,6 +1285,11 @@ function safeFence(content: string, min: number): string {
   return '`'.repeat(Math.max(min, longest + 1))
 }
 
+/** Canonical attributes inside a Markdown comment carrier. */
+export function renderCarrierAttributeBlock(attrs: Attrs | undefined): string {
+  return renderAttrs(attrs, '>')
+}
+
 function renderBlockAttrs(attrs: Attrs | undefined): string {
   const rendered = renderAttrs(attrs)
   return rendered
