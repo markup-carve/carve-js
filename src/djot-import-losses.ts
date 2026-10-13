@@ -29,7 +29,7 @@ export function djotImportLosses(
   const reported = new Set<string>()
   const lines = source.split('\n')
   const quoteDepths = lines.map(line => (line.slice(0, contentStart(line)).match(/>/g) ?? []).length)
-  if (quoteDepths.some(depth => depth > 1))
+  if (quoteDepths.some(depth => depth > 0))
     djotBlockLayout(source, rows, undefined, undefined, undefined, undefined, (line, depth) => { quoteDepths[line] = depth })
   const offsets: number[] = []
   let offset = 0

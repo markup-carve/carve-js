@@ -1,3 +1,4 @@
+import { djotBlockLayout } from './djot-block-layout.js'
 import { continuesParagraph } from './djot-attributes.js'
 import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
 import { djotTableRows, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
@@ -97,6 +98,9 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   const collapsedReferenceText = djotCollapsedReferenceCache()
   const lines = source.split('\n')
+  const quoteDepths = lines.map(line => (line.slice(0, contentStart(line)).match(/>/g) ?? []).length)
+  if (quoteDepths.some(depth => depth > 0))
+    djotBlockLayout(source, djotTableRows(source, mask), undefined, undefined, undefined, undefined, (line, depth) => { quoteDepths[line] = depth })
   let definitionOffset = 0
   const offsets = lines.map(line => { const at = definitionOffset; definitionOffset += line.length + 1; return at })
   const attributeContinues = new Map<number, boolean>()
@@ -257,7 +261,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
         explicit = referenceSource.slice(close + 2, labelEnd)
       if (content.startsWith('^') && content.length > 1) continue
       const key = explicit ? referenceKey(explicit) : definitionKey(
-        collapsedReferenceText(content, (lines[n]!.slice(0, contentStart(lines[n]!)).match(/>/g) ?? []).length),
+        collapsedReferenceText(content, quoteDepths[n]!),
       )
       let end = labelEnd + 1,
         own = ''
