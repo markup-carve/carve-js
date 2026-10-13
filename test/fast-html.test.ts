@@ -211,7 +211,8 @@ describe('borrowed HTML layout', () => {
     // is held against the authoritative render above before it is counted.
     // The pin at carve 6a11a860 adds corpus 559-3 and 559-6.
     // The pin at carve 2965a851 adds 588-3 and 588-4, the bare `> +` that stays text.
-    expect(accepted).toBe(70)
+    // Corpus 589-32 adds a blank first row promoted to an empty header row.
+    expect(accepted).toBe(71)
     // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
     expect(acceptedFiles).toEqual(expect.arrayContaining([
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',

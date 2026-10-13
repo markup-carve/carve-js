@@ -643,17 +643,9 @@ const RE_TABLE_ROW = /^\|/
 export const isTableRow = (line: string): boolean => {
   if (!RE_TABLE_ROW.test(line)) return false
   if (!/\|[ \t]*$/.test(line) && rowAttrsFromLine(line).attrs === undefined) return false
-  const cells = splitTableRow(rowAttrsFromLine(line).body)
-  return cells.some((cell) => {
-    const parsed = parseCellMarkers(cell)
-    return (
-      parsed.content.trim().length > 0 ||
-      parsed.attrs !== undefined ||
-      parsed.align !== undefined ||
-      parsed.valign !== undefined ||
-      parsed.span !== undefined
-    )
-  })
+  // A slot is counted, not weighed (CARVE-P9-082): `||` and `| |` are one empty
+  // cell, and only a lone `|` has no slot.
+  return splitTableRow(rowAttrsFromLine(line).body).length > 0
 }
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes

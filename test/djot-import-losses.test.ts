@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { djotToCarve, migrateDjot } from '../src/index.js'
+import { carveToHtml, djotToCarve, migrateDjot } from '../src/index.js'
 import { djotToCarveWithLosses } from '../src/djot-import.js'
 
 it.each(['_({_foo_})_\n', '*****a*****\n', '__emphasis inside_ emphasis_\n'])('preserves repeated emphasis without an import loss: %s', source => {
@@ -49,7 +49,7 @@ it.each([
   ],
   ['|a|b|\n|:-|---:|\n|c|d|\n|cc|dd|\n|-:|:-:|\n|e|f|\n|g|h|\n', 'A separator inside a table', 5],
   ['|--|--|\n', 'A table containing only separator rows', 1],
-  ['| |\n', 'A table row whose cells are all blank', 1],
+  ['|\t|\n', 'A blank table cell holding a tab', 1],
 ] as const)('names the loss in %s at its source line', (source, message, line) => {
   const result = migrateDjot(source)
   expect(result.value).toBe(djotToCarve(source))
@@ -251,4 +251,12 @@ it.each(['> [a](\n> )', '- [a](\n  )', '[a](\n  )'])('reports empty destinations
 
 it.each(['[a][b][c]\n\n[b]: /u', '[a][b]()\n\n[b]: /u'])('does not reuse an accepted reference payload: %s', (source) => {
   expect(djotToCarveWithLosses(source).losses).toEqual([])
+})
+
+it('imports a Djot row of blank cells as a native table row with no loss', () => {
+  // Djot tables.test:106. CARVE-P9-082 makes `| |` a Carve row.
+  const result = migrateDjot('| |\n')
+  expect(result.value).toBe('| |\n')
+  expect(carveToHtml(result.value)).toBe('<table>\n  <tbody>\n    <tr><td></td></tr>\n  </tbody>\n</table>')
+  expect(result.report.diagnostics.filter(d => d.code === 'structure-unspellable')).toStrictEqual([])
 })

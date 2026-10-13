@@ -18,7 +18,6 @@ import type {
   ListItem,
   Table,
   TableCell,
-  TableRow,
   Text,
 } from './ast.js'
 import {
@@ -149,7 +148,7 @@ export function renderCarveForHtmlImport(ast: Document): string {
     session.throwRefusedSpans()
     return value
   } catch (error) {
-    session.throwRefusedSpans(error)
+    session.throwRefusedSpans()
     throw error
   }
 }
@@ -2436,19 +2435,15 @@ function lastBoundary(node: InlineNode | undefined): string {
 class CarveRenderSession {
   private renderedVerbatimTail = false
 
-  private refusedTableRows: TableRow[] = []
   private refusedSpans: SourceUnspellableError[] = []
-  private rowsBeforeFirstSpan = 0
-  private spansBeforeFirstRow: number | undefined
 
   constructor(private readonly collectRefusedSpans = false) {}
 
-  throwRefusedSpans(error?: unknown): void {
-    if (this.rowsBeforeFirstSpan > 0 && error instanceof SourceUnspellableError && error.nodeType === 'table_row') return
+  throwRefusedSpans(): void {
     const first = this.refusedSpans[0]
     if (first !== undefined) {
       throw new SourceUnspellableError(first.nodeType, first.reason, first.node,
-        [...new Set(this.refusedSpans.slice(0, this.spansBeforeFirstRow).map(error => error.node!))])
+        [...new Set(this.refusedSpans.map(error => error.node!))])
     }
   }
 
@@ -2882,7 +2877,6 @@ class CarveRenderSession {
   }
 
   private renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string {
-    this.refusedTableRows = []
     let rendered = ''
     const previous = this.escapeMode
     this.escapeMode = mode
@@ -2936,19 +2930,8 @@ class CarveRenderSession {
       const body = this.renderDocumentBody(ast, ctx)
       if (body) parts.push(body)
       rendered = this.normalize(parts.join(BLOCK_SEPARATOR))
-    } catch (error) {
-      // Earlier row refusals are reported before the error a retry will reach.
-      if (this.refusedTableRows.length === 0) throw error
     } finally {
       this.escapeMode = previous
-    }
-    if (this.refusedTableRows.length > 0) {
-      throw new SourceUnspellableError(
-        'table_row',
-        'a table row whose every cell is blank has no Carve source spelling',
-        this.refusedTableRows[0],
-        this.rowsBeforeFirstSpan > 0 ? this.refusedTableRows.slice(0, this.rowsBeforeFirstSpan) : this.refusedTableRows,
-      )
     }
     if (this.collectRefusedSpans) this.throwRefusedSpans()
     return rendered
@@ -3813,17 +3796,8 @@ class CarveRenderSession {
         const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < node.separatorWidths!.length
         cells.push(this.renderTableCell(cell, ctx, asHeader, colonSpelled))
       })
-      // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
-      // so no source spells one and the writer refuses the tree (carve-js#1822).
-      if (cells.every((cell) => cell === ' ' || cell === '= ')) {
-        if (this.collectRefusedSpans && this.refusedTableRows.length === 0 && this.refusedSpans.length > 0 && this.spansBeforeFirstRow === undefined) this.spansBeforeFirstRow = this.refusedSpans.length
-        this.refusedTableRows.push(row)
-        return
-      }
       rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
     })
-    // A table losing every row also loses its caption on import.
-    if (rows.length === 0 && node.rows.length > 0) return ''
     if (needsDelimiter) {
       rows.splice(1, 0, authored ?? `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
     }
@@ -5045,7 +5019,6 @@ class CarveRenderSession {
       for (const inner of nearestOfType(children, node.type, this.writtenBraced).filter((child) => this.writtenBraced.has(child))) {
         const refusal = new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
         if (!this.collectRefusedSpans) throw refusal
-        if (this.refusedSpans.length === 0) this.rowsBeforeFirstSpan = this.refusedTableRows.length
         this.refusedSpans.push(refusal)
       }
     }
