@@ -46,9 +46,9 @@ const quoted = (line: string): [number, string] => {
   }
 }
 
-function replaceDjotImageLabels(source: string, mask: string, replace: (image: string, label: string, at: number) => string): string {
+function replaceDjotImageLabels(source: string, mask: string, replace: (image: string, label: string, at: number, completeTarget: boolean) => string, allowIncomplete = false): string {
   if (!source.includes('![')) return source
-  const opens: number[] = [], closes = new Map<number, number>()
+  const opens: number[] = [], closes = new Map<number, { end: number; completeTarget: boolean }>()
   const boundaries = new Set(djotInlineBoundaries(source, mask))
   for (const match of source.matchAll(/\n[ \t]*\n/g)) boundaries.add(match.index!)
   const referenceEnds = new Int32Array(source.length).fill(-1)
@@ -66,17 +66,18 @@ function replaceDjotImageLabels(source: string, mask: string, replace: (image: s
     else if (mask[at] === ']' && !isDjotEscaped(source, at)) {
       const open = opens.pop()
       const completeTarget = source[at + 1] === '(' ? mask[at + 1] === ' ' : source[at + 1] === '[' && referenceEnds[at + 2]! >= at + 2
-      if (open !== undefined && source[open - 1] === '!' && mask[open - 1] === '!' && !isDjotEscaped(source, open - 1) && completeTarget) closes.set(open - 1, at)
+      if (open !== undefined && source[open - 1] === '!' && mask[open - 1] === '!' && !isDjotEscaped(source, open - 1) && (completeTarget || allowIncomplete && /[([]/.test(source[at + 1] ?? ''))) closes.set(open - 1, { end: at, completeTarget })
     }
   }
   if (!closes.size) return source
   const chunks: string[] = []
   let cursor = 0
   for (let at = 0; at < source.length; at++) {
-    const end = closes.get(at)
-    if (end === undefined) continue
+    const close = closes.get(at)
+    if (close === undefined) continue
+    const { end, completeTarget } = close
     const image = source.slice(at, end + 1)
-    const replaced = replace(image, source.slice(at + 2, end), at)
+    const replaced = replace(image, source.slice(at + 2, end), at, completeTarget)
     if (replaced === image) continue
     chunks.push(source.slice(cursor, at), replaced)
     cursor = end + 1
@@ -884,6 +885,12 @@ function djotImageLabelText(normalizedLabel: string, convert: (source: string) =
 }
 
 function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string {
+  if (!omitQuoteDelimiters && source.includes('![') && /\{"|\{'|"\}|'\}/.test(source)) {
+    source = replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), (image, label, _at, completeTarget) => {
+      if (completeTarget || label.includes('![') || !/\{"|\{'|"\}|'\}/.test(label)) return image
+      return '![' + djotInlineLayout('DJOTALT ' + label).slice(8) + ']'
+    }, true)
+  }
   const imageQuotes = new Set<number>()
   if (!omitQuoteDelimiters && source.includes('![') && /\{"|\{'|"\}|'\}/.test(source)) {
     replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), (image, label, at) => {

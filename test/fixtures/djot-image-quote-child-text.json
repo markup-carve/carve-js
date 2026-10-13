@@ -1584,6 +1584,30 @@
     "html": "<ul>\n<li>\n<img alt=\"xay\" src=\"img\">\n</li>\n</ul>\n"
   },
   {
+    "source": "![![{\"a\"}](img)](",
+    "html": "<p>![<img alt=\"a\" src=\"img\">](</p>\n"
+  },
+  {
+    "source": "![![{\"a\"}](img)][",
+    "html": "<p>![<img alt=\"a\" src=\"img\">][</p>\n"
+  },
+  {
+    "source": "![{}\nfoo](x {\"q\"}",
+    "html": "<p>![\nfoo](x “q”</p>\n"
+  },
+  {
+    "source": "![{\"a\"}][oops",
+    "html": "<p>![“a”][oops</p>\n"
+  },
+  {
+    "source": "![{\"x\"}](unclosed",
+    "html": "<p>![“x”](unclosed</p>\n"
+  },
+  {
+    "source": "![{'x'}](unclosed",
+    "html": "<p>![‘x’](unclosed</p>\n"
+  },
+  {
     "source": "![a \"b\"][oops",
     "html": "<p>![a “b”][oops</p>\n"
   },
