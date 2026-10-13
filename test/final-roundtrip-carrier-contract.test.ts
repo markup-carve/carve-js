@@ -217,11 +217,12 @@ describe('rule 10: nested definition lists carry their depth in their markers', 
       exported.replace('<!-- carve:2 :: Inner -->', '<!-- carve:3 :: Inner -->').replace(/carve:2 /g, 'carve:3 '),
       exported.replace('<!-- carve:2 -->\n', ''),
       exported.replace('<!-- carve: :: Outer -->', '<!-- carve:2 :: Outer -->'),
-      '<!-- carve:2 {.x} -->\npara\n',
     ]) {
       const imported = migrateMarkdown(damaged)
       expect(imported.report.diagnostics.map(row => row.code)).toContain('carrier-markers-damaged')
     }
+    expect(migrateMarkdown('<!-- carve:2 {.x} -->\npara\n').report.diagnostics.map(row => row.code))
+      .toContain('carrier-marker-dropped')
   })
 })
 

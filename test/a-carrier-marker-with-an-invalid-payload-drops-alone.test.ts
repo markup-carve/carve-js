@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { migrateMarkdown } from '../src/index.js'
+import { migrateMarkdown, parse } from '../src/index.js'
 import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
 
 const opener = '<!-- carve: ::: note -->'
@@ -104,4 +104,22 @@ it('falls back for the whole set when an invalid opener has no closer', () => {
     confidence: 'fallback',
   })])
   expect(result.report.diagnostics.find(d => d.code === 'carrier-markers-damaged')).not.toHaveProperty('path')
+})
+
+it('drops a depth-bearing container pair and restores the following pair', () => {
+  const source = '<!-- carve:2 ::: note -->\nBody.\n<!-- carve: ::: -->\n\n<!-- carve: ::: tip -->\nok\n<!-- carve: ::: -->\n'
+  const result = migrateMarkdown(source)
+  expect(result.value).toContain('::: tip\nok\n:::')
+  expect(result.value).not.toContain('::: note\nBody.')
+  expect(result.report.diagnostics.filter(d => d.code.startsWith('carrier-marker'))).toEqual([
+    expect.objectContaining({ code: 'carrier-marker-dropped', path: 'line:1' }),
+  ])
+})
+
+it('drops a depth-bearing attribute marker alone', () => {
+  const result = migrateMarkdown('<!-- carve:2 {.x} -->\n# Heading\n')
+  expect(parse(result.value).children.find(node => node.type === 'heading')?.attrs?.classes).toBeUndefined()
+  expect(result.report.diagnostics.filter(d => d.code.startsWith('carrier-marker'))).toEqual([
+    expect.objectContaining({ code: 'carrier-marker-dropped', path: 'line:1' }),
+  ])
 })

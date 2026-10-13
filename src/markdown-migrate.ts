@@ -2947,6 +2947,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   if (payloads.size === 0 && dropped.length === 0) return markdown
   // Pair by shape before checking whether each payload can be restored.
   const pairs = new Map<number, number>()
+  const reversePairs = new Map<number, number>()
   const open: number[] = []
   let balanced = true
   for (const [at, payload] of payloads) {
@@ -2955,7 +2956,10 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     if (carrierIsCloser(payload)) {
       const opener = open.pop()
       if (opener === undefined || carrierFenceWidth(payloads.get(opener)!) !== width) balanced = false
-      else pairs.set(opener, at)
+      else {
+        pairs.set(opener, at)
+        reversePairs.set(at, opener)
+      }
     } else {
       if (open.length > 0 && width <= carrierFenceWidth(payloads.get(open.at(-1)!)!)) balanced = false
       open.push(at)
@@ -2964,17 +2968,18 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   balanced &&= open.length === 0
   if (balanced) {
     for (const [at, payload] of payloads) {
+      if (!payloads.has(at)) continue
       const width = carrierFenceWidth(payload)
       const isOpener = width > 0 && !carrierIsCloser(payload)
       const closer = pairs.get(at)
       const tree = isOpener ? parse(`${payload}\n${payloads.get(closer!)!}\n`) : undefined
-      const valid = tree
+      const valid = ((depths.get(at) ?? 1) === 1 || isDefinitionPayload(payload)) && (tree
         ? tree.children.length === 1 && tree.children[0]!.type !== 'paragraph'
         : /^\{.*\}$/.test(payload)
           ? isValidAttrPayload(payload.slice(1, -1))
           : carrierIsCodeFence(payload)
             ? codeFenceCarrier(payload) !== undefined
-            : width > 0 || carrierIsCaption(payload) || /^::[ \t]/.test(payload) || payload === ':' || payload === ''
+            : width > 0 || carrierIsCaption(payload) || isDefinitionPayload(payload))
       if (valid) continue
       payloads.delete(at)
       depths.delete(at)
@@ -2987,6 +2992,11 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
           payloads.delete(caption)
           depths.delete(caption)
         }
+      }
+      const opener = reversePairs.get(at)
+      if (opener !== undefined) {
+        payloads.delete(opener)
+        depths.delete(opener)
       }
       dropped.push({
         code: 'carrier-marker-dropped',
