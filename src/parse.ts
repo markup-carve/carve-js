@@ -8693,7 +8693,8 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
   // Closed verbatim spans the pass skipped, as [content start, end].
   const spans: Array<[number, number]> = []
   const stack: number[] = []
-  const imageAlt: boolean[] = []
+  // Most inline runs have no image label. Avoid tracking its nesting there.
+  const imageAlt: boolean[] | undefined = s.includes('![') ? [] : undefined
   let lastBang = -1
   for (let j = 0; j < s.length; j++) {
     const ch = s[j]
@@ -8713,7 +8714,7 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
       } else {
         structural?.add(-1)
         stack.length = 0
-        imageAlt.length = 0
+        if (imageAlt) imageAlt.length = 0
         j += openLen - 1
       }
       continue
@@ -8721,22 +8722,22 @@ export function buildBracketMap(s: string, outsideOnly = false, structural?: Set
     // A delimited or editorial comment is opaque: its content is discarded or
     // literal, so a `]` inside cannot close a label (carve#403). An unclosed
     // opener is not a comment and is left alone.
-    const inImageAlt = imageAlt[imageAlt.length - 1] ?? false
+    const inImageAlt = imageAlt ? (imageAlt[imageAlt.length - 1] ?? false) : false
     const commentEnd = opaqueEnd(j, inImageAlt)
     if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
     if (commentEnd !== undefined) {
       j = commentEnd - 1
       continue
     }
-    if (ch === '!') lastBang = j
+    if (imageAlt && ch === '!') lastBang = j
     if (ch === '[') {
       structural?.add(j)
       stack.push(j)
-      imageAlt.push(inImageAlt || (j > 0 && lastBang === j - 1))
+      imageAlt?.push(inImageAlt || (j > 0 && lastBang === j - 1))
     } else if (ch === ']') {
       structural?.add(j)
       const open = stack.pop()
-      imageAlt.pop()
+      imageAlt?.pop()
       if (open !== undefined) map.set(open, j)
     }
   }
