@@ -7534,6 +7534,7 @@ function rebaseOverindentedBlocks(
   tabFenceColumns?: ReadonlyMap<number, number>,
   markerDescriptionCodeOpeners?: ReadonlySet<number>,
   noteParagraph?: { markers?: ReadonlySet<number>, markerBody?: boolean },
+  itemParagraphFences?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7755,8 +7756,19 @@ function rebaseOverindentedBlocks(
       ? indentColumns(source) : undefined
 
     if (code) {
+      // Only the item's own paragraph releases a differently indented list marker.
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
-      end = sourceCodeBase === undefined
+      if (itemParagraphFences?.has(i) && sourceCodeBase === undefined) {
+        onUnclosedCodeFence?.()
+        for (let j = i + 1; j < lines.length; j++) {
+          const candidate = lines[j]!
+          const column = indentColumns(candidate)
+          if (column > 0 && column !== base && isListMarkerLine(candidate.trimStart())) break
+          end = j
+          onFenceBodyLine?.(j)
+          if (takenBelowColumn?.has(j)) heldFoldedLines.add(j)
+        }
+      } else end = sourceCodeBase === undefined
         ? rebasedCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
           onFenceBodyLine, onUnclosedCodeFence)
         : sourceCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
@@ -13138,6 +13150,7 @@ class ParseSession {
       // opens is read by its own leaf instead, as before.
       const markerNoteFloor = contentCol + FOOTNOTE_BODY_COLUMN
       const noteParagraphMarkers = new Set<number>()
+      const itemParagraphFences = new Set<number>()
       let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
         !RE_COMMENT_LINE.test(RE_FOOTNOTE_DEF.exec(content)![2]!)
       let noteBodyLast = false
@@ -13388,6 +13401,12 @@ class ParseSession {
           if (strippedPrefix !== undefined && dedented === placed) {
             nestedOrigins.set(nested.length, { text: dedented, parentIndex: lexer.pos, prefix: strippedPrefix })
           }
+          const continuesItemParagraph = !followsBlank && lazyState.lazyFoldable && lazyState.opaque === null &&
+              lazyState.inDefList === false && !lazyState.inFootnoteBody &&
+              lazyState.quoteInner === null && lazyState.deepest == null &&
+              lazyState.ownedColumn < 0 && lazyState.literalColon === undefined &&
+              lazyState.authoredColon === undefined && lazyState.divDepth === 0 && !markerNoteItem &&
+              opensCodeFence(dedented.trimStart())
           nested.push(dedented)
           nestedSourceLines.push(l)
           nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
@@ -13631,6 +13650,8 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (continuesItemParagraph && !skipConsumedCloser && lazyState.opaque === null &&
+              lazyState.inlineFenceParagraph) itemParagraphFences.add(nested.length - 1)
           if (lazyState.invisibleAtColumn && RE_FOOTNOTE_DEF.test(dedented.trimStart())) {
             nestedNoteBodyColumn = indentColumns(l) + FOOTNOTE_BODY_COLUMN
             nestedNoteParagraph = true
@@ -14071,6 +14092,7 @@ class ParseSession {
           tabRebaseColumns,
           markerDescriptionCodeOpeners,
           { markers: noteParagraphMarkers },
+          leadOwnsExtent ? undefined : itemParagraphFences,
         )
         : new Set<number>()
       if (leadOwnsExtent) {
