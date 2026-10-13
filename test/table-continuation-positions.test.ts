@@ -73,4 +73,18 @@ describe('positions across a table continuation', () => {
     expect(text.pos, 'an ordinary cell still anchors its content').toBeDefined()
     expect(slice(text.pos)).toBe(text.value)
   })
+
+  // carve-js#3020: the second join from one `+` line crosses that line's pipe.
+  it.each([
+    ['| a | < |\n+ x | y |', ['+', '|']],
+    ['| a | < | c |\n| ^ | ^ | d |\n+ x | y | z |', ['+', '|']],
+    ['| ^ | < |\n+ x | y |', ['|']],
+  ])('gives each join on one `+` line its own source byte: %j', (src, marks) => {
+    const cell = (parse(src).children[0] as any).rows[0].cells[0]
+    const wraps = cell.children.filter((child: { type: string }) => child.type === 'cell_wrap')
+    expect(wraps.map((w: { pos: { startOffset: number; endOffset: number } }) =>
+      [...src].slice(w.pos.startOffset, w.pos.endOffset).join(''))).toEqual(marks)
+    const starts = cell.children.map((child: { pos: { startOffset: number } }) => child.pos.startOffset)
+    expect(starts).toEqual([...starts].sort((a: number, b: number) => a - b))
+  })
 })

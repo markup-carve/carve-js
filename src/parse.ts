@@ -6770,7 +6770,9 @@ interface RawCell {
    */
   anchors?: AnchorRange[]
   /** Continuation text on a span marker, joined to its origin after the span walk. */
-  joins?: Array<{ frag: string; at: FragmentPlace | null; marker: FragmentPlace | null; line: number; rowIndex: number }>
+  joins?: Array<{ frag: string; at: FragmentPlace | null; marker: FragmentPlace | null; sep: FragmentPlace | null; line: number; rowIndex: number }>
+  /** The `+` of the continuation line the last fragment came from. */
+  lastMarker?: number
   wraps?: Array<{ offset: number; line: number; row?: number; pos?: Position }>
   /** A later row joins into this cell, so its row cannot contain every child span. */
   crossRowJoin?: boolean
@@ -6783,8 +6785,14 @@ interface FragmentPlace {
 }
 
 /** Appends one `+` continuation fragment to a cell's collected source. */
-function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, line?: number, row?: number, marker?: FragmentPlace | null): void {
+function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, line?: number, row?: number, marker?: FragmentPlace | null, sep?: FragmentPlace | null): void {
   const fragStart = target.raw ? target.raw.length + 1 : 0
+  // A second fragment from the same `+` line joins across that line's own pipe,
+  // so its marker is the pipe and not the `+` the first join already covers.
+  const sameLine = marker && target.lastMarker === marker.offset
+  if (marker) target.lastMarker = marker.offset
+  else delete target.lastMarker
+  if (sameLine) marker = sep ?? null
   if (target.raw && line !== undefined) (target.wraps ??= []).push({
     offset: fragStart - 1, line, ...(row ? { row } : {}),
     ...(marker ? { pos: {
@@ -15338,14 +15346,15 @@ class ParseSession {
             within >= 0 && line.slice(start + within, start + within + frag.length) === frag
               ? { offset: contOffset + start + within, line: contLine, column: contColumn + start + within }
               : null
+          const sep = contCanPosition && idx > 0 ? { offset: contOffset + start - 1, line: contLine, column: contColumn + start - 1 } : null
           if (target.span) {
             // The text belongs to the cell the marker resolves into, which only
             // the span walk below can name (T6).
             target.openRun = openVerbatimRun(frag, target.openRun)
-            ;(target.joins ??= []).push({ frag, at, marker, line: continuationLine, rowIndex: rawRows.length - 1 })
+            ;(target.joins ??= []).push({ frag, at, marker, sep, line: continuationLine, rowIndex: rawRows.length - 1 })
             return
           }
-          joinFragment(target, frag, at, continuationLine, undefined, marker)
+          joinFragment(target, frag, at, continuationLine, undefined, marker, sep)
         })
         continue
       }
@@ -15467,20 +15476,34 @@ class ParseSession {
       })
     }
     if (rawRows.some((rc) => rc.some((c) => c.joins))) {
-      // A marker's continuation text joins the cell it resolves into; a blocked
-      // marker renders empty and keeps none of it (T5, T6).
+      // A marker's continuation text joins the cell it resolves into. A blocked
+      // marker is a cell of its own: it renders no marker, and the text joined
+      // to it is its content (T5, T6, carve#3151).
       const grid = rawRows.map((rc, rowIndex) => rc.map((cell) => ({ cell, rowIndex, rowspan: 1, colspan: 1, skip: false })))
+      const keepBlocked = (cell: RawCell): void => {
+        if (!cell.span) return
+        delete cell.span
+        delete cell.anchors
+        delete cell.wraps
+        delete cell.lastMarker
+        cell.raw = ''
+        cell.openRun = 0
+        for (const { frag, at, marker: point, sep, line } of cell.joins ?? []) joinFragment(cell, frag, at, line, undefined, point, sep)
+      }
       resolveSpanGrid(
         grid,
         (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
         (origin, marker) => {
-          if (origin.rowIndex !== marker.rowIndex && marker.cell.joins?.length) {
+          if (!marker.cell.joins?.length) return
+          if (origin.rowIndex !== marker.rowIndex) {
             origin.cell.crossRowJoin = true
             marker.cell.crossRowJoin = true
           }
-          for (const { frag, at, marker: point, line, rowIndex } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex, point)
+          keepBlocked(origin.cell)
+          for (const { frag, at, marker: point, sep, line, rowIndex } of marker.cell.joins) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex, point, sep)
         },
       )
+      for (const row of grid) for (const e of row) if (!e.skip && e.cell.joins?.length) keepBlocked(e.cell)
     }
     const rows: TableRow[] = rawRows.map((rc, idx) => {
       const row: TableRow = {

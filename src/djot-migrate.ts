@@ -668,7 +668,9 @@ function tableContinuationLines(source: string): Set<number> {
       return
     }
     const node = value as Record<string, unknown>
-    if (node.type === 'table_row') {
+    // A row a later row joins into has no span, so the table's span stands in:
+    // every `+` line inside a table is a continuation row.
+    if (node.type === 'table_row' || node.type === 'table') {
       const pos = node.pos as { startLine?: number; endLine?: number } | undefined
       if (pos?.startLine !== undefined && pos.endLine !== undefined) {
         for (let line = pos.startLine + 1; line <= pos.endLine; line++) lines.add(line)
