@@ -49,9 +49,7 @@ describe('a quoted item ending on a block leaves no paragraph', () => {
       </table>`
     expect(carveToHtml(source)).toBe(`<blockquote>
   <ul>
-    <li>
-${lastBlock}
-    </li>
+    <li></li>
   </ul>
 </blockquote>
 <p>after</p>
@@ -61,7 +59,9 @@ ${lastBlock}
   <ol>
     <li id="fn1">
       <p>text
-more<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+more</p>
+${lastBlock}
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
     </li>
   </ol>
 </section>`)
