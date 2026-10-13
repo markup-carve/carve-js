@@ -732,7 +732,7 @@ function needsABlankLineAbove(
   return aSubListAlreadyOpened && LEAVES_A_PARAGRAPH_OPEN.has(previousEmitted.type)
 }
 
-function orderedMarker(n: number, type: List['olType']): string {
+export function orderedMarker(n: number, type: List['olType']): string {
   switch (type) {
     case 'a':
       return alphaMarker(n, false)

@@ -4,12 +4,12 @@ import { carveToHtml } from '../src/index.js'
 it('opens a code block in a box after a closed nested line block', () => {
   const source = '> - ::: box\n>   - ::: |\n>     ```\n>     :::\n>    ```\n>    :::bad\n>    :::\n- tail'
   const html = carveToHtml(source)
-  expect(html).toContain('<pre><code>')
+  expect(html).toContain('<pre><code>:::bad\n:::\n</code></pre>')
 })
 
 it('keeps deeper colon runs as code after a closed quoted child', () => {
   const source = '> - ::: box\n>   -   ::: |\n>       ```\n>       :::\n>     ```\n>     :::\n>     :::bad\n>     :::\n- tail\n'
-  expect(carveToHtml(source)).toContain('<pre><code>')
+  expect(carveToHtml(source)).toContain('<pre><code>:::\n:::bad\n:::\n</code></pre>')
 })
 
 it('ends a quote after unclosed child and outer item fences', () => {
@@ -22,6 +22,14 @@ it('ends a quote after unclosed child and outer item fences', () => {
 it('does not revive a child paragraph after its code fence closes', () => {
   const source = '- a\n    - child\n      ```\n      x\n      ```\n    ```\nafter\n'
   expect(carveToHtml(source)).toContain('<pre><code>after\n</code></pre>')
+})
+
+it('stops an unclosed code fence at its nested container closer', () => {
+  const source = ':::: note\n::: tip\n```\nx\n:::\nin note\n::::\n\nafter\n'
+  const html = carveToHtml(source)
+  expect(html).toContain('<pre><code>x\n</code></pre>')
+  expect(html).toContain('<p>in note</p>')
+  expect(html).toContain('</aside>\n<p>after</p>')
 })
 
 it.each([

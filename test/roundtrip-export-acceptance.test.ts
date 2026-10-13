@@ -179,6 +179,7 @@ for (const fixture of fixtures.markdownExportImport) test(`shared Markdown expor
   for (const fragment of fixture.carrierFragments) assert.ok(exported.includes(fragment), fragment)
   const codes = carveToMarkdownWithReport(fixture.source, { roundtrip: true }).losses.map((row) => row.code)
   for (const code of fixture.lossCodes ?? []) assert.ok(codes.includes(code), code)
+  for (const code of fixture.forbiddenLossCodes ?? []) assert.ok(!codes.includes(code), code)
   const imported = migrateMarkdown(exported)
   assertProjection(parse(imported.value), fixture.expectedNodes)
   assert.equal(carveToHtml(imported.value).trim(), carveToHtml(fixture.source).trim())
