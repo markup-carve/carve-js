@@ -938,5 +938,57 @@
   {
     "source": "- [ ] ```\n        a  b\n        scope=\"col\"\n  ```",
     "html": "<ul class=\"task-list\">\n<li>\n<input disabled=\"\" type=\"checkbox\"/>\n<pre><code>  a  b\n  scope=\"col\"\n</code></pre>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "para\n- x\n- [ ] ```\n  ``` _c_",
+    "html": "<p>para\n- x\n- [ ] <code>\n</code> <em>c</em></p>\n"
+  },
+  {
+    "source": "> para\n> - x\n> - [ ] ```\n>   ``` _c_",
+    "html": "<blockquote>\n<p>para\n- x\n- [ ] <code>\n</code> <em>c</em></p>\n</blockquote>\n"
+  },
+  {
+    "source": "> > para\n> > - x\n> > - [ ] ```\n> >   ``` _c_",
+    "html": "<blockquote>\n<blockquote>\n<p>para\n- x\n- [ ] <code>\n</code> <em>c</em></p>\n</blockquote>\n</blockquote>\n"
+  },
+  {
+    "source": "para\n- [ ] a\n- [ ] ```\n  ``` _c_",
+    "html": "<p>para\n- [ ] a\n- [ ] <code>\n</code> <em>c</em></p>\n"
+  },
+  {
+    "source": "> para\n> - [ ] a\n> - [ ] ```\n>   ``` _c_",
+    "html": "<blockquote>\n<p>para\n- [ ] a\n- [ ] <code>\n</code> <em>c</em></p>\n</blockquote>\n"
+  },
+  {
+    "source": "> > para\n> > - [ ] a\n> > - [ ] ```\n> >   ``` _c_",
+    "html": "<blockquote>\n<blockquote>\n<p>para\n- [ ] a\n- [ ] <code>\n</code> <em>c</em></p>\n</blockquote>\n</blockquote>\n"
+  },
+  {
+    "source": "para\n1. x\n- [ ] ```\n  ``` _c_",
+    "html": "<p>para\n1. x\n- [ ] <code>\n</code> <em>c</em></p>\n"
+  },
+  {
+    "source": "> para\n> 1. x\n> - [ ] ```\n>   ``` _c_",
+    "html": "<blockquote>\n<p>para\n1. x\n- [ ] <code>\n</code> <em>c</em></p>\n</blockquote>\n"
+  },
+  {
+    "source": "> > para\n> > 1. x\n> > - [ ] ```\n> >   ``` _c_",
+    "html": "<blockquote>\n<blockquote>\n<p>para\n1. x\n- [ ] <code>\n</code> <em>c</em></p>\n</blockquote>\n</blockquote>\n"
+  },
+  {
+    "source": "- a\n  - x\n  - [ ] ```\n    ``` _c_",
+    "html": "<ul>\n<li>\na\n- x\n- [ ] <code>\n</code> <em>c</em>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "> - a\n>   - x\n>   - [ ] ```\n>     ``` _c_",
+    "html": "<blockquote>\n<ul>\n<li>\na\n- x\n- [ ] <code>\n</code> <em>c</em>\n</li>\n</ul>\n</blockquote>\n"
+  },
+  {
+    "source": "> > - a\n> >   - x\n> >   - [ ] ```\n> >     ``` _c_",
+    "html": "<blockquote>\n<blockquote>\n<ul>\n<li>\na\n- x\n- [ ] <code>\n</code> <em>c</em>\n</li>\n</ul>\n</blockquote>\n</blockquote>\n"
+  },
+  {
+    "source": "[^n]: | a |\n  - [ ] ```php\n        _c_\n    ```\n\nx[^n]",
+    "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<table>\n<tr>\n<td>a</td>\n</tr>\n</table>\n<ul class=\"task-list\">\n<li>\n<input disabled=\"\" type=\"checkbox\"/>\n<pre><code class=\"language-php\">_c_\n</code></pre>\n</li>\n</ul>\n<p><a href=\"#fnref1\" role=\"doc-backlink\">↩︎</a></p>\n</li>\n</ol>\n</section>\n"
   }
 ]

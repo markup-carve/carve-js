@@ -489,7 +489,7 @@ export function maskDjotFences(
     }
     const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+](?: \[[ xX]\])?|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/) ?? nestedDjotNoteFence(content)
     const taskFence = open?.[2] !== undefined && /^[-*+] \[[ xX]\][ \t]+$/.test(open[2])
-    const lazyTaskFence = taskFence && !canNormalize && continuesParagraph(src, line.length - content.length + open![1]!.length + lineOffsets[index]!)
+    const lazyTaskFence = taskFence && !normalizeBoundary && continuesParagraph(src, line.length - content.length + open![1]!.length + lineOffsets[index]!)
     if (open && !lazyTaskFence && !(open[2]?.startsWith(':') && !previousBlock) && (!strict || canNormalize || !!open[2])) {
       const nestedNoteColumn = open.groups?.noteColumn === undefined ? -1 : Number(open.groups.noteColumn)
       const nestedNote = nestedNoteColumn >= 0
