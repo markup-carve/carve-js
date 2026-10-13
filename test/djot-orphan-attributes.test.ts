@@ -54,8 +54,10 @@ test('matches native Djot block attribute boundaries', async () => {
   type HtmlNode = import('parse5').DefaultTreeAdapterMap['node']
   const shape = (node: HtmlNode): unknown => {
     if ('value' in node) {
-      let value = node.value.replace(/[\t\r\n ]+/g, ' ')
       const parent = node.parentNode
+      let ancestor = parent
+      while (ancestor && ancestor.nodeName !== 'code' && ancestor.nodeName !== 'pre') ancestor = ancestor.parentNode
+      let value = ancestor ? node.value : node.value.replace(/[\t\r\n ]+/g, ' ')
       if (parent && 'attrs' in parent && parent.attrs.some(attr => attr.name === 'role' && attr.value === 'doc-backlink')) value = value.replace(/\uFE0E/g, '')
       if (parent && ['p', 'li', 'blockquote', 'td', 'th'].includes(parent.nodeName)) {
         const children = parent.childNodes.filter(child => !('value' in child && /^[\t\r\n ]*$/.test(child.value)))
