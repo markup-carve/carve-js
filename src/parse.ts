@@ -3287,7 +3287,9 @@ function parseCommentBlock(lexer: Lexer): Comment {
  */
 function stripPositions(nodes: InlineNode[]): InlineNode[] {
   for (const node of nodes) {
-    delete node.pos
+    // A cell wrap points to the authored `+`, even when surrounding text
+    // cannot be mapped after fragments from different rows are joined.
+    if (node.type !== 'cell_wrap') delete node.pos
     if (node.type === 'citation_group') {
       for (const item of node.items) delete item.pos
     }
@@ -3298,7 +3300,7 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
 
 function stripPositionsOutsideRow(nodes: InlineNode[], start: number, end: number): InlineNode[] {
   for (const node of nodes) {
-    if (node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
+    if (node.type !== 'cell_wrap' && node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
       (node.pos.startOffset < start || node.pos.endOffset > end)) delete node.pos
     if (node.type === 'citation_group') {
       for (const item of node.items) {
@@ -6747,8 +6749,10 @@ interface RawCell {
    */
   anchors?: AnchorRange[]
   /** Continuation text on a span marker, joined to its origin after the span walk. */
-  joins?: Array<{ frag: string; at: FragmentPlace | null; line: number; rowIndex: number }>
-  wraps?: Array<{ offset: number; line: number; row?: number }>
+  joins?: Array<{ frag: string; at: FragmentPlace | null; marker: FragmentPlace | null; line: number; rowIndex: number }>
+  wraps?: Array<{ offset: number; line: number; row?: number; pos?: Position }>
+  /** A later row joins into this cell, so its row cannot contain every child span. */
+  crossRowJoin?: boolean
 }
 
 interface FragmentPlace {
@@ -6758,9 +6762,16 @@ interface FragmentPlace {
 }
 
 /** Appends one `+` continuation fragment to a cell's collected source. */
-function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, line?: number, row?: number): void {
+function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, line?: number, row?: number, marker?: FragmentPlace | null): void {
   const fragStart = target.raw ? target.raw.length + 1 : 0
-  if (target.raw && line !== undefined) (target.wraps ??= []).push({ offset: fragStart - 1, line, ...(row ? { row } : {}) })
+  if (target.raw && line !== undefined) (target.wraps ??= []).push({
+    offset: fragStart - 1, line, ...(row ? { row } : {}),
+    ...(marker ? { pos: {
+      startLine: marker.line, endLine: marker.line,
+      startColumn: marker.column, endColumn: marker.column + 1,
+      startOffset: marker.offset, endOffset: marker.offset + 1,
+    } } : {}),
+  })
   target.raw = target.raw ? `${target.raw} ${frag}` : frag
   // Only the NEW fragment is read; the joining space is not a run
   // character, so resuming from the cell's own state is exact.
@@ -9244,7 +9255,7 @@ interface InlineSource {
    * also carries markup.
    */
   rangeShift?: number
-  cellWraps?: ReadonlyMap<number, { line: number; row?: number }>
+  cellWraps?: ReadonlyMap<number, { line: number; row?: number; pos?: Position }>
   wrapShift?: number
 }
 
@@ -15302,6 +15313,10 @@ class ParseSession {
         const contLine = lexer.lineNumber(lineIndex)
         const contColumn = lexer.lineStartColumn(lineIndex)
         const contCanPosition = lexer.hasDocumentOffsets
+        const markerIndex = line.indexOf('+')
+        const marker = contCanPosition && markerIndex >= 0
+          ? { offset: contOffset + markerIndex, line: contLine, column: contColumn + markerIndex }
+          : null
         splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
           const frag = trimCellPadding(src)
           const target: RawCell | undefined = lastRaw![idx]
@@ -15315,10 +15330,10 @@ class ParseSession {
             // The text belongs to the cell the marker resolves into, which only
             // the span walk below can name (T6).
             target.openRun = openVerbatimRun(frag, target.openRun)
-            ;(target.joins ??= []).push({ frag, at, line: continuationLine, rowIndex: rawRows.length - 1 })
+            ;(target.joins ??= []).push({ frag, at, marker, line: continuationLine, rowIndex: rawRows.length - 1 })
             return
           }
-          joinFragment(target, frag, at, continuationLine)
+          joinFragment(target, frag, at, continuationLine, undefined, marker)
         })
         continue
       }
@@ -15447,7 +15462,11 @@ class ParseSession {
         grid,
         (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
         (origin, marker) => {
-          for (const { frag, at, line, rowIndex } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex)
+          if (origin.rowIndex !== marker.rowIndex && marker.cell.joins?.length) {
+            origin.cell.crossRowJoin = true
+            marker.cell.crossRowJoin = true
+          }
+          for (const { frag, at, marker: point, line, rowIndex } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex, point)
         },
       )
     }
@@ -15457,7 +15476,7 @@ class ParseSession {
         ...(continuationCounts[idx] ? { continuationLines: continuationCounts[idx] } : {}),
         cells: rc.map((c) => {
           const cellWraps = c.wraps?.length
-            ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) }]))
+            ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.pos ? { pos: wrap.pos } : {}) }]))
             : undefined
           const children = c.span ? [] : c.anchors?.length
             ? this.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
@@ -15539,6 +15558,10 @@ class ParseSession {
       }
       const ra = rowAttrsList[idx]
       if (ra) row.attrs = ra
+      // A join through a span marker places content from one row in another.
+      // Neither row has a span that owns all of its source without also
+      // claiming a sibling's content.
+      if (rc.some(c => c.crossRowJoin)) delete row.pos
       if (row.pos?.startOffset !== undefined && row.pos.endOffset !== undefined) {
         for (const cell of row.cells) stripPositionsOutsideRow(cell.children ?? [], row.pos.startOffset, row.pos.endOffset)
       }
@@ -16317,7 +16340,7 @@ class ParseSession {
       const wrap = c === ' ' ? source.cellWraps?.get(i + (source.wrapShift ?? 0)) : undefined
       if (wrap) {
         flush()
-        out.push({ type: 'cell_wrap', line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+        out.push({ type: 'cell_wrap', line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(this.recordPositions && wrap.pos ? { pos: wrap.pos } : {}) })
         i++
         continue
       }

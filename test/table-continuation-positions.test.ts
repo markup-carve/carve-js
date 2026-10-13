@@ -63,7 +63,8 @@ describe('positions across a table continuation', () => {
     expect(children.filter((child: { type: string }) => child.type === 'text')
       .every((child: { pos?: unknown }) => child.pos !== undefined)).toBe(true)
     expect(children.filter((child: { type: string }) => child.type === 'cell_wrap')
-      .every((child: { pos?: unknown }) => child.pos === undefined)).toBe(true)
+      .every((child: { pos?: { startOffset: number; endOffset: number } }) =>
+        child.pos !== undefined && slice(child.pos) === '+')).toBe(true)
   })
 
   it('places the text of a cell that does NOT continue', () => {
