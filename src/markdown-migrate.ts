@@ -2715,10 +2715,12 @@ function writeTableRow(
  * as diagnostics; `markdownToCarve` returns the source alone.
  */
 import {
+  CARRIER_HEAD,
   CARRIER_PREFIX,
   carrierFenceWidth,
   carrierIsCaption,
   carrierIsCloser,
+  carrierMarker,
   carrierPayload,
 } from './carrier-markers.js'
 
@@ -2738,7 +2740,7 @@ export type MarkdownImportLoss = {
  * PART 11 §10s: the carrier payloads this conversion lifted out of the source,
  * in the order their marker lines appeared.
  */
-let carrierSlots: Array<{ payload: string; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string }> = []
+let carrierSlots: Array<{ payload: string; depth: number; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string }> = []
 
 /** The placeholder a lifted marker line stands in as, unique in the source. */
 let carrierToken = ''
@@ -2796,7 +2798,32 @@ function carrierSetBalances(payloads: readonly string[]): boolean {
   return open.length === 0
 }
 
-function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, string>, hosts: ReadonlyMap<number, string>): boolean {
+const isDefinitionPayload = (payload: string): boolean => /^::[ \t]/.test(payload) || payload === ':' || payload === ''
+
+/**
+ * Whether the definition-list markers pair by depth (CARVE-P11-067): a list of
+ * depth 2 or more opens only inside an open definition of the list one level up.
+ */
+function carrierDepthsPair(payloads: ReadonlyMap<number, string>, depths: ReadonlyMap<number, number>): boolean {
+  const lists: Array<{ inDefinition: boolean }> = []
+  for (const [at, payload] of payloads) {
+    const depth = depths.get(at) ?? 1
+    if (!isDefinitionPayload(payload)) {
+      if (depth > 1) return false
+      continue
+    }
+    if (/^::[ \t]/.test(payload)) {
+      if (depth === lists.length) lists.at(-1)!.inDefinition = false
+      else if (depth === lists.length + 1 && (depth === 1 || lists.at(-1)!.inDefinition)) lists.push({ inDefinition: false })
+      else return false
+    } else if (depth !== lists.length) return false
+    else if (payload === ':') lists.at(-1)!.inDefinition = true
+    else lists.pop()
+  }
+  return lists.length === 0
+}
+
+function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, string>, hosts: ReadonlyMap<number, string>, depths: ReadonlyMap<number, number>): boolean {
   let token = 'CARVEPROBE'
   while (lines.some(line => line.includes(token))) token += 'X'
   const probe = lines.map((line, at) => {
@@ -2826,7 +2853,7 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return
     if (Array.isArray(value)) {
-      const definitions: Array<{ depth: number }> = []
+      const definitions: Array<{ depth: number; list: number }> = []
       let depth = 0
       for (let i = 0; i < value.length; i++) {
         const node = value[i] as BlockNode
@@ -2838,22 +2865,24 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
             found.add(at)
             const payload = payloads.get(at)!
             if (carrierFenceWidth(payload) > 0) depth += carrierIsCloser(payload) ? -1 : 1
+            const list = depths.get(at) ?? 1
             if (/^::[ \t]/.test(payload)) {
               const last = definitions.at(-1)
-              if (!last || last.depth !== depth) definitions.push({ depth })
+              if (!last || last.depth !== depth || last.list < list) definitions.push({ depth, list })
             } else if (payload === ':') {
               const last = definitions.at(-1)
-              if (!last || last.depth !== depth) valid = false
+              if (!last || last.depth !== depth || last.list !== list) valid = false
             } else if (payload === '') {
               const last = definitions.pop()
-              if (!last || last.depth !== depth) valid = false
+              if (!last || last.depth !== depth || last.list !== list) valid = false
             }
             const next = value[i + 1] as BlockNode | undefined
             const previous = value[i - 1] as BlockNode | undefined
             const following = withoutCarrierHost(lines[at + 1] ?? '', hosts.get(at)!)
             if (/^\{.*\}$/.test(payload)) {
               const nextPayload = payloads.get(at + 1)
-              const listPrelude = nextPayload !== undefined && /^::[ \t]/.test(nextPayload) && definitions.length === 0
+              const listPrelude = nextPayload !== undefined && /^::[ \t]/.test(nextPayload) &&
+                (definitions.length === 0 || (depths.get(at + 1) ?? 1) > definitions.at(-1)!.list)
               if (!following || !next || (nextPayload !== undefined && !listPrelude && (carrierFenceWidth(nextPayload) === 0 || carrierIsCloser(nextPayload)))) valid = false
             }
             if (carrierIsCaption(payload) || /^::[ \t]/.test(payload)) {
@@ -2887,12 +2916,13 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
 function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>): string {
   carrierSlots = []
   carrierToken = ''
-  if (!markdown.includes(CARRIER_PREFIX)) return markdown
+  if (!markdown.includes(CARRIER_HEAD)) return markdown
 
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const dropped: MarkdownImportLoss[] = []
   const payloads = new Map<number, string>()
   const hosts = new Map<number, string>()
+  const depths = new Map<number, number>()
   // A MARKER IS A LINE THE BLOCK STRUCTURE READ AS HTML. The payload of a code
   // construct is verbatim content, so a marker-shaped line in one records no
   // container and must be left where it is - lifting one rewrote the sample
@@ -2902,11 +2932,13 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   for (const [at, line] of lines.entries()) {
     if (!blockLines.has(at)) continue
     const host = carrierHostPrefix(line)
-    const payload = carrierPayload(line.slice(host.length))
-    if (payload !== undefined) {
-      if (inlineCarriersEnabled && (payload === '[' || payload.startsWith(']{') || payload.startsWith('</#'))) continue
+    const marker = carrierMarker(line.slice(host.length))
+    if (marker !== undefined) {
+      const { payload, depth } = marker
+      if (depth === 1 && inlineCarriersEnabled && (payload === '[' || payload.startsWith(']{') || payload.startsWith('</#'))) continue
       payloads.set(at, payload)
       hosts.set(at, host)
+      if (depth > 1) depths.set(at, depth)
     }
   }
   if (payloads.size === 0 && dropped.length === 0) return markdown
@@ -2940,6 +2972,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
           : width > 0 || carrierIsCaption(payload) || /^::[ \t]/.test(payload) || payload === ':' || payload === ''
       if (valid) continue
       payloads.delete(at)
+      depths.delete(at)
       if (closer !== undefined) payloads.delete(closer)
       dropped.push({
         code: 'carrier-marker-dropped',
@@ -2950,7 +2983,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
       })
     }
   }
-  if (!balanced || !carrierSetBalances([...payloads.values()]) || !carrierPlacementsValid(lines, payloads, hosts)) {
+  if (!balanced || !carrierSetBalances([...payloads.values()]) || !carrierDepthsPair(payloads, depths) || !carrierPlacementsValid(lines, payloads, hosts, depths)) {
     importLosses.push({
       code: 'carrier-markers-damaged',
       message: CARRIER_MARKERS_DAMAGED,
@@ -3006,7 +3039,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     out.push(continuation.trimEnd())
     const equationLine = carrierEquationContent(lines[at - 1] ?? '', host)
     const equation = carrierIsCaption(payload) && /^\$\$[^$]+\$\$$/.test(equationLine) ? equationLine : undefined
-    carrierSlots.push({ payload, closer: carrierIsCloser(payload) || payload === '', caption: carrierIsCaption(payload), replaceParagraph: replaces && !droppedBold, ...(equation !== undefined ? { equation } : {}) })
+    carrierSlots.push({ payload, depth: depths.get(at) ?? 1, closer: carrierIsCloser(payload) || payload === '', caption: carrierIsCaption(payload), replaceParagraph: replaces && !droppedBold, ...(equation !== undefined ? { equation } : {}) })
     drop = droppedBold ? 1 : carrierIsCaption(payload) || carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
   }
 
@@ -3019,7 +3052,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
  * that opens it.
  */
 function carrierHostPrefix(line: string): string {
-  const at = line.indexOf(CARRIER_PREFIX)
+  const at = line.indexOf(CARRIER_HEAD)
   return at === -1 ? '' : line.slice(0, at)
 }
 
@@ -3117,7 +3150,7 @@ function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
   return out
 }
 
-type CarrierLine = { lead: string; text: string; kind: CarrierLineKind }
+type CarrierLine = { lead: string; text: string; kind: CarrierLineKind; depth?: number }
 
 /**
  * Put every restored closer at its OPENER's column.
@@ -3154,21 +3187,24 @@ function anchorCarrierClosers(items: CarrierLine[]): CarrierLine[] {
 }
 
 function restoreDefinitionBodies(items: CarrierLine[]): CarrierLine[] {
-  const lists: Array<{ lead: string; active: boolean; first: boolean }> = []
+  const lists: Array<{ lead: string; depth: number; active: boolean; first: boolean }> = []
   const out: CarrierLine[] = []
   for (const item of items) {
     const term = item.kind === 'open' && /^::[ \t]/.test(item.text)
     const definition = item.kind === 'open' && item.text === ':'
     const closing = item.kind === 'close' && item.text === ''
+    const depth = item.depth ?? 1
     const last = lists.at(-1)
     const normalizedLead = item.lead.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
-    if ((term || definition || closing) && last?.first && last.lead === normalizedLead) {
+    // A deeper term opens a list nested in the open definition (CARVE-P11-067).
+    const sameList = last?.lead === normalizedLead && last.depth === depth
+    if ((term || definition || closing) && last?.first && sameList) {
       out.push({ lead: last.lead, text: ': {empty}', kind: 'open' })
       last.first = false
     }
     if (term) {
-      if (last?.lead === normalizedLead) { last.active = false; last.first = false }
-      else lists.push({ lead: normalizedLead, active: false, first: false })
+      if (sameList) { last!.active = false; last!.first = false }
+      else lists.push({ lead: normalizedLead, depth, active: false, first: false })
     } else if (definition && last) {
       last.active = true
       last.first = true
@@ -3258,7 +3294,7 @@ function restoreCarrierMarkers(carve: string): string {
     const slot = carrierSlots[Number(match[1])]!
     const kind: CarrierLineKind = slot.caption ? 'caption' : slot.closer ? 'close' : 'open'
 
-    return { lead: line.slice(0, at), text: slot.payload, kind }
+    return { lead: line.slice(0, at), text: slot.payload, kind, ...(slot.depth > 1 ? { depth: slot.depth } : {}) }
   })
 
   return restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items))).map((item) => item.lead + item.text).join('\n')
@@ -6109,7 +6145,7 @@ function dropTrailingEmptyQuoteLines(source: string): string {
  * it (markup-carve/carve#2850).
  */
 function markdownBlockHtmlLines(markdown: string): ReadonlySet<number> {
-  if (!markdown.includes(CARRIER_PREFIX)) return new Set()
+  if (!markdown.includes(CARRIER_HEAD)) return new Set()
   const allLines = markdown.replace(/\0/g, '\ufffd').replace(/\r\n?/g, '\n').split('\n')
   const { bodyStart } = splitFrontmatter(allLines)
   const read = extractReferenceDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw, (line) =>
