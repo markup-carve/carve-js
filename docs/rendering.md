@@ -336,9 +336,9 @@ where that escape would land grows by one, so the transform reverses exactly.
 Nothing else is escaped: the payload is Carve source, and Carve's own escape is
 the one the reader already has.
 
-### Attribute lines, definition lists and captions
+### Attribute lines, definition lists, captions and fence titles
 
-Three constructs that are not containers take markers too (`CARVE-P11-067`).
+Four constructs that are not containers take markers too (`CARVE-P11-067`).
 
 An attribute line this target drops - a heading's `#id`, a class on a paragraph,
 a block quote, a list or a table - takes one marker directly above its block. A
@@ -377,6 +377,19 @@ Steve Jobs
 
 The import replaces a term's or a caption's rendered paragraph, so neither
 appears twice.
+
+A code fence with a title or a label takes one marker directly above the fence,
+holding the opener as `carve fmt` writes it. The fence below is written as
+without the mode, and the import takes only the title and the label from the
+marker. A title is not an attribute, so it is never carried as `{title=...}`; a
+block attribute line keeps its own marker above the fence marker.
+
+````markdown
+<!-- carve: ```js "app.js" [Example] -->
+```js "app.js" [Example]
+let x = 1
+```
+````
 
 ### What takes no marker
 
