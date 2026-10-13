@@ -115,7 +115,7 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
         for (let next = row + 1; next < lines.length && lines[next]!.trimEnd() === prefix.trimEnd(); next++) removed.add(next)
       }
       if (depth >= 2 && frame && indent > frame.column && attrs?.end === body.trimEnd().length && !continuesParagraph(source, at)) frame.attributes.push({ row, wire: attrs.source })
-      else if (frame && indent <= frame.column) frames.delete(depth)
+      else if (frame && indent <= frame.column && !lazy) frames.delete(depth)
       else if (frame && attrs?.end !== body.trimEnd().length) frame.attributes = []
     } else if (frame) {
       frame.attributes = []
