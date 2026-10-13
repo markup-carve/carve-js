@@ -4,7 +4,7 @@ import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
 import { SourceUnspellableError } from './source-unspellable-error.js'
-import { isValidAttrPayload, unescapeAttrValue } from './attribute-parser.js'
+import { isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
@@ -1261,6 +1261,114 @@ function markdownDestinationOpaqueEnd(source: string, dialect: MarkdownDialect):
     const match = angle.exec(source)
     return match ? offset + match[0].length : opaque(offset) ?? scanHtmlTag(source, offset)?.end
   }
+}
+
+let inlineCarriersEnabled = false
+let inlineCarriersDamaged = false
+
+// Read adjacency after Markdown links, including references, have become AST nodes.
+function restoreInlineCarriers(source: string): string {
+  if (!inlineCarriersEnabled || !source.includes(CARRIER_PREFIX)) return source
+  const tree = parse(source)
+  let changed = false
+  const restore = (nodes: InlineNode[]): InlineNode[] => {
+    const out: InlineNode[] = []
+    const stack: InlineNode[][] = []
+    let current = out
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]!
+      if (node.type === 'raw_inline' && node.format === 'html' && node.content.startsWith(CARRIER_PREFIX)) {
+        const payload = carrierPayload(node.content)
+        if (payload === '[') {
+          stack.push(current)
+          current = []
+          changed = true
+          continue
+        }
+        const closer = payload?.startsWith(']') ? payload.slice(1) : undefined
+        const attrsSource = closer ?? payload
+        const attrsValid = attrsSource !== undefined && /^\{.*\}$/.test(attrsSource) && isValidInlineAttrPayload(attrsSource.slice(1, -1))
+        if (closer !== undefined && attrsValid) {
+          const parent = stack.pop()
+          if (!parent) { inlineCarriersDamaged = true; return nodes }
+          const parsed = parse(`[x]${attrsSource}`).children[0]
+          const span = parsed?.type === 'paragraph' ? parsed.children[0] : undefined
+          if (span?.type === 'span') {
+            const child = current.length === 1 ? current[0] : undefined
+            const attrs = span.attrs
+            const childAttrs = child?.attrs
+            const sameAttrs = attrs?.id === childAttrs?.id
+              && (attrs?.classes ?? []).length === (childAttrs?.classes ?? []).length
+              && (attrs?.classes ?? []).every((value, index) => value === childAttrs?.classes?.[index])
+              && Object.keys(attrs?.keyValues ?? {}).length === Object.keys(childAttrs?.keyValues ?? {}).length
+              && Object.entries(attrs?.keyValues ?? {}).every(([key, value]) => value === childAttrs?.keyValues?.[key])
+            // Markdown's abbr element omits the span's other attributes.
+            const abbreviationOnly = childAttrs?.id === undefined
+              && !(childAttrs?.classes?.length)
+              && Object.keys(childAttrs?.keyValues ?? {}).length === 1
+              && childAttrs?.keyValues?.abbr !== undefined
+              && childAttrs.keyValues.abbr === attrs?.keyValues?.abbr
+            if (child?.type === 'span' && (sameAttrs || abbreviationOnly)) {
+              if (span.attrs) child.attrs = span.attrs
+              else delete child.attrs
+              parent.push(child)
+            } else parent.push({ ...span, children: current })
+          }
+          current = parent
+          changed = true
+          continue
+        }
+        const previous = current.at(-1)
+        if (closer === undefined && attrsValid && (previous?.type === 'link' || previous?.type === 'image' || previous?.type === 'autolink')) {
+          const parsed = parse(`[x]${attrsSource}`).children[0]
+          const span = parsed?.type === 'paragraph' ? parsed.children[0] : undefined
+          if (span?.type === 'span') {
+            if (span.attrs) previous.attrs = span.attrs
+            else delete previous.attrs
+          }
+          if (previous.type === 'link' || previous.type === 'image') {
+            delete previous.ref
+            delete previous.rawRef
+          }
+          changed = true
+          continue
+        }
+        if (payload?.startsWith('</#') && payload.endsWith('>') && (nodes[i + 1]?.type === 'link' || nodes[i + 1]?.type === 'autolink')) {
+          const parsed = parse(payload).children[0]
+          const ref = parsed?.type === 'paragraph' ? parsed.children[0] : undefined
+          if (parsed?.type === 'paragraph' && parsed.children.length === 1 && ref?.type === 'heading_ref') {
+            current.push(ref)
+            i++
+            changed = true
+            continue
+          }
+        }
+        // A container, term or caption payload is the block pass's to report.
+        if (!/^(?::|\^|$)/.test(payload ?? '')) importLosses.push({
+          code: 'carrier-markers-damaged',
+          message: `${CARRIER_MARKER_DROPPED}: ${node.content}`,
+          ...(node.pos === undefined ? {} : { line: node.pos.startLine }),
+          fidelity: 'degraded',
+          confidence: 'fallback',
+        })
+      }
+      if ('children' in node && Array.isArray(node.children)) node.children = restore(node.children)
+      current.push(node)
+    }
+    if (stack.length) inlineCarriersDamaged = true
+    return out
+  }
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach(visit); return }
+    const node = value as BlockNode
+    if (node.type === 'table' || node.type === 'code_block' || node.type === 'raw_block' || node.type === 'image') return
+    if (node.type === 'paragraph' || node.type === 'heading') node.children = restore(node.children)
+    else Object.values(value).forEach(visit)
+  }
+  visit(tree)
+  if (!changed || inlineCarriersDamaged) return source
+  return renderCarve(tree)
 }
 
 function convertInline(
@@ -2774,6 +2882,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     const host = carrierHostPrefix(line)
     const payload = carrierPayload(line.slice(host.length))
     if (payload !== undefined) {
+      if (inlineCarriersEnabled && (payload === '[' || payload.startsWith(']{') || payload.startsWith('</#'))) continue
       payloads.set(at, payload)
       hosts.set(at, host)
     }
@@ -5246,6 +5355,10 @@ function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | nu
   const first = lines[start]!
   if (/^(?: {4,}|\t)/.test(first)) return null
   const trimmed = first.replace(/^ {0,3}/, '')
+  if (inlineCarriersEnabled && trimmed.startsWith(CARRIER_PREFIX)) {
+    const end = trimmed.indexOf(' -->')
+    if (/^<!-- carve: (?:\[|\]\{|<\/#)/.test(trimmed) || end >= 0 && trimmed.slice(end + 4).trim() !== '') return null
+  }
   const collectUntil = (endRe: RegExp, fallbackBlank: boolean, interrupts = true): HtmlBlockRun => {
     const block: string[] = []
     for (let i = start; i < lines.length; i++) {
@@ -5589,9 +5702,19 @@ export function markdownToCarveWithLosses(
     // conversion and written back as the Carve line it is afterwards, so the
     // Markdown reading in between never sees a comment it would carry across as
     // raw HTML.
+    inlineCarriersEnabled = !Object.values(dialect).some(Boolean)
+    inlineCarriersDamaged = false
     const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
+    if (losses.some(loss => loss.message === CARRIER_MARKERS_DAMAGED)) inlineCarriersEnabled = false
 
-    let value = restoreCarrierMarkers(convertMarkdown(prepared, dialect))
+    let value = restoreInlineCarriers(restoreCarrierMarkers(convertMarkdown(prepared, dialect)))
+    if (inlineCarriersDamaged) {
+      inlineCarriersEnabled = false
+      carrierSlots = []
+      losses.length = 0
+      losses.push({ code: 'carrier-markers-damaged', message: CARRIER_MARKERS_DAMAGED, fidelity: 'degraded', confidence: 'fallback' })
+      value = convertMarkdown(markdown, dialect)
+    }
     const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
     if (value.includes('@') || usedBoundaryKey !== undefined) {
       const document = parse(value)
@@ -5606,6 +5729,8 @@ export function markdownToCarveWithLosses(
     }
     return { value, losses }
   } finally {
+    inlineCarriersEnabled = false
+    inlineCarriersDamaged = false
     carrierSlots = []
     carrierToken = ''
     useEmptyDestinationReferences(null)
