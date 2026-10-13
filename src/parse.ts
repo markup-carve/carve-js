@@ -7377,6 +7377,7 @@ function rebasedColonGroupEnd(
   onFenceBodyLine?: (index: number) => void,
   nestedBodyLines?: Set<number>,
   usesHostMinimum = false,
+  emptyHostMinimum = false,
 ): number {
   let end = start
   const stack = [{ width, literal: RE_LINE_BLOCK_OPEN.test(groupLineContent(lines[start]!, base)) }]
@@ -7413,7 +7414,8 @@ function rebasedColonGroupEnd(
       }
     }
     if (authoredCodeClose) {
-      if (authoredCodeAdjustment !== 0 && indentColumns(candidate, Math.max(0, authoredCodeAdjustment)) >= authoredCodeAdjustment) {
+      if (authoredCodeAdjustment !== 0 && !takenBelowColumn?.has(j) &&
+          indentColumns(candidate, Math.max(0, authoredCodeAdjustment)) >= Math.max(0, authoredCodeAdjustment)) {
         candidate = authoredCodeAdjustment < 0
           ? ' '.repeat(-authoredCodeAdjustment) + candidate
           : sliceColumns(candidate, authoredCodeAdjustment, true)
@@ -7425,6 +7427,7 @@ function rebasedColonGroupEnd(
       const column = authoredColumn ??= indentColumns(candidate, hostedAuthoredBlockOpener(candidate.trimStart()) ? Infinity : authored.at(-1)!.column + 4)
       while (!isBlankLine(candidate) && authored.length > 1 && column < authored.at(-1)!.column) authored.pop()
       const owner = authored.at(-1)!
+      const rebasesHere = !emptyHostMinimum || !owner.paragraph || column >= base
       const text = sliceColumns(candidate, column, true)
       const markerColumn = /^[*+\-0-9A-Za-z]/.test(text) ? markerContentColumn(text, false, 0) : -1
       const childColumn = markerColumn < 0 ? -1 : column + markerColumn
@@ -7434,22 +7437,22 @@ function rebasedColonGroupEnd(
         authoredChildBlockBoundary = false
       }
       const code = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
-      if (code && column === owner.column && owner.paragraph &&
+      if (rebasesHere && code && column === owner.column && owner.paragraph &&
           !opaqueGroupCloses(opaqueGroupCloser(text)!, lines, j + 1, column, takenBelowColumn, closerMemo)) authoredInlineFence = true
-      if (code && column >= owner.column && (column > owner.column ||
+      if (rebasesHere && code && column >= owner.column && (column > owner.column ||
           opaqueGroupCloses(opaqueGroupCloser(text)!, lines, j + 1, column, takenBelowColumn, closerMemo))) {
         authoredCodeClose = fenceCloseRe(RE_FENCE.test(text) ? code[2]! : code[1]!)
         authoredCodeAdjustment = column - base
       }
       const closeRun = RE_ADMONITION_CLOSE.exec(text)
       const closesOwner = closeRun?.[1]?.length === stack.at(-1)!.width
-      if (authoredChildColumn < 0 && !closesOwner &&
+      if (rebasesHere && authoredChildColumn < 0 && !closesOwner &&
           (column >= owner.column && (closeRun === null || column === owner.column) && colonBlockOpenerRun(text) !== null)) {
         authored.push({ column, paragraph: false })
       }
       const current = authored.at(-1)!
       const blockColumn = column > current.column && hostedAuthoredBlockOpener(text) && childColumn < 0 ? column : current.column
-      if (blockColumn !== base && column >= blockColumn && (blockColumn > base || usesHostMinimum && hostedAuthoredBlockOpener(text))) {
+      if (rebasesHere && blockColumn !== base && column >= blockColumn && (blockColumn > base || usesHostMinimum && hostedAuthoredBlockOpener(text))) {
         candidate = blockColumn < base
           ? ' '.repeat(base - blockColumn) + candidate
           : sliceColumns(candidate, blockColumn - base, true)
@@ -7583,6 +7586,7 @@ function rebaseOverindentedBlocks(
   noteParagraph?: { markers?: ReadonlySet<number>, markerBody?: boolean },
   itemParagraphFences?: ReadonlySet<number>,
   lazyParagraphFences?: ReadonlySet<number>,
+  descriptionItem = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7905,7 +7909,8 @@ function rebaseOverindentedBlocks(
         closerMemo,
         takenBelowColumn, onFenceBodyLine,
         !absorbingColonParagraph && (!includeSublists || typedContainer) ? markerColonNestedBody : undefined,
-        includeSublists && typedContainer,
+        (!includeSublists && descriptionItem && !RE_LINE_BLOCK_OPEN.test(opener)) || (includeSublists && typedContainer),
+        !includeSublists,
       )
       if (markerColonOwnsExtent && i === 0 && base === 0 && !RE_LINE_BLOCK_OPEN.test(opener)) {
         markerColonEnd = end
@@ -14262,6 +14267,8 @@ class ParseSession {
           tabRebaseColumns,
           { markers: noteParagraphMarkers },
           leadOwnsExtent ? undefined : itemParagraphFences,
+          undefined,
+          markerLineTerm,
         )
         : new Set<number>()
       if (leadOwnsExtent) {

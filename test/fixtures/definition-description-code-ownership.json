@@ -3082,7 +3082,7 @@
   {
     "id": "review-274",
     "source": "- :: t\n  :   payload\n     :::\n   ~~~\n~~~\n   ~~~\n",
-    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>payload</dd>\n    </dl>\n    <div>\n      <p>~~~\n~~~\n~~~</p>\n    </div>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>payload</dd>\n    </dl>\n    <div>\n      <pre><code></code></pre>\n    </div>\n  </li>\n</ul>\n<pre><code>   ~~~\n</code></pre>"
   },
   {
     "id": "review-275",
