@@ -2719,6 +2719,7 @@ import {
   CARRIER_PREFIX,
   carrierFenceWidth,
   carrierIsCaption,
+  carrierIsCodeFence,
   carrierIsCloser,
   carrierMarker,
   carrierPayload,
@@ -2740,7 +2741,7 @@ export type MarkdownImportLoss = {
  * PART 11 §10s: the carrier payloads this conversion lifted out of the source,
  * in the order their marker lines appeared.
  */
-let carrierSlots: Array<{ payload: string; depth: number; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string }> = []
+let carrierSlots: Array<{ payload: string; depth: number; closer: boolean; caption: boolean; replaceParagraph: boolean; equation?: string; fence?: true }> = []
 
 /** The placeholder a lifted marker line stands in as, unique in the source. */
 let carrierToken = ''
@@ -2781,7 +2782,7 @@ function carrierSetBalances(payloads: readonly string[]): boolean {
   const open: number[] = []
   for (const payload of payloads) {
     if (/^::[ \t]/.test(payload) || payload === ':' || payload === '') continue
-    if (carrierIsCaption(payload)) continue
+    if (carrierIsCaption(payload) || carrierIsCodeFence(payload)) continue
     if (/^\{.*\}$/.test(payload)) {
       if (!isValidAttrPayload(payload.slice(1, -1))) return false
       continue
@@ -2883,8 +2884,10 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
               const nextPayload = payloads.get(at + 1)
               const listPrelude = nextPayload !== undefined && /^::[ \t]/.test(nextPayload) &&
                 (definitions.length === 0 || (depths.get(at + 1) ?? 1) > definitions.at(-1)!.list)
-              if (!following || !next || (nextPayload !== undefined && !listPrelude && (carrierFenceWidth(nextPayload) === 0 || carrierIsCloser(nextPayload)))) valid = false
+              const fencePrelude = nextPayload !== undefined && carrierIsCodeFence(nextPayload)
+              if (!following || !next || (nextPayload !== undefined && !listPrelude && !fencePrelude && (carrierFenceWidth(nextPayload) === 0 || carrierIsCloser(nextPayload)))) valid = false
             }
+            if (carrierIsCodeFence(payload) && (!/^[ \t]{0,3}(?:`{3,}|~{3,})/.test(following) || next?.type !== 'code_block' || payloads.has(at + 1))) valid = false
             if (carrierIsCaption(payload) || /^::[ \t]/.test(payload)) {
               if (!following || next?.type !== 'paragraph' || payloads.has(at + 1)) valid = false
             }
@@ -2969,7 +2972,9 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
         ? tree.children.length === 1 && tree.children[0]!.type !== 'paragraph'
         : /^\{.*\}$/.test(payload)
           ? isValidAttrPayload(payload.slice(1, -1))
-          : width > 0 || carrierIsCaption(payload) || /^::[ \t]/.test(payload) || payload === ':' || payload === ''
+          : carrierIsCodeFence(payload)
+            ? codeFenceCarrier(payload) !== undefined
+            : width > 0 || carrierIsCaption(payload) || /^::[ \t]/.test(payload) || payload === ':' || payload === ''
       if (valid) continue
       payloads.delete(at)
       depths.delete(at)
@@ -3048,7 +3053,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     out.push(continuation.trimEnd())
     const equationLine = carrierEquationContent(lines[at - 1] ?? '', host)
     const equation = carrierIsCaption(payload) && /^\$\$[^$]+\$\$$/.test(equationLine) ? equationLine : undefined
-    carrierSlots.push({ payload, depth: depths.get(at) ?? 1, closer: carrierIsCloser(payload) || payload === '', caption: carrierIsCaption(payload), replaceParagraph: replaces && !droppedBold, ...(equation !== undefined ? { equation } : {}) })
+    carrierSlots.push({ payload, depth: depths.get(at) ?? 1, closer: carrierIsCloser(payload) || payload === '', caption: carrierIsCaption(payload), replaceParagraph: replaces && !droppedBold, ...(equation !== undefined ? { equation } : {}), ...(carrierIsCodeFence(payload) ? { fence: true as const } : {}) })
     drop = droppedBold ? 1 : carrierIsCaption(payload) || carrierIsCloser(payload) ? 0 : carrierFallbackLines(payload)
   }
 
@@ -3159,7 +3164,7 @@ function separateCarrierLines(items: readonly CarrierLine[]): CarrierLine[] {
   return out
 }
 
-type CarrierLine = { lead: string; text: string; kind: CarrierLineKind; depth?: number }
+type CarrierLine = { lead: string; text: string; kind: CarrierLineKind; depth?: number; fence?: true }
 
 /**
  * Put every restored closer at its OPENER's column.
@@ -3303,10 +3308,49 @@ function restoreCarrierMarkers(carve: string): string {
     const slot = carrierSlots[Number(match[1])]!
     const kind: CarrierLineKind = slot.caption ? 'caption' : slot.closer ? 'close' : 'open'
 
-    return { lead: line.slice(0, at), text: slot.payload, kind, ...(slot.depth > 1 ? { depth: slot.depth } : {}) }
+    return { lead: line.slice(0, at), text: slot.payload, kind, ...(slot.depth > 1 ? { depth: slot.depth } : {}), ...(slot.fence ? { fence: true as const } : {}) }
   })
 
-  return restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items))).map((item) => item.lead + item.text).join('\n')
+  return restoreFenceCarriers(restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items)))).map((item) => item.lead + item.text).join('\n')
+}
+
+/** The title and label a fence marker's opener holds, or undefined when it opens no fenced code block. */
+function codeFenceCarrier(payload: string): { header?: string; label?: string; info: string } | undefined {
+  const run = /^(?:`{3,}|~{3,})/.exec(payload)![0]
+  const tree = parse(`${payload}\n${run}\n`)
+  const block = tree.children[0]
+  if (tree.children.length !== 1 || block?.type !== 'code_block' || (block.header === undefined && block.label === undefined)) return undefined
+  // The info past the language token, as the canonical writer spelled it.
+  const info = payload.slice(run.length).replace(block.lang === undefined ? /^[ \t]*/ : /^[ \t]*\S+[ \t]*/, '')
+  return { ...(block.header !== undefined ? { header: block.header } : {}), ...(block.label !== undefined ? { label: block.label } : {}), info }
+}
+
+/**
+ * Put a fence marker's title and label onto the opener below it and drop the
+ * marker line: the import takes nothing else from it (CARVE-P11-067).
+ */
+function restoreFenceCarriers(items: CarrierLine[]): CarrierLine[] {
+  const out: CarrierLine[] = []
+  for (let at = 0; at < items.length; at++) {
+    const item = items[at]!
+    if (!item.fence) {
+      out.push(item)
+      continue
+    }
+    const carried = codeFenceCarrier(item.text)!
+    let below = at + 1
+    while (below < items.length && items[below]!.kind === undefined && items[below]!.text === '') below++
+    const opener = items[below]
+    const match = opener === undefined ? null : /^((?:`{3,}|~{3,}))(.*)$/.exec(opener.text)
+    if (opener === undefined || match === null) {
+      out.push(item)
+      continue
+    }
+    const lang = match[2]!.trim()
+    items[below] = { ...opener, text: `${match[1]}${lang}${lang === '' ? '' : ' '}${carried.info}` }
+    at = below - 1
+  }
+  return out
 }
 
 let importLosses: MarkdownImportLoss[] = []

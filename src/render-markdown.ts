@@ -8,6 +8,7 @@ import type {
   Admonition,
   Attrs,
   BlockNode,
+  CodeBlock,
   Document,
   Figure,
   Image,
@@ -28,11 +29,11 @@ import { codeSource, rawSource } from './verbatim-payload.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
-import { destinationDenied, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { destinationDenied, listStyleDropped, rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 import { inlineText } from './heading-ids.js'
 import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
-import { renderCarve, renderCarrierAttributeBlock } from './render-carve.js'
+import { renderCarve, renderCarrierAttributeBlock, withoutKey } from './render-carve.js'
 import { carrierLine, spellCarrierMarkers } from './carrier-markers.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
@@ -385,6 +386,15 @@ function carried(markers: CarrierMarkers | undefined, body: string): string {
   return `${head}${body}${tail}`
 }
 
+/** CARVE-P11-067: a fence's title and label travel in a marker holding its canonical opener. */
+function fenceMarker(node: CodeBlock, ctx: MarkdownContext): string {
+  if (!ctx.roundtrip || (node.header === undefined && (node.label === undefined || node.label === ''))) return ''
+  const { lang, header, label, content } = node
+  const block: CodeBlock = { type: 'code_block', content, ...(lang !== undefined ? { lang } : {}), ...(header !== undefined ? { header } : {}), ...(label !== undefined ? { label } : {}) }
+  const opener = renderCarve({ type: 'document', children: [block] }).split('\n', 1)[0]!
+  return `${carrierLine(opener)}\n`
+}
+
 function canonicalInline(nodes: InlineNode[]): string {
   return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: nodes }] }).replace(/\n+$/, '')
 }
@@ -405,6 +415,12 @@ function attributeMarker(node: BlockNode, ctx: MarkdownContext): string {
   if (node.type === 'heading' && !attrs.order?.includes('#id')) {
     const { id: _generated, ...authored } = attrs
     attrs = authored
+  }
+  // The fence marker carries a title read from the opener (CARVE-P11-067).
+  if (node.type === 'code_block' && node.header !== undefined && attrs.keyValues?.['title'] === node.header) {
+    const rest = withoutKey(attrs, 'title')
+    if (rest === undefined) return ''
+    attrs = rest
   }
   const line = renderCarrierAttributeBlock(attrs)
   return line.startsWith('{') ? `${carrierLine(line)}\n` : ''
@@ -446,7 +462,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       // stands.
       const payload = holdPayloadBlanks(`\n${codeSource(content)}${closerSeparator}`)
       const infoSeparator = fence[0] === '~' && info.startsWith('~') ? ' ' : ''
-      return `${fence}${infoSeparator}${info}${payload}${fence}\n\n`
+      return `${fenceMarker(node, ctx)}${fence}${infoSeparator}${info}${payload}${fence}\n\n`
     }
     case 'block_quote': {
       const inner = containerContent(() => inOwnContainer(ctx, () => renderBlocks(node.children, ctx)))
@@ -576,6 +592,7 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
 }
 
 function renderList(node: List, ctx: MarkdownContext, mark?: string): string {
+  if (node.ordered) listStyleDropped(ctx.options, node)
   ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
