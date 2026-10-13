@@ -5,7 +5,7 @@ import { parseFragment, serialize } from 'parse5'
 import { parse, carveToHtml, carveToHtmlWithReport, htmlToAst, htmlToCarve, carveToMarkdown, carveToMarkdownWithReport, migrateMarkdown } from '../src/index.js'
 
 const fixtures = JSON.parse(readFileSync(new URL('../spec/resources/roundtrip-export-acceptance-fixtures.json', import.meta.url), 'utf8'))
-const inventory = ['explicit-id', 'generated-id', 'ref', 'autolink', 'footnote-label', 'inline-footnote', 'raw', 'escaped', 'abbreviations', 'col-widths', 'label', 'id-slot', 'tight']
+const inventory = ['explicit-id', 'generated-id', 'ref', 'autolink', 'footnote-label', 'inline-footnote', 'raw', 'escaped', 'abbreviations', 'col-widths', 'label', 'id-slot', 'tight', 'xref', 'caption-number']
 // Reserved without an inventory row: no core writer emits it, every importer consumes it.
 const retiredNames = ['data-carve-src', 'data-djot-src']
 const reservedNames = new Set(['data-marker', 'data-char', ...retiredNames, ...inventory.flatMap((name) => [`data-carve-${name}`, `data-djot-${name}`])])
@@ -80,6 +80,7 @@ for (const fixture of fixtures.exportImport) {
     assert.equal(carveToHtml(fixture.source, { roundtrip: false }), ordinary)
     assert.ok(!htmlAttributes(ordinary).some((attr) => isReserved(attr.name)))
     const exported = carveToHtml(fixture.source, { roundtrip: true })
+    if (fixture.exportedHtml !== undefined) assert.equal(exported.replace(/\n+$/, ''), fixture.exportedHtml.replace(/\n+$/, ''))
     const attrs = htmlAttributes(exported)
     for (const [name, expected] of Object.entries(fixture.carrierText ?? {})) {
       const hosts = carrierElements(exported, name)

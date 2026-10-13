@@ -1931,6 +1931,25 @@ class Importer {
    * place and lets the attribute pass know which names were consumed.
    */
   private readInlineCarriers(node: P5Node, tag: string, children: InlineNode[], path: string): void {
+    if (tag === 'a' && this.hasCarrier(node, 'xref') && /^#[^> \n\r]+$/.test(this.attr(node, 'href') ?? '')) {
+      const footnoteLabel = this.carrierValue(node, 'footnote-label')
+      const validFootnoteLabel = footnoteLabel !== undefined && !/[\r\n\u2028\u2029]/u.test(footnoteLabel)
+        && RE_FOOTNOTE_DEF.exec(`[^${footnoteLabel}]: x`)?.[1] === footnoteLabel
+      const other = isReferenceLabel(this.carrierValue(node, 'ref') ?? '') ? 'ref'
+        : this.hasCarrier(node, 'autolink') ? 'autolink'
+        : validFootnoteLabel ? 'footnote-label'
+        : undefined
+      if (other) {
+        this.refuseContradiction(node, path, 'xref', other)
+        return
+      }
+      this.recordCarrier(node, 'xref')
+      return
+    }
+    if (tag === 'span' && this.hasCarrier(node, 'caption-number')) {
+      const bare = (domAttrs(node) ?? []).every(attribute => [carrier('caption-number'), legacyCarrier('caption-number')].includes(attribute.name))
+      if (bare && (domChildren(node) ?? []).every(child => child.nodeName === '#text')) this.recordCarrier(node, 'caption-number')
+    }
     if (tag === 'span') {
       // NEITHER A RAW INLINE NOR AN ESCAPE HAS AN ATTRIBUTE SLOT its writer
       // emits, so rebuilding one over an element carrying anything else
@@ -2079,7 +2098,7 @@ class Importer {
     // downstream reads one out of it.
     if (tag === 'a') {
       if (name === 'href') return true
-      return name === 'title' && destinationIsCarried(this.attr(node, 'href'))
+      return name === 'title' && !this.carrierReads.get(node)?.names.has('xref') && destinationIsCarried(this.attr(node, 'href'))
     }
     if (tag === 'img') {
       // `alt` stays consumed either way: with a source it is the image node's
@@ -4654,6 +4673,10 @@ class Importer {
     this.readInlineCarriers(node, tag, children, path)
     const carried = this.carrierReads.get(node)
     const attrs = this.attrs(node, path)
+    if (tag === 'a' && carried?.names.has('xref')) {
+      return [{ type: 'heading_ref', target: this.attr(node, 'href')!.slice(1), ...(attrs ? { attrs } : {}) }]
+    }
+    if (tag === 'span' && carried?.names.has('caption-number')) return [{ type: 'caption_number' }]
     if (tag === 'span' && carried?.names.has('raw')) {
       // §13a `data-carve-raw`. Without this the carrier span was read as raw
       // HTML, so `` `x`{=tex} `` came back as

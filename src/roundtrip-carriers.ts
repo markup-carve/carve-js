@@ -62,6 +62,8 @@ const PREFIXED = [
   'generated-id',
   'id-slot',
   'tight',
+  'xref',
+  'caption-number',
 ] as const
 
 export type PrefixedCarrier = (typeof PREFIXED)[number]
