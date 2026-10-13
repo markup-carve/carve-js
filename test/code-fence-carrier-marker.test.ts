@@ -22,6 +22,15 @@ describe('a code fence title and label under roundtrip Markdown export', () => {
     expect(codeBlock(imported.value)).toMatchObject({ lang: 'js', header: 'app.js', label: 'Example' })
   })
 
+  it('takes the title and label from the marker after the fence info is edited', () => {
+    const markdown = '<!-- carve: ```js "app.js" [Example] -->\n```js "edited.js"\nx\n```\n'
+    const imported = markdownToCarveWithLosses(markdown)
+    expect(codeBlock(imported.value)).toMatchObject({ header: 'app.js', label: 'Example' })
+    const unmarked = codeBlock(markdownToCarveWithLosses('```js "edited.js"\nx\n```\n').value)
+    expect(unmarked).toMatchObject({ lang: 'js' })
+    expect(unmarked).not.toHaveProperty('header')
+  })
+
   const roundtrips = [
     '```js [L]\nx\n```\n',
     '```"t.txt"\nx\n```\n',
