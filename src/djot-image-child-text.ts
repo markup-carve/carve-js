@@ -8,6 +8,7 @@ export function renderDjotImageChildText(document: Document, preserveBreaks = fa
   for (const block of document.children) blocks.push(block)
   while (blocks.length) {
     const block = blocks.pop()!
+    delete block.attrs
     forEachChildBlockList(block, children => {
       for (const child of children) blocks.push(child)
     })
@@ -17,6 +18,7 @@ export function renderDjotImageChildText(document: Document, preserveBreaks = fa
       const children = lists.pop()!
       for (let index = 0; index < children.length; index++) {
         const child = children[index]!
+        delete child.attrs
         if (child.type === 'link' && !child.href || child.type === 'image' && !child.src) {
           delete child.ref
           delete child.rawRef
