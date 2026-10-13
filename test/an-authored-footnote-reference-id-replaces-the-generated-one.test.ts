@@ -26,4 +26,9 @@ describe('an authored footnote reference id replaces the generated one', () => {
   it('imports the reference inside link text as a footnote again', () => {
     expect(htmlToCarve(carveToHtml(source)).value).toBe('a [t[^1]](/u) [^1] [^1]\n\n[^1]: n\n')
   })
+
+  it('reads only a fragment href as a backlink target', () => {
+    const html = carveToHtml(source).replace('href="#z" role="doc-backlink"', 'href="/z" role="doc-backlink"')
+    expect(htmlToCarve(html).value).not.toContain('[t[^1]]')
+  })
 })
