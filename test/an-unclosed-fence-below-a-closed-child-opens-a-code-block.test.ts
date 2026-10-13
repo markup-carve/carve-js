@@ -2,8 +2,8 @@ import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 // PART 2 "A CLOSER IS REQUIRED" and CARVE-P0-009: a child that leaves no paragraph
-// open lets a fence below its column leave it. With nothing to take, the fence
-// opens a code block to the end of the box; with the box closer ahead it opens nothing.
+// open lets a fence below its column leave it. The fence opens a code block that
+// ends at the box closer, or at the end of the box when there is none (carve#3061).
 const cases = [
   {
     name: 'source 2 from carve#3046',
@@ -161,7 +161,7 @@ x
 </ul>`,
   },
   {
-    name: 'control: the box closer is ahead',
+    name: 'the box closer is ahead',
     source: `- ::: box
   - ::: |
     x
@@ -179,13 +179,13 @@ x
           </div>
         </li>
       </ul>
-      <p><code></code></p>
+      <pre><code></code></pre>
     </div>
   </li>
 </ul>`,
   },
   {
-    name: 'control: the box closer is ahead after text',
+    name: 'the box closer is ahead after text',
     source: `- ::: box
   - ::: |
     x
@@ -204,8 +204,26 @@ x
           </div>
         </li>
       </ul>
-      <p><code>
-- x</code></p>
+      <pre><code>- x
+</code></pre>
+    </div>
+  </li>
+</ul>`,
+  },
+  {
+    name: 'control: an open paragraph in the child takes the fence',
+    source: `- ::: box
+  - x
+   \`\`\`
+  :::
+`,
+    html: `<ul>
+  <li>
+    <div class="box">
+      <ul>
+        <li>x
+<code></code></li>
+      </ul>
     </div>
   </li>
 </ul>`,
