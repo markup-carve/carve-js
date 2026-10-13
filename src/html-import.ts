@@ -44,7 +44,7 @@ import { normalizeRefLabel } from './label-key.js'
 import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndMatchingEdges, trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
 import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './roundtrip-carriers.js'
-import type { PrefixedCarrier } from './roundtrip-carriers.js'
+import type { CarrierName, PrefixedCarrier } from './roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -684,7 +684,7 @@ function isReferenceLabel(label: string): boolean {
 
 /** What one element's §13a carriers were read as (`HtmlImporter.carrierReads`). */
 interface CarrierRead {
-  names: Set<PrefixedCarrier>
+  names: Set<CarrierName>
   /** `data-carve-ref`: the label, and the Carve source of the link's own text.
    *  `rawRef` is finished in the arm, where the kept attributes are known. */
   ref?: string
@@ -1253,6 +1253,8 @@ class Importer {
           const lostRaw = this.mode === 'roundtrip' && (name === 'data-carve-raw' || name === 'data-djot-raw')
           this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', lostRaw ? 'warning' : 'info', destinationIsDenied(attr.value))
         }
+      } else if ((name === 'data-carve-ext' || name === 'data-carve-selected') && this.isReconstructedCarrier(node, domTag(node) ?? '', name)) {
+        // Extension carriers are consumed only when their marked structure was rebuilt.
       } else if (styleSlots.has(name) && (rawKept || !this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name))) {
         this.report.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', destinationIsDenied(attr.value))
       } else if (this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name)) {
@@ -1775,7 +1777,7 @@ class Importer {
    * deprecated `data-djot-` one second, so documents released carve-php
    * versions exported keep round-tripping (markup-carve/carve#2902 ruling 0).
    */
-  private carrierValue(node: P5Node, name: PrefixedCarrier): string | undefined {
+  private carrierValue(node: P5Node, name: CarrierName): string | undefined {
     return readCarrier((attribute) => this.attr(node, attribute), name)
   }
 
@@ -1792,13 +1794,13 @@ class Importer {
   }
 
   /** A presence carrier: §13a reads PRESENCE and does not compare the value. */
-  private hasCarrier(node: P5Node, name: PrefixedCarrier): boolean {
+  private hasCarrier(node: P5Node, name: CarrierName): boolean {
     return this.carrierValue(node, name) !== undefined
   }
 
   /** The reserved name a carrier was found under, for the consumed test. */
-  private carrierName(node: P5Node, name: PrefixedCarrier): string | undefined {
-    for (const spelling of [`data-carve-${name}`, `data-djot-${name}`]) {
+  private carrierName(node: P5Node, name: CarrierName): string | undefined {
+    for (const spelling of name === 'ext' || name === 'selected' ? [carrier(name)] : [carrier(name), legacyCarrier(name)]) {
       if (this.attr(node, spelling) !== undefined) return spelling
     }
     return undefined
@@ -1867,7 +1869,7 @@ class Importer {
     if (wrapper && RE_ID_SLOT.test(slot)) this.recordCarrier(node, 'id-slot')
   }
 
-  private recordCarrier(node: P5Node, name: PrefixedCarrier, read: Omit<CarrierRead, 'names'> = {}): void {
+  private recordCarrier(node: P5Node, name: CarrierName, read: Omit<CarrierRead, 'names'> = {}): void {
     const existing = this.carrierReads.get(node)
     if (existing) {
       existing.names.add(name)
@@ -1948,6 +1950,17 @@ class Importer {
       }
       this.recordCarrier(node, 'xref')
       return
+    }
+    if (tag === 'span' && this.hasCarrier(node, 'substitution')) {
+      // One `<del>` then one `<ins>`, nothing else on the span or its halves.
+      const names = [carrier('substitution'), legacyCarrier('substitution')]
+      const bare = (domAttrs(node) ?? []).every(attribute => names.includes(attribute.name.toLowerCase()))
+      const elements = domChildren(node) ?? []
+      const pair = elements.length === 2 && domTag(elements[0]!) === 'del' && domTag(elements[1]!) === 'ins'
+        && elements.every((element) => (domAttrs(element) ?? []).length === 0)
+      if (bare && pair && children.length === 2 && children[0]!.type === 'delete' && children[1]!.type === 'insert') {
+        this.recordCarrier(node, 'substitution')
+      }
     }
     if (tag === 'span' && this.hasCarrier(node, 'caption-number')) {
       const bare = (domAttrs(node) ?? []).every(attribute => [carrier('caption-number'), legacyCarrier('caption-number')].includes(attribute.name))
@@ -2483,9 +2496,19 @@ class Importer {
     if ((tag === 'ul' || tag === 'ol') && this.hasCarrier(node, 'tight')) {
       this.recordCarrier(node, 'tight')
     }
+    // §13a presence carriers: a `line_block` is read from its carrier, never
+    // from `class="line-block"` alone, which the admonition renders too.
+    const carriedLineBlock = tag === 'div' && this.hasCarrier(node, 'line-block')
+    if (carriedLineBlock) this.recordCarrier(node, 'line-block')
+    const carriedDiv = tag === 'div' && !carriedLineBlock && this.hasCarrier(node, 'div')
+    if (carriedDiv) this.recordCarrier(node, 'div')
     const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
     const label = carriedLabel !== undefined && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
     if (label !== undefined) this.recordCarrier(node, 'label')
+    if (tag === 'div' && (this.carrierValue(node, 'ext') === 'tabs' || this.carrierValue(node, 'ext') === 'code-group')) {
+      const group = this.extensionGroup(node, path, depth)
+      if (group) return [group]
+    }
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
       this.headingDepth++
@@ -2630,7 +2653,15 @@ class Importer {
     }
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
     if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
-    if (tag === 'div') {
+    if (carriedLineBlock) {
+      const classes = (attrs?.classes ?? []).filter((name) => name !== 'line-block')
+      const kept: Attrs = { ...attrs }
+      delete kept.classes
+      if (classes.length) kept.classes = classes
+      const own = kept.id || kept.classes || kept.keyValues ? kept : undefined
+      return [{ type: 'line_block', children: this.blocks(domChildren(node) ?? [], path, depth + 1), ...(own ? { attrs: own } : {}) }]
+    }
+    if (tag === 'div' && !carriedDiv) {
       /*
        * The block spelling of the same shape, which pandoc and the `math`
        * fence both write as `<div class="math display">\[…\]</div>`. It reads
@@ -2658,7 +2689,7 @@ class Importer {
       }
     }
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
-      const container = this.containerFrom(tag, attrs)
+      const container = carriedDiv ? undefined : this.containerFrom(tag, attrs)
       if (container) {
         /*
          * THE TITLE PARAGRAPH IS THE CONTAINER'S TITLE, not its first body
@@ -2847,7 +2878,7 @@ class Importer {
        * its own: the fence buys the reader nothing and costs two lines of markup
        * nobody asked for.
        */
-      if (tag !== 'div' || (!attrs && !lifted)) return children
+      if (tag !== 'div' || (!attrs && !lifted && !carriedDiv)) return children
       return [
         {
           type: 'div',
@@ -3194,6 +3225,89 @@ class Importer {
     if (attrs === undefined) return
     const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
     this.report.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path, node)
+  }
+
+  private extensionGroup(node: P5Node, path: string, depth: number): Admonition | undefined {
+    const kind = this.carrierValue(node, 'ext')
+    if (kind !== 'tabs' && kind !== 'code-group') return undefined
+    const elements = (domChildren(node) ?? []).filter(child => domTag(child) !== undefined)
+    const staticPanels = domTag(elements[0]!) === 'section'
+    const aria = domTag(elements[0]!) === 'button'
+    const controls: P5Node[] = []
+    let index = 0
+    if (staticPanels) {
+      if (elements.some(element => domTag(element) !== 'section')) return undefined
+      controls.push(...elements)
+    } else {
+      while (index < elements.length && domTag(elements[index]!) === (aria ? 'button' : 'input')) {
+        controls.push(elements[index++]!)
+        if (!aria && domTag(elements[index++]!) !== 'label') return undefined
+      }
+    }
+    if (controls.length === 0 || (!staticPanels && elements.length - index !== controls.length)) return undefined
+    const panels = staticPanels ? elements : elements.slice(index)
+    if (panels.some(panel => domTag(panel) !== (staticPanels ? 'section' : 'div'))) return undefined
+    const selected = controls.map(control => staticPanels ? this.hasCarrier(control, 'selected') : aria ? this.attr(control, 'aria-selected') === 'true' : this.attr(control, 'checked') !== undefined)
+    if (selected.filter(Boolean).length !== 1) return undefined
+    const children: BlockNode[] = []
+    for (let i = 0; i < panels.length; i++) {
+      const panel = panels[i]!
+      if (staticPanels) this.recordCarrier(panel, 'selected')
+      if (kind === 'tabs' && this.hasCarrier(panel, 'explicit-id')) this.recordCarrier(panel, 'explicit-id')
+      const carried = kind === 'tabs' ? this.carrierValue(panel, 'label') : undefined
+      if (carried !== undefined && !/[\r\n]/.test(carried)) this.recordCarrier(panel, 'label')
+      const panelPath = this.childPath(path, panel, index + i)
+      const panelAttrs = this.attrs(panel, panelPath)
+      const structural = kind === 'tabs' ? 'tabs-panel' : 'code-group-panel'
+      if (panelAttrs?.classes) panelAttrs.classes = panelAttrs.classes.filter(name => name !== structural)
+      if (panelAttrs?.classes?.length === 0) delete panelAttrs.classes
+      if (panelAttrs?.keyValues) {
+        delete panelAttrs.keyValues.role
+        delete panelAttrs.keyValues['aria-label']
+        delete panelAttrs.keyValues['aria-labelledby']
+      }
+      if (this.attr(panel, 'hidden') !== undefined) {
+        if (panelAttrs?.keyValues) delete panelAttrs.keyValues.hidden
+      }
+      if (this.attr(panel, 'id') !== undefined && !this.hasCarrier(panel, 'explicit-id')) {
+        if (panelAttrs) delete panelAttrs.id
+      }
+      let child: BlockNode
+      if (kind === 'tabs') {
+        const body = [...(domChildren(panel) ?? [])]
+        if (staticPanels) {
+          const labelIndex = body.findIndex(entry => domTag(entry) !== undefined)
+          const label = body[labelIndex]
+          if (label && domTag(label) === 'h3') body.splice(labelIndex, 1)
+        }
+        child = { type: 'admonition', kind: 'tab', children: this.blocks(body, panelPath, depth + 1),
+          ...(carried !== undefined && !/[\r\n]/.test(carried) ? { label: carried } : {}) }
+      } else {
+        const pre = (domChildren(panel) ?? []).find(entry => domTag(entry) === 'pre')
+        if (!pre) return undefined
+        const code = this.block(pre, this.childPath(panelPath, pre, 0), depth + 1)[0]
+        if (!code || code.type !== 'code_block') return undefined
+        child = code
+      }
+      if (kind === 'tabs' && panelAttrs && (panelAttrs.id || panelAttrs.classes?.length || Object.keys(panelAttrs.keyValues ?? {}).length)) child.attrs = panelAttrs
+      if (selected[i] && i > 0) {
+        const chosen = child.attrs ??= {}
+        chosen.keyValues = { ...(chosen.keyValues ?? {}), selected: '' }
+      }
+      children.push(child)
+    }
+    this.recordCarrier(node, 'ext')
+    const attrs = this.attrs(node, path)
+    const wrapper = attrs ? { ...attrs } : undefined
+    if (wrapper?.classes) {
+      wrapper.classes = wrapper.classes.filter(name => name !== kind)
+      if (wrapper.classes.length === 0) delete wrapper.classes
+    }
+    if (wrapper?.keyValues) {
+      delete wrapper.keyValues.role
+      delete wrapper.keyValues['aria-label']
+    }
+    return { type: 'admonition', kind, children, ...(wrapper && (wrapper.id || wrapper.classes?.length || Object.keys(wrapper.keyValues ?? {}).length) ? { attrs: wrapper } : {}) }
   }
 
   /**
@@ -4733,6 +4847,10 @@ class Importer {
       return [{ type: 'heading_ref', target: this.attr(node, 'href')!.slice(1), ...(attrs ? { attrs } : {}) }]
     }
     if (tag === 'span' && carried?.names.has('caption-number')) return [{ type: 'caption_number' }]
+    if (tag === 'span' && carried?.names.has('substitution')) {
+      const [removed, added] = children as [Extract<InlineNode, { type: 'delete' }>, Extract<InlineNode, { type: 'insert' }>]
+      return [{ type: 'substitution', old: removed.children, new: added.children }]
+    }
     if (tag === 'span' && carried?.names.has('raw')) {
       // §13a `data-carve-raw`. Without this the carrier span was read as raw
       // HTML, so `` `x`{=tex} `` came back as

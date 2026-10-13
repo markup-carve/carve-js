@@ -502,6 +502,8 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return '\0'
     case 'soft_break':
       return ' '
+    case 'cell_wrap':
+      return ' '
     case 'hard_break':
       return '\n'
     case 'substitution':

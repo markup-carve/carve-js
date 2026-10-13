@@ -147,7 +147,7 @@ describe('table rows and cells carry exact spans', () => {
     const merged = parse('| a | b |\n+ cont | more |\n').children[0] as {
       rows: Array<{ cells: Array<{ children: Array<{ value?: string }> }> }>
     }
-    expect(merged.rows[0]!.cells[0]!.children.map((c) => c.value ?? '').join('')).toBe('a cont')
+    expect(merged.rows[0]!.cells[0]!.children.map((c) => (c as { type: string }).type === 'cell_wrap' ? ' ' : c.value ?? '').join('')).toBe('a cont')
   })
 })
 

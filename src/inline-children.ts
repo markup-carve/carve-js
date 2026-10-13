@@ -39,7 +39,7 @@ export function mapInlineChildren<T>(
     case 'image': case 'math': case 'raw_inline': case 'literal_inline':
     case 'symbol': case 'autolink': case 'heading_ref': case 'caption_number':
     case 'mention': case 'tag': case 'abbreviation': case 'footnote_ref':
-    case 'non_breaking_space': case 'soft_break': case 'hard_break':
+    case 'non_breaking_space': case 'soft_break': case 'cell_wrap': case 'hard_break':
     case 'critic_comment': case 'comment':
       return
     default:
@@ -86,7 +86,7 @@ export function visitInlineChildren<T>(
     case 'image': case 'math': case 'raw_inline': case 'literal_inline':
     case 'symbol': case 'autolink': case 'heading_ref': case 'caption_number':
     case 'mention': case 'tag': case 'abbreviation': case 'footnote_ref':
-    case 'non_breaking_space': case 'soft_break': case 'hard_break':
+    case 'non_breaking_space': case 'soft_break': case 'cell_wrap': case 'hard_break':
     case 'critic_comment': case 'comment':
       return
     default:

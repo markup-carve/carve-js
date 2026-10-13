@@ -95,10 +95,10 @@ describe("a continuation row's carried text", () => {
     // corpus 237-a-continuation-row-carries-no-trailing-text. The joining space
     // is not in the document at all, so no slice selects "a c".
     const source = '| a | b |\n+ c | d |\n'
-    const text = cell(source).children[0]
+    const nodes = cell(source).children
 
-    expect(text.value).toBe('a c')
-    expect(text.pos).toBeUndefined()
+    expect(nodes.map((node: { type: string; value?: string; line?: number }) =>
+      node.type === 'cell_wrap' ? `wrap ${node.line}` : node.value)).toEqual(['a', 'wrap 1', 'c'])
   })
 
   it('holds across more than one continuation row', () => {

@@ -1195,6 +1195,8 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'text':
       return escapeUnresolvedCrossrefs(cleanEscapedText(node))
+    case 'cell_wrap':
+      return ' '
     case 'escaped_text':
       // Reproduce the author's escape where it protects something ON THIS
       // TARGET. `\-\-` was written precisely so a downstream processor with

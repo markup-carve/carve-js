@@ -513,6 +513,7 @@ export function inlineText(nodes: InlineNode[], typography?: SmartTypographyOpti
         out += n.alt
         break
       case 'soft_break':
+      case 'cell_wrap':
       case 'hard_break':
         out += ' '
         break

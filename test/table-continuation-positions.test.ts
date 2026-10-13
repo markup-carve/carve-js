@@ -54,17 +54,16 @@ describe('positions across a table continuation', () => {
     expect(slice(row.cells[1].pos)).toBe(' Single line.       ')
   })
 
-  it('does NOT place the joined text, because no span selects it', () => {
-    // The text is assembled from three lines that are not adjacent in the
-    // source. Any span covering it would include the `+ … |` structure between
-    // them - and a text node's span must select its own text, so the honest
-    // answer is none. PART 12 section 4 forbids inventing a position; it does
-    // not require inventing one here.
-    const text = table().rows[1].cells[1].children[0]
-
-    expect(text.type).toBe('text')
-    expect(text.value).toBe('A long description that continues across lines.')
-    expect(text.pos).toBeUndefined()
+  it('marks each join and places text within its source line', () => {
+    const children = table().rows[1].cells[1].children
+    expect(children.map((child: { type: string; value?: string; line?: number }) =>
+      child.type === 'cell_wrap' ? `wrap ${child.line}` : child.value)).toEqual([
+      'A long description', 'wrap 1', 'that continues', 'wrap 2', 'across lines.',
+    ])
+    expect(children.filter((child: { type: string }) => child.type === 'text')
+      .every((child: { pos?: unknown }) => child.pos !== undefined)).toBe(true)
+    expect(children.filter((child: { type: string }) => child.type === 'cell_wrap')
+      .every((child: { pos?: unknown }) => child.pos === undefined)).toBe(true)
   })
 
   it('places the text of a cell that does NOT continue', () => {

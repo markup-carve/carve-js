@@ -2,6 +2,7 @@ import type { SmartTypographyOption } from './smart-typography-mode.js'
 import type { Admonition, Attrs, BlockNode, Div, Heading } from './ast.js'
 import { inlineText } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
+import { carrier } from './roundtrip-carriers.js'
 
 /** Output mode for {@link tabs}: CSS-only radios or ARIA roles + JS. */
 export type TabsMode = 'css' | 'aria'
@@ -248,9 +249,9 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
     // an explicit {#tabset-1} or a colliding heading slug bumps these.
     const setId = ctx.uniqueId(`${idPrefix}-${tabSetCounter}`)
     const pad = ctx.indent(ctx.level)
-    let html = `${pad}<div${buildWrapperAttributes(wrapper, ctx)}>\n`
+    let html = `${pad}<div${buildWrapperAttributes(wrapper, ctx)}${ctx.roundtrip ? ` ${carrier('ext')}="tabs"` : ''}>\n`
     items.forEach((tab, index) => {
-      const inputId = tab.id ?? ctx.uniqueId(`${setId}-tab-${index + 1}`)
+      const inputId = tab.id && !ctx.roundtrip ? tab.id : ctx.uniqueId(`${setId}-tab-${index + 1}`)
       const checked = tab.selected ? ' checked' : ''
       html +=
         `<input type="radio" name="${ctx.escapeAttr(setId)}" ` +
@@ -279,7 +280,7 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       // escaping on the quote characters.
       html +=
         `<div class="${ctx.escapeAttr(tabClass)}" role="group" ` +
-        `aria-label="${ctx.escapeAttr(tab.label)}">\n${tab.content}</div>\n`
+        `aria-label="${ctx.escapeAttr(tab.label)}"${ctx.roundtrip && tab.id ? ` id="${ctx.escapeAttr(tab.id)}" ${carrier('explicit-id')}="1"` : ''}${ctx.roundtrip ? ` ${carrier('label')}="${ctx.escapeAttr(tab.label)}"` : ''}>\n${tab.content}</div>\n`
     }
     html += `${pad}</div>`
     return html
@@ -299,10 +300,10 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       const num = index + 1
       return {
         tab: tab.id ? `${ctx.escapeAttr(tab.id)}-tab` : ctx.uniqueId(`${setId}-tab-${num}`),
-        panel: tab.id ? `${ctx.escapeAttr(tab.id)}-panel` : ctx.uniqueId(`${setId}-panel-${num}`),
+        panel: tab.id ? `${ctx.escapeAttr(tab.id)}${ctx.roundtrip ? '' : '-panel'}` : ctx.uniqueId(`${setId}-panel-${num}`),
       }
     })
-    let html = `${pad}<div${buildWrapperAttributes(wrapper, ctx, 'tablist')}>\n`
+    let html = `${pad}<div${buildWrapperAttributes(wrapper, ctx, 'tablist')}${ctx.roundtrip ? ` ${carrier('ext')}="tabs"` : ''}>\n`
     items.forEach((tab, index) => {
       const tabId = pairIds[index]!.tab
       const panelId = pairIds[index]!.panel
@@ -332,7 +333,7 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       html +=
         `<div role="tabpanel" id="${panelId}" ` +
         `aria-labelledby="${tabId}" ` +
-        `class="${ctx.escapeAttr(tabClass)}"${hidden}>\n${tab.content}</div>\n`
+        `class="${ctx.escapeAttr(tabClass)}"${hidden}${ctx.roundtrip && tab.id ? ` ${carrier('explicit-id')}="1"` : ''}${ctx.roundtrip ? ` ${carrier('label')}="${ctx.escapeAttr(tab.label)}"` : ''}>\n${tab.content}</div>\n`
     })
     html += `${pad}</div>`
     return html
@@ -360,9 +361,9 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
     if (items.length === 0) return undefined
     const pad = ctx.indent(ctx.level)
     const innerPad = ctx.indent(ctx.level + 1)
-    let html = `${pad}<div${buildWrapperAttributes(node, ctx)}>\n`
+    let html = `${pad}<div${buildWrapperAttributes(node, ctx)}${ctx.roundtrip ? ` ${carrier('ext')}="tabs"` : ''}>\n`
     for (const tab of items) {
-      html += `${innerPad}<section class="${ctx.escapeAttr(tabClass)}">\n`
+      html += `${innerPad}<section class="${ctx.escapeAttr(tabClass)}"${ctx.roundtrip && tab.id ? ` id="${ctx.escapeAttr(tab.id)}" ${carrier('explicit-id')}="1"` : ''}${ctx.roundtrip ? ` ${carrier('label')}="${ctx.escapeAttr(tab.label)}"${tab.selected ? ` ${carrier('selected')}` : ''}` : ''}>\n`
       html += `${innerPad}<h3 class="${ctx.escapeAttr(labelClass)}">${ctx.escapeHtml(tab.label)}</h3>\n`
       html += tab.content
       html += `${innerPad}</section>\n`

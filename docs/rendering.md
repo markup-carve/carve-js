@@ -160,6 +160,9 @@ source**.
 | `data-carve-label` | `<pre>` | a code block's authored label, the text between the fence label's brackets |
 | `data-carve-id-slot` | `<section>` | the authored identifier's slot among the heading's attributes, counted from 0; omitted at 0, where the identifier leads |
 | `data-carve-tight` | `<ul>`, `<ol>` | presence: the list is tight although an item's paragraph keeps its `<p>` for its own attributes |
+| `data-carve-div` | `<div>` | presence: a bare `:::` div, written only where the `<div>` has no other attribute |
+| `data-carve-line-block` | `<div>` | presence: a line block; `class="line-block"` alone stays the admonition of that name |
+| `data-carve-substitution` | `<span>` | presence: the span holds exactly one `<del>` then one `<ins>`, the two halves of a substitution |
 
 ```carve
 | a | b |
