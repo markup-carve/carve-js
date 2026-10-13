@@ -892,7 +892,11 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
       maskDjotCodeAndDestinations(label, true, true, true, undefined, [], {
         onComment: (start, end) => comments.set(start, end),
       })
-      for (const [start, end] of [...comments].reverse()) label = label.slice(0, start) + '{%%}' + label.slice(end)
+      for (const [start, end] of [...comments].reverse()) {
+        const attrs = readAttributes(label, start)
+        if (attrs && attrs.source !== '{}') continue
+        label = label.slice(0, start) + '{%%}' + label.slice(attrs?.end ?? end)
+      }
       const mask = maskDjotCodeAndDestinations(label).split('')
       for (let i = 0; i < label.length; i++) {
         if (mask[i] !== '{' || isDjotEscaped(label, i)) continue
