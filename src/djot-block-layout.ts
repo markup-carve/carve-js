@@ -70,7 +70,7 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
     }
     const endsItem = masks[row]![prefix.lastIndexOf('>')] === '>' && frames.get(previousDepth)?.some(owner => owner.column >= openingColumn)
     if (literalDepth !== undefined && depth <= literalDepth) literalDepth = undefined
-    if (depth > previousDepth && previousParagraph && !endsItem) literalDepth = previousDepth
+    if (depth > previousDepth && previousParagraph && !endsItem) literalDepth ??= previousDepth
     for (const level of frames.keys()) if (level > depth) frames.delete(level)
     if (depth > previousDepth) {
       if ((endsItem || !previousParagraph) && masks[row]![prefix.lastIndexOf('>')] === '>') {
