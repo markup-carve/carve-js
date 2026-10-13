@@ -23,7 +23,7 @@ export { isDjotEscaped, djotContentStart, djotTableRows, djotInlineBoundaries } 
  */
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
-import { readAttributes } from './djot-attributes.js'
+import { readAttributes, continuesParagraph } from './djot-attributes.js'
 import { maskDjotOpaque, type DjotOpaqueOptions } from './djot-opaque.js'
 
 import { parse } from './parse.js'
@@ -372,10 +372,12 @@ export function maskDjotFences(
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
   const previousLines = new Map<number, string>()
+  const lineOffsets: number[] = []
   let sourceOffset = 0,
     previousLine = ''
   for (const line of lines) {
     previousLines.set(sourceOffset, previousLine)
+    lineOffsets.push(sourceOffset)
     sourceOffset += line.length + 1
     previousLine = line
   }
@@ -485,16 +487,21 @@ export function maskDjotFences(
         )
       return blanks(line)
     }
-    const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/) ?? nestedDjotNoteFence(content)
-    if (open && !(open[2]?.startsWith(':') && !previousBlock) && (!strict || canNormalize || !!open[2])) {
+    const open = trimEndSpaceTab(content).match(/^([ \t]*)(?:(\[\^[^\]\n]+\]:[ \t]*|(?:[-*+](?: \[[ xX]\])?|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+))?(`{3,}|~{3,})[ \t]*=?([a-zA-Z0-9_+#.-]*)$/) ?? nestedDjotNoteFence(content)
+    const taskFence = open?.[2] !== undefined && /^[-*+] \[[ xX]\][ \t]+$/.test(open[2])
+    const lazyTaskFence = taskFence && !normalizeBoundary && continuesParagraph(src, line.length - content.length + open![1]!.length + lineOffsets[index]!)
+    if (open && !lazyTaskFence && !(open[2]?.startsWith(':') && !previousBlock) && (!strict || canNormalize || !!open[2])) {
       const nestedNoteColumn = open.groups?.noteColumn === undefined ? -1 : Number(open.groups.noteColumn)
       const nestedNote = nestedNoteColumn >= 0
 
       const container = nestedNote ? nestedNoteColumn + 1 : open[2] ? open[1]!.length + 1 : nested ? ownerIndent + 1 : null
+      const targetMarker = open[2]?.replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2')
+      const taskMarker = targetMarker?.startsWith('-') || targetMarker?.startsWith('*') || targetMarker?.startsWith('+')
+        ? targetMarker.replace(/\[[ xX]\][ \t]+$/, '') : targetMarker
       const targetColumn = nestedNote ? nestedNoteColumn + 2 : open[2]?.startsWith('[^')
         ? open[1]!.length + 2
         : open[2]
-          ? open[1]!.length + open[2].replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').length
+          ? open[1]!.length + taskMarker!.length
           : nested
             ? ownerColumn
             : 0
@@ -507,7 +514,7 @@ export function maskDjotFences(
         dedent: open[1]!.length + (open[2]?.length ?? 0),
         normalize: canNormalize || !!open[2],
       }
-      const nativeMarker = (open[2] ?? '').replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2')
+      const nativeMarker = (open[2] ?? '').replace(/\(([0-9A-Za-z]+)\)([ \t]+)$/, '$1.$2').replace(/^\+(?=[ \t])/, '-').replace(/^([-*+] \[[ xX]\])[ \t]+$/, '$1 ')
       if (fence.normalize && (!open[2] || nativeMarker !== open[2]))
         onFenceLine?.(
           index,
