@@ -7542,6 +7542,7 @@ function rebaseOverindentedBlocks(
   sourceLines?: readonly (string | undefined)[],
   tabFenceColumns?: ReadonlyMap<number, number>,
   markerDescriptionCodeOpeners?: ReadonlySet<number>,
+  noteParagraph?: { markers?: ReadonlySet<number>, markerBody?: boolean },
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7577,9 +7578,15 @@ function rebaseOverindentedBlocks(
   let leadCommentBase = -1
   const markerColonNestedBody = new Set<number>()
   let absorbingColonParagraph = false
+  let footnoteParagraphOpen = false
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
-    if (isBlankLine(line)) { absorbingColonParagraph = false; continue }
+    if (isBlankLine(line)) { absorbingColonParagraph = false; footnoteParagraphOpen = false; continue }
+    if (noteParagraph?.markerBody) {
+      const text = line.trimStart()
+      if (footnoteParagraphOpen && isListMarkerLine(text)) continue
+      footnoteParagraphOpen = !lineOpensItemBlock(text) && !RE_COMMENT_LINE.test(text)
+    }
     if (i <= markerColonEnd && takenBelowColumn?.has(i) && opensCodeFence(line.trimStart())) inlineLeadPayload = true
     if (inlineLeadPayload && i <= markerColonEnd) continue
     if (eligible && !eligible.has(i)) continue
@@ -7605,6 +7612,11 @@ function rebaseOverindentedBlocks(
       else continue
     }
     ownedColumn = -1
+    // Folded note text owns deeper lines without opening a child list.
+    if (noteParagraph?.markers?.has(i)) {
+      ownedColumn = base + 1
+      continue
+    }
     const markerColumn = markerContentColumn(line)
     if (markerColumn >= 0) {
       ownedColumn = markerColumn
@@ -10740,7 +10752,10 @@ class ParseSession {
       // A recognized opener at or beyond the note's minimum column establishes
       // its authored column as a local base (carve#1729). The collector has
       // already removed the fixed two-column body margin.
-      rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
+      rebaseOverindentedBlocks(
+        bodyLines, undefined, -1, true, true, undefined, undefined, undefined, false,
+        undefined, undefined, undefined, { markerBody: lexer.hostBody === 'list' && defLineIndex === 0 },
+      )
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 ? defContentColumn : indentColumns(bodySourceLines[index] ?? ''),
       )
@@ -13131,7 +13146,9 @@ class ParseSession {
       // or code finds no open paragraph (CARVE-P0-009). A container the note
       // opens is read by its own leaf instead, as before.
       const markerNoteFloor = contentCol + FOOTNOTE_BODY_COLUMN
-      let markerNoteParagraph = markerNoteItem
+      const noteParagraphMarkers = new Set<number>()
+      let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
+        !RE_COMMENT_LINE.test(RE_FOOTNOTE_DEF.exec(content)![2]!)
       let noteBodyLast = false
       let nestedNoteParagraph = false
       let nestedNoteContainer = false
@@ -13403,6 +13420,7 @@ class ParseSession {
             lazyState.opaque === null && lazyState.quoteInner === null && lazyState.literalColon === undefined &&
             indentColumns(l, contentCol + FOOTNOTE_BODY_COLUMN) >= contentCol + FOOTNOTE_BODY_COLUMN &&
             isListMarkerLine(dedented.trimStart())
+          if (noteParagraphOpen && !followsBlank && (markerNoteFirstText || continuedMarkerNoteText) && isListMarkerLine(dedented.trimStart())) noteParagraphMarkers.add(nested.length - 1)
           let trackedContent = markerNoteFirstText || continuedMarkerNoteText ? 'text' : dedented
           markerNoteFirstText = false
           if (isMarker && lazyState.opaque === null) {
@@ -14061,6 +14079,7 @@ class ParseSession {
             : leadOwnsExtent ? [undefined, ...nestedSourceLines] : nestedSourceLines,
           tabRebaseColumns,
           markerDescriptionCodeOpeners,
+          { markers: noteParagraphMarkers },
         )
         : new Set<number>()
       if (leadOwnsExtent) {
