@@ -7294,6 +7294,7 @@ function rebasedCodeFenceEnd(
   takenBelowColumn?: ReadonlySet<number>,
   onFenceBodyLine?: (index: number) => void,
   onUnclosedCodeFence?: () => void,
+  stopsParagraph?: (line: string, index: number) => boolean,
 ): number {
   let end = start
   const close = fenceCloseRe(marker)
@@ -7303,6 +7304,7 @@ function rebasedCodeFenceEnd(
   let closed = false
   for (let j = start + 1; j < lines.length; j++) {
     const candidate = lines[j]!
+    if (stopsParagraph?.(candidate, j)) break
     end = j
     onFenceBodyLine?.(j)
     if (isBlankLine(candidate)) continue
@@ -7556,6 +7558,7 @@ function rebaseOverindentedBlocks(
   tabFenceColumns?: ReadonlyMap<number, number>,
   noteParagraph?: { markers?: ReadonlySet<number>, markerBody?: boolean },
   itemParagraphFences?: ReadonlySet<number>,
+  lazyParagraphFences?: ReadonlySet<number>,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -7830,7 +7833,7 @@ function rebaseOverindentedBlocks(
     if (code) {
       // Only the item's own paragraph releases a differently indented list marker.
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
-      if (itemParagraphFences?.has(i) && sourceCodeBase === undefined) {
+      if (!includeSublists && itemParagraphFences?.has(i) && sourceCodeBase === undefined) {
         onUnclosedCodeFence?.()
         for (let j = i + 1; j < lines.length; j++) {
           const candidate = lines[j]!
@@ -7842,7 +7845,13 @@ function rebaseOverindentedBlocks(
         }
       } else end = sourceCodeBase === undefined
         ? rebasedCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
-          onFenceBodyLine, onUnclosedCodeFence)
+          onFenceBodyLine, onUnclosedCodeFence, includeSublists && itemParagraphFences?.has(i) ? (line, index) => {
+            const text = line.trimStart()
+            if (RE_FENCE.test(opener) && indentColumns(line, base) < base && RE_COMMENT_LINE.test(text)) return true
+            return lazyParagraphFences?.has(i) === true && eligible?.has(index) === true &&
+              (RE_HEADING.test(text) || RE_BLOCKQUOTE.test(text) || RE_HR.test(text) || isTableRow(text) ||
+                colonFenceOpenerLen(text) !== null)
+          } : undefined)
         : sourceCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
           onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines!,
           sourceCodeBase - tabFenceColumns!.get(i)!)
@@ -11517,6 +11526,8 @@ class ParseSession {
         (afterBlank && (isBlankLine(line) || indentColumns(line, contentCol) < contentCol))
       let nestedLeadScans: ReturnType<typeof descriptionLeadFenceScans> | undefined
       let commentPayloadState: ItemLazyState | null = null
+      const paragraphFenceLines = new Set<number>()
+      const lazyParagraphFenceLines = new Set<number>()
       /**
        * Feed one collected body line to the S4 tracker.
        *
@@ -11572,6 +11583,14 @@ class ParseSession {
           return answer
         }
         trackItemLazyState(content, lazyState, hasFenceCloser, atContentColumn)
+        if (opensCodeFence(content.trimStart()) && lazyState.lazyFoldable && lazyState.opaque === null) {
+          paragraphFenceLines.add(bodyLines.length - 1)
+          const previous = bodyLines.length - 2
+          if (previous >= 0 && !bodyBaseEligible.has(previous) &&
+              !opensCodeFence(bodyLines[previous]!.trimStart()) && !RE_COMMENT_LINE.test(bodyLines[previous]!.trimStart())) {
+            lazyParagraphFenceLines.add(bodyLines.length - 1)
+          }
+        }
         if (lazyState.opaque?.kind === 'comment' && commentPayloadState !== null) {
           trackItemLazyState(content, commentPayloadState, hasFenceCloser, atContentColumn, () => false)
           lazyState.lazyFoldable = commentPayloadState.lazyFoldable
@@ -11984,7 +12003,8 @@ class ParseSession {
       // The same authored-base rule list items use, now in the definition body's
       // coordinate system after its own content margin was removed - plus
       // Definition entries use the same exact block extent in every container.
-      rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true)
+      rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true, false,
+        undefined, undefined, undefined, false, undefined, undefined, undefined, paragraphFenceLines, lazyParagraphFenceLines)
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 && !/^\+[ \t]*$/.test(first)
           ? contentCol

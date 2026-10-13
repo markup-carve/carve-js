@@ -3192,7 +3192,7 @@
   {
     "id": "review-296",
     "source": "- outer\n  - :: a\n    : p\n          ```\n   %%%\n          > q\n",
-    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>a</dt>\n          <dd>\n            <p>p\n<code></code></p>\n            <p>&gt; q</p>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>outer\n    <ul>\n      <li>\n        <dl>\n          <dt>a</dt>\n          <dd>\n            <p>p\n<code></code></p>\n            <blockquote><p>q</p></blockquote>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-297",
