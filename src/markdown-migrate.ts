@@ -2940,7 +2940,14 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
           : width > 0 || carrierIsCaption(payload) || /^::[ \t]/.test(payload) || payload === ':' || payload === ''
       if (valid) continue
       payloads.delete(at)
-      if (closer !== undefined) payloads.delete(closer)
+      if (closer !== undefined) {
+        payloads.delete(closer)
+        let caption = closer + 1
+        while (caption < lines.length && withoutCarrierHost(lines[caption]!, hosts.get(closer)!) === '') caption++
+        if (carrierIsCaption(payloads.get(caption) ?? '') && hosts.get(caption) === hosts.get(closer)) {
+          payloads.delete(caption)
+        }
+      }
       dropped.push({
         code: 'carrier-marker-dropped',
         message: `${isOpener ? CARRIER_MARKER_PAIR_DROPPED : CARRIER_MARKER_DROPPED}: ${lines[at]!.slice(hosts.get(at)!.length)}`,
