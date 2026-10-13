@@ -98,9 +98,6 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   const collapsedReferenceText = djotCollapsedReferenceCache()
   const lines = source.split('\n')
-  const quoteDepths = lines.map(line => (line.slice(0, contentStart(line)).match(/>/g) ?? []).length)
-  if (quoteDepths.some(depth => depth > 0))
-    djotBlockLayout(source, djotTableRows(source, mask), undefined, undefined, undefined, undefined, (line, depth) => { quoteDepths[line] = depth })
   let definitionOffset = 0
   const offsets = lines.map(line => { const at = definitionOffset; definitionOffset += line.length + 1; return at })
   const attributeContinues = new Map<number, boolean>()
@@ -214,6 +211,9 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   const references = lines.map((): ReferenceUse[] => [])
   if (rowAt) {
+    const quoteDepths = lines.map(line => (line.slice(0, contentStart(line)).match(/>/g) ?? []).length)
+    if (quoteDepths.some(depth => depth > 0))
+      djotBlockLayout(source, djotTableRows(source, mask), undefined, undefined, undefined, undefined, (line, depth) => { quoteDepths[line] = depth })
     const referenceSource = source, referenceMaskText = definitionMask.join('\n'), pipeMaskText = pipeMask.join('\n')
     const boundaries = djotInlineBoundaries(source, referenceMaskText)
     const boundarySet = new Set(boundaries)
