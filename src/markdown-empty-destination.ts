@@ -71,20 +71,20 @@ export function useEmptyDestinationReferences(found: EmptyDestinationReferences 
 /** The first usable definition's source label, if this is a link reference. */
 export function referenceDestinationLabel(
   label: string,
-  decodeEntity: (entity: string) => string,
+  _decodeEntity: (entity: string) => string,
   placeholders: readonly string[] = [],
   table = false,
 ): string | undefined {
   if (label.startsWith('^')) return undefined
   const authored = references.sourceLabels.get(normalizeReferenceLabel(referenceSourceText(label, placeholders)))
   if (authored !== undefined && (references.inline.has(authored) || table && references.tableInline.has(authored))) return authored
-  const key = normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders))
+  const key = normalizeReferenceLabel(referenceSourceText(label, placeholders))
   const found = references.empty.has(key) ? undefined : references.labels.get(key)
   return table && found !== undefined && references.tableInline.has(found) && authored === undefined ? undefined : found
 }
 
-export function isEmptyDestinationReference(label: string, decodeEntity: (entity: string) => string, placeholders: readonly string[]): boolean {
-  return references.empty.has(normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders)))
+export function isEmptyDestinationReference(label: string, _decodeEntity: (entity: string) => string, placeholders: readonly string[]): boolean {
+  return references.empty.has(normalizeReferenceLabel(referenceSourceText(label, placeholders)))
 }
 
 export function referenceInlineTarget(label: string, table = false): string | undefined {
@@ -439,7 +439,7 @@ export function extractReferenceDefinitions(
       new RegExp(String.raw`^[ \t]*(?:(?:<[^<>\n]*>|[^<\x00-\x20\x7f][^\x00-\x20\x7f]*)(?:[ \t]+${TITLE})?[ \t]*)?$`).test(definition[2]!)
     ) {
       depth = lineDepth
-      const key = normalizeReferenceLabel(decodeLinkTitle(definition[1]!, decodeEntity))
+      const key = normalizeReferenceLabel(definition[1]!)
       const continued: string[] = []
       let destination = definition[2]!
       const following = lines[i + 1]
@@ -601,7 +601,7 @@ export function plainAltText(label: string, placeholders: readonly string[], dec
   const nestedLink = new RegExp(String.raw`!?\[${LABEL}\](?=\()`, 'g')
   const referenceLink = new RegExp(String.raw`!?\[${LABEL}\]`, 'g')
   const referenceTail = /\[([^[\]\n]*)\]/y
-  const defined = (label: string): boolean => references.defined.has(normalizeReferenceLabel(decodeLinkTitle(label, decodeEntity, placeholders)))
+  const defined = (label: string): boolean => references.defined.has(normalizeReferenceLabel(referenceSourceText(label, placeholders)))
   do {
     previous = label
     label = label.replace(/\x00P(\d+)\x00/g, (token, index: string) => {
@@ -714,7 +714,7 @@ export function unwrapEmptyDestinations(
       imageRanges = []
       const images = new RegExp(String.raw`!\[${LABEL}\](?:(\((?:[^()\n]|\([^()\n]*\))*\))|\[([^[\]\n]*)\])?`, 'g')
       for (const image of subject.matchAll(images)) {
-        const key = normalizeReferenceLabel(decodeLinkTitle(image[3] || image[1]!, decodeEntity, placeholders))
+        const key = normalizeReferenceLabel(referenceSourceText(image[3] || image[1]!, placeholders))
         if (image[2] !== undefined || references.defined.has(key)) {
           imageRanges.push([image.index!, image.index! + 2 + image[1]!.length])
         }
@@ -734,7 +734,7 @@ export function unwrapEmptyDestinations(
   }
   if (references.empty.size > 0) {
     const byReference = (m: RegExpExecArray, reference: string, subject: string, emittedPrefix: string): string | null => {
-      const key = normalizeReferenceLabel(decodeLinkTitle(reference, decodeEntity, placeholders))
+      const key = normalizeReferenceLabel(referenceSourceText(reference, placeholders))
       const title = references.empty.get(key)
       return title === undefined ? null : unwrap(m, title, subject, emittedPrefix)
     }
