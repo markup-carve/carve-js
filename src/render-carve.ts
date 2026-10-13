@@ -19,6 +19,7 @@ import type {
   Table,
   TableCell,
   Text,
+  VerbatimCellWrap,
 } from './ast.js'
 import {
   aBodyRebaseWouldMoveALine,
@@ -2408,6 +2409,20 @@ function firstBoundary(node: InlineNode | undefined): string {
   }
 }
 
+/** Replaces each joining space a `cellWraps` entry names with the cell-wrap marker. */
+function markVerbatimCellWraps(content: string, cellWraps: readonly VerbatimCellWrap[], nodeType: string): string {
+  const chars = [...content]
+  let previous = -1
+  for (const wrap of cellWraps) {
+    if (wrap.offset <= previous || chars[wrap.offset] !== ' ') {
+      throw new SourceUnspellableError(nodeType, 'a cellWraps offset does not name a joining space in ascending order')
+    }
+    chars[wrap.offset] = `\u0002${wrap.row ?? 0},${wrap.line}\u0003`
+    previous = wrap.offset
+  }
+  return chars.join('')
+}
+
 function lastBoundary(node: InlineNode | undefined): string {
   if (!node) return ''
   switch (node.type) {
@@ -4446,7 +4461,7 @@ class CarveRenderSession {
         // span. An attribute block is written after it, so a code span carrying
         // one keeps the closed form (and `raw_inline` and `literal_inline`, which
         // both append to `renderCode`, never ask for it).
-        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === '', 'code', ctx, renderSession.inlineAttrs(node.attrs, node) === ''), ctx, 'code', node))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === '', 'code', ctx, renderSession.inlineAttrs(node.attrs, node) === '', node.cellWraps), ctx, 'code', node))
       case 'link':
         return renderSession.renderLink(node, ctx)
       case 'image':
@@ -4461,7 +4476,7 @@ class CarveRenderSession {
         return node.attrs ? `[${escapeNoteReferenceLabel(content, ctx)}]${renderSession.inlineAttrs(node.attrs, node)}` : content
       }
       case 'math':
-        return withAttrs(renderSession.guardCodeLines(renderSession.renderMath(node.display, node.content, ctx), ctx, 'math', node))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderMath(node.display, node.content, ctx, node.cellWraps), ctx, 'math', node))
       case 'raw_inline':
         if (node.content === '') {
           throw new SourceUnspellableError(
@@ -4469,7 +4484,7 @@ class CarveRenderSession {
             'an empty raw inline has no Carve source spelling',
           )
         }
-        return `${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'raw_inline', ctx), ctx, 'raw_inline', node)}{=${escapeFormat(node.format)}}`
+        return `${renderSession.guardCodeLines(renderSession.renderCode(node.content, false, 'raw_inline', ctx, true, node.cellWraps), ctx, 'raw_inline', node)}{=${escapeFormat(node.format)}}`
       case 'literal_inline':
         // §27: `!` prefix on a verbatim span. A trailing attribute block is the
         // ordinary inline attribute block (same as a code span carries).
@@ -4629,8 +4644,8 @@ class CarveRenderSession {
     return `${fence}\n${this.protectVerbatim(content)}\n${fence}`
   }
 
-  private renderMath(display: boolean, content: string, ctx: CarveContext): string {
-    const code = this.renderCode(content, false, 'math', ctx)
+  private renderMath(display: boolean, content: string, ctx: CarveContext, cellWraps?: readonly VerbatimCellWrap[]): string {
+    const code = this.renderCode(content, false, 'math', ctx, true, cellWraps)
     return `${display ? '$$' : '$'}${code}`
   }
 
@@ -4679,7 +4694,7 @@ class CarveRenderSession {
       && new RegExp(`(?:^|[\\r\\n])[ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
   }
 
-  private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true): string {
+  private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true, cellWraps?: readonly VerbatimCellWrap[]): string {
     // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
     // much as it is inside a fence - and `normalize()` would otherwise rewrite it
     // to `\ `, which inside backticks is a literal backslash and a space
@@ -4710,6 +4725,9 @@ class CarveRenderSession {
     // trip on a tree the renderer accepts.
     const unspellable = this.unspellableVerbatimReason(content, needsPad)
     if (unspellable !== undefined) throw new SourceUnspellableError(nodeType, unspellable)
+    // The pad is decided on the joined value above; only then does each joining
+    // space become the marker `renderTable` cuts the row at.
+    if (cellWraps && ctx && ctx.tableCellDepth > 0) content = markVerbatimCellWraps(content, cellWraps, nodeType)
     if (content.includes('\r')) content = content.replace(/\r\n?/g, '\n')
     // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
     // the closed form has no spelling and the bare opener is the one that does

@@ -65,6 +65,7 @@ import type {
   Position,
   RawBlock,
   RawInline,
+  VerbatimCellWrap,
   LiteralInline,
   Span,
   SymbolInline,
@@ -16151,6 +16152,27 @@ class ParseSession {
    * line block a line break is content and is kept (markup-carve/carve#2089); a
    * stanza's own end leaves nothing there to keep.
    */
+  /**
+   * The `+` joins inside a verbatim payload that starts at `start` in `text`.
+   * The scanner skips the payload, so its joins would otherwise vanish; a
+   * join consumed as padding has no space left to point at and is dropped.
+   */
+  private verbatimCellWraps(text: string, source: InlineSource, start: number, payload: string): VerbatimCellWrap[] | undefined {
+    if (!source.cellWraps) return undefined
+    const shift = source.wrapShift ?? 0
+    let wraps: VerbatimCellWrap[] | undefined
+    let codepoints = 0
+    for (let j = start; j < start + payload.length; j++) {
+      const code = text.charCodeAt(j)
+      if (code === 32) {
+        const wrap = source.cellWraps.get(j + shift)
+        if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+      }
+      if (code < 0xdc00 || code > 0xdfff || j === start || (text.charCodeAt(j - 1) & 0xfc00) !== 0xd800) codepoints++
+    }
+    return wraps
+  }
+
   private trimUnclosedRun(content: string): string {
     return this.inLineBlock ? content : trimEndNonNbsp(content)
   }
@@ -16588,20 +16610,23 @@ class ParseSession {
           // PART 7's four characters (the run may cross a line, so `\n` and `\r`
           // are in). `\s` ate a trailing vertical tab out of the span's content.
           const value = this.trimUnclosedRun(text.slice(i + openLen))
-          out.push(this.withPos({ type: 'code', value }, source, text, i, text.length))
+          const cellWraps = this.verbatimCellWraps(text, source, i + openLen, value)
+          out.push(this.withPos({ type: 'code', value, ...(cellWraps ? { cellWraps } : {}) }, source, text, i, text.length))
           i = text.length
           continue
         }
-        const inner = stripVerbatimPadding(text.slice(i + openLen, end - openLen))
+        const padded = text.slice(i + openLen, end - openLen)
+        const inner = stripVerbatimPadding(padded)
+        const cellWraps = this.verbatimCellWraps(text, source, i + openLen + (padded.length - inner.length) / 2, inner)
         // A verbatim span tagged `{=format}` is raw inline passthrough.
         const raw = RE_RAW_INLINE.exec(text.slice(end))
         if (raw) {
           const len = end - i + raw[0].length
-          out.push(this.withPos({ type: 'raw_inline', format: raw[1]!, content: inner } as RawInline, source, text, i, i + len))
+          out.push(this.withPos({ type: 'raw_inline', format: raw[1]!, content: inner, ...(cellWraps ? { cellWraps } : {}) } as RawInline, source, text, i, i + len))
           i += len
           continue
         }
-        out.push(this.withPos({ type: 'code', value: inner }, source, text, i, end))
+        out.push(this.withPos({ type: 'code', value: inner, ...(cellWraps ? { cellWraps } : {}) }, source, text, i, end))
         i = end
         continue
       }
@@ -16620,11 +16645,13 @@ class ParseSession {
             : text.length > tick + openLen
           if (hasContent && (!closed || text[end] !== '`')) {
             flush()
+            const padded = closed ? text.slice(tick + openLen, innerEnd) : ''
             const content = closed
-              ? stripVerbatimPadding(text.slice(tick + openLen, innerEnd))
+              ? stripVerbatimPadding(padded)
               : this.trimUnclosedRun(text.slice(tick + openLen))
+            const cellWraps = this.verbatimCellWraps(text, source, tick + openLen + (padded.length - (closed ? content.length : 0)) / 2, content)
             const len = end - i
-            out.push(this.withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
+            out.push(this.withPos({ type: 'math', display, content, ...(cellWraps ? { cellWraps } : {}) } as Math, source, text, i, i + len))
             i += len
             continue
           }
