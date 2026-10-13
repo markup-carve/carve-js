@@ -833,13 +833,13 @@ export function djotToCarve(djot: string): string {
   try { return convertDjotInput(djot) } finally { resetParagraphContext() }
 }
 
-function convertDjotInput(djot: string): string {
-  if (!djot.includes('\0')) return convertDjotDocument(djot)
+function convertDjotInput(djot: string, preserveReferenceBreaks = false): string {
+  if (!djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks)
   const token = '\0U\0'
-  return convertDjotDocument(djot.replaceAll('\0', token)).replaceAll(token, '\0')
+  return convertDjotDocument(djot.replaceAll('\0', token), preserveReferenceBreaks).replaceAll(token, '\0')
 }
 
-function convertDjotDocument(djot: string): string {
+function convertDjotDocument(djot: string, preserveReferenceBreaks = false): string {
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
@@ -875,7 +875,7 @@ function convertDjotDocument(djot: string): string {
       djotCodePadding(normalizeDjotFences(foldDjotReferences(
         normalizeDjotAttributeLines(djotInlineLayout(normalizeDjotAttributeLines(invalidAttributes.source))),
       ))),
-      djotContentStart,
+      djotContentStart, false, undefined, preserveReferenceBreaks,
     ),
     strippedDefinitions.isBoundary,
     invalidAttributes.inherited,
@@ -948,7 +948,7 @@ function convertDjotDocument(djot: string): string {
     const altMask = maskDjotCodeAndDestinations(codeProtected)
     const blockProtected = codeProtected.replace(/(\n[ \t]*)(#{1,6}(?=[ \t]|$)|>(?=[ \t]|$)|(?:[-*][ \t]*){3,}(?=\n|$)|[-*+](?=[ \t]|$)|:{1,}(?=[ \t]|$)|\||\^(?=[ \t]|$)|%%|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)](?=[ \t]|$))/gm, (all, prefix: string, marker: string, at: number) => altMask[at + prefix.length] === marker[0] ? prefix + scalar(marker) : all)
     const protectedLabel = blockProtected.replace(/^[ \t\u000b\u000c\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gm, value => /^[ \t]*$/.test(value) ? value : scalar(value))
-    const altDocument = parse(invalidAttributes.restore(djotToCarve(`DJOTALT ${protectedLabel} DJOTEND`)).replaceAll('\0U\0', '\0'))
+    const altDocument = parse(invalidAttributes.restore(convertDjotInput(`DJOTALT ${protectedLabel} DJOTEND`, true)).replaceAll('\0U\0', '\0'))
     spans.push(
       escapeImageAlt(renderDjotImageChildText(altDocument, label.includes('\n'))
         .replace(/ ?DJOTEND\n?$/, '')
@@ -1302,9 +1302,9 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
         } else rawDestination += source[at++]!
       }
       let destination = djotDestinationLines(rawDestination, owner.depth)
-      if (owner.image && label.includes('[')) {
+      if (owner.image && !authoredLabel.includes('\n') && label.includes('[')) {
         const definitions = Array.from(label.matchAll(/\[(carve-djot-pipe-target-\d+)\]/g), match => pipeDefinitions.get(match[1]!) ?? '').filter(Boolean).join('\n')
-        label = renderDjotImageChildText(parse(djotToCarve((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND')), label.includes('\n'))
+        label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true)), label.includes('\n'))
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
           .replace(/[\[\]\\]/g, (value) => '\\' + value)

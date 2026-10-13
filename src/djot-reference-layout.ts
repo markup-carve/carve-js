@@ -31,19 +31,27 @@ function foldLabelLines(label: string): string {
 
 function normalizeMultilineLabels(
   source: string,
-  replace: (at: number, label: string) => string | undefined,
+  replace: (at: number, label: string, image: boolean) => string | undefined,
   explicit: boolean,
+  mask: string,
 ): string {
   let open = -1, multiline = false, copied = 0, consumed = 0, output = ''
+  const images: boolean[] = []
+  const boundaries = source.includes('![') ? new Set(djotInlineBoundaries(source, mask)) : new Set<number>()
   for (let at = 0; at < source.length; at++) {
-    if (source[at] === '[') { open = at; multiline = false }
+    if (boundaries.has(at)) images.length = 0
+    if (source[at] === '[') {
+      if (mask[at] !== ' ') images.push((images.at(-1) ?? false) || source[at - 1] === '!' && !isDjotEscaped(source, at - 1))
+      open = at; multiline = false
+    }
     else if (source[at] === '\n') multiline = true
     else if (source[at] === ']') {
+      const image = mask[at] !== ' ' ? images.pop() ?? false : false
       if (open >= 0 && multiline && (explicit ? source[open - 1] === ']' : source[at + 1] === '[')) {
         const start = explicit ? open - 1 : source[open - 1] === '!' ? open - 1 : open
         if (start >= consumed) {
           consumed = at + 1
-          const replacement = replace(start, source.slice(open + 1, at))
+          const replacement = replace(start, source.slice(open + 1, at), image)
           if (replacement !== undefined) {
             output += source.slice(copied, start) + source.slice(start, open + 1) + replacement + ']'
             copied = at + 1
@@ -57,14 +65,14 @@ function normalizeMultilineLabels(
 }
 
 /** Normalize reference labels and share definition attributes. */
-export function djotReferenceLayout(source: string, contentStart: (line: string) => number, caretOnly = false, accepted?: ReadonlyMap<number, { label: string; target: string; end: number }>): string {
+export function djotReferenceLayout(source: string, contentStart: (line: string) => number, caretOnly = false, accepted?: ReadonlyMap<number, { label: string; target: string; end: number }>, imageChildText = false): string {
   let mask = referenceMask(source)
   if (!caretOnly) {
-  source = normalizeMultilineLabels(source, (at, label) =>
-    mask[at] !== ' ' && !isDjotEscaped(source, at) && !label.startsWith('^') &&
+  source = normalizeMultilineLabels(source, (at, label, image) =>
+    !image && !imageChildText && mask[at] !== ' ' && !isDjotEscaped(source, at) && !label.startsWith('^') &&
     !label.includes('`') && !/\n[ \t]*\n/.test(label)
       ? foldLabelLines(label)
-      : undefined, false)
+      : undefined, false, mask)
   mask = referenceMask(source)
   const labels = new Set(
     source.split('\n').flatMap((line) => {
@@ -75,7 +83,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   source = normalizeMultilineLabels(source, (at, label) =>
     mask[at] === ']' && !/\n[ \t]*\n/.test(label) && labels.has(referenceKey(label))
       ? label.replace(/\s+/g, ' ').trim()
-      : undefined, true)
+      : undefined, true, mask)
   }
   const lines = source.split('\n')
   const quoteOpenings = new Set<number>()
