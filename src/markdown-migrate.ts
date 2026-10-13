@@ -1,5 +1,6 @@
 import { protectNativeMarkdownDestinationGlyphs } from './markdown-native-destination-glyphs.js'
-import type { BlockNode, Document, InlineNode } from './ast.js'
+import type { BlockNode, Document, InlineNode, List } from './ast.js'
+import { orderedMarker } from './render-carve.js'
 import { trimMatchingEdges, trimEndSpaceTab } from './trim-non-nbsp.js'
 import { escapeInactiveMarkdownLinkBrackets, markdownActiveLinkLabelRanges, protectMarkdownLinkLabels, markdownInlineDestinationEnd } from './markdown-link-scopes.js'
 import { parseFragment } from 'parse5'
@@ -2782,7 +2783,7 @@ function carrierSetBalances(payloads: readonly string[]): boolean {
   const open: number[] = []
   for (const payload of payloads) {
     if (/^::[ \t]/.test(payload) || payload === ':' || payload === '') continue
-    if (carrierIsCaption(payload) || carrierIsCodeFence(payload)) continue
+    if (carrierIsCaption(payload) || carrierIsCodeFence(payload) || carrierListStyle(payload) !== undefined) continue
     if (/^\{.*\}$/.test(payload)) {
       if (!isValidAttrPayload(payload.slice(1, -1))) return false
       continue
@@ -2800,6 +2801,24 @@ function carrierSetBalances(payloads: readonly string[]): boolean {
 }
 
 const isDefinitionPayload = (payload: string): boolean => /^::[ \t]/.test(payload) || payload === ':' || payload === ''
+
+/** An ordered-list style carried by its first canonical Carve marker. */
+function carrierListStyle(payload: string, start?: number): List['olType'] | undefined {
+  const markers = /^([A-Za-z]+[.)])(?: ([A-Za-z]+[.)]))?$/.exec(payload)
+  if (!markers) return undefined
+  if (markers[2] !== undefined) {
+    const node = parse(`${markers[1]} item\n${markers[2]} item\n`).children[0]
+    return node?.type === 'list' && node.ordered && node.items.length === 2 ? node.olType : undefined
+  }
+  const first = markers[1]!.slice(0, -1)
+  if (start !== undefined && /^[IVXLCDM]$/i.test(first)) {
+    const roman = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 }[first.toLowerCase() as 'i' | 'v' | 'x' | 'l' | 'c' | 'd' | 'm']
+    if (roman === start) return first === first.toLowerCase() ? 'i' : 'I'
+    if (first.toLowerCase().charCodeAt(0) - 96 === start) return first === first.toLowerCase() ? 'a' : 'A'
+  }
+  const node = parse(`${payload} item\n`).children[0]
+  return node?.type === 'list' && node.ordered ? node.olType : undefined
+}
 
 /**
  * Whether the definition-list markers pair by depth (CARVE-P11-067): a list of
@@ -2885,9 +2904,11 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
               const listPrelude = nextPayload !== undefined && /^::[ \t]/.test(nextPayload) &&
                 (definitions.length === 0 || (depths.get(at + 1) ?? 1) > definitions.at(-1)!.list)
               const fencePrelude = nextPayload !== undefined && carrierIsCodeFence(nextPayload)
-              if (!following || !next || (nextPayload !== undefined && !listPrelude && !fencePrelude && (carrierFenceWidth(nextPayload) === 0 || carrierIsCloser(nextPayload)))) valid = false
+              const stylePrelude = nextPayload !== undefined && carrierListStyle(nextPayload) !== undefined
+              if (!following || !next || (nextPayload !== undefined && !listPrelude && !fencePrelude && !stylePrelude && (carrierFenceWidth(nextPayload) === 0 || carrierIsCloser(nextPayload)))) valid = false
             }
             if (carrierIsCodeFence(payload) && (!/^[ \t]{0,3}(?:`{3,}|~{3,})/.test(following) || next?.type !== 'code_block' || payloads.has(at + 1))) valid = false
+            if (carrierListStyle(payload) !== undefined && (!/^[0-9]+[.)][ \t]+\S/.test(following) || next?.type !== 'list' || !next.ordered || payloads.has(at + 1))) valid = false
             if (carrierIsCaption(payload) || /^::[ \t]/.test(payload)) {
               if (!following || next?.type !== 'paragraph' || payloads.has(at + 1)) valid = false
             }
@@ -2916,7 +2937,7 @@ function carrierPlacementsValid(lines: string[], payloads: ReadonlyMap<number, s
  * untouched, the markers import as the raw HTML they are, and one
  * `carrier-markers-damaged` loss is reported.
  */
-function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>): string {
+function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>, sourceLineNumbers?: readonly number[]): string {
   carrierSlots = []
   carrierToken = ''
   if (!markdown.includes(CARRIER_HEAD)) return markdown
@@ -2979,7 +3000,8 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
           ? isValidAttrPayload(payload.slice(1, -1))
           : carrierIsCodeFence(payload)
             ? codeFenceCarrier(payload) !== undefined
-            : width > 0 || carrierIsCaption(payload) || isDefinitionPayload(payload))
+            : width > 0 || carrierIsCaption(payload) || (carrierListStyle(payload) !== undefined &&
+              !/(?:^|[ \t>])(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?$/.test(hosts.get(at)!)) || isDefinitionPayload(payload))
       if (valid) continue
       payloads.delete(at)
       depths.delete(at)
@@ -3001,7 +3023,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
       dropped.push({
         code: 'carrier-marker-dropped',
         message: `${isOpener ? CARRIER_MARKER_PAIR_DROPPED : CARRIER_MARKER_DROPPED}: ${lines[at]!.slice(hosts.get(at)!.length)}`,
-        line: at + 1,
+        line: sourceLineNumbers?.[at] ?? at + 1,
         fidelity: 'degraded',
         confidence: 'fallback',
       })
@@ -3300,6 +3322,19 @@ function restoreCarrierMarkers(carve: string): string {
               for (let line = (node.pos?.endLine ?? paragraph.pos.startLine) + 1; line <= paragraph.pos.endLine; line++) removed.add(line - 1)
               const after = paragraph.pos.endLine
               if (after < sourceLines.length - 1 && /^[ \t>]*$/.test(sourceLines[after]!)) removed.add(after)
+            }
+          }
+          const list = value[at + 1] as BlockNode | undefined
+          const style = slots.map(slot => slot && carrierListStyle(slot.payload, list?.type === 'list' ? list.start ?? 1 : undefined)).find(value => value !== undefined)
+          if (style !== undefined && list?.type === 'list' && list.ordered && node.pos) {
+            removed.add(node.pos.startLine - 1)
+            if (/^[ \t>]*$/.test(sourceLines[node.pos.endLine] ?? '')) removed.add(node.pos.endLine)
+            if (node.pos.startLine > 1 && /^\s*>[\s>]*$/.test(sourceLines[node.pos.startLine - 2]!)) removed.add(node.pos.startLine - 2)
+            for (const [index, item] of list.items.entries()) {
+              if (!item.pos) continue
+              const line = item.pos.startLine - 1
+              sourceLines[line] = sourceLines[line]!.replace(/^([ \t>]*?)[0-9]+([.)])(?=[ \t])/, (_match, lead: string, delim: string) =>
+                `${lead}${orderedMarker((list.start ?? 1) + index, style)}${delim}`)
             }
           }
         }
@@ -5827,10 +5862,17 @@ export function markdownToCarveWithLosses(
     // raw HTML.
     inlineCarriersEnabled = !Object.values(dialect).some(Boolean)
     inlineCarriersDamaged = false
-    const prepared = prepareCarrierMarkers(markdown, markdownBlockHtmlLines(markdown))
+    const footnoteStyles = prepareFootnoteListStyles(markdown)
+    if (footnoteStyles.damaged) losses.push({ code: 'carrier-markers-damaged', message: CARRIER_MARKERS_DAMAGED, fidelity: 'degraded', confidence: 'fallback' })
+    const prepared = footnoteStyles.damaged ? markdown : prepareCarrierMarkers(footnoteStyles.source, markdownBlockHtmlLines(footnoteStyles.source), footnoteStyles.lineNumbers)
     if (losses.some(loss => loss.message === CARRIER_MARKERS_DAMAGED)) inlineCarriersEnabled = false
 
     let value = restoreInlineCarriers(restoreCarrierMarkers(convertMarkdown(prepared, dialect)))
+    const restoredFootnotes = footnoteStyles.damaged ? value : restoreFootnoteListStyles(value, footnoteStyles.token, footnoteStyles.payloads)
+    if (restoredFootnotes === undefined) {
+      losses.push({ code: 'carrier-markers-damaged', message: CARRIER_MARKERS_DAMAGED, fidelity: 'degraded', confidence: 'fallback' })
+      value = convertMarkdown(markdown, dialect)
+    } else value = restoredFootnotes
     if (inlineCarriersDamaged) {
       inlineCarriersEnabled = false
       carrierSlots = []
@@ -6224,6 +6266,86 @@ function markdownBlockHtmlLines(markdown: string): ReadonlySet<number> {
   for (const at of read.taskHtmlLines) lines.add(at + bodyStart)
 
   return lines
+}
+
+/** Footnote bodies use four spaces as their content column, not a code indent. */
+function prepareFootnoteListStyles(markdown: string): { source: string; token: string; payloads: string[]; damaged: boolean; lineNumbers?: number[] } {
+  if (!markdown.includes(CARRIER_HEAD) || !markdown.includes('[^')) return { source: markdown, token: '', payloads: [], damaged: false }
+  let token = 'CARVEFOOTSTYLE'
+  while (markdown.includes(token)) token += 'X'
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const lineNumbers = lines.map((_line, at) => at + 1)
+  const payloads: string[] = []
+  let footnote = false
+  let emptyOpening = false
+  let fence: { char: string; width: number } | undefined
+  let outerFence: { char: string; width: number } | undefined
+  let damaged = false
+  for (let at = 0; at < lines.length; at++) {
+    const line = lines[at]!
+    const outerRun = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1]
+    if (outerFence) {
+      if (outerRun?.[0] === outerFence.char && outerRun.length >= outerFence.width && line.slice(line.indexOf(outerRun) + outerRun.length).trim() === '') outerFence = undefined
+      continue
+    }
+    if (!footnote && outerRun) { outerFence = { char: outerRun[0]!, width: outerRun.length }; continue }
+    if (/^ {0,3}\[\^[^\]]+\]:/.test(line)) { footnote = true; emptyOpening = /^ {0,3}\[\^[^\]]+\]:[ \t]*$/.test(line); fence = undefined; continue }
+    if (!footnote || line.trim() === '') continue
+    if (!line.startsWith('    ')) {
+      footnote = false
+      fence = undefined
+      if (outerRun) outerFence = { char: outerRun[0]!, width: outerRun.length }
+      continue
+    }
+    const body = line.slice(4)
+    if (body.trim() !== '' && carrierMarker(body) === undefined) emptyOpening = false
+    const run = /^(`{3,}|~{3,})/.exec(body)?.[1]
+    if (fence) {
+      if (run?.[0] === fence.char && run.length >= fence.width && body.slice(run.length).trim() === '') fence = undefined
+      continue
+    }
+    if (run) { fence = { char: run[0]!, width: run.length }; continue }
+    const marker = carrierMarker(body)
+    if (marker === undefined || marker.depth !== 1 || carrierListStyle(marker.payload) === undefined) continue
+    if (emptyOpening) { damaged = true; continue }
+    if (!/^ {4}[0-9]+[.)][ \t]+\S/.test(lines[at + 1] ?? '')) { damaged = true; continue }
+    lines[at] = `    ${token}${payloads.length}Z`
+    lines.splice(at + 1, 0, '')
+    lineNumbers.splice(at + 1, 0, lineNumbers[at]!)
+    payloads.push(marker.payload)
+    at++
+  }
+  return { source: damaged ? markdown : lines.join('\n'), token, payloads, damaged, lineNumbers }
+}
+
+function restoreFootnoteListStyles(carve: string, token: string, payloads: readonly string[]): string | undefined {
+  if (payloads.length === 0) return carve
+  const lines = carve.split('\n')
+  const removed = new Set<number>()
+  const found = new Set<number>()
+  for (const blocks of Object.values(parse(carve).footnoteDefs ?? {})) {
+    for (let at = 0; at < blocks.length; at++) {
+      const block = blocks[at]!
+      if (block.type !== 'paragraph' || !block.pos) continue
+      const match = new RegExp(`^${token}(\\d+)Z$`).exec(block.children.map(child => child.type === 'text' ? child.value : '').join(''))
+      if (!match) continue
+      const index = Number(match[1])
+      const list = blocks[at + 1]
+      if (list?.type !== 'list' || !list.ordered || !list.pos || found.has(index)) return undefined
+      const style = carrierListStyle(payloads[index] ?? '', list.start ?? 1)
+      if (style === undefined) return undefined
+      found.add(index)
+      removed.add(block.pos.startLine - 1)
+      if (lines[block.pos.endLine]?.trim() === '') removed.add(block.pos.endLine)
+      for (const [itemIndex, item] of list.items.entries()) {
+        if (!item.pos) return undefined
+        const line = item.pos.startLine - 1
+        lines[line] = lines[line]!.replace(/^([ \t]*)[0-9]+([.)])(?=[ \t])/, (_match, lead: string, delim: string) =>
+          `${lead}${orderedMarker((list.start ?? 1) + itemIndex, style)}${delim}`)
+      }
+    }
+  }
+  return found.size === payloads.length ? lines.filter((_line, at) => !removed.has(at)).join('\n') : undefined
 }
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
