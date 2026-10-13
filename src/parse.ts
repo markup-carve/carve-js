@@ -10516,7 +10516,8 @@ class ParseSession {
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
-      if (closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
+      const folded = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
+      if (!folded && closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
         lexer.consume()
         break
       }
@@ -10526,7 +10527,8 @@ class ParseSession {
       // closing run the CONTAINER folded in from closing this block - and a
       // verbatim body is where a framed line becomes text, so it comes off here
       // (markup-carve/carve-js#1630).
-      const body = stripLazyFrame(ln)
+      // Below-column payload carries host alignment, not code indentation.
+      const body = folded ? stripLazyFrame(ln).replace(/^[ \t]+/, '') : stripLazyFrame(ln)
       // Strip the common indent of the opening fence (Djot rule)
       lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
     }
