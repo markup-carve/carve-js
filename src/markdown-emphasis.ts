@@ -24,7 +24,7 @@ export function recordMarkdownProtectedDepth(spans: readonly string[], token: st
 }
 
 /** Pair CommonMark delimiter runs before writing native emphasis. */
-export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }): string {
+export function markdownEmphasis(source: string, onFlatten: () => void = () => {}, onStep?: () => void, protectedSpans: readonly string[] = [], plainText = false, strikethrough = false, hostDepth = 0, onDepth?: (depth: number) => void, braceSlashBoundaries = false, protectOutput?: (value: string) => string, edgeNeighbors?: { before: string; after: string }, extensionDelimiters = strikethrough): string {
   const runs: Run[] = []
   const pairs = new Map<number, Pair>()
   const claimed = new Set<number>()
@@ -43,15 +43,22 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
     if (unit < 0xd800 || unit > 0xdfff) return source[index]!
     return left ? Array.from(source.slice(Math.max(0, index - 1), index + 1)).at(-1) ?? '' : Array.from(source.slice(index, index + 2))[0] ?? ''
   }
-  const punctuation = (s: string): boolean => /[\p{P}\p{S}]/u.test(s)
+  const punctuation = (s: string): boolean => /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\p{P}]/u.test(s)
   const whitespace = (s: string): boolean => s === '' || /\s/u.test(s)
   for (const m of source.matchAll(strikethrough ? /\*+|_+|~+/g : /\*+|_+/g)) {
     const start = m.index
     const end = start + m[0].length
     if (m[0][0] === '~' && m[0].length > 2) continue
     if (source[start - 1] === '\\') continue
-    const before = neighbor(start - 1, true)
-    const after = neighbor(end, false)
+    let beforeIndex = start - 1
+    let afterIndex = end
+    // cmark-gfm skips registered extension delimiters in emphasis flank scans.
+    if (extensionDelimiters && m[0][0] !== '~') {
+      while (source[beforeIndex] === '~') beforeIndex--
+      while (source[afterIndex] === '~') afterIndex++
+    }
+    const before = neighbor(beforeIndex, true)
+    const after = neighbor(afterIndex, false)
     const left = !whitespace(after) && (!punctuation(after) || whitespace(before) || punctuation(before))
     const right = !whitespace(before) && (!punctuation(before) || whitespace(after) || punctuation(after))
     runs.push({ start, end, scope: -1, char: m[0][0]!, open: left && (m[0][0] !== '_' || !right || punctuation(before)),
@@ -140,7 +147,7 @@ export function markdownEmphasis(source: string, onFlatten: () => void = () => {
   for (const run of runs) {
     const before = source[run.start - 1] ?? '', after = source[run.end] ?? ''
     const partiallyClaimed = claimed.has(run.start) || claimed.has(run.end - 1)
-    if (partiallyClaimed || (run.char === '_' && /[^\x00-\x7f]/u.test(before + after)) || /\u00a0/u.test(before + after)) {
+    if ((extensionDelimiters && run.char !== '~' && (before === '~' || after === '~')) || partiallyClaimed || (run.char === '_' && /[^\x00-\x7f]/u.test(before + after)) || /\u00a0/u.test(before + after)) {
       for (let i = run.start; i < run.end; i++) if (!claimed.has(i)) literalEscapes.add(i)
     }
   }
