@@ -5,6 +5,10 @@ import { carveToHtml, markdownToCarve } from '../src/index.js'
 // for the opener and the closer alike (carve-js#1825).
 
 describe('a Markdown fence measured from its item', () => {
+  it('keeps a fence inside a quoted list item', () => {
+    const source = '- a\n  > ```\n  > x\n  > ```\n  > more'
+    expect(markdownToCarve(source)).toBe('- a\n  > ```\n  > x\n  > ```\n  >\n  > more')
+  })
   it('keeps an unclosed fence in a nested item', () => {
     expect(markdownToCarve('- a\n  - b\n\n    ```\n    code')).toBe('- a\n  {loose}\n  - b\n\n    ```\n    code\n    ```')
   })
