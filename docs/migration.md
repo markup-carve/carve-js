@@ -123,11 +123,12 @@ becomes
 Body rows are rewritten in the same spelling `carve fmt` writes, and each one is
 fitted to the header's column count the way GFM reads it.
 
-**A row whose every cell is blank is dropped.** Carve has no spelling for one -
-`| | |` is a paragraph, not a row, so writing it would split the table in two -
-and the importer drops the row rather than inventing a cell the author never
-typed. `migrateMarkdown` reports each dropped row as a `structure-unspellable`
-diagnostic, so nothing goes missing silently.
+**A body row whose every cell is blank is kept.** It is written as `| | |`, one
+slot per cell, and reads back as a row of empty cells. An all-blank header with
+no column alignment is different: it is the scaffolding a Markdown writer adds
+to a headerless table, so the importer drops it and reports a
+`structure-unspellable` diagnostic rather than giving the table an empty header
+row.
 
 **A pipe row without a delimiter row stays text.** Carve reads any line that
 begins and ends with `|` as a table row, with no delimiter row anywhere, so a

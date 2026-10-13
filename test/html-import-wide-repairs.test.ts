@@ -64,12 +64,14 @@ it('bounds array removal work when many empty code spans are dropped', () => {
   expect(shifted).toBeLessThan(64 * n)
 })
 
-it('keeps the first refusal when row and span repairs reach the diagnostic cap', () => {
+it('keeps blank rows beside span repairs that reach the diagnostic cap', () => {
+  // A blank row is a row (CARVE-P9-082), so only the span is repaired.
   const blank = '<table><tr><td></td></tr></table>'
   const nested = '<p><ins><ins><code>x</code></ins><ins><code>y</code></ins></ins></p>'
-  for (const [html, message] of [[blank + nested, 'Dropped a row'], [nested + blank, 'Unwrapped <ins>'], [blank + nested + blank, 'Dropped a row'], [nested + blank + nested, 'Unwrapped <ins>']] as const) {
+  for (const html of [blank + nested, nested + blank, blank + nested + blank, nested + blank + nested]) {
     const result = htmlToCarve(html, { maxDiagnostics: 2 })
-    expect(result.report.diagnostics[0]?.message).toContain(message)
+    expect(result.report.diagnostics[0]?.message).toContain('Unwrapped <ins>')
+    expect(result.value.match(/^\| \|$/gm)?.length).toBe(html.split(blank).length - 1)
   }
 })
 
