@@ -138,7 +138,7 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
   return lines.flatMap((line, row) => removed.has(row) ? [] : [...(before.get(row) ?? []), line]).join('\n')
 }
 
-export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%', holdItemAttributes?: (attributes: string, block?: boolean) => string): string {
+export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%', holdItemAttributes?: (attributes: string, block?: boolean) => string, onLiteralQuote?: (line: number, depth: number) => void): string {
   if (holdItemAttributes) {
     const prepared = deepQuotedItemAttributes(source, holdItemAttributes)
     if (prepared !== source) { source = prepared; rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false)) }
@@ -439,6 +439,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         quoteBoundary = quoteForCarve().trimEnd()
       }
       if (paragraph && quoteDepth > depth && !outsideQuoteItem) {
+        onLiteralQuote?.(n, depth)
         const markerAt = closedQuoteBoundary(quoteForCarve(), Math.max(0, depth - (noteOwner?.depth ?? 0))).length - 1
         const written = originalForCarve()
         out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
@@ -567,6 +568,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       continue
     }
     if (paragraph && quoteDepth > depth) {
+      onLiteralQuote?.(n, depth)
       const markerAt = closedQuoteBoundary(quoteForCarve(), Math.max(0, depth - (noteOwner?.depth ?? 0))).length - 1
       const written = originalForCarve()
       out.push(written.slice(0, markerAt) + '\\' + written.slice(markerAt))
