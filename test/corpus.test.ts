@@ -993,7 +993,26 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()// A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    '107-colspan-marker-scans-left-past-a-consumed-cell',
+    {
+      reason: 'carve#3051: a `<` beside a cell that started in an earlier row is BLOCKED, so the span cannot overlap',
+      html: [
+        '<table>',
+        '  <thead>',
+        '    <tr><th scope="col">p</th><th scope="col">q</th><th scope="col">r</th><th scope="col">s</th></tr>',
+        '  </thead>',
+        '  <tbody>',
+        '    <tr><td>a</td><td rowspan="2">b</td><td>c</td><td>d</td></tr>',
+        '    <tr><td>p</td><td></td><td>e</td></tr>',
+        '  </tbody>',
+        '</table>',
+      ].join('\n'),
+    },
+  ],
+])
+// A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
 // meant every renumbering broke this guard for ~100 categories that had not
