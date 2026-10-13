@@ -13273,6 +13273,7 @@ class ParseSession {
       // opens is read by its own leaf instead, as before.
       const markerNoteFloor = contentCol + FOOTNOTE_BODY_COLUMN
       const noteParagraphMarkers = new Set<number>()
+      const markerNoteFenceMemos = new Map<number, QuotedFenceCloserMemo>()
       const itemParagraphFences = new Set<number>()
       let markerNoteParagraph = markerNoteItem && !lineOpensItemBlock(RE_FOOTNOTE_DEF.exec(content)![2]!) &&
         !RE_COMMENT_LINE.test(RE_FOOTNOTE_DEF.exec(content)![2]!)
@@ -13576,8 +13577,24 @@ class ParseSession {
             const bodyText = dedented.trimStart()
             // A comment keeps its own retention reading (CARVE-P9-053).
             const bodyComment = RE_COMMENT_LINE.test(bodyText) || commentFenceRun(bodyText) !== undefined
+            // An unclosed run past the note column keeps its paragraph open,
+            // so its payload cannot grant the outer item a continuation claim.
+            let unclosedNoteFence = false
+            if (noteParagraphOpen && !followsBlank && !bodyComment && opensCodeFence(bodyText) &&
+                indentColumns(l) > markerNoteFloor) {
+              const fence = RE_FENCE.exec(bodyText) ?? RE_RAW_FENCE.exec(bodyText)
+              const marker = RE_FENCE.test(bodyText) ? fence![2]! : fence![1]!
+              const closesAt = (column: number): boolean => {
+                let memo = markerNoteFenceMemos.get(column)
+                if (memo === undefined) markerNoteFenceMemos.set(column, memo = new Map())
+                return itemFenceHasCloser(lexer, marker, fenceLineIndex, column, memo,
+                  line => !isBlankLine(line) && indentColumns(line, markerNoteFloor) < markerNoteFloor)
+              }
+              unclosedNoteFence = !closesAt(indentColumns(l)) && !closesAt(markerNoteFloor)
+            }
             markerNoteParagraph = noteParagraphOpen && !followsBlank && !bodyComment &&
-              indentColumns(l, markerNoteFloor) >= markerNoteFloor && (isListMarkerLine(bodyText) || !lineOpensItemBlock(bodyText))
+              indentColumns(l, markerNoteFloor) >= markerNoteFloor &&
+              (unclosedNoteFence || isListMarkerLine(bodyText) || !lineOpensItemBlock(bodyText))
             if (nestedNoteBodyColumn !== undefined && indentColumns(l, nestedNoteBodyColumn) >= nestedNoteBodyColumn) {
               const marker = isListMarkerLine(bodyText)
               const folds: boolean = marker && nestedNoteParagraph && !followsBlank

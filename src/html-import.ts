@@ -43,7 +43,7 @@ import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_ABBR_DEF, RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
-import { trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
+import { trimEndMatchingEdges, trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
 import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './roundtrip-carriers.js'
 import type { PrefixedCarrier } from './roundtrip-carriers.js'
 
@@ -249,12 +249,12 @@ function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
  * overindented lazy continuation.
  * Each leaves a space at a boundary where the re-parse does not keep it.
  */
-function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean {
+function textEdge(node: InlineNode | undefined, side: 'start' | 'end', preserveTabs = false): boolean {
   if (node === undefined || node.type !== 'text') return false
   // NOT the whitespace class: JavaScript counts U+00A0 as whitespace and a
   // non-breaking space is CONTENT - it is the one character here whose whole
   // point is that the renderer does not collapse it.
-  return (side === 'start' ? /^[ 	]/ : /[ 	]$/).test(node.value)
+  return (preserveTabs ? (side === 'start' ? /^ / : / $/) : (side === 'start' ? /^[ \t]/ : /[ \t]$/)).test(node.value)
 }
 
 /**
@@ -262,12 +262,12 @@ function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean 
  * merges with whitespace already there (carve#2361). Whitespace-only content
  * stays, and so does U+00A0, which is content rather than layout.
  */
-function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNode[] {
+function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false, preserveTabs = false): InlineNode[] {
   const out: InlineNode[] = []
   let owed = false
   // Through nested inlines: a strong ending in a space already has one there.
   const blankEdge = (node: InlineNode | undefined, side: 'start' | 'end'): boolean => {
-    if (node === undefined || textEdge(node, side)) return node !== undefined
+    if (node === undefined || textEdge(node, side, preserveTabs)) return node !== undefined
     const children = 'children' in node && Array.isArray(node.children) ? (node.children as InlineNode[]) : undefined
     return children !== undefined && blankEdge(side === 'start' ? children[0] : children.at(-1), side)
   }
@@ -288,17 +288,17 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
       continue
     }
     // Nested links and spans have already hoisted their children.
-    node.children = dropSpaceAfterHardBreak(hoistEdgeSpace(node.children, true))
-    if (!node.children.some((c) => c.type !== 'text' || !/^[ \t]*$/.test(c.value))) {
+    node.children = dropSpaceAfterHardBreak(hoistEdgeSpace(node.children, true, preserveTabs), preserveTabs)
+    if (!node.children.some((c) => c.type !== 'text' || !(preserveTabs ? /^ *$/ : /^[ \t]*$/).test(c.value))) {
       pay(node)
       out.push(node)
       continue
     }
     let children = [...node.children]
-    const lead = textEdge(children[0], 'start')
+    const lead = textEdge(children[0], 'start', preserveTabs)
     let leadingCount = 0
-    while (textEdge(children[leadingCount], 'start')) {
-      const value = (children[leadingCount] as { value: string }).value.replace(/^[ \t]+/, '')
+    while (textEdge(children[leadingCount], 'start', preserveTabs)) {
+      const value = (children[leadingCount] as { value: string }).value.replace(preserveTabs ? /^ +/ : /^[ \t]+/, '')
       if (value === '') leadingCount++
       else {
         children[leadingCount] = { ...(children[leadingCount] as object), value } as InlineNode
@@ -306,9 +306,9 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
       }
     }
     if (leadingCount > 0) children = children.slice(leadingCount)
-    const trail = textEdge(children.at(-1), 'end')
-    while (textEdge(children.at(-1), 'end')) {
-      const value = trimEndSpaceTab((children.at(-1) as { value: string }).value)
+    const trail = textEdge(children.at(-1), 'end', preserveTabs)
+    while (textEdge(children.at(-1), 'end', preserveTabs)) {
+      const value = trimInlineEnd((children.at(-1) as { value: string }).value, preserveTabs)
       if (value === '') children.pop()
       else {
         children[children.length - 1] = { ...(children.at(-1) as object), value } as InlineNode
@@ -335,11 +335,11 @@ function hoistEdgeSpace(nodes: InlineNode[], withinLinkOrSpan = false): InlineNo
  * a `<strong>`, the closer is written first on the new line, so a space behind
  * it is mid-line content and stays.
  */
-function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
+function dropSpaceAfterHardBreak(nodes: InlineNode[], preserveTabs = false): InlineNode[] {
   const out: InlineNode[] = []
   for (const node of nodes) {
     if (node.type === 'text' && out.at(-1)?.type === 'hard_break') {
-      const value = node.value.replace(/^[ 	]+/, '')
+      const value = node.value.replace(preserveTabs ? /^ +/ : /^[ \t]+/, '')
       if (value === '') continue
       out.push({ ...node, value })
       continue
@@ -369,18 +369,22 @@ function isLayoutOnlyText(node: P5Node): boolean {
   return node.nodeName === '#text' && trimNonNbsp(domValue(node) ?? '') === ''
 }
 
-/** Trim block-edge padding and redundant padding inside formatting. */
-function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
-  return trimFormattingEdges(nodes, true, true)
+function trimInlineEnd(text: string, preserveTabs: boolean): string {
+  return preserveTabs ? trimEndMatchingEdges(text, code => code === 0x20) : trimEndSpaceTab(text)
 }
 
-function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: boolean): InlineNode[] {
+/** Trim block-edge padding and redundant padding inside formatting. */
+function trimBlockEdges(nodes: InlineNode[], preserveTabs = false): InlineNode[] {
+  return trimFormattingEdges(nodes, true, true, preserveTabs)
+}
+
+function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: boolean, preserveTabs = false): InlineNode[] {
   let out = [...nodes]
   let leadingCount = 0
   while (leading) {
     const first = out[leadingCount]
     if (first?.type !== 'text') break
-    const value = first.value.replace(/^[ \t]+/, '')
+    const value = first.value.replace(preserveTabs ? /^ +/ : /^[ \t]+/, '')
     if (value === '') leadingCount++
     else {
       out[leadingCount] = { ...first, value }
@@ -390,7 +394,7 @@ function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: bo
   if (leadingCount > 0) out = out.slice(leadingCount)
   while (trailing && out.at(-1)?.type === 'text') {
     const last = out.at(-1) as { type: 'text'; value: string }
-    const value = trimEndSpaceTab(last.value)
+    const value = trimInlineEnd(last.value, preserveTabs)
     if (value === '') out.pop()
     else {
       out[out.length - 1] = { ...last, value }
@@ -399,18 +403,19 @@ function trimFormattingEdges(nodes: InlineNode[], leading: boolean, trailing: bo
   }
   const endsWithSpace = (node: InlineNode | undefined): boolean => {
     if (node === undefined) return false
-    if (textEdge(node, 'end')) return true
+    if (textEdge(node, 'end', preserveTabs)) return true
     if (node.type === 'link' || node.type === 'span' || isFormatting(node)) return endsWithSpace(node.children.at(-1))
     return false
   }
   for (let index = 0; index < out.length; index++) {
     const node = out[index]!
-    if (!isFormatting(node) || node.children.every((child) => child.type === 'text' && /^[ \t]*$/.test(child.value))) continue
+    if (!isFormatting(node) || node.children.every((child) => child.type === 'text' && (preserveTabs ? /^ *$/ : /^[ \t]*$/).test(child.value))) continue
     const next = out[index + 1]
     node.children = trimFormattingEdges(
       node.children,
       index === 0 ? leading : out[index - 1]?.type === 'hard_break' || endsWithSpace(out[index - 1]),
-      next === undefined ? trailing : next.type === 'hard_break' || textEdge(next, 'start'),
+      next === undefined ? trailing : next.type === 'hard_break' || textEdge(next, 'start', preserveTabs),
+      preserveTabs,
     )
   }
   return out
@@ -3491,21 +3496,8 @@ class Importer {
     }
   }
 
-  /**
-   * Whether the writer can put these inlines in the quoted title slot.
-   *
-   * The slot is delimited by `"` and the grammar gives it no escape, so a
-   * double quote ends the title early and the opener stops being one. A line
-   * break does the same thing for the same reason: the opener is a LINE.
-   *
-   * The question is asked of the WRITTEN form, not of the text nodes. A quote
-   * reaches the title through more than its own text - an attribute VALUE is
-   * written quoted, so `<span title='a"b'>hi</span>` is spelled
-   * `[hi]{title="a\"b"}` and carries three of them - and enumerating the
-   * spellings that can produce one is the kind of second copy of the grammar
-   * that goes stale the next time a spelling is added. Rendering the inlines
-   * asks the writer itself.
-   */
+  private preserveLabelTabs = false
+
   /**
    * A container label's source, written from the inline content of the
    * `<p class="div-label">` the renderer degraded it to, or `undefined` when the
@@ -3521,10 +3513,14 @@ class Importer {
   private containerLabelSource(kids: P5Node[], labelPath: string, depth: number): string | undefined {
     const rewind = this.mark()
     const nodes = this.nodes
+    const preserveTabs = this.preserveLabelTabs
+    this.preserveLabelTabs = true
     try {
       const inlines = this.blockInlines(kids, labelPath, depth + 2)
-
-      return renderCarve({ type: 'document', children: [{ type: 'paragraph', children: inlines }] }).trimEnd()
+      // Flanking text keeps label-edge tabs inside the writer's paragraph.
+      const children: InlineNode[] = [{ type: 'text', value: 'x ' }, ...inlines, { type: 'text', value: ' x' }]
+      const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children }] })
+      return written.startsWith('x ') && written.endsWith(' x\n') ? written.slice(2, -3) : undefined
     } catch (error) {
       // NO SPELLING IS A REFUSAL, NOT A CRASH. An empty `<code>` has no Carve
       // source while its open run does not end, and the writer says so; the
@@ -3533,6 +3529,7 @@ class Importer {
       if (error instanceof SourceUnspellableError) return undefined
       throw error
     } finally {
+      this.preserveLabelTabs = preserveTabs
       this.nodes = nodes
       this.restore(rewind)
     }
@@ -3553,6 +3550,21 @@ class Importer {
     return first?.type === 'div' && first.label === label
   }
 
+  /**
+   * Whether the writer can put these inlines in the quoted title slot.
+   *
+   * The slot is delimited by `"` and the grammar gives it no escape, so a
+   * double quote ends the title early and the opener stops being one. A line
+   * break does the same thing for the same reason: the opener is a LINE.
+   *
+   * The question is asked of the WRITTEN form, not of the text nodes. A quote
+   * reaches the title through more than its own text - an attribute VALUE is
+   * written quoted, so `<span title='a"b'>hi</span>` is spelled
+   * `[hi]{title="a\"b"}` and carries three of them - and enumerating the
+   * spellings that can produce one is the kind of second copy of the grammar
+   * that goes stale the next time a spelling is added. Rendering the inlines
+   * asks the writer itself.
+   */
   private spellableTitle(title: InlineNode[]): boolean {
     const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: title }] })
     return !written.includes('"') && !written.trimEnd().includes('\n')
@@ -4496,13 +4508,13 @@ class Importer {
       if (produced.length > 0) previousWasBlock = isFlattenedBlock(node)
     })
     const merged: InlineNode[] = []
-    for (const node of hoistEdgeSpace(out)) {
+    for (const node of hoistEdgeSpace(out, false, this.preserveLabelTabs)) {
       const last = merged.at(-1)
       if (node.type === 'text' && last?.type === 'text') last.value += node.value
       else merged.push(node)
     }
 
-    return dropSpaceAfterHardBreak(merged)
+    return dropSpaceAfterHardBreak(merged, this.preserveLabelTabs)
   }
 
   /**
@@ -4511,7 +4523,7 @@ class Importer {
    * edges is not content and the re-parse will not keep it.
    */
   private blockInlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[], depths?: number[]): InlineNode[] {
-    return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths, depths))
+    return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths, depths), this.preserveLabelTabs)
   }
 
   private codeText(node: P5Node, path: string, depth: number, block = false, languageWrapper?: P5Node, lang?: string): string {
@@ -4600,7 +4612,11 @@ class Importer {
     // way round - a no-break space is CONTENT - so the collapse names the
     // characters HTML actually collapses and leaves every other one alone.
     if (node.nodeName === '#text') {
-      return [{ type: 'text', value: (domValue(node) ?? '').replace(/[ \t\n\r\f]+/g, ' ') }]
+      const text = domValue(node) ?? ''
+      const value = this.preserveLabelTabs
+        ? text.replace(/[ \t\n\r\f]+/g, run => /[\n\r\f]/.test(run) ? ' ' : run.replace(/ +/g, ' '))
+        : text.replace(/[ \t\n\r\f]+/g, ' ')
+      return [{ type: 'text', value }]
     }
     /*
      * AN HTML COMMENT IS A CARVE COMMENT, and this is the INLINE position of it

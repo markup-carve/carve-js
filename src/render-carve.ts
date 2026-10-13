@@ -95,6 +95,7 @@ interface CarveContext {
   blockDepth: number
   inlineDepth: number
   listDepth: number
+  atItemContentColumn: boolean
   /** Depth of line-block nesting, so the inline writer drops the explicit
    *  backslash: inside a `::: |` fence every newline already IS a hard break. */
   lineBlockDepth: number
@@ -888,13 +889,16 @@ function colonFenceFor(ctx: CarveContext): string {
  * footnote body or a definition description - so a definition list among its
  * DIRECT children can take that base one column in. See `atARaisedBase`.
  */
-function atAnAuthoredBodyColumn<T>(ctx: CarveContext, render: () => T): T {
+function atAnAuthoredBodyColumn<T>(ctx: CarveContext, render: () => T, atItemContentColumn = false): T {
   const outer = ctx.atAnAuthoredBodyColumn
+  const outerItemColumn = ctx.atItemContentColumn
   ctx.atAnAuthoredBodyColumn = true
+  ctx.atItemContentColumn = atItemContentColumn
   try {
     return render()
   } finally {
     ctx.atAnAuthoredBodyColumn = outer
+    ctx.atItemContentColumn = outerItemColumn
   }
 }
 
@@ -2918,6 +2922,7 @@ class CarveRenderSession {
         blockDepth: 0,
         inlineDepth: 0,
         listDepth: 0,
+        atItemContentColumn: false,
         lineBlockDepth: 0,
         inlineNoteDepth: 0,
         tableCellDepth: 0,
@@ -3023,6 +3028,10 @@ class CarveRenderSession {
     // and cleared for whatever this node renders inside itself - a definition
     // list inside a blockquote inside a footnote body is at the QUOTE's column,
     // not the body's - and restored so the next sibling still sees it.
+    const previousItemParagraph = this.itemParagraph
+    this.itemParagraph = ctx.atItemContentColumn && node.type === 'paragraph'
+    const atItemContentColumn = ctx.atItemContentColumn
+    ctx.atItemContentColumn = false
     const previousDescriptionParagraph = this.descriptionParagraph
     this.descriptionParagraph = this.descriptionBody && ctx.atAnAuthoredBodyColumn && node.type === 'paragraph'
     const atAnAuthoredBodyColumn = ctx.atAnAuthoredBodyColumn
@@ -3032,6 +3041,8 @@ class CarveRenderSession {
     } finally {
       this.escapeUnit = previous
       this.descriptionParagraph = previousDescriptionParagraph
+      this.itemParagraph = previousItemParagraph
+      ctx.atItemContentColumn = atItemContentColumn
       ctx.atAnAuthoredBodyColumn = atAnAuthoredBodyColumn
     }
   }
@@ -3454,7 +3465,7 @@ class CarveRenderSession {
     const outerFenceDepth = ctx.colonFenceDepth
     ctx.colonFenceDepth = 0
     try {
-      return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight))
+      return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight), true)
     } finally {
       ctx.colonFenceDepth = outerFenceDepth
     }
@@ -4634,6 +4645,7 @@ class CarveRenderSession {
     return undefined
   }
 
+  private itemParagraph = false
   private descriptionBody = false
   private descriptionParagraph = false
   private verbatimLineGuardNodes: InlineNode[] = []
@@ -4643,7 +4655,7 @@ class CarveRenderSession {
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
-    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'g')
+    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'g')
     if (this.termKeepsLineIndent && marker.test(written)) {
       throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }

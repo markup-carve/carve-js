@@ -168,3 +168,10 @@ perfIt('scans invalid fence attributes in linear time', () => {
     minSampleMs: 250, label: 'invalid fence attributes',
   })
 }, 30000)
+
+perfIt('imports label internal space runs in linear time', () => {
+  expectScansLinearly((html) => void htmlToCarve(html), '<span> </span>', {
+    prefix: '<div><p class="div-label">x', suffix: 'x</p></div>', smallRepeats: 4000,
+    minSampleMs: 500, label: 'HTML import label internal spaces',
+  })
+}, 30000)
