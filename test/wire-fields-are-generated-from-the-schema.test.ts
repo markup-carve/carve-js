@@ -89,6 +89,9 @@ describe("the generated wire-field map", () => {
 
     expect(inlineRecords.sort()).toEqual([
       "block_extension.payload",
+      "code.cellWraps",
+      "math.cellWraps",
+      "raw_inline.cellWraps",
       "table.columns",
       "table.rowGroups",
       "table.rowGroups.bodies",
