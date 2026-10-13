@@ -53,6 +53,28 @@ describe('list-style-dropped on the Markdown target', () => {
     expect(result.report.diagnostics.filter(row => row.code.startsWith('carrier-marker'))).toEqual([])
   })
 
+  it('stacks an attribute marker directly above the list-style marker', () => {
+    const source = '{.steps}\na. one\nb. two\n'
+    const exported = carveToMarkdownWithReport(source, { roundtrip: true })
+    expect(exported.value).toBe('<!-- carve: {.steps} -->\n<!-- carve: a. -->\n1. one\n2. two\n')
+    expect(exported.losses).toEqual([])
+    const restored = migrateMarkdown(exported.value)
+    expect(restored.report.diagnostics.filter(row => row.code.startsWith('carrier-marker'))).toEqual([])
+    expect(parse(restored.value).children[0]).toMatchObject({
+      type: 'list', ordered: true, olType: 'a', attrs: { classes: ['steps'] },
+    })
+  })
+
+  it('keeps a separated attribute marker with its own block', () => {
+    const markdown = '<!-- carve: {.steps} -->\nIntro.\n\n<!-- carve: a. -->\n1. one\n2. two\n'
+    const restored = migrateMarkdown(markdown)
+    expect(restored.report.diagnostics.filter(row => row.code.startsWith('carrier-marker'))).toEqual([])
+    expect(parse(restored.value).children).toMatchObject([
+      { type: 'paragraph', attrs: { classes: ['steps'] } },
+      { type: 'list', ordered: true, olType: 'a' },
+    ])
+  })
+
   it.each([
     'i. one\nj. two\n',
     'v. one\nvi. two\n',
