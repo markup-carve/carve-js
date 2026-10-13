@@ -29,3 +29,26 @@ it('bounds raw-format suffixes at the next newline or closer', () => {
   expect(maskDjotOpaque(source + '\n}', true)).toBe('   {='.repeat(8192) + '\n}')
   expect(maskDjotOpaque('`a`{=html}', true, { code: false })).toBe('   {=html}')
 })
+
+it('requires a space or line ending after quote markers at reference boundaries', () => {
+  for (const head of ['># heading', '>***', '>{.c}', '>:::']) {
+    const source = `${head}\n[r]: /a\`b`
+    expect(maskDjotOpaque(source, false)).toBe(source)
+  }
+  for (const head of ['> # heading', '> ***', '> {.c}', '> :::', '>']) {
+    const source = `${head}\n[r]: /a\`b`
+    expect(maskDjotOpaque(source, false)).toBe(source.replace('/a`b', '    '))
+  }
+})
+
+it('keeps empty item boundaries and list-hosted block boundaries opaque', () => {
+  for (const head of ['- ', '1. ', ': ', '- [ ] ', '- # H', '- [a]: /x', '- {.c}', '- :::']) {
+    const source = head + '\n[r]: /a`b\n[s]: /c`d'
+    expect(maskDjotOpaque(source, false)).toBe(source.replace('/a`b', '    ').replace('/c`d', '    ').replace('/x', '  '))
+  }
+})
+
+it('keeps code delimiters in separate paragraphs after a definition', () => {
+  const source = '[r]: /x\n\na `b\n\nc` d'
+  expect(maskDjotOpaque(source, false)).toBe(source.replace('/x', '  '))
+})

@@ -1,3 +1,4 @@
+import { continuesParagraph } from './djot-attributes.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotTableRows, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
@@ -29,21 +30,40 @@ function foldLabelLines(label: string): string {
   return [first, ...lines.map(line => line.trim()).filter(Boolean), last].join(' ')
 }
 
+function continuesReferenceQuote(source: string, at: number, label: string, contentStart: (line: string) => number): boolean {
+  const firstLine = source.slice(source.lastIndexOf('\n', at) + 1, at)
+  const depth = (firstLine.slice(0, contentStart(firstLine)).match(/>/g) ?? []).length
+  if (depth === 0) return true
+  return label.split('\n').slice(1).every(line => {
+    const prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
+    return (prefix.match(/>/g) ?? []).length >= depth ||
+      !/^(?:#{1,6} |[-*+](?:[ \t]|$)|[0-9A-Za-z]+[.)] |:{3,}|`{3,}|~{3,}|\||\{|\[[^\]]+\]:)/.test(line.slice(prefix.length).replace(/^[ \t]*/, ''))
+  })
+}
+
 function normalizeMultilineLabels(
   source: string,
-  replace: (at: number, label: string) => string | undefined,
+  replace: (at: number, label: string, image: boolean) => string | undefined,
   explicit: boolean,
+  mask: string,
 ): string {
   let open = -1, multiline = false, copied = 0, consumed = 0, output = ''
+  const images: boolean[] = []
+  const boundaries = source.includes('\n') && source.includes('[') ? new Set(djotInlineBoundaries(source, mask)) : new Set<number>()
   for (let at = 0; at < source.length; at++) {
-    if (source[at] === '[') { open = at; multiline = false }
+    if (boundaries.has(at)) { images.length = 0; open = -1; multiline = false }
+    if (source[at] === '[') {
+      if (mask[at] !== ' ') images.push((images.at(-1) ?? false) || source[at - 1] === '!' && !isDjotEscaped(source, at - 1))
+      open = at; multiline = false
+    }
     else if (source[at] === '\n') multiline = true
     else if (source[at] === ']') {
+      const image = mask[at] !== ' ' ? images.pop() ?? false : false
       if (open >= 0 && multiline && (explicit ? source[open - 1] === ']' : source[at + 1] === '[')) {
         const start = explicit ? open - 1 : source[open - 1] === '!' ? open - 1 : open
         if (start >= consumed) {
           consumed = at + 1
-          const replacement = replace(start, source.slice(open + 1, at))
+          const replacement = replace(start, source.slice(open + 1, at), image)
           if (replacement !== undefined) {
             output += source.slice(copied, start) + source.slice(start, open + 1) + replacement + ']'
             copied = at + 1
@@ -57,13 +77,14 @@ function normalizeMultilineLabels(
 }
 
 /** Normalize reference labels and share definition attributes. */
-export function djotReferenceLayout(source: string, contentStart: (line: string) => number): string {
+export function djotReferenceLayout(source: string, contentStart: (line: string) => number, caretOnly = false, accepted?: ReadonlyMap<number, { label: string; target: string; end: number }>, imageChildText = false): string {
   let mask = referenceMask(source)
-  source = normalizeMultilineLabels(source, (at, label) =>
-    mask[at] !== ' ' && !isDjotEscaped(source, at) && !label.startsWith('^') &&
-    !label.includes('`') && !/\n[ \t]*\n/.test(label)
+  if (!caretOnly) {
+  source = normalizeMultilineLabels(source, (at, label, image) =>
+    !image && !imageChildText && mask[at] !== ' ' && !isDjotEscaped(source, at) && !label.startsWith('^') &&
+    !label.includes('`') && !/\n[ \t]*\n/.test(label) && continuesReferenceQuote(source, at, label, contentStart)
       ? foldLabelLines(label)
-      : undefined, false)
+      : undefined, false, mask)
   mask = referenceMask(source)
   const labels = new Set(
     source.split('\n').flatMap((line) => {
@@ -74,8 +95,28 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   source = normalizeMultilineLabels(source, (at, label) =>
     mask[at] === ']' && !/\n[ \t]*\n/.test(label) && labels.has(referenceKey(label))
       ? label.replace(/\s+/g, ' ').trim()
-      : undefined, true)
+      : undefined, true, mask)
+  }
   const lines = source.split('\n')
+  let definitionOffset = 0
+  const offsets = lines.map(line => { const at = definitionOffset; definitionOffset += line.length + 1; return at })
+  const attributeContinues = new Map<number, boolean>()
+  for (let index = 0; index < lines.length; index++) {
+    const start = contentStart(lines[index]!)
+    const content = lines[index]!.slice(start)
+    if (content.startsWith('{') && readAttributes(content, 0)?.end === content.length) {
+      const previous = lines[index - 1] ?? ''
+      const priorBody = previous.slice(contentStart(previous))
+      attributeContinues.set(index, !/^:{3,}[ \t]*$/.test(priorBody) && !/[-*+.):]/.test(lines[index]!.slice(0, start)) && continuesParagraph(source, offsets[index]! + start))
+    }
+  }
+  const quoteOpenings = new Set<number>()
+  let previousQuoteDepth = 0
+  for (const [index, line] of lines.entries()) {
+    const depth = (line.slice(0, contentStart(line)).match(/>/g) ?? []).length
+    if (depth > previousQuoteDepth) quoteOpenings.add(index)
+    previousQuoteDepth = depth
+  }
   const definitions = new Map<string, { target: string; attrs: string; slots: Map<string, string[]>; line: number; first: number }>()
   const definitionMask = referenceMask(source).split('\n')
   const definitionLines = new Set<number>()
@@ -84,33 +125,66 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   const tableRows = source.includes('|') ? djotTableRows(source, pipeMask.join('\n')) : []
   for (let n = 0; n < lines.length; n++) {
     const start = contentStart(lines[n]!)
-    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(lines[n]!.slice(start))
-    if (!definition || definitionMask[n]![start] !== '[') continue
-    let first = n
+    const definition = /^\[(?!\^[^\]\n]+\]:(?:[ \t\r]|$))([^\]\n]+)\]:[ \t]*([^ \t\r\n]*)\r?$/.exec(lines[n]!.slice(start))
+    if (!definition || definitionMask[n]![start] !== '[' || caretOnly && (!definition[1]!.startsWith('^') || !accepted?.has(n))) continue
+    let first = n, cursor = n
     const attrs: string[] = []
-    while (first > 0) {
-      const precedingStart = contentStart(lines[first - 1]!)
-      const precedingPrefix = lines[first - 1]!.slice(0, precedingStart)
+    const attributeLines: number[] = []
+    let attributeDepth: number | undefined
+    while (cursor > 0 && !caretOnly) {
+      const precedingStart = contentStart(lines[cursor - 1]!)
+      const precedingPrefix = lines[cursor - 1]!.slice(0, precedingStart)
       const prefix = lines[n]!.slice(0, start)
       const quoteDepth = (value: string) => value.split('>').length - 1
       if (/[-*+.):]/.test(prefix) || quoteDepth(prefix) > quoteDepth(precedingPrefix)) break
-      const preceding = lines[first - 1]!.slice(precedingStart),
-        parsed = readAttributes(preceding, 0)
+      const depth = quoteDepth(precedingPrefix)
+      const preceding = lines[cursor - 1]!.slice(precedingStart)
+      if (preceding.trim() === '') {
+        if (quoteOpenings.has(cursor - 1)) break
+        if (attributeDepth !== undefined && depth < attributeDepth) break
+        cursor--; continue
+      }
+      if (attributeDepth !== undefined && depth < attributeDepth) break
+      if (!/[-*+.):]/.test(precedingPrefix) && attributeContinues.get(cursor - 1) === true) break
+      const parsed = readAttributes(preceding, 0)
       if (parsed?.end !== preceding.length) break
+      attributeDepth = depth
       attrs.push(preceding)
-      first--
+      attributeLines.push(cursor - 1)
+      first = --cursor
+      if (quoteOpenings.has(cursor)) break
     }
-    const previous = lines[first - 1] ?? ''
-    const previousContent = previous.slice(contentStart(previous)).trim()
-    if (
-      first > 0 &&
-      previousContent !== '' &&
-      !definitionLines.has(first - 1) &&
-      !/^(?:#{1,6}(?: |$)|:{3,}|\|)/.test(previousContent) &&
-      readAttributes(previousContent, 0)?.end !== previousContent.length
-    )
-      continue
-    for (let k = first; k < n; k++) removed.add(k)
+    const boundary = (at: number): boolean => {
+      const previous = lines[at - 1] ?? ''
+      const previousStart = contentStart(previous)
+      const previousContent = previous.slice(previousStart).trim()
+      const currentStart = contentStart(lines[at] ?? '')
+      const noteAt = previous.slice(0, previousStart).indexOf('[^')
+      const ownerStart = noteAt < 0 ? previousStart : noteAt + 1
+      const quoteDepth = (line: string): number => (/^(?:(?:[ \t]*>)+[ \t]*)?/.exec(line)![0].match(/>/g) ?? []).length
+      const outdented = quoteDepth(lines[at] ?? '') < quoteDepth(previous) || currentStart < ownerStart && (noteAt >= 0 || /(?:[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(previous.slice(0, previousStart)))
+      return at === 0 || previousContent === '' || outdented || definitionLines.has(at - 1) ||
+        /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\||(?:[-*][ \t]*){3,}$)/.test(previousContent) ||
+        readAttributes(previousContent, 0)?.end === previousContent.length
+    }
+    if (!boundary(first)) {
+      let tail = -1
+      for (const [index, at] of attributeLines.entries()) {
+        const previous = lines[at - 1] ?? ''
+        if (previous.slice(contentStart(previous)).trim() === '') tail = index
+      }
+      if (tail >= 0) {
+        first = attributeLines[tail]!
+        attrs.length = tail + 1
+        attributeLines.length = tail + 1
+      } else {
+        if (!boundary(n)) continue
+        first = n
+        attrs.length = 0
+        attributeLines.length = 0
+      }
+    }
+    for (const at of attributeLines) removed.add(at)
     const attributes = attrs.reverse().join('')
     definitions.set(definitionKey(definition[1]!), {
       target: definition[2]!,
@@ -182,6 +256,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       const at = referenceSource[open - 1] === '!' && !escaped[open - 1] ? open - 1 : open
       const content = referenceSource.slice(open + 1, close),
         explicit = referenceSource.slice(close + 2, labelEnd)
+      if (content.startsWith('^') && content.length > 1) continue
       const key = explicit ? referenceKey(explicit) : definitionKey(
         djotReferenceText(parseRefLabelInlines(djotEmphasis(content, (plain) => plain))),
       )
@@ -220,6 +295,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       if (count === useCounts.get(key)) definition.slots.delete(attribute)
   }
   const occupied = new Set(definitions.keys())
+  if (caretOnly) for (const decision of accepted?.values() ?? []) occupied.add(definitionKey(decision.label))
   for (const uses of references) for (const use of uses) occupied.add(use.key)
   let serial = 0
   const nextAlias = (): string => {
@@ -230,7 +306,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   const aliases = new Map<string, string>()
   if (source.includes('\\') || source.includes('|') || source.includes('[')) {
-    const aliasKeys = new Set([...definitions.keys()].filter(key => key.includes('\\') || key.includes('|') || key.includes('[')))
+    const aliasKeys = new Set([...definitions.keys()].filter(key => key.startsWith('^') || key.includes('\\') || key.includes('|') || key.includes('[')))
     for (const uses of references) for (const use of uses)
       if (use.rawKey !== use.key && definitions.has(use.key)) aliasKeys.add(use.key)
     if (aliasKeys.size) {
@@ -263,7 +339,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   for (const n of definitionLines) {
     const line = lines[n]!, start = contentStart(line)
-    const definition = /^\[(?!\^)([^\]\n]+)\]:/.exec(line.slice(start))
+    const definition = /^\[([^\]\n]+)\]:/.exec(line.slice(start))
     if (!definition) continue
     const key = definitionKey(definition[1]!), alias = aliases.get(key)
     const close = line.indexOf(']:', start), prefix = line.slice(0, start)
@@ -278,7 +354,10 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       renamedLines.set(n, prefix + '{%%}')
       movedDefinitions.push(target)
     } else if (alias || attrs) {
-      renamedLines.set(n, prefix + target)
+      const first = definitions.get(key)!.first
+      const before = lines[first - 1] ?? ''
+      const separate = prefix === '' && attrs !== '' && before.slice(contentStart(before)).trim() !== '' && !definitionLines.has(first - 1)
+      renamedLines.set(n, (separate ? '\n' : '') + prefix + target)
     }
   }
   const edits: { at: number; end: number; text: string }[] = []
@@ -295,6 +374,10 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       if (!definition) continue
       const name = (use.ownSlots.has('class') ? classAliases.get(use.key) : undefined)
         ?? aliases.get(use.key) ?? use.key
+      if (caretOnly) {
+        edits.push({ at: use.at, end: use.end, text: `${use.label}[${name}]${use.own}` })
+        continue
+      }
       if (!definition.attrs) {
         if (aliases.has(use.key) || use.formatted || definition.target && use.own) {
           let attrs = definition.target ? mergedReferenceAttrs(use.ownSlots, '') : use.own

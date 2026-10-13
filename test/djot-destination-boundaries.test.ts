@@ -49,7 +49,7 @@ it('checks the shared fixtures against the Djot parser', () => {
       .replace(/<li>\n/g, '<li>').replace(/\n<\/li>/g, '</li>')
       .replace(/(?:href|src)="([^"]*)"/g, (all, url: string) => all.replace(url, url
         .replace(/\](?=[\[{])/g, '%5D').replace(/&quot;/g, '%22').replace(/&lt;/g, '%3C').replace(/&gt;/g, '%3E')
-        .replace(/[()` |]/g, ch => '%' + ch.charCodeAt(0).toString(16).toUpperCase())))
+        .replace(/[()` ]/g, ch => '%' + ch.charCodeAt(0).toString(16).toUpperCase())))
     expect(html, row.name).toBe(row.html)
   }
 })
