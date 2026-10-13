@@ -2486,7 +2486,7 @@ class Importer {
       this.recordCarrier(node, 'tight')
     }
     const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
-    const label = carriedLabel !== undefined && carriedLabel !== '' && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
+    const label = carriedLabel !== undefined && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
     if (label !== undefined) this.recordCarrier(node, 'label')
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
