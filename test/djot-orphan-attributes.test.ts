@@ -104,3 +104,19 @@ test('keeps a long pending value through chained quote exits', () => {
   expect(imported.length).toBeLessThan(source.length * 2)
   expect(carveToHtml(imported)).toContain(`<p title="${value}" class="${classes.join(' ')}">word</p>`)
 })
+
+test('returns pending item attributes when a footnote closes', () => {
+  const converted = djotToCarve('[^n]: - x\n\n        {.a}\n\np[^n]')
+  const html = carveToHtml(converted).replace(/>\s+</g, '><')
+  expect(converted).not.toContain('\0')
+  expect(html).toContain('<p class="a">p<a')
+  expect(html).toContain('<ul><li><p>x</p></li></ul>')
+})
+
+test('keeps a task list opened on a referenced footnote head', () => {
+  const converted = djotToCarve('[^n]: - [ ] a\n      - [ ] b\n\nx[^n]')
+  const html = carveToHtml(converted)
+  expect(converted).not.toContain('\0')
+  expect(html.match(/<ul(?: |>)/g)).toHaveLength(1)
+  expect(html.match(/type="checkbox"/g)).toHaveLength(2)
+})

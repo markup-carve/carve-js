@@ -68,6 +68,7 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
       const owner = frames.get(previousDepth)?.at(-1)
       if (owner) owner.attributes = []
     }
+    const priorDepth = previousDepth, priorParagraph = previousParagraph
     previousDepth = depth
     previousParagraph = text !== '' && !/^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|\[(?:\^)?[^\]\n]*\]:)/.test(visible) && !(visible.startsWith('{') && readAttributes(body, indent)?.end === body.trimEnd().length)
     if (literalDepth !== undefined && depth > literalDepth) continue
@@ -77,6 +78,13 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
     while (stack.at(-1) && stack.at(-1)!.column > indent) stack.pop()
     const frame = stack.at(-1)
     if (item) {
+      if (depth === priorDepth && priorParagraph && (!frame || indent > frame.column)) {
+        previousParagraph = true
+        if (stack.length) frames.set(depth, stack)
+        continue
+      }
+      const itemText = text.slice(item[0].length).replace(/^\[[ xX]\][ \t]+/, '').trimStart()
+      previousParagraph = itemText !== '' && !/^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|[>|]|\[(?:\^)?[^\]\n]*\]:)/.test(itemText)
       let kind = djotListKind(item[1]!)
       if (/^[-*+]/.test(item[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length))) kind += ':task'
       const same = frame && indent === frame.column ? sharedDjotListKind(frame.kind, kind) : undefined
@@ -99,6 +107,10 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
       frames.set(depth, stack)
     } else if (visible.startsWith('{')) {
       const attrs = readAttributes(body, indent)
+      if (depth >= 2 && !frame && !priorParagraph && attrs?.end === body.trimEnd().length) {
+        lines[row] = prefix + attrs.source
+        for (let next = row + 1; next < lines.length && lines[next]!.trimEnd() === prefix.trimEnd(); next++) removed.add(next)
+      }
       if (depth >= 2 && frame && indent > frame.column && attrs?.end === body.trimEnd().length && !continuesParagraph(source, at)) frame.attributes.push({ row, wire: attrs.source })
       else if (frame && indent <= frame.column) frames.delete(depth)
       else if (frame && attrs?.end !== body.trimEnd().length) frame.attributes = []
@@ -146,6 +158,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
   }[] = []
   const mainOut: string[] = []
   let out = mainOut
+  const returnedNoteItemAttributes: string[] = []
   let pendingAttributes: { owner: number; depth: number; row: number; output: string[]; attributes: string }[] = []
   let paragraph = false,
     blank = true,
@@ -167,6 +180,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
   const completedNotes: { body: string[]; placement: number | undefined; fenceColumn?: number }[] = []
   const endNote = (): void => {
     const ended = notes.pop()!
+    for (const attribute of pendingAttributes) { attribute.output[attribute.row] = ''; returnedNoteItemAttributes.push(attribute.attributes) }
+    pendingAttributes = []
     if (divs.length) dropOrphanAttributeLine(out)
     while (divs.length) {
       const div = divs.pop()!
@@ -302,7 +317,14 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const ordinaryQuoteList = lists.at(-1)
     const quoteList = embeddedListOwner && embeddedListOwner.depth < quoteDepth && (!ordinaryQuoteList || embeddedListOwner.depth > ordinaryQuoteList.depth) ? embeddedListOwner : ordinaryQuoteList
     const outsideQuoteItem = quoteList && quoteDepth > quoteList.depth && ownerColumn(quoteList) < quoteList.column + 1
+    if (returnedNoteItemAttributes.length) {
+      const prefix = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(originalForCarve())![0]
+      for (const attributes of returnedNoteItemAttributes) out.push(prefix + attributes)
+      returnedNoteItemAttributes.length = 0
+    }
     if (noteHead) {
+      for (const attribute of pendingAttributes) attribute.output[attribute.row] = ''
+      pendingAttributes = []
       if (!noteOwner && (quotedNoteItem || inlineNoteItem) && physicalQuoteDepth < depth) {
         out.push(quoteBoundary)
         depth = physicalQuoteDepth
@@ -341,7 +363,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
       let childBody = body
       if (child) {
-        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
+        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+]/.test(child[1]!) && /^\[[ xX]\][ \t]+/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
         childBody = body.slice(child[1]!.length)
         if (/^[-*+]/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\][ \t]+/, '')
       }
@@ -703,7 +725,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       if (owner && owner.depth === quoteDepth && indent > owner.column && attrs!.source !== '{}') {
         const heldLoose = /\x00DJOTITEMATTR\x00(?:\d+\x00)?B\d+\x00$/.test(out[owner.start - 2] ?? '')
         if (blank && !heldLoose && !out[owner.start]!.includes('{loose}\n')) {
-          out[owner.start] = quoteForCarve() + ' '.repeat(owner.target) + '{loose}\n' + out[owner.start]
+          const start = out[owner.start]!, noteItem = noteOwner ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(start) : null
+          out[owner.start] = noteItem ? `${noteItem[1]}{loose}\n  ${noteItem[2]}` : quoteForCarve() + ' '.repeat(owner.target) + '{loose}\n' + start
           owner.loose = true
         }
         pendingAttributes.push({ owner: owner.column, depth: quoteDepth, row: out.length, output: out, attributes: attrs!.source })
