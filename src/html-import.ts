@@ -1949,6 +1949,17 @@ class Importer {
       this.recordCarrier(node, 'xref')
       return
     }
+    if (tag === 'span' && this.hasCarrier(node, 'substitution')) {
+      // One `<del>` then one `<ins>`, nothing else on the span or its halves.
+      const names = [carrier('substitution'), legacyCarrier('substitution')]
+      const bare = (domAttrs(node) ?? []).every(attribute => names.includes(attribute.name.toLowerCase()))
+      const elements = domChildren(node) ?? []
+      const pair = elements.length === 2 && domTag(elements[0]!) === 'del' && domTag(elements[1]!) === 'ins'
+        && elements.every((element) => (domAttrs(element) ?? []).length === 0)
+      if (bare && pair && children.length === 2 && children[0]!.type === 'delete' && children[1]!.type === 'insert') {
+        this.recordCarrier(node, 'substitution')
+      }
+    }
     if (tag === 'span' && this.hasCarrier(node, 'caption-number')) {
       const bare = (domAttrs(node) ?? []).every(attribute => [carrier('caption-number'), legacyCarrier('caption-number')].includes(attribute.name))
       if (bare && (domChildren(node) ?? []).every(child => child.nodeName === '#text')) this.recordCarrier(node, 'caption-number')
@@ -2483,6 +2494,12 @@ class Importer {
     if ((tag === 'ul' || tag === 'ol') && this.hasCarrier(node, 'tight')) {
       this.recordCarrier(node, 'tight')
     }
+    // §13a presence carriers: a `line_block` is read from its carrier, never
+    // from `class="line-block"` alone, which the admonition renders too.
+    const carriedLineBlock = tag === 'div' && this.hasCarrier(node, 'line-block')
+    if (carriedLineBlock) this.recordCarrier(node, 'line-block')
+    const carriedDiv = tag === 'div' && !carriedLineBlock && this.hasCarrier(node, 'div')
+    if (carriedDiv) this.recordCarrier(node, 'div')
     const carriedLabel = tag === 'pre' && domChildren(node)?.some(n => domTag(n) === 'code') ? this.carrierValue(node, 'label') : undefined
     const label = carriedLabel !== undefined && !/[\]\r\n]/.test(carriedLabel) ? carriedLabel : undefined
     if (label !== undefined) this.recordCarrier(node, 'label')
@@ -2630,7 +2647,15 @@ class Importer {
     }
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
     if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
-    if (tag === 'div') {
+    if (carriedLineBlock) {
+      const classes = (attrs?.classes ?? []).filter((name) => name !== 'line-block')
+      const kept: Attrs = { ...attrs }
+      delete kept.classes
+      if (classes.length) kept.classes = classes
+      const own = kept.id || kept.classes || kept.keyValues ? kept : undefined
+      return [{ type: 'line_block', children: this.blocks(domChildren(node) ?? [], path, depth + 1), ...(own ? { attrs: own } : {}) }]
+    }
+    if (tag === 'div' && !carriedDiv) {
       /*
        * The block spelling of the same shape, which pandoc and the `math`
        * fence both write as `<div class="math display">\[…\]</div>`. It reads
@@ -2658,7 +2683,7 @@ class Importer {
       }
     }
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
-      const container = this.containerFrom(tag, attrs)
+      const container = carriedDiv ? undefined : this.containerFrom(tag, attrs)
       if (container) {
         /*
          * THE TITLE PARAGRAPH IS THE CONTAINER'S TITLE, not its first body
@@ -2847,7 +2872,7 @@ class Importer {
        * its own: the fence buys the reader nothing and costs two lines of markup
        * nobody asked for.
        */
-      if (tag !== 'div' || (!attrs && !lifted)) return children
+      if (tag !== 'div' || (!attrs && !lifted && !carriedDiv)) return children
       return [
         {
           type: 'div',
@@ -4733,6 +4758,10 @@ class Importer {
       return [{ type: 'heading_ref', target: this.attr(node, 'href')!.slice(1), ...(attrs ? { attrs } : {}) }]
     }
     if (tag === 'span' && carried?.names.has('caption-number')) return [{ type: 'caption_number' }]
+    if (tag === 'span' && carried?.names.has('substitution')) {
+      const [removed, added] = children as [Extract<InlineNode, { type: 'delete' }>, Extract<InlineNode, { type: 'insert' }>]
+      return [{ type: 'substitution', old: removed.children, new: added.children }]
+    }
     if (tag === 'span' && carried?.names.has('raw')) {
       // §13a `data-carve-raw`. Without this the carrier span was read as raw
       // HTML, so `` `x`{=tex} `` came back as

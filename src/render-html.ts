@@ -1591,7 +1591,9 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     case 'directive':
       return renderAdmonition(node, opts, level)
     case 'div': {
-      const open = `${pad}<div${renderAttrs(node.attrs, 'div')}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      const divAttrs = `${renderAttrs(node.attrs, 'div')}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}`
+      // §13a: a `<div>` with no attribute is any foreign div, so a bare one is marked.
+      const open = `${pad}<div${divAttrs === '' && roundtripExport(opts) ? ` ${carrier('div')}` : divAttrs}>`
       // Core caption floor (graceful degradation): a grouping `[label]` that
       // no extension consumed must not be silently dropped. Surface it as a
       // `<p class="div-label">` at the start of the div content. (A group
@@ -1607,7 +1609,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // class is part of the OUTPUT contract, not of the AST: the node type is
       // what records that every newline inside is a hard break, so a plain div
       // an author gave that class stays an ordinary div.
-      const open = `${pad}<div${renderAttrs2(node.attrs, { trailingClass: 'line-block', tag: 'div' })}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      const lineBlockCarrier = roundtripExport(opts) ? ` ${carrier('line-block')}` : ''
+      const open = `${pad}<div${lineBlockCarrier}${renderAttrs2(node.attrs, { trailingClass: 'line-block', tag: 'div' })}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
       const body = renderBlocks(node.children, opts, level + 1)
       return frameBlockContainer(open, body, `${pad}</div>`)
     }
@@ -2683,8 +2686,10 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return `<ins${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</ins>`
     case 'delete':
       return `<del${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</del>`
-    case 'substitution':
-      return `<del>${renderInlines(node.old, opts)}</del><ins>${renderInlines(node.new, opts)}</ins>`
+    case 'substitution': {
+      const pair = `<del>${renderInlines(node.old, opts)}</del><ins>${renderInlines(node.new, opts)}</ins>`
+      return roundtripExport(opts) ? `<span ${carrier('substitution')}>${pair}</span>` : pair
+    }
     case 'critic_comment':
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
     case 'heading_ref':
