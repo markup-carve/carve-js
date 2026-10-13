@@ -786,6 +786,9 @@ const IMPLEMENTED = new Set([
   // markup-carve/carve#3105. The leading marker above is a marker when a
   // flush-left block follows it: a quote and a note take the first-block form.
   'a-block-quote-and-a-footnote-body-take-the-first-block-form',
+  // markup-carve/carve#2879. A row with both pipes and one slot is a row,
+  // whatever its cells hold (CARVE-P9-082).
+  'an-explicitly-delimited-row-of-blank-cells-is-a-table',
   // markup-carve/carve#1833. An empty description body is written with the
   // `{empty}` sentinel rather than dropped, which keeps the list whole.
   'an-empty-description-body-is-written-with-the-empty-sentinel',
