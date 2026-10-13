@@ -17,8 +17,9 @@ describe('differential audit regressions', () => {
     expect(carveToHtml(':: t\n* x\n')).toContain('<li>x</li>')
   })
 
-  it('does not promote a one-cell whitespace row to a table', () => {
-    expect(carveToHtml('* | |\n')).toContain('<li>| |</li>')
+  it('opens a table of one empty cell in a list item', () => {
+    // CARVE-P9-082: `| |` is a row whatever its cell holds.
+    expect(carveToHtml('* | |\n')).toContain('<li>\n    <table>\n      <tbody>\n        <tr><td></td></tr>')
   })
 
   it('reads an unclosed dollar-prefixed verbatim run as math', () => {

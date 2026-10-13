@@ -73,14 +73,6 @@ describe('markdownToCarve — flavour constructs Carve spells the same way', () 
       onHtml: 'doc-noteref',
     },
     {
-      name: 'an abbreviation definition (PHP Markdown Extra)',
-      md: '*[HTML]: HyperText\n\nHTML here',
-      off: '\\*[HTML]: HyperText\n\nHTML here',
-      offHtml: '<p>*[HTML]: HyperText</p>\n<p>HTML here</p>',
-      dialect: { abbreviations: true },
-      onHtml: '<abbr title="HyperText">HTML</abbr>',
-    },
-    {
       name: 'a fenced div (Pandoc, Quarto)',
       md: 'x\n\n::: note\nbody\n:::',
       off: 'x\n\n\\::: note\nbody\n\\:::',
@@ -109,6 +101,16 @@ describe('markdownToCarve — flavour constructs Carve spells the same way', () 
   it.each(cases)('leaves $name literal by default', ({ md, off, offHtml }) => {
     expect(conv(md)).toBe(off)
     expect(html(md)).toBe(offHtml)
+  })
+
+  // CARVE-P11-033 T1: the Markdown target writes this line, so the import
+  // reads it by default and keeps it literal only when turned off.
+  it('reads an abbreviation definition (PHP Markdown Extra) unless turned off', () => {
+    const md = '*[HTML]: HyperText\n\nHTML here'
+    expect(conv(md)).toBe(md)
+    expect(html(md)).toContain('<abbr title="HyperText">HTML</abbr>')
+    expect(conv(md, { abbreviations: false })).toBe('\\*[HTML]: HyperText\n\nHTML here')
+    expect(html(md, { abbreviations: false })).toBe('<p>*[HTML]: HyperText</p>\n<p>HTML here</p>')
   })
 
   it.each(cases)('converts $name when asked', ({ md, dialect, onHtml }) => {

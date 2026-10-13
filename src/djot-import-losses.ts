@@ -176,8 +176,10 @@ export function djotImportLosses(
         end++
       if (!rows[end]) report('A table containing only separator rows cannot be spelled in Carve.', n + 1)
     }
-    if (/^\|(?:[ \t]*\|)+[ \t]*$/.test(content))
-      report('A table row whose cells are all blank cannot be spelled in Carve.', n + 1)
+    // A row of blank cells is a Carve row (CARVE-P9-082), but Carve reads a tab
+    // between the pipes as content where Djot reads padding.
+    if (/^\|(?:[ \t]*\|)+[ \t]*$/.test(content) && content.trimEnd().includes('\t'))
+      report('A blank table cell holding a tab reads as tab content in Carve.', n + 1)
   }
   const escaped = new Uint8Array(source.length)
   let slashes = 0

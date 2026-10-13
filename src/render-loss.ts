@@ -26,7 +26,7 @@ export type RenderLoss =
   | (RenderLossBase & { code: 'editorial-comment-flattened'; nodeType: 'inline' })
   | (RenderLossBase & { code: 'carrier-attribute-dropped'; attribute: string })
   | (RenderLossBase & { code: 'list-style-dropped'; target: 'markdown'; nodeType: 'block'; style: ListStyle })
-  | (RenderLossBase & { code: 'list-delimiter-changed'; target: 'markdown'; nodeType: 'block'; authored: '.' | ')'; emitted: '.' | ')' })
+  | (RenderLossBase & { code: 'list-delimiter-changed'; target: 'markdown'; nodeType: 'block'; delim: '.' | ')'; emittedDelim: '.' | ')' })
 
 export interface RenderResult<T = string> {
   value: T
@@ -183,8 +183,8 @@ export function listDelimiterChanged(
     code: 'list-delimiter-changed',
     target: 'markdown',
     nodeType: 'block',
-    authored,
-    emitted,
+    delim: authored,
+    emittedDelim: emitted,
     message: `Changed an ordered list delimiter from ${authored} to ${emitted} while rendering markdown`,
     ...(node.pos ? { pos: node.pos } : {}),
   })

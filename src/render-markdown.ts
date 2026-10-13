@@ -14,6 +14,7 @@ import type {
   Image,
   InlineNode,
   Link,
+  LinkReferenceDefinition,
   List,
   ListItem,
   Table,
@@ -141,6 +142,7 @@ function renderMarkdownBody(ast: Document, opts: MarkdownRenderOptions, normaliz
     smartTypography,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
     referencedLinks: referencedLinkLabels(ast),
+    nativeReferences: opts.roundtrip === true ? nativeReferenceDefinitions(ast) : new Map(),
   }
   const out = renderBlocks(blocksWithLinkDefinitionsInSourceOrder(ast), ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -169,6 +171,8 @@ function renderFrontmatter(frontmatter: Document['frontmatter']): string {
 
 interface MarkdownContext {
   referencedLinks: ReadonlySet<string>
+  /** CARVE-P11-028: definitions a roundtrip export may name from a native reference link. */
+  nativeReferences: ReadonlyMap<string, LinkReferenceDefinition>
   options: MarkdownRenderOptions
   /** Carve heading id -> the GFM slug of the heading the target writes. */
   headingSlugs: Map<string, string>
@@ -578,10 +582,13 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
     case 'comment':
       return ''
     case 'link_reference_definition': {
-      if (ctx.referencedLinks.has(normalizeRefLabel(node.label))) return ''
+      // CARVE-P11-028: roundtrip export writes a referenced definition too;
+      // its link already reported a denied destination.
+      const referenced = ctx.referencedLinks.has(normalizeRefLabel(node.label))
+      if (referenced && !ctx.roundtrip) return ''
       const authored = deniedProbeInput(node.href)
       const probed = sanitizeMdUrl(authored)
-      destinationDenied(ctx.options, 'link', 'markdown', authored, probed, node.pos)
+      if (!referenced) destinationDenied(ctx.options, 'link', 'markdown', authored, probed, node.pos)
       // `<>` keeps a blanked line a definition, with an empty destination.
       const destination =
         probed === '' && authored !== ''
@@ -1521,9 +1528,42 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
     }
   })
   const title = node.title ?? node.attrs?.keyValues?.title
+  const definition = slug === undefined ? nativeReferenceFor(node, ctx) : undefined
+  if (definition !== undefined) {
+    const collapsed = node.rawRef?.endsWith('[]') === true && text === definition.label
+    return collapsed ? `[${text}][]` : `[${text}][${definition.label}]`
+  }
   return title === undefined
     ? `[${text}](${destination})`
     : `[${text}](${destination} "${escapeMdTitle(title)}")`
+}
+
+/**
+ * Definitions whose label Markdown reads back as the same one label: a
+ * label Markdown would case-fold onto another, or cannot write, stays inline.
+ */
+function nativeReferenceDefinitions(ast: Document): Map<string, LinkReferenceDefinition> {
+  const byKey = new Map<string, LinkReferenceDefinition[]>()
+  for (const node of ast.children) {
+    if (node.type !== 'link_reference_definition') continue
+    const key = normalizeRefLabel(node.label).toLowerCase().toUpperCase()
+    byKey.set(key, [...(byKey.get(key) ?? []), node])
+  }
+  const definitions = new Map<string, LinkReferenceDefinition>()
+  for (const group of byKey.values()) {
+    const label = group[0]!.label
+    if (group.length !== 1 || !/\S/.test(label) || /[[\]\\\n]/.test(label) || label.length > 999) continue
+    definitions.set(normalizeRefLabel(label), group[0]!)
+  }
+  return definitions
+}
+
+/** The definition a resolved link is written against natively, if it can be (CARVE-P11-028). */
+function nativeReferenceFor(node: Link, ctx: MarkdownContext): LinkReferenceDefinition | undefined {
+  if (!ctx.roundtrip || node.ref === undefined || node.attrs !== undefined || isUnresolvedReference(node)) return undefined
+  const definition = ctx.nativeReferences.get(normalizeRefLabel(node.ref))
+  if (definition === undefined || definition.href !== node.href || definition.title !== node.title) return undefined
+  return definition
 }
 
 function renderImage(node: Image, ctx: MarkdownContext): string {

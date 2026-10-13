@@ -38,7 +38,7 @@ import {
   useEmptyDestinationBoundaryKey,
 } from './markdown-empty-destination.js'
 import { CARRIER_MARKER_DROPPED, CARRIER_MARKER_PAIR_DROPPED, CARRIER_MARKERS_DAMAGED, FRONTMATTER_SYNTHESIZED, HEADING_LEADING_WHITESPACE_UNSPELLABLE, LEADING_WHITESPACE_UNSPELLABLE, ORDERED_TASK_ITEM_UNSPELLABLE, RAW_SPAN_WHITESPACE_TRIMMED } from './import-report-messages.js'
-import { isTableRow, opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
+import { opensFrontmatter, parse, rawBracketRunCloses, rawImageBracketRunCloses } from './parse.js'
 import { BLOCK_SEPARATOR, FRONTMATTER_CLOSER, canonicalFrontmatterOpener, escapeSpanMarkerPayload, padCell, renderCarve } from './render-carve.js'
 import { FRONTMATTER_SAFE_BREAK } from './thematic-break-marker.js'
 
@@ -1097,7 +1097,10 @@ export interface MarkdownDialect {
   math?: boolean
   /** `^[body]` is an inline footnote (Pandoc). */
   inlineFootnotes?: boolean
-  /** `*[HTML]: HyperText` defines an abbreviation (PHP Markdown Extra). */
+  /**
+   * `*[HTML]: HyperText` defines an abbreviation (PHP Markdown Extra). On
+   * unless `false`: the Markdown target writes the line (CARVE-P11-033 T1).
+   */
   abbreviations?: boolean
   /** `::: note` opens a fenced div (Pandoc, Quarto). */
   fencedDivs?: boolean
@@ -1174,7 +1177,7 @@ function escapeCarveConstructsSpelledLikeText(
     out = out.replace(/(?<!\\)\^(?=\[)/g, '\\^')
   }
 
-  if (!dialect.abbreviations) {
+  if (dialect.abbreviations === false) {
     // `*[HTML]: HyperText` defines an abbreviation: the definition line
     // disappears from the render and every later `HTML` becomes an `<abbr>`.
     // Carve wants the space after the colon, so `*[A]:x` is already literal.
@@ -2942,7 +2945,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   carrierToken = ''
   if (!markdown.includes(CARRIER_HEAD)) return markdown
 
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const { lines, lineNumbers, markerLines, spanned } = joinSpannedCarrierMarkers(markdown.replace(/\r\n?/g, '\n').split('\n'), blockLines, sourceLineNumbers)
   const dropped: MarkdownImportLoss[] = []
   const payloads = new Map<number, string>()
   const hosts = new Map<number, string>()
@@ -2954,9 +2957,9 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   // derives answers that at every indent and behind every host prefix, which a
   // fence scan over the raw lines could not (markup-carve/carve#2850).
   for (const [at, line] of lines.entries()) {
-    if (!blockLines.has(at)) continue
+    if (!markerLines.has(at)) continue
     const host = carrierHostPrefix(line)
-    const marker = carrierMarker(line.slice(host.length))
+    const marker = carrierMarker(spanned.get(at) ?? line.slice(host.length))
     if (marker !== undefined) {
       const { payload, depth } = marker
       if (depth === 1 && inlineCarriersEnabled && (payload === '[' || payload.startsWith(']{') || payload.startsWith('</#'))) continue
@@ -2966,6 +2969,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
     }
   }
   if (payloads.size === 0 && dropped.length === 0) return markdown
+  classifyBareFencePayloads(payloads)
   // Pair by shape before checking whether each payload can be restored.
   const pairs = new Map<number, number>()
   const reversePairs = new Map<number, number>()
@@ -3023,7 +3027,7 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
       dropped.push({
         code: 'carrier-marker-dropped',
         message: `${isOpener ? CARRIER_MARKER_PAIR_DROPPED : CARRIER_MARKER_DROPPED}: ${lines[at]!.slice(hosts.get(at)!.length)}`,
-        line: sourceLineNumbers?.[at] ?? at + 1,
+        line: lineNumbers[at]!,
         fidelity: 'degraded',
         confidence: 'fallback',
       })
@@ -3090,6 +3094,77 @@ function prepareCarrierMarkers(markdown: string, blockLines: ReadonlySet<number>
   }
 
   return out.join('\n')
+}
+
+/**
+ * Join a marker whose payload spans lines into one entry (CARVE-P11-063). The
+ * entry keeps the raw lines, so an unlifted marker comes back verbatim, and
+ * `spanned` holds the comment with each later line's host prefix removed.
+ * The scan for the closing `-->` only moves forward, which keeps it linear.
+ */
+function joinSpannedCarrierMarkers(raw: readonly string[], blockLines: ReadonlySet<number>, sourceLineNumbers?: readonly number[]): {
+  lines: string[]
+  lineNumbers: number[]
+  markerLines: Set<number>
+  spanned: Map<number, string>
+} {
+  const lines: string[] = []
+  const lineNumbers: number[] = []
+  const markerLines = new Set<number>()
+  const spanned = new Map<number, string>()
+  let close = 0
+  for (let at = 0; at < raw.length; at++) {
+    const line = raw[at]!
+    const number = sourceLineNumbers?.[at] ?? at + 1
+    if (blockLines.has(at)) {
+      const host = carrierHostPrefix(line)
+      const head = line.slice(host.length)
+      if (head.startsWith(CARRIER_HEAD) && !head.includes('-->')) {
+        if (close <= at) close = at + 1
+        while (close < raw.length && !raw[close]!.includes('-->')) close++
+        const continuation = host.replace(/\[[ xX]\][ \t]+$/, '').replace(/[^>\t]/g, ' ')
+        const comment = close < raw.length ? [head, ...raw.slice(at + 1, close + 1).map(rest => withoutCarrierHost(rest, continuation))].join('\n') : ''
+        if (comment !== '' && carrierMarker(comment) !== undefined) {
+          markerLines.add(lines.length)
+          spanned.set(lines.length, comment)
+          lines.push(raw.slice(at, close + 1).join('\n'))
+          lineNumbers.push(number)
+          at = close
+          continue
+        }
+      }
+      markerLines.add(lines.length)
+    }
+    lines.push(line)
+    lineNumbers.push(number)
+  }
+  return { lines, lineNumbers, markerLines, spanned }
+}
+
+/**
+ * A bare div's opener and every closer are the same bytes, `:::` (CARVE-P11-063),
+ * so which one a payload is follows from the open containers: a bare fence of
+ * the innermost opener's width closes it, any other opens. An opener is given
+ * the trailing space it keeps through the rest of the import, the spelling an
+ * older export wrote, which is still read.
+ */
+function classifyBareFencePayloads(payloads: Map<number, string>): void {
+  const open: number[] = []
+  for (const [at, payload] of payloads) {
+    const width = carrierFenceWidth(payload)
+    if (width === 0) continue
+    if (!carrierIsCloser(payload)) {
+      open.push(width)
+      continue
+    }
+    const innermost = open.at(-1)
+    if (innermost !== undefined && width <= innermost) {
+      open.pop()
+      continue
+    }
+    payloads.set(at, `${payload} `)
+    open.push(width)
+  }
 }
 
 /**
@@ -3353,10 +3428,14 @@ function restoreCarrierMarkers(carve: string): string {
     const slot = carrierSlots[Number(match[1])]!
     const kind: CarrierLineKind = slot.caption ? 'caption' : slot.closer ? 'close' : 'open'
 
-    return { lead: line.slice(0, at), text: slot.payload, kind, ...(slot.depth > 1 ? { depth: slot.depth } : {}), ...(slot.fence ? { fence: true as const } : {}) }
+    // The space classifyBareFencePayloads gave a bare opener is not source.
+    const text = /^:{3,} $/.test(slot.payload) ? slot.payload.trimEnd() : slot.payload
+    return { lead: line.slice(0, at), text, kind, ...(slot.depth > 1 ? { depth: slot.depth } : {}), ...(slot.fence ? { fence: true as const } : {}) }
   })
 
-  return restoreFenceCarriers(restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items)))).map((item) => item.lead + item.text).join('\n')
+  // A payload spanning lines continues behind the lead's continuation (CARVE-P11-063).
+  return restoreFenceCarriers(restoreDefinitionBodies(separateCarrierLines(anchorCarrierClosers(items))))
+    .map((item) => item.lead + item.text.replace(/\n/g, `\n${item.lead.replace(/[^>\t]/g, ' ')}`)).join('\n')
 }
 
 /** The title and label a fence marker's opener holds, or undefined when it opens no fenced code block. */
@@ -3451,31 +3530,22 @@ function reportOrderedTask(line: string, sourceLine?: number): void {
 }
 
 /**
- * Whether `row` is a row the parser reads back as a table row - the same
- * predicate `parseTable` gates on, so the importer cannot drop a row Carve
- * would have accepted or keep one it refuses.
+ * Whether a written header row is kept. A GFM header whose cells are all blank
+ * and carry no alignment is the scaffolding the Markdown writer adds to a
+ * headerless table, so it is dropped and reported rather than read back as an
+ * empty header row (CARVE-P11-056). A blank BODY row is a row (CARVE-P9-082)
+ * and never comes here.
  *
- * A row whose every cell is blank is not a table row (markup-carve/carve#1954).
- * GFM reads one as an empty row, and written out as `| | |` Carve reads a
- * paragraph, which splits the table in two (carve-js#1919). The row is dropped
- * and reported rather than filled with a cell the author never wrote: an
- * invented value round-trips back out as if it were theirs, and an honest
- * omission with a report beats a wrong value.
- *
- * `sourceLine` is the line of the INPUT the dropped row stood on, which carve-php
- * and carve-rs both report and which the ruling on carve-js#2668 settled: a
- * diagnostic naming what was dropped needs the one field that says where. It is
- * an index into the source, never into the stripped array the importer writes
- * from (markup-carve/carve#2792), and the row goes out pathless where the
- * caller cannot name one rather than carrying a guess.
+ * `sourceLine` is the line of the INPUT the dropped row stood on, an index into
+ * the source, never into the stripped array the importer writes from
+ * (markup-carve/carve#2792).
  */
-function keepTableRow(row: string, sourceLine?: number): boolean {
-  if (isTableRow(row)) return true
-  // No cell of a blank row can hold an escaped pipe, so splitting counts them.
-  const cells = row.split('|').length - 2
+function keepTableHeader(row: string, sourceLine?: number): boolean {
+  const cells = splitTableRow(row)
+  if (!cells.every((cell) => cell === '=')) return true
   importLosses.push({
     code: 'structure-unspellable',
-    message: `Dropped a table row of ${cells} blank cells; Carve spells no row whose every cell is blank`,
+    message: `Dropped an empty table header of ${cells.length} blank cells; it is the scaffolding a Markdown writer adds to a headerless table`,
     ...(sourceLine === undefined ? {} : { line: sourceLine }),
   })
   return false
@@ -3487,9 +3557,9 @@ function unescapePipesInCodeSpans(row: string): string {
 
 function isStandardTableRow(line: string): boolean {
   const trimmed = line.trim()
-  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return false
-  const cells = splitTableRow(trimmed)
-  return cells.some((cell) => cell !== '') || cells.length >= 2
+  // Any cell slot makes a row, blank ones included (CARVE-P9-082): `||` and
+  // `| |` are rows, a lone `|` is not.
+  return trimmed.length >= 2 && trimmed.startsWith('|') && trimmed.endsWith('|')
 }
 
 function hasFollowingSetextUnderline(lines: readonly string[], index: number): boolean {
@@ -4131,7 +4201,7 @@ function restorePrefixedInlineRun(
         inlineRunSourceLine = runPartSourceLine(part)
         const header = writeTableRow(splitTableRow(body.trim()), headers, dialect)
         inlineRunSourceLine = previousLine
-        if (keepTableRow(header, runPartSourceLine(part))) out.push(part.prefix + marker + header)
+        if (keepTableHeader(header, runPartSourceLine(part))) out.push(part.prefix + marker + header)
         idx++ // consume the delimiter row
         continue
       }
@@ -4139,7 +4209,7 @@ function restorePrefixedInlineRun(
       inlineRunSourceLine = runPartSourceLine(part)
       const row = writeTableRow(splitTableRow(body.trim()), [], dialect, tableWidth)
       inlineRunSourceLine = previousLine
-      if (keepTableRow(row, runPartSourceLine(part))) out.push(part.prefix + marker + row)
+      out.push(part.prefix + marker + row)
       continue
     }
     // The same containers `held` peeled, so a row a quoted item holds is
@@ -5880,6 +5950,7 @@ export function markdownToCarveWithLosses(
       losses.push({ code: 'carrier-markers-damaged', message: CARRIER_MARKERS_DAMAGED, fidelity: 'degraded', confidence: 'fallback' })
       value = convertMarkdown(markdown, dialect)
     }
+    if (dialect.abbreviations !== false && value.includes('{abbr="')) value = foldDefinedAbbreviations(value)
     const usedBoundaryKey = emptyDestinationKey !== undefined && value.includes(emptyDestinationKey) ? emptyDestinationKey : undefined
     if (value.includes('@') || usedBoundaryKey !== undefined) {
       const document = parse(value)
@@ -5904,6 +5975,46 @@ export function markdownToCarveWithLosses(
     inlineRunSourceLine = undefined
     importSourceLine = undefined
   }
+}
+
+/**
+ * An `<abbr>` whose title is the expansion a definition in the document gives
+ * its text comes back as the plain term that definition resolves
+ * (CARVE-P11-033 T1). Only a span written exactly as the abbr import spells
+ * it is replaced.
+ */
+function foldDefinedAbbreviations(carve: string): string {
+  const document = parse(carve)
+  const expansions = new Map<string, string>()
+  const spans: Array<{ start: number; end: number; term: string }> = []
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child)
+      return
+    }
+    const node = value as Record<string, any>
+    if (node.type === 'abbreviation_def' && !expansions.has(node.abbr)) expansions.set(node.abbr, node.expansion)
+    // The span's text must itself resolve as the abbreviation, or the plain
+    // term would come back without one.
+    if (node.type === 'span' && node.pos?.startOffset !== undefined && node.children?.length === 1 && node.children[0].type === 'abbreviation') {
+      const attrs = node.attrs
+      const keys = Object.keys(attrs?.keyValues ?? {})
+      if (keys.length === 1 && keys[0] === 'abbr' && attrs.id === undefined && !(attrs.classes?.length) && node.children[0].expansion === attrs.keyValues.abbr) {
+        spans.push({ start: node.pos.startOffset, end: node.pos.endOffset, term: node.children[0].abbr })
+      }
+    }
+    for (const child of Object.values(node)) visit(child)
+  }
+  visit(document.children)
+  if (expansions.size === 0) return carve
+  let out = carve
+  for (const span of spans.sort((a, b) => b.start - a.start)) {
+    const expansion = expansions.get(span.term)
+    if (expansion === undefined || out.slice(span.start, span.end) !== `[${span.term}]{abbr="${expansion}"}`) continue
+    out = out.slice(0, span.start) + span.term + out.slice(span.end)
+  }
+  return out
 }
 
 /**
@@ -6007,6 +6118,26 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
   if (!/\n[ \t>]*\n/.test(source)) return source
   const lines = source.split('\n')
   const isBlank = (at: number): boolean => /^[ \t>]*$/.test(lines[at] ?? '')
+  // A list-style marker line and the blank lines around it go when the marker
+  // is restored, so looseness is read without them: the export writes those
+  // blanks, and they part nothing of the author's item.
+  const styleLines = new Set<number>()
+  if (carrierToken !== '') {
+    const token = new RegExp(`^[ \\t>]*${carrierToken}(\\d+)Z$`)
+    for (const [at, line] of lines.entries()) {
+      const slot = carrierSlots[Number(token.exec(line)?.[1] ?? -1)]
+      if (slot === undefined || carrierListStyle(slot.payload) === undefined) continue
+      styleLines.add(at)
+      for (let k = at - 1; k >= 0 && isBlank(k); k--) styleLines.add(k)
+      for (let k = at + 1; k < lines.length && isBlank(k); k++) styleLines.add(k)
+    }
+  }
+  const kept = [...lines.keys()].filter((at) => !styleLines.has(at))
+  const decide = styleLines.size === 0 ? source : kept.map((at) => lines[at]).join('\n')
+  const origin = (at: number): number => (styleLines.size === 0 ? at : kept[at]!)
+  const decideBlanks = styleLines.size === 0
+    ? sourceBlanks
+    : new Set(kept.flatMap((at, idx) => (sourceBlanks.has(at) ? [idx] : [])))
   const before: number[] = []
   const looseKeys = new Map<number, string>()
   const moved = new Map<number, string>()
@@ -6019,7 +6150,7 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
       (item.children ?? []).some((child, idx) => {
         const prev = item.children![idx - 1]
         if (idx === 0 || !prev?.pos || !child.pos) return false
-        for (let at = prev.pos.endLine; at < child.pos.startLine - 1; at++) if (sourceBlanks.has(at)) return true
+        for (let at = prev.pos.endLine; at < child.pos.startLine - 1; at++) if (decideBlanks.has(at)) return true
         return false
       }),
     )
@@ -6030,7 +6161,7 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
     if (block.type === 'list') {
       let loose = block.tight === false
       if (block.tight === true && block.pos && parted(block.items!)) {
-        const at = block.pos.startLine - 1
+        const at = origin(block.pos.startLine - 1)
         const lead = lines[at]!.slice(0, block.pos.startColumn - 1)
         // A list opening on an outer item's line (`- - a`) moves to the next
         // line under its key, as fmt writes it.
@@ -6045,13 +6176,13 @@ function separateLooseItems(source: string, sourceBlanks: ReadonlySet<number>): 
       if (loose) {
         for (const [idx, item] of block.items!.entries()) {
           const starts = [...(idx > 0 ? [item] : []), ...(item.children ?? []).slice(1)]
-          for (const start of starts) if (start.pos) before.push(start.pos.startLine - 1)
+          for (const start of starts) if (start.pos) before.push(origin(start.pos.startLine - 1))
         }
       }
     }
     for (const child of [...(block.items ?? []), ...(block.children ?? [])]) visit(child)
   }
-  visit(parse(source))
+  visit(parse(decide))
   if (before.length === 0) return source
   const starts = new Set(before)
   const written: string[] = []
@@ -7030,7 +7161,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
           // At the container's content column, so the converted header keeps
           // the item that holds it. Written at column 0 it left the item while
           // the body rows stayed behind, splitting one table into two blocks.
-          if (keepTableRow(header, sourceLine(i))) out.push(containerPad + header)
+          if (keepTableHeader(header, sourceLine(i))) out.push(containerPad + header)
           i++ // consume the delimiter row
           prevType = 'text'
           inTableBody = true
@@ -7044,7 +7175,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // padding matches the formatter's and a pipeless row stays in the table.
     if (inTableBody && inGfmTable[i] && trimmed !== '') {
       const row = writeTableRow(splitTableRow(trimmed), [], dialect, tableWidth)
-      if (keepTableRow(row, sourceLine(i))) out.push(containerPad + row)
+      out.push(containerPad + row)
       continue
     }
     inTableBody = false
