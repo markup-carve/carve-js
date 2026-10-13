@@ -3348,29 +3348,29 @@ function consumeOpaqueColonFenceBodySpan(
   lineIndex: number,
   text: string,
   literalOwnerLine?: number,
+  canOpenUnclosed = false,
+  hostCloserAt?: (lineIndex: number) => boolean,
 ): boolean {
   const fenceText = literalOwnerLine === undefined ? text : text.replace(/^[ \t]+/, '')
   const rawOpen = RE_RAW_FENCE.exec(fenceText)
   const codeOpen = rawOpen === null ? RE_FENCE.exec(fenceText) : null
   const marker = rawOpen?.[1] ?? codeOpen?.[2]
   if (marker !== undefined) {
-    // A closer is required whether or not a paragraph is open. Only a fence
-    // that closes is opaque; an unterminated one would otherwise consume the
-    // container's own `:::` as content and run to the end of the document,
-    // dragging every following block inside (carve#515).
-    //
-    // The comment-fence branch below has always required its closer. This one
-    // asked only when a paragraph was open, so the rule held for a fence that
-    // interrupted prose and lapsed for one that opened a body - which is why
-    // the `paragraphOpen` argument is gone.
-    if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) || !fenceHasCloser(lexer, marker, literalOwnerLine !== undefined)) return false
+    // A fence that interrupts a paragraph needs a closer. After a closed child
+    // leaves no paragraph, an unclosed fence opens and runs to this host's edge.
+    // A closer below its authored column belongs to the host, not the fence.
+    const closes = fenceHasCloser(lexer, marker, literalOwnerLine !== undefined)
+    if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) || (!closes && !canOpenUnclosed)) return false
     const closeRe = fenceCloseRe(marker)
+    const openerColumn = indentColumns(text)
     const isCodeFence = codeOpen !== null
     lexer.consume()
     lines.push({ text, lineIndex })
     while (!lexer.eof()) {
       const innerLineIndex = lexer.pos
       const innerText = lexer.peek()!
+      if (!closes && hostCloserAt?.(innerLineIndex)) break
+      if (!closes && !isBlankLine(innerText) && indentColumns(innerText) < openerColumn) break
       lexer.consume()
       lines.push({ text: innerText, lineIndex: innerLineIndex })
       if (literalOwnerLine !== undefined ? closeRe.test(innerText.replace(/^[ \t]+/, '')) :
@@ -3434,13 +3434,37 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
   const lines: ColonFenceBodyLine[] = []
   const stack: ColonFenceOpener[] = [opener]
   let paragraphOpen: boolean = false
+  let markerLineLiteral: { width: number; column: number } | undefined
+  const authoredColonColumn = (at: number, width: number): number | undefined => {
+    const source = lexer.rootLines?.[lexer.lineNumber(at) - 1]
+    const markerAt = source?.indexOf(':'.repeat(width)) ?? -1
+    if (source === undefined || markerAt < 0) return undefined
+    let column = 0
+    for (const char of source.slice(0, markerAt)) column += char === '\t' ? 4 - (column % 4) : 1
+    return column
+  }
+  const hostCloserAt = (at: number): boolean => {
+    const candidate = lexer.lineAt(at) ?? ''
+    const width = RE_ADMONITION_CLOSE.exec(candidate)?.[1]?.length
+    if (width === undefined) return false
+    for (let frame = stack.length - 1; frame >= 0; frame--) {
+      const owner = stack[frame]!
+      if (owner.fenceWidth !== width) continue
+      const ownerColumn = authoredColonColumn(owner.lineIndex, width)
+      const column = authoredColonColumn(at, width)
+      if (ownerColumn === undefined || column === undefined
+        ? indentColumns(candidate) === indentColumns(lexer.lineAt(owner.lineIndex) ?? '')
+        : column === ownerColumn) return true
+    }
+    return false
+  }
 
   while (!lexer.eof()) {
     if (layoutWork.on) layoutWork.colonLines++
     const lineIndex = lexer.pos
     const text = lexer.peek()!
     const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) {
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, undefined, !paragraphOpen && markerLineLiteral === undefined, hostCloserAt)) {
       paragraphOpen = false
       continue
     }
@@ -3458,6 +3482,16 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
 
     lexer.consume()
     lines.push({ text, lineIndex })
+    const markerColumn = text.includes('|') ? markerContentColumn(text) : -1
+    const markerBody = markerColumn >= 0 ? markerFreeContent(text) : ''
+    if (markerColumn >= 0 && RE_LINE_BLOCK_OPEN.test(markerBody)) {
+      markerLineLiteral = { width: colonFenceOpenerLen(markerBody)!, column: markerColumn }
+    } else if (markerLineLiteral && indentColumns(text) === markerLineLiteral.column &&
+        RE_ADMONITION_CLOSE.exec(text.trimStart())?.[1]?.length === markerLineLiteral.width) {
+      markerLineLiteral = undefined
+      paragraphOpen = false
+      continue
+    }
     if (stack.at(-1)!.kind === 'line block') continue
     const openerLen = colonFenceOpenerLen(text)
     if (openerLen !== null) {
