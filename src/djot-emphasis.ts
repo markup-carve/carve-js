@@ -23,14 +23,18 @@ export function djotEmphasis(source: string, convert: (plain: string) => string,
   return processDjotEmphasis(source, convert, undefined, flattened, omitQuoteDelimiters)
 }
 
+export function djotReferenceEmphasis(source: string, convert: (plain: string) => string): string {
+  return processDjotEmphasis(source, convert, undefined, undefined, true, true)
+}
+
 export function djotPairedEmphasisOpeners(source: string): Map<number, number> {
   const paired = new Map<number, number>()
   processDjotEmphasis(source, plain => plain, paired)
   return paired
 }
 
-function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void, omitQuoteDelimiters = false): string {
-  const mask = maskFootnotes(maskDjotEmphasisSource(source)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
+function processDjotEmphasis(source: string, convert: (plain: string) => string, paired?: Map<number, number>, flattened?: (offset: number) => void, omitQuoteDelimiters = false, imageLabels = false): string {
+  const mask = maskFootnotes(maskDjotEmphasisSource(source, imageLabels)).replace(/<[^<>\s]+>/g, value => /[^:]@|[A-Za-z]:/.test(value) ? ' '.repeat(value.length) : value).replace(/(?<=\])\[[^\]\n]*\]/gm, value => ' '.repeat(value.length)).split('')
   const cells = new Set<number>()
   if (source.includes('|')) {
     const cellMask = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: false, autolinks: false, attributeValues: false })
@@ -449,7 +453,7 @@ function maskFootnotes(source: string): string {
     .join('\n')
 }
 
-function maskDjotEmphasisSource(source: string): string {
+function maskDjotEmphasisSource(source: string, imageLabels = false): string {
   const masked = maskDjotCodeAndDestinations(source).split('')
   let offset = 0, rawFence: string | undefined
   for (const line of source.split('\n')) {
@@ -465,5 +469,6 @@ function maskDjotEmphasisSource(source: string): string {
     }
     offset += line.length + 1
   }
-  return masked.join('').replace(/!\[[^\[\]\n]*\](?=[([])/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
+  const text = masked.join('')
+  return imageLabels ? text : text.replace(/!\[[^\[\]\n]*\](?=[([])/g, (value: string, at: number) => isDjotEscaped(source, at) || isDjotEscaped(source, at + value.length - 1) ? value : ' '.repeat(value.length))
 }
