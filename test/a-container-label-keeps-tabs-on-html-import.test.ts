@@ -15,8 +15,8 @@ for (const kind of ['', 'note ', 'figure ']) for (const label of labels) {
   })
 }
 
-it('still collapses tabs in an ordinary imported paragraph', () => {
-  expect(htmlToCarve('<p>a\tb</p>', { mode: 'roundtrip' }).value).toBe('a b\n')
+it('keeps literal tabs in an ordinary roundtrip paragraph', () => {
+  expect(htmlToCarve('<p>a\tb</p>', { mode: 'roundtrip' }).value).toBe('a\tb\n')
 })
 
 it('still collapses label spaces and HTML line breaks', () => {
@@ -24,13 +24,17 @@ it('still collapses label spaces and HTML line breaks', () => {
   expect(imported.value).toBe('::: [a b c]\nbody\n:::\n')
 })
 
-it('restores ordinary whitespace handling when a label lift is refused', () => {
+it('keeps literal roundtrip tabs when a label lift is refused', () => {
   const imported = htmlToCarve('<div><p class="div-label">a\t]b</p><p>c\td</p></div>', { mode: 'roundtrip' })
-  expect(imported.value).not.toContain('\t')
-  expect(imported.value).toContain('c d')
+  expect(imported.value).toContain('a\t]b')
+  expect(imported.value).toContain('c\td')
 })
 
 it('collapses tab indentation around label HTML line breaks', () => {
   const html = '<div><p class="div-label">\n\t\tLabel\n\t</p><p>body</p></div>'
   expect(htmlToCarve(html, { mode: 'roundtrip' }).value).toBe('::: [Label]\nbody\n:::\n')
+})
+
+it('collapses ordinary paragraph tabs in plain mode', () => {
+  expect(htmlToCarve('<p>a\tb</p>').value).toBe('a b\n')
 })

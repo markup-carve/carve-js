@@ -4613,7 +4613,8 @@ class Importer {
     // characters HTML actually collapses and leaves every other one alone.
     if (node.nodeName === '#text') {
       const text = domValue(node) ?? ''
-      const value = this.preserveLabelTabs
+      // A literal tab in roundtrip text is content, including unresolved links.
+      const value = this.preserveLabelTabs || this.mode === 'roundtrip'
         ? text.replace(/[ \t\n\r\f]+/g, run => /[\n\r\f]/.test(run) ? ' ' : run.replace(/ +/g, ' '))
         : text.replace(/[ \t\n\r\f]+/g, ' ')
       return [{ type: 'text', value }]

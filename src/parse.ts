@@ -3781,7 +3781,9 @@ function trackQuoteHostFence(
       return true
     }
   }
-  if (!blockStart && at === floor && host.terms.length > 0) host.terms[host.terms.length - 1] = false
+  if (!blockStart && at === floor && host.terms.length > 0 &&
+      (!paragraph || lineOpensBlock(inner) || RE_DEFLIST_DEF.test(inner) || isBlockAttributeLine(inner)))
+    host.terms[host.terms.length - 1] = false
   if (floor > 0 && at >= floor && !blockStart && !host.terms.at(-1)) {
     if (RE_BLOCKQUOTE.test(inner) && !markerLineState(inner).leavesParagraphOpen) {
       closeBlockQuoteParagraph(state)
@@ -4000,6 +4002,7 @@ function classifyQuotedLine(
   }
   if (atColumn && trackQuoteHostFence(content, state, hasFenceCloser, terminatorFree, hasLiteralCommentCloser, wasInTable)) return null
   const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
+  const wasTerm = state.mode.kind === 'paragraph' && state.mode.term && !RE_DEFLIST_DEF.test(content)
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
@@ -4194,7 +4197,7 @@ function classifyQuotedLine(
   // the prose line in between made the bare run open a real div here instead
   // (corpus 260). Absorption ends where the paragraph does, and every branch
   // that ends one returns above this point.
-  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing }
+  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing, ...(wasTerm ? { term: true } : {}) }
 
   return null
 }
@@ -7684,7 +7687,19 @@ function rebaseOverindentedBlocks(
       i = payload.pos - 1
       continue
     }
-    if (base === 0) {
+    // CARVE-P2-017 and section 10 I4: unmatched runs remain paragraph text.
+    // Inline code cannot hide later visible block openers in the description.
+    let descriptionParagraphFence = false
+    if (includeSublists && itemParagraphFences?.has(i) && opensCodeFence(line.trimStart())) {
+      const group = opaqueGroupCloser(line.trimStart())!
+      const closesAt = (column: number): boolean => {
+        let memo = groupCloserMemos.get(column)
+        if (memo === undefined) groupCloserMemos.set(column, memo = { verbatim: new Map(), comment: new Map() })
+        return opaqueGroupCloses(group, lines, i + 1, column, takenBelowColumn, memo)
+      }
+      descriptionParagraphFence = !closesAt(base) && !closesAt(0)
+    }
+    if (base === 0 && !descriptionParagraphFence) {
       // Opaque groups already at the container's minimum column still own
       // their payload. Without advancing past them, a payload line that looks
       // like a block opener is reconsidered as an authored base of its own.
@@ -7876,9 +7891,10 @@ function rebaseOverindentedBlocks(
           onFenceBodyLine, onUnclosedCodeFence, includeSublists && itemParagraphFences?.has(i) ? (line, index) => {
             const text = line.trimStart()
             if (RE_FENCE.test(opener) && indentColumns(line, base) < base && RE_COMMENT_LINE.test(text)) return true
-            return lazyParagraphFences?.has(i) === true && eligible?.has(index) === true &&
+            return (descriptionParagraphFence || lazyParagraphFences?.has(i) === true) && eligible?.has(index) === true &&
               (RE_HEADING.test(text) || RE_BLOCKQUOTE.test(text) || RE_HR.test(text) || isTableRow(text) ||
-                colonFenceOpenerLen(text) !== null)
+                colonFenceOpenerLen(text) !== null || (descriptionParagraphFence &&
+                  (RE_DEFLIST_TERM.test(text) || RE_DEFLIST_DEF.test(text) || isBlockAttributeLine(text))))
           } : undefined)
         : sourceCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
           onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines!,
@@ -12133,8 +12149,8 @@ class ParseSession {
           // The test is column-0 anchored, so an indented fence still folds in.
           if (
             isBlankLine(next) ||
-            RE_DEFLIST_TERM.test(nextEntry) ||
-            RE_DEFLIST_DEF.test(nextEntry) ||
+            (!lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+              (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
             endsHeadingOrQuote(lexer)
           )
@@ -12396,11 +12412,12 @@ class ParseSession {
       paragraphOpen ??= blockQuoteParagraphOpen(state)
       if (handDown && handDown.paragraphOpen === undefined) handDown.paragraphOpen = paragraphOpen
       if (!paragraphOpen) break
-      if (deflistMarkerLine(ln)) {
+      if (leadingWhitespace(ln) === 0 && deflistMarkerLine(ln) &&
+          !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
         let leaf = state
         while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
-        // A description marker opens a block; the ruling covers plain lazy text.
-        if (leaf.mode.kind === 'paragraph' && leaf.mode.term) break
+        // A marker at the surviving document column ends the open term.
+        if (leaf.mode.kind === 'paragraph' && (leaf.mode.term || leaf.hosts?.terms.at(-1))) break
       }
       const lineIndex = lexer.pos
       lexer.consume()
