@@ -70,6 +70,7 @@ export const DOCUMENT_ID_CHILD_FIELDS = {
   block_extension: ["fallback"],
   block_quote: ["children"],
   caption_number: NO_CHILDREN,
+  cell_wrap: NO_CHILDREN,
   citation: ["locator", "prefix", "suffix"],
   citation_definition: ["children"],
   citation_group: ["items"],
