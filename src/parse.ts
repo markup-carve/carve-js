@@ -3372,21 +3372,40 @@ function consumeOpaqueColonFenceBodySpan(
   if (marker !== undefined) {
     // A fence that interrupts a paragraph needs a closer. After a closed child
     // leaves no paragraph, an unclosed fence opens and runs to this host's edge.
-    // A closer below its authored column belongs to the host, not the fence.
     const closes = fenceHasCloser(lexer, marker, literalOwnerLine !== undefined)
     if (lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) || (!closes && !canOpenUnclosed)) return false
     const closeRe = fenceCloseRe(marker)
     const openerColumn = indentColumns(text)
+    const authoredRunColumn = (at: number, line: string): number => {
+      const prefix = lexer.lineStartColumn(at) - 1
+      const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(at) - 1]
+      let column = 0
+      if (source !== undefined && prefix <= source.length) {
+        for (let i = 0; i < prefix; i++) column += source[i] === '\t' ? 4 - column % 4 : 1
+      } else column = prefix
+      for (const char of line) {
+        if (char === '\t') column += 4 - column % 4
+        else if (char === ' ') column++
+        else break
+      }
+      return column
+    }
+    const authoredColumn = authoredRunColumn(lineIndex, text)
     const isCodeFence = codeOpen !== null
     lexer.consume()
     lines.push({ text, lineIndex })
     while (!lexer.eof()) {
       const innerLineIndex = lexer.pos
       const innerText = lexer.peek()!
+      const content = innerText.replace(/^[ \t]+/, '')
+      const bandPayload = literalOwnerLine === undefined &&
+        authoredRunColumn(innerLineIndex, innerText) <= authoredColumn
+      const bandCloser = bandPayload && closeRe.test(content)
       if (!closes && hostCloserAt?.(innerLineIndex)) break
-      if (!closes && !isBlankLine(innerText) && indentColumns(innerText) < openerColumn) break
+      if (!closes && !bandCloser && !isBlankLine(innerText) && indentColumns(innerText) < openerColumn) break
       lexer.consume()
-      lines.push({ text: innerText, lineIndex: innerLineIndex })
+      lines.push({ text: bandPayload ? content : innerText, lineIndex: innerLineIndex })
+      if (bandCloser) break
       if (literalOwnerLine !== undefined ? closeRe.test(innerText.replace(/^[ \t]+/, '')) :
         closeRe.test(innerText) && (!isCodeFence || leadingWhitespace(innerText) <= 3)) break
     }
@@ -3426,7 +3445,8 @@ type ColonFenceBody = ColonFenceBodyLine[] | ColonFenceBodyView
 function nestedColonLexer(parent: Lexer, body: ColonFenceBody, start: number): Lexer {
   if (Array.isArray(body)) {
     if (layoutWork.on) layoutWork.bodyEntries += body.length * 2
-    return nestedSubLexer(parent, body.map((line) => line.text), start, undefined, undefined, true)
+    const unchanged = body.every((line) => line.text === parent.lineAt(line.lineIndex))
+    return nestedSubLexer(parent, body.map((line) => line.text), start, undefined, undefined, unchanged)
   }
   const sub = nestedSubLexer(parent, [], start, undefined, undefined, true)
   sub.useLineView(body.lexer, body.start, body.length)
@@ -7328,7 +7348,7 @@ function opaqueGroupCloses(
   for (let k = from; k < lines.length; k++) {
     const line = lines[k]!
     if (isBlankLine(line)) continue
-    if (!group.belowBaseCloses && !closerReachesBase(line, k, base, folded)) continue
+    if (!group.belowBaseCloses && !closerReachesBase(k, folded)) continue
     const content = groupLineContent(line, base)
     if (group.closes(content)) return true
     if (!group.belowBaseCloses) {
@@ -7345,23 +7365,11 @@ function opaqueGroupCloses(
 /**
  * Does this line stand where a closer for the group can stand?
  *
- * A FOLDED LINE NEVER DOES, whatever residue the host's clamp left on it: the
- * host kept one column so the line could not re-classify, and reading that column
- * as the base is the collision at an over-indent of one all over again. Otherwise
- * the group's own base and the container's column both close it, which is the
- * pair the verbatim arm above already accepts (CARVE-P0-004).
+ * A folded line belongs to the host's paragraph. Every other line has an
+ * available prefix that is removed before measuring its closing run.
  */
-const closerReachesBase = (
-  line: string,
-  index: number,
-  base: number,
-  folded: ReadonlySet<number> | undefined,
-): boolean => {
-  if (folded?.has(index) === true) return false
-  const column = indentColumns(line, base)
-
-  return column >= base || column === 0
-}
+const closerReachesBase = (index: number, folded: ReadonlySet<number> | undefined): boolean =>
+  folded?.has(index) !== true
 
 // Skip a quote's marked lines and lazy paragraph continuation during rebasing.
 function rebasedQuoteEnd(lines: string[], start: number, quote: Lexer): number {
@@ -7391,7 +7399,7 @@ function sourceCodeFenceEnd(
   heldFoldedLines: Set<number>, takenBelowColumn: ReadonlySet<number> | undefined,
   onFenceBodyLine: ((index: number) => void) | undefined,
   onUnclosedCodeFence: (() => void) | undefined,
-  authoredBase: number, sourceLines: readonly (string | undefined)[], authoredFloor: number | undefined,
+  authoredBase: number, sourceLines: readonly (string | undefined)[],
 ): number {
   let end = start
   const close = fenceCloseRe(marker)
@@ -7414,9 +7422,9 @@ function sourceCodeFenceEnd(
     }
     const column = indentColumns(source)
     if (takenBelowColumn?.has(j)) heldFoldedLines.add(j)
-    if ((column === authoredBase || column === authoredFloor) && !heldFoldedLines.has(j) &&
+    if (column <= authoredBase && !heldFoldedLines.has(j) &&
         close.test(candidate.slice(leadingWhitespace(candidate)))) {
-      if (column === authoredBase) lines[j] = ' '.repeat(base) + candidate.slice(leadingWhitespace(candidate))
+      lines[j] = candidate.slice(leadingWhitespace(candidate))
       closed = true
       break
     }
@@ -7439,9 +7447,7 @@ function rebasedCodeFenceEnd(
 ): number {
   let end = start
   const close = fenceCloseRe(marker)
-  // A closing run BELOW the base reaches neither column, so it is payload and
-  // the scan carries on past it; only a run AT the base or at the container's
-  // own column closes (CARVE-P0-004, markup-carve/carve-js#2205).
+  // Measure a run below the base after removing its available prefix.
   let closed = false
   for (let j = start + 1; j < lines.length; j++) {
     const candidate = lines[j]!
@@ -7449,27 +7455,17 @@ function rebasedCodeFenceEnd(
     end = j
     onFenceBodyLine?.(j)
     if (isBlankLine(candidate)) continue
+    // A folded line belongs to the host paragraph, not this fence.
+    if (takenBelowColumn?.has(j) === true) {
+      heldFoldedLines.add(j)
+      continue
+    }
     const column = indentColumns(candidate, base)
     if (column < base) {
-      if (column === 0 && close.test(candidate)) {
+      if (close.test(candidate.replace(/^[ \t]+/, ''))) {
         closed = true
         break
       }
-      continue
-    }
-    // A FOLDED LINE IS NOT AT THIS GROUP'S BASE, the same reading the colon
-    // arm below takes: its leading run is the host's alignment clamp, not an
-    // authored column, and at an over-indent of ONE the clamp leaves exactly
-    // the single residual column the rebased opener carries. So a run the
-    // host folded in from below its own content column closed a fence it was
-    // never written inside, and the paragraph that had folded it lost its
-    // inline verbatim run to a code block (markup-carve/carve-js#2243).
-    //
-    // Held rather than skipped, so the dedent leaves it where the host put
-    // it. CARVE-P0-004 re-bases a verbatim closer, so an unterminated run is
-    // what the author wrote here and §10 I4 keeps it inside the paragraph.
-    if (takenBelowColumn?.has(j) === true) {
-      heldFoldedLines.add(j)
       continue
     }
     if (close.test(sliceColumns(candidate, base, true))) {
@@ -7639,7 +7635,7 @@ function rebasedColonGroupEnd(
     const insideOpaque = opaque !== null
     if (
       opaque !== null &&
-      (opaque.belowBaseCloses || closerReachesBase(candidate, j, base, takenBelowColumn)) &&
+      (opaque.belowBaseCloses || closerReachesBase(j, takenBelowColumn)) &&
       opaque.closes(groupLineContent(candidate, base))
     ) {
       opaque = null
@@ -8210,8 +8206,7 @@ function rebaseOverindentedBlocks(
                   (RE_DEFLIST_TERM.test(text) || RE_DEFLIST_DEF.test(text) || isBlockAttributeLine(text))))
           } : undefined)
         : sourceCodeFenceEnd(lines, i, base, marker, heldFoldedLines, takenBelowColumn,
-          onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines!,
-          sourceCodeBase - tabFenceColumns!.get(i)!)
+          onFenceBodyLine, onUnclosedCodeFence, sourceCodeBase, sourceLines!)
     } else if (comment !== undefined) {
       const closeAt = (commentCloser ??= commentCloserLookup(lines))(comment, i)
       for (let j = i + 1; j < lines.length; j++) {
@@ -8354,22 +8349,20 @@ function rebaseOverindentedBlocks(
         for (let j = i; j <= end; j++) {
           const sourceLine = sourceLines?.[j]
           if (sourceLine !== undefined) {
-            if (indentColumns(sourceLine, sourceCodeBase) >= sourceCodeBase && !heldFoldedLines.has(j)) {
-              lines[j] = sliceColumns(sourceLine, sourceCodeBase, true)
-            }
+            if (!heldFoldedLines.has(j)) lines[j] =
+              indentColumns(sourceLine, sourceCodeBase) >= sourceCodeBase
+                ? sliceColumns(sourceLine, sourceCodeBase, true)
+                : sourceLine.slice(leadingWhitespace(sourceLine))
           } else if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
             lines[j] = sliceColumns(lines[j]!, base, true)
           }
         }
       } else {
-        let belowBaseCodeRun = false
         for (let j = i; j <= end; j++) {
           if (!isBlankLine(lines[j]!) && !heldFoldedLines.has(j)) {
             const column = indentColumns(lines[j]!)
-            if (code && stripLeftCodePrefix && column < base && opensCodeFence(lines[j]!.trimStart())) {
-              belowBaseCodeRun = true
-            }
-            if (column >= base || code && stripLeftCodePrefix && !belowBaseCodeRun) {
+            if (column >= base || code &&
+                (stripLeftCodePrefix || !itemParagraphFences?.has(i) && !lazyParagraphFences?.has(i))) {
               lines[j] = sliceColumns(lines[j]!, Math.min(base, column), true)
             }
           }

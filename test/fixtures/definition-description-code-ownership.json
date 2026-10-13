@@ -3362,7 +3362,7 @@
   {
     "id": "review-330",
     "source": "> - :: a\n>   :: b\n>   : p\n>       ```=html\n> %%%\n>      ```\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dt>b</dt>\n        <dd>\n          <p>p\n<code>=html</code></p>\n          <p><code></code></p>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>a</dt>\n        <dt>b</dt>\n        <dd>\n          <p>p\n<code>=html</code></p>\n          <pre><code></code></pre>\n        </dd>\n      </dl>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "review-331",

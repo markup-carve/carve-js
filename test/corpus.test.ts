@@ -34,6 +34,9 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-fence-closer-below-the-authored-base-is-measured-as-its-payload',
+  'a-closed-fence-in-a-nested-child-leaves-no-paragraph-open',
+  'a-code-line-left-of-an-authored-base-fence-opener-is-measured-from-that-base',
   'a-comment-between-a-heading-and-a-colon-fence-leaves-the-fence-an-opener',
   'a-comment-closes-a-marker-line-note-s-paragraph-and-an-unclosed-fence-below-it-opens-in-the-note',
   'a-comment-in-a-marker-line-note-changes-nothing',
