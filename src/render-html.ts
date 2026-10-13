@@ -1371,6 +1371,7 @@ function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderConte
     uniqueId,
     titleId: mintTitleId,
     mode: opts.mode ?? 'interactive',
+    roundtrip: opts.roundtrip === true,
     renderers: opts.renderers ?? {},
     labels: resolvedLabels(opts),
     sections: opts.sections !== false,
@@ -1386,6 +1387,7 @@ function inlineCtx(opts: RenderOptions): ExtensionRenderContext {
     renderAttrs,
     uniqueId,
     mode: opts.mode ?? 'interactive',
+    roundtrip: opts.roundtrip === true,
     renderers: opts.renderers ?? {},
     labels: resolvedLabels(opts),
   }

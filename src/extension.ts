@@ -45,6 +45,8 @@ export interface ExtensionRenderContext {
   uniqueId(baseId: string): string
   /** The active render mode: `"interactive"` (default) or `"static"`. */
   mode: 'interactive' | 'static'
+  /** Whether HTML preservation carriers are enabled. */
+  roundtrip: boolean
   /** Build-time renderers supplied for a static render (else empty). */
   renderers: StaticRenderers
   /**
