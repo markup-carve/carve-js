@@ -1,3 +1,4 @@
+import type { Doc } from '@djot/djot'
 import { expect, test } from 'vitest'
 import { djotToCarve, carveToHtml, parse } from '../src/index.js'
 import pending from './fixtures/djot-pending-attributes.json'
@@ -49,14 +50,15 @@ test.each([
 })
 
 test('matches native Djot block attribute boundaries', async () => {
-  const { default: controls } = await import('./fixtures/djot-root-attribute-boundaries.json')
+  const { default: fixture } = await import('./fixtures/djot-root-attribute-boundaries.json')
+  const controls = fixture as { source: string; html: string; nativeAst?: Doc }[]
   const { parseFragment } = await import('parse5')
   type HtmlNode = import('parse5').DefaultTreeAdapterMap['node']
   const shape = (node: HtmlNode): unknown => {
     if ('value' in node) {
       const parent = node.parentNode
       let ancestor = parent
-      while (ancestor && ancestor.nodeName !== 'code' && ancestor.nodeName !== 'pre') ancestor = ancestor.parentNode
+      while (ancestor && ancestor.nodeName !== 'code' && ancestor.nodeName !== 'pre') ancestor = 'parentNode' in ancestor ? ancestor.parentNode : null
       let value = ancestor ? node.value : node.value.replace(/[\t\r\n ]+/g, ' ')
       if (parent && 'attrs' in parent && parent.attrs.some(attr => attr.name === 'role' && attr.value === 'doc-backlink')) value = value.replace(/\uFE0E/g, '')
       if (parent && ['p', 'li', 'blockquote', 'td', 'th'].includes(parent.nodeName)) {
@@ -79,7 +81,9 @@ test('matches native Djot block attribute boundaries', async () => {
       const list = document.children[0]!
       expect(list.type).toBe('list')
       if (list.type !== 'list') continue
-      const nativeQuote = nativeAst.children[0]!.children[0]?.children?.[0]
+      const nativeList = nativeAst.children[0]!
+      if (nativeList.tag !== 'bullet_list' && nativeList.tag !== 'ordered_list' && nativeList.tag !== 'task_list') throw new Error('Native control must start with a list')
+      const nativeQuote = nativeList.children[0]?.children[0]
       if (nativeQuote?.tag === 'block_quote') {
         expect(list.items).toHaveLength(1)
         const quote = list.items[0]!.children[0]!
@@ -91,8 +95,9 @@ test('matches native Djot block attribute boundaries', async () => {
         expect(carveToHtml(converted)).toContain('<p class="x">para</p>')
         continue
       }
+      if (nativeList.tag !== 'task_list') throw new Error('Native checkbox control must use a task list')
       expect(list.items.map(item => ({ checked: item.checked, classes: item.attrs?.classes ?? [] }))).toEqual(
-        nativeAst.children[0]!.children.map(item => ({ checked: item.checkbox === 'checked', classes: 'attributes' in item ? item.attributes?.class?.split(' ') ?? [] : [] }))
+        nativeList.children.map(item => ({ checked: item.checkbox === 'checked', classes: 'attributes' in item ? item.attributes?.class?.split(' ') ?? [] : [] }))
       )
       if (source.includes('_c_')) expect(carveToHtml(converted)).toContain('<pre><code>_c_\n</code></pre>')
       continue
