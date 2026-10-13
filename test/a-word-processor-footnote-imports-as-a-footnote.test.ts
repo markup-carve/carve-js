@@ -145,6 +145,16 @@ describe('a word processor footnote imports as a footnote', () => {
     })
   }
 
+  it('does not carry Word anchor styling into the reference', () => {
+    const html = WORD_FILTERED.replace('title=""', 'title="hint" class="export-style"')
+    expect(importAs(html)).toContain('Data[^1] centre.')
+  })
+
+  it('does not carry Google Docs anchor styling into the reference', () => {
+    const html = GOOGLE_DOCS.replace('id="ftnt_ref1"', 'id="ftnt_ref1" class="c3"')
+    expect(importAs(html, 'google-docs')).not.toContain('[^1]{.c3}')
+  })
+
   it('the generic adapter leaves the shape alone', () => {
     // The adapter is the caller's declaration of provenance. `generic` takes
     // arbitrary HTML, where a mutually linked anchor pair is not proof of a
