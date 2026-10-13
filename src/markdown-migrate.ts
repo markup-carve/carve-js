@@ -17,6 +17,7 @@ import {
   escapeAttributeBlockOpener,
   escapeUnclosedImageEditorialOpeners,
   escapePlainCarveInlineSyntax,
+  escapePlainCarveInlineSyntaxAround,
   escapeVerbatimDelimiter,
   HANDLED_MARKDOWN,
 } from './carve-escape.js'
@@ -677,6 +678,17 @@ const NATIVE_INLINE_HTML_TAGS = new Set([
   'em',
   'i',
 ])
+
+const RE_NATIVE_INLINE_TAG = new RegExp(`</?(?:${[...NATIVE_INLINE_HTML_TAGS].join('|')})>`, 'gi')
+
+/** Offsets of the native tags that the tag rules turn into Carve markers. */
+function nativeInlineTagOffsets(line: string): Set<number> {
+  const offsets = new Set<number>()
+  for (const tag of line.matchAll(RE_NATIVE_INLINE_TAG)) {
+    for (let at = tag.index; at < tag.index + tag[0].length; at++) offsets.add(at)
+  }
+  return offsets
+}
 
 const HTML_BLOCK_TAGS = new Set([
   'address',
@@ -2434,7 +2446,11 @@ function convertInline(
       (match, inner: string, offset: number, source: string) =>
         (wholeLine === match || /[\x00\]/*_~=,^}]/.test(source[offset - 1] ?? '')) && isValidAttrPayload(inner) ? protect(match) : match)
   }
-  line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
+  // A native tag becomes a marker below, so its `/` is no text delimiter.
+  const nativeTags = nativeInlineTagOffsets(line)
+  line = nativeTags.size === 0
+    ? escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
+    : escapePlainCarveInlineSyntaxAround(line, offset => nativeTags.has(offset), HANDLED_MARKDOWN)
   // Numeric references are decoded below. Keep their hash available to that
   // pass even though the standalone escaper freezes it.
   line = line.replace(/&\\#(?=(?:[0-9]+|[xX][0-9A-Fa-f]+);)/g, '&#')
