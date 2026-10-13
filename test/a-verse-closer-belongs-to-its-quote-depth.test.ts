@@ -34,8 +34,10 @@ describe('a verse closer belongs to its quote depth', () => {
     })
   }
 
+  // The opener is refused, so no verse holds the definition and it registers,
+  // as the layout checker reads it.
   it('rejects indentation after a quote inside a list', () => {
-    expect(carveToHtml('- >   ::: |\n  >\n  > [r]: /target\n\n[t][r]\n')).toContain('[r]: /target')
+    expect(carveToHtml('- >   ::: |\n  >\n  > [r]: /target\n\n[t][r]\n')).toContain('<a href="/target">t</a>')
   })
 
   it('keeps tab-indented footnote verse definitions literal', () => {
