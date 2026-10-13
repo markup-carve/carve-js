@@ -3785,6 +3785,9 @@ class CarveRenderSession {
     const needsDelimiter = authored !== undefined || tableNeedsDelimiterHeader(node)
 
     node.rows.forEach((row, rowIndex) => {
+      // `|` alone is prose and `||` is one empty cell (CARVE-P9-082), so a row
+      // with no cell has no spelling that keeps its cell count.
+      if (row.cells.length === 0) throw new SourceUnspellableError('table_row', 'a table row with no cells has no Carve source spelling', row)
       const cells: string[] = []
       row.cells.forEach((cell, cellIndex) => {
         // In the delimiter form the promoted row is written as ordinary data
