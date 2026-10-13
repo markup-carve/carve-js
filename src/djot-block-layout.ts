@@ -91,11 +91,12 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
       if (depth >= 2 && frame && same !== undefined && frame.attributes.length) {
         const wire = '{' + frame.attributes.map(attr => attr.wire.slice(1, -1)).join(' ') + '}'
         for (const attr of frame.attributes) removed.add(attr.row)
-        before.set(row, [prefix + ' '.repeat(indent) + hold(wire), prefix.trimEnd()])
+        const loose = lines.slice(Math.max(0, frame.attributes[0]!.row - 1), row).some(line => /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*$/.test(line))
+        before.set(row, [prefix + ' '.repeat(indent) + hold(wire), ...(loose ? [prefix.trimEnd()] : [])])
         const prefixEnds = [0]
         for (let level = 0; level < depth; level++) prefixEnds.push(prefixEnds[level]! + /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(prefixEnds[level]))![0].length)
         for (const [ownerDepth, owners] of frames) for (const owner of owners) {
-          if (ownerDepth > depth) continue
+          if (!loose || ownerDepth > depth) continue
           const ownerIndent = /^[ \t]*/.exec(prefix.slice(prefixEnds[ownerDepth]))![0].length
           if (ownerDepth < depth && ownerIndent <= owner.column) continue
           const startPrefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(lines[owner.start]!)![0]
@@ -159,6 +160,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
   const mainOut: string[] = []
   let out = mainOut
   const returnedNoteItemAttributes: string[] = []
+  let returnedNoteDestinationDepth: number | undefined
   let pendingAttributes: { owner: number; depth: number; row: number; output: string[]; attributes: string }[] = []
   let paragraph = false,
     blank = true,
@@ -182,6 +184,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const ended = notes.pop()!
     for (const attribute of pendingAttributes) { attribute.output[attribute.row] = ''; returnedNoteItemAttributes.push(attribute.attributes) }
     pendingAttributes = []
+    if (returnedNoteItemAttributes.length) returnedNoteDestinationDepth = Math.min(returnedNoteDestinationDepth ?? ended.depth, ended.depth)
     if (divs.length) dropOrphanAttributeLine(out)
     while (divs.length) {
       const div = divs.pop()!
@@ -284,6 +287,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
           const prefix = ' '.repeat(noteOwner.content)
           for (const attributes of returnedNoteItemAttributes) out.push(prefix + attributes)
           returnedNoteItemAttributes.length = 0
+          returnedNoteDestinationDepth = undefined
         }
         out.push(' '.repeat(noteOwner.content) + payload.slice(Math.min(payloadIndent, noteOwner.fenceColumn)))
         paragraph = false
@@ -323,9 +327,11 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const quoteList = embeddedListOwner && embeddedListOwner.depth < quoteDepth && (!ordinaryQuoteList || embeddedListOwner.depth > ordinaryQuoteList.depth) ? embeddedListOwner : ordinaryQuoteList
     const outsideQuoteItem = quoteList && quoteDepth > quoteList.depth && ownerColumn(quoteList) < quoteList.column + 1
     if (returnedNoteItemAttributes.length) {
-      const prefix = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(originalForCarve())![0]
+      const retainedDepth = Math.max(0, (returnedNoteDestinationDepth ?? 0) - (noteOwner?.depth ?? 0))
+      const prefix = retainedDepth ? closedQuoteBoundary(quoteForCarve(), retainedDepth - 1) + ' ' : ' '.repeat(noteOwner?.content ?? 0)
       for (const attributes of returnedNoteItemAttributes) out.push(prefix + attributes)
       returnedNoteItemAttributes.length = 0
+      returnedNoteDestinationDepth = undefined
     }
     if (noteHead) {
       for (const attribute of pendingAttributes) attribute.output[attribute.row] = ''
@@ -448,6 +454,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const row: boolean = (rows[n] ?? false) && !(noteOwner && paragraph && quoteDepth >= depth && !(lists.at(-1) && indent <= lists.at(-1)!.column))
     const rawFencedItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?[`~]{3,}/.test(text)
     const rawReferenceItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+\[(?!\^)[^\]\n]+\]:/.test(text)
+    const fencedItemOpener = rawFencedItem && /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(visible)
     const wholeAttributes = visible.startsWith('{') && readAttributes(raw, rawIndent)?.end === raw.length
     if (pendingAttributes.length && text !== '' && (!wholeAttributes || !lists.some(list => list.depth === quoteDepth && indent > list.column)) && (!/^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+[^ \t]/.test(visible) && !rawFencedItem && !rawReferenceItem || pendingAttributes.some(attribute => attribute.depth !== quoteDepth))) {
       for (const attribute of pendingAttributes) {
@@ -471,7 +478,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const emptyItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]*$/.test(text) || /^[-*+] \[[ xX]\][ \t]*$/.test(text)
     const item =
       /^(?:([-*+])|((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)))[ \t]+[^ \t]/.exec(
-        emptyItem ? visible.trimEnd() + ' +' : pendingAttributes.length && (rawFencedItem || rawReferenceItem) ? text : visible,
+        emptyItem ? visible.trimEnd() + ' +' : fencedItemOpener || pendingAttributes.length && (rawFencedItem || rawReferenceItem) ? text : visible,
       )
     if (outsideQuoteItem) {
       paragraph = false
@@ -505,7 +512,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       out.splice(before, 0, owned.prefix + ':'.repeat(owned.width))
       paragraph = false
     }
-    if (blockStart && !(pendingAttributes.length && item)) {
+    if (blockStart && !((pendingAttributes.length || fencedItemOpener || row) && item)) {
       // A block outside the nested item's content column belongs to its parent.
       while (
         lists.length &&
@@ -537,11 +544,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       blank = false
       continue
     }
-    if ((fences[n] !== original || row) && !(pendingAttributes.length && item)) {
-      if (row && item) {
-        nativeRemainder = raw.slice(0, indent) + compactDjotListPrefix(text)
-        opaqueQuoteOwner = { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length }
-      }
+    if ((fences[n] !== original || row) && !((pendingAttributes.length || fencedItemOpener || row) && item)) {
       out.push(row && !item && !noteOwner && !lists.length && !embeddedListOwner && !opaqueQuoteOwner && definitionIndent < 0 ? quoteForCarve() + text : originalForCarve())
       paragraph = false
       headingMarker = ''
@@ -616,7 +619,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     if (item && !rule) {
       const carriedAttributes = pendingAttributes
       pendingAttributes = []
-      for (const attribute of carriedAttributes) attribute.output[attribute.row] = '> '.repeat(attribute.depth).trimEnd()
+      for (const attribute of carriedAttributes) attribute.output[attribute.row] = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/.exec(attribute.output[attribute.row]!)![0].trimEnd()
       const previousList = lists.at(-1)
       const endsNestedList = previousList && indent < previousList.column
       while (lists.length && indent < lists.at(-1)!.column) {
@@ -730,7 +733,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       if (heldItemAttributes[1] && out.at(-1)?.trimEnd() !== quoteForCarve().trimEnd()) out.push(quoteForCarve().trimEnd())
       out.push(originalForCarve())
       paragraph = false
-      blank = true
+      blank = !!heldItemAttributes[1]
       continue
     }
     const attrs = visible.startsWith('{') ? readAttributes(raw, rawIndent) : undefined
@@ -769,7 +772,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     if (visible.trim() !== '' && !attributeLine) {
       for (const list of lists) if (indent > list.column) list.empty = false
     }
-    const outsideColumn = blank && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
+    const outsideColumn = (blank || !paragraph) && !parentContains(lists, indent) && !attributeLine ? lists[0]?.column : undefined
     if (outsideColumn !== undefined) { lists.length = 0; setEmbedded(undefined) }
     const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(visible)
     if (rejectedCommentStartsBlock(visible)) {

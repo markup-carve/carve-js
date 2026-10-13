@@ -56,6 +56,7 @@ test('matches native Djot block attribute boundaries', async () => {
     if ('value' in node) {
       let value = node.value.replace(/[\t\r\n ]+/g, ' ')
       const parent = node.parentNode
+      if (parent && 'attrs' in parent && parent.attrs.some(attr => attr.name === 'role' && attr.value === 'doc-backlink')) value = value.replace(/\uFE0E/g, '')
       if (parent && ['p', 'li', 'blockquote', 'td', 'th'].includes(parent.nodeName)) {
         const children = parent.childNodes.filter(child => !('value' in child && /^[\t\r\n ]*$/.test(child.value)))
         if (children[0] === node) value = value.replace(/^ /, '')
