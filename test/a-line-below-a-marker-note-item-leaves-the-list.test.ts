@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-it("closes an unclosed fence when the marker-note item ends", () => {
+it("leaves an unclosed note fence as inline text when the marker-note item ends", () => {
   const source = `- [^n]: text
     more
     \`\`\`
@@ -9,10 +9,7 @@ it("closes an unclosed fence when the marker-note item ends", () => {
 after [^n]
 `
   expect(carveToHtml(source)).toBe(`<ul>
-  <li>
-    <pre><code>code
-</code></pre>
-  </li>
+  <li></li>
 </ul>
 <p>after <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
 <section role="doc-endnotes" aria-label="Footnotes">
@@ -20,7 +17,9 @@ after [^n]
   <ol>
     <li id="fn1">
       <p>text
-more<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+more
+<code>
+code</code><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
     </li>
   </ol>
 </section>`)
@@ -121,10 +120,7 @@ it("leaves a comment-led note and its closed fence", () => {
 after [^n]
 `
   expect(carveToHtml(source)).toBe(`<ul>
-  <li>
-    <pre><code>code
-</code></pre>
-  </li>
+  <li></li>
 </ul>
 <p>after <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
 <section role="doc-endnotes" aria-label="Footnotes">
@@ -132,7 +128,10 @@ after [^n]
   <ol>
     <li id="fn1">
       <p>text</p>
-      <p>more<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+      <p>more</p>
+      <pre><code>code
+</code></pre>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
     </li>
   </ol>
 </section>`)
@@ -149,10 +148,7 @@ it("starts the following paragraph at quote level", () => {
 `
   expect(carveToHtml(source)).toBe(`<blockquote>
   <ul>
-    <li>
-      <pre><code>code
-</code></pre>
-    </li>
+    <li></li>
   </ul>
   <p>after <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
 </blockquote>
@@ -161,7 +157,10 @@ it("starts the following paragraph at quote level", () => {
   <ol>
     <li id="fn1">
       <p>text</p>
-      <p>more<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+      <p>more</p>
+      <pre><code>code
+</code></pre>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
     </li>
   </ol>
 </section>`)

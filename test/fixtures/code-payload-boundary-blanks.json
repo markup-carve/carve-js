@@ -10850,98 +10850,74 @@
   {
     "id": "host-code-payload-blanks-60",
     "source": "- [^n]: note\n    ```\n    a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-61",
     "source": "- [^n]: note\n    ```\n    a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-62",
     "source": "- [^n]: note\n    ~~~\n    a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-63",
     "source": "- [^n]: note\n    ~~~\n    a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-64",
     "source": "- [^n]: note\n    ~~~ raw\n    a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-65",
     "source": "- [^n]: note\n    ~~~ raw\n    a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-66",
     "source": "- [^n]: note\n      ```\n      a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-67",
     "source": "- [^n]: note\n      ```\n      a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-68",
     "source": "- [^n]: note\n      ~~~\n      a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-69",
     "source": "- [^n]: note\n      ~~~\n      a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-70",
     "source": "- [^n]: note\n      ~~~ raw\n      a\n\n b\ntail\n",
-    "html": "<ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-71",
     "source": "- [^n]: note\n      ~~~ raw\n      a\n\n\n b\ntail\n",
-    "html": "<ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<ul><li></li></ul><p>b\ntail</p>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-72",
@@ -11546,98 +11522,74 @@
   {
     "id": "host-code-payload-blanks-186",
     "source": "> - [^n]: note\n>     ```\n>     a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-187",
     "source": "> - [^n]: note\n>     ```\n>     a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-188",
     "source": "> - [^n]: note\n>     ~~~\n>     a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-189",
     "source": "> - [^n]: note\n>     ~~~\n>     a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-190",
     "source": "> - [^n]: note\n>     ~~~ raw\n>     a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-191",
     "source": "> - [^n]: note\n>     ~~~ raw\n>     a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-192",
     "source": "> - [^n]: note\n>       ```\n>       a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-193",
     "source": "> - [^n]: note\n>       ```\n>       a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-194",
     "source": "> - [^n]: note\n>       ~~~\n>       a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-195",
     "source": "> - [^n]: note\n>       ~~~\n>       a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-196",
     "source": "> - [^n]: note\n>       ~~~ raw\n>       a\n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-197",
     "source": "> - [^n]: note\n>       ~~~ raw\n>       a\n> \n> \n>  b\n> tail\n",
-    "html": "<blockquote><ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><ul><li></li></ul><p>b\ntail</p></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-198",
@@ -12242,98 +12194,74 @@
   {
     "id": "host-code-payload-blanks-312",
     "source": "> > - [^n]: note\n> >     ```\n> >     a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-313",
     "source": "> > - [^n]: note\n> >     ```\n> >     a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-314",
     "source": "> > - [^n]: note\n> >     ~~~\n> >     a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-315",
     "source": "> > - [^n]: note\n> >     ~~~\n> >     a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-316",
     "source": "> > - [^n]: note\n> >     ~~~ raw\n> >     a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-317",
     "source": "> > - [^n]: note\n> >     ~~~ raw\n> >     a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-318",
     "source": "> > - [^n]: note\n> >       ```\n> >       a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-319",
     "source": "> > - [^n]: note\n> >       ```\n> >       a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-320",
     "source": "> > - [^n]: note\n> >       ~~~\n> >       a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-321",
     "source": "> > - [^n]: note\n> >       ~~~\n> >       a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code>a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-322",
     "source": "> > - [^n]: note\n> >       ~~~ raw\n> >       a\n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code class=\"language-raw\">a\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-323",
     "source": "> > - [^n]: note\n> >       ~~~ raw\n> >       a\n> > \n> > \n> >  b\n> > tail\n",
-    "html": "<blockquote><blockquote><ul><li><pre><code class=\"language-raw\">a\n\n\n</code></pre></li></ul><p>b\ntail</p></blockquote></blockquote>",
-    "codePayloads": [
-      "a\n\n\n"
-    ]
+    "html": "<blockquote><blockquote><ul><li></li></ul><p>b\ntail</p></blockquote></blockquote>",
+    "codePayloads": []
   },
   {
     "id": "host-code-payload-blanks-324",

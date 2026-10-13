@@ -1,0 +1,45 @@
+import { expect, it } from 'vitest'
+import { carveToHtml } from '../src/index.js'
+
+for (const prefix of ['', '> ', '> > ']) for (const fence of ['```', '~~~']) {
+  it(`keeps a closed ${fence} fence at the marker-note body column in the note at quote depth ${prefix.length / 2}`, () => {
+    const source = ['- [^n]: text', `    ${fence}`, '    code', `    ${fence}`, 'after [^n]']
+      .map(line => prefix + line).join('\n')
+    const html = carveToHtml(source)
+    expect(html).toMatch(/<li id="fn1">\s*<p>text<\/p>\s*<pre><code>code\n<\/code><\/pre>/)
+    expect(html).toMatch(/<ul>\s*<li><\/li>\s*<\/ul>/)
+    expect(html).toContain('<p>after <a id="fnref1"')
+  })
+
+  it(`opens a closed ${fence} fence below the note child in the note at quote depth ${prefix.length / 2}`, () => {
+    const source = ['- [^n]: %% c', '    - child', `     ${fence}`, '     code', `     ${fence}`, 'after [^n]']
+      .map(line => prefix + line).join('\n')
+    const html = carveToHtml(source)
+    expect(html).toMatch(/<li id="fn1">[\s\S]*<ul>[\s\S]*<li>child<\/li>[\s\S]*<\/ul>\s*<pre><code>code\n<\/code><\/pre>/)
+    expect(html).toMatch(/<ul>\s*<li><\/li>\s*<\/ul>/)
+  })
+}
+
+it('does not close a note fence with a deeper delimiter', () => {
+  const html = carveToHtml('- [^n]: text\n    ```\n    code\n        ```\n    more\nafter [^n]')
+  expect(html).toContain('<code>\ncode\n</code>')
+  expect(html).not.toMatch(/<li id="fn1">[\s\S]*<pre><code>/)
+})
+
+it('measures the note body from an ordered item content column', () => {
+  const html = carveToHtml('1. [^n]: text\n     ~~~\n     x\n     ~~~\nafter [^n]')
+  expect(html).toMatch(/<ol>\s*<li><\/li>\s*<\/ol>/)
+  expect(html).toMatch(/<li id="fn1">\s*<p>text<\/p>\s*<pre><code>x\n<\/code><\/pre>/)
+})
+
+it('leaves a line below a closed note fence outside the item', () => {
+  const html = carveToHtml('- [^n]: text\n     ```\n     code\n     ```\n     more\nafter [^n]')
+  expect(html).toContain('<p>after <a id="fnref1"')
+  expect(html).not.toContain('<li>after')
+})
+
+it('ignores comment-looking text inside a closed note fence', () => {
+  const html = carveToHtml('- [^n]: text\n     ~~~\n     %% c\n     ```\n     ~~~\nafter [^n]')
+  expect(html).toContain('<p>after <a id="fnref1"')
+  expect(html).not.toContain('<li>after')
+})
