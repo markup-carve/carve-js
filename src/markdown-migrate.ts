@@ -5165,9 +5165,8 @@ function collectListInlineRun(
     if (quotedFence !== null) {
       if (openFence !== null && quotedFence.test(openFence.text)) quotedFence = null
     } else if (
-      quote !== null &&
       openFence !== null &&
-      openFence.prefix === quote &&
+      (quote === null || openFence.prefix === quote) &&
       indentColumns(openFence.text) < 4 &&
       isMarkdownFenceLine(openFence.text.trimStart())
     ) break
@@ -6866,7 +6865,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         // this fence stands when the item's own marker line opened that quote:
         // `prevInItem` cannot see that line, since a marker line sits LEFT of
         // the content column it establishes (carve-js#2028).
-        (afterLazy >= 0 || prevInItem || lazyQuote !== null) &&
+        (afterLazy >= 0 || prevInItem || lazyQuote !== null || listCols.includes(contentCol)) &&
         indentColumns(line) >= contentCol &&
         slack < 4 &&
         quoted !== null &&
