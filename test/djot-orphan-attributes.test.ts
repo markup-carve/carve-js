@@ -76,6 +76,18 @@ test('matches native Djot block attribute boundaries', async () => {
       const list = document.children[0]!
       expect(list.type).toBe('list')
       if (list.type !== 'list') continue
+      const nativeQuote = nativeAst.children[0]!.children[0]?.children?.[0]
+      if (nativeQuote?.tag === 'block_quote') {
+        expect(list.items).toHaveLength(1)
+        const quote = list.items[0]!.children[0]!
+        expect(quote.type).toBe('block_quote')
+        if (quote.type !== 'block_quote') continue
+        expect(quote.children.map(child => ({ type: child.type, classes: child.attrs?.classes ?? [] }))).toEqual(
+          nativeQuote.children.map(child => ({ type: child.tag === 'para' ? 'paragraph' : child.tag, classes: 'attributes' in child ? child.attributes?.class?.split(' ') ?? [] : [] }))
+        )
+        expect(carveToHtml(converted)).toContain('<p class="x">para</p>')
+        continue
+      }
       expect(list.items.map(item => ({ checked: item.checked, classes: item.attrs?.classes ?? [] }))).toEqual(
         nativeAst.children[0]!.children.map(item => ({ checked: item.checkbox === 'checked', classes: 'attributes' in item ? item.attributes?.class?.split(' ') ?? [] : [] }))
       )
@@ -119,4 +131,17 @@ test('keeps a task list opened on a referenced footnote head', () => {
   expect(converted).not.toContain('\0')
   expect(html.match(/<ul(?: |>)/g)).toHaveLength(1)
   expect(html.match(/type="checkbox"/g)).toHaveLength(2)
+})
+
+test('returns nested footnote item attributes before the parent fence', () => {
+  const converted = djotToCarve('[^a]: - x\n\n      [^b]: - y\n\n              {.c}\n\n      ```\n      z\n      ```\n\np[^a] q[^b]')
+  const html = carveToHtml(converted)
+  expect(converted).not.toContain('\0')
+  expect(html).toContain('<pre class="c"><code>z\n</code></pre>')
+  expect(html).not.toContain('<p class="c">')
+})
+
+test('keeps one literal quote marker in a footnote paragraph', () => {
+  const html = carveToHtml(djotToCarve('[^n]: > a\n      > >\n\nx[^n]')).replace(/>\s+</g, '><')
+  expect(html).toContain('<blockquote><p>a\n&gt;</p></blockquote>')
 })
