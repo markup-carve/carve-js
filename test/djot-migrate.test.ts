@@ -236,6 +236,11 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(rules(src)).toEqual([])
   })
 
+  it('does not flag a continuation row that joins a rowspan, whose rows have no span', () => {
+    expect(rules('| a | b |\n| ^ | c |\n+ more | d |')).toEqual([])
+    expect(rules('- | a | b |\n  | ^ | c |\n  + more | d |\n\n+ para')).toEqual(['djot-plus-bullet'])
+  })
+
   it('still flags the same `+ |` shape when no table row consumes it', () => {
     expect(rules('+ | | more |')).toEqual(['djot-plus-bullet'])
   })
