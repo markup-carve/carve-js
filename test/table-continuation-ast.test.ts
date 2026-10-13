@@ -20,6 +20,29 @@ describe('table continuation AST', () => {
     expect(carveToHtml(source)).toContain('<strong>bold text</strong>')
   })
 
+  it('gives a part a colspan marker joins its column', () => {
+    const source = '| a | < |\n+ x | y |\n'
+    const table = parse(source).children[0]
+    expect(table?.type).toBe('table')
+    if (table?.type !== 'table') return
+    expect(table.rows[0]?.cells[0]?.children).toMatchObject([
+      { type: 'text', value: 'a' }, { type: 'cell_wrap', line: 1 }, { type: 'text', value: 'x' },
+      { type: 'cell_wrap', line: 1, col: 1 }, { type: 'text', value: 'y' },
+    ])
+    expect(carveToCarve(source)).toBe(source)
+    expect(carveToHtml(source)).toContain('<td colspan="2">a x y</td>')
+  })
+
+  it('gives each part of a rowspan strip its row and column', () => {
+    const source = '| a | < |\n| ^ | ^ |\n+ x | y |\n'
+    const table = parse(source).children[0]
+    expect(table?.type === 'table' && table.rows[0]?.cells[0]?.children).toMatchObject([
+      { type: 'text', value: 'a' }, { type: 'cell_wrap', line: 1, row: 1 }, { type: 'text', value: 'x' },
+      { type: 'cell_wrap', line: 1, row: 1, col: 1 }, { type: 'text', value: 'y' },
+    ])
+    expect(carveToCarve(source)).toBe(source)
+  })
+
   it('counts an empty continuation line', () => {
     const source = '| a | b |\n+ | |\n'
     const table = parse(source).children[0]

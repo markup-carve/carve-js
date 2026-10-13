@@ -34,6 +34,8 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-continuation-on-a-span-marker-joins-the-cell-the-marker-resolves-into',
+  'a-table-row-ends-a-description-body-and-a-lone-plus-folds-into-a-term',
   'a-fence-closer-below-the-authored-base-is-measured-as-its-payload',
   'a-closed-fence-in-a-nested-child-leaves-no-paragraph-open',
   'a-code-line-left-of-an-authored-base-fence-opener-is-measured-from-that-base',
