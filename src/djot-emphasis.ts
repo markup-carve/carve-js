@@ -238,7 +238,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
     const forcedClose = source[i + 1] === '}'
     if (omitQuoteDelimiters && (ch === '"' || ch === "'")) {
       if (forcedOpen) omittedQuoteBraces.add(i - 1)
-      if (forcedClose) omittedQuoteBraces.add(i + 1)
+      if (forcedClose && !forcedOpen) omittedQuoteBraces.add(i + 1)
     }
     const canOpen = forcedOpen || (!forcedClose && source[i + 1] !== undefined && !/[ \t\r\n]/.test(source[i + 1]!) && (ch !== "'" || i === 0 || /[ \t\r\n"'\-(\[]/.test(source[i - 1]!)))
     const canClose = !forcedOpen && (forcedClose || (i > 0 && !/[ \t\r\n]/.test(source[i - 1]!)))
@@ -399,7 +399,7 @@ function processDjotEmphasis(source: string, convert: (plain: string) => string,
       (mask[pair.end] === '{' && source.startsWith('{}', pair.end)) ||
       (mask[pair.start - 2] === '{' && source.slice(Math.max(0, pair.start - 2), pair.start) === '{}')
     const forced =
-      pair.kind === '~' || pair.kind === '^' || pair.forced ||
+      omitQuoteDelimiters || pair.kind === '~' || pair.kind === '^' || pair.forced ||
       emptyBoundary ||
       scope ||
       content.startsWith('\0') ||

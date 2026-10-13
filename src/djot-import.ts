@@ -51,6 +51,13 @@ function replaceDjotImageLabels(source: string, mask: string, replace: (image: s
   const opens: number[] = [], closes = new Map<number, number>()
   const boundaries = new Set(djotInlineBoundaries(source, mask))
   for (const match of source.matchAll(/\n[ \t]*\n/g)) boundaries.add(match.index!)
+  const referenceEnds = new Int32Array(source.length).fill(-1)
+  let referenceEnd = -1
+  for (let at = source.length - 1; at >= 0; at--) {
+    if (boundaries.has(at)) referenceEnd = -1
+    if (source[at] === ']' && !isDjotEscaped(source, at)) referenceEnd = at
+    referenceEnds[at] = referenceEnd
+  }
   for (let at = 0; at < source.length; at++) {
     if (boundaries.has(at)) opens.length = 0
     if (mask[at] === '[' && !isDjotEscaped(source, at)) {
@@ -58,7 +65,8 @@ function replaceDjotImageLabels(source: string, mask: string, replace: (image: s
     }
     else if (mask[at] === ']' && !isDjotEscaped(source, at)) {
       const open = opens.pop()
-      if (open !== undefined && source[open - 1] === '!' && mask[open - 1] === '!' && !isDjotEscaped(source, open - 1) && /[([]/.test(source[at + 1] ?? '')) closes.set(open - 1, at)
+      const completeTarget = source[at + 1] === '(' ? mask[at + 1] === ' ' : source[at + 1] === '[' && referenceEnds[at + 2]! >= at + 2
+      if (open !== undefined && source[open - 1] === '!' && mask[open - 1] === '!' && !isDjotEscaped(source, open - 1) && completeTarget) closes.set(open - 1, at)
     }
   }
   if (!closes.size) return source
@@ -877,8 +885,9 @@ function djotImageLabelText(normalizedLabel: string, convert: (source: string) =
 
 function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string {
   const imageQuotes = new Set<number>()
-  if (!omitQuoteDelimiters && source.includes('![')) {
+  if (!omitQuoteDelimiters && source.includes('![') && /\{"|\{'|"\}|'\}/.test(source)) {
     replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), (image, label, at) => {
+      if (source.startsWith('[]', at + image.length)) return image
       for (let i = 0; i < label.length; i++) if (label[i] === '"' || label[i] === "'") {
         imageQuotes.add(at + 2 + i)
         imageQuotes.add(at + 1 + i)
@@ -1003,7 +1012,11 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     if (imageMask[at] !== '!' || imageMask[at + image.length - 1] !== ']' || /\n[ \t]*\n/.test(label) || isDjotEscaped(rawFolded, at)) return image
     const paragraph = imageStarts.has(at) ? imageParagraph : ''
     if (label.startsWith('^')) return image
-    if (!label.includes('\n') && !/[_*`{^~\[\]"']/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
+    const pairedQuotes = ['"', "'"].some(quote => {
+      const first = label.indexOf(quote)
+      return first >= 0 && label.indexOf(quote, first + 1) >= 0
+    })
+    if (!label.includes('\n') && !/[_*`{^~\[\]]/.test(label) && !pairedQuotes && !/["']\}/.test(label) && !/(?<!\\)(?:\\\\)*\\[ \t]/.test(label)) {
       spans.push(label)
       return `${paragraph}![${prefix}${spans.length - 1}\x00]`
     }
@@ -1368,7 +1381,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
         label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true, true)), label.includes('\n'))
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
-          .replace(/[\[\]\\]/g, (value) => '\\' + value)
+          .replace(/[\[\]\\"']/g, (value) => '\\' + value)
       }
       const target = destination.replace(
         rows[line] && destination.includes('|') ? /\\([ \t!-\/:-@\[-`{-~])|[\\\s"<>`]/g : /\\([ \t!-\/:-@\[-`{-~])|[\\\s"<>`()]/g,

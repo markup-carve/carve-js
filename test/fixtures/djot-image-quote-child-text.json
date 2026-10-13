@@ -1270,5 +1270,333 @@
   {
     "source": "- ![\"a\\n b\"][img]\n\n[img]: img\n[r]: link",
     "html": "<ul>\n<li>\n<img alt=\"a\\n b\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![{\"}](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"&quot;}\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![{\"}](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"&quot;}\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![{\"}](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"&quot;}\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![{\"}][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"&quot;}\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![{\"}][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"&quot;}\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![{\"}][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"&quot;}\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![{'}](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"'}\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![{'}](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"'}\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![{'}](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"'}\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![{'}][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"'}\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![{'}][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"'}\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![{'}][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"'}\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) `\"a\"`](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) `\"a\"`](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) `\"a\"`](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x &quot;a&quot;\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) `\"a\"`][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) `\"a\"`][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) `\"a\"`][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x &quot;a&quot;\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) `'a'`](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x 'a'\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) `'a'`](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x 'a'\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) `'a'`](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x 'a'\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) `'a'`][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x 'a'\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) `'a'`][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x 'a'\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) `'a'`][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x 'a'\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) \\\"a\\\"](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) \\\"a\\\"](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) \\\"a\\\"](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x &quot;a&quot;\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) \\\"a\\\"][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) \\\"a\\\"][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x &quot;a&quot;\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) \\\"a\\\"][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x &quot;a&quot;\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) \\'a\\'](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x 'a'\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) \\'a\\'](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x 'a'\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) \\'a\\'](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x 'a'\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![[x](u) \\'a\\'][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x 'a'\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![[x](u) \\'a\\'][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x 'a'\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![[x](u) \\'a\\'][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x 'a'\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![don't](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"don't\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![don't](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"don't\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![don't](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"don't\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![don't][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"don't\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![don't][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"don't\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![don't][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"don't\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![O'Brien](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"O'Brien\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![O'Brien](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"O'Brien\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![O'Brien](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"O'Brien\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![O'Brien][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"O'Brien\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![O'Brien][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"O'Brien\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![O'Brien][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"O'Brien\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x\"_a_\"y](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xay\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x\"_a_\"y](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xay\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x\"_a_\"y](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xay\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x\"_a_\"y][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xay\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x\"_a_\"y][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xay\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x\"_a_\"y][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xay\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x\"a\"_b_](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xab\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x\"a\"_b_](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xab\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x\"a\"_b_](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xab\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x\"a\"_b_][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xab\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x\"a\"_b_][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xab\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x\"a\"_b_][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xab\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x\"*a*\"y](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xay\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x\"*a*\"y](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xay\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x\"*a*\"y](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xay\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x\"*a*\"y][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xay\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x\"*a*\"y][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xay\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x\"*a*\"y][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xay\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x'a'_b_](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x'a'b\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x'a'_b_](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x'a'b\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x'a'_b_](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x'a'b\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x'a'_b_][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"x'a'b\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x'a'_b_][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"x'a'b\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x'a'_b_][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"x'a'b\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x{\"_a_\"}y](img)\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xay\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x{\"_a_\"}y](img)\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xay\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x{\"_a_\"}y](img)\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xay\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![x{\"_a_\"}y][img]\n\n[img]: img\n[r]: link",
+    "html": "<p><img alt=\"xay\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "> ![x{\"_a_\"}y][img]\n\n[img]: img\n[r]: link",
+    "html": "<blockquote>\n<p><img alt=\"xay\" src=\"img\"></p>\n</blockquote>\n"
+  },
+  {
+    "source": "- ![x{\"_a_\"}y][img]\n\n[img]: img\n[r]: link",
+    "html": "<ul>\n<li>\n<img alt=\"xay\" src=\"img\">\n</li>\n</ul>\n"
+  },
+  {
+    "source": "![a \"b\"][oops",
+    "html": "<p>![a “b”][oops</p>\n"
+  },
+  {
+    "source": "![\"x\"](unclosed",
+    "html": "<p>![“x”](unclosed</p>\n"
+  },
+  {
+    "source": "{\"outside\"}\n\n![\"inside\"](img)",
+    "html": "<p>“outside”</p>\n<p><img alt=\"inside\" src=\"img\"></p>\n"
+  },
+  {
+    "source": "{'outside'}\n\n!['inside'](img)",
+    "html": "<p>‘outside’</p>\n<p><img alt=\"inside\" src=\"img\"></p>\n"
   }
 ]
