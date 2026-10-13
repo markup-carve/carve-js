@@ -5137,6 +5137,7 @@ function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
   const root = lexer.rootLines ?? lexer.lines
   const line = root[lexer.lineNumber(lexer.pos) - 1]
   if (line === undefined) return true
+  if (/^[ \t]+>/.test(line)) return false
   let rest = line
   for (;;) {
     const m = /^[ \t]*>[ \t]?/.exec(rest)
@@ -7443,6 +7444,15 @@ function rebasedColonGroupEnd(
                   !groupCloserAhead(j)))) && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
         else if (column >= authoredChildColumn && authoredChildState !== undefined) {
           trackItemLazyState(sliceColumns(candidate, authoredChildColumn, true), authoredChildState, childFenceCloses(j))
+          // The line block closer still closes its child when an unmatched code
+          // run in that child was read as inline text.
+          const closer = RE_ADMONITION_CLOSE.exec(candidate.trimStart())
+          if (closer && column === authoredChildColumn &&
+              closer[1]!.length === authoredChildState.literalColon?.width) {
+            delete authoredChildState.literalColon
+            authoredChildState.divDepth = Math.max(0, authoredChildState.divDepth - 1)
+            authoredChildState.lazyFoldable = false
+          }
         }
       }
     }
@@ -7772,6 +7782,7 @@ function rebaseOverindentedBlocks(
   // of by the line's own indentation, so a ladder does not re-read the same
   // leading run once per level (carve#752's counted bound).
   let ownedColumn = leadNestedColumn
+  let ownedParagraphOpen = false
   let quoteProbe: Lexer | undefined
   let markerColonEnd = -1
   let inlineLeadPayload = false
@@ -7782,7 +7793,7 @@ function rebaseOverindentedBlocks(
   let footnoteParagraphOpen = false
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
-    if (isBlankLine(line)) { absorbingColonParagraph = false; footnoteParagraphOpen = false; continue }
+    if (isBlankLine(line)) { absorbingColonParagraph = false; footnoteParagraphOpen = false; ownedParagraphOpen = false; continue }
     if (noteParagraph?.markerBody) {
       const text = line.trimStart()
       if (footnoteParagraphOpen && isListMarkerLine(text)) continue
@@ -7799,20 +7810,35 @@ function rebaseOverindentedBlocks(
     }
     if (i <= markerColonEnd && RE_COMMENT_LINE.test(line.trimStart()) && base > 0) leadCommentBase = base
     if (i <= markerColonEnd && leadCommentBase >= 0 && base >= leadCommentBase && RE_FOOTNOTE_DEF.test(line.trimStart())) continue
-    if (i <= markerColonEnd && ownedColumn >= 0 && base >= ownedColumn) continue
+    if (i <= markerColonEnd && ownedColumn >= 0 && base >= ownedColumn) {
+      ownedParagraphOpen = false
+      continue
+    }
     if (i <= markerColonEnd && (RE_ADMONITION_CLOSE.test(line.trimStart()) ||
       (base > 0 && (markerColonNestedBody.has(i) || (!RE_FOOTNOTE_DEF.test(line.trimStart()) && !RE_LINK_DEF.test(line.trimStart())))))) continue
     // A deeper item owns this line. Its own collector will see the line after
     // the intervening marker/content columns have been removed and will apply
     // the authored-base rule in that coordinate system.
-    if (ownedColumn >= 0 && base >= ownedColumn) continue
+    if (ownedColumn >= 0 && base >= ownedColumn) {
+      ownedParagraphOpen = false
+      continue
+    }
     if (ownedColumn >= 0 && RE_COMMENT_LINE.test(line) && commentFenceRun(line) === undefined) continue
     if (childColonWidth !== null && ownedColumn >= 0) {
       const close = RE_ADMONITION_CLOSE.exec(line.trimStart())
       if (close?.[1]?.length === childColonWidth || (lineOpensItemBlock(line.trimStart()) && !opensCodeFence(line.trimStart()) && !RE_COMMENT_LINE.test(line.trimStart()))) childColonWidth = null
       else continue
     }
+    // An unmatched fence below a child's column continues its paragraph. Keep
+    // the child column so a later line at that column is still the child's.
+    if (ownedColumn >= 0 && ownedParagraphOpen && opensCodeFence(line.trimStart())) {
+      const group = opaqueGroupCloser(line.trimStart())!
+      let memo = groupCloserMemos.get(base)
+      if (memo === undefined) groupCloserMemos.set(base, memo = { verbatim: new Map(), comment: new Map() })
+      if (!opaqueGroupCloses(group, lines, i + 1, base, takenBelowColumn, memo)) continue
+    }
     ownedColumn = -1
+    ownedParagraphOpen = false
     // Folded note text owns deeper lines without opening a child list.
     if (noteParagraph?.markers?.has(i)) {
       ownedColumn = base + 1
@@ -7822,6 +7848,8 @@ function rebaseOverindentedBlocks(
     if (markerColumn >= 0) {
       ownedColumn = markerColumn
       const childContent = markerFreeContent(line.trimStart())
+      ownedParagraphOpen = bottomBlockLeavesParagraphOpen(childContent) &&
+        colonFenceOpenerLen(childContent) === null && !opensCodeFence(childContent)
       childColonWidth = colonFenceOpenerLen(childContent)
       continue
     }
@@ -14023,6 +14051,10 @@ class ParseSession {
             tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
             tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
           )
+          if (isMarker && lazyState.literalColon === undefined &&
+              colonFenceShapeEndsLazyContinuation(markerLineBottomBlock(dedented))) {
+            lazyState.lazyFoldable = false
+          }
           if (descriptionCloserAnswer === false) {
             markerDescriptionInlineFence = true
             lazyState.inlineFenceParagraph = true
