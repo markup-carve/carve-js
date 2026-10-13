@@ -4779,6 +4779,8 @@ interface ItemLazyState {
   // Fed by a definition body's collector rather than a list item's.
   definitionBody?: boolean
   descriptionColumn?: number
+  /** Whether the stored description column came from a term. */
+  descriptionHasTerm?: boolean
   closedBelowComment?: boolean
   // The column of the first fence run with no closer. Its rebase group runs to
   // the end of the item, so only a line at this exact column is authored again.
@@ -5811,6 +5813,14 @@ function trackItemLazyState(
   }
   if (atContentColumn && state.opaque === null && authoredColon && authoredColon.column > 0 &&
       indentColumns(content, authoredColon.column) < authoredColon.column && !RE_COMMENT_LINE.test(content.trimStart())) {
+    const text = content.trimStart()
+    if (state.descriptionHasTerm && state.descriptionColumn !== undefined && !state.lazyFoldable && opensCodeFence(text)) {
+      const fence = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
+      const marker = RE_FENCE.test(text) ? fence![2]! : fence![1]!
+      state.opaque = { kind: 'code', close: fenceCloseRe(marker), column: indentColumns(content) }
+      state.inDefList = false
+      return
+    }
     state.ownedColumn = -1
     state.deepest = null
     state.lazyFoldable = bottomBlockLeavesParagraphOpen(content) && colonFenceOpenerLen(content) === null &&
@@ -5904,6 +5914,7 @@ function trackItemLazyState(
   }
   if (isBlankLine(content)) {
     delete state.termAfterComment
+    if (state.descriptionHasTerm === false) state.inDefList = false
     // A blank is a separator; a `:  def` may follow it (djot allows a blank
     // between a term and its definition), so leave inDefList unchanged.
     state.lazyFoldable = false
@@ -5916,7 +5927,11 @@ function trackItemLazyState(
   // A definition-list term or definition marker opens (or continues) a def
   // list in this item, and leaves an open paragraph for its body.
   if (RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content)) {
-    state.inDefList = RE_DEFLIST_TERM.test(content) ? 'term' : 'description'
+    const isTerm = RE_DEFLIST_TERM.test(content)
+    const hasTerm = isTerm || state.inDefList === 'term' ||
+      (state.inDefList === 'description' && state.descriptionHasTerm === true)
+    state.descriptionHasTerm = hasTerm
+    state.inDefList = isTerm ? 'term' : 'description'
     const description = RE_DEFLIST_DEF.exec(content)
     if (description) state.descriptionColumn = 1 + description[1]!.length
     delete state.termAfterComment
@@ -6003,8 +6018,8 @@ function trackItemLazyState(
   const runColumns = authoredFenceColumns ?? run
   if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
       runColumns !== undefined && runColumns > 0 && runColumns < state.descriptionColumn &&
-      colonBlockOpenerRun(content.slice(run!)) !== null) state.inDefList = false
-  if (state.inDefList === 'description' && state.descriptionColumn !== undefined &&
+      (colonBlockOpenerRun(content.slice(run!)) !== null || RE_BLOCKQUOTE.test(content.slice(run!)))) state.inDefList = false
+  if (state.inDefList === 'description' && state.descriptionHasTerm && state.descriptionColumn !== undefined &&
       run !== undefined && runColumns !== undefined && runColumns >= state.descriptionColumn) {
     const text = content.slice(run)
     if (RE_HEADING.test(text) || RE_HR.test(text) || isTableRow(text) || colonFenceOpenerLen(text) !== null) {
@@ -6111,7 +6126,8 @@ function trackItemLazyState(
     readFlush && (state.divDepth === 0 || (state.authoredColon !== undefined && runColumns! > state.authoredColon.column && hostedAuthoredBlockOpener(content.slice(run!)))) &&
     state.inDefList === false && !state.unrebasedColonBody &&
     (wasQuote === null || !blockQuoteParagraphOpen(wasQuote) ||
-      (state.unclosedFenceBase !== undefined && runColumns === state.unclosedFenceBase))
+      (state.unclosedFenceBase !== undefined && runColumns === state.unclosedFenceBase) ||
+      (state.descriptionHasTerm && state.ownedAuthored && runColumns === state.ownedColumn))
   ) {
     const overIndented = content.slice(run!)
     const inlineCode = RE_FENCE.exec(overIndented) ?? RE_RAW_FENCE.exec(overIndented)
@@ -6156,6 +6172,10 @@ function trackItemLazyState(
       state.lazyFoldable = true
       state.inDefList = false
       return
+    }
+    if ((state.descriptionHasTerm || (!state.lazyFoldable && state.descriptionColumn !== undefined)) && RE_BLOCKQUOTE.test(overIndented)) {
+      content = overIndented
+      if (facts) facts = { ...facts, whitespace: 0 }
     }
     if (RE_HEADING.test(overIndented) || isTableRow(overIndented) || RE_HR.test(overIndented)) {
       state.inTable = isTableRow(overIndented)
