@@ -201,6 +201,8 @@ would become Carve markup, including tags, mentions, bare `/` and `=`, and the
 `%%` comment opener. Code spans, fenced code and link destinations remain
 opaque.
 
+Djot derives collapsed image-reference keys from child text. Paired quote wrappers, footnotes, symbols and ignored attributes do not contribute to the key. An unresolved image without a destination, or alternative text containing a blank line after ignored markup is removed, cannot be represented by Carve image syntax. The migration report records the loss; HTML rendered from the converted source does not preserve that image.
+
 ```ts
 import { djotToCarve } from '@markup-carve/carve'
 
