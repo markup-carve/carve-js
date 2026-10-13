@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseFragment } from 'parse5'
 import {
   carveToHtml, carveToHtmlWithReport, carveToMarkdown, carveToMarkdownWithReport,
-  htmlToAst, htmlToCarve, parse, renderHtml,
+  htmlToAst, htmlToCarve, migrateMarkdown, parse, renderHtml,
 } from '../src/index.js'
 import type { BlockNode, Document } from '../src/ast.js'
 
@@ -199,21 +199,29 @@ describe('rule 9: published order requires an id carrier', () => {
   })
 })
 
-describe('rule 10: nested definition lists report their flattened structure', () => {
-  it('reports one row per nested list in document order on each render', () => {
-    const ordinary = carveToMarkdownWithReport(nested)
-    expect(ordinary.losses).toEqual([])
-    for (let pass = 0; pass < 2; pass++) {
-      const report = carveToMarkdownWithReport(nested, { roundtrip: true })
-      expect(report.value).toBe(carveToMarkdown(nested, { roundtrip: true }))
-      expect(report.value.match(/carve: ::/g)).toHaveLength(1)
-      expect(report.losses).toEqual([expect.objectContaining({ code: 'definition-list-flattened', target: 'markdown', nodeType: 'block' })])
+describe('rule 10: nested definition lists carry their depth in their markers', () => {
+  it('writes depth markers, reports no loss and imports the nesting back', () => {
+    expect(carveToMarkdownWithReport(nested).losses).toEqual([])
+    const report = carveToMarkdownWithReport(nested, { roundtrip: true })
+    expect(report.value).toBe(carveToMarkdown(nested, { roundtrip: true }))
+    expect(report.losses).toEqual([])
+    expect(report.value.match(/<!-- carve:2 [^>]*-->/g)).toEqual(['<!-- carve:2 :: Inner -->', '<!-- carve:2 : -->', '<!-- carve:2 -->'])
+    expect(carveToHtml(migrateMarkdown(report.value).value)).toBe(carveToHtml(nested))
+    const attributed = ':: Outer\n: body\n\n  {.inner}\n  :: Inner\n  : inner body\n'
+    expect(carveToHtml(migrateMarkdown(carveToMarkdown(attributed, { roundtrip: true })).value)).toBe(carveToHtml(attributed))
+  })
+
+  it('reads a depth marker with no list one level up as a damaged set', () => {
+    const exported = carveToMarkdown(nested, { roundtrip: true })
+    for (const damaged of [
+      exported.replace('<!-- carve:2 :: Inner -->', '<!-- carve:3 :: Inner -->').replace(/carve:2 /g, 'carve:3 '),
+      exported.replace('<!-- carve:2 -->\n', ''),
+      exported.replace('<!-- carve: :: Outer -->', '<!-- carve:2 :: Outer -->'),
+      '<!-- carve:2 {.x} -->\npara\n',
+    ]) {
+      const imported = migrateMarkdown(damaged)
+      expect(imported.report.diagnostics.map(row => row.code)).toContain('carrier-markers-damaged')
     }
-    const report = carveToMarkdownWithReport(nested + '\nseparate\n\n' + nested.replace('Inner', 'Second'), { roundtrip: true })
-    expect(report.losses.map(row => row.code)).toEqual(['definition-list-flattened', 'definition-list-flattened'])
-    expect(report.losses[0].pos!.startLine).toBeLessThan(report.losses[1].pos!.startLine)
-    const probe = carveToMarkdownWithReport(nested + '\n' + String.fromCharCode(...Array.from({ length: 32 }, (_, i) => 0xE000 + i)) + '\n', { roundtrip: true })
-    expect(probe.losses.filter(row => row.code === 'definition-list-flattened')).toHaveLength(1)
   })
 })
 

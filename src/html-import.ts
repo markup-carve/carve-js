@@ -1253,7 +1253,8 @@ class Importer {
         // exactly as `data-delim` is: a row here would name a loss that did
         // not happen.
         if (!this.isReconstructedCarrier(node, domTag(node) ?? '', name) && !this.contradicted.get(node)?.has(name)) {
-          this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', 'info', destinationIsDenied(attr.value))
+          const lostRaw = this.mode === 'roundtrip' && (name === 'data-carve-raw' || name === 'data-djot-raw')
+          this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', lostRaw ? 'warning' : 'info', destinationIsDenied(attr.value))
         }
       } else if (styleSlots.has(name) && (rawKept || !this.isConsumedHtmlAttribute(node, domTag(node) ?? '', name))) {
         this.report.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', destinationIsDenied(attr.value))
@@ -4885,7 +4886,9 @@ class Importer {
      * for exactly this case, says what it dropped, and keeps the markup
      * verbatim in the mode whose contract is Carve-produced HTML.
      */
-    if (this.mode === 'roundtrip' && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node)))) {
+    // carve#3044: a refused generic-span carrier is consumed in every mode (CARVE-P10-021).
+    const refusedSpanCarrier = tag === 'span' && (this.hasCarrier(node, 'raw') || this.hasCarrier(node, 'escaped'))
+    if (this.mode === 'roundtrip' && !refusedSpanCarrier && !(this.cellDepth > 0 && /[\r\n]/.test(serializeOuter(node)))) {
       // The walk into the children reported bytes this arm keeps.
       this.discardWalk(beforeWalk, walked)
       this.keepRaw(node, path, `Preserved unsupported <${tag}> element as raw HTML`)
