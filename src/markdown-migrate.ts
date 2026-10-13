@@ -1400,6 +1400,8 @@ function convertInline(
   unwrapEmptyLinks = true,
   nativeCode = false,
   stripDestinationIndent: boolean | ((line: number) => boolean | string) = false,
+  // The caller writes every returned line as it stands, so a code value may add one.
+  breakableCode = false,
 ): string {
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
@@ -1587,11 +1589,26 @@ function convertInline(
         if (!(error instanceof SourceUnspellableError)) throw error
       }
     }
-    // An empty code run is spellable on the final line of its paragraph.
+    // An empty code run is spellable only as an unclosed run ending its paragraph.
     if (value === '' && terminal && !table &&
-        /(?:^|\n)[ \t]*$/.test(line.slice(0, offset)) &&
+        /(?:^|[\p{L}\p{N} \t\n.,;:?)'"-])$/u.test(line.slice(0, offset)) &&
         /^[ \t]*$/.test(line.slice(offset + match.length))) {
       return protect('``', referenceSourceText(match, protectedSources))
+    }
+    // A line break in the value continues the paragraph when the caller keeps added lines.
+    if (breakableCode && value.includes('\n') && !value.includes('\r') && !table &&
+        !/^[ \t]*#{1,6}(?:[ \t]|$)/.test(input) && !/[!$\\`\x00{}\]]$/.test(line.slice(0, offset))) {
+      try {
+        const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] }).replace(/\n$/, '')
+        const probe = parse(`x ${written} y\n`)
+        const paragraph = probe.children[0]
+        const code = paragraph?.type === 'paragraph' ? paragraph.children[1] : undefined
+        if (probe.children.length === 1 && paragraph?.type === 'paragraph' && paragraph.children.length === 3 && code?.type === 'code' && code.value === value) {
+          return protect(written, referenceSourceText(match, protectedSources))
+        }
+      } catch (error) {
+        if (!(error instanceof SourceUnspellableError)) throw error
+      }
     }
     if (value === '' || value.includes('\n') || value.includes('\r')) {
       importLosses.push({
@@ -7519,6 +7536,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
                 .join('\n'),
               dialect, false, false, undefined, true, false, true, undefined, true, false,
               listCols.length === 0 && !/^[ \t]*>/.test(line),
+              listCols.length === 0 && !/^[ \t]*>/.test(line),
             ),
           ),
         )
@@ -7529,7 +7547,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       }
     }
     if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
-    const converted = convertInline(body, dialect, false, false, undefined, true, false, true, undefined, true, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body))
+    const converted = convertInline(body, dialect, false, false, undefined, true, false, true, undefined, true, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body), false, !isHeading && listCols.length === 0 && !/^[ \t]*>/.test(body))
     // A pipe row GFM did NOT read as a table row stays text. Carve needs no
     // delimiter row, so passing the line through was itself the conversion and
     // the migrated document grew a table the author never saw

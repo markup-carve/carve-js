@@ -64,7 +64,7 @@ it('reads a footnote-shaped label with a destination as a link', () => {
   expect(carveToHtml(result.value)).toBe('<p>x<a href="u%3Ccode%3Ea%3C/code%3E">^1</a></p>')
 })
 
-it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code>'])('reports the original code line: %s', markdown => {
+it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code> z'])('reports the original code line: %s', markdown => {
   const result = migrateMarkdown(markdown)
   const rows = result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')
   expect(rows).toHaveLength(1)
@@ -72,7 +72,7 @@ it.each(['Title\n<code>*a*</code>\n=====', 'a\nb <code></code>'])('reports the o
 })
 
 it('keeps a code fallback line after a multiline link title', () => {
-  const result = migrateMarkdown('[x](u\n"t") <code></code>')
+  const result = migrateMarkdown('[x](u\n"t") <code></code> z')
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')[0]?.path).toBe('line:2')
 })
 
@@ -91,7 +91,7 @@ it('does not degrade code because of a delimiter in an autolink', () => {
 })
 
 it('keeps the code line after an invalid destination in a setext heading', () => {
-  const result = migrateMarkdown('Title [a](b c) <code></code>\n=====')
+  const result = migrateMarkdown('Title [a](b c) <code></code> z\n=====')
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')[0]?.path).toBe('line:1')
 })
 
@@ -112,7 +112,7 @@ it('keeps a code delimiter in a link from pairing with outside text', () => {
 })
 
 it('keeps the code line after a reference label spanning lines', () => {
-  const result = migrateMarkdown('[x][a\nb] <code></code>\n\n[a b]: /u\n')
+  const result = migrateMarkdown('[x][a\nb] <code></code> z\n\n[a b]: /u\n')
   expect(result.report.diagnostics.filter(row => row.code === 'raw-code-fallback')[0]?.path).toBe('line:2')
 })
 
