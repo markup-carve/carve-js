@@ -7510,6 +7510,7 @@ function rebasedColonGroupEnd(
   let authoredInlineFence = false
   let authoredCodeClose: RegExp | undefined
   let authoredCodeAdjustment = 0
+  let authoredBelowBaseRun = false
   let authoredChildColumn = -1
   let authoredChildBlank = false
   let authoredChildBlockBoundary = false
@@ -7555,14 +7556,19 @@ function rebasedColonGroupEnd(
       }
     }
     if (authoredCodeClose) {
+      if (authoredCodeAdjustment > 0 && indentColumns(candidate, authoredCodeAdjustment) < authoredCodeAdjustment &&
+          opensCodeFence(candidate.trimStart())) authoredBelowBaseRun = true
       if (authoredCodeAdjustment !== 0 && !takenBelowColumn?.has(j) &&
-          indentColumns(candidate, Math.max(0, authoredCodeAdjustment)) >= Math.max(0, authoredCodeAdjustment)) {
+          !(authoredBelowBaseRun && indentColumns(candidate, authoredCodeAdjustment) < authoredCodeAdjustment)) {
         candidate = authoredCodeAdjustment < 0
           ? ' '.repeat(-authoredCodeAdjustment) + candidate
-          : sliceColumns(candidate, authoredCodeAdjustment, true)
+          : sliceColumns(candidate, Math.min(authoredCodeAdjustment, indentColumns(candidate)), true)
         lines[j] = candidate
       }
-      if (indentColumns(candidate, base + 1) === base && authoredCodeClose.test(groupLineContent(candidate, base))) authoredCodeClose = undefined
+      if (indentColumns(candidate, base + 1) === base && authoredCodeClose.test(groupLineContent(candidate, base))) {
+        authoredCodeClose = undefined
+        authoredBelowBaseRun = false
+      }
     } else if (nestedBodyLines && opaque === null && !authoredCodeClose && stack.length === authored.length && authoredChildColumn < 0 &&
         !stack.at(-1)!.literal && !authoredInlineFence) {
       const column = authoredColumn ??= indentColumns(candidate, hostedColonBodyOpener(candidate.trimStart()) ? Infinity : authored.at(-1)!.column + 4)
@@ -7586,6 +7592,7 @@ function rebasedColonGroupEnd(
           opaqueGroupCloses(opaqueGroupCloser(text)!, lines, j + 1, column, takenBelowColumn, closerMemo))) {
         authoredCodeClose = fenceCloseRe(RE_FENCE.test(text) ? code[2]! : code[1]!)
         authoredCodeAdjustment = column - base
+        authoredBelowBaseRun = false
       }
       const closeRun = RE_ADMONITION_CLOSE.exec(text)
       const closesOwner = closeRun?.[1]?.length === stack.at(-1)!.width
@@ -7873,6 +7880,7 @@ function rebaseOverindentedBlocks(
   itemParagraphFences?: ReadonlySet<number>,
   lazyParagraphFences?: ReadonlySet<number>,
   descriptionItem = false,
+  stripLeftCodePrefix = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const groupCloserMemos = new Map<number, GroupCloserMemo>()
@@ -8354,10 +8362,16 @@ function rebaseOverindentedBlocks(
           }
         }
       } else {
+        let belowBaseCodeRun = false
         for (let j = i; j <= end; j++) {
-          // A payload line below the base keeps the residue the collector left it.
-          if (!isBlankLine(lines[j]!) && indentColumns(lines[j]!, base) >= base && !heldFoldedLines.has(j)) {
-            lines[j] = sliceColumns(lines[j]!, base, true)
+          if (!isBlankLine(lines[j]!) && !heldFoldedLines.has(j)) {
+            const column = indentColumns(lines[j]!)
+            if (code && stripLeftCodePrefix && column < base && opensCodeFence(lines[j]!.trimStart())) {
+              belowBaseCodeRun = true
+            }
+            if (column >= base || code && stripLeftCodePrefix && !belowBaseCodeRun) {
+              lines[j] = sliceColumns(lines[j]!, Math.min(base, column), true)
+            }
           }
         }
       }
@@ -12378,7 +12392,8 @@ class ParseSession {
       // coordinate system after its own content margin was removed - plus
       // Definition entries use the same exact block extent in every container.
       rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true, false,
-        undefined, undefined, undefined, false, undefined, undefined, undefined, paragraphFenceLines, lazyParagraphFenceLines)
+        undefined, undefined, undefined, false, undefined, undefined, undefined, paragraphFenceLines, lazyParagraphFenceLines,
+        false, true)
       restoreVerbatimBlanks(bodyLines, bodySourceLines, bufferedBlanks, (index) =>
         index === 0 && !/^\+[ \t]*$/.test(first)
           ? contentCol
@@ -16157,11 +16172,15 @@ class ParseSession {
    * The scanner skips the payload, so its joins would otherwise vanish; a
    * join consumed as padding has no space left to point at and is dropped.
    */
-  private verbatimCellWraps(text: string, source: InlineSource, start: number, payload: string): VerbatimCellWrap[] | undefined {
+  private verbatimCellWraps(text: string, source: InlineSource, start: number, payload: string, strippedPadding = false): VerbatimCellWrap[] | undefined {
     if (!source.cellWraps) return undefined
     const shift = source.wrapShift ?? 0
     let wraps: VerbatimCellWrap[] | undefined
     let codepoints = 0
+    if (strippedPadding) {
+      const wrap = source.cellWraps.get(start - 1 + shift)
+      if (wrap) (wraps ??= []).push({ offset: 0, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+    }
     for (let j = start; j < start + payload.length; j++) {
       const code = text.charCodeAt(j)
       if (code === 32) {
@@ -16169,6 +16188,10 @@ class ParseSession {
         if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
       }
       if (code < 0xdc00 || code > 0xdfff || j === start || (text.charCodeAt(j - 1) & 0xfc00) !== 0xd800) codepoints++
+    }
+    if (strippedPadding) {
+      const wrap = source.cellWraps.get(start + payload.length + shift)
+      if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
     }
     return wraps
   }
@@ -16617,7 +16640,7 @@ class ParseSession {
         }
         const padded = text.slice(i + openLen, end - openLen)
         const inner = stripVerbatimPadding(padded)
-        const cellWraps = this.verbatimCellWraps(text, source, i + openLen + (padded.length - inner.length) / 2, inner)
+        const cellWraps = this.verbatimCellWraps(text, source, i + openLen + (padded.length - inner.length) / 2, inner, padded.length !== inner.length)
         // A verbatim span tagged `{=format}` is raw inline passthrough.
         const raw = RE_RAW_INLINE.exec(text.slice(end))
         if (raw) {
