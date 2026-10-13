@@ -332,10 +332,10 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       continue
     }
     const row: boolean = (rows[n] ?? false) && !(noteOwner && paragraph && quoteDepth >= depth && !(lists.at(-1) && indent <= lists.at(-1)!.column))
-    const ownerBeforeBlock = lists.at(-1)
-    const rawFencedItem = /^((?:[-*+]|[^ \t]+)[ \t]+)(?:\[[ xX]\][ \t]+)?[`~]{3,}/.test(text)
+    const rawFencedItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?[`~]{3,}/.test(text)
+    const rawReferenceItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+\[(?!\^)[^\]\n]+\]:/.test(text)
     const wholeAttributes = visible.startsWith('{') && readAttributes(raw, rawIndent)?.end === raw.length
-    if (pendingAttributes.length && text !== '' && !wholeAttributes && (!/^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+[^ \t]/.test(visible) && !rawFencedItem || pendingAttributes.some(attribute => attribute.depth !== quoteDepth))) {
+    if (pendingAttributes.length && text !== '' && (!wholeAttributes || !lists.some(list => list.depth === quoteDepth && indent > list.column)) && (!/^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+[^ \t]/.test(visible) && !rawFencedItem && !rawReferenceItem || pendingAttributes.some(attribute => attribute.depth !== quoteDepth))) {
       for (const attribute of pendingAttributes) {
         const destinationDepth = Math.min(attribute.depth, quoteDepth)
         const column = quoteDepth > attribute.depth ? quoteColumns[attribute.depth] ?? 0 : indent
@@ -355,7 +355,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
     const emptyItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]*$/.test(text) || /^[-*+] \[[ xX]\][ \t]*$/.test(text)
     const item =
       /^(?:([-*+])|((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)))[ \t]+[^ \t]/.exec(
-        emptyItem ? visible.trimEnd() + ' +' : visible,
+        emptyItem ? visible.trimEnd() + ' +' : pendingAttributes.length && (rawFencedItem || rawReferenceItem) ? text : visible,
       )
     if (outsideQuoteItem) {
       paragraph = false
@@ -389,7 +389,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       out.splice(before, 0, owned.prefix + ':'.repeat(owned.width))
       paragraph = false
     }
-    if (blockStart) {
+    if (blockStart && !(pendingAttributes.length && item)) {
       // A block outside the nested item's content column belongs to its parent.
       while (
         lists.length &&
@@ -421,24 +421,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       blank = false
       continue
     }
-    if (fences[n] !== original || row) {
-      const fencedItem = fences[n] !== original ? /^((?:[-*+]|[^ \t]+)[ \t]+)(?:\[[ xX]\][ \t]+)?[`~]{3,}/.exec(text) : undefined
-      const owner = ownerBeforeBlock
-      const fencePrefix = fencedItem?.[1] ?? ''
-      const fenceKind = fencePrefix.trim().replace(/[0-9A-Za-z]+/, '1') + (/^\[[ xX]\]/.test(text.slice(fencePrefix.length)) ? ':task' : '')
-      if (fencedItem && owner && fenceKind === owner.kind && owner.depth === quoteDepth && indent === owner.column && pendingAttributes.length && holdItemAttributes) {
-        const attached = pendingAttributes.filter(attribute => attribute.depth === quoteDepth && attribute.owner >= indent)
-        for (const attribute of attached) attribute.output[attribute.row] = '> '.repeat(attribute.depth).trimEnd()
-        pendingAttributes = pendingAttributes.filter(attribute => !attached.includes(attribute))
-        if (attached.length) {
-          const attributes = '{' + attached.map(attribute => attribute.attributes.slice(1, -1)).join(' ') + '}'
-          while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '') out.pop()
-          out.push(quoteForCarve().trimEnd(), quoteForCarve() + holdItemAttributes(attributes), quoteForCarve().trimEnd())
-        }
-      } else if (fencedItem && pendingAttributes.length) {
-        for (const attribute of pendingAttributes) attribute.output[attribute.row] = quoteForCarve() + ' '.repeat(indent) + attribute.attributes
-        pendingAttributes = []
-      }
+    if ((fences[n] !== original || row) && !(pendingAttributes.length && item)) {
       if (row && item) {
         nativeRemainder = raw.slice(0, indent) + compactDjotListPrefix(text)
         opaqueQuoteOwner = { depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length }
@@ -468,7 +451,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       depth = quoteDepth
       quoteBoundary = quoteForCarve().trimEnd()
     }
-    if (view.trim() === '') {
+    if (view.trim() === '' && !(pendingAttributes.length && item)) {
       out.push(originalForCarve())
       paragraph = !headingMarker && !/^(?:(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+)?\[[^\]\n]+\]:/.test(text)
       blank = false
@@ -539,7 +522,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         blank = false
         continue
       }
-      const kind = (item[1] ?? item[2]!.replace(/[0-9A-Za-z]+/, '1')) + (/^\[[ xX]\]/.test(text.slice(item[0].length - 1)) ? ':task' : '')
+      const kind = (item[1] ?? item[2]!.replace(/[0-9A-Za-z]+/, '1')) + (item[1] && /^\[[ xX]\][ \t]+/.test(text.slice(item[0].length - 1)) ? ':task' : '')
       let context = parent
       const nested = parent && indent > parent.column
       if (!parent || nested) {
@@ -570,17 +553,17 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       headingMarker = ''
       const itemOwned = parent && !nested && kind === priorKind
       const attached = carriedAttributes.filter(attribute => itemOwned && attribute.depth === quoteDepth && attribute.owner >= indent)
+      const attachedSet = new Set(attached)
       for (const attribute of carriedAttributes) {
-        if (!attached.includes(attribute)) out.push(quoteForCarve() + ' '.repeat(context!.target) + attribute.attributes)
+        if (!attachedSet.has(attribute)) out.push(quoteForCarve() + ' '.repeat(context!.target) + attribute.attributes)
       }
-      let writtenWithAttributes = written
       if (attached.length && holdItemAttributes) {
-        while (out.length > 1 && out.at(-1)!.replace(/>/g, '').trim() === '' && out.at(-2)!.replace(/>/g, '').trim() === '') out.pop()
+        while (out.length && out.at(-1)!.replace(/>/g, '').trim() === '') out.pop()
         const attributes = '{' + attached.map(attribute => attribute.attributes.slice(1, -1)).join(' ') + '}'
-        const prefix = /^(?:[-*+]|[^ \t]+)[ \t]+(?:\[[ xX]\][ \t]+)?/.exec(written)![0]
-        writtenWithAttributes = prefix + holdItemAttributes(attributes) + written.slice(prefix.length)
+        if (context!.loose) out.push(quoteForCarve().trimEnd())
+        out.push(quoteForCarve() + ' '.repeat(context!.target) + holdItemAttributes(attributes), quoteForCarve().trimEnd())
       }
-      out.push(quoteForCarve() + ' '.repeat(context!.target) + writtenWithAttributes)
+      out.push(quoteForCarve() + ' '.repeat(context!.target) + written)
       const body = text.slice(item[0].length - 1)
       const itemHeading = /^(#{1,6})(?:[ \t]+|$)/.exec(body)
       headingMarker = itemHeading?.[1] ?? ''
@@ -604,7 +587,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       }
       const quoteBody = itemQuote?.body ?? ''
       const itemAttributes = itemBody.startsWith('{') ? readAttributes(itemBody, 0) : undefined
-      paragraph = !emptyItem && !itemDiv && !itemHeading && itemAttributes?.end !== itemBody.length && !/^\[(?!\^)[^\]\n]+\]:/.test(itemBody) && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
+      paragraph = !emptyItem && !row && !rawFencedItem && !itemDiv && !itemHeading && itemAttributes?.end !== itemBody.length && !/^\[(?!\^)[^\]\n]+\]:/.test(itemBody) && !(itemQuote?.depth && (quoteBody === '' || /^\[[^\]\n]*\]:/.test(quoteBody) || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|(?:[*-][ \t]*){3,}$)/.test(quoteBody)))
       blank = !!itemDiv
       continue
     }

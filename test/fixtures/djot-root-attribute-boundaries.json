@@ -431,5 +431,81 @@
         }
       ]
     }
+  },
+  {
+    "source": "para\n> x\n> - a\n>\n>   {.x}\n>\n> - b",
+    "html": "<p>para\n&gt; x\n&gt; - a\n&gt;\n&gt;   \n&gt;\n&gt; - b</p>\n"
+  },
+  {
+    "source": "> {.a}\n>\n\np",
+    "html": "<blockquote>\n</blockquote>\n<p class=\"a\">p</p>\n"
+  },
+  {
+    "source": "> {.a}\n\n> p",
+    "html": "<blockquote>\n</blockquote>\n<blockquote class=\"a\">\n<p>p</p>\n</blockquote>\n"
+  },
+  {
+    "source": "> > {.a}\n\n> p",
+    "html": "<blockquote>\n<blockquote>\n</blockquote>\n</blockquote>\n<blockquote class=\"a\">\n<p>p</p>\n</blockquote>\n"
+  },
+  {
+    "source": ">  {.a}\n\np",
+    "html": "<blockquote>\n</blockquote>\n<p class=\"a\">p</p>\n"
+  },
+  {
+    "source": "- x\n\n  > {.a}\n\n  p",
+    "html": "<ul>\n<li>\n<p>x</p>\n<blockquote>\n</blockquote>\n<p class=\"a\">p</p>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "> - x\n>\n>   > {.a}\n>\n>   p",
+    "html": "<blockquote>\n<ul>\n<li>\n<p>x</p>\n<blockquote>\n</blockquote>\n<p class=\"a\">p</p>\n</li>\n</ul>\n</blockquote>\n"
+  },
+  {
+    "source": "1. a\n2. [ ] b\n3. c",
+    "html": "<ol>\n<li>\na\n</li>\n<li>\n[ ] b\n</li>\n<li>\nc\n</li>\n</ol>\n"
+  },
+  {
+    "source": "- a\n- [x](https://e.com) link",
+    "html": "<ul>\n<li>\na\n</li>\n<li>\n<a href=\"https://e.com\">x</a> link\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- a\n- [x]y",
+    "html": "<ul>\n<li>\na\n</li>\n<li>\n[x]y\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- x\n- [ ] y",
+    "html": "<ul>\n<li>\nx\n</li>\n</ul>\n<ul class=\"task-list\">\n<li>\n<input disabled=\"\" type=\"checkbox\"/>\ny\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- x\n\n  {.a}\n\n- | t |\n\n- y",
+    "html": "<ul>\n<li>\n<p>x</p>\n</li>\n<li class=\"a\">\n<table>\n<tr>\n<td>t</td>\n</tr>\n</table>\n</li>\n<li>\n<p>y</p>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- x\n\n  {.a}\n\n  | ``` |\n\n- y",
+    "html": "<ul>\n<li>\n<p>x</p>\n<p class=\"a\">| <code> |</code></p>\n</li>\n<li>\n<p>y</p>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- outer\n\n  - inner\n\n    {.a}\n\n- ```\n  _c_\n  ```",
+    "html": "<ul>\n<li>\nouter\n<ul>\n<li>\n<p>inner</p>\n</li>\n</ul>\n</li>\n<li class=\"a\">\n<pre><code>_c_\n</code></pre>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- x\n\n  {.a}\n\n{.b}\n\n- y",
+    "html": "<ul>\n<li>\n<p>x</p>\n</li>\n</ul>\n<ul class=\"a b\">\n<li>\ny\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- x\n\n  {#one}\n\n{#two}\n\n- y",
+    "html": "<ul>\n<li>\n<p>x</p>\n</li>\n</ul>\n<ul id=\"two\">\n<li>\ny\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- x\n\n  {.a}\n\n- ::: d\n  y\n  :::\n\n- z",
+    "html": "<ul>\n<li>\n<p>x</p>\n</li>\n<li class=\"a\">\n<div class=\"d\">\n<p>y</p>\n</div>\n</li>\n<li>\n<p>z</p>\n</li>\n</ul>\n"
+  },
+  {
+    "source": "- x\n\n  {.a}\n\n- [r]: /u\n\n- y\n\n[z][r]",
+    "html": "<ul>\n<li>\n<p>x</p>\n</li>\n<li class=\"a\">\n</li>\n<li>\n<p>y</p>\n</li>\n</ul>\n<p><a href=\"/u\">z</a></p>\n"
+  },
+  {
+    "source": "- [ ] ```\n        _c_\n  ```",
+    "html": "<ul class=\"task-list\">\n<li>\n<input disabled=\"\" type=\"checkbox\"/>\n<pre><code>  _c_\n</code></pre>\n</li>\n</ul>\n"
   }
 ]

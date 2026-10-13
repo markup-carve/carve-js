@@ -875,21 +875,43 @@ function carryDjotAttributesAcrossQuoteExits(source: string): string {
     const prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0]
     const body = line.slice(prefix.length), indent = /^[ \t]*/.exec(body)![0].length
     const attrs = mask[index]![prefix.length + indent] === '{' ? readAttributes(body, indent) : undefined
-    return { prefix, depth: (prefix.match(/>/g) ?? []).length, body, indent, attributes: attrs?.end === body.trimEnd().length }
+    return { prefix, depth: (prefix.match(/>/g) ?? []).length, body, indent, attributes: attrs?.end === body.trimEnd().length, continued: false, listOwned: false }
   })
-  let followingDepth: number | undefined
+  const listColumns = new Map<number, number[]>()
+  for (let index = 0; index < contexts.length; index++) {
+    const context = contexts[index]!
+    if (context.body.trim() === '') continue
+    const columns = listColumns.get(context.depth) ?? []
+    if (/^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.test(context.body.slice(context.indent))) {
+      while (columns.length && columns.at(-1)! >= context.indent) columns.pop()
+      columns.push(context.indent)
+      listColumns.set(context.depth, columns)
+    }
+    if (context.attributes) {
+      context.continued = continuesParagraph(source, offsets[index]! + context.prefix.length + context.indent)
+      context.listOwned = columns.some(column => column < context.indent)
+    } else if (context.indent <= (columns.at(-1) ?? -1) && !/^(?:[-*+]|[^ \t]+[.)])[ \t]+/.test(context.body.slice(context.indent))) listColumns.delete(context.depth)
+  }
+  const moved = new Map<number, string[]>()
+  let following: number | undefined, destinationDepth: number | undefined
   for (let index = lines.length - 1; index >= 0; index--) {
     const context = contexts[index]!
     if (context.attributes) {
-      if (context.indent === 0 && context.depth > (followingDepth ?? context.depth) &&
-          !continuesParagraph(source, offsets[index]! + context.prefix.length)) {
-        const previous = contexts[index - 1]
-        const precedingMove = previous?.attributes && previous.indent === 0 && previous.depth === context.depth && !continuesParagraph(source, offsets[index - 1]! + previous.prefix.length)
-        lines[index] = (precedingMove ? '' : context.prefix.trimEnd() + '\n') + '> '.repeat(followingDepth!) + context.body
+      if (following !== undefined && destinationDepth !== undefined && context.depth > destinationDepth && !context.continued && !context.listOwned) {
+        const target = lines[following]!
+        let end = 0
+        for (let level = 0; level < destinationDepth; level++) end += /^[ \t]*>(?:[ \t]|$)/.exec(target.slice(end))![0].length
+        end += /^[ \t]*/.exec(target.slice(end))![0].length
+        const attributes = moved.get(following) ?? []
+        attributes.push(target.slice(0, end) + context.body.slice(context.indent))
+        moved.set(following, attributes)
+        lines[index] = context.prefix.trimEnd()
       }
-    } else if (context.body.trim() !== '') followingDepth = context.depth
+    } else if (context.body.trim() === '') {
+      if (destinationDepth !== undefined) destinationDepth = Math.min(destinationDepth, context.depth)
+    } else { following = index; destinationDepth = context.depth }
   }
-  return lines.join('\n')
+  return lines.flatMap((line, index) => [...(moved.get(index)?.reverse() ?? []), line]).join('\n')
 }
 
 function normalizeDjotAttributeLines(source: string): string {

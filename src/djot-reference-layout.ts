@@ -79,6 +79,12 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   const lines = source.split('\n')
   let definitionOffset = 0
   const offsets = lines.map(line => { const at = definitionOffset; definitionOffset += line.length + 1; return at })
+  const attributeContinues = new Map<number, boolean>()
+  for (let index = 0; index < lines.length; index++) {
+    const start = contentStart(lines[index]!)
+    const content = lines[index]!.slice(start)
+    if (content.startsWith('{') && readAttributes(content, 0)?.end === content.length) attributeContinues.set(index, continuesParagraph(source, offsets[index]! + start))
+  }
   const definitions = new Map<string, { target: string; attrs: string; slots: Map<string, string[]>; line: number; first: number }>()
   const definitionMask = referenceMask(source).split('\n')
   const definitionLines = new Set<number>()
@@ -100,7 +106,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       const preceding = lines[at]!.slice(precedingStart),
         parsed = readAttributes(preceding, 0)
       if (preceding.trim() === '') continue
-      if (parsed?.end !== preceding.length || (!/[-*+.):]/.test(precedingPrefix) && continuesParagraph(source, offsets[at]! + precedingStart))) break
+      if (parsed?.end !== preceding.length || (!/[-*+.):]/.test(precedingPrefix) && attributeContinues.get(at) === true)) break
       attrs.push(preceding)
       first = at
     }
