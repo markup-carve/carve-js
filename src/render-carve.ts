@@ -2419,7 +2419,7 @@ function markVerbatimCellWraps(content: string, cellWraps: readonly VerbatimCell
     if (wrap.offset <= previous || (chars[wrap.offset] !== ' ' && wrap.offset !== 0 && wrap.offset !== chars.length)) {
       throw new SourceUnspellableError(nodeType, 'a cellWraps offset does not name a joining space in ascending order')
     }
-    const marker = `\u0002${wrap.row ?? 0},${wrap.line}\u0003`
+    const marker = `\u0002${wrap.row ?? 0},${wrap.line},${wrap.col ?? 0}\u0003`
     if (wrap.offset === chars.length) trailing = marker
     else if (wrap.offset === 0 && chars[0] !== ' ') leading = marker
     else chars[wrap.offset] = marker
@@ -3820,14 +3820,21 @@ class CarveRenderSession {
         // cell marker would be a second spelling of it and the bytes would not
         // be the ones the author wrote. Both re-parse to the same alignment.
         const colonSpelled = authored !== undefined && rowIndex === 0 && cellIndex < node.separatorWidths!.length
-        const rendered = this.renderTableCell(cell, ctx, asHeader, colonSpelled)
-        const marker = /\u0002([0-9]+),([0-9]+)\u0003/g
+        let rendered = this.renderTableCell(cell, ctx, asHeader, colonSpelled)
+        if (cell.span && cell.children?.length) {
+          if (!row.continuationLines) throw new SourceUnspellableError('table_cell', 'a span cell with text needs a continuation line', cell)
+          const textCell = { ...cell }
+          delete textCell.span
+          const text = this.renderTableCell(textCell, ctx, false, false).trim()
+          rendered += `\u00020,1,0\u0003${text}`
+        }
+        const marker = /\u0002([0-9]+),([0-9]+),([0-9]+)\u0003/g
         const firstMarker = marker.exec(rendered)
         if (!firstMarker) {
           cells.push(rendered)
           return
         }
-        cells.push(`${rendered.slice(0, firstMarker.index)} `)
+        cells.push(cell.span ? rendered.slice(0, firstMarker.index) : `${rendered.slice(0, firstMarker.index)} `)
         let current: RegExpExecArray | null = firstMarker
         while (current) {
           const start = marker.lastIndex
@@ -3838,11 +3845,9 @@ class CarveRenderSession {
           const line = continuations[targetRow]?.[targetLine]
           if (!line || cellIndex >= line.length) throw new SourceUnspellableError('table_row', 'cell_wrap points outside its continuation row', row)
           const part = rendered.slice(start, end)
-          // A colspan marker may carry another fragment into this cell on the
-          // same continuation line. The schema records its row and line but no
-          // column, so place successive fragments in successive free slots.
-          const slot = line.findIndex((value, index) => index >= cellIndex && value === ' ')
-          if (slot < 0) throw new SourceUnspellableError('table_row', 'cell_wrap has no free continuation cell', row)
+          const col = Number(current[3])
+          const slot = col ? cellIndex + col : line.findIndex((value, index) => index >= cellIndex && value === ' ')
+          if (slot < 0 || slot >= line.length || line[slot] !== ' ') throw new SourceUnspellableError('table_row', 'cell_wrap has no free continuation cell', row)
           line[slot] = padCell('', next ? part : part.endsWith(' ') ? part.slice(0, -1) : part)
           current = next ?? null
         }
@@ -4522,7 +4527,7 @@ class CarveRenderSession {
       case 'soft_break':
         return '\n'
       case 'cell_wrap':
-        return ctx.tableCellDepth > 0 ? `\u0002${node.row ?? 0},${node.line}\u0003` : ' '
+        return ctx.tableCellDepth > 0 ? `\u0002${node.row ?? 0},${node.line},${node.col ?? 0}\u0003` : ' '
       case 'hard_break':
         return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
       case 'insert':

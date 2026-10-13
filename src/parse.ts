@@ -6773,7 +6773,7 @@ interface RawCell {
   joins?: Array<{ frag: string; at: FragmentPlace | null; marker: FragmentPlace | null; sep: FragmentPlace | null; line: number; rowIndex: number }>
   /** The `+` of the continuation line the last fragment came from. */
   lastMarker?: number
-  wraps?: Array<{ offset: number; line: number; row?: number; pos?: Position }>
+  wraps?: Array<{ offset: number; line: number; row?: number; col?: number; pos?: Position }>
   /** A later row joins into this cell, so its row cannot contain every child span. */
   crossRowJoin?: boolean
 }
@@ -6785,7 +6785,7 @@ interface FragmentPlace {
 }
 
 /** Appends one `+` continuation fragment to a cell's collected source. */
-function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, line?: number, row?: number, marker?: FragmentPlace | null, sep?: FragmentPlace | null): void {
+function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, line?: number, row?: number, marker?: FragmentPlace | null, sep?: FragmentPlace | null, col?: number): void {
   const fragStart = target.raw ? target.raw.length + 1 : 0
   // A second fragment from the same `+` line joins across that line's own pipe,
   // so its marker is the pipe and not the `+` the first join already covers.
@@ -6794,7 +6794,7 @@ function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null, l
   else delete target.lastMarker
   if (sameLine) marker = sep ?? null
   if (target.raw && line !== undefined) (target.wraps ??= []).push({
-    offset: fragStart - 1, line, ...(row ? { row } : {}),
+    offset: fragStart - 1, line, ...(row ? { row } : {}), ...(col !== undefined ? { col } : {}),
     ...(marker ? { pos: {
       startLine: marker.line, endLine: marker.line,
       startColumn: marker.column, endColumn: marker.column + 1,
@@ -9272,7 +9272,7 @@ interface InlineSource {
    * also carries markup.
    */
   rangeShift?: number
-  cellWraps?: ReadonlyMap<number, { line: number; row?: number; pos?: Position }>
+  cellWraps?: ReadonlyMap<number, { line: number; row?: number; col?: number; pos?: Position }>
   wrapShift?: number
 }
 
@@ -15484,13 +15484,12 @@ class ParseSession {
       })
     }
     if (rawRows.some((rc) => rc.some((c) => c.joins))) {
-      // A marker's continuation text joins the cell it resolves into. A blocked
-      // marker is a cell of its own: it renders no marker, and the text joined
-      // to it is its content (T5, T6, carve#3151).
+      // A blocked marker remains a span cell and holds its joined text.
       const grid = rawRows.map((rc, rowIndex) => rc.map((cell) => ({ cell, rowIndex, rowspan: 1, colspan: 1, skip: false })))
+      const blocked = new Set<RawCell>()
       const keepBlocked = (cell: RawCell): void => {
-        if (!cell.span) return
-        delete cell.span
+        if (!cell.span || blocked.has(cell)) return
+        blocked.add(cell)
         delete cell.anchors
         delete cell.wraps
         delete cell.lastMarker
@@ -15508,7 +15507,7 @@ class ParseSession {
             marker.cell.crossRowJoin = true
           }
           keepBlocked(origin.cell)
-          for (const { frag, at, marker: point, sep, line, rowIndex } of marker.cell.joins) joinFragment(origin.cell, frag, at, line, rowIndex - origin.rowIndex, point, sep)
+          for (const { frag, at, marker: point, sep, line } of marker.cell.joins) joinFragment(origin.cell, frag, at, line, marker.rowIndex - origin.rowIndex, point, sep, grid[marker.rowIndex]!.indexOf(marker) - grid[origin.rowIndex]!.indexOf(origin))
         },
       )
       for (const row of grid) for (const e of row) if (!e.skip && e.cell.joins?.length) keepBlocked(e.cell)
@@ -15519,9 +15518,9 @@ class ParseSession {
         ...(continuationCounts[idx] ? { continuationLines: continuationCounts[idx] } : {}),
         cells: rc.map((c) => {
           const cellWraps = c.wraps?.length
-            ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.pos ? { pos: wrap.pos } : {}) }]))
+            ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}), ...(wrap.pos ? { pos: wrap.pos } : {}) }]))
             : undefined
-          const children = c.span ? [] : c.anchors?.length
+          const children = c.span && !c.raw ? [] : c.anchors?.length
             ? this.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
                 baseOffset: c.anchors[0]!.offset,
                 startLine: c.anchors[0]!.line,
@@ -16206,19 +16205,19 @@ class ParseSession {
     let codepoints = 0
     if (strippedPadding) {
       const wrap = source.cellWraps.get(start - 1 + shift)
-      if (wrap) (wraps ??= []).push({ offset: 0, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+      if (wrap) (wraps ??= []).push({ offset: 0, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}) })
     }
     for (let j = start; j < start + payload.length; j++) {
       const code = text.charCodeAt(j)
       if (code === 32) {
         const wrap = source.cellWraps.get(j + shift)
-        if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+        if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}) })
       }
       if (code < 0xdc00 || code > 0xdfff || j === start || (text.charCodeAt(j - 1) & 0xfc00) !== 0xd800) codepoints++
     }
     if (strippedPadding) {
       const wrap = source.cellWraps.get(start + payload.length + shift)
-      if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}) })
+      if (wrap) (wraps ??= []).push({ offset: codepoints, line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}) })
     }
     return wraps
   }
@@ -16412,7 +16411,7 @@ class ParseSession {
       const wrap = c === ' ' ? source.cellWraps?.get(i + (source.wrapShift ?? 0)) : undefined
       if (wrap) {
         flush()
-        out.push({ type: 'cell_wrap', line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(this.recordPositions && wrap.pos ? { pos: wrap.pos } : {}) })
+        out.push({ type: 'cell_wrap', line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}), ...(this.recordPositions && wrap.pos ? { pos: wrap.pos } : {}) })
         i++
         continue
       }

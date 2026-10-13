@@ -732,6 +732,7 @@ export interface VerbatimCellWrap {
   offset: number
   line: number
   row?: number
+  col?: number
 }
 
 export interface Link extends BaseNode {
@@ -979,6 +980,7 @@ export interface CellWrap extends BaseNode {
   type: 'cell_wrap'
   line: number
   row?: number
+  col?: number
 }
 
 export interface HardBreak extends BaseNode {
