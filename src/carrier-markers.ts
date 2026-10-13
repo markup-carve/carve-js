@@ -11,6 +11,8 @@ import { renderCarve } from './render-carve.js'
  */
 export const CARRIER_PREFIX = '<!-- carve: '
 export const CARRIER_SUFFIX = ' -->'
+/** What every marker head starts with, a depth-carrying one included. */
+export const CARRIER_HEAD = '<!-- carve:'
 
 /**
  * A `-->` the payload carries becomes `--\>`; a backslash run already sitting
@@ -25,9 +27,21 @@ export function unescapeCarrierPayload(payload: string): string {
   return payload.replace(/--(\\*)\\>/g, (_m, slashes: string) => `--${slashes}>`)
 }
 
-/** Write a payload into a marker line. */
-export function carrierLine(payload: string): string {
-  return payload === '' ? '<!-- carve: -->' : `${CARRIER_PREFIX}${escapeCarrierPayload(payload)}${CARRIER_SUFFIX}`
+/**
+ * Write a payload into a marker line. A depth of 2 or more follows `carve:`
+ * directly; depth 1 keeps the bare head (CARVE-P11-063).
+ */
+export function carrierLine(payload: string, depth = 1): string {
+  const head = depth > 1 ? `${CARRIER_HEAD}${depth}` : CARRIER_HEAD
+  return payload === '' ? `${head} -->` : `${head} ${escapeCarrierPayload(payload)}${CARRIER_SUFFIX}`
+}
+
+/** A marker line's payload and depth, or undefined when the line is not one. */
+export function carrierMarker(line: string): { payload: string; depth: number } | undefined {
+  const head = /^<!-- carve:([2-9]|[1-9][0-9]+)?(?= )/.exec(line)
+  if (head === null) return undefined
+  const payload = carrierPayload(CARRIER_HEAD + line.slice(head[0].length))
+  return payload === undefined ? undefined : { payload, depth: head[1] === undefined ? 1 : Number(head[1]) }
 }
 
 /** The payload a marker line carries, or undefined when the line is not one. */

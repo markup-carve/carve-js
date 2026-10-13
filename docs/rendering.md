@@ -288,10 +288,29 @@ An admonition body.
 container. Programmatically the mode is the `roundtrip` option on
 `carveToMarkdown` and `renderMarkdown`.
 
-A definition list nested inside a carried definition list takes no markers.
-Its visible Markdown stays unchanged, and roundtrip export reports one
-`definition-list-flattened` render loss per nested list, in document order.
-Default export reports no such loss.
+A definition list nested inside another one is carried too. Its markers carry
+its depth right after `carve:`, so the import can tell which list a marker
+belongs to: the outermost list writes a bare `carve:`, a list inside one of its
+definitions writes `carve:2`, and so on. A marker of depth 2 or more with no
+open list one level up makes the set damaged.
+
+```markdown
+<!-- carve: :: Outer -->
+**Outer**
+
+<!-- carve: : -->
+body
+
+<!-- carve:2 :: Inner -->
+**Inner**
+
+<!-- carve:2 : -->
+inner body
+
+<!-- carve:2 -->
+
+<!-- carve: -->
+```
 
 The mode is **off by default**, and the default output is unchanged: a renderer
 with raw HTML turned off shows the comment as text, so the carrier is a choice
