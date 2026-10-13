@@ -4828,8 +4828,13 @@ class Importer {
     if (tag === 'carve-footnote-ref') {
       const label = this.attr(node, 'label') ?? ''
       const inline = this.inlineFootnoteBodies.get(label)
-      if (inline !== undefined) return [{ type: 'inline_footnote', inline }]
-      return [{ type: 'footnote_ref', label }]
+      if (attrs?.keyValues) {
+        delete attrs.keyValues.label
+        if (Object.keys(attrs.keyValues).length === 0) delete attrs.keyValues
+      }
+      const authored = attrs && (attrs.id !== undefined || attrs.classes || attrs.keyValues) ? { attrs } : {}
+      if (inline !== undefined) return [{ type: 'inline_footnote', inline, ...authored }]
+      return [{ type: 'footnote_ref', label, ...authored }]
     }
     if (tag === 'abbr') {
       // A use of an abbreviation the document DEFINED is prose: the expansion
@@ -5805,7 +5810,12 @@ class Importer {
       for (const reference of definition.refs) {
         const site = this.footnoteReferenceSite(reference)
         const replacement = defaultTreeAdapter.createElement(
-          'carve-footnote-ref', p5html.NS.HTML, [{ name: 'label', value: label }],
+          'carve-footnote-ref', p5html.NS.HTML, [
+            { name: 'label', value: label },
+            ...(domTag(reference) === 'sup' ? (domAttrs(site) ?? []).filter(attr =>
+              attr.name !== 'id' && !RESERVED_CARRIER_ATTRIBUTES.has(attr.name.toLowerCase()),
+            ) : []),
+          ],
         )
         replacement.parentNode = domParent(site) ?? null
         this.replaceP5Node(site, replacement)
