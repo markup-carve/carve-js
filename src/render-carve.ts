@@ -3023,12 +3023,15 @@ class CarveRenderSession {
     // and cleared for whatever this node renders inside itself - a definition
     // list inside a blockquote inside a footnote body is at the QUOTE's column,
     // not the body's - and restored so the next sibling still sees it.
+    const previousDescriptionParagraph = this.descriptionParagraph
+    this.descriptionParagraph = this.descriptionBody && ctx.atAnAuthoredBodyColumn && node.type === 'paragraph'
     const atAnAuthoredBodyColumn = ctx.atAnAuthoredBodyColumn
     ctx.atAnAuthoredBodyColumn = false
     try {
       return this.renderBlockBody(node, ctx, atAnAuthoredBodyColumn)
     } finally {
       this.escapeUnit = previous
+      this.descriptionParagraph = previousDescriptionParagraph
       ctx.atAnAuthoredBodyColumn = atAnAuthoredBodyColumn
     }
   }
@@ -3715,9 +3718,14 @@ class CarveRenderSession {
          * escapes the brace and the second is not a block-attribute line - so
          * both keep writing their own text.
          */
-        const written = trimNonNbsp(
-          atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx)),
-        )
+        const outerDescriptionBody = this.descriptionBody
+        this.descriptionBody = true
+        let written: string
+        try {
+          written = trimNonNbsp(atAnAuthoredBodyColumn(ctx, () => this.renderHostedBlocks(def, ctx)))
+        } finally {
+          this.descriptionBody = outerDescriptionBody
+        }
         if (written === '') {
           out.push(`: ${EMPTY_BODY_SENTINEL}`)
 
@@ -4626,10 +4634,12 @@ class CarveRenderSession {
     return undefined
   }
 
+  private descriptionBody = false
+  private descriptionParagraph = false
   private verbatimLineGuardNodes: InlineNode[] = []
 
   private verbatimLineGuardPattern(): string {
-    return `${this.sentinels[6]}(?:g[0-9]+${this.sentinels[6]})?`
+    return `${this.sentinels[6]}(?:[gd][0-9]+${this.sentinels[6]})?`
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
@@ -4639,7 +4649,8 @@ class CarveRenderSession {
     }
     if (ctx.lineBlockDepth > 0 || !written.includes('\n') || !marker.test(written)) return written
     marker.lastIndex = 0
-    const guard = `${this.sentinels[6]}g${this.verbatimLineGuardNodes.push(node) - 1}${this.sentinels[6]}`
+    const ownsDescriptionColumn = this.descriptionParagraph && nodeType === 'code' && /^`{3,}\n/.test(written)
+    const guard = `${this.sentinels[6]}${ownsDescriptionColumn ? 'd' : 'g'}${this.verbatimLineGuardNodes.push(node) - 1}${this.sentinels[6]}`
     return written.replace(marker, `\n${guard}`)
   }
 
@@ -4659,7 +4670,9 @@ class CarveRenderSession {
     if (hidesLineBlockCloser && (nodeType !== 'code' || !canPairFence)) {
       throw new SourceUnspellableError(nodeType, 'a prefixed or suffixed verbatim span cannot hide a line-block closer')
     }
-    const fence = hidesLineBlockCloser ? safeFence(content, 3) : codeSpanFence(content)
+    // Description markers stay at the content column and need a fence run to remain inline.
+    const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
+    const fence = hidesLineBlockCloser || descriptionFence ? safeFence(content, 3) : codeSpanFence(content)
     const needsPad =
       content.startsWith('`') ||
       content.endsWith('`') ||
@@ -4689,7 +4702,8 @@ class CarveRenderSession {
       throw new SourceUnspellableError(nodeType, 'a leading newline loses its padding where the code span cannot run to the end')
     }
     if (hidesLineBlockCloser) content = content.replace(/\n([ \t\u00a0]*)$/, (_, indent: string) => '\n' + indent.replace(/\u00a0/g, ' '))
-    return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
+    const closer = descriptionFence ? `${this.sentinels[6]}${fence}` : fence
+    return needsPad ? `${fence} ${content} ${closer}` : `${fence}${content}${closer}`
   }
 
   private lineBlockLayoutWhitespace(body: string): string {
@@ -4784,7 +4798,8 @@ class CarveRenderSession {
       text
         .replace(new RegExp(`^([ \\t>]*)${this.sentinels[7]}(?=\\[)`, 'gm'), (_match, prefix: string) => prefix + ' ')
         .replaceAll(this.sentinels[7]!, '')
-        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>:\\[\\-*0-9a-zA-Z])`, 'gm'), (_match, prefix: string, marker: string) =>
+        .replace(new RegExp(`^([ \\t>]*)${this.sentinels[6]}d[0-9]+${this.sentinels[6]}`, 'gm'), '$1')
+        .replace(new RegExp(`^([ \\t>]*)${this.verbatimLineGuardPattern()}([>:\\[\\-*0-9a-zA-Z\\x60])`, 'gm'), (_match, prefix: string, marker: string) =>
           (prefix.includes('>') ? prefix.slice(0, prefix.lastIndexOf('>') + 1) + '  ' : ' ') + marker,
         )
         .replace(new RegExp(this.verbatimLineGuardPattern(), 'g'), '')

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml } from '../src/index.js'
 
 it("ignores a closer below the description column", () => {
   const source = `- :: term
@@ -160,4 +160,16 @@ it("retains marker text after unmatched description fences", () => {
     </dl>
   </li>
 </ul>`)
+})
+
+const markerFenceSource = '- :: term\n  : payload\n    ```\n    - child\n```\nafter\n'
+
+it.each([
+  markerFenceSource,
+  markerFenceSource.replace('- :: term', '1. :: term').replace('  : payload', '   : payload').replaceAll('    ', '     '),
+  markerFenceSource.split('\n').slice(0, -1).map(line => `> ${line}`).join('\n') + '\n',
+])('round trips a description fence containing a list marker: %s', source => {
+  const formatted = carveToCarve(source)
+  expect(carveToHtml(formatted)).toBe(carveToHtml(source))
+  expect(carveToCarve(formatted)).toBe(formatted)
 })
