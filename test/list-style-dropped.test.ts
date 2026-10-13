@@ -128,7 +128,7 @@ describe('list-style-dropped on the Markdown target', () => {
     const exported = carveToMarkdownWithReport(source, { roundtrip: true })
     expect(exported.value).toContain('1) two')
     expect(exported.losses).toMatchObject([{
-      code: 'list-delimiter-changed', target: 'markdown', nodeType: 'block', authored: '.', emitted: ')',
+      code: 'list-delimiter-changed', target: 'markdown', nodeType: 'block', delim: '.', emittedDelim: ')',
     }])
     expect(exported.totalLosses).toBe(1)
     expect(carveToMarkdownWithReport('a. one\n\n1) two\n', { roundtrip: true }).losses).toEqual([])
