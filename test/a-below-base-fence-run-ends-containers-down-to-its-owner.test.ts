@@ -114,7 +114,7 @@ describe('a below-base fence run ends containers down to the owner its column se
     [
       'CONTROL: a line at an intermediate column ends it at depth three',
       "- i0\n  - i1\n    - i2\n\n      ```\n      p\n\n    para\nx\n",
-      "<ul>\n  <li>i0\n    <ul>\n      <li><p>i1</p>\n        <ul>\n          <li>i2\n            <pre><code>p\n\n</code></pre>\n          </li>\n        </ul>\n        <p>para\nx</p>\n      </li>\n    </ul>\n  </li>\n</ul>",
+      "<ul>\n  <li>i0\n    <ul>\n      <li><p>i1</p>\n        <ul>\n          <li>i2\n            <pre><code>p\n\n</code></pre>\n          </li>\n        </ul>\n        <p>para</p>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>",
     ],
     [
       'CONTROL: a comment-shaped payload line does not stop the real closer',

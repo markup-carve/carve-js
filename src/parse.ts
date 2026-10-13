@@ -13474,6 +13474,7 @@ class ParseSession {
        * fence-shaped or already inside a descendant's fence, so a body with no
        * such fence walks no indentation run for it.
        */
+      let childLeadComment = false
       const trackDescendantOpaque = (
         line: string,
         opener: string,
@@ -13524,11 +13525,10 @@ class ParseSession {
             closedListFence = false
             return
           }
-          // ANY OTHER LINE BELOW THE BASE IS NOT PAYLOAD. It ends the fence
-          // unterminated and the containers down to its own owner, so the item's
-          // paragraph state is whatever that line leaves. Only a line AT or PAST
-          // the base is the fence's body.
-          if (column < base && !descendantOpaque.markerLine) descendantOpaque = null
+          // A line between the child's column and the base is payload that loses
+          // its prefix (carve#3133); only a line below the child ends the fence,
+          // and that case returned above.
+          if (column < base && !descendantOpaque.markerLine && (child < 0 || childLeadComment)) descendantOpaque = null
           return
         }
         const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
@@ -13697,6 +13697,13 @@ class ParseSession {
         // at `nested[0]`.
         itemSpanScan.opaque = { comment: true, char: '%', run: leadComment }
         itemSpanScan.atBlockStart = false
+      }
+      // The item's tracker cannot see a comment opened on a CHILD's marker line,
+      // `- - %%%`, so a fence-shaped line in that body may look like a descendant
+      // fence. Such a fence keeps ending at a below-base line, as before carve#3133.
+      if (!leadFence && leadComment === undefined && content.includes('%')) {
+        const bottom = markerLineBottomBlock(content, this.markerPrefixMemo(lexer, itemStartLineIndex))
+        childLeadComment = bottom !== content && commentFenceRun(bottom) !== undefined
       }
       const leadColon = colonFenceOpenerLen(content)
       if (leadColon !== null && RE_LINE_BLOCK_OPEN.test(content)) lazyState.literalColon = {width: leadColon, column: 0, sourceLine: lexer.lineNumber(itemStartLineIndex), awaitingBody: true}
