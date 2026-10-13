@@ -1571,6 +1571,12 @@ function convertInline(
         if (!(error instanceof SourceUnspellableError)) throw error
       }
     }
+    // An empty code run is spellable on the final line of its paragraph.
+    if (value === '' && terminal && !table &&
+        /(?:^|\n)[ \t]*$/.test(line.slice(0, offset)) &&
+        /^[ \t]*$/.test(line.slice(offset + match.length))) {
+      return protect('``', referenceSourceText(match, protectedSources))
+    }
     if (value === '' || value.includes('\n') || value.includes('\r')) {
       importLosses.push({
         code: 'raw-code-fallback',
@@ -5138,6 +5144,9 @@ function collectListInlineRun(
     if (!continues && !orderedText && RE_ITEM_LINE.test(line)) break
     if (indent < contentCol) { terminal = !lazyText; break }
 
+    // Star and underscore rules interrupt the paragraph; dashes may be setext.
+    if (RE_MD_THEMATIC.test(text) && !/^[ \t]*-/.test(text)) break
+
     // Leave fenced code blocks inside list items to the main fence handler.
     //
     // Measured from the innermost item that holds the line, not from the
@@ -6638,11 +6647,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         fenceStrip = 0
         shiftBy = 0
         out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol + fenceShift), fenceInfoText))
-        // A blank line before a line that returns to an enclosing item would
-        // make that item loose.
+        // Preserve the absence of a source blank inside this or an enclosing item.
         const next = lines[i + 1]
         const nextIndent = next === undefined ? 0 : indentColumns(next)
-        if (next !== undefined && next.trim() !== '' && !/^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t]|$)/.test(next) && !(nextIndent > 0 && nextIndent < fenceCol)) out.push('')
+        if (next !== undefined && next.trim() !== '' && !/^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t]|$)/.test(next) && !(fenceCol > 0 && nextIndent > 0)) out.push('')
         prevType = 'code_fence'
       } else {
         out.push(dedented)

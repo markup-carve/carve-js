@@ -114,8 +114,11 @@ describe("the Markdown target keeps a list's tightness", () => {
   describe('where the separator carries the meaning', () => {
     const glued = (markdown: string) => renderHtml(parse(markdownToCarve(markdown)))
 
-    it('keeps it above a thematic break, which a paragraph line turns into a setext heading', () => {
-      expect(readBack('- a\n  ---\n').markdown).toBe('- a\n\n  ---\n')
+    it('uses an unambiguous thematic marker under a tight paragraph', () => {
+      const { markdown, list, html } = readBack('- a\n  ---\n')
+      expect(markdown).toBe('- a\n  ***\n')
+      expect(list).toMatchObject({ type: 'list', tight: true })
+      expect(html).toBe(renderHtml(parse('- a\n  ---\n')))
       expect(glued('- a\n  ---\n')).toContain('<h2>a</h2>')
     })
 

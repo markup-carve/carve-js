@@ -4488,6 +4488,18 @@ class Importer {
     nodes.forEach((node, index) => {
       const path = paths?.[index] ?? this.childPath(parentPath, node, index)
       const produced = this.inline(node, path, depths?.[index] ?? depth)
+      const previous = nodes[index - 1]
+      const last = out.at(-1)
+      const terminal = index === nodes.length - 1 || index === nodes.length - 2
+        && nodes[index + 1]?.nodeName === '#text' && /^[ \t\r\n]*$/.test(domValue(nodes[index + 1]!) ?? '')
+      if (terminal && this.cellDepth === 0 && produced.length === 1
+          && produced[0]?.type === 'code' && produced[0].value === ''
+          && previous?.nodeName === '#text' && /\n[ \t]*$/.test(domValue(previous) ?? '')
+          && last?.type === 'text' && last.value.trim() !== '') {
+        // The terminal empty run starts on its own line in the exported paragraph.
+        last.value = last.value.replace(/ +$/, '')
+        out.push({ type: 'soft_break' })
+      }
       for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) {
