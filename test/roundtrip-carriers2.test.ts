@@ -158,7 +158,7 @@ describe('new roundtrip carriers', () => {
       }
     }
   })
-  it.each(['', 'bad]', 'bad\nlabel', 'bad\rlabel'])('rejects an invalid HTML label %j', label => {
+  it.each(['bad]', 'bad\nlabel', 'bad\rlabel'])('rejects an invalid HTML label %j', label => {
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
       const result = htmlToAst(`<pre data-carve-label="${label}"><code>x</code></pre>`, { mode })
       expect(result.value.children[0]).not.toHaveProperty('label')

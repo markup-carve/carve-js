@@ -6647,10 +6647,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         fenceStrip = 0
         shiftBy = 0
         out.push(closeFence(out, fenceOut, ' '.repeat(fenceCol + fenceShift), fenceInfoText))
-        // Preserve the absence of a source blank inside this or an enclosing item.
+        // A following line in the sole enclosing item stays tight. A line in
+        // the same nested item still needs the separator to preserve its blocks.
         const next = lines[i + 1]
         const nextIndent = next === undefined ? 0 : indentColumns(next)
-        if (next !== undefined && next.trim() !== '' && !/^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t]|$)/.test(next) && !(fenceCol > 0 && nextIndent > 0)) out.push('')
+        const nextIsItem = next !== undefined && /^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t]|$)/.test(next)
+        const staysTight = nextIndent > 0 &&
+          (nextIndent < fenceCol || (nextIndent === fenceCol && listCols.length === 1))
+        if (next !== undefined && next.trim() !== '' && !nextIsItem && !staysTight) out.push('')
         prevType = 'code_fence'
       } else {
         out.push(dedented)
