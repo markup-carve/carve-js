@@ -11,6 +11,11 @@ describe('table continuation AST', () => {
     expect(table.rows[0]?.cells[0]?.children).toMatchObject([
       { type: 'strong', children: [{ type: 'text', value: 'bold' }, { type: 'cell_wrap', line: 1 }, { type: 'text', value: 'text' }] },
     ])
+    const strong = table.rows[0]?.cells[0]?.children?.[0]
+    expect(strong?.type === 'strong' ? strong.children[1]?.pos : undefined).toEqual({
+      startLine: 2, endLine: 2, startColumn: 1, endColumn: 2,
+      startOffset: source.indexOf('+'), endOffset: source.indexOf('+') + 1,
+    })
     expect(carveToCarve(source)).toBe(source)
     expect(carveToHtml(source)).toContain('<strong>bold text</strong>')
   })
@@ -28,14 +33,22 @@ describe('table continuation AST', () => {
     expect(table?.type).toBe('table')
     if (table?.type !== 'table') return
     expect(table.rows[1]?.continuationLines).toBe(1)
+    expect(table.rows[0]?.pos).toBeUndefined()
+    expect(table.rows[1]?.pos).toBeUndefined()
     expect(table.rows[0]?.cells[0]?.children).toMatchObject([
       { type: 'text', value: 'a' }, { type: 'cell_wrap', line: 1, row: 1 }, { type: 'text', value: 'more' },
     ])
+    expect(table.rows[0]?.cells[0]?.children?.[1]?.pos).toEqual({
+      startLine: 3, endLine: 3, startColumn: 1, endColumn: 2,
+      startOffset: source.indexOf('+'), endOffset: source.indexOf('+') + 1,
+    })
     expect(carveToCarve(source)).toBe(source)
   })
 
   it('keeps both continuation fragments when a colspan marker joins left', () => {
     const source = '| a | < |\n+ x | y |\n'
+    const table = parse(source).children[0]
+    expect(table?.type === 'table' && table.rows[0]?.pos).toBeDefined()
     expect(carveToCarve(source)).toBe(source)
     expect(carveToHtml(source)).toContain('a x y')
   })
