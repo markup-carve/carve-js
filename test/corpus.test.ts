@@ -66,6 +66,7 @@ const IMPLEMENTED = new Set([
   'a-table-with-no-bodies-keeps-its-head-and-foot',
   'invalid-table-body-metadata-stays-ordinary',
   'a-span-across-bodies-keeps-their-header-semantics',
+  'a-span-never-covers-another-cell',
   'a-head-and-foot-consuming-all-rows-leave-no-implicit-body',
   'explicit-body-counts-include-native-header-cells',
 
@@ -995,23 +996,6 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  [
-    '107-colspan-marker-scans-left-past-a-consumed-cell',
-    {
-      reason: 'carve#3051: a `<` beside a cell that started in an earlier row is BLOCKED, so the span cannot overlap',
-      html: [
-        '<table>',
-        '  <thead>',
-        '    <tr><th scope="col">p</th><th scope="col">q</th><th scope="col">r</th><th scope="col">s</th></tr>',
-        '  </thead>',
-        '  <tbody>',
-        '    <tr><td>a</td><td rowspan="2">b</td><td>c</td><td>d</td></tr>',
-        '    <tr><td>p</td><td></td><td>e</td></tr>',
-        '  </tbody>',
-        '</table>',
-      ].join('\n'),
-    },
-  ],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
