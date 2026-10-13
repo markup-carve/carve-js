@@ -3836,10 +3836,29 @@ class Importer {
     // a cell cannot see that on its own.
     const headerCells = (row: P5Node): P5Node[] =>
       (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th')
+    const listForm = this.listTableForBlockCells && tr.some((row) => headerCells(row).some(holdsBlocks))
+    // A row with no cell that no rowspan reaches is dropped before writing (see
+    // below), so it must not end the run: the header row after it leads.
+    const dropsEmptyRows = this.writing && !listForm
     let leadingHeaderRows = 0
-    for (const row of tr) {
+    // A rowspan stops at its own row group, so coverage resets at a boundary.
+    let coveredThrough = -1
+    let coveringGroup: P5Node | undefined
+    for (const [r, row] of tr.entries()) {
+      if (group.get(row) !== coveringGroup) {
+        coveringGroup = group.get(row)
+        coveredThrough = -1
+      }
       const cells = headerCells(row)
+      if (cells.length === 0 && dropsEmptyRows && r > coveredThrough) {
+        leadingHeaderRows += 1
+        continue
+      }
       if (cells.length === 0 || !cells.every((n) => domTag(n) === 'th')) break
+      for (const cell of cells) {
+        const span = this.spanCount(cell, 'rowspan', 65534, 0)
+        coveredThrough = Math.max(coveredThrough, span === 0 ? Infinity : r + span - 1)
+      }
       leadingHeaderRows += 1
     }
 
@@ -3857,7 +3876,6 @@ class Importer {
       remainingInGroup.set(row, (groupTotals.get(section) ?? 1) - index)
     }
 
-    const listForm = this.listTableForBlockCells && tr.some((row) => headerCells(row).some(holdsBlocks))
     const ownAlignment = new Map<TableCell, Pick<TableCell, 'align' | 'valign'>>()
     const built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>> = tr.map((row, r) =>
       (domChildren(row) ?? []).filter((n) => domTag(n) === 'td' || domTag(n) === 'th').map((cell, c) => {
@@ -3962,10 +3980,11 @@ class Importer {
     const rows = this.spanGrid(tr, built, rowAttrs, path, depth)
     // A row with no cell has no pipe spelling: `|` alone is prose and `||` is
     // one empty cell (CARVE-P9-082), so writing it would invent a cell.
-    if (this.writing && !listForm) {
+    if (dropsEmptyRows) {
       const hadRows = rows.length > 0
       for (let r = rows.length - 1; r >= 0; r--) {
         if (rows[r]!.cells.length > 0) continue
+        if (r < leadingHeaderRows) leadingHeaderRows -= 1
         this.report.add('structure-unspellable', 'Dropped a row with no cells: Carve has no spelling for it', 'warning', `${path}/tr[${r + 1}]`, tr[r]!)
         rows.splice(r, 1)
         group.delete(tr[r]!)

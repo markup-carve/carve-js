@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { htmlToAst, htmlToCarve, parse, renderCarve, SourceUnspellableError, type Document, type InlineNode, type Table, type TableCell, type TableRow } from '../src/index.js'
+import { htmlToAst, htmlToCarve, parse, renderCarve, renderHtml, SourceUnspellableError, type Document, type InlineNode, type Table, type TableCell, type TableRow } from '../src/index.js'
 
 // `|` alone is prose and `||` is one empty cell (CARVE-P9-082), so a row with
 // no cell has no spelling that keeps its cell count. The writer refuses it and
@@ -62,6 +62,20 @@ describe('the HTML importer', () => {
   ])('keeps the %s body counts of the rows that survive', (_, sections, counts) => {
     const written = parse(htmlToCarve(`<table>${sections}</table>`).value).children[0] as Table
     expect(written.rowGroups?.bodies.map((body) => body.bodyRows)).toStrictEqual(counts)
+  })
+
+  it.each([
+    ['above', '<table><tr></tr><tr><th>H</th></tr><tr><td>a</td></tr></table>', '/table[1]/tr[1]', '|= H |\n| a |\n'],
+    ['above, in a head', '<table><thead><tr></tr><tr><th>H</th></tr></thead><tbody><tr><td>a</td></tr></tbody></table>', '/table[1]/tr[1]', '|= H |\n| a |\n'],
+    ['past a full-group rowspan, in the next group', '<table><thead><tr><th rowspan="0">H</th></tr></thead><tbody><tr></tr><tr><th>I</th></tr><tr><td>a</td></tr></tbody></table>', '/table[1]/tr[2]', '{header-rows=1 body-rows=1 body-header-rows=1}\n|= H |\n|= I |\n| a |\n'],
+    ['inside', '<table><tr><th>H</th></tr><tr></tr><tr><th>I</th></tr><tr><td>a</td></tr></table>', '/table[1]/tr[2]', '|= H |\n|= I |\n| a |\n'],
+  ])('leaves the header rows leading when a dropped row sits %s them', (_, html, dropped, carve) => {
+    const imported = htmlToCarve(html)
+    expect(imported.value).toBe(carve)
+    // The same table without the empty row is the oracle.
+    expect(imported.value).toBe(htmlToCarve(html.replace('<tr></tr>', '')).value)
+    expect(imported.report.diagnostics.map((d) => [d.code, d.path])).toStrictEqual([['structure-unspellable', dropped]])
+    expect(renderHtml(parse(imported.value)).split('</thead>')[0]).toContain('<th scope="col">H</th>')
   })
 
   it('keeps the row in the imported AST', () => {
