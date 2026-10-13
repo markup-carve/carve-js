@@ -7448,17 +7448,6 @@ function rebasedColonGroupEnd(
     return opaqueGroupCloses(group, lines, j + 1, column, takenBelowColumn, memo)
   }
   const childCloserMemos = new Map<number, GroupCloserMemo>()
-  // PART 2 "A CLOSER IS REQUIRED": an unclosed fence that would take this
-  // group's closer opens nothing. One forward pointer keeps the lookahead linear.
-  let groupCloserAt = start
-  const groupCloserAhead = (j: number): boolean => {
-    if (groupCloserAt <= j) {
-      groupCloserAt = j + 1
-      while (groupCloserAt < lines.length && !(indentColumns(lines[groupCloserAt]!, base + 1) === base &&
-        RE_ADMONITION_CLOSE.exec(groupLineContent(lines[groupCloserAt]!, base))?.[1]?.length === width)) groupCloserAt++
-    }
-    return groupCloserAt < lines.length
-  }
   for (let j = start + 1; j < lines.length; j++) {
     let candidate = lines[j]!
     let authoredColumn: number | undefined
@@ -7474,8 +7463,7 @@ function rebasedColonGroupEnd(
         if (column < authoredChildColumn && (authoredChildBlank ||
             ((column === authored.at(-1)!.column && lineOpensItemBlock(candidate.trimStart())) ||
               (column > authored.at(-1)!.column && (colonFenceOpenerLen(candidate.trimStart()) !== null ||
-                ((authoredChildBlockBoundary || (childClosed && (childFenceCloses(j)(candidate.trimStart(), column - authoredChildColumn) ||
-                  !groupCloserAhead(j)))) && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
+                ((authoredChildBlockBoundary || childClosed) && opensCodeFence(candidate.trimStart()))))))) authoredChildColumn = -1
         else if (column >= authoredChildColumn && authoredChildState !== undefined) {
           trackItemLazyState(sliceColumns(candidate, authoredChildColumn, true), authoredChildState, childFenceCloses(j))
           // The line block closer still closes its child when an unmatched code
