@@ -7649,10 +7649,10 @@ function rebaseOverindentedBlocks(
             if (close.test(lines[j]!)) break
           }
         } else {
-          for (let j = i + 1; j < lines.length; j++) {
-            end = j
-            if (commentFenceRun(lines[j]!) === comment) break
-          }
+          // An unmatched fence is one comment line and owns no successor (§28).
+          const close = (commentCloser ??= commentCloserLookup(lines))(comment!, i)
+          if (close < 0) continue
+          end = close
         }
         i = end
         continue
