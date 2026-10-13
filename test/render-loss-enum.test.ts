@@ -25,7 +25,7 @@ const schemaCodes = (): string[] => JSON.parse(
   readFileSync(new URL('../spec/resources/render-loss-report.schema.json', import.meta.url), 'utf8'),
 ).properties.losses.items.properties.code.enum
 // carve#3098 adds this code to the published schema after the engine reports it.
-const aheadOfPinCodes = ['list-delimiter-changed']
+const aheadOfPinCodes: string[] = []
 
 /** Every §1d shape at once: a section, a block cell, a labelled equation and an attributed partition. */
 const interchangeOnly = () => ({
@@ -92,7 +92,7 @@ const collidesWithCarrier = (): unknown => ({
 const targets = { carve: renderCarve, markdown: renderMarkdown, plain: renderPlainText, ansi: renderAnsi, html: renderHtml }
 
 describe('the render-loss code enum', () => {
-  it('names six codes in the selected schema', () => {
+  it('names seven codes in the selected schema', () => {
     expect(schemaCodes()).toEqual([
       'raw-format-dropped',
       'ruby-flattened',
@@ -100,6 +100,7 @@ describe('the render-loss code enum', () => {
       'editorial-comment-flattened',
       'carrier-attribute-dropped',
       'list-style-dropped',
+      'list-delimiter-changed',
     ])
   })
 

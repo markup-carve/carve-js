@@ -814,6 +814,8 @@ export const layoutWork = {
 
 class Lexer {
   attachmentBoundaries: Set<number>
+  /** Per document line whose quote chain ends in a lone `+`: text length at each depth to the levels below it. */
+  quoteChainEndsInPlus: Map<number, Map<number, number>>
   prefixMemoLines?: boolean[]
   private storedLines: readonly string[] = []
   private lineView: { lexer: Lexer; start: number; length: number } | undefined
@@ -1122,6 +1124,7 @@ class Lexer {
     inherited?: Lexer,
   ) {
     this.attachmentBoundaries = inherited?.attachmentBoundaries ?? new Set()
+    this.quoteChainEndsInPlus = inherited?.quoteChainEndsInPlus ?? new Map()
     this.abbrDefs = inherited?.abbrDefs ?? new Map()
     this.linkDefs = inherited?.linkDefs ?? new Map()
     this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()
@@ -3887,6 +3890,13 @@ const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean => {
   return level.mode.kind === 'paragraph'
 }
 
+/** How many quotes are open below the one `state` tracks. */
+const openQuoteDepth = (state: BlockQuoteLazyState): number => {
+  let depth = 0
+  for (let mode = state.mode; mode.kind === 'quote'; mode = mode.inner.mode) depth++
+  return depth
+}
+
 const closeBlockQuoteParagraph = (state: BlockQuoteLazyState): void => {
   state.mode = { kind: 'closed' }
 }
@@ -3965,6 +3975,13 @@ function trackBlockQuoteLazyState(
  * terminator the regex's `.*` cannot fail, so the marker alone decides and the
  * rest of the line is not re-read at every level of a deep quote chain.
  */
+/** Whether the last character before trailing spaces and tabs is `+`, without a scan past them. */
+function endsInPlus(text: string): boolean {
+  let end = text.length - 1
+  while (end >= 0 && (text[end] === ' ' || text[end] === '\t' || text[end] === '\n' || text[end] === '\r')) end--
+  return end >= 0 && text[end] === '+'
+}
+
 function quotedLineText(content: string, terminatorFree: boolean): string | null {
   if (!terminatorFree) {
     const quoted = RE_BLOCKQUOTE.exec(content)
@@ -11033,7 +11050,28 @@ class ParseSession {
     let pendingBlankSources: string[] = []
     const noteSpanScan = newCommentSpanScan()
     const lazyState = verbatimOnlyLazyState()
-    trackItemLazyState(m[2]!, lazyState, () => false)
+    // First-block form (`[^a]: +`, as `- +` and `:  +`): a lone `+` as the whole
+    // marker-line content, with a non-blank line at document column 0 below it,
+    // is a marker, and that line's block is the body. An invisible line (a
+    // definition or a comment) is passed over as under `- +`, so a further
+    // footnote definition is no boundary here. Otherwise the `+` stays text.
+    let firstBlockAttached = false
+    const below = lexer.peek()
+    if (/^\+[ \t]*$/.test(m[2]!) && below !== undefined && !isBlankLine(below) && attachesAtDocumentColumnZero(lexer)) {
+      const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+        lexer,
+        (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a),
+      )
+      firstBlockAttached = true
+      bodyLines[0] = ''
+      bodySourceLines[0] = undefined
+      for (const a of attached) {
+        bodyLines.push(a)
+        bodySourceLines.push(a)
+      }
+      bodyLineNumbers.push(...attachedLineNumbers)
+    }
+    if (!firstBlockAttached) trackItemLazyState(m[2]!, lazyState, () => false)
     let retainedBelowComment = false
     while (!lexer.eof()) {
       const ln = lexer.peek()!
@@ -12624,6 +12662,38 @@ class ParseSession {
         const lineIndex = lexer.pos
         lexer.consume()
         const content = quoted
+        // First-block form (`> +`, as `- +` and `:  +`): a lone `+` as the whole
+        // first line of a quote, at any depth, is a marker when a flush-left line
+        // outside the quote follows, and that line's block is the innermost
+        // quote's body. Before a blank, a quoted line or the end it stays text.
+        if (endsInPlus(content) && this.opensFirstBlockQuote(lexer, lineIndex, content, lineIndex === firstLineIndex ? 0 : -1, () => {
+          trackUntracked()
+          return openQuoteDepth(state)
+        })) {
+          const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
+            lexer,
+            (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
+          )
+          if (/^\+[ \t]*$/.test(content)) {
+            if (attached.length > 0) lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
+          } else {
+            // A nested quote keeps its `+` line and receives the block raw behind
+            // it, so its own parse takes this same branch one level down.
+            if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
+            inner.push(content)
+            innerLineNumbers.push(lexer.lineNumber(lineIndex))
+          }
+          for (const attachedLine of attached) inner.push(attachedLine)
+          innerLineNumbers.push(...attachedLineNumbers)
+          if (attached.length > 0) {
+            inner.push('')
+            innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
+          }
+          trackUntracked()
+          closeBlockQuoteParagraph(state)
+          handDown = null
+          continue
+        }
         if (lexer.lineTerminatorFree(lineIndex)) origins.set(inner.length, { text: content, parentIndex: lineIndex, prefix: ln.length - content.length })
         inner.push(content)
         untracked.push([content, lineIndex])
@@ -12916,6 +12986,44 @@ class ParseSession {
     } finally {
       this.activeMatchers = matchers
     }
+  }
+
+  /**
+   * Whether the quote line at `lineIndex` (already consumed, quoted text
+   * `content`) is the first-block form: its quote chain ends in a lone `+`, the
+   * innermost quote opens on this line, and the next line is a non-blank,
+   * unquoted line at document column 0. `openDepth` is how many quotes below
+   * this one are already open (0 on the quote's first line), or -1 to ask
+   * `readOpenDepth` lazily.
+   */
+  private opensFirstBlockQuote(
+    lexer: Lexer,
+    lineIndex: number,
+    content: string,
+    openDepth: number,
+    readOpenDepth: () => number,
+  ): boolean {
+    const next = lexer.peek()
+    if (next === undefined || isBlankLine(next) || quotedLineText(next, lexer.lineTerminatorFree(lexer.pos)) !== null) return false
+    const lineNumber = lexer.lineNumber(lineIndex)
+    let chain = lexer.quoteChainEndsInPlus.get(lineNumber)
+    // A probe that parsed a nested quote first measured a shorter chain.
+    if (chain !== undefined && chain.size > 0 && !chain.has(content.length) && content.length > Math.max(...chain.keys())) chain = undefined
+    if (chain === undefined) {
+      // Asked once per source line: every nested quote's text is a suffix of
+      // this one, so its levels are looked up by length instead of rescanned.
+      const suffixes = [content]
+      for (let deeper = quotedLineText(content, false); deeper !== null; deeper = quotedLineText(deeper, false)) suffixes.push(deeper)
+      chain = new Map()
+      if (/^\+[ \t]*$/.test(suffixes[suffixes.length - 1]!)) {
+        for (let k = 0; k < suffixes.length; k++) chain.set(suffixes[k]!.length, suffixes.length - 1 - k)
+      }
+      lexer.quoteChainEndsInPlus.set(lineNumber, chain)
+    }
+    const levels = chain.get(content.length)
+    if (levels === undefined) return false
+    if (levels === 0 ? openDepth !== 0 : (openDepth < 0 ? readOpenDepth() : openDepth) >= levels) return false
+    return attachesAtDocumentColumnZero(lexer)
   }
 
   private collectAttachedBlock(
