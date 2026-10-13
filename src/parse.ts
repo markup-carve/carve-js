@@ -398,7 +398,7 @@ function isContinuationMarker(line: string): boolean {
   return RE_CONTINUATION_MARKER.test(line)
 }
 
-const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
+const RE_BLOCKQUOTE = /^>(?: (.*)|[\t][ \t]*|)$/
 const RE_VALID_ADMONITION_OPEN = balancedLabelMatcher(
   /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\n]*\]))?[ \t]*$/,
   [4],
@@ -577,7 +577,7 @@ function isLinkDefLine(line: string): boolean {
  * grammar and rejected `[^my note]`, which the parser reads and the exporter
  * writes.
  */
-export const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +([^]+)$/
+export const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:(?=[ \t]*[^ \t]) +([^]+)$/
 
 // A footnote body's own column: the indent §16 requires of a continuation line.
 // The body is dedented by exactly this much, never by the first continuation
@@ -3929,7 +3929,7 @@ function quotedLineText(content: string, terminatorFree: boolean): string | null
     const quoted = RE_BLOCKQUOTE.exec(content)
     return quoted ? (quoted[1] ?? '') : null
   }
-  if (content === '>') return ''
+  if (content === '>' || (content.startsWith('>\t') && isBlankLine(content.slice(1)))) return ''
 
   return content.startsWith('> ') ? content.slice(2) : null
 }
@@ -5204,20 +5204,17 @@ function prefixWalkBound(content: string): number {
   return nl === -1 ? content.length : nl + 1
 }
 
-/**
- * The length of the block quote marker at `from`, or 0 when there is none.
- *
- * `RE_BLOCKQUOTE` takes `>` plus at most one space, so a two-character window
- * already decides it; the window is only ever short when the line itself is,
- * and `>` alone at the end of the line consumes the whole remainder exactly as
- * `quoted[1] ?? ''` did.
- */
+// Read the quote prefix without mistaking a partial window for the end of the line.
 function quotePrefixLength(content: string, from: number, bound: number): number {
-  const window = content.slice(from, Math.min(from + PREFIX_WINDOW, bound))
-  const quoted = RE_BLOCKQUOTE.exec(window)
-  if (!quoted) return 0
-
-  return window.length - (quoted[1]?.length ?? 0)
+  if (content[from] !== '>') return 0
+  if (from + 1 === bound) return 1
+  if (content[from + 1] === ' ') return 2
+  if (content[from + 1] !== '\t') return 0
+  // A tab starts no quote separator unless the entire remainder is line-final layout.
+  for (let at = from + 1; at < bound; at++) {
+    if (content[at] !== ' ' && content[at] !== '\t') return 0
+  }
+  return bound - from
 }
 
 /**
