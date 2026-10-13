@@ -82,14 +82,22 @@ type DjotImageLineOwner = { start: number; end: number; quotes: number; itemColu
 
 function djotImageLineOwners(source: string, mask: string): DjotImageLineOwner[] {
   const imageLines: DjotImageLineOwner[] = []
-  let imageOffset = 0, imageItemColumn = 0, imageItemQuote = 0
+  let imageOffset = 0, imageItemColumn = 0, imageItemQuote = 0, imageBlank = false
   const imageDivs: Array<{ width: number; depth: number; column: number }> = []
   const imageOwnerMarker = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)|:)[ \t]+/
   for (const line of source.split('\n')) {
     const contentStart = djotContentStart(line)
     const [depth, body] = quoted(line), text = body.replace(/^[ \t]*/, ''), indent = body.length - text.length
+    let itemBody = line
+    for (let quote = 0; quote < imageItemQuote; quote++) {
+      const prefix = /^[ \t]*>(?:[ \t]|$)/.exec(itemBody)
+      if (!prefix) break
+      itemBody = itemBody.slice(prefix[0].length)
+    }
+    const ownerIndent = /^[ \t]*/.exec(itemBody)![0].length
     if (imageOwnerMarker.test(text)) { imageItemColumn = indent + 1; imageItemQuote = depth }
-    else if (text && (depth < imageItemQuote || depth === imageItemQuote && indent < imageItemColumn && /^(?:#{1,6} |:{3,}|[-*+] |\{|\|)/.test(text))) imageItemColumn = 0
+    else if (text && (depth < imageItemQuote || imageBlank && ownerIndent < imageItemColumn || depth === imageItemQuote && indent < imageItemColumn && /^(?:#{1,6} |:{3,}|[-*+] |\{|\|)/.test(text))) imageItemColumn = 0
+    imageBlank = !text
     const delimiter = /^(:{3,})(?:[ \t]+\S.*)?[ \t]*$/.exec(line.slice(contentStart))
     if (delimiter && mask[imageOffset + contentStart] !== ' ') {
       const owner = imageDivs.at(-1)
@@ -827,6 +835,43 @@ function foldHeadingContinuations(source: string): string {
   return result.join('\n')
 }
 
+function djotImageLabelText(normalizedLabel: string, convert: (source: string) => string): string {
+  const whitespace: string[] = [], reserved = new Set<string>()
+  for (const match of normalizedLabel.matchAll(/DJOTALTSCALAR([0-9]+)Z/g)) reserved.add(match[1]!)
+  let serial = 0
+  while (reserved.has(String(serial))) serial++
+  const whitespacePrefix = `DJOTALTSCALAR${serial}Z`
+  const scalar = (value: string): string => { whitespace.push(value); return `${whitespacePrefix}${whitespace.length - 1}Z` }
+  const codeMask = maskDjotOpaque(normalizedLabel, false, { code: false, rawCode: false })
+  const codeEnds = backtickRunEnds(codeMask)
+  const codeChunks: string[] = []
+  const rawFormats = new Map(Array.from(normalizedLabel.matchAll(/\{=[^\s{}`]+\}/g), match => [match.index!, match.index! + match[0].length]))
+  let codeCopied = 0
+  if (codeEnds) for (let at = 0; at < codeMask.length; at++) {
+    if (codeMask[at] !== '`' || isDjotEscaped(normalizedLabel, at)) continue
+    let width = 1
+    while (codeMask[at + width] === '`') width++
+    const end = codeEnds[at]!
+    if (end < 0) { at += width - 1; continue }
+    let value = normalizedLabel.slice(at + width, end - width)
+    const raw = rawFormats.get(end)
+    if (raw) value = value.replace(/^ `/, '`').replace(/` $(?![\s\S])/, '`')
+    else if (value.startsWith(' ') && value.endsWith(' ') && /[^ \t\n\r]/.test(value)) value = value.slice(1, -1)
+    codeChunks.push(normalizedLabel.slice(codeCopied, at), '`' + scalar(value) + '`')
+    codeCopied = raw ?? end
+    at = codeCopied - 1
+  }
+  const codeProtected = codeCopied ? codeChunks.join('') + normalizedLabel.slice(codeCopied) : normalizedLabel
+  const altMask = maskDjotCodeAndDestinations(codeProtected)
+  const blockProtected = codeProtected.replace(/(\n[ \t]*)(#{1,6}(?=[ \t]|$)|>(?=[ \t]|$)|(?:[-*][ \t]*){3,}(?=\n|$)|[-*+](?=[ \t]|$)|:{1,}(?=[ \t]|$)|\||\^(?=[ \t]|$)|%%|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)](?=[ \t]|$))/gm, (all, prefix: string, marker: string, at: number) => altMask[at + prefix.length] === marker[0] ? prefix + scalar(marker) : all)
+  const protectedLabel = blockProtected.replace(/^[ \t\u000b\u000c\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gm, value => /^[ \t]*$/.test(value) ? value : scalar(value))
+  const altDocument = parse(convert(`DJOTALT ${protectedLabel} DJOTEND`).replaceAll('\0U\0', '\0'))
+  return renderDjotImageChildText(altDocument, normalizedLabel.includes('\n'))
+    .replace(/ ?DJOTEND\n?$/, '')
+    .replace(/^DJOTALT ?/, '')
+    .replace(new RegExp(`${whitespacePrefix}(\\d+)Z`, 'g'), (all, index: string) => whitespace[Number(index)] ?? all)
+}
+
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   resetParagraphContext()
@@ -864,6 +909,14 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
   const spans: string[] = []
   const prefix = djotPlaceholderPrefix(body, '\x00DJOTSTRONG')
   const invalidAttributes = escapeInvalidDjotAttributes(carryDjotAttributesAcrossDivClosers(body))
+  const childTextCache = new Map<string, string>()
+  const imageChildText = (label: string): string => {
+    const cached = childTextCache.get(label)
+    if (cached !== undefined) return cached
+    const text = djotImageLabelText(label, source => invalidAttributes.restore(convertDjotInput(source, true)))
+    childTextCache.set(label, text)
+    return text
+  }
   // Carve has no empty footnote body: `[^b]:` alone is a paragraph, not a
   // definition, so an empty Djot body needs a body that renders nothing - a
   // comment. It travels as a NUL token so the text escaper cannot reach it and
@@ -899,23 +952,25 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
   const previousDefinitionLines = new Map<number, string>()
   let definitionOffset = 0, previousDefinitionLine = ''
   for (const line of headingFolded.split('\n')) { previousDefinitionLines.set(definitionOffset, previousDefinitionLine); definitionOffset += line.length + 1; previousDefinitionLine = line }
-  const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!))
+  const definitions = new Set(Array.from(headingFolded.matchAll(/^[ \t]*(?:>[ ]?)*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?\[([^\[\]\n]*)\]:[ \t]/gm)).filter(match => { const previous = (previousDefinitionLines.get(match.index!) ?? '').replace(/^[ \t]*(?:>[ ]?)*/, '').trim(); return collapsedMask[match.index! + match[0].indexOf('[')] === '[' && (previous === '' || /^(?:#{1,6} |`{3,}|~{3,}|:{3,}|\{[ \t.#A-Za-z}%]|\[(?!\^)[^\]]*\]:)/.test(previous)) }).map(match => match[1]!.trim().replace(/[ \t\r\n]+/g, ' ')))
   let collapsedImageLines: DjotImageLineOwner[] | undefined, collapsedImageLine = 0
   const rawFolded = headingFolded.replace(/(!?\[([^\[\]]*)\])\[\]/g, (value: string, label: string, key: string, at: number) => {
     if (collapsedMask[at] === ' ' || key.startsWith('^') && key.length > 1) return value
     if (key.includes('\n')) {
-      if (/\n[ \t]*\n/.test(key) || isDjotEscaped(headingFolded, at)) return value
+      const image = label.startsWith('!') && !isDjotEscaped(headingFolded, at)
+      const bracketAt = at + (label.startsWith('!') ? 1 : 0)
+      if (/\n[ \t]*\n/.test(key) || isDjotEscaped(headingFolded, bracketAt)) return value
       const line = headingFolded.slice(headingFolded.lastIndexOf('\n', at) + 1, at)
       const depth = (line.slice(0, djotContentStart(line)).match(/>/g) ?? []).length
       let layout = djotImageAltLayout(key, depth)
-      if (label.startsWith('!')) {
+      if (image) {
         collapsedImageLines ??= djotImageLineOwners(headingFolded, collapsedMask)
         while (collapsedImageLines[collapsedImageLine]!.end <= at) collapsedImageLine++
         const owner = collapsedImageLines[collapsedImageLine]!
         layout = djotImageAltLayout(key, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div)
         if (!layout.valid) return value
       }
-      key = layout.normalized.replace(/\\\n/g, '\n').trim().replace(/[ \t\r\n]+/g, ' ')
+      key = imageChildText(layout.normalized).trim().replace(/[ \t\r\n]+/g, ' ')
     }
     return definitions.has(key) ? `${label}[${key}]` : value
   })
@@ -937,43 +992,9 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false): str
     if (!altLayout.valid) return image
     const { normalized: normalizedLabel, continuations } = altLayout
     let continuation = 0
-    const whitespace: string[] = [], reserved = new Set<string>()
-    for (const match of normalizedLabel.matchAll(/DJOTALTSCALAR([0-9]+)Z/g)) reserved.add(match[1]!)
-    let serial = 0
-    while (reserved.has(String(serial))) serial++
-    const whitespacePrefix = `DJOTALTSCALAR${serial}Z`
-    const scalar = (value: string): string => { whitespace.push(value); return `${whitespacePrefix}${whitespace.length - 1}Z` }
-    const codeMask = maskDjotOpaque(normalizedLabel, false, { code: false, rawCode: false })
-    const codeEnds = backtickRunEnds(codeMask)
-    const codeChunks: string[] = []
-    const rawFormats = new Map(Array.from(normalizedLabel.matchAll(/\{=[^\s{}`]+\}/g), match => [match.index!, match.index! + match[0].length]))
-    let codeCopied = 0
-    if (codeEnds) for (let at = 0; at < codeMask.length; at++) {
-      if (codeMask[at] !== '`' || isDjotEscaped(normalizedLabel, at)) continue
-      let width = 1
-      while (codeMask[at + width] === '`') width++
-      const end = codeEnds[at]!
-      if (end < 0) { at += width - 1; continue }
-      let value = normalizedLabel.slice(at + width, end - width)
-      const raw = rawFormats.get(end)
-      if (raw) value = value.replace(/^ `/, '`').replace(/` $(?![\s\S])/, '`')
-      else if (value.startsWith(' ') && value.endsWith(' ') && /[^ \t\n\r]/.test(value)) value = value.slice(1, -1)
-      codeChunks.push(normalizedLabel.slice(codeCopied, at), '`' + scalar(value) + '`')
-      codeCopied = raw ?? end
-      at = codeCopied - 1
-    }
-    const codeProtected = codeCopied ? codeChunks.join('') + normalizedLabel.slice(codeCopied) : normalizedLabel
-    const altMask = maskDjotCodeAndDestinations(codeProtected)
-    const blockProtected = codeProtected.replace(/(\n[ \t]*)(#{1,6}(?=[ \t]|$)|>(?=[ \t]|$)|(?:[-*][ \t]*){3,}(?=\n|$)|[-*+](?=[ \t]|$)|:{1,}(?=[ \t]|$)|\||\^(?=[ \t]|$)|%%|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)](?=[ \t]|$))/gm, (all, prefix: string, marker: string, at: number) => altMask[at + prefix.length] === marker[0] ? prefix + scalar(marker) : all)
-    const protectedLabel = blockProtected.replace(/^[ \t\u000b\u000c\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gm, value => /^[ \t]*$/.test(value) ? value : scalar(value))
-    const altDocument = parse(invalidAttributes.restore(convertDjotInput(`DJOTALT ${protectedLabel} DJOTEND`, true)).replaceAll('\0U\0', '\0'))
-    spans.push(
-      escapeImageAlt(renderDjotImageChildText(altDocument, label.includes('\n'))
-        .replace(/ ?DJOTEND\n?$/, '')
-        .replace(/^DJOTALT ?/, '')
-        .replace(new RegExp(`${whitespacePrefix}(\\d+)Z`, 'g'), (all, index: string) => whitespace[Number(index)] ?? all), imageLines[imageLine]!.table)
-        .replace(/\n/g, () => `\n${continuations[continuation++] ?? ''}`),
-    )
+    const plain = imageChildText(normalizedLabel)
+    spans.push(escapeImageAlt(plain, imageLines[imageLine]!.table)
+      .replace(/\n/g, () => `\n${continuations[continuation++] ?? ''}`))
     return `${paragraph}![${prefix}${spans.length - 1}\x00]`
   })
   const wordMask = maskDjotCodeAndDestinations(folded).replace(/\[\^[^\]\n]*\]/g, (value, at: number) => isDjotEscaped(folded, at) ? value : ' '.repeat(value.length))
