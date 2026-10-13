@@ -23,6 +23,7 @@ import { applyAbbreviations, applyLinkDefs } from './inline-resolution.js'
 import { mapInlineChildren, visitInlineChildren } from './inline-children.js'
 import { referenceLink, referenceImage } from './reference-resolution.js'
 import { definitionLinePosition, dropPositions, toCodepointPositions } from './source-positions.js'
+import { resolveSpanGrid } from './table-spans.js'
 import type {
   SmartPunctuation,
   AbbreviationDef,
@@ -6725,6 +6726,41 @@ interface RawCell {
    * reaching across a row boundary are not (markup-carve/carve-js#1153).
    */
   anchors?: AnchorRange[]
+  /** Continuation text on a span marker, joined to its origin after the span walk. */
+  joins?: Array<{ frag: string; at: FragmentPlace | null }>
+}
+
+interface FragmentPlace {
+  offset: number
+  line: number
+  column: number
+}
+
+/** Appends one `+` continuation fragment to a cell's collected source. */
+function joinFragment(target: RawCell, frag: string, at: FragmentPlace | null): void {
+  const fragStart = target.raw ? target.raw.length + 1 : 0
+  target.raw = target.raw ? `${target.raw} ${frag}` : frag
+  // Only the NEW fragment is read; the joining space is not a run
+  // character, so resuming from the cell's own state is exact.
+  target.openRun = openVerbatimRun(frag, target.openRun)
+  // The CELL keeps no span. Its content sits in two column ranges on
+  // non-adjacent lines, and one range covering both would swallow the
+  // neighbouring column's content on the lines between - so cell 1 would
+  // CONTAIN cell 0, and an offset would map to two sibling cells at once.
+  // A construct that is not one contiguous range cannot honestly be one.
+  delete target.pos
+  if (at) {
+    const range: AnchorRange = { from: fragStart, to: fragStart + frag.length, ...at }
+    if (target.anchors) target.anchors.push(range)
+    else target.anchors = [range]
+  }
+  // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
+  // range's `to` is the length `raw` had when it was appended, and the
+  // next fragment starts one past that, so the joining space is already
+  // the only offset between them and an unplaced fragment simply leaves a
+  // wider gap. `to` is inclusive so an exclusive span end may land on it;
+  // the space itself belongs to no range, which is what makes a node
+  // reaching across the boundary unplaceable.
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
@@ -15148,46 +15184,21 @@ class ParseSession {
         const contCanPosition = lexer.hasDocumentOffsets
         splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
           const frag = trimCellPadding(src)
-          let target: RawCell | undefined = lastRaw![idx]
-          if (target?.span === 'rowspan') {
-            // A caret carries this column from an earlier row. Follow a chain of
-            // carets to the cell that owns the text before joining the fragment.
-            let above = rawRows.length - 2
-            while (above >= 0 && rawRows[above]?.[idx]?.span === 'rowspan') above--
-            if (above === 1 && isGfmDelimiterRow(rawRows[1]!) && !isGfmDelimiterRow(rawRows[0]!)) above = 0
-            target = above >= 0 ? rawRows[above]?.[idx] : undefined
-          }
-          if (!frag || !target || target.span) return
-          const fragStart = target.raw ? target.raw.length + 1 : 0
-          target.raw = target.raw ? `${target.raw} ${frag}` : frag
-          // Only the NEW fragment is read; the joining space is not a run
-          // character, so resuming from the cell's own state is exact.
-          target.openRun = openVerbatimRun(frag, target.openRun)
-          // The CELL keeps no span. Its content sits in two column ranges on
-          // non-adjacent lines, and one range covering both would swallow the
-          // neighbouring column's content on the lines between - so cell 1 would
-          // CONTAIN cell 0, and an offset would map to two sibling cells at once.
-          // A construct that is not one contiguous range cannot honestly be one.
-          delete target.pos
+          const target: RawCell | undefined = lastRaw![idx]
+          if (!frag || !target) return
           const within = contCanPosition ? src.indexOf(frag) : -1
-          if (within >= 0 && line.slice(start + within, start + within + frag.length) === frag) {
-            const range: AnchorRange = {
-              from: fragStart,
-              to: fragStart + frag.length,
-              offset: contOffset + start + within,
-              line: contLine,
-              column: contColumn + start + within,
-            }
-            if (target.anchors) target.anchors.push(range)
-            else target.anchors = [range]
+          const at =
+            within >= 0 && line.slice(start + within, start + within + frag.length) === frag
+              ? { offset: contOffset + start + within, line: contLine, column: contColumn + start + within }
+              : null
+          if (target.span) {
+            // The text belongs to the cell the marker resolves into, which only
+            // the span walk below can name (T6).
+            target.openRun = openVerbatimRun(frag, target.openRun)
+            ;(target.joins ??= []).push({ frag, at })
+            return
           }
-          // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
-          // range's `to` is the length `raw` had when it was appended, and the
-          // next fragment starts one past that, so the joining space is already
-          // the only offset between them and an unplaced fragment simply leaves a
-          // wider gap. `to` is inclusive so an exclusive span end may land on it;
-          // the space itself belongs to no range, which is what makes a node
-          // reaching across the boundary unplaceable.
+          joinFragment(target, frag, at)
         })
         continue
       }
@@ -15305,6 +15316,18 @@ class ParseSession {
         const a = aligns[i]
         if (a && !c.align) c.align = a
       })
+    }
+    if (rawRows.some((rc) => rc.some((c) => c.joins))) {
+      // A marker's continuation text joins the cell it resolves into; a blocked
+      // marker renders empty and keeps none of it (T5, T6).
+      const grid = rawRows.map((rc) => rc.map((cell) => ({ cell, rowspan: 1, colspan: 1, skip: false })))
+      resolveSpanGrid(
+        grid,
+        (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
+        (origin, marker) => {
+          for (const { frag, at } of marker.cell.joins ?? []) joinFragment(origin.cell, frag, at)
+        },
+      )
     }
     const rows: TableRow[] = rawRows.map((rc, idx) => {
       const row: TableRow = {
