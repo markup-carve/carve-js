@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { djotToCarve, carveToHtml, parse } from '../src/index.js'
+import pending from './fixtures/djot-pending-attributes.json'
 
 test.each([
   ['{#id} at beginning\n', '<p> at beginning</p>'],
@@ -86,4 +87,20 @@ test('matches native Djot block attribute boundaries', async () => {
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push({ source, converted, actual, expected })
   }
   expect(failures).toEqual([])
+})
+
+const blockHtml = (html: string): string => html.replace(/<\/?tbody>/g, '').replace(/\s+/g, ' ').replace(/> | </g, value => value.trim()).trim()
+
+test.each(pending)('preserves pending block attributes: $source', ({ source, html }) => {
+  expect(blockHtml(carveToHtml(djotToCarve(source)))).toBe(blockHtml(html))
+})
+
+test('keeps a long pending value through chained quote exits', () => {
+  const value = 'v'.repeat(32768)
+  const classes = Array.from({ length: 63 }, (_, index) => `c${index}`)
+  const source = '> '.repeat(64) + `{title="${value}"}\n` + classes.map((name, index) => '> '.repeat(63 - index) + `{.${name}}\n`).join('') + '\nword'
+  const imported = djotToCarve(source)
+  expect(imported.split(value)).toHaveLength(2)
+  expect(imported.length).toBeLessThan(source.length * 2)
+  expect(carveToHtml(imported)).toContain(`<p title="${value}" class="${classes.join(' ')}">word</p>`)
 })

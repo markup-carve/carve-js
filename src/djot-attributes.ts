@@ -5,7 +5,7 @@ const commentEnd = /[%}]/g
 const quoteValue = (value: string, carve = false): string => `"${value.replace(carve ? /[!-\/:-@\[-`{-~]/g : /[\\"]/g, char => '\\' + char)}"`
 
 export function attributeContext(source: string, start: number): { depth: number; indent: number | undefined; minimum: number } {
-  let prefix = source.slice(source.lastIndexOf('\n', start - 1) + 1, start), depth = 0
+  let prefix = source.slice((start > 0 ? source.lastIndexOf('\n', start - 1) : -1) + 1, start), depth = 0
   if (!prefix) return { depth: 0, indent: 0, minimum: 0 }
   const enclosingItem = /^[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+(?=>)/.exec(prefix)
   if (enclosingItem) prefix = prefix.slice(enclosingItem[0].length)
@@ -28,7 +28,7 @@ export function continuesParagraph(source: string, start: number, context = attr
   paragraphSource = source
   if (context.indent === undefined) return true
   const key = `${context.depth}:${context.indent}:${context.minimum}`
-  const from = source.lastIndexOf('\n', start - 1) + 1
+  const from = (start > 0 ? source.lastIndexOf('\n', start - 1) : -1) + 1
   const cached = paragraphStarts.get(from)
   if (cached?.key === key && cached.start === start) return cached.result
   const result = scanParagraph(source, start, key, context)
@@ -37,13 +37,13 @@ export function continuesParagraph(source: string, start: number, context = attr
 }
 
 function scanParagraph(source: string, start: number, key: string, context: ReturnType<typeof attributeContext>): boolean {
-  const marker = /^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+/
-  let end = source.lastIndexOf('\n', start - 1)
+  const marker = /^(?:[ \t]*>(?:[ \t]|$))*[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))[.)]|\((?:[0-9]+|[A-Za-z]|(?:[ivxlcdm]+|[IVXLCDM]+))\))[ \t]+/
+  let end = start > 0 ? source.lastIndexOf('\n', start - 1) : -1
   const prefix = source.slice(end + 1, start)
   if (marker.test(prefix)) return false
   const lines: { raw: string; from: number }[] = []
   while (end >= 0) {
-    const from = source.lastIndexOf('\n', end - 1) + 1
+    const from = (end > 0 ? source.lastIndexOf('\n', end - 1) : -1) + 1
     const raw = source.slice(from, end)
     const depth = raw.match(/^[ \t]*(?:>[ \t]*)+/)?.[0].match(/>/g)?.length ?? 0
     if (depth !== context.depth) return false
@@ -51,7 +51,7 @@ function scanParagraph(source: string, start: number, key: string, context: Retu
       if (lines.length === 0) break
       let parentEnd = from - 1
       while (parentEnd >= 0) {
-        const parentFrom = source.lastIndexOf('\n', parentEnd - 1) + 1
+        const parentFrom = (parentEnd > 0 ? source.lastIndexOf('\n', parentEnd - 1) : -1) + 1
         const parent = source.slice(parentFrom, parentEnd)
         const owner = marker.exec(parent)
         if (owner) {

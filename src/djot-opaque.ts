@@ -1,11 +1,13 @@
 import { plainCommentEnd } from './djot-attributes.js'
-import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries } from './djot-inline-boundaries.js'
+import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries, djotContentStart } from './djot-inline-boundaries.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-word-attributes.js'
 
 export interface DjotOpaqueOptions {
   comments?: boolean
+  commentAttributeBoundaries?: boolean
   code?: boolean
+  rawCode?: boolean
   destinations?: boolean
   inlineDestinations?: boolean
   autolinks?: boolean
@@ -22,20 +24,12 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
   if (source.includes(']:')) {
     for (const line of source.split('\n')) {
       const definition = /^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[(?!\^)[^\]\n]+\](?=:)/.exec(line)
-      if (definition) definitionLines.set(lineOffset + definition[0].length - 1, { start: lineOffset, previous: previousLine.trim() })
+      if (definition) definitionLines.set(lineOffset + definition[0].length - 1, { start: lineOffset, previous: previousLine })
       lineOffset += line.length + 1
       previousLine = line
     }
   }
-  const rawFormats = new Map<number, number>()
-  if (source.includes('{=')) {
-    let rawEnd = -1
-    for (let at = source.length - 1; at >= 0; at--) {
-      if (source[at] === '}') rawEnd = at + 1
-      else if (source[at] === '\n') rawEnd = -1
-      if (source[at] === '{' && source[at + 1] === '=' && rawEnd >= 0) rawFormats.set(at, rawEnd)
-    }
-  }
+  const rawFormats = new Map(Array.from(source.matchAll(/\{=[^\s{}`]+\}/g), match => [match.index!, match.index! + match[0].length]))
   const lastBrace = source.lastIndexOf('}')
   const out = source.split('')
   const hide = (start: number, end: number): void => {
@@ -91,6 +85,10 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
           continue
         }
       }
+      if (attrs && source[at + 1] === '%' && options.comments === false && options.commentAttributeBoundaries === true) {
+        const end = source.indexOf('}', at + 2)
+        if (end >= 0) { at = end; continue }
+      }
       if (attrs) {
         for (const value of source.slice(at, attrs.end).matchAll(/=\s*("(?:\\.|[^"\\])*"|[^\s{}%]+)/g)) {
           const start = at + value.index! + value[0].indexOf(value[1]!)
@@ -109,8 +107,10 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       const definition = definitionLines.get(at)
       if (definition) {
         const { start: lineStart, previous } = definition
-        if (lineStart && previous && !/^(?:#{1,6} |:{3,}|[`~]{3,}|\{|\[[^\]]+\]:|(?:[*-][ \t]*){3,}$)/.test(previous))
-          continue
+        const content = previous.slice(djotContentStart(previous)).trim()
+        const block = previous.replace(/^(?:[ \t]*>(?:[ \t]|$))*[ \t]*/, '').trim()
+        const definitionBoundary = /^(?:#{1,6} |:{3,}|[`~]{3,}|\{|\[[^\]]+\]:|(?:[*-][ \t]*){3,}$)/
+        if (lineStart && content && !definitionBoundary.test(content) && !definitionBoundary.test(block)) continue
         const newline = source.indexOf('\n', at)
         const end = newline < 0 ? source.length : newline
         if (options.destinations !== false) hide(at + 2, end)
@@ -133,7 +133,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
     }
     const rawEnd = rawFormats.get(end)
     const math = source[at - 1] === '$'
-    if (options.code !== false || rawEnd !== undefined || math) hide(at - (math ? 1 : 0), end)
+    if (options.code !== false || rawEnd !== undefined && options.rawCode !== false || math) hide(at - (math ? 1 : 0), end)
     at = (rawEnd ?? end) - 1
   }
   return out.join('')

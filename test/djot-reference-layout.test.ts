@@ -180,3 +180,25 @@ it.each([
   expect(renderHTML(parse(source)).trim()).toBe(expected)
   expect(carveToHtml(djotToCarve(source)).trim()).toBe(expected)
 })
+
+it.each([' ', '', '\t'])('resolves definitions after a footnote with %j padding without a false loss', (padding) => {
+  const source = `[^n]: note\n  more\n[r]:${padding}/u\n\n[x][r]`
+  const result = migrateDjot(source)
+  expect(carveToHtml(result.value)).toContain('href="/u"')
+  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toEqual([])
+})
+
+it('keeps reference-looking text after a paragraph footnote literal', () => {
+  const result = migrateDjot('text\n[^n]: note\n[r]: /u\n\n[x][r]')
+  expect(carveToHtml(result.value)).not.toContain('href="/u"')
+  expect(carveToHtml(result.value)).toContain('[r]: /u')
+  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toHaveLength(1)
+})
+
+it('preserves adjacent footnote references beside a caret-labeled definition', () => {
+  const result = migrateDjot('[^n]:/u\n\n[^n][^n]')
+  const html = carveToHtml(result.value)
+  expect(html.match(/role="doc-noteref"/g)).toHaveLength(2)
+  expect(html).not.toContain('carve-djot-reference')
+  expect(result.report.diagnostics.filter(row => row.message.includes('unresolved Djot reference'))).toEqual([])
+})

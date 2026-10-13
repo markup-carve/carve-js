@@ -49,7 +49,8 @@ function compactDjotListPrefix(text: string): string {
 function deepQuotedItemAttributes(source: string, hold: (attributes: string, block?: boolean) => string): string {
   if (!source.includes('{') || !source.includes('>')) return source
   const lines = source.split('\n'), masks = maskDjotCodeAndDestinations(source).split('\n')
-  const frames = new Map<number, { column: number; start: number; kind: string; attributes: { row: number; wire: string }[] }>()
+  type Frame = { column: number; start: number; kind: string; attributes: { row: number; wire: string }[] }
+  const frames = new Map<number, Frame[]>()
   const before = new Map<number, string[]>()
   const removed = new Set<number>()
   let offset = 0, previousDepth = 0, previousParagraph = false
@@ -63,12 +64,18 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
     if (literalDepth !== undefined && depth <= literalDepth) literalDepth = undefined
     if (depth > previousDepth && previousParagraph) literalDepth = previousDepth
     for (const level of frames.keys()) if (level > depth) frames.delete(level)
+    if (depth > previousDepth) {
+      const owner = frames.get(previousDepth)?.at(-1)
+      if (owner) owner.attributes = []
+    }
     previousDepth = depth
-    previousParagraph = text !== '' && !/^(?:[-*+][ \t]|[0-9A-Za-z]+[.)][ \t]|#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|\[|\{)/.test(visible)
+    previousParagraph = text !== '' && !/^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|\[(?:\^)?[^\]\n]*\]:)/.test(visible) && !(visible.startsWith('{') && readAttributes(body, indent)?.end === body.trimEnd().length)
     if (literalDepth !== undefined && depth > literalDepth) continue
     if (depth < 1 || text === '') continue
     const item = /^([-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(visible)
-    const frame = frames.get(depth)
+    const stack = frames.get(depth) ?? []
+    while (stack.at(-1) && stack.at(-1)!.column > indent) stack.pop()
+    const frame = stack.at(-1)
     if (item) {
       let kind = djotListKind(item[1]!)
       if (/^[-*+]/.test(item[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length))) kind += ':task'
@@ -79,7 +86,7 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
         before.set(row, [prefix + ' '.repeat(indent) + hold(wire), prefix.trimEnd()])
         const prefixEnds = [0]
         for (let level = 0; level < depth; level++) prefixEnds.push(prefixEnds[level]! + /^[ \t]*>(?:[ \t]|$)/.exec(prefix.slice(prefixEnds[level]))![0].length)
-        for (const [ownerDepth, owner] of frames) {
+        for (const [ownerDepth, owners] of frames) for (const owner of owners) {
           if (ownerDepth > depth) continue
           const ownerIndent = /^[ \t]*/.exec(prefix.slice(prefixEnds[ownerDepth]))![0].length
           if (ownerDepth < depth && ownerIndent <= owner.column) continue
@@ -87,11 +94,18 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
           if (!before.has(owner.start)) before.set(owner.start, [startPrefix + ' '.repeat(owner.column) + hold('{loose}', true), startPrefix.trimEnd()])
         }
       }
-      frames.set(depth, { column: indent, start: same !== undefined ? frame!.start : row, kind: same ?? kind, attributes: [] })
+      if (frame && indent === frame.column) stack.pop()
+      stack.push({ column: indent, start: same !== undefined ? frame!.start : row, kind: same ?? kind, attributes: [] })
+      frames.set(depth, stack)
     } else if (visible.startsWith('{')) {
       const attrs = readAttributes(body, indent)
       if (depth >= 2 && frame && indent > frame.column && attrs?.end === body.trimEnd().length && !continuesParagraph(source, at)) frame.attributes.push({ row, wire: attrs.source })
-    } else if (frame && indent <= frame.column) frames.delete(depth)
+      else if (frame && indent <= frame.column) frames.delete(depth)
+      else if (frame && attrs?.end !== body.trimEnd().length) frame.attributes = []
+    } else if (frame) {
+      frame.attributes = []
+      if (indent <= frame.column) frames.delete(depth)
+    }
   }
   return lines.flatMap((line, row) => removed.has(row) ? [] : [...(before.get(row) ?? []), line]).join('\n')
 }
@@ -99,10 +113,10 @@ function deepQuotedItemAttributes(source: string, hold: (attributes: string, blo
 export function djotBlockLayout(source: string, rows: readonly boolean[], isBoundary: (line: string) => boolean = () => false, noteSourceWidths: ReadonlyMap<string, number> = new Map(), emptyNote = '%%%%', holdItemAttributes?: (attributes: string, block?: boolean) => string): string {
   if (holdItemAttributes) {
     const prepared = deepQuotedItemAttributes(source, holdItemAttributes)
-    if (prepared !== source) { source = prepared; rows = djotTableRows(source, maskDjotCodeAndDestinations(source)) }
+    if (prepared !== source) { source = prepared; rows = djotTableRows(source, maskDjotCodeAndDestinations(source, false, true, false)) }
   }
   const lines = source.split('\n')
-  const maskedSource = maskDjotCodeAndDestinations(source)
+  const maskedSource = maskDjotCodeAndDestinations(source, false)
   const hasDefinitionSyntax = /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*:[ \t]/.test(maskedSource)
   const mask = maskedSource.split('\n')
   const divClosers = new Map<number, number[]>()
@@ -258,6 +272,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         continue
       }
     } else if (noteOwner) delete noteOwner.fenceColumn
+    if (/^\[(?!\^)[^\]\n]*\]:/.test(text) && out.at(-1)?.includes(emptyNote)) out.push(quoteForCarve() + ' '.repeat(Math.max(0, indent)))
     if (opaqueQuoteOwner && text && (quoteDepth < opaqueQuoteOwner.depth || (quoteDepth === opaqueQuoteOwner.depth ? indent : quoteColumns[opaqueQuoteOwner.depth] ?? 0) < opaqueQuoteOwner.column + 1)) opaqueQuoteOwner = undefined
     const embeddedParent = lists.at(-1)
     if (text && fences[n] === original && embeddedOwners.length && embeddedParent && quoteDepth > embeddedParent.depth && ownerColumn(embeddedParent) <= embeddedParent.column) {
@@ -422,7 +437,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       row ||
       fences[n] !== original ||
       /^(?:#{1,6}(?:[ \t]|$)|:{3,}|\|)/.test(visible) ||
-      /^(?:[*-][ \t]*){3,}$/.test(visible)
+      (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text))
     // Match authored empty bodies, not spaces masking inline code.
     const emptyItem = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]*$/.test(text) || /^[-*+] \[[ xX]\][ \t]*$/.test(text)
     const item =
@@ -489,7 +504,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         setEmbedded({ depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }, embeddedOwners.filter(owner => owner.depth < quoteDepth).concat({ depth: quoteDepth, column: indent, content: compactDjotListPrefix(item[0].slice(0, -1)).length, sourcePrefix: quote.length, sourceContent: item[0].length - 1 }))
       }
       out.push(originalForCarve())
-      paragraph = !(row || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || /^(?:[*-][ \t]*){3,}$/.test(visible) || /^\[[^\]\n]*\]:/.test(visible) || (!paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
+      paragraph = !(row || fences[n] !== original || /^(?:#{1,6}(?:[ \t]|$)|:{3,})/.test(visible) || (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text)) || /^\[[^\]\n]*\]:/.test(visible) || (!paragraph && visible.startsWith('{') && readAttributes(visible, 0)?.end === visible.length))
       blank = false
       continue
     }
@@ -568,7 +583,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       }
       continue
     }
-    const rule = /^(?:[*-][ \t]*){3,}$/.test(visible)
+    const rule = (/^(?:[*-][ \t]*){3,}$/.test(visible) && /^(?:[*-][ \t]*){3,}$/.test(text))
     if (item && !rule) {
       const carriedAttributes = pendingAttributes
       pendingAttributes = []
@@ -849,22 +864,24 @@ export function djotInlineLayout(source: string): string {
     '{"': '“',
     '"}': '”',
   }
-  let output = ''
+  const output: string[] = []
+  let escaped = false
   for (let i = 0; i < source.length; i++) {
+    escaped = source[i - 1] === '\\' ? !escaped : false
     const commentEnd = comments.get(i)
     if (commentEnd !== undefined && source[commentEnd - 2] !== '%' && source.slice(i + 2, commentEnd).includes('{')) {
-      output += '{%%}'
+      output.push('{%%}')
       i = commentEnd - 1
       continue
     }
-    if (mask[i] !== source[i] || isDjotEscaped(source, i)) {
-      output += source[i]
+    if (mask[i] !== source[i] || escaped) {
+      output.push(source[i]!)
       continue
     }
     if (source[i] === '<') {
       const angle = /^<([^<>\s]+)>/.exec(source.slice(i))
       if (angle && /[^:]@|[A-Za-z]:/.test(angle[1]!)) {
-        output += angle[0]
+        output.push(angle[0])
         i += angle[0].length - 1
         continue
       }
@@ -872,7 +889,7 @@ export function djotInlineLayout(source: string): string {
     if (source[i] === '{') {
       const attrs = readAttributes(source, i)
       if (attrs) {
-        output += source.slice(i, attrs.end)
+        output.push(source.slice(i, attrs.end))
         i = attrs.end - 1
         continue
       }
@@ -880,7 +897,7 @@ export function djotInlineLayout(source: string): string {
     if (source.startsWith('{}', i)) {
       if (mask[i - 1] === ']' && !isDjotEscaped(source, i - 1)) {
         // Empty attributes turn bracketed text into a span.
-        output += '{}'
+        output.push('{}')
         i++
         continue
       }
@@ -888,7 +905,7 @@ export function djotInlineLayout(source: string): string {
       while (source.startsWith('{}', end)) end += 2
       if (/[_*]/.test(source[i - 1] ?? '') && source[i - 1] === source[end]) {
         // Keep the boundary until emphasis pairing can write separate forced spans.
-        output += source.slice(i, end)
+        output.push(source.slice(i, end))
         i = end - 1
         continue
       }
@@ -900,20 +917,24 @@ export function djotInlineLayout(source: string): string {
     }
     const quote = quotes[source.slice(i, i + 2)]
     if (quote) {
-      output += quote
+      output.push(quote)
       i++
       continue
     }
-    if (source[i] === '\\' && /[ \t]$/.test(output) && /^[ \t]*\n/.test(source.slice(i + 1)) && !/^[ \t>]*:{3,}[ \t]+$/.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))) {
-      let end = output.length
-      while (end > 0 && /[ \t]/.test(output[end - 1]!) && !isDjotEscaped(output, end - 1)) end--
-      output = output.slice(0, end) + '\\'
+    if (source[i] === '\\' && (output.at(-1) === ' ' || output.at(-1) === '\t') && /^[ \t]*\n/.test(source.slice(i + 1)) && !/^[ \t>]*:{3,}[ \t]+$/.test(source.slice(source.lastIndexOf('\n', i - 1) + 1, i))) {
+      while (output.at(-1) === ' ' || output.at(-1) === '\t') {
+        let slashes = 0
+        for (let at = output.length - 2; at >= 0 && output[at] === '\\'; at--) slashes++
+        if (slashes % 2) break
+        output.pop()
+      }
+      output.push('\\')
       while (/[ \t]/.test(source[i + 1] ?? '')) i++
       continue
     }
-    output += source[i]
+    output.push(source[i]!)
   }
-  return output
+  return output.join('')
 }
 
 /** Pad closed code spans for Carve's one-space trimming rule. */

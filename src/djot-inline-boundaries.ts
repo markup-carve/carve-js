@@ -11,7 +11,7 @@ export function djotContentStart(line: string): number {
     while (at < line.length) {
       while (line[at] === ' ' || line[at] === '\t') at++
       if (line[at] === '>' && (at + 1 === line.length || line[at + 1] === ' ' || line[at + 1] === '\t')) { at++; continue }
-      const marker = /^(?:\[\^[^\]\n]+\]:[ \t]*|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)|:)[ \t]+)/.exec(line.slice(at))
+      const marker = /^(?:\[\^[^\]\n]+\]:(?:[ \t]+|[\r\n]*$)|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)|:)[ \t]+)/.exec(line.slice(at))
       if (!marker) break
       at += marker[0].length
       if (/^[-*+]/.test(marker[0])) {
@@ -22,12 +22,17 @@ export function djotContentStart(line: string): number {
     return at
   }
 
+export function djotItemPrefix(line: string, at: number): string {
+  return line.slice(0, at).replace(/\[\^[^\]\n]+\]:[ \t]*/g, '')
+}
+
 export function djotTableRows(source: string, mask: string): boolean[] {
   let offset = 0, previousRow = false, previousBlock = true, footnoteColumn = -1, noteContainerColumn = -1, noteContainerDepth = 0, noteItemColumn = -1, noteItemDepth = 0, noteItemPrefix = 0
   let inlineNote: { depth: number; column: number } | undefined
   return source.split('\n').map(line => {
     const at = djotContentStart(line), end = line.trimEnd().length - 1, content = line.slice(at)
-    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(line.slice(0, at))
+    const prefix = line.slice(0, at), noteAt = prefix.indexOf('[^')
+    const opensItem = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+/.test(noteAt < 0 ? prefix : prefix.slice(0, noteAt))
     const closesNote = footnoteColumn >= 0 && at < footnoteColumn
     if (closesNote) { footnoteColumn = -1; noteContainerColumn = -1 }
     const physicalDepth = (/^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0].match(/>/g) ?? []).length
@@ -40,7 +45,6 @@ export function djotTableRows(source: string, mask: string): boolean[] {
     const closesInlineNote = inlineNote && content.trim() !== '' && (physicalDepth < inlineNote.depth || physicalDepth === inlineNote.depth && /^[ \t]*/.exec(line.slice(physicalPrefix.length))![0].length <= inlineNote.column)
     if (closesInlineNote) inlineNote = undefined
     const allowed = previousBlock || previousRow || opensItem || closesNote || closesContainer || closesNoteItem || !!closesInlineNote
-    const noteAt = line.slice(0, at).indexOf('[^')
     const noteHead = noteAt >= 0 && mask[offset + noteAt] === '[' ? /^\[\^[^\]\n]+\]:/.exec(line.slice(noteAt)) : null
     const note = noteHead ? line.slice(0, noteAt + noteHead[0].length) : undefined
     if (note !== undefined && allowed) {
@@ -77,7 +81,7 @@ export function djotTableRows(source: string, mask: string): boolean[] {
 }
 
 
-export function djotInlineBoundaries(source: string, mask: string, codeScopes = false, divClosers?: Map<number, number[]>): number[] {
+export function djotInlineBoundaries(source: string, mask: string, codeScopes = false, divClosers?: Map<number, number[]>, divOwners?: Map<number, { column: number | undefined; depth: number }>): number[] {
   const boundaries: number[] = []
   const rows = djotTableRows(source, mask)
   const items: Array<{ column: number; depth: number }> = []
@@ -132,7 +136,7 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
         codeFence = { ch: ticks[1]![0]!, width: ticks[1]!.length, depth: bodyDepth, itemColumn: startsItem ? indent + marker![0].length : active && depth === active.depth && indent >= active.column ? active.column : undefined }
         previousBlock = false
       } else {
-        const fence = /^(:{3,})[ \t]*[A-Za-z0-9_-]*[ \t]*$/.exec(body)
+        const fence = /^(:{3,})(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$/.exec(body)
         const owner = divs.at(-1)
         const visible = mask[offset + line.length - body.length] === ':'
         if (fence && visible && owner && /^[ \t]*$/.test(body.slice(fence[1]!.length)) &&
@@ -145,6 +149,7 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
             else low = mid + 1
           }
           divClosers?.set(offset, divs.slice(low).map(owner => owner.start).reverse())
+          divOwners?.set(offset, { column: divs[low]!.itemColumn, depth: divs[low]!.itemDepth })
           divs.length = low
           previousBlock = true
         } else if (fence && visible && canOpen) {

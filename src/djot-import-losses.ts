@@ -1,3 +1,4 @@
+import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
@@ -21,6 +22,7 @@ export function djotImportLosses(
   rows: readonly boolean[],
   contentStart: (line: string) => number,
   rawCode: readonly number[] = [],
+  accepted: ReadonlyMap<number, { label: string; target: string; end: number }>,
 ): DjotImportLoss[] {
   const losses: DjotImportLoss[] = []
   const reported = new Set<string>()
@@ -68,15 +70,15 @@ export function djotImportLosses(
   const definitionLines = new Set<number>()
   const headingLines = new Set<number>()
   for (let n = 0; n < lines.length; n++) {
+    if (definitionLines.has(n)) continue
     const line = lines[n]!,
       visible = masked.slice(offsets[n]!, offsets[n]! + line.length).join('')
     const at = contentStart(line),
       content = line.slice(at),
       contentMask = visible.slice(at)
-    const definition = /^\[(?!\^)([^\]\n]+)\]:[ \t]*(\S*)[ \t]*$/.exec(content)
     const previous = lines[n - 1] ?? ''
     const previousContent = previous.slice(contentStart(previous)).trim()
-    const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(line.slice(0, at))
+    const item = /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(djotItemPrefix(line, at))
     const boundary =
       previousContent === '' ||
       rows[n - 1] ||
@@ -85,20 +87,11 @@ export function djotImportLosses(
       /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\{|\[[^\]]+\]:)/.test(previousContent) ||
       /^(?:[*-][ \t]*){3,}$/.test(previousContent) ||
       (contentStart(previous) > at &&
-        /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(previous.slice(0, contentStart(previous))))
-    if (definition && contentMask.startsWith('[') && boundary) {
-      let destination = definition[2]!
-      for (
-        let next = n + 1;
-        next < lines.length &&
-        contentStart(lines[next]!) > at &&
-        /^\S+$/.test(lines[next]!.slice(contentStart(lines[next]!)));
-        next++
-      ) {
-        destination += lines[next]!.slice(contentStart(lines[next]!))
-        definitionLines.add(next)
-      }
-      definitions.set(definitionKey(definition[1]!), destination)
+        /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(djotItemPrefix(previous, contentStart(previous))))
+    const decision = accepted.get(n)
+    if (decision) {
+      for (let next = n + 1; next <= decision.end; next++) definitionLines.add(next)
+      definitions.set(definitionKey(decision.label), decision.target)
       definitionLines.add(n)
       for (let k = offsets[n]!; k < offsets[n]! + line.length; k++) masked[k] = ' '
     }
@@ -112,7 +105,7 @@ export function djotImportLosses(
         const prefix = following.slice(0, contentStart(following))
         if (
           (prefix.match(/>/g) ?? []).length !== (line.slice(0, at).match(/>/g) ?? []).length ||
-          /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(prefix)
+          /(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\))[ \t]+/.test(djotItemPrefix(following, contentStart(following)))
         )
           break
         const part = following.slice(contentStart(following))
@@ -221,7 +214,7 @@ export function djotImportLosses(
     if (source[at] !== ']') continue
     const opener = stack.pop()
     if (opener === undefined) continue
-    if (source[opener.at + 1] === '^') { carryNested(opener.nested); continue }
+    if (source[opener.at + 1] === '^' && at > opener.at + 2) { carryNested(opener.nested); continue }
     const open = opener.at
     const image = source[open - 1] === '!' && !escaped[open - 1]
     let end = at + 1,
