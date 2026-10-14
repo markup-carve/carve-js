@@ -3826,7 +3826,11 @@ class CarveRenderSession {
           const textCell = { ...cell }
           delete textCell.span
           const text = this.renderTableCell(textCell, ctx, false, false).trim()
-          rendered += `\u00020,1,0\u0003${text}`
+          const firstContentLine = cell.children.find(child => child.pos?.startLine !== undefined)?.pos?.startLine
+          const sourceLine = firstContentLine !== undefined && row.pos?.startLine !== undefined
+            ? firstContentLine - row.pos.startLine : 1
+          const continuationLine = sourceLine >= 1 && sourceLine <= row.continuationLines ? sourceLine : 1
+          rendered += `\u00020,${continuationLine},0\u0003${text}`
         }
         const marker = /\u0002([0-9]+),([0-9]+),([0-9]+)\u0003/g
         const firstMarker = marker.exec(rendered)
