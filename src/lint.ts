@@ -2038,6 +2038,13 @@ function collectSilentFailures(
     }
   }
 
+  // The parser also breaks lines at a lone CR, which `lines` does not.
+  const breakLines = source.split(/\r\n|\r|\n/)
+  const breakStart: number[] = []
+  for (let off = 0, i = 0; i < breakLines.length; i++) {
+    breakStart[i] = off
+    off += breakLines[i]!.length + (source.startsWith('\r\n', off + breakLines[i]!.length) ? 2 : 1)
+  }
   for (const table of spanTables) {
     const grid = resolveTableSpans(table.rows)
     for (let r = 0; r < grid.length; r++) {
@@ -2054,7 +2061,7 @@ function collectSilentFailures(
             : 'The cell to its left starts in an earlier row, so widening it would cover cells already placed.'
         const pos = entry.cell.pos
         const line = pos?.startLine ?? entry.row.pos?.startLine ?? table.pos?.startLine ?? 1
-        const sourceLine = lines[line - 1] ?? ''
+        const sourceLine = breakLines[line - 1] ?? ''
         const cellStart = pos?.startOffset === undefined ? undefined : toUtf16(pos.startOffset)
         const cellEnd = pos?.endOffset === undefined ? undefined : toUtf16(pos.endOffset)
         const markerAt = cellStart === undefined || cellEnd === undefined
@@ -2072,16 +2079,18 @@ function collectSilentFailures(
           ? prefixWidth + indent + sourceCell.start + fallbackMarkerAt + 1
           : 0
         const column = markerAt >= 0
-          ? cellStart! + markerAt - (lineStart[line - 1] ?? 0) + 1
+          ? cellStart! + markerAt - (breakStart[line - 1] ?? 0) + 1
           : fallbackColumn
         if (column < 1) continue
-        push(
+        const start = (breakStart[line - 1] ?? 0) + column - 1
+        out.push({
           line,
           column,
-          1,
-          'table-span-marker-blocked',
-          `The "${marker}" span marker cannot extend a cell. ${reason} It renders as a cell of its own; escape it as "\\${marker}" to keep the character as text, or remove it.`,
-        )
+          rule: 'table-span-marker-blocked',
+          start,
+          end: start + 1,
+          message: `The "${marker}" span marker cannot extend a cell. ${reason} It renders as a cell of its own; escape it as "\\${marker}" to keep the character as text, or remove it.`,
+        })
       }
     }
   }
