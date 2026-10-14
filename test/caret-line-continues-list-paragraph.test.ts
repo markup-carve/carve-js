@@ -10,3 +10,7 @@ describe('caret line below an open list paragraph', () => {
     expect(carveToHtml('- a\n# H\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<section id="H">\n  <h1>H</h1>\n</section>')
   })
 })
+
+it('continues a quote paragraph inside a list', () => {
+  expect(carveToHtml('- > a\n^ cap\n')).toBe('<ul>\n  <li>\n    <blockquote><p>a\n^ cap</p></blockquote>\n  </li>\n</ul>')
+})
