@@ -20,7 +20,7 @@ test.each(controls)('resolves a Native image reference: $source', row => {
   const blank = expected.some(image => /\n[ \t]*\n/.test(image.alt ?? ''))
   for (const image of expected) image.alt = image.alt?.replace(/\n(?:[ \t]*\n)+/g, '\n') ?? ''
   expect(images(carveToHtml(result.value))).toEqual(expected)
-  expect(result.report.diagnostics.some(d => /unresolved Djot reference/.test(d.message))).toBe(false)
+  expect(result.report.diagnostics.some(d => /unresolved Djot reference|with an empty destination/.test(d.message))).toBe(false)
   if (blank) expect(result.report.diagnostics.some(d => /image alternative text with a blank line/.test(d.message))).toBe(true)
 })
 
@@ -44,4 +44,9 @@ test('keeps a footnote-shaped label out of image reference resolution', () => {
   const result = migrateDjot('![^a][]\n\n[^a]: note')
   expect(result.value).toContain('[]')
   expect(images(carveToHtml(result.value))).toEqual([])
+})
+
+test('reports an empty destination on the rendered outer image', () => {
+  const result = migrateDjot('![a ![b]() c]()')
+  expect(result.report.diagnostics.some(d => /An image with an empty destination/.test(d.message))).toBe(true)
 })
