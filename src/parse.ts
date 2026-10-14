@@ -10185,6 +10185,10 @@ class ParseSession {
         const rest = marker ? raw.slice(marker.marker) : view
         if (isBlankLine(view)) {
           term = null
+        } else if (term && quotes === term.quotes && RE_ABBR_DEF.test(rest)) {
+          // A term keeps this spelling as text, so it registers no abbreviation.
+          paraState = 'yes'
+          continue
         } else if (term && quotes === term.quotes && col > term.col && markerContentColumn(rest) < 0) {
           if (commentFenceRun(rest) === undefined) {
             if (this.matchLinkDef(rest) !== null) lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
@@ -12496,7 +12500,7 @@ class ParseSession {
             (!lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
-            endsHeadingOrQuote(lexer)
+            (endsHeadingOrQuote(lexer) && !RE_ABBR_DEF.test(next))
           )
             break
           // The term is the other place a framed line becomes text. The frame
