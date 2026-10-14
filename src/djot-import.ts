@@ -1,3 +1,4 @@
+import { djotImageEmptyDestinations } from './djot-image-empty-destinations.js'
 import { importedDjotHeadingTargets } from './djot-heading-targets.js'
 import { genericDjotDivClasses } from './djot-div-classes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
@@ -1067,7 +1068,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     const key = `${omitQuotes ? 1 : 0}:${preserveSourceNuls ? 1 : 0}:${label}`
     const cached = childTextCache.get(key)
     if (cached !== undefined) return cached
-    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes, true, true)), preserveSourceNuls)
+    const text = djotImageLabelText(djotImageEmptyDestinations(djotImageLabelAttributes(label)), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes, true, true)), preserveSourceNuls)
     childTextCache.set(key, text)
     return text
   }
@@ -1137,7 +1138,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     let line = 0
     replaceDjotImageLabels(flatFolded, mask, (image, label, at) => {
       const end = at + image.length
-      if (flatFolded.slice(end, end + 2) !== '[]') return image
+      if (flatFolded.slice(end, end + 2) !== '[]' || label.startsWith('^') && label.length > 1) return image
       while (owners[line]!.end <= at) line++
       const owner = owners[line]!
       const layout = djotImageAltLayout(label, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div)

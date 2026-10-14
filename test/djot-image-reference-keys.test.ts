@@ -39,3 +39,9 @@ test('keeps the loss report for an unsupported collapsed outer link', () => {
   expect(result.report.diagnostics.some(d => /unresolved Djot reference/.test(d.message))).toBe(true)
   expect(result.report.diagnostics.some(d => /link inside another link/.test(d.message))).toBe(true)
 })
+
+test('keeps a footnote-shaped label out of image reference resolution', () => {
+  const result = migrateDjot('![^a][]\n\n[^a]: note')
+  expect(result.value).toContain('[]')
+  expect(images(carveToHtml(result.value))).toEqual([])
+})
