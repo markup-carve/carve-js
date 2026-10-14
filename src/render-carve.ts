@@ -338,26 +338,38 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
  * reference link comes back with an empty href and reports a difference that
  * escaping never caused.
  */
+/** Nodes whose body the parser reads one container level deeper. */
+const NESTING_CONTAINERS: ReadonlySet<string> = new Set([
+  'block_quote', 'list_item', 'table_cell', 'section', 'admonition', 'directive', 'div', 'line_block', 'figure_group',
+])
+
 /**
- * Whether some path through `ast` nests as deep as `MAX_NESTING_DEPTH`.
+ * Whether some node sits as deep in containers as `MAX_NESTING_DEPTH`.
  *
- * Counts every node holding a `children` array, which over-counts the parser's
- * container depth by the leaf block at most; a list's `items` wrapper is skipped
- * because the parser charges a list level once, to the item body. Iterative for
- * the same reason as `collectEscapeUnits`.
+ * Counted in the parser's unit, container ancestors, so inline nesting adds
+ * nothing: a declared carve-out such as a paragraph holding only an image stays
+ * out of the check one level under the cap. A definition's body is a level of
+ * its own. Iterative for the same reason as `collectEscapeUnits`.
  */
 function nestingReachesCap(ast: Document): boolean {
   const stack: Array<[unknown, number]> = [[ast, 0]]
   while (stack.length > 0) {
     const [node, depth] = stack.pop()!
+    if (Array.isArray(node)) {
+      for (const child of node) stack.push([child, depth])
+      continue
+    }
     if (!node || typeof node !== 'object') continue
-    const root = node === ast
     const record = node as Record<string, unknown>
-    const children = root ? record['children'] : record['children'] ?? record['items']
-    if (!Array.isArray(children)) continue
-    const below = root || Array.isArray(record['items']) ? depth : depth + 1
-    if (below >= MAX_NESTING_DEPTH) return true
-    for (const child of children) stack.push([child, below])
+    let below = depth
+    if (typeof record['type'] === 'string') {
+      if (depth >= MAX_NESTING_DEPTH) return true
+      if (NESTING_CONTAINERS.has(record['type'])) below = depth + 1
+    }
+    for (const [key, value] of Object.entries(record)) {
+      if (key === 'attrs' || key === 'pos') continue
+      stack.push([value, key === 'definitions' && Array.isArray(record['terms']) ? below + 1 : below])
+    }
   }
   return false
 }
