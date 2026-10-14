@@ -9,8 +9,15 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-14
+
 ### Fixes
-- The `wikilinks()` extension no longer closes `[[` at a `]]` whose first bracket is escaped (`\]`), so `a [[x\]](u)` renders the core link instead of a wikilink.
+- Markdown import no longer slows down exponentially with deeply nested block quotes (#3096).
+- Djot import preserves empty nested task items and generic DIV classes (#3083, #3090).
+- Djot image alternative text reports blank lines and trailing spaces only when they survive import (#3095).
+- Unresolved references containing NUL no longer select sanitized headings (#3088).
+- The `wikilinks()` extension ignores an escaped bracket when finding a closing `]]` (#3092).
+- Markdown output preserves representable autolinks (#3093).
 
 ## [0.1.11] - 2026-10-14
 
