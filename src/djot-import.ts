@@ -8,7 +8,7 @@ import { attributeContext, continuesParagraph, resetParagraphContext } from './d
 import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { trimEndMatchingEdges, trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
-import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
+import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen, MAX_NESTING_DEPTH } from './parse.js'
 import { renderHtml } from './render-html.js'
 import { renderDjotImageChildText } from './djot-image-child-text.js'
 import { djotCollapsedReferenceText, djotImageLabelAttributes } from './djot-collapsed-reference.js'
@@ -282,7 +282,101 @@ function definitionTermBlockBoundaries(source: string): string {
 }
 
 /** Translate Djot definition-item structure without touching unrelated source. */
-function convertDefinitionLists(source: string, emptyTerm: string): string {
+function convertDefinitionLists(source: string, emptyTerm: string, depth = 0): string {
+  if (depth >= MAX_NESTING_DEPTH) return convertRootDefinitionLists(source, emptyTerm)
+  if (/^[ \t]*(?:>[ \t]*)+(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*:(?:[ \t]|$)/m.test(source)) {
+    const lines = source.split('\n'), masks = maskDjotCodeAndDestinations(source).split('\n')
+    const result: string[] = []
+    for (let at = 0; at < lines.length;) {
+      const quote = /^(>)(?:[ \t]|$)/.exec(lines[at]!)
+      if (!quote || masks[at]![quote[1]!.length - 1] !== '>') {
+        let end = at + 1
+        while (end < lines.length && !/^>/.test(masks[end]!)) end++
+        result.push(convertUnquotedDefinitionLists(lines.slice(at, end).join('\n'), emptyTerm, depth))
+        at = end
+        continue
+      }
+      const nested: string[] = []
+      let termColumn: number | undefined
+      let endsBlock = false
+      let end = at
+      while (end < lines.length) {
+        const prefix = /^>(?:[ \t]|$)/.exec(lines[end]!)
+        if (!prefix || masks[end]![prefix[0].indexOf('>')] !== '>') {
+          const text = lines[end]!.trimStart(), visible = masks[end]!.trimStart()
+          const block = /^(?:#{1,6}(?:[ \t]|$)|>|:(?:[ \t]|$)|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|(?:[*-][ \t]*){3,}$)/.test(visible)
+            || visible.startsWith('|') && text.endsWith('|')
+            || /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(text)
+          if (termColumn === undefined || !text || block) { endsBlock = block; break }
+          nested.push(lines[end]!)
+          end++
+          continue
+        }
+        const child = lines[end]!.slice(prefix[0].length), body = quoted(child)[1]
+        const term = /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*):(?:[ \t]|$)/.exec(body)
+        if (term) termColumn = term[1]!.length
+        else if (!body.trim() || termColumn !== undefined && leadingIndent(body)[0] <= termColumn && /^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(body.trimStart())) termColumn = undefined
+        nested.push(child)
+        end++
+      }
+      result.push(convertDefinitionLists(nested.join('\n'), emptyTerm, depth + 1).split('\n').map(line => quote[1] + (line ? ' ' + line : '')).join('\n'))
+      if (endsBlock) result.push('')
+      at = end
+    }
+    return result.join('\n')
+  }
+  return convertUnquotedDefinitionLists(source, emptyTerm, depth)
+}
+
+function convertUnquotedDefinitionLists(source: string, emptyTerm: string, depth = 0): string {
+  if (/^[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)+:/m.test(source)) {
+    const lines = source.split('\n'), mask = maskDjotCodeAndDestinations(source), masks = mask.split('\n')
+    const boundaries = new Set(djotInlineBoundaries(source, mask, true)), result: string[] = []
+    let offset = 0, start = 0
+    for (let at = 0; at < lines.length; at++) {
+      const line = lines[at]!, item = /^([ \t]*)(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?=(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*:(?:[ \t]|$))/.exec(line)
+      const sourceAt = offset
+      offset += line.length + 1
+      if (!item || masks[at]![item[0].length] !== line[item[0].length] || at !== 0 && !boundaries.has(sourceAt)) continue
+      if (at > start) result.push(convertRootDefinitionLists(lines.slice(start, at).join('\n'), emptyTerm))
+      const column = leadingIndent(item[0])[0] + item[0].trimStart().replaceAll('\t', ' ').length
+      const nested = [line.slice(item[0].length)]
+      let end = at + 1, blank = false
+      while (end < lines.length) {
+        const next = lines[end]!, indent = leadingIndent(next)[0], text = next.trimStart()
+        if (text !== '' && indent < column && (blank || /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|#{1,6}(?:[ \t]|$)|>|:{3,}|[`~]{3,}|\|)/.test(masks[end]!.trimStart()))) break
+        nested.push(next.slice(charsThroughColumns(next, Math.min(column, indent))))
+        blank = text === ''
+        offset += next.length + 1
+        end++
+      }
+      let converted = convertDefinitionLists(nested.join('\n'), emptyTerm, depth + 1).replace(/^\{loose\}\n/, '').split('\n')
+      const removed = new Set<number>()
+      for (let index = 0; index < converted.length; index++) {
+        if (converted[index]!.trim() !== '') continue
+        let end = index
+        while (end < converted.length && converted[end]!.trim() === '') end++
+        if (converted[end]?.trimStart().startsWith(':  ')) for (let blank = index; blank < end; blank++) removed.add(blank)
+        index = end - 1
+      }
+      for (let index = 0; index < converted.length; index++) {
+        if (converted[index] !== ':  ' + emptyTerm) continue
+        let end = index + 1
+        while (end < converted.length && converted[end]!.trim() === '') end++
+        if (end > index + 1 && end < converted.length && /^\S/.test(converted[end]!) && !converted[end]!.startsWith('::')) for (let blank = index + 1; blank < end; blank++) removed.add(blank)
+      }
+      if (removed.size) converted = converted.filter((_line, index) => !removed.has(index))
+      result.push(item[0] + emptyTerm + '\n' + converted.map(value => ' '.repeat(column) + value).join('\n'))
+      at = end - 1
+      start = end
+    }
+    if (start < lines.length) result.push(convertRootDefinitionLists(lines.slice(start).join('\n'), emptyTerm))
+    return result.join('\n')
+  }
+  return convertRootDefinitionLists(source, emptyTerm)
+}
+
+function convertRootDefinitionLists(source: string, emptyTerm: string): string {
   const lines = source.split('\n')
   const sourceMask = maskDjotCodeAndDestinations(source)
   const masked = sourceMask.split('\n')
@@ -309,7 +403,7 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
       const [indent] = leadingIndent(term[1]!)
       while (stack.length && indent < stack.at(-1)!.source) pop()
       const top = stack.at(-1)
-      const mayStart = top !== undefined || i === 0 || lines[i - 1]!.trim() === '' || (boundaries ??= new Set(djotInlineBoundaries(source, sourceMask, true))).has(sourceAt)
+      const mayStart = top !== undefined || i === 0 || lines[i - 1]!.trim() === '' || /^ *:{3,}(?:[ \t]+[A-Za-z0-9_-]+)?[ \t]*$/.test(masked[i - 1] ?? '') || (boundaries ??= new Set(djotInlineBoundaries(source, sourceMask, true))).has(sourceAt)
       if (mayStart) {
         const authoredTerm = /^([ \t]*):(?:[ \t]+(.*)|$)/.exec(lines[i]!)
         let termText = authoredTerm?.[2] ?? term[2] ?? ''

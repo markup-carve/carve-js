@@ -482,6 +482,13 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       blank = true
       continue
     }
+    if (definitionIndent >= 0 && quoteDepth < depth && /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|:(?:[ \t]|$))/.test(visible)) {
+      definitionStack.length = 0
+      definitionIndent = -1
+      paragraph = false
+      blank = true
+      depth = quoteDepth
+    }
     if ((definitionStack.at(-1) ?? -1) !== definitionIndent) {
       definitionStack.length = 0
       if (definitionIndent >= 0) definitionStack.push(definitionIndent)
@@ -500,8 +507,16 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       paragraph = false
       blank = true
     }
+    if (definitionIndent >= 0 && indent <= definitionIndent && divClosers.has(lineOffsets[n]!)) {
+      definitionStack.length = 0
+      definitionIndent = -1
+      paragraph = false
+      blank = true
+    }
     if (definitionIndent >= 0) {
       out.push(originalForCarve())
+      depth = Math.max(depth, quoteDepth)
+      quoteBoundary = quoteForCarve().trimEnd()
       headingMarker = ''
       paragraph = true
       blank = false

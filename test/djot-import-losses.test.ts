@@ -27,25 +27,7 @@ it.each([
   ['[link][a and\nb]\n\n[a and\nb]: url\n', 'An unresolved Djot reference', 1],
   ['[Link][]\n\n[link]: /url\n', 'An unresolved Djot reference', 1],
   ['[[foo](bar)](baz)\n', 'A link inside another link', 1],
-  ['> : term\n', 'An empty definition description', 1],
-  ['- : term\n', 'An empty definition description', 1],
-  ['intro\n\n> : term\n', 'An empty definition description', 3],
-  ['- first\n- : term\n', 'An empty definition description', 2],
-  ['> > : term\n', 'An empty definition description', 1],
-  ['> - : term\n', 'An empty definition description', 1],
   ['- > : term\n', 'An empty definition description', 1],
-  ['1. : term\n', 'An empty definition description', 1],
-  ['> : term\n>\n> outside\n', 'An empty definition description', 1],
-  ['- : term\n\n- outside\n', 'An empty definition description', 1],
-  ['> : term\n\n  outside\n', 'An empty definition description', 1],
-  ['- : term\n- sibling\n\n    body\n', 'An empty definition description', 1],
-  ['- : term\n  - sibling\n\n    body\n', 'An empty definition description', 1],
-  ['> : term\n> - sibling\n>\n>   body\n', 'An empty definition description', 1],
-  [
-    '> : apple\n> fruit\n>\n>   Paragraph one\n>\n>   Paragraph two\n>\n>   - sub\n>   - list\n>\n> : orange\n',
-    'An empty definition description',
-    11,
-  ],
   ['|a|b|\n|:-|---:|\n|c|d|\n|cc|dd|\n|-:|:-:|\n|e|f|\n|g|h|\n', 'A separator inside a table', 5],
   ['|--|--|\n', 'A table containing only separator rows', 1],
   ['|\t|\n', 'A blank table cell holding a tab', 1],
@@ -258,4 +240,29 @@ it('imports a Djot row of blank cells as a native table row with no loss', () =>
   expect(result.value).toBe('| |\n')
   expect(carveToHtml(result.value)).toBe('<table>\n  <tbody>\n    <tr><td></td></tr>\n  </tbody>\n</table>')
   expect(result.report.diagnostics.filter(d => d.code === 'structure-unspellable')).toStrictEqual([])
+})
+
+it.each([
+  ['> : term\n', 'An empty definition description', 1],
+  ['- : term\n', 'An empty definition description', 1],
+  ['intro\n\n> : term\n', 'An empty definition description', 3],
+  ['- first\n- : term\n', 'An empty definition description', 2],
+  ['> > : term\n', 'An empty definition description', 1],
+  ['> - : term\n', 'An empty definition description', 1],
+  ['1. : term\n', 'An empty definition description', 1],
+  ['> : term\n>\n> outside\n', 'An empty definition description', 1],
+  ['- : term\n\n- outside\n', 'An empty definition description', 1],
+  ['> : term\n\n  outside\n', 'An empty definition description', 1],
+  ['- : term\n- sibling\n\n    body\n', 'An empty definition description', 1],
+  ['- : term\n  - sibling\n\n    body\n', 'An empty definition description', 1],
+  ['> : term\n> - sibling\n>\n>   body\n', 'An empty definition description', 1],
+  [
+    '> : apple\n> fruit\n>\n>   Paragraph one\n>\n>   Paragraph two\n>\n>   - sub\n>   - list\n>\n> : orange\n',
+    'An empty definition description',
+    11,
+  ],
+] as const)('preserves the empty description in %s', (source, _message, _line) => {
+  const result = migrateDjot(source)
+  expect(carveToHtml(result.value)).toContain('<dd>')
+  expect(result.report.diagnostics.filter(d => d.message.includes('empty definition description'))).toEqual([])
 })
