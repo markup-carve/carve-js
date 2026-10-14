@@ -9,6 +9,7 @@ import { isValidAttrPayload, isValidInlineAttrPayload, unescapeAttrValue } from 
 import { completeDestinationOpeners } from './link-destination.js'
 import { markdownEmphasis, recordMarkdownProtectedDepth } from './markdown-emphasis.js'
 import { markdownBareLinks, markdownRawBareLinks } from './markdown-gfm-autolinks.js'
+import { backtickRunEnds } from './backtick-run-index.js'
 import { linkMarkdownEmailText } from './markdown-email-links.js'
 /*
  * Markdown -> Carve converter.
@@ -1281,6 +1282,7 @@ function markdownDestinationOpaqueEnd(source: string, dialect: MarkdownDialect):
 
 let inlineCarriersEnabled = false
 let inlineCarriersDamaged = false
+let footChainMarker = ''
 
 // Read adjacency after Markdown links, including references, have become AST nodes.
 function restoreInlineCarriers(source: string): string {
@@ -1403,6 +1405,28 @@ function convertInline(
   // The caller writes every returned line as it stands, so a code value may add one.
   breakableCode = false,
 ): string {
+  if (input.includes('][') && !input.includes('<')) {
+    const codeRanges: Array<[number, number]> = []
+    const codeEnds = backtickRunEnds(input)
+    if (codeEnds) for (let at = 0; at < input.length; at++) {
+      if (input[at] !== '`') continue
+      let slashes = 0
+      for (let before = at - 1; before >= 0 && input[before] === '\\'; before--) slashes++
+      if (slashes % 2) continue
+      const end = codeEnds[at]!
+      if (end > at) { codeRanges.push([at, end]); at = end - 1 }
+    }
+    input = input.replace(/(?<!\\)\[([^\[\]\n]+)\]\[([^\[\]\n]+)\]\[([^\[\]\n]+)\](\([^()\n]+\))/g,
+      (whole, first: string, second: string, third: string, destination: string, at: number) =>
+        !codeRanges.some(([start, end]) => at < end && at + whole.length > start) &&
+        referenceDestinationLabel(second, decodeHtmlEntitiesRaw, [], table) === undefined &&
+        referenceDestinationLabel(third, decodeHtmlEntitiesRaw, [], table) !== undefined
+          ? first.startsWith('^')
+            ? `[${first}]${footChainMarker}[${second}][${third}]\\${destination}`
+            : referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined
+              ? `\\[${first}][${second}][${third}]\\${destination}` : whole
+          : whole)
+  }
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
     message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
@@ -6497,6 +6521,12 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
 }
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
+  markdown = markdown.replace(/\r\n?/g, '\n')
+  let footChainSerial = 0
+  while (markdown.includes(`CARVEMDFOOTCHAIN${footChainSerial}Z`)) footChainSerial++
+  footChainMarker = `CARVEMDFOOTCHAIN${footChainSerial}Z`
+  const brokenAngle = /^\[([^\[\]\n]+)\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.exec(markdown)
+  if (brokenAngle) return markdown.replace(/^\[[^\[\]\n]+\]\(/, () => `[${convertInline(brokenAngle[1]!, dialect)}]\\(`)
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
     .replace(/\r\n?/g, '\n')
@@ -7636,6 +7666,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     : separated === ''
       ? `${frontmatter.join('\n')}\n`
       : `${frontmatter.join('\n')}${BLOCK_SEPARATOR}${separated}`
+  output = output.replaceAll(removed.titleBreakMarker, '\n  ')
+  output = output.replaceAll(footChainMarker, '')
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
   if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {

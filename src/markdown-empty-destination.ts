@@ -183,10 +183,14 @@ export function extractReferenceDefinitions(
   htmlLines: Set<number>
   /** Input line indices opening a list item whose content is a task box plus an HTML comment. */
   taskHtmlLines: Set<number>
+  titleBreakMarker: string
 } {
   const htmlLines = new Set<number>()
   const taskHtmlLines = new Set<number>()
   const lines = [...inputLines]
+  let titleSerial = 0
+  while (inputLines.some(line => line.includes(`CARVEMDTITLEBREAK${titleSerial}Z`))) titleSerial++
+  const titleBreakMarker = `CARVEMDTITLEBREAK${titleSerial}Z`
   const empty = new Map<string, string>()
   const defined = new Set<string>()
   const authoredDefinitions = new Set<string>()
@@ -483,14 +487,31 @@ export function extractReferenceDefinitions(
         const next = lines[i + 1]
         const nextTitle = next !== undefined && next.startsWith(quotePrefix)
           ? new RegExp(String.raw`^[ \t]*${TITLE}[ \t]*$`).exec(next.slice(quotePrefix.length)) : null
-        const title = !new RegExp(String.raw`[ \t]${TITLE}[ \t]*$`).test(target) && nextTitle
+        const targetHasTitle = new RegExp(String.raw`[ \t]${TITLE}[ \t]*$`).test(target)
+        let title = !targetHasTitle && nextTitle
           ? ` ${nextTitle[1]}` : ''
-        if (title) i++
+        let multilineTitle = false
+        if (!title && !targetHasTitle && opensItem && next !== undefined && /^ {2,}"[^"\n]*$/.test(next) &&
+            lines[i + 2] !== undefined && /^ {2,}[^"\n]*"[ \t]*$/.test(lines[i + 2]!) &&
+            !lines.some((candidate, at) => at !== i &&
+              (/^ {0,3}>/.test(candidate) || /^(?:[ \t]*[-*+][ \t]+)?#{1,6}[ \t]/.test(candidate) ||
+                /^[ \t]*\|/.test(candidate) || /^[ \t]*\d+[.)][ \t]/.test(candidate) ||
+                /^[ \t]*[-=]+[ \t]*$/.test((lines[at + 1] ?? '').replace(/^(?: {0,3}>[ \t]?)*/, ''))) &&
+              Array.from(candidate.matchAll(/\[([^\]\n]+)\]/g)).some(match => normalizeReferenceLabel(match[1]!) === key))) {
+          title = ` "${next.trimStart().slice(1)}${titleBreakMarker}${lines[i + 2]!.trim().slice(0, -1)}"`
+          multilineTitle = true
+          i += 2
+        } else if (title) i++
         if (!repeated && definition[1]!.includes('|')) tableInline.set(definition[1]!, `${target}${title}`)
         const writtenTarget = rewriteParenthesizedTitle(`${target}${title}`.replace(/^<([^<>]+)>/, (_match, url: string) =>
           url.replace(/[ \t]/g, (space) => encodeURIComponent(space)),
         ))
-        if (!authoredRepeated || empty.has(key)) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
+        if (multilineTitle && !repeated) {
+          while (reservedReferences.has(nextSerial)) nextSerial++
+          const canonical = `carve-import-reference-${nextSerial++}`
+          inline.set(canonical, `${target}${title}`)
+          sourceLabels.set(key, canonical)
+        } else if (!authoredRepeated || empty.has(key)) definitions.push(`[${definition[1]}]: ${writtenTarget}`)
         if (opensItem) {
           const nextLine = lines[i + 1]
           if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
@@ -517,12 +538,7 @@ export function extractReferenceDefinitions(
             } else keep(prefix.trimEnd() + ' \x00REFITEM\x00')
           }
         } else if (quotePrefix !== '') {
-          const nextLine = lines[i + 1]
-          if (nextLine !== undefined && nextLine.trim() !== '' && !opensBlock(nextLine) &&
-              !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
-            keep(quotePrefix + nextLine.trimStart())
-            i++
-          } else keep(quotePrefix)
+          keep(quotePrefix)
         } else if ((kept.length === 0 || kept.at(-1)!.trim() === '') && lines[i + 1]?.trim() === '') {
           i++
         } else if (lines[i + 1]?.startsWith('    ') && lines[i + 1]!.trim() !== '') {
@@ -559,6 +575,7 @@ export function extractReferenceDefinitions(
   }
   return {
     lines: kept,
+    titleBreakMarker,
     sourceLines: keptSource,
     references: { empty, defined, labels, inline, tableInline, sourceLabels, footnotes },
     definitions,
