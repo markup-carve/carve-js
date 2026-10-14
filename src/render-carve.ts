@@ -4091,7 +4091,15 @@ class CarveRenderSession {
       // verbatim emit, so such a run keeps the (already degenerate) old path.
       // Fast path: a run with no "{{" cannot hold a directive, so the common
       // (directive-free) document never pays for the scan.
-      const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full)
+      const escaped = (index: number): boolean => {
+        let cursor = 0
+        for (let k = 0; k < texts.length; k++) {
+          cursor += texts[k]!.length
+          if (index < cursor) return nodes[i + k]!.type === 'escaped_text'
+        }
+        return false
+      }
+      const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full, escaped)
       if (spans.length) {
         let offset = 0
         for (let k = 0; k < texts.length; k++) {
