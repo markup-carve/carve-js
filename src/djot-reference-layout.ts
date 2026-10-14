@@ -373,7 +373,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
       const headingTarget = headingTargets.get(use.key)
       if (headingTarget !== undefined) {
         const target = headingTarget.replace(/[\\()]/g, char => '\\' + char)
-        edits.push([use.at, use.end, use.label + '(' + target + ')' + use.own])
+        edits.push([use.at + use.label.length, use.end - use.own.length, '(' + target + ')'])
       } else {
         const alias = aliases.get(use.key)
         if (alias) edits.push([use.at + use.label.length + 1, use.end - use.own.length - 1, alias])

@@ -25,9 +25,16 @@ test('NUL heading references preserve Native destinations', () => {
     return [node.nodeName, attrs, children.flatMap(child => Array.isArray(child) && Array.isArray(child[0]) ? child : [child])]
   }
   const failures = []
-  for (const { source, html } of controls) {
+  for (const row of controls) {
+    const { source, html } = row
     const converted = djotToCarve(source)
-    const actual = shape(parseFragment(carveToHtml(converted)))
+    const rendered = carveToHtml(converted)
+    if ('destinationOnly' in row) {
+      const destinations = (html: string): string[] => [...html.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(match => match[1]!.replaceAll('\0', '�').replace(/ /g, '%20'))
+      expect(destinations(rendered), source).toEqual(destinations(html))
+      continue
+    }
+    const actual = shape(parseFragment(rendered))
     const expected = shape(parseFragment(html.replaceAll('\0', '�')))
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push({ source, converted, actual, expected })
   }
