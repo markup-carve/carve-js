@@ -1281,6 +1281,7 @@ function markdownDestinationOpaqueEnd(source: string, dialect: MarkdownDialect):
 
 let inlineCarriersEnabled = false
 let inlineCarriersDamaged = false
+let footChainMarker = ''
 
 // Read adjacency after Markdown links, including references, have become AST nodes.
 function restoreInlineCarriers(source: string): string {
@@ -1409,7 +1410,7 @@ function convertInline(
         referenceDestinationLabel(second, decodeHtmlEntitiesRaw, [], table) === undefined &&
         referenceDestinationLabel(third, decodeHtmlEntitiesRaw, [], table) !== undefined
           ? first.startsWith('^')
-            ? `[${first}][${second}][${third}]\\${destination}`
+            ? `[${first}]${footChainMarker}[${second}][${third}]\\${destination}`
             : referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined
               ? `\\[${first}][${second}][${third}]\\${destination}` : whole
           : whole)
@@ -6508,6 +6509,9 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   markdown = markdown.replace(/\r\n?/g, '\n')
+  let footChainSerial = 0
+  while (markdown.includes(`CARVEMDFOOTCHAIN${footChainSerial}Z`)) footChainSerial++
+  footChainMarker = `CARVEMDFOOTCHAIN${footChainSerial}Z`
   const brokenAngle = /^\[([^\[\]\n]+)\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.exec(markdown)
   if (brokenAngle) return markdown.replace(/^\[[^\[\]\n]+\]\(/, () => `[${convertInline(brokenAngle[1]!, dialect)}]\\(`)
   const allLines = markdown
@@ -7650,10 +7654,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       ? `${frontmatter.join('\n')}\n`
       : `${frontmatter.join('\n')}${BLOCK_SEPARATOR}${separated}`
   output = output.replaceAll(removed.titleBreakMarker, '\n  ')
-  output = output.replace(/\[\^([^\]\n]+)\]\\\[([^\]\n]+)\\\]\[([^\]\n]+)\]\\?\(([^()\n]+)\)/g,
-    (whole, note: string, label: string, reference: string, destination: string) =>
-      referenceDestinationLabel(reference, decodeHtmlEntitiesRaw, [], false) !== undefined
-        ? `[^${note}][${label}][${reference}]\\(${destination})` : whole)
+  output = output.replaceAll(footChainMarker, '')
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
   if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
