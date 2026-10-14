@@ -530,8 +530,9 @@ export function maskDjotFences(
     const attributeStart = content.length - content.trimStart().length
     const lineAttributes = content[attributeStart] === '{' ? readAttributes(content, attributeStart) : undefined
     const attributeBoundary = canNormalize && lineAttributes?.end === content.trimEnd().length
-    normalizeBoundary = /^(?:[ 	]*[-*]){3,}[ 	]*$/.test(content) || /^[ 	]*\[(?!\^)[^\]]+\]:/.test(content) || content.trim() === '' || /^[ \t]*\[\^[^\]\n]+\]:[ \t]*$/.test(content) || /^[ \t]*(?:#{1,6} |:{3,})/.test(content) || attributeBoundary
-    previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} )/.test(content) || attributeBoundary
+    const definitionDivBoundary = canNormalize && /^[ \t]*:[ \t]+:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*\r?$/.test(content)
+    normalizeBoundary = /^(?:[ 	]*[-*]){3,}[ 	]*$/.test(content) || /^[ 	]*\[(?!\^)[^\]]+\]:/.test(content) || content.trim() === '' || /^[ \t]*\[\^[^\]\n]+\]:[ \t]*$/.test(content) || /^[ \t]*(?:#{1,6} |:{3,})/.test(content) || attributeBoundary || definitionDivBoundary
+    previousBlock = content.trim() === '' || /^[ \t]*(?:[-*+] |[0-9]+[.)] |:{1,2} |#{1,6} )/.test(content) || attributeBoundary || definitionDivBoundary
     return line
   })
   return staged.join('\n')

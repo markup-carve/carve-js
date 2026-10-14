@@ -263,6 +263,8 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
       if (mayStart) {
         const authoredTerm = /^([ \t]*):[ \t]+(\S.*)$/.exec(lines[i]!)
         const termText = authoredTerm?.[2] ?? term[2]!
+        const containerBody = /^:{3,}(?:[ \t]*[A-Za-z0-9_-]+)?[ \t]*$/.test(termText)
+        const startsDefinitionBody = rawFence || containerBody
         if (!top || indent === top.source) {
           const target = top?.target ?? indent
           if (!top) stack.push({ source: indent, target, body: false, ready: false })
@@ -271,8 +273,8 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
             top.ready = false
           }
           const prefix = ' '.repeat(target)
-          lines[i] = `${top ? '' : `${prefix}{loose}\n`}${prefix}:: ${rawFence ? emptyTerm : termText}`
-          if (rawFence) {
+          lines[i] = `${top ? '' : `${prefix}{loose}\n`}${prefix}:: ${startsDefinitionBody ? emptyTerm : termText}`
+          if (startsDefinitionBody) {
             lines[i] += `\n${prefix}:  ${termText}`
             stack.at(-1)!.body = true
             stack.at(-1)!.ready = true
@@ -283,8 +285,9 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
           const target = top.target + 3
           const lead = top.body ? ' '.repeat(target) : `${' '.repeat(top.target)}:  `
           top.body = true
-          lines[i] = `${lead}{loose}\n${' '.repeat(target)}:: ${termText}`
-          stack.push({ source: indent, target, body: false, ready: false })
+          lines[i] = `${lead}{loose}\n${' '.repeat(target)}:: ${startsDefinitionBody ? emptyTerm : termText}`
+          if (startsDefinitionBody) lines[i] += `\n${' '.repeat(target)}:  ${termText}`
+          stack.push({ source: indent, target, body: !!startsDefinitionBody, ready: !!startsDefinitionBody })
           continue
         }
       }
