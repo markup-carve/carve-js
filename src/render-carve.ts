@@ -4704,7 +4704,7 @@ class CarveRenderSession {
 
   private hidesLineBlockCloser(content: string, ctx: CarveContext): boolean {
     return ctx.lineBlockDepth > 0
-      && new RegExp(`(?:^|[\\r\\n])[ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
+      && new RegExp(`[\\r\\n][ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
   }
 
   private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true, cellWraps?: readonly VerbatimCellWrap[]): string {
