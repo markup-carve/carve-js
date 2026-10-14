@@ -8,9 +8,11 @@ import {
   renderMarkdown,
   renderPlainText,
   renderAnsi,
+  SourceUnspellableError,
   type BlockNode,
   type Document,
 } from '../src/index.js'
+import { MAX_NESTING_DEPTH } from '../src/parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from '../src/render-depth.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
@@ -180,8 +182,13 @@ describe('every renderer refuses at the render ceiling', () => {
     ['renderAnsi', renderAnsi],
   ]
 
-  it.each(renderers)('%s keeps the content one level under the ceiling', (_name, render) => {
+  it.each(renderers.filter(([name]) => name !== 'renderCarve'))('%s keeps the content one level under the ceiling', (_name, render) => {
     expect(render(quotes(MAX_RENDER_DEPTH - 1))).toContain('x')
+  })
+
+  it('renderCarve refuses one level under the ceiling, which is past the parser cap', () => {
+    // CARVE-P9-078: no source reads back as quotes nested past the parser cap.
+    expect(() => renderCarve(quotes(MAX_RENDER_DEPTH - 1))).toThrow(SourceUnspellableError)
   })
 
   it.each(renderers)('%s refuses at the ceiling', (_name, render) => {
@@ -247,14 +254,18 @@ describe('the canonical writer respects the render depth cap', () => {
     expect(Date.now() - started).toBeLessThan(5000)
   })
 
-  it('sizes fences from the containers it actually writes, below the cap', () => {
+  it('sizes fences from the containers it actually writes, at the parser cap', () => {
     // Derived, not pinned: the outermost fence is `:::` and each level inward
-    // adds a colon, so the widest a bounded writer can emit is fixed by the cap
-    // itself. Writing the number out instead made this test track the old cap
-    // rather than the rule (issue 517).
-    const formatted = renderCarve(divs(MAX_RENDER_DEPTH - 4))
+    // adds a colon, so the widest the writer emits is fixed by the cap itself
+    // (issue 517). `divs(n)` nests n + 1 divs, so this is the deepest tree the
+    // parser reads back.
+    const formatted = renderCarve(divs(MAX_NESTING_DEPTH - 1))
     const widest = Math.max(...formatted.split('\n').map((line) => (/^:+$/.test(line) ? line.length : 0)))
-    expect(widest).toBeLessThanOrEqual(3 + MAX_RENDER_DEPTH - 1)
+    expect(widest).toBeLessThanOrEqual(3 + MAX_NESTING_DEPTH - 1)
     expect(formatted).toContain('x')
+  })
+
+  it('refuses divs nested past the parser cap rather than write source that reads back flattened', () => {
+    expect(() => renderCarve(divs(MAX_NESTING_DEPTH))).toThrow(SourceUnspellableError)
   })
 })
