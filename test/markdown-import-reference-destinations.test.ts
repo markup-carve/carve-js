@@ -33,11 +33,18 @@ test('a multiline title does not split a heading reference', () => {
 })
 
 test('a reference chain does not erase a footnote opener', () => {
-  expect(carveToHtml(markdownToCarve('[^1][b][c](/u)\n\n[c]: /v\n\n[^1]: note'))).toContain('role="doc-noteref"')
+  const html = carveToHtml(markdownToCarve('[^1][b][c](/u)\n\n[c]: /v\n\n[^1]: note'))
+  expect(html).toContain('role="doc-noteref"')
+  expect(html).toContain('<a href="/v">b</a>(/u)')
 })
 
 test('a raw newline angle shortcut leaves formatted labels on the normal path', () => {
-  expect(markdownToCarve('[*x*](<a\nb>)\n---')).toContain('##')
+  expect(carveToHtml(markdownToCarve('[*x*](<a\nb>)\n---'))).toBe('<p>[<em>x</em>](&lt;a\nb&gt;)</p>\n<hr>')
+  expect(carveToHtml(markdownToCarve('[x-y](<a\nb>)\n---'))).toBe('<p>[x-y](&lt;a\nb&gt;)</p>\n<hr>')
+})
+
+test('an explicit reference outside the list keeps its multiline title', () => {
+  expect(carveToHtml(markdownToCarve('- [Foo]: /u\n  "t\n  t2"\n\n[x][foo]'))).toContain('title="t\nt2"')
 })
 
 test('a reference chain without an inline destination keeps its established reading', () => {

@@ -494,8 +494,8 @@ export function extractReferenceDefinitions(
         if (!title && !targetHasTitle && opensItem && next !== undefined && /^ {2,}"[^"\n]*$/.test(next) &&
             lines[i + 2] !== undefined && /^ {2,}[^"\n]*"[ \t]*$/.test(lines[i + 2]!) &&
             !lines.some((candidate, at) => at !== i &&
-              Array.from(candidate.matchAll(/\[([^\]\n]+)\]/g)).some(match => normalizeReferenceLabel(match[1]!) === key) &&
-              !/^[ \t]*[-*+][ \t]+/.test(candidate))) {
+              (/^ {0,3}#{1,6}[ \t]/.test(candidate) || /^[ \t]*\|/.test(candidate) || /^[ \t]*[-=]+[ \t]*$/.test(lines[at + 1] ?? '')) &&
+              Array.from(candidate.matchAll(/\[([^\]\n]+)\]/g)).some(match => normalizeReferenceLabel(match[1]!) === key))) {
           title = ` "${next.trimStart().slice(1)}${titleBreakMarker}${lines[i + 2]!.trim().slice(0, -1)}"`
           multilineTitle = true
           i += 2

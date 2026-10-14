@@ -1406,10 +1406,13 @@ function convertInline(
   if (input.includes('][') && !input.includes('`') && !input.includes('<'))
     input = input.replace(/(?<!\\)\[([^\[\]\n]+)\]\[([^\[\]\n]+)\]\[([^\[\]\n]+)\](\([^()\n]+\))/g,
       (whole, first: string, second: string, third: string, destination: string) =>
-        !first.startsWith('^') && referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined &&
         referenceDestinationLabel(second, decodeHtmlEntitiesRaw, [], table) === undefined &&
         referenceDestinationLabel(third, decodeHtmlEntitiesRaw, [], table) !== undefined
-          ? `\\[${first}][${second}][${third}]\\${destination}` : whole)
+          ? first.startsWith('^')
+            ? `[${first}][${second}][${third}]\\${destination}`
+            : referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined
+              ? `\\[${first}][${second}][${third}]\\${destination}` : whole
+          : whole)
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
     message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
@@ -6505,8 +6508,8 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   markdown = markdown.replace(/\r\n?/g, '\n')
-  if (/^\[[A-Za-z0-9 ]+\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.test(markdown))
-    return markdown.replace('](', ']\\(')
+  const brokenAngle = /^\[([^\[\]\n]+)\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.exec(markdown)
+  if (brokenAngle) return markdown.replace(/^\[[^\[\]\n]+\]\(/, () => `[${convertInline(brokenAngle[1]!, dialect)}]\\(`)
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
     .replace(/\r\n?/g, '\n')
@@ -7647,6 +7650,10 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       ? `${frontmatter.join('\n')}\n`
       : `${frontmatter.join('\n')}${BLOCK_SEPARATOR}${separated}`
   output = output.replaceAll(removed.titleBreakMarker, '\n  ')
+  output = output.replace(/\[\^([^\]\n]+)\]\\\[([^\]\n]+)\\\]\[([^\]\n]+)\]\\?\(([^()\n]+)\)/g,
+    (whole, note: string, label: string, reference: string, destination: string) =>
+      referenceDestinationLabel(reference, decodeHtmlEntitiesRaw, [], false) !== undefined
+        ? `[^${note}][${label}][${reference}]\\(${destination})` : whole)
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
   if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {
