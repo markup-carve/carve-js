@@ -10,6 +10,10 @@ const blocked = [
   { source: '| a | b | c |\n| ^ | < | d |\n', line: 2, column: 7, reason: 'The cell to its left starts in an earlier row, so widening it would cover cells already placed.' },
   { source: '| a | b |\n| < | c |\n+ x | y |\n', line: 2, column: 3, reason: 'There is no cell to its left to widen.' },
   { source: '- item\n\n  | ^ | b |\n', line: 3, column: 5, reason: 'There is no cell above it to extend.' },
+  { source: 'x[^n]\n\n[^n]: note\n\n    | ^ | b |\n', line: 5, column: 7, reason: 'There is no cell above it to extend.' },
+  { source: '| ^ | b |\n^ Table: cap\n', line: 1, column: 3, reason: 'There is no cell above it to extend.' },
+  { source: '| a |\n| b | ^ |\n', line: 2, column: 7, reason: 'There is no cell above it to extend.' },
+  { source: '| `a|b` | ^ |\n+ x | y |\n', line: 1, column: 11, reason: 'There is no cell above it to extend.' },
 ]
 
 describe('table-span-marker-blocked', () => {
@@ -34,6 +38,15 @@ describe('table-span-marker-blocked', () => {
     '```\n| ^ | b |\n```\n',
   ])('does not report resolved or literal markers in %s', (source) => {
     expect(findings(source)).toEqual([])
+  })
+
+  it.each([
+    '| a | b |\r| < | c |\r+ x | y |\r',
+    '| a | b |\r| < | c |\r',
+    '| a | b |\r\n| < | c |\r\n+ x | y |\r\n',
+  ])('locates the marker across CR line breaks in %j', (source) => {
+    const start = source.indexOf('<')
+    expect(findings(source)).toMatchObject([{ line: 2, column: 3, start, end: start + 1 }])
   })
 
   it('uses UTF-16 offsets after an astral character in a quote', () => {
