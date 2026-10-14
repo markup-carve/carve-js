@@ -215,7 +215,8 @@ export function djotImportLosses(
         report('An empty heading cannot be spelled in Carve.', n + 1)
     }
     if (/^(?:[ \t]*>[ \t]*)*:[ \t]*$/.test(line) && boundary && masked[offsets[n]! + line.indexOf(':')] === ':')
-      report('A definition item with an empty term cannot be spelled in Carve.', n + 1)
+      if (line.slice(0, line.indexOf(':')).trim() !== '')
+        report('An empty definition term is omitted during import.', n + 1)
     const term = /:[ \t]+$/.exec(visible.slice(0, at))
     if (
       term &&
@@ -247,7 +248,8 @@ export function djotImportLosses(
         !inContainer(lines[end]!) ||
         /^[ \t]*/.exec(withoutQuotes(lines[end]!))![0].length < minimum
       ) {
-        report('An empty definition description cannot be spelled in Carve.', n + 1)
+        if (line.slice(0, term.index).trim() !== '')
+          report('An empty definition description is omitted during import.', n + 1)
       }
     }
     if (!rows[n]) continue
