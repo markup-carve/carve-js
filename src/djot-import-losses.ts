@@ -322,7 +322,7 @@ export function djotImportLosses(
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
       const key = explicit ? referenceKey(explicit) : definitionKey(
-        definitions.size === 0 ? '' : collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!),
+        definitions.size === 0 ? '' : collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!, source[open - 1] === '!' && !escaped[open - 1]),
       )
       destination = definitions.get(key)
       end++

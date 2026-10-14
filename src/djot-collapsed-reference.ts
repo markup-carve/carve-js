@@ -81,7 +81,7 @@ export function djotImageLabelAttributes(source: string, flattenAttributeLines =
   return parts.join('') + source.slice(cursor)
 }
 
-export function djotCollapsedReferenceText(source: string, quoteDepth = 0): string {
+export function djotCollapsedReferenceText(source: string, quoteDepth = 0, imageLabel = false): string {
   if (quoteDepth && source.includes('\n')) source = source.replace(/\n([^\n]*)/g, (_all, line: string) => {
     for (let n = 0; n < quoteDepth; n++) {
       const prefix = /^[ \t]*>(?:[ \t]|$)/.exec(line)
@@ -90,16 +90,29 @@ export function djotCollapsedReferenceText(source: string, quoteDepth = 0): stri
     }
     return '\n' + line
   })
-  return djotReferenceText(parseRefLabelInlines(djotReferenceEmphasis(imageLabelsAsLinks(djotImageLabelAttributes(source)), escapePlainDjotText)))
+  if (!imageLabel) return djotReferenceText(parseRefLabelInlines(djotReferenceEmphasis(imageLabelsAsLinks(djotImageLabelAttributes(source)), escapePlainDjotText)))
+  const attributes = djotImageLabelAttributes(source, true)
+  const destinations: Array<[number, number]> = []
+  maskDjotCodeAndDestinations(attributes, true, true, true, undefined, [], {
+    onDestination: (start, end) => destinations.push([start, end]),
+  })
+  const parts: string[] = []
+  let cursor = 0
+  for (const [start, end] of destinations) {
+    parts.push(attributes.slice(cursor, start), '(djot-label)')
+    cursor = end
+  }
+  const label = parts.join('') + attributes.slice(cursor)
+  return djotReferenceText(parseRefLabelInlines(djotReferenceEmphasis(imageLabelsAsLinks(label), escapePlainDjotText)))
 }
 
-export function djotCollapsedReferenceCache(): (source: string, quoteDepth?: number) => string {
+export function djotCollapsedReferenceCache(): (source: string, quoteDepth?: number, imageLabel?: boolean) => string {
   const cache = new Map<string, string>()
-  return (source, quoteDepth = 0) => {
-    if (source.length > 256) return djotCollapsedReferenceText(source, quoteDepth)
-    const key = quoteDepth + ':' + source
+  return (source, quoteDepth = 0, imageLabel = false) => {
+    if (source.length > 256) return djotCollapsedReferenceText(source, quoteDepth, imageLabel)
+    const key = quoteDepth + ':' + Number(imageLabel) + ':' + source
     let value = cache.get(key)
-    if (value === undefined) { value = djotCollapsedReferenceText(source, quoteDepth); cache.set(key, value) }
+    if (value === undefined) { value = djotCollapsedReferenceText(source, quoteDepth, imageLabel); cache.set(key, value) }
     return value
   }
 }
