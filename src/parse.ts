@@ -13695,7 +13695,9 @@ class ParseSession {
       // believing the item held an open paragraph and nothing below the marker
       // line was comment body to it. PART 9 §28 makes that body VERBATIM, so the
       // tracker has to know the comment is open before it reads the next line.
-      const leadComment = leadFence ? undefined : commentFenceRun(content)
+      const leadCommentRun = leadFence ? undefined : commentFenceRun(content)
+      const leadComment = leadCommentRun !== undefined && commentBlockHasCloser(lexer, leadCommentRun)
+        ? leadCommentRun : undefined
       if (leadComment !== undefined) {
         lazyState.opaque = { kind: 'comment', length: leadComment, paragraphBefore: lazyState.lazyFoldable, atColumn: false }
         lazyState.lazyFoldable = false
