@@ -38,7 +38,7 @@ function compactDjotListPrefix(text: string): string {
     at += item[0].length
     if (/^[-*+]/.test(item[0])) {
       const task = /^\[[ xX]\][ \t]+/.exec(text.slice(at))
-      if (task) { parts.push(task[0]); at += task[0].length }
+      if (task) { parts.push(task[0].replace(/\t/g, ' ')); at += task[0].length }
     }
   }
   parts.push(text.slice(at))
@@ -706,7 +706,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const body = text.slice(item[0].length - 1)
       const itemHeading = /^(#{1,6})(?:[ \t]+|$)/.exec(body)
       headingMarker = itemHeading?.[1] ?? ''
-      const itemDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(body)
+      const task = body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
+      const itemBody = task ? body.slice(task[0].length) : body
+      const itemDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(itemBody)
       if (itemDiv)
         divs.push({
           width: itemDiv[1]!.length,
@@ -715,8 +717,6 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
           depth: quoteDepth,
           start: lineOffsets[n]!,
         })
-      const task = body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
-      const itemBody = task ? body.slice(task[0].length) : body
       const itemQuote = itemBody.startsWith('>') ? itemQuotePrefix(itemBody) : undefined
       const itemOwners = itemQuote?.owners.map(owner => ({ ...owner, depth: quoteDepth + owner.depth, sourcePrefix: quote.length + rawIndent + item[0].length - 1 + (task?.[0].length ?? 0) + owner.sourceOffset })) ?? []
       setEmbedded(itemOwners.at(-1), itemOwners)
