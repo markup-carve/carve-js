@@ -105,6 +105,32 @@ export function djotImportLosses(
   const definitions = new Map<string, string>()
   const definitionLines = new Set<number>()
   const headingLines = new Set<number>()
+  const headingAttributes = (line: number, column: number): { start: number; boundary: boolean; id?: string } => {
+    let start = line, end = offsets[line]!, id: string | undefined
+    for (let prior = line - 1; prior >= 0; prior--) {
+      let begin = prior
+      while (begin > 0) {
+        const value = lines[begin]!.slice(contentStart(lines[begin]!)).trimStart()
+        if (value.startsWith('{') || value === '' || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|[-*+][ \t])/.test(value)) break
+        begin--
+      }
+      const attributeAt = contentStart(lines[begin]!)
+      if (attributeAt < column || quoteDepths[begin]! < quoteDepths[line]!) break
+      const absolute = offsets[begin]! + attributeAt
+      const attrs = source[absolute] === '{' ? readAttributes(source, absolute) : undefined
+      if (!attrs || attrs.end <= offsets[prior]! || attrs.end > end || source.slice(attrs.end, end).trim() !== '') break
+      start = begin
+      let token: (typeof attrs.tokens)[number] | undefined
+      for (const value of attrs.tokens) if (value.key === 'id') token = value
+      if (token && id === undefined)
+        id = token.source.startsWith('#') ? token.source.slice(1) : token.source.slice(3).replace(/^"|"$/g, '').replace(/\\([\\"])/g, '$1')
+      end = offsets[begin]!
+      prior = begin
+    }
+    const before = start > 0 ? lines[start - 1]!.slice(contentStart(lines[start - 1]!)).trim() : ''
+    const boundary = start === line || before === '' || rows[start - 1] || definitionLines.has(start - 1) || /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\[[^\]\n]+\]:|(?:[-*][ \t]*){3,}$)/.test(before)
+    return { start, boundary, ...id === undefined ? {} : { id } }
+  }
   for (let n = 0; n < lines.length; n++) {
     if (definitionLines.has(n)) continue
     const line = lines[n]!,
@@ -133,7 +159,9 @@ export function djotImportLosses(
       for (let k = offsets[n]!; k < offsets[n]! + line.length; k++) masked[k] = ' '
     }
     const heading = contentMask.startsWith('#') ? /^(#{1,6})(?:[ \t]+|$)/.exec(content) : null
-    if (heading && boundary && !headingLines.has(n)) {
+    const attributes = heading ? headingAttributes(n, at) : undefined
+    const headingBoundary = boundary || !!attributes && attributes.start < n && attributes.boundary
+    if (heading && headingBoundary && !headingLines.has(n)) {
       let text = content.slice(heading[0].length)
       let lastPart = text
       const marker = new RegExp(`^${heading[1]}[ \\t]+`)
@@ -162,7 +190,9 @@ export function djotImportLosses(
       }
       const label = collapsedReferenceText(text)
       const key = definitionKey(label)
-      if (!definitions.has(key)) definitions.set(key, '#' + key)
+      const identifier = key.replace(/[\]\[~!@#$%^&*(){}`,.<>\\|=+/?\s]+/g, ' ').trim().replace(/ +/g, '-')
+      const target = '#' + (attributes?.id ?? (identifier || 's-1'))
+      if (attributes?.boundary && !definitions.has(key)) definitions.set(key, target)
     }
     if (/^#{1,6}[ \t]*$/.test(contentMask) && heading && collapsedReferenceText(content.slice(heading[0].length)).trim() === '' && boundary && !headingLines.has(n)) {
       const next = lines[n + 1]?.trim() ?? ''
