@@ -8,6 +8,7 @@ import { djotDestinationLines } from './djot-destination-lines.js'
 import { djotPlaceholderPrefix } from './djot-placeholder-prefix.js'
 import { trimEndMatchingEdges, trimNonNbsp, trimStartNonNbsp } from './trim-non-nbsp.js'
 import { parse, hasInvalidContainerMetadata, colonFenceOpenerLen } from './parse.js'
+import { renderHtml } from './render-html.js'
 import { renderDjotImageChildText } from './djot-image-child-text.js'
 import { djotImageLabelAttributes } from './djot-collapsed-reference.js'
 import { escapeImageAlt } from './render-carve.js'
@@ -319,13 +320,14 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
     if (!stack.at(-1)!.ready) {
       const continuation = lines[i]!.trimStart()
       const indent = leadingIndent(lines[i]!)[0]
+      const visible = masked[i]?.[/^[ \t]*/.exec(lines[i]!)![0].length] === continuation[0]
       const marker = /^(?:#{1,6}(?:[ \t]|$)|>|\||:{3,}|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(continuation) || /^(?:[*-][ \t]*){3,}$/.test(continuation)
-      if (indent <= stack.at(-1)!.source && marker) {
+      if (visible && indent <= stack.at(-1)!.source && marker) {
         while (stack.length && stack.at(-1)!.source >= indent) pop()
         if (!stack.length) continue
       } else {
         stack.at(-1)!.termEnd = i
-        if (!/^(?:[#>|{]|:{3,}|[`~]{3,}|[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] )/.test(continuation)) lines[i] = (!marker ? continuation.replace(/^([ivxlcdmIVXLCDM]+)([.)])(?=[ \t])/, '$1\\$2') : continuation).replace(/^:(?=[ \t]|$)/, '\\:')
+        if (!/^(?:[#>|{]|:{3,}|[`~]{3,}|[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] )/.test(continuation)) lines[i] = visible ? (!marker ? continuation.replace(/^([ivxlcdmIVXLCDM]+)([.)])(?=[ \t])/, '$1\\$2') : continuation).replace(/^:(?=[ \t]|$)/, '\\:') : continuation
         continue
       }
     }
@@ -2719,10 +2721,25 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
           ) ||
         (itemColumn > 0 && itemKind.startsWith('[^') && normalized.length > 1)
       if (codeDepth > 0 && !rawCode) payload = normalized.join('\n')
+      let codeEnd = closed ? end + width : end
+      let codeTag = '<code>'
+      if (rawCode && closed && source[codeEnd] === '{') {
+        const parts: string[] = []
+        while (source[codeEnd] === '{') {
+          const attrs = readAttributes(source, codeEnd)
+          if (!attrs) break
+          parts.push(attrs.source.slice(1, -1))
+          codeEnd = attrs.end
+        }
+        if (parts.length) {
+          const html = renderHtml(parse('`X`{' + parts.join(' ') + '}'))
+          codeTag = /<code\b[^>]*>/.exec(html)?.[0] ?? codeTag
+        }
+      }
       if (rawCode) {
         onRawCode?.(i)
         payload =
-          '<code>' + normalized.join('\n').replace(/[!-\/:-@\[-`{-~]|\n/g, (ch) => `&#${ch.charCodeAt(0)};`) + '</code>'
+          codeTag + normalized.join('\n').replace(/[!-\/:-@\[-`{-~]|\n/g, (ch) => `&#${ch.charCodeAt(0)};`) + '</code>'
       }
       let fenceWidth = 1
       for (const run of payload.matchAll(/`+/g)) fenceWidth = Math.max(fenceWidth, run[0].length + 1)
@@ -2734,7 +2751,7 @@ function closeDjotTableCode(source: string, onRawCode?: (at: number) => void): s
       }
       const pad = payload.startsWith('`') || payload.endsWith('`') ? ' ' : ''
       output.push(source.slice(cursor, i), fence + pad + payload + pad + fence + (rawCode ? '{=html}' : ''))
-      cursor = closed ? end + width : end
+      cursor = codeEnd
       consumed = cursor
       if (separate && !closed) output.push('\n' + '> '.repeat(separateDepth).trimEnd())
       i = consumed

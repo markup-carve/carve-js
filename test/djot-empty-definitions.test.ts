@@ -32,3 +32,12 @@ test('empty description carriers preserve authored placeholder text', () => {
   expect(result.value).toContain('\0DJOTEMPTYTERM\0')
   expect(carveToHtml(result.value)).toContain('<dd></dd>')
 })
+
+test('reports definition code fallback at its original continuation opener', () => {
+  const result = migrateDjot('before\n\n: term\n  `code\n  : x`{.x}\n\n  body')
+  expect(result.report.diagnostics).toContainEqual(expect.objectContaining({
+    code: 'structure-unspellable',
+    message: 'Multiline inline code uses raw HTML; plain-text export omits it.',
+    path: 'line:4',
+  }))
+})
