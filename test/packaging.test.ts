@@ -42,6 +42,12 @@ describe('prettier plugin', () => {
     expect(await format(once)).toBe(once)
   })
 
+  it('passes the optional table alignment setting to the formatter', async () => {
+    const source = '|= Name |= Score |\n| 山田太郎 | 10 |\n'
+    const settings = { parser: 'carve', plugins: [PLUGIN], carveAlignTables: true } as Parameters<typeof prettier.format>[1]
+    expect(await prettier.format(source, settings)).toBe(carveToCarve(source, { alignTables: true }))
+  })
+
   it('formats malformed input rather than refusing the file', async () => {
     // `carve fmt` never fails on malformed input - there is no parse error in
     // Carve, only text that means something else. A plugin that threw would

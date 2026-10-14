@@ -46,7 +46,7 @@ export const parsers = {
 
 export const printers = {
   'carve-source': {
-    print: (path: { node?: CarveSourceNode; getValue?: () => CarveSourceNode }): string => {
+    print: (path: { node?: CarveSourceNode; getValue?: () => CarveSourceNode }, options: { carveAlignTables?: boolean }): string => {
       // Prettier 3 exposes `path.node`; Prettier 2 only had `getValue()`.
       // Supporting both is two characters here and one less reason for a
       // consumer to be on a specific major.
@@ -56,16 +56,21 @@ export const printers = {
       // a Doc, but not for a plain string - and stripping it here made the
       // plugin's output differ from `carve fmt --write` by exactly one byte,
       // so a repository running both had each tool undo the other.
-      return carveToCarve(node?.source ?? '')
+      return carveToCarve(node?.source ?? '', { alignTables: options.carveAlignTables === true })
     },
   },
 }
 
 /**
- * Prettier reads `options` from a plugin to know which of ITS options apply.
- * Carve's canonical form is fixed by the spec, so the answer is none - stated
- * explicitly rather than left to look like an oversight.
+ * Prettier's configuration uses a namespaced key for the optional table mode.
  */
-export const options = {}
+export const options = {
+  carveAlignTables: {
+    type: 'boolean',
+    default: false,
+    category: 'Carve',
+    description: 'Align table cells by Unicode display width.',
+  },
+}
 
 export const defaultOptions = {}
