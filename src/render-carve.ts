@@ -32,7 +32,7 @@ import {
 } from './parse.js'
 import { isAttrValueEscapable } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
-import { findDirectives } from './include-directive.js'
+import { findDirectives, RunOffsets } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -997,6 +997,15 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
     }
   }
   return chunks.flatMap((chunk, index) => index === 0 ? chunk : [{ type: 'text', value: ' ' } as InlineNode, ...chunk])
+}
+
+/** Whether a character of the run `texts` reassembles from `nodes[from..]` sits in an escape. */
+function escapedIn(nodes: InlineNode[], from: number, texts: string[]): (index: number) => boolean {
+  const offsets = new RunOffsets(texts)
+  return (index) => {
+    const piece = offsets.pieceAt(index)
+    return piece < texts.length && nodes[from + piece]!.type === 'escaped_text'
+  }
 }
 
 /**
@@ -4091,22 +4100,19 @@ class CarveRenderSession {
       // verbatim emit, so such a run keeps the (already degenerate) old path.
       // Fast path: a run with no "{{" cannot hold a directive, so the common
       // (directive-free) document never pays for the scan.
-      const escaped = (index: number): boolean => {
-        let cursor = 0
-        for (let k = 0; k < texts.length; k++) {
-          cursor += texts[k]!.length
-          if (index < cursor) return nodes[i + k]!.type === 'escaped_text'
-        }
-        return false
-      }
-      const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full, escaped)
+      const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full, escapedIn(nodes, i, texts))
       if (spans.length) {
         let offset = 0
+        // Spans are disjoint and in order, so the ones a node overlaps start at
+        // the first span not yet behind it.
+        let first = 0
         for (let k = 0; k < texts.length; k++) {
           const text = texts[k]!
           const start = offset
           offset += text.length
-          const covering = spans.filter((s) => s.start < offset && s.end > start)
+          while (first < spans.length && spans[first]!.end <= start) first++
+          const covering: typeof spans = []
+          for (let q = first; q < spans.length && spans[q]!.start < offset; q++) covering.push(spans[q]!)
           if (covering.length === 0) continue
           let out = ''
           const ranges: LiteralRange[] = []
