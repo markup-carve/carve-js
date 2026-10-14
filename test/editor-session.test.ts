@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { createEditorSession as createInternalSession } from '../src/editor-session.js'
 import { createEditorSession, EditorChangeError, parse, toAstJson } from '../src/index.js'
+import { astNodePaths, nodeIdentityForPaths } from '../src/ast-sidecars.js'
+import type { AstJsonDocument } from '../src/ast-json.js'
 
 const fresh = (source: string) => toAstJson(parse(source, { positions: true }))
 
 describe('editor session', () => {
+  it('bounds sidecar node visits and reuses collected paths for identity', () => {
+    let typeReads = 0
+    const node = (type: string, children: unknown[] = []) => new Proxy({ type, children }, {
+      get(target, key) { if (key === 'type') typeReads++; return Reflect.get(target, key) },
+    })
+    const ast = node('document', Array.from({ length: 500 }, () => node('paragraph', [node('text')]))) as unknown as AstJsonDocument
+    const paths = astNodePaths(ast)
+    expect(paths).toHaveLength(1001)
+    expect(typeReads).toBeLessThan(5000)
+    const readsAfterCollection = typeReads
+    expect(nodeIdentityForPaths(paths, 'session').nodes).toHaveLength(paths.length)
+    expect(typeReads).toBe(readsAfterCollection)
+  })
+
   it('reports same-length text and reference destination changes', () => {
     const text = createEditorSession('one')
     expect(text.update([{ from: 0, to: 3, insert: 'two' }]).changedPaths).toContain('/children/0/children/0')
