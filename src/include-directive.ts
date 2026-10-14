@@ -148,6 +148,39 @@ export function isDirectiveShape(raw: string): boolean {
 }
 
 /**
+ * Which piece of a reassembled run holds a given character. Built once per
+ * run so a lookup is a binary search, not a walk from the run's start: a run
+ * with many `{{` candidates asks once per candidate.
+ */
+export class RunOffsets {
+  private readonly ends: number[] = []
+
+  constructor(texts: readonly string[]) {
+    let end = 0
+    for (const text of texts) {
+      end += text.length
+      this.ends.push(end)
+    }
+  }
+
+  /** The first piece ending after `index`; the piece count when none does. */
+  pieceAt(index: number): number {
+    let lo = 0
+    let hi = this.ends.length
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (this.ends[mid]! <= index) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
+  startOf(piece: number): number {
+    return piece === 0 ? 0 : this.ends[piece - 1]!
+  }
+}
+
+/**
  * Locate the SHAPE-well-formed directive spans inside a reassembled inline
  * run, in source order.
  *
