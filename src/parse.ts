@@ -3301,6 +3301,8 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
 
 function stripPositionsOutsideRow(nodes: InlineNode[], start: number, end: number): InlineNode[] {
   for (const node of nodes) {
+    // A marker from a later row can record a join here, outside this row's
+    // own source span (carve#3172).
     if (node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
       (node.pos.startOffset < start || node.pos.endOffset > end)) delete node.pos
     if (node.type === 'citation_group') {
@@ -6777,7 +6779,6 @@ interface RawCell {
   /** The `+` of the continuation line the last fragment came from. */
   lastMarker?: number
   wraps?: Array<{ offset: number; line: number; row?: number; col?: number; pos?: Position }>
-  /** A later row joins into this cell, so its row cannot contain every child span. */
 }
 
 interface FragmentPlace {

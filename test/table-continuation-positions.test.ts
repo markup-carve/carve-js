@@ -87,9 +87,13 @@ describe('positions across a table continuation', () => {
     ['| a | < |\n+ x | y |', ['+', '|']],
     ['| a | < | c |\n| ^ | ^ | d |\n+ x | y | z |', []],
     ['| ^ | < |\n+ x | y |', ['|']],
-  ])('gives each join on one `+` line its own source byte: %j', (src, marks) => {
+  ])('records each join on one `+` line: %j', (src, marks) => {
     const cell = (parse(src).children[0] as any).rows[0].cells[0]
     const wraps = cell.children.filter((child: { type: string }) => child.type === 'cell_wrap')
+    if (src.includes('| ^ | ^ |')) {
+      expect(wraps.map((w: { line: number; row?: number; col?: number }) =>
+        [w.line, w.row, w.col])).toEqual([[1, 1, undefined], [1, 1, 1]])
+    }
     expect(wraps.flatMap((w: { pos?: { startOffset: number; endOffset: number } }) =>
       w.pos ? [[...src].slice(w.pos.startOffset, w.pos.endOffset).join('')] : [])).toEqual(marks)
     const starts = cell.children.flatMap((child: { pos?: { startOffset: number } }) =>
