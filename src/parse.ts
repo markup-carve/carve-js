@@ -12802,7 +12802,7 @@ class ParseSession {
       paragraphOpen ??= blockQuoteParagraphOpen(state)
       if (handDown && handDown.paragraphOpen === undefined) handDown.paragraphOpen = paragraphOpen
       if (!paragraphOpen) break
-      if (leadingWhitespace(ln) === 0 && deflistMarkerLine(ln) &&
+      if (leadingWhitespace(ln) === 0 && (deflistMarkerLine(ln) || isListMarkerLine(ln)) &&
           !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
         let leaf = state
         while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
