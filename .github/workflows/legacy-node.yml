@@ -1,0 +1,44 @@
+name: Legacy Node
+
+# Node 20 is EOL and left the PR matrix, but package.json still declares
+# engines >=20, so keep a daily full-suite signal for it.
+on:
+  schedule:
+    # 05:15 UTC daily, after the scaling guards and the drift run.
+    - cron: '15 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: full suite on Node 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Corpus tests
+        run: npm test
+
+      - name: Include-conformance gate (spec §19 vectors)
+        run: npm run test:includes
+
+      - name: Build
+        run: npm run build
+
+      - name: Packed package consumer
+        run: npm run test:package

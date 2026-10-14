@@ -77,7 +77,8 @@ unable to fail.
 assert asymptotics, so a reading taken while the machine is busy means nothing:
 in the default run they would measure each other, which is why they are skipped
 there. CI gives them a runner of their own in
-`.github/workflows/scaling-guards.yml`, on pushes to `main` and nightly rather
+`.github/workflows/scaling-guards.yml`, nightly and on pushes to `main` that
+touch `src/`, `test/`, the spec pointer, dependencies or the test config, rather
 than on the pull-request path. For a branch:
 
 ```bash
