@@ -12,6 +12,8 @@ const blocked = [
   { source: '- item\n\n  | ^ | b |\n', line: 3, column: 5, reason: 'There is no cell above it to extend.' },
   { source: 'x[^n]\n\n[^n]: note\n\n    | ^ | b |\n', line: 5, column: 7, reason: 'There is no cell above it to extend.' },
   { source: '| ^ | b |\n^ Table: cap\n', line: 1, column: 3, reason: 'There is no cell above it to extend.' },
+  { source: '| a |\n| b | ^ |\n', line: 2, column: 7, reason: 'There is no cell above it to extend.' },
+  { source: '| `a|b` | ^ |\n+ x | y |\n', line: 1, column: 11, reason: 'There is no cell above it to extend.' },
 ]
 
 describe('table-span-marker-blocked', () => {
