@@ -11,6 +11,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Fixes
 - An escaped include directive (`\{{ path }}`) stays literal: `expandIncludes` no longer expands it, `findDirectiveSites` no longer reports it, and `renderCarve` keeps the escape instead of writing a live directive (#3101).
+- A cross-reference `</#id>` is opaque to emphasis like an autolink: an earlier bare `/` no longer pairs with the slash inside it.
 
 ## [0.1.12] - 2026-10-14
 
