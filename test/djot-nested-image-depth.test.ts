@@ -8,6 +8,7 @@ test.each([100, 400, 1600, 6400])('nested literal image labels at depth %i', dep
 
 test('nested image destinations retain the outer destination', () => {
   expect(carveToHtml(djotToCarve('![![x](inner)](outer)'))).toBe('<p><img src="outer" alt="x"></p>')
+  expect(carveToHtml(djotToCarve('![![ä *b*](inner?q=1&n=2)](outer)'))).toBe('<p><img src="outer" alt="ä b"></p>')
 })
 
 test.each([

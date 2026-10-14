@@ -13,3 +13,11 @@ test.each(['::: warning Title', '::: [x]', ':::'])('reports a container opener i
 test('a line block marker remains in the code span', () => {
   expect(djotToCarveWithLosses('`a\n| b`').losses).toEqual([])
 })
+
+test('a code span after paragraph text still reports a container opener', () => {
+  expect(djotToCarveWithLosses('x `a\n::: warning\nb`').losses).toContainEqual({
+    code: 'structure-unspellable',
+    message: 'A multiline code span contains a Carve container opener on a continuation line.',
+    line: 1,
+  })
+})

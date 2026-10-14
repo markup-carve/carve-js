@@ -930,7 +930,7 @@ function collapseLiteralNestedImages(source: string): string {
     const depth = (at - start) / 2
     if (depth < 2) continue
     const labelStart = at
-    while (at < source.length && /[A-Za-z0-9 ]/.test(source[at]!)) at++
+    while (at < source.length && !/[\[\]\\\n]/.test(source[at]!)) at++
     if (at === labelStart) continue
     const label = source.slice(labelStart, at)
     let outerTarget = ''
@@ -939,7 +939,7 @@ function collapseLiteralNestedImages(source: string): string {
       if (source.slice(at, at + 2) !== '](') { valid = false; break }
       at += 2
       const targetStart = at
-      while (at < source.length && /[A-Za-z0-9/._~#%-]/.test(source[at]!)) at++
+      while (at < source.length && !/[\s()\[\]<>]/.test(source[at]!)) at++
       if (at === targetStart || source[at] !== ')') { valid = false; break }
       if (level === depth - 1) outerTarget = source.slice(targetStart, at)
       at++

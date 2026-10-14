@@ -1403,6 +1403,13 @@ function convertInline(
   // The caller writes every returned line as it stands, so a code value may add one.
   breakableCode = false,
 ): string {
+  if (input.includes('][') && !input.includes('`') && !input.includes('<'))
+    input = input.replace(/(?<!\\)\[([^\[\]\n]+)\]\[([^\[\]\n]+)\]\[([^\[\]\n]+)\](\([^()\n]+\))/g,
+      (whole, first: string, second: string, third: string, destination: string) =>
+        referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined &&
+        referenceDestinationLabel(second, decodeHtmlEntitiesRaw, [], table) === undefined &&
+        referenceDestinationLabel(third, decodeHtmlEntitiesRaw, [], table) !== undefined
+          ? `\\[${first}][${second}][${third}]\\${destination}` : whole)
   const reportFlattenedEmphasis = () => importLosses.push({
     code: 'structure-unspellable',
     message: 'Flattened emphasis exceeding the native nesting budget; its text is preserved',
@@ -6497,6 +6504,9 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
 }
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
+  markdown = markdown.replace(/\r\n?/g, '\n')
+  if (/^\[[^\[\]\n]+\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.test(markdown))
+    return markdown.replace('](', ']\\(')
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
     .replace(/\r\n?/g, '\n')
@@ -7636,6 +7646,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     : separated === ''
       ? `${frontmatter.join('\n')}\n`
       : `${frontmatter.join('\n')}${BLOCK_SEPARATOR}${separated}`
+  output = output.replaceAll(removed.titleBreakMarker, '\n  ')
   // The writer collects footnote definitions at document end. Apply that
   // ordering only when the parsed import actually defines a footnote.
   if (removed.references.footnotes.size > 0 || /(?:^|\n)[ \t]{0,3}\[\^[^\]\n]+\]:/.test(output)) {

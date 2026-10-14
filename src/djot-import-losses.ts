@@ -59,7 +59,8 @@ export function djotImportLosses(
   const codeMask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { code: false })
   const codeEnds = backtickRunEnds(codeMask)
   if (codeEnds) for (let at = 0; at < source.length; at++) {
-    if (source[at] !== '`' || codeMask[at] !== '`' || at > 0 && source[at - 1] !== '\n') continue
+    if (source[at] !== '`' || codeMask[at] !== '`') continue
+    if (/^[ \t]*>/.test(source.slice(source.lastIndexOf('\n', at - 1) + 1, at))) continue
     const end = codeEnds[at]!
     if (end < 0) continue
     const content = source.slice(at + 1, end - 1)
@@ -147,7 +148,7 @@ export function djotImportLosses(
       if (next === '' || /^(?:[#>|{]|[-*+] |:{3,}|`{3,}|~{3,})/.test(next))
         report('An empty heading cannot be spelled in Carve.', n + 1)
     }
-    if (/^(?:[ \t]*>[ \t]*)*:[ \t]+$/.test(line) && boundary)
+    if (/^(?:[ \t]*>[ \t]*)*:[ \t]*$/.test(line) && boundary)
       report('A definition item with an empty term cannot be spelled in Carve.', n + 1)
     const term = /:[ \t]+$/.exec(visible.slice(0, at))
     if (
@@ -263,7 +264,7 @@ export function djotImportLosses(
       const label = source.slice(open + 1, at)
       if (label.includes('\n') && /\n[ \t]*\n/.test(collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!)))
         report('An image alternative text with a blank line cannot be spelled in Carve.', lineAt(open))
-      if (/ {2,}\n/.test(label))
+      if (/[ \t]+\n/.test(label))
         report('An image alternative text loses trailing spaces before a line break.', lineAt(open))
     }
     if (!image) {
