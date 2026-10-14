@@ -22,8 +22,27 @@ function sharedDjotListKind(prior: string | undefined, current: string): string 
   return common ? `${common}:${first[2]}` : undefined
 }
 
-function compactDjotListPrefix(text: string): string {
-  if (!text.includes('0') && !text.includes('(') && !text.includes('\t') && !text.includes('[')) return text
+function emptyDjotTaskTailEnd(text: string, allowAttributes: boolean): number | undefined {
+  let at = 0
+  while (at < text.length) {
+    const marker = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(text.slice(at))
+    if (!marker) return undefined
+    at += marker[0].length
+    if (/^[-*+] $/.test(marker[0])) {
+      const task = /^\[[ xX]\](?:[ \t]+|$)/.exec(text.slice(at))
+      if (task) {
+        at += task[0].length
+        if (at === text.length) return at
+        const attrs = readAttributes(text, at)
+        if (allowAttributes && attrs && text.slice(attrs.end).trim() === '') return at
+      }
+    }
+  }
+  return undefined
+}
+
+function compactDjotListPrefix(text: string, canonicalBullets = false): string {
+  if (!canonicalBullets && !text.includes('0') && !text.includes('(') && !text.includes('\t') && !text.includes('[') && !text.includes('+')) return text
   const parts: string[] = []
   let at = 0
   while (at < text.length) {
@@ -34,7 +53,7 @@ function compactDjotListPrefix(text: string): string {
     if (quote) { parts.push(quote[0]); at += quote[0].length; continue }
     const item = /^(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+/.exec(text.slice(at))
     if (!item) break
-    parts.push(item[0].replace(/^(\(?)0+(?=[0-9])/, '$1').replace(/^\(([^)]+)\)/, '$1.').replace(/\t/g, ' '))
+    parts.push(item[0].replace(canonicalBullets ? /^[-*+](?=[ \t])/ : /^\+(?=[ \t])/, '-').replace(/^(\(?)0+(?=[0-9])/, '$1').replace(/^\(([^)]+)\)/, '$1.').replace(/\t/g, ' '))
     at += item[0].length
     if (/^[-*+]/.test(item[0])) {
       const task = /^\[[ xX\-_>?]\](?:[ \t]+|$)/.exec(text.slice(at))
@@ -394,9 +413,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
       let childBody = body
       if (child) {
-        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\][ \t]+/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
+        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (emptyDjotTaskTailEnd(body, n + 1 === lines.length || lines[n + 1]!.trim() === '') !== undefined ? 2 : (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length)), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\](?:[ \t]+|$)/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
         childBody = body.slice(child[1]!.length)
-        if (/^[-*+] $/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\][ \t]+/, '')
+        if (/^[-*+] $/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\](?:[ \t]+|$)/, '')
       }
       const nestedHead = child ? /^(\[\^[^\]\n]+\]:[ \t]*)(.+)$/.exec(childBody) : null
       if (!nestedFirstBody && nestedHead) {
@@ -422,7 +441,12 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       depth = quoteDepth + inlineQuote.depth
       const context = child ? lists.at(-1)! : noteOwner
       quoteBoundary = (quoteForCarve() + ' '.repeat(context.target + context.content) + inlineQuote.prefix).trimEnd()
-      out.push(currentNoteHead[1] + compactDjotListPrefix(body))
+      const emptyTaskEnd = emptyDjotTaskTailEnd(body, n + 1 === lines.length || lines[n + 1]!.trim() === '')
+      let writtenBody = compactDjotListPrefix(emptyTaskEnd === undefined ? body : body.slice(0, emptyTaskEnd).trimEnd() + ' +', emptyTaskEnd !== undefined)
+      if (emptyTaskEnd !== undefined && body.startsWith('* ')) {
+        writtenBody = '*' + writtenBody.slice(1)
+        out.push(currentNoteHead[1] + emptyNote + '\n  ' + writtenBody)
+      } else out.push(currentNoteHead[1] + writtenBody)
       const content = inlineQuote.body
       const inlineDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(content)
       if (inlineDiv) divs.push({ width: inlineDiv[1]!.length, prefix: ' '.repeat(context.target + context.content) + inlineQuote.prefix, depth, start: lineOffsets[n]!, ...(child ? { itemColumn: context.column + 1 } : {}) })
@@ -690,7 +714,8 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       }
       if (parent && !nested && parent.loose && parent.continuation && out.at(-1)?.trim() !== '')
         out.push(quoteForCarve().trimEnd())
-      const compact = compactDjotListPrefix(emptyItem ? text.trimEnd() + ' +' : text)
+      const emptyTaskEnd = emptyDjotTaskTailEnd(text, n + 1 === lines.length || lines[n + 1]!.trim() === '')
+      const compact = compactDjotListPrefix(emptyTaskEnd !== undefined ? text.slice(0, emptyTaskEnd).trimEnd() + ' +' : emptyItem ? text.trimEnd() + ' +' : text)
       const written = item[1] ? context!.bullet + compact.slice(1) : compact
       context!.continuation = false
       context!.empty = emptyItem
