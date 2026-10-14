@@ -88,8 +88,27 @@ export function djotImportLosses(
     (text) => text,
     (at) => report('Emphasis exceeding the native nesting budget is flattened; its text is preserved.', lineAt(at)),
   )
+  const rawFormatMessage = 'A Djot raw-format identifier containing U+0085 cannot be spelled in Carve; its raw-output behavior is lost.'
+  const rawFormats: Array<[number, number]> = []
+  const rawFormatIgnored: Array<[number, number]> = []
+  const rawFenceLines = new Set<number>()
+  const maskSource = source.includes('\u0085') ? lines.map((line, n) => line.replace(
+    /(`{3,}|~{3,})([ \t]*=)([^\s{}%"'`~\\]+)([ \t]*)$/,
+    (all, ticks: string, prefix: string, format: string, tail: string) => {
+      if (!format.includes('\u0085')) return all
+      rawFenceLines.add(n)
+      return ticks + prefix + format.replace(/[^A-Za-z0-9_+#.-]/g, 'x') + tail
+    },
+  )).join('\n') : source
   const destinations = new Map<number, number>()
-  const masked = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: true, autolinks: true, comments: true, onDestination: (start, end) => destinations.set(start, end) }).split('')
+  const masked = maskDjotCodeAndDestinations(maskSource, false, true, false, undefined, [], {
+    destinations: true, autolinks: true, comments: true,
+    onDestination: (start, end) => destinations.set(start, end),
+    onFenceOpen: n => { if (rawFenceLines.has(n)) report(rawFormatMessage, n + 1) },
+    onRawFormat: (start, end, format) => {
+      if (format.includes('\u0085') && !(source[start - 1] === '$' && !isDjotEscaped(source, start - 1))) rawFormats.push([start, end])
+    },
+  }).split('')
   for (let at = 0; at < source.length; at++) {
     if (masked[at] !== '{' || isDjotEscaped(source, at)) continue
     const attrs = readAttributes(source, at)
@@ -100,6 +119,32 @@ export function djotImportLosses(
   const definitions = new Map<string, string>()
   const definitionLines = new Set<number>()
   const headingLines = new Set<number>()
+  const headingAttributes = (line: number, column: number): { start: number; boundary: boolean; id?: string } => {
+    let start = line, end = offsets[line]!, id: string | undefined
+    for (let prior = line - 1; prior >= 0; prior--) {
+      let begin = prior
+      while (begin > 0) {
+        const value = lines[begin]!.slice(contentStart(lines[begin]!)).trimStart()
+        if (value.startsWith('{') || value === '' || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|[-*+][ \t])/.test(value)) break
+        begin--
+      }
+      const attributeAt = contentStart(lines[begin]!)
+      if (attributeAt < column || quoteDepths[begin]! < quoteDepths[line]!) break
+      const absolute = offsets[begin]! + attributeAt
+      const attrs = source[absolute] === '{' ? readAttributes(source, absolute) : undefined
+      if (!attrs || attrs.end <= offsets[prior]! || attrs.end > end || source.slice(attrs.end, end).trim() !== '') break
+      start = begin
+      let token: (typeof attrs.tokens)[number] | undefined
+      for (const value of attrs.tokens) if (value.key === 'id') token = value
+      if (token && id === undefined)
+        id = token.source.startsWith('#') ? token.source.slice(1) : token.source.slice(3).replace(/^"|"$/g, '').replace(/\\([\\"])/g, '$1')
+      end = offsets[begin]!
+      prior = begin
+    }
+    const before = start > 0 ? lines[start - 1]!.slice(contentStart(lines[start - 1]!)).trim() : ''
+    const boundary = start === line || before === '' || rows[start - 1] || definitionLines.has(start - 1) || /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\[[^\]\n]+\]:|(?:[-*][ \t]*){3,}$)/.test(before)
+    return { start, boundary, ...id === undefined ? {} : { id } }
+  }
   for (let n = 0; n < lines.length; n++) {
     if (definitionLines.has(n)) continue
     const line = lines[n]!,
@@ -121,13 +166,16 @@ export function djotImportLosses(
         /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(djotItemPrefix(previous, contentStart(previous))))
     const decision = accepted.get(n)
     if (decision) {
+      rawFormatIgnored.push([offsets[n]!, offsets[decision.end]! + lines[decision.end]!.length])
       for (let next = n + 1; next <= decision.end; next++) definitionLines.add(next)
       definitions.set(definitionKey(decision.label), decision.target)
       definitionLines.add(n)
       for (let k = offsets[n]!; k < offsets[n]! + line.length; k++) masked[k] = ' '
     }
     const heading = contentMask.startsWith('#') ? /^(#{1,6})(?:[ \t]+|$)/.exec(content) : null
-    if (heading && boundary && !headingLines.has(n)) {
+    const attributes = heading ? headingAttributes(n, at) : undefined
+    const headingBoundary = boundary || !!attributes && attributes.start < n && attributes.boundary
+    if (heading && headingBoundary && !headingLines.has(n)) {
       let text = content.slice(heading[0].length)
       let lastPart = text
       const marker = new RegExp(`^${heading[1]}[ \\t]+`)
@@ -156,7 +204,9 @@ export function djotImportLosses(
       }
       const label = collapsedReferenceText(text)
       const key = definitionKey(label)
-      if (!definitions.has(key)) definitions.set(key, '#' + key)
+      const identifier = key.replace(/[\]\[~!@#$%^&*(){}`,.<>\\|=+/?\s]+/g, ' ').trim().replace(/ +/g, '-')
+      const target = '#' + (attributes?.id ?? (identifier || 's-1'))
+      if (attributes?.boundary && !definitions.has(key)) definitions.set(key, target)
     }
     if (/^#{1,6}[ \t]*$/.test(contentMask) && heading && collapsedReferenceText(content.slice(heading[0].length)).trim() === '' && boundary && !headingLines.has(n)) {
       const next = lines[n + 1]?.trim() ?? ''
@@ -253,7 +303,7 @@ export function djotImportLosses(
     if (source[at] !== ']') continue
     const opener = stack.pop()
     if (opener === undefined) continue
-    if (source[opener.at + 1] === '^' && at > opener.at + 2) { carryNested(opener.nested); continue }
+    if (source[opener.at + 1] === '^' && at > opener.at + 2) { rawFormatIgnored.push([opener.at, at + 1]); carryNested(opener.nested); continue }
     const open = opener.at
     const image = source[open - 1] === '!' && !escaped[open - 1]
     let end = at + 1,
@@ -267,6 +317,7 @@ export function djotImportLosses(
       const start = end + 1
       end = referenceEnds[start]!
       if (end < 0) { carryNested(opener.nested); continue }
+      rawFormatIgnored.push([start, end])
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
       const key = explicit ? referenceKey(explicit) : definitionKey(
@@ -278,6 +329,7 @@ export function djotImportLosses(
         report(image ? 'An unresolved Djot image reference has no src; Carve cannot spell that image.' : 'An unresolved Djot reference has no href; Carve cannot spell that link.', lineAt(open))
       }
     } else { carryNested(opener.nested); continue }
+    if (image) rawFormatIgnored.push([open, at + 1])
     if (destination === '')
       report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(open))
     if (image && destination !== undefined && destination !== '') {
@@ -293,6 +345,13 @@ export function djotImportLosses(
       if (parent) parent.nested = true
     }
     at = end - 1
+  }
+  rawFormatIgnored.sort((a, b) => a[0] - b[0])
+  let ignoredIndex = 0, ignoredEnd = -1
+  for (const [start, end] of rawFormats) {
+    while (ignoredIndex < rawFormatIgnored.length && rawFormatIgnored[ignoredIndex]![0] <= start)
+      ignoredEnd = Math.max(ignoredEnd, rawFormatIgnored[ignoredIndex++]![1])
+    if (ignoredEnd < end) report(rawFormatMessage, lineAt(start))
   }
   return losses.sort((a, b) => a.line - b.line)
 }
