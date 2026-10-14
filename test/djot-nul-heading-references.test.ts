@@ -40,3 +40,25 @@ test('NUL heading references preserve Native destinations', () => {
   }
   expect(failures).toEqual([])
 })
+
+test.each([
+  { source: '# A b\0\n\n# A-b\0\n\n[A-b\0][]', target: 1 },
+  { source: '# a�b\n\n# a\0b\n\n[a\0b][]', target: 1 },
+  { source: '# H\0\n\n[H\0][]\n\n{#H�}', target: 0 },
+  { source: '# H\0\n\n[H\0][]\n\n{#H�}\n{.x}', target: 0 },
+])('a heading reference points to its actual heading: $source', ({ source, target }) => {
+  const document = parseFragment(carveToHtml(djotToCarve(source)))
+  const ids: string[] = [], links: string[] = []
+  const pending: import('parse5').DefaultTreeAdapterMap['node'][] = [document]
+  while (pending.length) {
+    const node = pending.pop()!
+    if ('attrs' in node) {
+      const id = node.attrs.find(attr => attr.name === 'id')?.value
+      if (id && (node.nodeName === 'section' || /^h[1-6]$/.test(node.nodeName))) ids.push(id)
+      const href = node.attrs.find(attr => attr.name === 'href')?.value
+      if (href) links.push(href)
+    }
+    if ('childNodes' in node) for (let i = node.childNodes.length - 1; i >= 0; i--) pending.push(node.childNodes[i]!)
+  }
+  expect(links).toEqual(['#' + ids[target]])
+})

@@ -1,3 +1,4 @@
+import { importedDjotHeadingTargets } from './djot-heading-targets.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
@@ -971,24 +972,26 @@ export function djotToCarve(djot: string): string {
   try { return convertDjotInput(djot) } finally { resetParagraphContext() }
 }
 
-function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false): string {
+function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false, skipHeadingTargets = false): string {
   djot = collapseLiteralNestedImages(djot)
-  if (nulShielded || !djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters)
+  if (nulShielded || !djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters, skipHeadingTargets)
   const token = '\0U\0'
-  return convertDjotDocument(djot.replaceAll('\0', token), preserveReferenceBreaks, omitQuoteDelimiters).replaceAll(token, '\0')
+  return convertDjotDocument(djot.replaceAll('\0', token), preserveReferenceBreaks, omitQuoteDelimiters, skipHeadingTargets).replaceAll(token, '\0')
 }
 
-function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false): string {
+function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, skipHeadingTargets = false): string {
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
   let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(sourceBody))
   const hasSourceNuls = body.includes('\0U\0')
-  if (((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line))) || hasSourceNuls && /^\[(?!\^)[^\]\n]*�[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) || hasSourceNuls && /(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?#{1,6}[ \t][^\n]*\0U\0/.test(body) && body.includes(']['))
+  const headingCandidate = !skipHeadingTargets && hasSourceNuls && body.includes('][') && /(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?#{1,6}[ \t]/.test(body)
+  const actualHeadingTargets = headingCandidate ? importedDjotHeadingTargets(convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters, true)) : undefined
+  if (((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line))) || hasSourceNuls && /^\[(?!\^)[^\]\n]*�[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) || headingCandidate)
   {
     const accepted = hasSourceNuls ? new Map<number, { label: string; target: string; end: number }>() : undefined
     if (accepted) foldDjotReferences(body, accepted)
-    body = djotReferenceLayout(body, djotContentStart, false, accepted, false, true)
+    body = djotReferenceLayout(body, djotContentStart, false, accepted, false, true, actualHeadingTargets)
   }
   if (body.includes('[^') && body.includes(']:') && body.split('\n').some(line => /^\[\^[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) {
     const accepted = new Map<number, { label: string; target: string; end: number }>()
@@ -1016,7 +1019,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     const key = `${omitQuotes ? 1 : 0}:${preserveSourceNuls ? 1 : 0}:${label}`
     const cached = childTextCache.get(key)
     if (cached !== undefined) return cached
-    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes, true)), preserveSourceNuls)
+    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes, true, true)), preserveSourceNuls)
     childTextCache.set(key, text)
     return text
   }
@@ -1454,7 +1457,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
       let destination = djotDestinationLines(rawDestination, owner.depth)
       if (owner.image && !authoredLabel.includes('\n') && label.includes('[')) {
         const definitions = Array.from(label.matchAll(/\[(carve-djot-pipe-target-\d+)\]/g), match => pipeDefinitions.get(match[1]!) ?? '').filter(Boolean).join('\n')
-        label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true, true, true).replaceAll('\0U\0', '\0')), label.includes('\n'))
+        label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true, true, true, true).replaceAll('\0U\0', '\0')), label.includes('\n'))
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
           .replace(/[!-\/:-@\[-`{-~]/g, (value) => '\\' + value)

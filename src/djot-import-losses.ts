@@ -92,14 +92,14 @@ export function djotImportLosses(
       let begin = prior
       while (begin > 0) {
         const value = lines[begin]!.slice(contentStart(lines[begin]!)).trimStart()
-        if (value.startsWith('{') || value === '' || /^(?:#{1,6}[ \t]|:{3,}|[`~]{3,}|[-*+][ \t])/.test(value)) break
+        if (value.startsWith('{') || value === '' || /^(?:#{1,6}(?:[ \t]|$)|:{3,}|[`~]{3,}|[-*+][ \t])/.test(value)) break
         begin--
       }
       const attributeAt = contentStart(lines[begin]!)
       if (attributeAt < column || quoteDepths[begin]! < quoteDepths[line]!) break
       const absolute = offsets[begin]! + attributeAt
       const attrs = source[absolute] === '{' ? readAttributes(source, absolute) : undefined
-      if (!attrs || attrs.end <= offsets[prior]! || source.slice(attrs.end, end).trim() !== '') break
+      if (!attrs || attrs.end <= offsets[prior]! || attrs.end > end || source.slice(attrs.end, end).trim() !== '') break
       start = begin
       let token: (typeof attrs.tokens)[number] | undefined
       for (const value of attrs.tokens) if (value.key === 'id') token = value
@@ -109,7 +109,7 @@ export function djotImportLosses(
       prior = begin
     }
     const before = start > 0 ? lines[start - 1]!.slice(contentStart(lines[start - 1]!)).trim() : ''
-    const boundary = start === line || before === '' || /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\[[^\]\n]+\]:|(?:[-*][ \t]*){3,}$)/.test(before)
+    const boundary = start === line || before === '' || rows[start - 1] || definitionLines.has(start - 1) || /^(?:#{1,6}(?: |$)|:{3,}|[`~]{3,}|\[[^\]\n]+\]:|(?:[-*][ \t]*){3,}$)/.test(before)
     return { start, boundary, ...id === undefined ? {} : { id } }
   }
   for (let n = 0; n < lines.length; n++) {
@@ -170,7 +170,8 @@ export function djotImportLosses(
       }
       const label = collapsedReferenceText(text)
       const key = definitionKey(label)
-      const target = attributes?.id === undefined ? '#' + key.replace(/[ \t\r\n]+/g, '-') : '#' + attributes.id
+      const identifier = key.replace(/[\]\[~!@#$%^&*(){}`,.<>\\|=+/?\s]+/g, ' ').trim().replace(/ +/g, '-')
+      const target = '#' + (attributes?.id ?? (identifier || 's-1'))
       if (attributes?.boundary && !definitions.has(key)) definitions.set(key, target)
     }
     if (/^#{1,6}[ \t]*$/.test(contentMask) && heading && collapsedReferenceText(content.slice(heading[0].length)).trim() === '' && boundary && !headingLines.has(n)) {

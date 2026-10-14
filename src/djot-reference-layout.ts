@@ -77,7 +77,7 @@ function normalizeMultilineLabels(
 }
 
 /** Normalize reference labels and share definition attributes. */
-export function djotReferenceLayout(source: string, contentStart: (line: string) => number, caretOnly = false, accepted?: ReadonlyMap<number, { label: string; target: string; end: number }>, imageChildText = false, aliasesOnly = false): string {
+export function djotReferenceLayout(source: string, contentStart: (line: string) => number, caretOnly = false, accepted?: ReadonlyMap<number, { label: string; target: string; end: number }>, imageChildText = false, aliasesOnly = false, actualHeadingTargets?: ReadonlyMap<string, string>): string {
   let mask = referenceMask(source)
   if (!caretOnly && !aliasesOnly) {
   source = normalizeMultilineLabels(source, (at, label, image) =>
@@ -197,11 +197,14 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     for (let k = first; k <= n; k++) definitionLines.add(k)
   }
   const headingTargets = new Map<string, string>()
-  if (aliasesOnly && source.includes('\0U\0') && source.includes('#')) {
+  if (aliasesOnly && actualHeadingTargets && source.includes('\0U\0') && source.includes('#')) {
     const targets = new Map<string, string>()
     djotImportLosses(source, djotTableRows(source, mask), contentStart, [], accepted ?? new Map(), targets)
     for (const [key, target] of targets)
-      if (key.includes('\0U\0') && target.startsWith('#') && !definitions.has(key)) headingTargets.set(key, target)
+      if (key.includes('\0U\0') && target.startsWith('#') && !definitions.has(key)) {
+        const actual = actualHeadingTargets.get(key.replaceAll('\0U\0', '\0'))
+        if (actual !== undefined) headingTargets.set(key, actual)
+      }
   }
   if (!definitions.size && !headingTargets.size) return source
   const lineOffsets: number[] = []
