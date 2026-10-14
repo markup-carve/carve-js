@@ -3931,7 +3931,14 @@ class CarveRenderSession {
    * line in both.
    */
   private captionRow(caption: InlineNode[], ctx: CarveContext): string | undefined {
-    const written = this.renderInlines(caption, ctx)
+    const wasCaption = this.inCaption
+    this.inCaption = true
+    let written: string
+    try {
+      written = this.renderInlines(caption, ctx)
+    } finally {
+      this.inCaption = wasCaption
+    }
 
     return trimNonNbsp(written) === '' ? undefined : `^ ${written}`
   }
@@ -4659,12 +4666,13 @@ class CarveRenderSession {
    * does (carve-js#1344).
    */
   private termKeepsLineIndent = false
+  private inCaption = false
 
   private unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
     if (/[ \t][\r\n]/.test(content)) {
       return 'a line of the value ends in whitespace, which the block layer strips'
     }
-    if (!this.termKeepsLineIndent && /[\r\n][ \t]/.test(content)) {
+    if (!this.termKeepsLineIndent && !this.inCaption && /[\r\n][ \t]/.test(content)) {
       return 'a line of the value starts with whitespace, which the block layer strips'
     }
     if (needsPad && /[\r\n]$/.test(content)) {
