@@ -3301,7 +3301,9 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
 
 function stripPositionsOutsideRow(nodes: InlineNode[], start: number, end: number): InlineNode[] {
   for (const node of nodes) {
-    if (node.type !== 'cell_wrap' && node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
+    // A marker from a later row can record a join here, outside this row's
+    // own source span (carve#3172).
+    if (node.pos && node.pos.startOffset !== undefined && node.pos.endOffset !== undefined &&
       (node.pos.startOffset < start || node.pos.endOffset > end)) delete node.pos
     if (node.type === 'citation_group') {
       for (const item of node.items) {
@@ -6777,8 +6779,6 @@ interface RawCell {
   /** The `+` of the continuation line the last fragment came from. */
   lastMarker?: number
   wraps?: Array<{ offset: number; line: number; row?: number; col?: number; pos?: Position }>
-  /** A later row joins into this cell, so its row cannot contain every child span. */
-  crossRowJoin?: boolean
 }
 
 interface FragmentPlace {
@@ -15535,10 +15535,6 @@ class ParseSession {
         (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
         (origin, marker) => {
           if (!marker.cell.joins?.length) return
-          if (origin.rowIndex !== marker.rowIndex) {
-            origin.cell.crossRowJoin = true
-            marker.cell.crossRowJoin = true
-          }
           keepBlocked(origin.cell)
           for (const { frag, at, marker: point, sep, line } of marker.cell.joins) joinFragment(origin.cell, frag, at, line, marker.rowIndex - origin.rowIndex, point, sep, grid[marker.rowIndex]!.indexOf(marker) - grid[origin.rowIndex]!.indexOf(origin))
         },
@@ -15638,10 +15634,6 @@ class ParseSession {
       }
       const ra = rowAttrsList[idx]
       if (ra) row.attrs = ra
-      // A join through a span marker places content from one row in another.
-      // Neither row has a span that owns all of its source without also
-      // claiming a sibling's content.
-      if (rc.some(c => c.crossRowJoin)) delete row.pos
       if (row.pos?.startOffset !== undefined && row.pos.endOffset !== undefined) {
         for (const cell of row.cells) stripPositionsOutsideRow(cell.children ?? [], row.pos.startOffset, row.pos.endOffset)
       }
