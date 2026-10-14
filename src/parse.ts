@@ -12491,6 +12491,7 @@ class ParseSession {
           // The test is column-0 anchored, so an indented fence still folds in.
           if (
             isBlankLine(next) ||
+            RE_CAPTION.test(next) ||
             (!lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
               (RE_DEFLIST_TERM.test(nextEntry) || RE_DEFLIST_DEF.test(nextEntry))) ||
             opensCodeFence(next) ||
