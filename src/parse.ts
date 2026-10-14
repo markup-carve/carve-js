@@ -6262,7 +6262,7 @@ function trackItemLazyState(
       state.inDefList = false
       return
     }
-    if ((state.descriptionHasTerm || (!state.lazyFoldable && state.descriptionColumn !== undefined)) && RE_BLOCKQUOTE.test(overIndented)) {
+    if (RE_BLOCKQUOTE.test(overIndented)) {
       content = overIndented
       if (facts) facts = { ...facts, whitespace: 0 }
     }
