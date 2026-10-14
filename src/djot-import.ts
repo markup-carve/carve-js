@@ -317,7 +317,24 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
   return lines.join('\n')
 }
 
+function normalizeDjotDivOpeners(source: string): string {
+  if (!source.includes(':::')) return source
+  let mask: string | undefined, boundaries: Set<number> | undefined, offset = 0
+  return source.split('\n').map(line => {
+    const start = offset
+    offset += line.length + 1
+    const at = djotContentStart(line), prefix = line.slice(0, at)
+    const opener = /^(:{3,})([ \t]*)([A-Za-z0-9_-]+)([ \t]*)(\r?)$/.exec(line.slice(at))
+    if (!opener || opener[2] === ' ') return line
+    mask ??= maskDjotCodeAndDestinations(source)
+    boundaries ??= new Set(djotInlineBoundaries(source, mask, true))
+    return mask[start + at] === ':' && boundaries.has(start)
+      ? `${prefix}${opener[1]} ${opener[3]}${opener[4]}${opener[5]}` : line
+  }).join('\n')
+}
+
 /** Rewrite Djot block spellings that Carve does not recognize. */
+
 function convertDjotBlockMarkers(source: string): string {
   const lines = source.split('\n')
   const masked = maskDjotCodeAndDestinations(source).split('\n')
@@ -917,7 +934,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const strippedDefinitions = stripDjotFootnoteDefinitionAttributes(djot)
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
-  let body = escapeDjotTableAttributeBoundaries(sourceBody)
+  let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(sourceBody))
   if (body.includes('`') && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*`[^\]\n]*\]:/.test(line.slice(djotContentStart(line)))))
     body = djotReferenceLayout(body, djotContentStart, false, undefined, false, true)
   if (body.includes('[^') && body.includes(']:') && body.split('\n').some(line => /^\[\^[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) {
