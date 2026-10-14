@@ -934,7 +934,14 @@ function collapseLiteralNestedImages(source: string): string {
     const depth = (at - start) / 2
     if (depth < 2) continue
     const labelStart = at
-    while (at < source.length && !/[\[\]\\\n]/.test(source[at]!)) at++
+    while (at < source.length) {
+      const ch = source[at]!
+      if (ch === '\\') {
+        if (at + 1 >= source.length || source[at + 1] === '\n' || source[at + 1] === '\r') break
+        at += 2
+      } else if (ch === '[' || ch === ']' || ch === '\n' || ch === '\r') break
+      else at++
+    }
     if (at === labelStart) continue
     const label = source.slice(labelStart, at)
     if (label.includes('`')) continue
