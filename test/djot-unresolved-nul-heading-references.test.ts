@@ -5,7 +5,7 @@ import { djotToCarveWithLosses } from '../src/djot-import.js'
 import controls from './fixtures/djot-unresolved-nul-heading-references.json'
 
 test('unresolved NUL heading references do not select replacement-character headings', () => {
-  for (const { source, html, image } of controls) {
+  for (const { source, html, image, quoteOwn } of controls) {
     expect(html, source).not.toMatch(/<(?:a|img)\b[^>]*\b(?:href|src)=/)
     const report = djotToCarveWithLosses(source)
     const actual = carveToHtml(report.value)
@@ -15,6 +15,11 @@ test('unresolved NUL heading references do not select replacement-character head
     expect(actual, source).not.toContain('class="c"')
     expect(actual, source).not.toContain('id="i"')
     expect(actual, source).not.toContain('{%comment%}')
+    if (quoteOwn !== undefined) {
+      expect((html.match(/<blockquote>/g) ?? []).length, source).toBe(quoteOwn)
+      expect((actual.match(/<blockquote>/g) ?? []).length, source).toBe(quoteOwn)
+      expect(actual, source).not.toContain('&gt;')
+    }
     const message = image
       ? 'An unresolved Djot image reference has no src; Carve cannot spell that image.'
       : 'An unresolved Djot reference has no href; Carve cannot spell that link.'
