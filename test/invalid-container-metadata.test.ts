@@ -88,7 +88,7 @@ it('migrates authored malformed metadata rather than its masked tokens', () => {
     expect(carveToHtml(migrated)).toBe(`<p>::: tip${metadata === '{.x}' ? '' : ' ' + (metadata === '"T" extra' ? '“T” extra' : metadata)}\nbody\n:::</p>`)
   }
   const source = '::: tip Bad X\n\n::: note\nx\n:::\n:::\n'
-  expect(carveToHtml(djotToCarve(source))).toBe('<p>::: tip Bad X</p>\n<aside class="admonition note" aria-label="Note">\n  <p>x</p>\n</aside>\n<p>:::</p>')
+  expect(carveToHtml(djotToCarve(source))).toBe('<p>::: tip Bad X</p>\n<div class="note">\n  <p>x</p>\n</div>\n<p>:::</p>')
 })
 
 it('diagnoses metadata on a footnote marker line and blocks its format patch', () => {

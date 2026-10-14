@@ -386,8 +386,8 @@ it.each(['  - a\n* b\n', '  - a\n\n  a\n'])('preserves blocks after an indented 
 
 it('keeps main recovery for equal-width nested containers with rejected metadata', () => {
   const source = '::: tip Bad X\n\n::: note\nx\n:::\n:::\n'
-  expect(djotToCarve(source)).toBe('\\::: tip Bad X\n\n::: note\nx\n:::\n\\:::\n')
-  expect(carveToHtml(djotToCarve(source))).toBe('<p>::: tip Bad X</p>\n<aside class="admonition note" aria-label="Note">\n  <p>x</p>\n</aside>\n<p>:::</p>')
+  expect(djotToCarve(source)).toBe('\\::: tip Bad X\n\n{class="note"}\n:::\nx\n:::\n\\:::\n')
+  expect(carveToHtml(djotToCarve(source))).toBe('<p>::: tip Bad X</p>\n<div class="note">\n  <p>x</p>\n</div>\n<p>:::</p>')
 })
 
 it('attaches word attributes across escaped punctuation', () => {

@@ -1,4 +1,5 @@
 import { importedDjotHeadingTargets } from './djot-heading-targets.js'
+import { genericDjotDivClasses } from './djot-div-classes.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { djotItemPrefix } from './djot-inline-boundaries.js'
 import { djotStructuralPrefixEnd } from './djot-structural-prefix.js'
@@ -329,6 +330,10 @@ function normalizeDjotDivOpeners(source: string): string {
     offset += line.length + 1
     const at = djotContentStart(line), prefix = line.slice(0, at)
     const opener = /^(:{3,})([ \t]*)([A-Za-z0-9_-]+)([ \t]*)(\r?)$/.exec(line.slice(at))
+    if (!opener && /[\\{]/.test(line.slice(at)) && /^:{3,}[ \t]*(?:[A-Za-z0-9_-]|\\[_-])+/.test(line.slice(at))) {
+      mask ??= maskDjotCodeAndDestinations(source)
+      return mask[start + at] === ':' ? prefix + '\\' + line.slice(at) : line
+    }
     if (!opener || opener[2] === ' ') return line
     mask ??= maskDjotCodeAndDestinations(source)
     boundaries ??= new Set(djotInlineBoundaries(source, mask, true))
@@ -1122,7 +1127,8 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     .replaceAll(emptyNote, '%%%%').replaceAll(imageParagraph, '{%%}')
     .replace(new RegExp(`^[ \t>]*${itemAttributePrefix}(B?)(\\d+)\x00\\n(?:[ \t>]*\\n)*([ \t>]*)([-*+]|[^ \t\\n]+)([ \t]+)`, 'gm'), (_match, block: string, index: string, container: string, marker: string, whitespace: string) => block ? `${container}${itemAttributeValues[Number(index)] ?? ''}\n${container}${marker}${whitespace}` : `${container}${marker}${itemAttributeValues[Number(index)] ?? ''}${whitespace}`)
     .replace(new RegExp(`(?<![ \t])([ \t]+)((?:\\[[ xX]\\][ \t]+)?)${itemAttributePrefix}(\\d+)\x00`, 'g'), (_match, whitespace: string, task: string, index: string) => `${itemAttributeValues[Number(index)] ?? ''}${whitespace}${task}`)
-  return strippedDefinitions.restore(frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`)
+  const containers = genericDjotDivClasses(converted, djotContentStart)
+  return strippedDefinitions.restore(frontmatter === '' ? containers : `${frontmatter}${separator}${containers}`)
 }
 
 export function djotToCarveWithLosses(djot: string): { value: string; losses: DjotImportLoss[] } {
