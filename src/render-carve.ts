@@ -4683,7 +4683,7 @@ class CarveRenderSession {
   }
 
   private guardCodeLines(written: string, ctx: CarveContext, nodeType: string, node: InlineNode): string {
-    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'g')
+    const marker = new RegExp(`\\n(?=>(?: |\\n|$)|\\[[^\\]\\n]+\\]:[ \\t]|:{3,}(?:[ \\t]*$|[ \\t]+)${this.termKeepsLineIndent || this.descriptionParagraph || this.itemParagraph ? '|[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +' : ''}${ctx.colonFenceDepth > 0 ? `|:{${ctx.colonFenceDepth + 2}}[ \\t]*(?:\\n|$)` : ''})`, 'gm')
     if (this.termKeepsLineIndent && marker.test(written)) {
       throw new SourceUnspellableError(nodeType, 'a block marker on a continuation line ends the definition term', node)
     }
