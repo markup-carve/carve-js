@@ -2046,7 +2046,7 @@ function collectSilentFailures(
         if (entry.skip || !entry.cell.span) continue
         const marker = entry.cell.span === 'rowspan' ? '^' : '<'
         const reason = marker === '^'
-          ? r === 0
+          ? r === 0 || grid[r - 1]![c] === undefined
             ? 'There is no cell above it to extend.'
             : 'Extending the cell above would cover another cell.'
           : c === 0
