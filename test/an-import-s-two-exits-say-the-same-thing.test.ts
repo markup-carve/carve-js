@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { htmlToCarve, htmlToAst, parse, renderCarveWithConversionReport, toAstJson } from '../src/index.js'
+import { carveToHtml, htmlToCarve, htmlToAst, parse, renderCarveWithConversionReport, toAstJson } from '../src/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const fixtureDir = resolve(__dirname, '../spec/tests/html-import')
@@ -283,21 +283,15 @@ describe('the three shapes the import contract now rules', () => {
     expect(htmlToCarve('<p>x:rocket: y</p>').value).toBe('x:rocket: y\n')
   })
 
-  it('writes no link or image where the HTML names no destination', () => {
-    // The new rule. `[x]()` re-parses as literal text, so the four punctuation
-    // characters were the whole of what the import added - and `[t](){#k}`
-    // re-read its trailing block as a TAG node rather than as the link's
-    // attributes.
+  it('keeps explicit empty destinations and unwraps an absent one', () => {
     const html = '<p><a href="">click here</a> and <a id="k">a named one</a></p>\n<img src="" alt="logo">'
     const result = htmlToCarve(html)
-    expect(result.value).toBe('click here and [a named one]{#k}\n\nlogo\n')
+    expect(result.value).toBe('[click here]() and [a named one]{#k}\n\n![logo]()\n')
     expect(twoExits(html)).toBeNull()
     expect(
       result.report.diagnostics.map((row) => ({ code: row.code, message: row.message, severity: row.severity })),
     ).toEqual([
       { code: 'element-unwrapped', message: 'Unwrapped <a> with no destination', severity: 'info' },
-      { code: 'element-unwrapped', message: 'Unwrapped <a> with no destination', severity: 'info' },
-      { code: 'element-unwrapped', message: 'Unwrapped <img> with no source', severity: 'info' },
     ])
   })
 
@@ -312,25 +306,18 @@ describe('the three shapes the import contract now rules', () => {
     expect(htmlToCarve('<p><a href=" /u ">t</a></p>').value).toBe('[t](%20/u%20)\n')
   })
 
-  it('NEVER rebuilds the destination, in any mode', () => {
-    // THE SECURITY HALF. `href=""` is what PART 9 §25's URL sink denylist emits
-    // when it blanks a dangerous scheme, and it writes no provenance - so any
-    // route producing a destination here reconstructs the exact value a
-    // security rule removed. Not from a title, not from the anchor's text, not
-    // from provenance in `roundtrip` mode.
+  it('keeps an empty href empty in every mode', () => {
     const hostile = '<p><a href="" title="javascript:alert(1)">javascript:alert(1)</a></p>'
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
       const out = htmlToCarve(hostile, { mode }).value
-      expect(out, `mode ${mode}`).not.toContain('](')
-      expect(out, `mode ${mode}`).not.toContain('href')
+      expect(out, `mode ${mode}`).toBe('[javascript:alert(1)]( "javascript:alert(1)")\n')
+      expect(carveToHtml(out)).toContain('href=""')
     }
   })
 
-  it('keeps an unwrapped image out of the image slot entirely', () => {
-    // An image's content is its alternative text, and that is all there is to
-    // stand in its place. With no alt there is nothing to write.
-    expect(htmlToCarve('<img src="" alt="">').value).toBe('\n')
-    expect(htmlToCarve('<img alt="a" id="i" src="">').value).toBe('[a]{#i}\n')
+  it('keeps an empty image and its attributes', () => {
+    expect(htmlToCarve('<img src="" alt="">').value).toBe('![]()\n')
+    expect(htmlToCarve('<img alt="a" id="i" src="">').value).toBe('![a](){#i}\n')
   })
 })
 

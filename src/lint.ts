@@ -509,6 +509,15 @@ export function lintCarve(
   const foldId = caseOnlyKey
   const out: LintWarning[] = []
 
+  walkDocument(doc, (node) => {
+    if (node.type !== 'link_reference_definition' || node.href !== '') return
+    out.push({
+      ...locate(node as Positioned, toUtf16),
+      rule: 'empty-reference-definition',
+      message: 'This reference definition has an empty destination. Check that its URL was not removed by mistake.',
+    })
+  })
+
   for (const mismatch of inspectColonFences(source).mismatches) {
     out.push({
       line: mismatch.line,

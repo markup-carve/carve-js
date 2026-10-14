@@ -16,10 +16,6 @@ const cases = [
     },
   },
   { owner: 'math', field: 'label', node: { type: 'math', display: true, content: '' } },
-  {
-    owner: 'link_reference_definition', field: 'href',
-    node: { type: 'link_reference_definition', label: 'a' },
-  },
 ]
 
 function documentWith(spec: (typeof cases)[number], value: unknown) {
@@ -33,13 +29,18 @@ function documentWith(spec: (typeof cases)[number], value: unknown) {
 }
 
 describe('a string minimum is checked at decode', () => {
-  it('refuses the empty reference destination reproducer', () => {
+  it('accepts an empty reference destination and rejects non-strings', () => {
     const wire = JSON.parse(`{
       "type": "document",
       "srcByteLength": 0,
       "children": [{"type": "link_reference_definition", "label": "a", "href": ""}]
     }`)
-    expect(() => fromAstJson(wire)).toThrow(AstJsonSchemaError)
+    expect(() => fromAstJson(wire)).not.toThrow()
+    expect(WIRE_VALUE_KINDS.link_reference_definition.href).toBe('string')
+    for (const href of [1, null, []]) {
+      wire.children[0].href = href
+      expect(() => fromAstJson(wire)).toThrow(AstJsonSchemaError)
+    }
   })
 
   it.each(cases)('carries the minimum for $owner / $field', (spec) => {

@@ -73,11 +73,11 @@ it.each(['https://x.test/[r]\n\n[r]: /u\n', 'https://x.test/a\\_b/[r]\n\n[r]: /u
 
 
 it.each([
-  ['[r](<> "t")\n\n[r]: /u\n', '[r]{title=t}\n\n[r]: /u\n'],
-  ['[https://x.test](<> "t")\n\n[https://x.test]: /u\n', '[https://x.test]{title=t}\n\n[https://x.test]: /u\n'],
-])('keeps titled empty destinations lossy without resolving another reference: %s', (source, expected) => {
+  ['[r](<> "t")\n\n[r]: /u\n', '[r]( "t")\n\n[r]: /u\n'],
+  ['[https://x.test](<> "t")\n\n[https://x.test]: /u\n', '[https://x.test]( "t")\n\n[https://x.test]: /u\n'],
+])('keeps titled empty destinations separate from references: %s', (source, expected) => {
   const migration = migrateMarkdown(source)
   expect(migration.value).toBe(expected)
-  expect(migration.report.diagnostics.some(row => row.code === 'structure-unspellable' && row.fidelity === 'dropped')).toBe(true)
+  expect(migration.report.diagnostics.some(row => row.code === 'structure-unspellable')).toBe(false)
 })
 

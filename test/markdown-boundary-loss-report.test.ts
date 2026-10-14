@@ -5,6 +5,10 @@ it.each([["``` f&ouml;&ouml;\nfoo\n```\n", 1], ["````;\n````\n", 1], ["[foo]: <>
   const result = migrateMarkdown(source)
   expect(result.value).toBe(markdownToCarve(source))
   const losses = result.report.diagnostics.filter(row => row.code === 'structure-unspellable')
+  if (source.includes('()') || source.includes('<>')) {
+    expect(losses).toEqual([])
+    return
+  }
   expect(losses).toHaveLength(1)
   expect(losses[0]).toMatchObject({ fidelity: 'dropped', confidence: 'exact', severity: 'warning', path: `line:${line}` })
 })
@@ -13,20 +17,18 @@ it.each(['[link](url)', '![alt](image.png)', '`[link]()`', '\\[link]()', '```c++
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
 })
 
-it.each([["- | h |\n  |---|\n  | [x]() |\n", 3], ["> | h |\n> |---|\n> | [x]() |\n", 3], ["a `c\nd`\n[x]()\n", 3], ["a\n[x]()\n===\n", 2]])('reports a folded source construct once at its original line: %s', (source, line) => {
+it.each([["- | h |\n  |---|\n  | [x]() |\n", 3], ["> | h |\n> |---|\n> | [x]() |\n", 3], ["a `c\nd`\n[x]()\n", 3], ["a\n[x]()\n===\n", 2]])('keeps a native empty link without a folded loss: %s', (source) => {
   const losses = migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')
-  expect(losses).toHaveLength(1)
-  expect(losses[0]?.path).toBe(`line:${line}`)
+  expect(losses).toEqual([])
 })
 
 it.each(['<span title="[x]()">a</span>', '<http://a/[x]()>', '![a [b]() c](img.png)', '[foo]: <>\n\n![x [foo] y](i.png)'])('does not confuse opaque syntax or image descriptions with links: %s', source => {
   expect(migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')).toEqual([])
 })
 
-it.each([["> a\n> [x]()\n> ---\n", 2], ["- a\n  [x]()\n  ---\n", 2], ["> a\n> ```\n> x\n> ```\n> b\n> [x]()\n", 6], ["[a][a] z\n\n[a]: <> \"t\"\n", 1], ["<a@[x]()>", 1]])('keeps contained and reference diagnostics exact: %s', (source, line) => {
+it.each([["> a\n> [x]()\n> ---\n", 2], ["- a\n  [x]()\n  ---\n", 2], ["> a\n> ```\n> x\n> ```\n> b\n> [x]()\n", 6], ["<a@[x]()>", 1]])('keeps native empty destinations out of structure losses: %s', (source) => {
   const losses = migrateMarkdown(source).report.diagnostics.filter(row => row.code === 'structure-unspellable')
-  expect(losses).toHaveLength(1)
-  expect(losses[0]?.path).toBe(`line:${line}`)
+  expect(losses).toEqual([])
 })
 
 it('does not read a link across nested table cells', () => {
@@ -39,9 +41,9 @@ it.each([
   ['- a\n- b [x]()\n  c', 2],
   ['> <code>a</code>\n> [x]()', 2],
   ['<code>a</code>\n[x]()\n===', 2],
-])('keeps first item lines and protected HTML offsets: %s', (source, line) => {
+])('keeps native empty links at their source position: %s', (source) => {
   const loss = migrateMarkdown(source).report.diagnostics.find(row => row.code === 'structure-unspellable')
-  expect(loss?.path).toBe(`line:${line}`)
+  expect(loss).toBeUndefined()
 })
 
 

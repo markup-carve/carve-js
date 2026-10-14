@@ -126,8 +126,8 @@ describe('the field is published on the wire', () => {
     expect(() => fromAstJson(payload)).toThrow()
   })
 
-  it('the envelope announces contract 1.1, which this field is the minor bump for', () => {
-    expect(toAstEnvelope(parse('| a |\n|---|\n| 1 |\n')).astVersion).toBe('1.1')
+  it('the envelope announces contract 2.0, which this field is the minor bump for', () => {
+    expect(toAstEnvelope(parse('| a |\n|---|\n| 1 |\n')).astVersion).toBe('2.0')
   })
 })
 

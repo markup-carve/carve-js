@@ -26,9 +26,9 @@ it('retains whitespace and case folding of source labels', () => {
 
 it.each([
   ['[a_~b]\n\n[a\\_~b]: <>', '<p>[a_~b]</p>'],
-  ['[a\\_~b]\n\n[a\\_~b]: <>', '<p>a_~b</p>'],
+  ['[a\\_~b]\n\n[a\\_~b]: <>', '<p><a href="">a_~b</a></p>'],
   ['[a&b]\n\n[a&amp;b]: <>', '<p>[a&amp;b]</p>'],
-  ['[a&amp;b]\n\n[a&amp;b]: <>', '<p>a&amp;b</p>'],
-])('compares source labels before unwrapping an empty destination: %s', (source, expected) => {
+  ['[a&amp;b]\n\n[a&amp;b]: <>', '<p><a href="">a&amp;b</a></p>'],
+])('compares source labels when resolving an empty definition: %s', (source, expected) => {
   expect(carveToHtml(markdownToCarve(source))).toBe(expected)
 })

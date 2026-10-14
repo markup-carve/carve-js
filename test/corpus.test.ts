@@ -847,6 +847,8 @@ const IMPLEMENTED = new Set([
   // normalization needed no change here.
   'a-bare-closer-does-not-reach-inside-a-braced-inline',
   'a-bare-closer-does-not-reach-inside-a-link-destination',
+  'a-bare-closer-does-not-reach-inside-a-cross-reference',
+  'an-autolink-or-a-cross-reference-is-atomic-to-brackets-and-braces',
   'a-block-that-opens-a-tight-item-is-written-on-the-marker-line',
   'an-underscore-pair-in-text-is-escaped-where-the-line-would-pair-it',
   'an-underscore-pair-split-across-a-line-break-is-escaped',
@@ -1016,6 +1018,11 @@ const IMPLEMENTED = new Set([
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 ])
+// carve-js#3105 is separate from empty destinations. The spec pin includes
+// these three newer corpus rows; keep their measured lag explicit until that
+// parser change lands.
+const behindSpec = new Map<string, string>([
+])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
@@ -1127,6 +1134,15 @@ describe('spec corpus', () => {
     const expected = readFileSync(htmlPath, 'utf8')
     const allowlisted = IMPLEMENTED.has(name.replace(/^\d+-/, '')) || IMPLEMENTED.has(baseSlug(name))
     const ahead = AHEAD_OF_PIN.get(name)
+    const lag = behindSpec.get(name)
+
+    if (lag !== undefined) {
+      it(`${name} (declared parser lag)`, () => {
+        expect(carveToHtml(source).trim()).toBe(lag)
+        expect(expected.trim()).not.toBe(lag)
+      })
+      continue
+    }
 
     if (ahead) {
       it(`${name} (ahead of the pinned corpus)`, () => {

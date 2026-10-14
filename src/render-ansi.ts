@@ -4,7 +4,7 @@ import { renderLinkReferenceDefinition } from './render-carve.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { renderCellContent } from './render-cell-content.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
-import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
+import type { BlockNode, DefinitionItem, Document, Figure, Image, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
@@ -14,6 +14,7 @@ import { codeLines, rawSource } from './verbatim-payload.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+import { hydrateResolvedEmptyReferences, isResolvedEmptyReference } from './reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLoss, type RenderLossSinkOptions } from './render-loss.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
 
@@ -61,6 +62,7 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
+  hydrateResolvedEmptyReferences(ast)
   // PART 11 §10f, and see the twin comment in render-plain.ts: the definition
   // lines come before the occurrences that decide whether they survive, so a
   // document holding a definition is rendered once to find out which pairs were
@@ -738,7 +740,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   }
 }
 
-function renderImage(node: { alt: string; src?: string; ref?: string; rawRef?: string }): string {
+function renderImage(node: Image): string {
   // An unresolved reference image writes back as its source, like the link
   // arm above; `[img: alt]` would announce an image the document never had.
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
@@ -747,7 +749,7 @@ function renderImage(node: { alt: string; src?: string; ref?: string; rawRef?: s
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src) return stripControls(referenceSourceText(node.rawRef))
+  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceSourceText(node.rawRef))
   const alt = stripControls(node.alt)
   return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }

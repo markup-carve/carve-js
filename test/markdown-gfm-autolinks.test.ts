@@ -24,7 +24,7 @@ const htmlTree = (html: string): unknown => {
 }
 
 // Native HTML comes from cmark-gfm with unsafe HTML and the GFM extensions enabled.
-it.each(controls)('preserves GFM bare autolinks and surrounding emphasis: $source', ({ source: markdown, html, emptyDestinationLoss }) => {
+it.each(controls)('preserves GFM bare autolinks and surrounding emphasis: $source', ({ source: markdown, html, nativeHtml }) => {
   const source = markdownToCarve(markdown)
   const migration = migrateMarkdown(markdown)
   expect(migration.value).toBe(source)
@@ -33,13 +33,12 @@ it.each(controls)('preserves GFM bare autolinks and surrounding emphasis: $sourc
     expect(migration.report.diagnostics.some(row => row.code === 'fidelity-unverified')).toBe(true)
   }
   for (const row of migration.report.diagnostics) {
-    if (emptyDestinationLoss && row.code === 'structure-unspellable' && row.message.includes('empty destination')) continue
     expect(row.confidence === 'exact' && row.fidelity === 'dropped').toBe(false)
     if (row.code === 'fidelity-unverified') {
       expect(row).toMatchObject({ severity: 'warning', fidelity: 'dropped', confidence: 'fallback' })
     }
   }
-  const expected = htmlTree(html)
+  const expected = htmlTree(nativeHtml ?? html)
   expect(htmlTree(carveToHtml(source))).toEqual(expected)
   expect(htmlTree(renderHtml(resolve(parse(source))))).toEqual(expected)
   expect(htmlTree(carveToHtml(carveToCarve(source)))).toEqual(expected)
@@ -75,7 +74,7 @@ it.each(['[a@b.test]()', '![a@b.test]()', 'a@b[]().test', 'a@b![]().test'])(
   'keeps empty destinations from introducing an email link: %s', source => {
     const result = migrateMarkdown(source)
     expect(carveToHtml(result.value)).not.toContain('mailto:')
-    expect(result.report.diagnostics.some(row => row.message.includes('empty destination'))).toBe(true)
+    expect(result.report.diagnostics.some(row => row.message.includes('empty destination'))).toBe(false)
   },
 )
 
@@ -103,11 +102,10 @@ it('links email outside an empty destination while preserving authored attribute
 })
 
 it('keeps empty heading and blank-table normalization with email elsewhere', () => {
-  expect(carveToHtml(markdownToCarve('# []()\n\nmail c@d.test'))).toContain('<h1></h1>')
+  expect(carveToHtml(markdownToCarve('# []()\n\nmail c@d.test'))).toContain('<h1><a href=""></a></h1>')
   const result = migrateMarkdown('| a |\n|---|\n| []() |\n\nmail c@d.test')
   expect(result.value).not.toContain('carve-md-empty-')
-  // The emptied cell keeps its row (CARVE-P9-082).
-  expect(result.value).toContain('|= a |\n| |\n')
+  expect(result.value).toContain('|= a |\n| []() |\n')
 })
 
 it.each(['[foo]()\n\nmail a@b.test\n\n[foo]: /url', '*a [b*]() c@d.test', '- [ ]()\n\na@b.test', 'x [ ]() a@b.test', 'a@b.test *[]()*', '[[]()](u) a@b.test', '<code>[a]()</code> a@b.test', '<code>[a@b.test]()</code>', 'para\n# []()\n\na@b.test', '- para\n  # []()\n\na@b.test', '[]()\n===\n\na@b.test', '~~[]()~~ a@b.test', '<mark>[]()</mark> a@b.test', '<u>[]()</u> a@b.test', '<s>[]()</s> a@b.test', '<sup>[]()</sup> a@b.test', '<sub>[]()</sub> a@b.test', '<ins>[]()</ins> a@b.test', '![x [a]() y](u) m@n.o', '[x](u "t [a]() t") c@d.e'])('does not expose private empty-link scopes: %s', source => {
@@ -119,14 +117,14 @@ it.each(['[foo]()\n\nmail a@b.test\n\n[foo]: /url', '*a [b*]() c@d.test', '- [ ]
 it.each([
   ['[a [x](u) b@c.test]()', '<p>[a <a href="u">x</a> <a href="mailto:b@c.test">b@c.test</a>]()</p>'],
   ['[a [foo] b@c.test]()\n\n[foo]: /url', '<p>[a <a href="/url">foo</a> <a href="mailto:b@c.test">b@c.test</a>]()</p>'],
-  ['*a [b*]() c@d.test', '<p>*a b* <a href="mailto:c@d.test">c@d.test</a></p>'],
-  ['[https://a.b]() c@d.test', '<p>https://a.b <a href="mailto:c@d.test">c@d.test</a></p>'],
-  ['[www.a.b]() c@d.test', '<p>www.a.b <a href="mailto:c@d.test">c@d.test</a></p>'],
-  ['[<https://a.b>]() c@d.test', '<p><a href="https://a.b">https://a.b</a> <a href="mailto:c@d.test">c@d.test</a></p>'],
-  ['[http://a.b/*x*]() c@d.test', '<p>http://a.b/<em>x</em> <a href="mailto:c@d.test">c@d.test</a></p>'],
-  ['~~[]()~~ a@b.test', '<p><del></del> <a href="mailto:a@b.test">a@b.test</a></p>'],
-  ['<mark>[]()</mark> a@b.test', '<p><mark></mark> <a href="mailto:a@b.test">a@b.test</a></p>'],
-])('preserves native structure after dropping an empty destination: %s', (source, expected) => {
+  ['*a [b*]() c@d.test', '<p>*a <a href="">b*</a> <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[https://a.b]() c@d.test', '<p><a href="">https://a.b</a> <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[www.a.b]() c@d.test', '<p><a href="">www.a.b</a> <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[<https://a.b>]() c@d.test', '<p><a href="">https://a.b</a> <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['[http://a.b/*x*]() c@d.test', '<p><a href="">http://a.b/<em>x</em></a> <a href="mailto:c@d.test">c@d.test</a></p>'],
+  ['~~[]()~~ a@b.test', '<p><s><a href=""></a></s> <a href="mailto:a@b.test">a@b.test</a></p>'],
+  ['<mark>[]()</mark> a@b.test', '<p><mark><a href=""></a></mark> <a href="mailto:a@b.test">a@b.test</a></p>'],
+])('preserves native structure with an empty destination: %s', (source, expected) => {
   const result = migrateMarkdown(source)
   expect(htmlTree(carveToHtml(result.value))).toEqual(htmlTree(expected))
   expect(htmlTree(carveToHtml(carveToCarve(result.value)))).toEqual(htmlTree(expected))
@@ -157,21 +155,21 @@ it.each([
   const result = migrateMarkdown(source)
   const paragraph = parse(result.value).children[0]
   expect(paragraph?.type).toBe('paragraph')
-  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]?.type).toBe(type)
+  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]?.type).toBe(type === 'code' ? 'raw_inline' : type)
   expect(result.value).not.toContain('carve-md-empty-')
-  expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(false)
+  expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(type === 'code')
 })
 
 it('does not mistake joined authored text for a surviving private attribute', () => {
   const result = migrateMarkdown('carve-md-empty-[]()0=x a@b.test')
-  expect(carveToHtml(result.value)).toContain('carve-md-empty-0=x')
+  expect(carveToHtml(result.value)).toContain('carve-md-empty-<a href=""></a>0=x')
   expect(carveToHtml(result.value)).toContain('mailto:a@b.test')
 })
 
 it('keeps an empty heading after consecutive empty destinations', () => {
   const result = migrateMarkdown('# []()[]()\n\na@b.test')
-  expect(carveToHtml(result.value)).toContain('<h1></h1>')
-  expect(carveToHtml(carveToCarve(result.value))).toContain('<h1></h1>')
+  expect(carveToHtml(result.value)).toContain('<h1><a href=""></a><a href=""></a></h1>')
+  expect(carveToHtml(carveToCarve(result.value))).toContain('<h1><a href=""></a><a href=""></a></h1>')
 })
 
 it.each(['| a |\n|---|\n| []()[]() |\n\na@b.test', '[]()[]()\n\na@b.test', '- []()[]()\n\na@b.test'])('handles blocks emptied by consecutive destinations: %s', source => {
@@ -185,8 +183,8 @@ it('keeps native code conversion across empty comments', () => {
   const result = migrateMarkdown('<code>a<!---->[b]()</code> x@y.z')
   const paragraph = parse(result.value).children[0]
   expect(paragraph?.type).toBe('paragraph')
-  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'code', value: 'ab' })
-  expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(false)
+  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'raw_inline' })
+  expect(result.report.diagnostics.some(row => row.code === 'raw-code-fallback')).toBe(true)
 })
 
 it.each(['a[^1][^2]', '[x][^1]', '[ref][^1]', '[2^n][^1]', '[a [b]][^1]'])('keeps footnote references after a closing bracket: %s', label => {
@@ -217,7 +215,7 @@ it.each(['[$a*b*c$]()', '[$$a*b*c$$]()'])('keeps opt-in math inside an empty lab
   const result = migrateMarkdown(source, { dialect: { math: true } })
   const paragraph = parse(result.value).children[0]
   expect(paragraph?.type).toBe('paragraph')
-  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'math', content: 'a*b*c' })
+  if (paragraph?.type === 'paragraph') expect(paragraph.children[0]).toMatchObject({ type: 'link', href: '', children: [{ type: 'math', content: 'a*b*c' }] })
   expect(carveToHtml(carveToCarve(result.value))).toBe(carveToHtml(result.value))
 })
 
@@ -246,7 +244,7 @@ it.each(['a&amp;b', 'a\\*b', 'a|b'])('keeps a renamed footnote after a literal b
 it.each(['my_note', 'a&amp;b', 'a\\*b'])('keeps a footnote label inside an empty link unchanged: %s', label => {
   const result = migrateMarkdown(`[see[^${label}]]()\n\n[^${label}]: note`)
   for (const value of [result.value, carveToCarve(result.value)]) {
-    expect((carveToHtml(value).match(/role="doc-noteref"/g) ?? []).length).toBe(1)
+    expect((carveToHtml(value).match(/role="doc-noteref"/g) ?? []).length).toBe(0)
     expect(value).not.toContain('carve-md-empty-')
   }
 })
@@ -285,7 +283,8 @@ it.each(['del class="critic-delete"', 'ins', 'del'])('preserves an empty mark af
   const close = tag.split(' ')[0]!
   const result = migrateMarkdown(`<${tag}>[]()</${close}> a@b.test`)
   for (const value of [result.value, carveToCarve(result.value)]) {
-    expect(carveToHtml(value)).toContain(`<${tag}></${close}>`)
+    const rendered = tag.startsWith('del class=') ? 'del' : close === 'del' ? 's' : close
+    expect(carveToHtml(value)).toContain(`<${rendered}><a href=""></a></${rendered}>`)
     expect(carveToHtml(value)).toContain('mailto:a@b.test')
     expect(value).not.toContain('carve-md-empty-')
   }
