@@ -23,6 +23,7 @@ export function djotImportLosses(
   contentStart: (line: string) => number,
   rawCode: readonly number[] = [],
   accepted: ReadonlyMap<number, { label: string; target: string; end: number }>,
+  definitionsOnly?: Map<string, string>,
 ): DjotImportLoss[] {
   const collapsedReferenceText = djotCollapsedReferenceCache()
   const losses: DjotImportLoss[] = []
@@ -98,7 +99,7 @@ export function djotImportLosses(
       definitionLines.add(n)
       for (let k = offsets[n]!; k < offsets[n]! + line.length; k++) masked[k] = ' '
     }
-    const heading = /^(#{1,6})(?:[ \t]+|$)/.exec(contentMask)
+    const heading = contentMask.startsWith('#') ? /^(#{1,6})(?:[ \t]+|$)/.exec(content) : null
     if (heading && boundary && !headingLines.has(n)) {
       let text = content.slice(heading[0].length)
       let lastPart = text
@@ -130,7 +131,7 @@ export function djotImportLosses(
       const key = definitionKey(label)
       if (!definitions.has(key)) definitions.set(key, '#' + key)
     }
-    if (/^#{1,6}[ \t]*$/.test(contentMask) && boundary && !headingLines.has(n)) {
+    if (/^#{1,6}[ \t]*$/.test(contentMask) && heading && collapsedReferenceText(content.slice(heading[0].length)).trim() === '' && boundary && !headingLines.has(n)) {
       const next = lines[n + 1]?.trim() ?? ''
       if (next === '' || /^(?:[#>|{]|[-*+] |:{3,}|`{3,}|~{3,})/.test(next))
         report('An empty heading cannot be spelled in Carve.', n + 1)
@@ -183,6 +184,10 @@ export function djotImportLosses(
     // between the pipes as content where Djot reads padding.
     if (/^\|(?:[ \t]*\|)+[ \t]*$/.test(content) && content.trimEnd().includes('\t'))
       report('A blank table cell holding a tab reads as tab content in Carve.', n + 1)
+  }
+  if (definitionsOnly) {
+    for (const [key, target] of definitions) definitionsOnly.set(key, target)
+    return losses
   }
   const escaped = new Uint8Array(source.length)
   let slashes = 0
@@ -240,8 +245,9 @@ export function djotImportLosses(
       )
       destination = definitions.get(key)
       end++
-      if (destination === undefined)
+      if (destination === undefined) {
         report(image ? 'An unresolved Djot image reference has no src; Carve cannot spell that image.' : 'An unresolved Djot reference has no href; Carve cannot spell that link.', lineAt(open))
+      }
     } else { carryNested(opener.nested); continue }
     if (destination === '')
       report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(open))

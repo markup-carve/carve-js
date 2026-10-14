@@ -1,3 +1,4 @@
+import { djotImportLosses } from './djot-import-losses.js'
 import { djotBlockLayout } from './djot-block-layout.js'
 import { continuesParagraph } from './djot-attributes.js'
 import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
@@ -209,6 +210,15 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     at: number; end: number; key: string; rawKey: string; label: string
     own: string; ownSlots: Map<string, string[]>; formatted: boolean
   }
+  const hasSourceNuls = source.includes('\0U\0')
+  const scanNestedAliases = aliasesOnly && hasSourceNuls && [...definitions.keys()].some(key => key.includes('�'))
+  let nativeDefinitions: ReadonlyMap<string, unknown> = definitions
+  if (scanNestedAliases && source.includes('#')) {
+    const targets = new Map<string, string>()
+    djotImportLosses(source, djotTableRows(source, mask), contentStart, [], accepted ?? new Map(), targets)
+    nativeDefinitions = targets
+  }
+  const referenceLabels = new Set<number>()
   const references = lines.map((): ReferenceUse[] => [])
   if (rowAt) {
     const quoteDepths = lines.map(line => (line.slice(0, contentStart(line)).match(/>/g) ?? []).length)
@@ -245,11 +255,33 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
         nextPipe[at] = pipe
       }
     }
+    const wrapperText = new Map<number, string>()
+    const aliasLabelText = (open: number, close: number): string => {
+      if (!scanNestedAliases || rowAt[open] !== rowAt[close])
+        return collapsedReferenceText(referenceSource.slice(open + 1, close), quoteDepths[rowAt[open]!]!)
+      const wrappers: number[] = []
+      let current = open, end = close
+      while (!wrapperText.has(current)) {
+        wrappers.push(current)
+        const child = referenceSource[current + 1] === '!' ? current + 2 : current + 1
+        const childClose = closers.get(child)
+        if (referenceSource[child] !== '[' || escaped[child] || childClose === undefined || referenceSource[childClose + 1] !== '[' || nextCloser[childClose + 2] !== end - 1 || referenceSource[child + 1] === '^') {
+          wrapperText.set(current, collapsedReferenceText(referenceSource.slice(current + 1, end), quoteDepths[rowAt[current]!]!))
+          break
+        }
+        current = child
+        end = childClose
+      }
+      const value = wrapperText.get(current)!
+      for (const wrapper of wrappers) wrapperText.set(wrapper, value)
+      return value
+    }
     let boundaryIndex = 0
     for (let open = 0; open < referenceSource.length; open++) {
       while (boundaryIndex < boundaries.length && boundaries[boundaryIndex]! <= open) boundaryIndex++
       const n = rowAt[open]!
       if (definitionLines.has(n)) continue
+      if (referenceLabels.has(open)) continue
       if (referenceSource[open] !== '[' || referenceMaskText[open] !== '[' || escaped[open]) continue
       const close = closers.get(open)
       if (close === undefined || referenceSource[close + 1] !== '[') continue
@@ -261,7 +293,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
         explicit = referenceSource.slice(close + 2, labelEnd)
       if (content.startsWith('^') && content.length > 1) continue
       const key = explicit ? referenceKey(explicit) : definitionKey(
-        collapsedReferenceText(content, quoteDepths[n]!),
+        aliasLabelText(open, close),
       )
       let end = labelEnd + 1,
         own = ''
@@ -281,7 +313,8 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
         ownSlots: referenceAttributeSlots(own),
         formatted: !explicit && /[_*`{^~"']/.test(content),
       })
-      open = end - 1
+      referenceLabels.add(close + 1)
+      if (!scanNestedAliases || !nativeDefinitions.has(key) || explicit && !definitions.has(key)) open = end - 1
     }
   }
   const useCounts = new Map<string, number>()
@@ -309,7 +342,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
   }
   const aliases = new Map<string, string>()
   if (source.includes('\\') || source.includes('|') || source.includes('[') || source.includes('\0')) {
-    const aliasKeys = new Set([...definitions.keys()].filter(key => key.startsWith('^') || key.includes('\\') || key.includes('|') || key.includes('[') || key.includes('`') || key.includes('\0')))
+    const aliasKeys = new Set([...definitions.keys()].filter(key => key.startsWith('^') || key.includes('\\') || key.includes('|') || key.includes('[') || key.includes('`') || key.includes('\0') || aliasesOnly && hasSourceNuls && key.includes('�')))
     for (const uses of references) for (const use of uses)
       if (use.rawKey !== use.key && definitions.has(use.key)) aliasKeys.add(use.key)
     if (aliasKeys.size) {
