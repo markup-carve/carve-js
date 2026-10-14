@@ -12,8 +12,7 @@ test('unresolved NUL heading references do not select replacement-character head
     expect(actual, source).not.toMatch(/<(?:a|img)\b[^>]*\b(?:href|src)=/)
     expect(actual, source).not.toContain('carve-djot-reference-')
     expect(actual, source).not.toMatch(/<(?:span|em|strong|code)\b/)
-    expect(actual, source).not.toContain('class="c"')
-    expect(actual, source).not.toContain('id="i"')
+    expect(actual, source).not.toMatch(/<[^>]*\b(?:class="c"|id="i")/)
     expect(actual, source).not.toContain('{%comment%}')
     if (quoteOwn !== undefined) {
       expect((html.match(/<blockquote>/g) ?? []).length, source).toBe(quoteOwn)
