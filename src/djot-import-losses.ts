@@ -142,7 +142,20 @@ export function djotImportLosses(
       }
       const label = collapsedReferenceText(text)
       const key = definitionKey(label)
-      if (!definitions.has(key)) definitions.set(key, '#' + key)
+      let target = '#' + key.replace(/[ \t\r\n]+/g, '-')
+      for (let prior = n - 1; prior >= 0; prior--) {
+        const value = lines[prior]!.slice(contentStart(lines[prior]!)).trim()
+        const attrs = value.startsWith('{') ? readAttributes(value, 0) : undefined
+        if (!attrs || attrs.end !== value.length) break
+        let id: (typeof attrs.tokens)[number] | undefined
+        for (const token of attrs.tokens) if (token.key === 'id') id = token
+        if (id) {
+          const idValue = id.source.startsWith('#') ? id.source.slice(1) : id.source.slice(3).replace(/^"|"$/g, '').replace(/\\([\\"])/g, '$1')
+          target = '#' + idValue
+          break
+        }
+      }
+      if (!definitions.has(key)) definitions.set(key, target)
     }
     if (/^#{1,6}[ \t]*$/.test(contentMask) && heading && collapsedReferenceText(content.slice(heading[0].length)).trim() === '' && boundary && !headingLines.has(n)) {
       const next = lines[n + 1]?.trim() ?? ''

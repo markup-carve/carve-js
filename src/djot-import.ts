@@ -984,7 +984,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
   let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(sourceBody))
   const hasSourceNuls = body.includes('\0U\0')
-  if ((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line))) || hasSourceNuls && /^\[(?!\^)[^\]\n]*�[^\]\n]*\]:/.test(line.slice(djotContentStart(line)))))
+  if (((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line))) || hasSourceNuls && /^\[(?!\^)[^\]\n]*�[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) || hasSourceNuls && /(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?#{1,6}[ \t][^\n]*\0U\0/.test(body) && body.includes(']['))
   {
     const accepted = hasSourceNuls ? new Map<number, { label: string; target: string; end: number }>() : undefined
     if (accepted) foldDjotReferences(body, accepted)
