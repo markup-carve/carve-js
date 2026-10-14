@@ -31,9 +31,9 @@ describe('a reference definition', () => {
     )
   })
 
-  it('is still not a definition when the run is all there is', () => {
+  it('takes an ASCII-only trailing run as an empty definition', () => {
     expect(carveToHtml('[link][r]\n\n[r]:  \n')).not.toContain('href')
-    expect(carveToHtml('[link][r]\n\n[r]:  \n')).not.toContain('href')
+    expect(carveToHtml('[link][r]\n\n[r]:  \n')).toContain('href=""')
   })
 
   it('still requires the mandatory separator space before the run', () => {

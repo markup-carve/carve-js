@@ -209,8 +209,8 @@ describe('real whitespace still ends a destination', () => {
     expect(href('[r]:  https://e.com/\n\nsee [x][r]\n')).toBe('https://e.com/')
   })
 
-  it('a definition whose destination is empty is not a definition', () => {
-    expect(isLink('[r]:  \n\nsee [x][r]\n')).toBe(false)
+  it('a definition whose destination is empty resolves a reference', () => {
+    expect(isLink('[r]:  \n\nsee [x][r]\n')).toBe(true)
   })
 })
 

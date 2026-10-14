@@ -1397,7 +1397,7 @@ function convertInline(
   joinedLines?: Set<number>,
   terminal = true,
   table = false,
-  reportEmptyLosses = true,
+  _reportEmptyLosses = true,
   sourceLineAtOffset?: (offset: number) => number | undefined | null,
   unwrapEmptyLinks = true,
   nativeCode = false,
@@ -1728,7 +1728,6 @@ function convertInline(
     const original = referenceSourceText(destination, protectedSources)
     return markdownInlineDestinationEnd(original, 0) === original.length - 1
   }
-  const sourceLineCounts = new Map<string, Array<{ offset: number; count: number; delta: number }>>()
   if (line.includes('[') && line.includes(']')) {
     const subject = line
     const opaque = opaqueHtmlScanner(subject)
@@ -1749,38 +1748,7 @@ function convertInline(
   let activeEmptyDestinationOpeners = new Set<number>()
   let scalarBoundaryRanges: Array<[number, number]> = []
   let activeImageLabelRanges: Array<[number, number]> = []
-  line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, (image, before, subject) => {
-    if (!reportEmptyLosses) return
-    let counts = sourceLineCounts.get(subject)
-    if (counts === undefined) {
-      counts = []
-      let count = 0, delta = 0
-      for (const match of subject.matchAll(/\n|\x00P(\d+)\x00/g)) {
-        const source = match[1] === undefined ? '\n' : referenceSourceText(match[0], protectedSources)
-        count += countNewlines(source)
-        delta += source.length - match[0].length
-        counts.push({ offset: match.index! + match[0].length - 1, count, delta })
-      }
-      sourceLineCounts.set(subject, counts)
-    }
-    let low = 0, high = counts.length
-    while (low < high) {
-      const mid = (low + high) >>> 1
-      if (counts[mid]!.offset < before.length) low = mid + 1
-      else high = mid
-    }
-    const sourceLine = sourceLineAtOffset === undefined
-      ? inlineRunSourceLine === undefined ? undefined : inlineRunSourceLine + (counts[low - 1]?.count ?? 0)
-      : sourceLineAtOffset(before.length + (counts[low - 1]?.delta ?? 0))
-    if (sourceLine === null) return
-    importLosses.push({
-      code: 'structure-unspellable',
-      message: image
-        ? 'Dropped an image with an empty destination; retained its alt text and title.'
-        : 'Dropped a link with an empty destination; retained its label and title.',
-      ...(sourceLine === undefined ? {} : { line: sourceLine }),
-    })
-  }, (subject, offset) => {
+  line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw, undefined, (subject, offset) => {
     if (!unwrapEmptyLinks) return true
     if (subject !== opaqueSubject) {
       opaqueSubject = subject
@@ -2221,7 +2189,8 @@ function convertInline(
     const labelStart = reference === '' ? source.lastIndexOf('[', offset - 2) : -1
     const preceding = labelStart >= 0 ? source.slice(labelStart + 1, offset - 1) : ''
     const label = reference || (!/[\]\n]/.test(preceding) ? preceding : undefined)
-    const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label))
+    const canonical = label !== undefined && (reference === '' || !/[\\&\x00]/.test(label)
+      || isEmptyDestinationReference(label, decodeHtmlEntitiesRaw, protectedSpans))
       ? referenceDestinationLabel(label, decodeHtmlEntitiesRaw, protectedSpans, table) : undefined
     const sourceLabel = referenceSourceLabel(reference, protectedSpans)
     if (sourceLabel !== undefined && referenceInlineTarget(sourceLabel, table) !== undefined) return referenceTail(sourceLabel, match)
@@ -6579,6 +6548,14 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       return block !== null && (atBlockStart || block.interrupts)
     },
   )
+  for (const definition of removed.discardedEmptyDefinitions) {
+    importLosses.push({
+      code: 'structure-unspellable',
+      message: `Dropped titled empty reference definition [${definition.label}]:; uses become inline links`,
+      line: definition.line + bodyStart + 1,
+      confidence: 'exact',
+    })
+  }
   useEmptyDestinationReferences(removed.references)
   const lines = removed.lines
   // A diagnostic's `path` names the line in the source the importer was given,

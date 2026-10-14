@@ -6,7 +6,7 @@ const paragraphs = (n: number, value: string) => `${value}\n\n`.repeat(n)
 
 describe('remaining scan costs', () => {
   it('keeps failed destinations literal and accepts balanced destinations', () => {
-    expect(carveToHtml('[x]([x]([x]()')).toBe('<p>[x]([x]([x]()</p>')
+    expect(carveToHtml('[x]([x]([x]()')).toBe('<p>[x]([x](<a href="">x</a></p>')
     expect(carveToHtml('[x](a(b)c "title")')).toContain('href="a(b)c" title="title"')
   })
 

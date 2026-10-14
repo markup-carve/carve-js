@@ -42,6 +42,7 @@ import { ownValue } from './own-property.js'
 import { codeSource, codeTerminated } from './verbatim-payload.js'
 import { FRONTMATTER_SAFE_BREAK, thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
+import { hydrateResolvedEmptyReferences } from './reference-state.js'
 import { rubyFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { collectSentinelNonces, occupiedPrivateUse, pickSentinelRun, shortSentinelTokens, treeSentinelNonces } from './sentinel-run.js'
 import { EscapeWindows, type EscapeWindow } from './escape-window.js'
@@ -138,11 +139,13 @@ interface CarveContext {
  * @throws {SourceUnspellableError} when a node's content has no Carve spelling.
  */
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+  hydrateResolvedEmptyReferences(ast)
   return new CarveRenderSession().renderCarve(ast, opts)
 }
 
 /** Collect span refusals for the HTML importer's next repair pass. */
 export function renderCarveForHtmlImport(ast: Document): string {
+  hydrateResolvedEmptyReferences(ast)
   const session = new CarveRenderSession(true)
   try {
     const value = session.renderCarve(ast)
@@ -5259,6 +5262,7 @@ class CarveRenderSession {
       const bracketClose = buildBracketMap(text, true)
       const paired = new Set<number>()
       for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', i + 1)) {
+        if (!ranges.some(range => i >= range.start && i < range.end)) continue
         if (crossing.has(i)) continue
         const close = bracketClose(i)
         if (close !== undefined && !noteCloses.has(close) && destinations.has(close + 1)) paired.add(close + 1)
@@ -5437,6 +5441,7 @@ class CarveRenderSession {
 }
 
 export function renderLinkReferenceDefinition(node: LinkReferenceDefinition): string {
+  if (node.href === '') return `[${node.label}]:`
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
   const attrs = renderAttrs(node.attrs)
   return `[${node.label}]: ${escapeDestinationEscapes(node.href)}${title}${attrs === '' ? '' : ` ${attrs}`}`

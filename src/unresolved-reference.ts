@@ -24,6 +24,7 @@
 
 import type { InlineNode } from './ast.js'
 import type { UnresolvedReference } from './reference-state.js'
+import { isResolvedEmptyReference } from './reference-state.js'
 
 /**
  * True when `node` is a reference link/image that matched no definition.
@@ -33,8 +34,8 @@ import type { UnresolvedReference } from './reference-state.js'
  * predicate can say so rather than leave every call site to re-test it.
  */
 export function isUnresolvedReference(node: InlineNode): node is UnresolvedReference {
-  if (node.type === 'link') return node.ref !== undefined && !node.href
-  if (node.type === 'image') return node.ref !== undefined && !node.src
+  if (node.type === 'link') return node.ref !== undefined && !node.href && !isResolvedEmptyReference(node)
+  if (node.type === 'image') return node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)
   return false
 }
 

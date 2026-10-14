@@ -1,4 +1,5 @@
 import { blocksWithLinkDefinitionsInSourceOrder, referencedLinkLabels } from './referenced-link-labels.js'
+import { hydrateResolvedEmptyReferences } from './reference-state.js'
 import { normalizeRefLabel } from './label-key.js'
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
 import { backtickRunEnds } from './backtick-run-index.js'
@@ -84,6 +85,7 @@ function renderHtmlAttrs(attrs: Attrs | undefined): string {
  */
 
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
+  hydrateResolvedEmptyReferences(ast)
   // Choose the escape carriers before anything is rendered, so every pass that
   // introduces one and every pass that resolves one agrees on them.
   const budget = budgetForDocument(ast)
@@ -590,10 +592,9 @@ function renderBlockBody(node: BlockNode, ctx: MarkdownContext): string {
       const probed = sanitizeMdUrl(authored)
       if (!referenced) destinationDenied(ctx.options, 'link', 'markdown', authored, probed, node.pos)
       // `<>` keeps a blanked line a definition, with an empty destination.
-      const destination =
-        probed === '' && authored !== ''
-          ? '<>'
-          : neutralizeCharRefs(stripControls(node.href).replace(/[\\()<>]/g, '\\$&'))
+      const destination = probed === ''
+        ? '<>'
+        : neutralizeCharRefs(stripControls(node.href).replace(/[\\()<>]/g, '\\$&'))
       const title = node.title === undefined ? '' : ` "${escapeMdTitle(node.title)}"`
       return `[${node.label}]: ${destination}${title}\n\n`
     }
@@ -1787,6 +1788,7 @@ function deniedProbeInput(url: string): string {
 }
 
 function markdownDestination(url: string): string {
+  if (url === '') return '<>'
   const probed = sanitizeMdUrl(stripDestinationControls(url))
   const pipeDestination = url.includes('|')
   const encoded = (probed === '' ? probed : stripControls(url)).replace(/[ ()<>\\|]/g, (ch) => {

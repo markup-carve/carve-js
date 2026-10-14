@@ -8,7 +8,7 @@ describe('PART 11 §5 destination-opening parentheses', () => {
     ['[[a]](b)', '[[a]]\\(b)'],
     ['[a](b) and [c](d)', '[a]\\(b) and [c]\\(d)'],
     ['f(x) and (see above) and [a] (b) and [a](b c)', 'f(x) and (see above) and [a] (b) and [a](b c)'],
-    ['](b) and [a]() and [a](b', '](b) and [a]() and [a](b'],
+    ['](b) and [a]() and [a](b', '](b) and [a]\\() and [a](b'],
     ['[a](b(c d))', '[a](b(c d))'],
     ['[a](b) {{ file.crv }}', '[a]\\(b) {{ file.crv }}'],
     ['{{ file.crv }} [a](b) *x*', '{{ file.crv }} [a]\\(b) \\*x*'],

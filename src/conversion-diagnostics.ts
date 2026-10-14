@@ -56,6 +56,12 @@ export function renderCarveWithConversionReport(
     if (type === 'small_caps') report('structure-unspellable', 'Carve source cannot spell small caps')
     if (type === 'ruby') report('structure-unspellable', 'Carve source cannot spell ruby annotations')
     if (type === 'hard_break' && inlineOnly) report('structure-unspellable', 'Carve source cannot spell a hard break in a single-line slot')
+    if (type === 'link_reference_definition' && node.href === '') {
+      if (node.title !== undefined) report('field-unspellable', 'An empty reference definition cannot spell a title', 'title')
+      if (node.attrs && typeof node.attrs === 'object' && Object.keys(node.attrs).length > 0) {
+        report('field-unspellable', 'An empty reference definition cannot spell attributes', 'attrs')
+      }
+    }
     if (type === 'paragraph' && Array.isArray(node.children) && node.children.length === 1 && ['image', 'comment'].includes((node.children[0] as { type?: string }).type ?? '')) report('structure-unspellable', 'Carve source spells the paragraph content as a block')
     if ((type === 'figure' || type === 'table') && node.shortCaption !== undefined) report('field-unspellable', 'Carve source cannot spell a short caption', 'shortCaption')
     if (type === 'figure' && (node.target as { type?: string } | undefined)?.type === 'table') report('structure-unspellable', 'Carve source cannot spell a figure wrapper around a table')

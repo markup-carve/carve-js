@@ -10317,68 +10317,55 @@
   },
   {
     "source": "*a [*b*]() c*",
-    "html": "<p><em>a <em>b</em> c</em></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><em>a <a href=\"\"><em>b</em></a> c</em></p>\n"
   },
   {
     "source": "x[*b*]()y",
-    "html": "<p>x<em>b</em>y</p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p>x<a href=\"\"><em>b</em></a>y</p>\n"
   },
   {
     "source": "**a [**b**]() c**",
-    "html": "<p><strong>a <strong>b</strong> c</strong></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><strong>a <a href=\"\"><strong>b</strong></a> c</strong></p>\n"
   },
   {
     "source": "*a [*b*]() c* x@y.z",
-    "html": "<p><em>a <em>b</em> c</em> <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><em>a <a href=\"\"><em>b</em></a> c</em> <a href=\"mailto:x@y.z\">x@y.z</a></p>\n"
   },
   {
     "source": "x[*b*]()y x@y.z",
-    "html": "<p>x<em>b</em>y <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p>x<a href=\"\"><em>b</em></a>y <a href=\"mailto:x@y.z\">x@y.z</a></p>\n"
   },
   {
     "source": "[a [foo] b]() x@y.z\n\n[foo]: <>",
-    "html": "<p>[a foo b]() <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p>[a <a href=\"\">foo</a> b]() <a href=\"mailto:x@y.z\">x@y.z</a></p>\n"
   },
   {
     "source": "[a [foo] b](u) x@y.z\n\n[foo]: <>",
-    "html": "<p>[a foo b](u) <a href=\"mailto:x@y.z\">x@y.z</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p>[a <a href=\"\">foo</a> b](u) <a href=\"mailto:x@y.z\">x@y.z</a></p>\n"
   },
   {
     "source": "[- *x*]()",
-    "html": "<p>- <em>x</em></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\">- <em>x</em></a></p>\n"
   },
   {
     "source": "[# *x*]()",
-    "html": "<p># <em>x</em></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"># <em>x</em></a></p>\n"
   },
   {
     "source": "[> *x*]()",
-    "html": "<p>&gt; <em>x</em></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\">&gt; <em>x</em></a></p>\n"
   },
   {
     "source": "[1. *x*]()",
-    "html": "<p>1. <em>x</em></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\">1. <em>x</em></a></p>\n"
   },
   {
     "source": "*[*b*]()*",
-    "html": "<p><em><em>b</em></em></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><em><a href=\"\"><em>b</em></a></em></p>\n"
   },
   {
     "source": "[^*x*]() a@b.test",
-    "html": "<p>^<em>x</em> <a href=\"mailto:a@b.test\">a@b.test</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\">^<em>x</em></a> <a href=\"mailto:a@b.test\">a@b.test</a></p>\n"
   },
   {
     "source": "[foo][don't]\n\n[foo]: /u",
@@ -10390,124 +10377,104 @@
   },
   {
     "source": "[x [foo]](u) a@b.test\n\n[foo]: <>",
-    "html": "<p>[x foo](u) <a href=\"mailto:a@b.test\">a@b.test</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p>[x <a href=\"\">foo</a>](u) <a href=\"mailto:a@b.test\">a@b.test</a></p>\n"
   },
   {
     "source": "[<img src=\"my_image.png\">]()",
-    "html": "<p><img src=\"my_image.png\"></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><img src=\"my_image.png\"></a></p>\n"
   },
   {
     "source": "[<span title=\"*a*\">x</span>]()",
-    "html": "<p><span title=\"*a*\">x</span></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><span title=\"*a*\">x</span></a></p>\n"
   },
   {
     "source": "[<https://a.b/x_y>]()",
-    "html": "<p><a href=\"https://a.b/x_y\">https://a.b/x_y</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><a href=\"https://a.b/x_y\">https://a.b/x_y</a></a></p>\n",
+    "nativeHtml": "<p><a href=\"\">https://a.b/x_y</a></p>\n"
   },
   {
     "source": "[<https://a.b/*x*>]()",
-    "html": "<p><a href=\"https://a.b/*x*\">https://a.b/*x*</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><a href=\"https://a.b/*x*\">https://a.b/*x*</a></a></p>\n",
+    "nativeHtml": "<p><a href=\"\">https://a.b/*x*</a></p>\n"
   },
   {
     "source": "[<img src=\"my_image.png\">]() c@d.test",
-    "html": "<p><img src=\"my_image.png\"> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><img src=\"my_image.png\"></a> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n"
   },
   {
     "source": "[<https://a.b/x_y>]() c@d.test",
-    "html": "<p><a href=\"https://a.b/x_y\">https://a.b/x_y</a> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><a href=\"https://a.b/x_y\">https://a.b/x_y</a></a> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n",
+    "nativeHtml": "<p><a href=\"\">https://a.b/x_y</a> <a href=\"mailto:c@d.test\">c@d.test</a></p>\n"
   },
   {
     "source": "[![logo](/assets/_static_/logo.png)]()",
-    "html": "<p><img src=\"/assets/_static_/logo.png\" alt=\"logo\" /></img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><img src=\"/assets/_static_/logo.png\" alt=\"logo\" /></a></p>\n"
   },
   {
     "source": "[![*x*](u)]()",
-    "html": "<p><img src=\"u\" alt=\"x\" /></img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><img src=\"u\" alt=\"x\" /></a></p>\n"
   },
   {
     "source": "[![~b~](u)]()",
-    "html": "<p><img src=\"u\" alt=\"b\" /></img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><img src=\"u\" alt=\"b\" /></a></p>\n"
   },
   {
     "source": "`c`![a@b.test]()",
-    "html": "<p><code>c</code>a@b.test</img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><code>c</code><img src=\"\" alt=\"a@b.test\" /></p>\n"
   },
   {
     "source": "$![a@b.test]()",
-    "html": "<p>$a@b.test</img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p>$<img src=\"\" alt=\"a@b.test\" /></p>\n"
   },
   {
     "source": "!![a@b.test]()",
-    "html": "<p>!a@b.test</img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p>!<img src=\"\" alt=\"a@b.test\" /></p>\n"
   },
   {
     "source": "`c`![]()\n\nmail a@b.test",
-    "html": "<p><code>c</code></img></p>\n<p>mail <a href=\"mailto:a@b.test\">a@b.test</a></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><code>c</code><img src=\"\" alt=\"\" /></p>\n<p>mail <a href=\"mailto:a@b.test\">a@b.test</a></p>\n"
   },
   {
     "source": "[![*x*][r]]()\n\n[r]: /u \"a*b*\"",
-    "html": "<p><img src=\"/u\" alt=\"x\" title=\"a*b*\" /></img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><img src=\"/u\" alt=\"x\" title=\"a*b*\" /></a></p>\n"
   },
   {
     "source": "[![*x*]]()\n\n[*x*]: /u",
-    "html": "<p><img src=\"/u\" alt=\"x\" /></img></p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><a href=\"\"><img src=\"/u\" alt=\"x\" /></a></p>\n"
   },
   {
     "source": "x[**\"a\"*]()y",
-    "html": "<p>x**&quot;a&quot;*y</p>\n",
-    "emptyDestinationLoss": true,
+    "html": "<p>x<a href=\"\">**&quot;a&quot;*</a>y</p>\n",
     "nativeHtml": "<p>x<a href=\"\">**&quot;a&quot;*</a>y</p>\n"
   },
   {
     "source": "[**\"a\"*]()",
-    "html": "<p>**&quot;a&quot;*</p>\n",
-    "emptyDestinationLoss": true,
+    "html": "<p><a href=\"\">**&quot;a&quot;*</a></p>\n",
     "nativeHtml": "<p><a href=\"\">**&quot;a&quot;*</a></p>\n"
   },
   {
     "source": "x[*\"a\"**]()y",
-    "html": "<p>x*&quot;a&quot;**y</p>\n",
-    "emptyDestinationLoss": true,
+    "html": "<p>x<a href=\"\">*&quot;a&quot;**</a>y</p>\n",
     "nativeHtml": "<p>x<a href=\"\">*&quot;a&quot;**</a>y</p>\n"
   },
   {
     "source": "x[***\"a\"***]()y",
-    "html": "<p>x<em><strong>&quot;a&quot;</strong></em>y</p>\n",
-    "emptyDestinationLoss": true,
+    "html": "<p>x<a href=\"\"><em><strong>&quot;a&quot;</strong></em></a>y</p>\n",
     "nativeHtml": "<p>x<a href=\"\"><em><strong>&quot;a&quot;</strong></em></a>y</p>\n"
   },
   {
     "source": "x[__\"a\"_]()y",
-    "html": "<p>x__&quot;a&quot;_y</p>\n",
-    "emptyDestinationLoss": true,
+    "html": "<p>x<a href=\"\">__&quot;a&quot;_</a>y</p>\n",
     "nativeHtml": "<p>x<a href=\"\">__&quot;a&quot;_</a>y</p>\n"
   },
   {
     "source": "x[_\"a\"__]()y",
-    "html": "<p>x_&quot;a&quot;__y</p>\n",
-    "emptyDestinationLoss": true,
+    "html": "<p>x<a href=\"\">_&quot;a&quot;__</a>y</p>\n",
     "nativeHtml": "<p>x<a href=\"\">_&quot;a&quot;__</a>y</p>\n"
   },
   {
     "source": "![a [b ![c](/x)](oops]()",
     "nativeHtml": "<p><img src=\"\" alt=\"a [b c](oops\" /></p>\n",
-    "html": "<p>a [b c](oops</p>\n",
-    "emptyDestinationLoss": true
+    "html": "<p><img src=\"\" alt=\"a [b c](oops\" /></p>\n"
   }
 ]

@@ -29,7 +29,7 @@ import { hasOwnKey, ownValue } from './own-property.js'
  * removes, renames or reinterprets a field or a meaning; a minor bump adds a
  * field or a node type.
  */
-export const AST_CONTRACT_VERSION = '1.1'
+export const AST_CONTRACT_VERSION = '2.0'
 
 /** The vocabulary an envelope with no `vocabulary` is written in. */
 export const CORE_AST_VOCABULARY = 'https://markup-carve.org/ast/core'

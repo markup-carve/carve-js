@@ -352,7 +352,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "insert": { "attrs": "object", "children": "array", "pos": "object" },
   "line_block": { "attrs": "object", "children": "array", "lines": "array", "pos": "object" },
   "link": { "attrs": "object", "children": "array", "href": "string", "pos": "object", "rawRef": "string", "ref": "string", "title": "string" },
-  "link_reference_definition": { "attrs": "object", "href": "string>=1", "label": "string", "pos": "object", "title": "string" },
+  "link_reference_definition": { "attrs": "object", "href": "string", "label": "string", "pos": "object", "title": "string" },
   "list": { "attrs": "object", "bareMarker": "const:true", "bulletChar": "enum:-\u0000*", "delim": "enum:.\u0000)", "items": "array", "olType": "enum:a\u0000A\u0000i\u0000I", "ordered": "boolean", "pos": "object", "start": "integer", "tight": "boolean" },
   "list_item": { "attrs": "object", "checked": "boolean", "children": "array", "pos": "object", "taskState": "enum: \u0000x\u0000-\u0000_\u0000>\u0000?" },
   "literal_inline": { "attrs": "object", "content": "string", "pos": "object" },

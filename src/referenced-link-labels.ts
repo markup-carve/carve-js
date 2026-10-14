@@ -1,4 +1,5 @@
-import type { BlockNode, Document } from './ast.js'
+import type { BlockNode, Document, Image, Link } from './ast.js'
+import { isResolvedEmptyReference } from './reference-state.js'
 import { normalizeRefLabel } from './label-key.js'
 import { ownedChildFields } from './owned-child-fields.js'
 
@@ -16,7 +17,7 @@ export function referencedLinkLabels(ast: Document): ReadonlySet<string> {
       continue
     }
     const node = value as Record<string, unknown>
-    if ((node.type === 'link' && node.href || node.type === 'image' && node.src) && typeof node.ref === 'string') {
+    if ((node.type === 'link' && (node.href || isResolvedEmptyReference(node as unknown as Link)) || node.type === 'image' && (node.src || isResolvedEmptyReference(node as unknown as Image))) && typeof node.ref === 'string') {
       labels.add(normalizeRefLabel(node.ref))
     }
     for (const field of ownedChildFields(node)) stack.push(node[field])

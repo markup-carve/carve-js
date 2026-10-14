@@ -1,4 +1,5 @@
 import { normalizeSmartTypography, smartTypographyUsesSource, type SmartTypographyOption } from './smart-typography-mode.js'
+import { hydrateResolvedEmptyReferences } from './reference-state.js'
 /*
  * HTML renderer — emits the canonical output the spec corpus expects.
  *
@@ -621,7 +622,9 @@ export function renderHtml(
   // that lives in that arm cannot reach them (carve-js#1440). Copy on write -
   // `ast` belongs to the caller.
   const original = ast
+  hydrateResolvedEmptyReferences(ast)
   ast = collapseLoneImageParagraphs(ast)
+  hydrateResolvedEmptyReferences(ast)
   inheritDocumentIds(original, ast)
   // PART 9 §10: an extension may add semantic span names. Core renders them,
   // so the order below is the union in the canonical order rather than
