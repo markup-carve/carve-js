@@ -12,7 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Fixes
 - An escaped include directive (`\{{ path }}`) stays literal: `expandIncludes` no longer expands it, `findDirectiveSites` no longer reports it, and `renderCarve` keeps the escape instead of writing a live directive (#3101).
 - A cross-reference `</#id>` is opaque to emphasis like an autolink: an earlier bare `/` no longer pairs with the slash inside it (#3100).
-- `renderCarve` refuses a list nested past the parser's nesting cap with `SourceUnspellableError` instead of writing source that reads back as a different document after a search that took seconds to minutes (CARVE-P9-078). A hand-built tree nested past the cap is refused the same way (#3107).
+- `renderCarve` refuses a list nested past the parser's nesting cap with `SourceUnspellableError` instead of writing source that reads back as a different document after a search that took seconds to minutes (CARVE-P9-078). A hand-built tree nested past the cap is refused the same way; the check counts container depth only, so a declared carve-out just under the cap is still written (#3107, #3109).
 - A `[` inside an autolink or cross-reference no longer opens a bracket run for emphasis pairing, and a braced closer inside a cross-reference no longer closes the braced span (#3105).
 
 ### Performance
