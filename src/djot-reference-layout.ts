@@ -201,12 +201,12 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     const targets = new Map<string, string>()
     djotImportLosses(source, djotTableRows(source, mask), contentStart, [], accepted ?? new Map(), targets)
     for (const [key, target] of targets)
-      if (key.includes('\0U\0') && target.startsWith('#') && !definitions.has(key)) {
+      if ((key.includes('\0U\0') || key.includes('�')) && target.startsWith('#') && !definitions.has(key)) {
         const actual = actualHeadingTargets.get(key.replaceAll('\0U\0', '\0'))
         if (actual !== undefined) headingTargets.set(key, actual)
       }
   }
-  if (!definitions.size && !headingTargets.size) return source
+  if (!definitions.size && !headingTargets.size && !actualHeadingTargets?.size) return source
   const lineOffsets: number[] = []
   const hasReferencePairs = source.includes('][')
   const rowAt = hasReferencePairs ? new Uint32Array(source.length + 1) : undefined
@@ -374,7 +374,24 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     }
     for (const uses of references) for (const use of uses) {
       const headingTarget = headingTargets.get(use.key)
-      if (headingTarget !== undefined) {
+      if (actualHeadingTargets && !definitions.has(use.key) && headingTarget === undefined &&
+          (use.key.includes('\0U\0') || use.key.includes('�')) &&
+          !actualHeadingTargets.has(use.key.replaceAll('\0U\0', '\0'))) {
+        const at = use.at + (use.label.startsWith('!') ? 1 : 0)
+        edits.push([at, at, '\\'])
+        const referenceAt = use.at + use.label.length
+        edits.push([referenceAt, referenceAt, '\\'])
+        let attributeAt = use.end - use.own.length
+        while (attributeAt < use.end) {
+          const attributes = readAttributes(source, attributeAt)
+          if (!attributes) break
+          const literal = referenceAttributeSlots(attributes.source).size
+            ? source.slice(attributeAt, attributes.end).replace(/[!-\/:-@\[-`{-~]/g, char => '\\' + char)
+            : ''
+          edits.push([attributeAt, attributes.end, literal])
+          attributeAt = attributes.end
+        }
+      } else if (headingTarget !== undefined) {
         const target = headingTarget.replace(/[\\()]/g, char => '\\' + char)
         edits.push([use.at + use.label.length, use.end - use.own.length, '(' + target + ')'])
       } else {
