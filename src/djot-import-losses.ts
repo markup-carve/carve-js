@@ -25,6 +25,7 @@ export function djotImportLosses(
   accepted: ReadonlyMap<number, { label: string; target: string; end: number }>,
   definitionsOnly?: Map<string, string>,
   codeSource = source,
+  imageChildText?: (label: string, quoteDepth: number) => string,
 ): DjotImportLoss[] {
   const collapsedReferenceText = djotCollapsedReferenceCache()
   const losses: DjotImportLoss[] = []
@@ -334,10 +335,13 @@ export function djotImportLosses(
       report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(open))
     if (image && destination !== undefined && destination !== '') {
       const label = source.slice(open + 1, at)
-      if (label.includes('\n') && /\n[ \t]*\n/.test(collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!)))
-        report('An image alternative text with a blank line cannot be spelled in Carve.', lineAt(open))
-      if (/[ \t]+\n/.test(label))
-        report('An image alternative text loses trailing spaces before a line break.', lineAt(open))
+      if (label.includes('\n')) {
+        const childText = (imageChildText ?? collapsedReferenceText)(label, quoteDepths[lineAt(open) - 1]!)
+        if (/\n[ \t]*\n/.test(childText))
+          report('An image alternative text with a blank line cannot be spelled in Carve.', lineAt(open))
+        else if (/[ \t]+\n/.test(childText))
+          report('An image alternative text loses trailing spaces before a line break.', lineAt(open))
+      }
     }
     if (!image) {
       if (opener.nested) report('A link inside another link cannot be spelled in Carve.', lineAt(open))

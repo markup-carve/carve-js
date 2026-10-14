@@ -35,9 +35,9 @@ function imageLabelsAsLinks(source: string): string {
   return parts.join('') + source.slice(cursor)
 }
 
-export function djotImageLabelAttributes(source: string): string {
+export function djotImageLabelAttributes(source: string, flattenAttributeLines = false): string {
   const mask = maskDjotCodeAndDestinations(source, true, true, true, undefined, [], { comments: false, autolinks: false })
-  const framed = 'DJOTALT ' + source
+  const framed = 'DJOTALT ' + (flattenAttributeLines ? source.replaceAll('\n', ' ') : source)
   const symbols = /:[\w_+-]+:/y
   const autolinks = /<([^<>\s]+)>/y
   const parts: string[] = []

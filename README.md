@@ -78,6 +78,7 @@ Djot, and BBCode importers return Carve source. Source-preserving patches let
 editors apply canonical formatting without replacing unrelated bytes.
 
 - [Migration](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md)
+- [Djot image alternative text](docs/djot-image-alt-fidelity.md): multiline values and export diagnostics.
 - [HTML import](https://github.com/markup-carve/carve-js/blob/main/docs/html-import.md)
 - [Source-preserving patches](https://github.com/markup-carve/carve-js/blob/main/docs/source-patches.md)
 - [Reversible patches](https://github.com/markup-carve/carve-js/blob/main/docs/reversible-patches.md)
