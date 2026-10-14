@@ -217,7 +217,7 @@ export function djotImportLosses(
         report('An empty heading cannot be spelled in Carve.', n + 1)
     }
     if (/^(?:[ \t]*>[ \t]*)*:[ \t]*$/.test(line) && boundary && masked[offsets[n]! + line.indexOf(':')] === ':')
-      if (line.slice(0, line.indexOf(':')).trim() !== '')
+      if (!/^(?:[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)+|(?:>[ \t]*)*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*|[ \t]*)$/.test(line.slice(0, line.indexOf(':'))))
         report('An empty definition term is omitted during import.', n + 1)
     const term = /:[ \t]+$/.exec(visible.slice(0, at))
     if (
@@ -250,7 +250,7 @@ export function djotImportLosses(
         !inContainer(lines[end]!) ||
         /^[ \t]*/.exec(withoutQuotes(lines[end]!))![0].length < minimum
       ) {
-        if (line.slice(0, term.index).trim() !== '')
+        if (!/^(?:[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)+|(?:>[ \t]*)*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*|[ \t]*)$/.test(line.slice(0, term.index)))
           report('An empty definition description is omitted during import.', n + 1)
       }
     }
