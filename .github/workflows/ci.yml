@@ -98,11 +98,11 @@ jobs:
         run: npm run test:includes
 
       - name: Build
-        if: matrix.shard == 2
+        if: matrix.shard == 1
         run: npm run build
 
       - name: Packed package consumer
-        if: matrix.shard == 2
+        if: matrix.shard == 1
         run: npm run test:package
 
   browser-bundle:
