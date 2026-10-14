@@ -308,8 +308,8 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     return alias
   }
   const aliases = new Map<string, string>()
-  if (source.includes('\\') || source.includes('|') || source.includes('[')) {
-    const aliasKeys = new Set([...definitions.keys()].filter(key => key.startsWith('^') || key.includes('\\') || key.includes('|') || key.includes('[') || key.includes('`')))
+  if (source.includes('\\') || source.includes('|') || source.includes('[') || source.includes('\0')) {
+    const aliasKeys = new Set([...definitions.keys()].filter(key => key.startsWith('^') || key.includes('\\') || key.includes('|') || key.includes('[') || key.includes('`') || key.includes('\0')))
     for (const uses of references) for (const use of uses)
       if (use.rawKey !== use.key && definitions.has(use.key)) aliasKeys.add(use.key)
     if (aliasKeys.size) {

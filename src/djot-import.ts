@@ -831,9 +831,9 @@ function foldHeadingContinuations(source: string): string {
   return result.join('\n')
 }
 
-function djotImageLabelText(normalizedLabel: string, convert: (source: string) => string): string {
+function djotImageLabelText(normalizedLabel: string, convert: (source: string) => string, preserveSourceNuls = false): string {
   const whitespace: string[] = [], reserved = new Set<string>()
-  for (const match of normalizedLabel.matchAll(/DJOTALTSCALAR([0-9]+)Z/g)) reserved.add(match[1]!)
+  for (const match of normalizedLabel.replace(/[^A-Za-z0-9]/g, '').matchAll(/DJOTALTSCALAR([0-9]+)Z/g)) reserved.add(match[1]!)
   let serial = 0
   while (reserved.has(String(serial))) serial++
   const whitespacePrefix = `DJOTALTSCALAR${serial}Z`
@@ -860,8 +860,12 @@ function djotImageLabelText(normalizedLabel: string, convert: (source: string) =
   const codeProtected = codeCopied ? codeChunks.join('') + normalizedLabel.slice(codeCopied) : normalizedLabel
   const altMask = maskDjotCodeAndDestinations(codeProtected)
   const blockProtected = codeProtected.replace(/(\n[ \t]*)(#{1,6}(?=[ \t]|$)|>(?=[ \t]|$)|(?:[-*][ \t]*){3,}(?=\n|$)|[-*+](?=[ \t]|$)|:{1,}(?=[ \t]|$)|\||\^(?=[ \t]|$)|%%|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)](?=[ \t]|$))/gm, (all, prefix: string, marker: string, at: number) => altMask[at + prefix.length] === marker[0] ? prefix + scalar(marker) : all)
-  const protectedLabel = blockProtected.replace(/^[ \t\u000b\u000c\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gm, value => /^[ \t]*$/.test(value) ? value : scalar(value))
-  const altDocument = parse(convert(`DJOTALT ${protectedLabel} DJOTEND`).replaceAll('\0U\0', '\0'))
+  let protectedLabel = blockProtected.replace(/^[ \t\u000b\u000c\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gm, value => /^[ \t]*$/.test(value) ? value : scalar(value))
+  // Reference keys retain NUL identity even though image text renders it as U+FFFD.
+  if (preserveSourceNuls) protectedLabel = protectedLabel.replaceAll('\0U\0', () => scalar('\0U\0'))
+  const converted = convert(`DJOTALT ${protectedLabel} DJOTEND`)
+  const native = converted.replaceAll('\0U\0', '\0')
+  const altDocument = parse(native)
   return renderDjotImageChildText(altDocument, normalizedLabel.includes('\n'))
     .replace(/ ?DJOTEND\n?$/, '')
     .replace(/^DJOTALT ?/, '')
@@ -935,7 +939,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
   let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(sourceBody))
-  if (body.includes('`') && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*`[^\]\n]*\]:/.test(line.slice(djotContentStart(line)))))
+  if ((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line)))))
     body = djotReferenceLayout(body, djotContentStart, false, undefined, false, true)
   if (body.includes('[^') && body.includes(']:') && body.split('\n').some(line => /^\[\^[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) {
     const accepted = new Map<number, { label: string; target: string; end: number }>()
@@ -958,11 +962,12 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const prefix = djotPlaceholderPrefix(body, '\x00DJOTSTRONG')
   const invalidAttributes = escapeInvalidDjotAttributes(carryDjotAttributesAcrossQuoteExits(carryDjotAttributesAcrossDivClosers(body)))
   const childTextCache = new Map<string, string>()
-  const imageChildText = (label: string, omitQuotes = true): string => {
-    const key = `${omitQuotes ? 1 : 0}:${label}`
+  const imageChildText = (label: string, omitQuotes = true, preserveSourceNuls = false): string => {
+    preserveSourceNuls &&= label.includes('\0')
+    const key = `${omitQuotes ? 1 : 0}:${preserveSourceNuls ? 1 : 0}:${label}`
     const cached = childTextCache.get(key)
     if (cached !== undefined) return cached
-    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes, true)))
+    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes, true)), preserveSourceNuls)
     childTextCache.set(key, text)
     return text
   }
@@ -1019,8 +1024,8 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
       const owner = collapsedImageLines[collapsedImageLine]!
       const layout = djotImageAltLayout(key, owner.quotes, owner.itemColumn, owner.itemQuote, owner.div)
       if (!layout.valid) return value
-      key = imageChildText(layout.normalized).trim().replace(/[ \t\r\n]+/g, ' ')
-    } else key = imageChildText(key)
+      key = imageChildText(layout.normalized, true, true).trim().replace(/[ \t\r\n]+/g, ' ')
+    } else key = imageChildText(key, true, true)
     key = key.trim().replace(/[ \t\r\n]+/g, ' ')
     const definition = definitions.get(key)
     return definition !== undefined ? `${label}[${definition}]` : value
