@@ -5,6 +5,7 @@ import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
+import { backtickRunEnds } from './backtick-run-index.js'
 
 export type DjotImportLoss = {
   code: 'structure-unspellable'
@@ -55,6 +56,18 @@ export function djotImportLosses(
     }
   }
   for (const at of rawCode) report('Multiline inline code uses raw HTML; plain-text export omits it.', lineAt(at))
+  const codeMask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { code: false })
+  const codeEnds = backtickRunEnds(codeMask)
+  if (codeEnds) for (let at = 0; at < source.length; at++) {
+    if (source[at] !== '`' || codeMask[at] !== '`') continue
+    if (/^[ \t]*>/.test(source.slice(source.lastIndexOf('\n', at - 1) + 1, at))) continue
+    const end = codeEnds[at]!
+    if (end < 0) continue
+    const content = source.slice(at + 1, end - 1)
+    if (/\n[ \t]*:{3,}(?:[ \t]+[^\n]*)?(?:\n|$)/.test(content))
+      report('A multiline code span contains a Carve container opener on a continuation line.', lineAt(at))
+    at = end - 1
+  }
   djotEmphasis(
     source,
     (text) => text,
@@ -135,6 +148,8 @@ export function djotImportLosses(
       if (next === '' || /^(?:[#>|{]|[-*+] |:{3,}|`{3,}|~{3,})/.test(next))
         report('An empty heading cannot be spelled in Carve.', n + 1)
     }
+    if (/^(?:[ \t]*>[ \t]*)*:[ \t]*$/.test(line) && boundary)
+      report('A definition item with an empty term cannot be spelled in Carve.', n + 1)
     const term = /:[ \t]+$/.exec(visible.slice(0, at))
     if (
       term &&
@@ -249,6 +264,8 @@ export function djotImportLosses(
       const label = source.slice(open + 1, at)
       if (label.includes('\n') && /\n[ \t]*\n/.test(collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!)))
         report('An image alternative text with a blank line cannot be spelled in Carve.', lineAt(open))
+      if (/[ \t]+\n/.test(label))
+        report('An image alternative text loses trailing spaces before a line break.', lineAt(open))
     }
     if (!image) {
       if (opener.nested) report('A link inside another link cannot be spelled in Carve.', lineAt(open))
