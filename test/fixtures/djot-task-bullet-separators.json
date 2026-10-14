@@ -44038,5 +44038,13 @@
   {
     "source": "[^1]: -\t[x] ::: d\n    x\n    :::\n\nt[^1]",
     "html": "<p>t<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<ul>\n<li>\n[x] ::: d\nx\n</li>\n</ul>\n<div>\n</div>\n<p><a href=\"#fnref1\" role=\"doc-backlink\">↩︎</a></p>\n</li>\n</ol>\n</section>\n"
+  },
+  {
+    "source": "[^1]: -  [x] a\n      - b\n\nt[^1]",
+    "html": "<p>t<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<ul>\n<li>\n[x] a\n</li>\n<li>\nb\n</li>\n</ul>\n<p><a href=\"#fnref1\" role=\"doc-backlink\">↩︎</a></p>\n</li>\n</ol>\n</section>\n"
+  },
+  {
+    "source": "[^1]: -\t[x] a\n      - b\n\nt[^1]",
+    "html": "<p>t<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\">\n<hr>\n<ol>\n<li id=\"fn1\">\n<ul>\n<li>\n[x] a\n</li>\n<li>\nb\n</li>\n</ul>\n<p><a href=\"#fnref1\" role=\"doc-backlink\">↩︎</a></p>\n</li>\n</ol>\n</section>\n"
   }
 ]
