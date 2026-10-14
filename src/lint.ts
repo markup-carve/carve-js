@@ -69,6 +69,7 @@ import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue, renderHtml } from './render-html.js'
 import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
 import { inspectColonFences } from './colon-fences.js'
+import { resolveTableSpans } from './table-spans.js'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 
 export interface LintWarning {
@@ -2023,6 +2024,51 @@ function collectSilentFailures(
   }
 
   for (const table of tables) {
+    const grid = resolveTableSpans(table.rows)
+    for (let r = 0; r < grid.length; r++) {
+      for (let c = 0; c < grid[r]!.length; c++) {
+        const entry = grid[r]![c]!
+        if (entry.skip || !entry.cell.span) continue
+        const marker = entry.cell.span === 'rowspan' ? '^' : '<'
+        const reason = marker === '^'
+          ? r === 0
+            ? 'There is no cell above it to extend.'
+            : 'Extending the cell above would cover another cell.'
+          : c === 0
+            ? 'There is no cell to its left to widen.'
+            : 'The cell to its left starts in an earlier row, so widening it would cover cells already placed.'
+        const pos = entry.cell.pos
+        const line = pos?.startLine ?? entry.row.pos?.startLine ?? table.pos?.startLine ?? 1
+        const sourceLine = lines[line - 1] ?? ''
+        const cellStart = pos?.startOffset === undefined ? undefined : toUtf16(pos.startOffset)
+        const cellEnd = pos?.endOffset === undefined ? undefined : toUtf16(pos.endOffset)
+        const markerAt = cellStart === undefined || cellEnd === undefined
+          ? -1
+          : source.slice(cellStart, cellEnd).indexOf(marker)
+        const stripped = stripContainerPrefixesKeepIndent(sourceLine)
+        const prefixWidth = sourceLine.length - stripped.length
+        const indent = stripped.length - stripped.trimStart().length
+        const rowText = stripped.slice(indent)
+        const sourceCell = isTableRow(rowText)
+          ? splitTableRowSpans(rowAttrsFromLine(rowText).body)[c]
+          : undefined
+        const fallbackMarkerAt = sourceCell?.text.indexOf(marker) ?? -1
+        const fallbackColumn = sourceCell && fallbackMarkerAt >= 0
+          ? prefixWidth + indent + sourceCell.start + fallbackMarkerAt + 1
+          : 0
+        const column = markerAt >= 0
+          ? cellStart! + markerAt - (lineStart[line - 1] ?? 0) + 1
+          : fallbackColumn
+        if (column < 1) continue
+        push(
+          line,
+          column,
+          1,
+          'table-span-marker-blocked',
+          `The "${marker}" span marker cannot extend a cell. ${reason} It renders as a cell of its own; escape it as "\\${marker}" to keep the character as text, or remove it.`,
+        )
+      }
+    }
     const kv = table.attrs?.keyValues ?? {}
     const widest = table.rows.reduce((width, row) => Math.max(width, row.cells.length), 0)
     const lineNo = table.pos?.startLine ?? 1
