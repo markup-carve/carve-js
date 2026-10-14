@@ -13123,7 +13123,15 @@ class ParseSession {
     if (fenced !== -1) {
       take = fenced + 1
     } else {
-      while (lexer.peek(take) !== undefined && !isBoundary(lexer.peek(take)!)) take++
+      while (lexer.peek(take) !== undefined) {
+        const candidate = lexer.peek(take)!
+        // A first-block marker can attach a flush-left block even when its
+        // list marker is indented. Dedent ends the block only after it starts.
+        const firstFlushLeft = take === 0 && contentColumn > 0 &&
+          indentColumns(candidate) === 0 && !isBlankLine(candidate) && !isContinuationMarker(candidate)
+        if (isBoundary(candidate) && !firstFlushLeft) break
+        take++
+      }
       const measured = this.attachedBlockExtent(lexer, take, transform, endAtFoldedDefinition)
       if (measured < take) take = measured
     }
@@ -13221,6 +13229,9 @@ class ParseSession {
         RE_ORDERED.test(a) || RE_UNORDERED.test(a) || RE_TASK.test(a) || extractItemAttr(a) !== null
       return Boolean(sibling) || anyMarker || isContinuationMarker(a)
     }
+    const firstItemAttachBoundary = (a: string): boolean =>
+      isItemAttachBoundary(a) && !(baseIndent > 0 && indentColumns(a) === 0 &&
+        !isBlankLine(a) && !isContinuationMarker(a))
 
     while (!lexer.eof()) {
       const itemStartLineIndex = lexer.pos
@@ -13278,7 +13289,7 @@ class ParseSession {
       lexer.consume()
 
       if (isContinuationMarker(content) &&
-        (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || isItemAttachBoundary(lexer.peek()!))) {
+        (!attachesAtDocumentColumnZero(lexer) || lexer.peek() === undefined || firstItemAttachBoundary(lexer.peek()!))) {
         // The marker line is still consumed and contributes nothing; the item
         // carries an EMPTY lead from here, exactly as a comment on that line
         // would leave it. `contentCol` is already measured off the marker, so
