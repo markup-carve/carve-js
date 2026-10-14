@@ -247,35 +247,45 @@ function charsThroughColumns(line: string, wanted: number): number {
 }
 
 function definitionTermBlockBoundaries(source: string): string {
-  if (!source.includes(':') || !(source.includes('|') || source.includes('```') || source.includes('~~~'))) return source
-  const mask = maskDjotCodeAndDestinations(source)
+  if (!source.includes(':')) return source
+  const mask = maskDjotCodeAndDestinations(source), masks = mask.split('\n')
   const boundaries = new Set(djotInlineBoundaries(source, mask, true))
-  let column: number | undefined, previousBlank = true, offset = 0
-  const lines: string[] = [], masks = mask.split('\n')
+  const item = /^(?:[ \t]*(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)+(?=:)/
+  const marker = /^(?:#{1,6}(?:[ \t]|$)|:{3,}|:(?:[ \t]|$)|[-*+](?:[ \t]|$)|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)](?:[ \t]|$)|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)(?:[ \t]|$)|(?:[*-][ \t]*){3,}$)/
+  const project = (line: string): { prefix: string; body: string; depth: number; indent: number; first: number } => {
+    const prefix = /^(?:[ \t]*>(?:[ \t]|$))*/.exec(line)![0], body = line.slice(prefix.length)
+    const [indent, first] = leadingIndent(body)
+    return { prefix, body, depth: (prefix.match(/>/g) ?? []).length, indent, first }
+  }
+  let held: { column: number; depth: number } | undefined, previousBlank = true, previousBlock = true, offset = 0
+  const lines: string[] = []
   for (const [index, line] of source.split('\n').entries()) {
-    const [indent, first] = leadingIndent(line), visible = masks[index]!
-    const blank = line.trim() === ''
-    if (blank) column = undefined
-    if (visible[first] === ':') {
-      if (/^:(?:[ \t]|$)/.test(line.slice(first)) && (previousBlank || column === undefined && boundaries.has(offset) || column !== undefined && indent <= column)) column = indent
-    } else if (column !== undefined && indent <= column) {
-      const pipe = visible[first] === '|' && line.trimEnd().endsWith('|')
-      const code = /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t\r]*$/.test(line.slice(first))
-      if (pipe || code) {
+    const view = project(line), visible = masks[index]!.slice(view.prefix.length)
+    const inline = item.exec(view.body), first = inline?.[0].length ?? view.first
+    const blank = /^[ \t]*$/.test(view.body)
+    if (blank) held = undefined
+    if (visible[first] === ':' && /^:(?:[ \t]|$)/.test(view.body.slice(first)) && (previousBlank || previousBlock || held?.depth === view.depth || boundaries.has(offset))) {
+      let column = 0
+      for (const character of view.body.slice(0, first)) column = character === '\t' ? column + 4 - column % 4 : column + 1
+      if (!held || view.depth !== held.depth || column <= held.column) held = { column, depth: view.depth }
+    } else if (held && (view.depth < held.depth || view.depth === held.depth && view.indent <= held.column)) {
+      const text = view.body.slice(view.first), masked = visible.slice(view.first)
+      const pipe = text.startsWith('|') && /\|[ \t]*$/.test(text)
+      const code = /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(text)
+      if (pipe || code || marker.test(text)) {
         let at = lines.length
         while (at > 0) {
-          const prior = lines[at - 1]!, [priorIndent, first] = leadingIndent(prior)
-          const attrs = prior[first] === '{' ? readAttributes(prior, first, false, false, false) : undefined
-          if (priorIndent > indent || !attrs || prior.slice(attrs.end).trim() !== '') break
+          const prior = project(lines[at - 1]!), attrs = prior.body[prior.first] === '{' ? readAttributes(prior.body, prior.first, false, false, false) : undefined
+          if (prior.depth !== view.depth || prior.indent > view.indent || !attrs || !/^[ \t]*$/.test(prior.body.slice(attrs.end))) break
           at--
         }
-        lines.splice(at, 0, '')
-        column = undefined
-      }
-      else if (/^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|(?:[*-][ \t]*){3,}$)/.test(visible.slice(first))) column = undefined
+        lines.splice(at, 0, view.prefix + ' '.repeat(view.indent))
+        held = undefined
+      } else if (/^>/.test(masked)) held = undefined
     }
     lines.push(line)
     previousBlank = blank
+    previousBlock = blank || /^:{3,}(?:[ \t]+[A-Za-z0-9_-]+)?[ \t]*$/.test(visible.slice(view.first))
     offset += line.length + 1
   }
   return lines.join('\n')
@@ -284,7 +294,7 @@ function definitionTermBlockBoundaries(source: string): string {
 /** Translate Djot definition-item structure without touching unrelated source. */
 function convertDefinitionLists(source: string, emptyTerm: string, depth = 0): string {
   if (depth >= MAX_NESTING_DEPTH) return convertRootDefinitionLists(source, emptyTerm)
-  if (/^[ \t]*(?:>[ \t]*)+(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*:(?:[ \t]|$)/m.test(source)) {
+  if (/^[ \t]*(?:>[ \t]*)+(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)*:(?:[ \t]|$)/m.test(source)) {
     const lines = source.split('\n'), masks = maskDjotCodeAndDestinations(source).split('\n')
     const result: string[] = []
     for (let at = 0; at < lines.length;) {
@@ -304,7 +314,7 @@ function convertDefinitionLists(source: string, emptyTerm: string, depth = 0): s
         const prefix = /^>(?:[ \t]|$)/.exec(lines[end]!)
         if (!prefix || masks[end]![prefix[0].indexOf('>')] !== '>') {
           const text = lines[end]!.replace(/^[ \t]*/, ''), visible = masks[end]!.replace(/^[ \t]*/, '')
-          const block = /^(?:#{1,6}(?:[ \t]|$)|>|:(?:[ \t]|$)|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|(?:[*-][ \t]*){3,}$)/.test(visible)
+          const block = /^(?:#{1,6}(?:[ \t]|$)|>|:(?:[ \t]|$)|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)[ \t]|(?:[*-][ \t]*){3,}$)/.test(visible)
             || visible.startsWith('|') && text.endsWith('|')
             || /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t]*$/.test(text)
           if (termColumn === undefined || !text || block) { endsBlock = block; break }
@@ -313,9 +323,9 @@ function convertDefinitionLists(source: string, emptyTerm: string, depth = 0): s
           continue
         }
         const child = lines[end]!.slice(prefix[0].length), body = quoted(child)[1]
-        const term = /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*):(?:[ \t]|$)/.exec(body)
+        const term = /^([ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)*):(?:[ \t]|$)/.exec(body)
         if (term) termColumn = term[1]!.length
-        else if (!body.replace(/^[ \t]+|[ \t]+$/g, '') || termColumn !== undefined && leadingIndent(body)[0] <= termColumn && /^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(body.replace(/^[ \t]*/, ''))) termColumn = undefined
+        else if (!body.replace(/^[ \t]+|[ \t]+$/g, '') || termColumn !== undefined && leadingIndent(body)[0] <= termColumn && /^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)[ \t])/.test(body.replace(/^[ \t]*/, ''))) termColumn = undefined
         nested.push(child)
         end++
       }
@@ -329,12 +339,12 @@ function convertDefinitionLists(source: string, emptyTerm: string, depth = 0): s
 }
 
 function convertUnquotedDefinitionLists(source: string, emptyTerm: string, depth = 0): string {
-  if (/^[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)+:/m.test(source)) {
+  if (/^[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)+:/m.test(source)) {
     const lines = source.split('\n'), mask = maskDjotCodeAndDestinations(source), masks = mask.split('\n')
     const boundaries = new Set(djotInlineBoundaries(source, mask, true)), result: string[] = []
     let offset = 0, start = 0
     for (let at = 0; at < lines.length; at++) {
-      const line = lines[at]!, item = /^([ \t]*)(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+(?=(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)*:(?:[ \t]|$))/.exec(line)
+      const line = lines[at]!, item = /^([ \t]*)(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+(?=(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\))[ \t]+)*:(?:[ \t]|$))/.exec(line)
       const sourceAt = offset
       offset += line.length + 1
       if (!item || masks[at]![item[0].length] !== line[item[0].length] || at !== 0 && !boundaries.has(sourceAt)) continue
@@ -344,7 +354,7 @@ function convertUnquotedDefinitionLists(source: string, emptyTerm: string, depth
       let end = at + 1, blank = false
       while (end < lines.length) {
         const next = lines[end]!, indent = leadingIndent(next)[0], text = next.replace(/^[ \t]*/, '')
-        if (text !== '' && indent < column && (blank || /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t]|#{1,6}(?:[ \t]|$)|>|:{3,}|[`~]{3,}|\|)/.test(masks[end]!.replace(/^[ \t]*/, '')))) break
+        if (text !== '' && indent < column && (blank || /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)[ \t]|#{1,6}(?:[ \t]|$)|>|:{3,}|[`~]{3,}|\|)/.test(masks[end]!.replace(/^[ \t]*/, '')))) break
         nested.push(next.slice(charsThroughColumns(next, Math.min(column, indent))))
         blank = text === ''
         offset += next.length + 1
