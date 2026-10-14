@@ -6177,8 +6177,13 @@ function trackItemLazyState(
   // are read there exactly as they are here, rather than enumerated. An
   // enumeration of block kinds is how the three engines drifted apart.
   if (readDescendant && state.inDefList === false) {
-    const inner = (state.deepest ??= { ...verbatimOnlyLazyState(), lazyFoldable: state.lazyFoldable })
     const dedented = content.slice(run!)
+    const inlineFence = RE_FENCE.exec(dedented)
+    const inlineMarker = inlineFence?.[2] ?? RE_RAW_FENCE.exec(dedented)?.[1]
+    const inner = (state.deepest ??= {
+      ...verbatimOnlyLazyState(),
+      lazyFoldable: state.lazyFoldable && inlineMarker !== undefined && !hasFenceCloser(inlineMarker, run!),
+    })
     trackItemLazyState(
       dedented,
       inner,
@@ -6262,7 +6267,9 @@ function trackItemLazyState(
       state.inDefList = false
       return
     }
-    if (RE_BLOCKQUOTE.test(overIndented)) {
+    const authoredQuote = RE_BLOCKQUOTE.exec(overIndented)
+    if (authoredQuote && ((state.descriptionHasTerm || (!state.lazyFoldable && state.descriptionColumn !== undefined)) ||
+        isBlankLine(authoredQuote[1] ?? ''))) {
       content = overIndented
       if (facts) facts = { ...facts, whitespace: 0 }
     }
@@ -10060,7 +10067,7 @@ class ParseSession {
       const codeOpener = RE_FENCE.exec(rawTrimmed)
       const rawCodeOpener = codeOpener ? null : RE_RAW_FENCE.exec(rawTrimmed)
       const codeRun = codeOpener?.[2] ?? rawCodeOpener?.[1]
-      const inlineFence = codeRun !== undefined && listCols.length > 0 &&
+      const inlineFence = codeRun !== undefined && leadingWhitespace(raw) === 0 && listCols.length > 0 &&
         paraState !== 'no' && (paragraphFoldedAbove || !prepassOpensBlock(paraLine, paraLinePlusOpens)) &&
         !codeCloserPossibleIn(
           (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
@@ -11215,7 +11222,7 @@ class ParseSession {
         lexer.consume()
       } else if (
         pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
-        !(retainedBelowComment && lineOpensItemBlock(ln.trimStart())) &&
+        !(retainedBelowComment && isColonFenceOpener(ln.trimStart())) &&
         (retainedBelowComment || (lazyState.lazyFoldable && isRetainableLineComment(lexer, ln))) &&
         (retainedBelowComment || isRetainableLineComment(lexer, ln) ||
           !startsInterruptingBlock(lexer, ln.trimStart(), false, false, ln === ln.trimStart()))
@@ -12812,7 +12819,7 @@ class ParseSession {
       const lineIndex = lexer.pos
       lexer.consume()
       const lazyLinkDef = this.isLinkDefLine(ln)
-      if (lazyLinkDef) {
+      if (lazyLinkDef && lexer.declinedLinkDefLines.has(lexer.lineNumber(lineIndex))) {
         lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
       }
       // THE LINE IS THE QUOTE'S LAZY TEXT, AND A MARKER DOES NOT SURVIVE THE
@@ -13706,7 +13713,7 @@ class ParseSession {
       // line was comment body to it. PART 9 §28 makes that body VERBATIM, so the
       // tracker has to know the comment is open before it reads the next line.
       const leadCommentRun = leadFence ? undefined : commentFenceRun(content)
-      const leadComment = leadCommentRun !== undefined && commentBlockHasCloser(lexer, leadCommentRun)
+      const leadComment = leadCommentRun !== undefined && (commentFenceRun(lexer.peek() ?? '') === leadCommentRun || commentBlockHasCloser(lexer, leadCommentRun))
         ? leadCommentRun : undefined
       if (leadComment !== undefined) {
         lazyState.opaque = { kind: 'comment', length: leadComment, paragraphBefore: lazyState.lazyFoldable, atColumn: false }

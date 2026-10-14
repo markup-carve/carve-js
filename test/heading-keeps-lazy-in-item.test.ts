@@ -46,7 +46,7 @@ describe('a heading leaves no item paragraph open', () => {
     )
   })
 
-  it('a caption line ends a plain-paragraph item too', () => {
-    expect(carveToHtml('- text\n^ cap')).toBe('<ul>\n  <li>text</li>\n</ul>\n<p>^ cap</p>')
+  it('a caret line continues a plain-paragraph item', () => {
+    expect(carveToHtml('- text\n^ cap')).toBe('<ul>\n  <li>text\n^ cap</li>\n</ul>')
   })
 })
