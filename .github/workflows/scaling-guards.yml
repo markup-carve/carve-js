@@ -30,6 +30,20 @@ name: Scaling guards
 on:
   push:
     branches: [main]
+    # Everything the perf-gated tests can load: the engine, the suite with its
+    # helpers and fixtures, dependencies, the vitest/TypeScript config, the spec
+    # pointer and this file. A docs-, scripts- or CHANGELOG-only merge cannot
+    # move a ratio; the non-perf tests that read those still run in ci.yml.
+    # Schedule and workflow_dispatch stay unfiltered.
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'spec'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.ts'
+      - 'tsconfig*.json'
+      - '.github/workflows/scaling-guards.yml'
   schedule:
     # 04:30 UTC. Before the 05:00 drift jobs in this repository and in carve, so
     # a nightly failure here is already filed when those run.
