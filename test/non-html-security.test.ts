@@ -33,7 +33,7 @@ describe('Markdown renderer is safe-by-default', () => {
   })
 
   it('keeps safe autolink destinations unchanged', () => {
-    expect(md('<https://example.com>')).toBe('[https://example.com](https://example.com)')
+    expect(md('<https://example.com>')).toBe('<https://example.com>')
   })
 
   it('escapes raw =html instead of emitting it', () => {
