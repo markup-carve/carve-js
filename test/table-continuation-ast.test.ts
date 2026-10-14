@@ -33,15 +33,13 @@ describe('table continuation AST', () => {
     expect(table?.type).toBe('table')
     if (table?.type !== 'table') return
     expect(table.rows[1]?.continuationLines).toBe(1)
-    expect(table.rows[0]?.pos).toBeUndefined()
-    expect(table.rows[1]?.pos).toBeUndefined()
+    expect([table.rows[0]?.pos?.startLine, table.rows[0]?.pos?.endLine]).toEqual([1, 1])
+    expect([table.rows[1]?.pos?.startLine, table.rows[1]?.pos?.endLine]).toEqual([2, 3])
     expect(table.rows[0]?.cells[0]?.children).toMatchObject([
       { type: 'text', value: 'a' }, { type: 'cell_wrap', line: 1, row: 1 }, { type: 'text', value: 'more' },
     ])
-    expect(table.rows[0]?.cells[0]?.children?.[1]?.pos).toEqual({
-      startLine: 3, endLine: 3, startColumn: 1, endColumn: 2,
-      startOffset: source.indexOf('+'), endOffset: source.indexOf('+') + 1,
-    })
+    expect(table.rows[0]?.cells[0]?.children?.[1]?.pos).toBeUndefined()
+    expect(table.rows[0]?.cells[0]?.children?.[2]?.pos).toBeUndefined()
     expect(carveToCarve(source)).toBe(source)
   })
 
