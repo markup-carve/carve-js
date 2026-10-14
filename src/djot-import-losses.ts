@@ -5,7 +5,6 @@ import { djotEmphasis } from './djot-emphasis.js'
 import { djotInlineBoundaries, isDjotEscaped, maskDjotCodeAndDestinations } from './djot-migrate.js'
 import { readAttributes } from './djot-word-attributes.js'
 import { djotCollapsedReferenceCache } from './djot-collapsed-reference.js'
-import { backtickRunEnds } from './backtick-run-index.js'
 
 export type DjotImportLoss = {
   code: 'structure-unspellable'
@@ -25,6 +24,7 @@ export function djotImportLosses(
   rawCode: readonly number[] = [],
   accepted: ReadonlyMap<number, { label: string; target: string; end: number }>,
   definitionsOnly?: Map<string, string>,
+  codeSource = source,
 ): DjotImportLoss[] {
   const collapsedReferenceText = djotCollapsedReferenceCache()
   const losses: DjotImportLoss[] = []
@@ -57,17 +57,31 @@ export function djotImportLosses(
     }
   }
   for (const at of rawCode) report('Multiline inline code uses raw HTML; plain-text export omits it.', lineAt(at))
-  const codeMask = maskDjotCodeAndDestinations(source, false, false, false, undefined, [], { code: false })
-  const codeEnds = backtickRunEnds(codeMask)
-  if (codeEnds) for (let at = 0; at < source.length; at++) {
-    if (source[at] !== '`' || codeMask[at] !== '`') continue
-    if (/^[ \t]*>/.test(source.slice(source.lastIndexOf('\n', at - 1) + 1, at))) continue
-    const end = codeEnds[at]!
-    if (end < 0) continue
-    const content = source.slice(at + 1, end - 1)
-    if (/\n[ \t]*:{3,}(?:[ \t]+[^\n]*)?(?:\n|$)/.test(content))
-      report('A multiline code span contains a Carve container opener on a continuation line.', lineAt(at))
-    at = end - 1
+  if (source.includes('`') && source.includes(':::')) {
+    const scan = codeSource.split('')
+    for (let line = 0; line < lines.length; line++) {
+      let depth = 0
+      const prefix = lines[line]!.slice(0, contentStart(lines[line]!))
+      for (let i = 0; i < prefix.length; i++)
+        if (prefix[i] === '>' && ++depth > quoteDepths[line]!) scan[offsets[line]! + i] = ' '
+    }
+    const spans: { at: number; end: number; closed: boolean }[] = []
+    let spanEnd = 0
+    maskDjotCodeAndDestinations(scan.join(''), false, true, false, undefined, [], {
+      destinations: true, comments: true, attributeValues: true,
+      onCode: (at, end, closed) => {
+        if (at >= spanEnd) { spans.push({ at, end, closed }); spanEnd = end }
+      },
+    })
+    for (const { at, end, closed } of spans) {
+      const line = lineAt(at)
+      if (quoteDepths[line - 1]! > 0) continue
+      let width = 1
+      while (source[at + width] === '`') width++
+      const content = source.slice(at + width, end - (closed ? width : 0))
+      if (/\n[ \t]*:{3,}(?:[ \t]+[^\n]*)?(?:\n|$)/.test(content))
+        report('A multiline code span contains a Carve container opener on a continuation line.', line)
+    }
   }
   djotEmphasis(
     source,
