@@ -113,6 +113,11 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
       }
       let body = startsItem ? trimmed.slice(marker![0].length) : trimmed
       let column = indent + (startsItem ? marker![0].length : 0)
+      if (startsItem && /^[-*+]/.test(marker![0])) {
+        const task = /^\[[ xX]\][ \t]+/.exec(body)
+        if (task) { body = body.slice(task[0].length); column += task[0].length }
+      }
+
       const padding = /^[ \t]*/.exec(body)![0].length
       body = body.slice(padding)
       column += padding

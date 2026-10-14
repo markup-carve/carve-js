@@ -706,7 +706,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const body = text.slice(item[0].length - 1)
       const itemHeading = /^(#{1,6})(?:[ \t]+|$)/.exec(body)
       headingMarker = itemHeading?.[1] ?? ''
-      const task = body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
+      const task = item[1] !== undefined && body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
       const itemBody = task ? body.slice(task[0].length) : body
       const itemDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(itemBody)
       if (itemDiv)
