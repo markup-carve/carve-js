@@ -29,11 +29,6 @@ test('Definition-body DIV openers preserve Native structure', () => {
     const { source, html } = row
     const converted = djotToCarve(source)
     const rendered = carveToHtml(converted)
-    if ('destinationOnly' in row) {
-      const destinations = (html: string): string[] => [...html.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(match => match[1]!.replaceAll('\0', '�').replace(/ /g, '%20'))
-      expect(destinations(rendered), source).toEqual(destinations(html))
-      continue
-    }
     const actual = shape(parseFragment(rendered))
     const expected = shape(parseFragment(html.replaceAll('\0', '�')))
     if (JSON.stringify(actual) !== JSON.stringify(expected)) failures.push({ source, converted, actual, expected })
