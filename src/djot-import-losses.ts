@@ -148,7 +148,7 @@ export function djotImportLosses(
       if (next === '' || /^(?:[#>|{]|[-*+] |:{3,}|`{3,}|~{3,})/.test(next))
         report('An empty heading cannot be spelled in Carve.', n + 1)
     }
-    if (/^(?:[ \t]*>[ \t]*)*:[ \t]*$/.test(line) && boundary)
+    if (/^(?:[ \t]*>[ \t]*)*:[ \t]*$/.test(line) && boundary && masked[offsets[n]! + line.indexOf(':')] === ':')
       report('A definition item with an empty term cannot be spelled in Carve.', n + 1)
     const term = /:[ \t]+$/.exec(visible.slice(0, at))
     if (

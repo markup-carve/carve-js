@@ -491,10 +491,11 @@ export function extractReferenceDefinitions(
         let title = !targetHasTitle && nextTitle
           ? ` ${nextTitle[1]}` : ''
         let multilineTitle = false
-        const rawReference = `[${definition[1]}]`
         if (!title && !targetHasTitle && opensItem && next !== undefined && /^ {2,}"[^"\n]*$/.test(next) &&
             lines[i + 2] !== undefined && /^ {2,}[^"\n]*"[ \t]*$/.test(lines[i + 2]!) &&
-            !lines.some((candidate, at) => at !== i && candidate.includes(rawReference) && !/^[ \t]*[-*+][ \t]+/.test(candidate))) {
+            !lines.some((candidate, at) => at !== i &&
+              Array.from(candidate.matchAll(/\[([^\]\n]+)\]/g)).some(match => normalizeReferenceLabel(match[1]!) === key) &&
+              !/^[ \t]*[-*+][ \t]+/.test(candidate))) {
           title = ` "${next.trimStart().slice(1)}${titleBreakMarker}${lines[i + 2]!.trim().slice(0, -1)}"`
           multilineTitle = true
           i += 2

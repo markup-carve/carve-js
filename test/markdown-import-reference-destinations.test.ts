@@ -29,6 +29,15 @@ test('a second quoted run stays in the item when the definition already has a ti
 
 test('a multiline title does not split a heading reference', () => {
   expect(markdownToCarve('- [a]: /u\n  "t\n  t2"\n# [a]')).not.toContain('CARVEMDTITLEBREAK')
+  expect(carveToHtml(markdownToCarve('- [a]: /u\n  "t\n  t2"\n# [A]'))).not.toContain('[A](/u “t')
+})
+
+test('a reference chain does not erase a footnote opener', () => {
+  expect(carveToHtml(markdownToCarve('[^1][b][c](/u)\n\n[c]: /v\n\n[^1]: note'))).toContain('role="doc-noteref"')
+})
+
+test('a raw newline angle shortcut leaves formatted labels on the normal path', () => {
+  expect(markdownToCarve('[*x*](<a\nb>)\n---')).toContain('##')
 })
 
 test('a reference chain without an inline destination keeps its established reading', () => {

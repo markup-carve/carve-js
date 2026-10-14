@@ -1406,7 +1406,7 @@ function convertInline(
   if (input.includes('][') && !input.includes('`') && !input.includes('<'))
     input = input.replace(/(?<!\\)\[([^\[\]\n]+)\]\[([^\[\]\n]+)\]\[([^\[\]\n]+)\](\([^()\n]+\))/g,
       (whole, first: string, second: string, third: string, destination: string) =>
-        referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined &&
+        !first.startsWith('^') && referenceDestinationLabel(first, decodeHtmlEntitiesRaw, [], table) === undefined &&
         referenceDestinationLabel(second, decodeHtmlEntitiesRaw, [], table) === undefined &&
         referenceDestinationLabel(third, decodeHtmlEntitiesRaw, [], table) !== undefined
           ? `\\[${first}][${second}][${third}]\\${destination}` : whole)
@@ -6505,7 +6505,7 @@ function restoreFootnoteListStyles(carve: string, token: string, payloads: reado
 
 function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   markdown = markdown.replace(/\r\n?/g, '\n')
-  if (/^\[[^\[\]\n]+\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.test(markdown))
+  if (/^\[[A-Za-z0-9 ]+\]\(<[^<>\n]*(?<!\\)\n[^<>\n]*>\)\n(?:=+|-+)[ \t]*\n?$/.test(markdown))
     return markdown.replace('](', ']\\(')
   const allLines = markdown
     .replace(/\0/g, '\ufffd')

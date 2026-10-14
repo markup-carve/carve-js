@@ -933,6 +933,7 @@ function collapseLiteralNestedImages(source: string): string {
     while (at < source.length && !/[\[\]\\\n]/.test(source[at]!)) at++
     if (at === labelStart) continue
     const label = source.slice(labelStart, at)
+    if (label.includes('`')) continue
     let outerTarget = ''
     let valid = true
     for (let level = 0; level < depth; level++) {
