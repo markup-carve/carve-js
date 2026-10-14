@@ -1,4 +1,4 @@
-import { ALL_OWNED_CHILD_FIELDS } from './owned-child-fields.js'
+import { ownedChildFields } from './owned-child-fields.js'
 import type { AstJsonDocument } from './ast-json.js'
 import { NODE_POSITION_KIND } from './wire-fields.js'
 
@@ -14,8 +14,6 @@ export interface ProvenanceSidecar { version: 1; sources: ProvenanceSource[]; no
 export class AstSidecarError extends TypeError {
   constructor(message: string) { super(message); this.name = 'AstSidecarError' }
 }
-
-const ANNOTATION_CHILD_FIELDS = ALL_OWNED_CHILD_FIELDS
 
 type RecordValue = Record<string, unknown>
 const record = (value: unknown): value is RecordValue => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -44,9 +42,10 @@ function collectNodes(ast: AstJsonDocument): Map<string, RecordValue> {
   const visitNode = (value: unknown, path: string): void => {
     if (!record(value) || !nonempty(value.type)) return
     nodes.set(path, value)
-    for (const key of ANNOTATION_CHILD_FIELDS) {
+    for (const key of ownedChildFields(value)) {
       const child = value[key]
       const kind = NODE_POSITION_KIND[`${value.type}.${key}`]
+      if (child === undefined || kind === undefined) continue
       const next = `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`
       if (kind === 'node') visitNode(child, next)
       else if (kind === 'nodes' && Array.isArray(child)) child.forEach((item, index) => visitNode(item, `${next}/${index}`))
@@ -56,7 +55,7 @@ function collectNodes(ast: AstJsonDocument): Map<string, RecordValue> {
   }
   const visitRecord = (value: unknown, path: string, name: string): void => {
     if (!record(value)) return
-    for (const key of ANNOTATION_CHILD_FIELDS) {
+    for (const key of ownedChildFields(value)) {
       const child = value[key]
       if (NODE_POSITION_KIND[`${name}.${key}`] !== 'nodes' || !Array.isArray(child)) continue
       child.forEach((item, index) => visitNode(item, `${path}/${key}/${index}`))
@@ -86,9 +85,15 @@ export function readNodeIdentity(input: unknown, ast: AstJsonDocument): NodeIden
 
 export function toNodeIdentity(ast: AstJsonDocument, session: string, ids?: ReadonlyMap<string, string>): NodeIdentitySidecar {
   if (!nonempty(session)) throw new AstSidecarError('session must be nonempty')
+  return readNodeIdentity(nodeIdentityForPaths(astNodePaths(ast), session, ids), ast)
+}
+
+/** Build identity for paths already collected from the same AST. */
+export function nodeIdentityForPaths(paths: readonly string[], session: string, ids?: ReadonlyMap<string, string>): NodeIdentitySidecar {
+  if (!nonempty(session)) throw new AstSidecarError('session must be nonempty')
   const used = new Set(ids?.values() ?? [])
   let next = 0
-  const nodes = astNodePaths(ast).map((path) => {
+  const nodes = paths.map((path) => {
     let id = ids?.get(path)
     if (id === undefined) {
       do { id = `n${next++}` } while (used.has(id))
@@ -96,7 +101,7 @@ export function toNodeIdentity(ast: AstJsonDocument, session: string, ids?: Read
     }
     return { id, path }
   })
-  return readNodeIdentity({ version: 1, session, nodes }, ast)
+  return { version: 1, session, nodes }
 }
 
 function textMetrics(canonical: Map<string, RecordValue>): Map<string, { start: number; length: number }> {
