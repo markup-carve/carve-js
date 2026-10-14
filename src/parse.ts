@@ -11201,6 +11201,7 @@ class ParseSession {
         lexer.consume()
       } else if (
         pendingBlanks === 0 && !RE_FOOTNOTE_DEF.test(ln) &&
+        !(retainedBelowComment && lineOpensItemBlock(ln.trimStart())) &&
         (retainedBelowComment || (lazyState.lazyFoldable && isRetainableLineComment(lexer, ln))) &&
         (retainedBelowComment || isRetainableLineComment(lexer, ln) ||
           !startsInterruptingBlock(lexer, ln.trimStart(), false, false, ln === ln.trimStart()))
