@@ -23,7 +23,7 @@ function sharedDjotListKind(prior: string | undefined, current: string): string 
 }
 
 function compactDjotListPrefix(text: string): string {
-  if (!text.includes('0') && !text.includes('(') && !text.includes('\t')) return text
+  if (!text.includes('0') && !text.includes('(') && !text.includes('\t') && !text.includes('[')) return text
   const parts: string[] = []
   let at = 0
   while (at < text.length) {
@@ -37,8 +37,13 @@ function compactDjotListPrefix(text: string): string {
     parts.push(item[0].replace(/^(\(?)0+(?=[0-9])/, '$1').replace(/^\(([^)]+)\)/, '$1.').replace(/\t/g, ' '))
     at += item[0].length
     if (/^[-*+]/.test(item[0])) {
-      const task = /^\[[ xX]\][ \t]+/.exec(text.slice(at))
-      if (task) { parts.push(task[0].replace(/\t/g, ' ')); at += task[0].length }
+      const task = /^\[[ xX\-_>?]\](?:[ \t]+|$)/.exec(text.slice(at))
+      if (task) {
+        const accepted = /^[-*+] $/.test(item[0]) && /^[ xX]$/.test(task[0][1]!)
+        parts.push(accepted ? task[0].replace(/\t/g, ' ') : '\\' + task[0])
+        at += task[0].length
+        if (!accepted) break
+      }
     }
   }
   parts.push(text.slice(at))
@@ -389,9 +394,9 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const child = /^((?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\))[ \t]+)(?=[^ \t])/.exec(body)
       let childBody = body
       if (child) {
-        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+]/.test(child[1]!) && /^\[[ xX]\][ \t]+/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
+        lists.push({ sourcePrefix: quote.length, depth: quoteDepth, column: noteOwner.column + (noteSourceWidths.get(/^\[\^([^\]]+)\]/.exec(currentNoteHead[1]!)![1]!) ?? currentNoteHead[1]!.length), content: compactDjotListPrefix(child[1]!).length, target: noteOwner.target + 2, kind: djotListKind(child[1]!.trim()) + (/^[-*+] $/.test(child[1]!) && /^\[[ xX]\][ \t]+/.test(body.slice(child[1]!.length)) ? ':task' : ''), bullet: child[1]![0] === '*' ? '*' : '-', loose: false, start: out.length, continuation: false })
         childBody = body.slice(child[1]!.length)
-        if (/^[-*+]/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\][ \t]+/, '')
+        if (/^[-*+] $/.test(child[1]!)) childBody = childBody.replace(/^\[[ xX]\][ \t]+/, '')
       }
       const nestedHead = child ? /^(\[\^[^\]\n]+\]:[ \t]*)(.+)$/.exec(childBody) : null
       if (!nestedFirstBody && nestedHead) {
@@ -658,7 +663,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
         blank = false
         continue
       }
-      let kind = (item[1] ?? djotListKind(item[2]!)) + (item[1] && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length - 1)) ? ':task' : '')
+      let kind = (item[1] ?? djotListKind(item[2]!)) + (item[1] && item[0].length === 3 && item[0][1] === ' ' && /^\[[ xX]\](?:[ \t]+|$)/.test(text.slice(item[0].length - 1)) ? ':task' : '')
       let context = parent
       const nested = parent && indent > parent.column
       const sharedKind = sharedDjotListKind(priorKind, kind)
@@ -706,7 +711,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       const body = text.slice(item[0].length - 1)
       const itemHeading = /^(#{1,6})(?:[ \t]+|$)/.exec(body)
       headingMarker = itemHeading?.[1] ?? ''
-      const task = item[1] !== undefined && body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
+      const task = item[1] !== undefined && item[0].length === 3 && item[0][1] === ' ' && body.startsWith('[') ? /^\[[ xX]\][ \t]+/.exec(body) : null
       const itemBody = task ? body.slice(task[0].length) : body
       const itemDiv = /^(:{3,})(?:[ \t]+.*)?$/.exec(itemBody)
       if (itemDiv)

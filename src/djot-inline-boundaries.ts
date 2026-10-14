@@ -14,7 +14,7 @@ export function djotContentStart(line: string): number {
       const marker = /^(?:\[\^[^\]\n]+\]:(?:[ \t]+|[\r\n]*$)|(?:[-*+]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})[.)]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]{2,}|[IVXLCDM]{2,})\)|:)[ \t]+)/.exec(line.slice(at))
       if (!marker) break
       at += marker[0].length
-      if (/^[-*+]/.test(marker[0])) {
+      if (/^[-*+] $/.test(marker[0])) {
         const task = /^\[[ xX]\][ \t]+/.exec(line.slice(at))
         if (task) at += task[0].length
       }
@@ -113,7 +113,7 @@ export function djotInlineBoundaries(source: string, mask: string, codeScopes = 
       }
       let body = startsItem ? trimmed.slice(marker![0].length) : trimmed
       let column = indent + (startsItem ? marker![0].length : 0)
-      if (startsItem && /^[-*+]/.test(marker![0])) {
+      if (startsItem && /^[-*+] $/.test(marker![0])) {
         const task = /^\[[ xX]\][ \t]+/.exec(body)
         if (task) { body = body.slice(task[0].length); column += task[0].length }
       }
