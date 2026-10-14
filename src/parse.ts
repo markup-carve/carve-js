@@ -9378,6 +9378,7 @@ interface EmphasisMemo {
   // Each `[` mapped to its balanced `]`, built once. Same map the inline pass
   // resolves a label with, so the scan hides exactly the run the parser builds.
   brackets?: BracketClose
+  crossref?: CrossrefMemo
 }
 
 function combinedSpanCloser(text: string, start: number, memo: EmphasisMemo): number | undefined {
@@ -17730,6 +17731,14 @@ class ParseSession {
         }
       }
       if (ch === '<') {
+        // A cross-reference ranks with autolinks (PART 8 item 3).
+        if (text.startsWith('</#', j) && text[j + 3] !== '>') {
+          memo.crossref ??= { lastCloser: text.lastIndexOf('>') }
+          if (crossrefBodyCanEnd(text, j + 3, memo.crossref)) {
+            j = text.indexOf('>', j + 3)
+            continue
+          }
+        }
         RE_AUTOLINK_STICKY.lastIndex = j
         const m = RE_AUTOLINK_STICKY.exec(text)
         if (m) {
