@@ -246,6 +246,41 @@ function charsThroughColumns(line: string, wanted: number): number {
   return chars
 }
 
+function definitionTermBlockBoundaries(source: string): string {
+  if (!source.includes(':') || !(source.includes('|') || source.includes('```') || source.includes('~~~'))) return source
+  const mask = maskDjotCodeAndDestinations(source)
+  const boundaries = new Set(djotInlineBoundaries(source, mask, true))
+  let column: number | undefined, previousBlank = true, offset = 0
+  const lines: string[] = [], masks = mask.split('\n')
+  for (const [index, line] of source.split('\n').entries()) {
+    const [indent, first] = leadingIndent(line), visible = masks[index]!
+    const blank = line.trim() === ''
+    if (blank) column = undefined
+    if (visible[first] === ':') {
+      if (/^:(?:[ \t]|$)/.test(line.slice(first)) && (previousBlank || column === undefined && boundaries.has(offset) || column !== undefined && indent <= column)) column = indent
+    } else if (column !== undefined && indent <= column) {
+      const pipe = visible[first] === '|' && line.trimEnd().endsWith('|')
+      const code = /^(?:`{3,}|~{3,})[ \t]*=?[A-Za-z0-9_+#.-]*[ \t\r]*$/.test(line.slice(first))
+      if (pipe || code) {
+        let at = lines.length
+        while (at > 0) {
+          const prior = lines[at - 1]!, [priorIndent, first] = leadingIndent(prior)
+          const attrs = prior[first] === '{' ? readAttributes(prior, first, false, false, false) : undefined
+          if (priorIndent > indent || !attrs || prior.slice(attrs.end).trim() !== '') break
+          at--
+        }
+        lines.splice(at, 0, '')
+        column = undefined
+      }
+      else if (/^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|(?:[*-][ \t]*){3,}$)/.test(visible.slice(first))) column = undefined
+    }
+    lines.push(line)
+    previousBlank = blank
+    offset += line.length + 1
+  }
+  return lines.join('\n')
+}
+
 /** Translate Djot definition-item structure without touching unrelated source. */
 function convertDefinitionLists(source: string, emptyTerm: string): string {
   const lines = source.split('\n')
@@ -254,6 +289,8 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
   let boundaries: Set<number> | undefined
   let sourceOffset = 0
   type DefinitionContext = { source: number; target: number; body: boolean; ready: boolean; termEnd: number }
+  const fenceStarts = new Set<number>()
+  if (source.includes('```') || source.includes('~~~')) maskDjotFences(source, undefined, [], true, line => fenceStarts.add(line))
   const stack: DefinitionContext[] = []
   const finish = (context: DefinitionContext): void => {
     if (!context.body) lines[context.termEnd] += `\n${' '.repeat(context.target)}:  ${emptyTerm}`
@@ -297,7 +334,7 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
           }
           continue
         }
-        if (top.ready && indent >= top.source + 2) {
+        if (top.ready && indent > top.source) {
           const target = top.target + 3
           const lead = top.body ? ' '.repeat(target) : `${' '.repeat(top.target)}:  `
           top.body = true
@@ -321,19 +358,23 @@ function convertDefinitionLists(source: string, emptyTerm: string): string {
     if (!stack.at(-1)!.ready) {
       const continuation = lines[i]!.trimStart()
       const indent = leadingIndent(lines[i]!)[0]
-      const visible = masked[i]?.[/^[ \t]*/.exec(lines[i]!)![0].length] === continuation[0]
-      const marker = /^(?:#{1,6}(?:[ \t]|$)|>|\||:{3,}|[`~]{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(continuation) || /^(?:[*-][ \t]*){3,}$/.test(continuation)
+      const visible = masked[i]?.[/^[ \t]*/.exec(lines[i]!)![0].length] === continuation[0] || fenceStarts.has(i)
+      const marker = /^(?:#{1,6}(?:[ \t]|$)|>|:{3,}|[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(continuation) || /^(?:[*-][ \t]*){3,}$/.test(continuation) || fenceStarts.has(i)
       if (visible && indent <= stack.at(-1)!.source && marker) {
         while (stack.length && stack.at(-1)!.source >= indent) pop()
         if (!stack.length) continue
       } else {
         stack.at(-1)!.termEnd = i
+        if (visible && marker && indent > stack.at(-1)!.source && /^(?:[-*+][ \t]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)][ \t]|\((?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)\)[ \t])/.test(continuation)) {
+          lines[i] = continuation.replace(/^([-*+])/, '\\$1').replace(/^([0-9A-Za-z]+)([.)])(?=[ \t])/, '$1\\$2').replace(/^\(/, '\\(')
+          continue
+        }
         if (!/^(?:[#>|{]|:{3,}|[`~]{3,}|[-*+] |(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] )/.test(continuation)) lines[i] = visible ? (!marker ? continuation.replace(/^([ivxlcdmIVXLCDM]+)([.)])(?=[ \t])/, '$1\\$2') : continuation).replace(/^:(?=[ \t]|$)/, '\\:') : continuation
         continue
       }
     }
     const [indent] = leadingIndent(lines[i]!)
-    while (stack.length && indent < stack.at(-1)!.source + 2) pop()
+    while (stack.length && indent <= stack.at(-1)!.source) pop()
     const context = stack.at(-1)
     if (!context) continue
     const payload = lines[i]!.slice(charsThroughColumns(lines[i]!, context.source + 2))
@@ -1034,7 +1075,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
 
   const convert = (text: string, transform?: (chunk: string) => string): string => {
     const emptyTerm = djotPlaceholderPrefix(text, '\x00DJOTEMPTYTERM\x00')
-    const attrs = consumeOrphanDjotAttributes(convertDefinitionLists(convertDjotBlockMarkers(text), emptyTerm))
+    const attrs = consumeOrphanDjotAttributes(convertDjotBlockMarkers(convertDefinitionLists(text, emptyTerm)))
     return attrs
       .restore(
         collapseFalseListBoundaries(
@@ -1081,7 +1122,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const normalizedBody = normalizeDjotFootnotes(
     djotReferenceLayout(
       djotCodePadding(normalizeDjotFences(foldDjotReferences(
-        normalizeDjotAttributeLines(imageQuoteLayout(normalizeDjotAttributeLines(invalidAttributes.source), omitQuoteDelimiters)),
+        definitionTermBlockBoundaries(normalizeDjotAttributeLines(imageQuoteLayout(normalizeDjotAttributeLines(invalidAttributes.source), omitQuoteDelimiters))),
       ))),
       djotContentStart, false, undefined, preserveReferenceBreaks,
     ),
