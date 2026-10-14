@@ -918,6 +918,40 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
   return djotInlineLayout(source, at => omitQuoteDelimiters || imageQuotes.has(at))
 }
 
+function collapseLiteralNestedImages(source: string): string {
+  if (!source.includes('![![')) return source
+  const chunks: string[] = []
+  let copied = 0
+  for (let at = 0; at < source.length;) {
+    if (source.slice(at, at + 2) !== '![' || at > 0 && isDjotEscaped(source, at)) { at++; continue }
+    const start = at
+    while (source.slice(at, at + 2) === '![') at += 2
+    const depth = (at - start) / 2
+    if (depth < 2) continue
+    const labelStart = at
+    while (at < source.length && /[A-Za-z0-9 ]/.test(source[at]!)) at++
+    if (at === labelStart) continue
+    const label = source.slice(labelStart, at)
+    let outerTarget = ''
+    let valid = true
+    for (let level = 0; level < depth; level++) {
+      if (source.slice(at, at + 2) !== '](') { valid = false; break }
+      at += 2
+      const targetStart = at
+      while (at < source.length && /[A-Za-z0-9/._~#%-]/.test(source[at]!)) at++
+      if (at === targetStart || source[at] !== ')') { valid = false; break }
+      if (level === depth - 1) outerTarget = source.slice(targetStart, at)
+      at++
+    }
+    if (!valid) continue
+    chunks.push(source.slice(copied, start), `![${label}](${outerTarget})`)
+    copied = at
+  }
+  if (!chunks.length) return source
+  chunks.push(source.slice(copied))
+  return chunks.join('')
+}
+
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   resetParagraphContext()
@@ -925,6 +959,7 @@ export function djotToCarve(djot: string): string {
 }
 
 function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false): string {
+  djot = collapseLiteralNestedImages(djot)
   if (nulShielded || !djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters)
   const token = '\0U\0'
   return convertDjotDocument(djot.replaceAll('\0', token), preserveReferenceBreaks, omitQuoteDelimiters).replaceAll(token, '\0')
