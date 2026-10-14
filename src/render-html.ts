@@ -2133,7 +2133,7 @@ function renderTableRowFlat(
       renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
       (attrs.length ? ' ' + attrs.join(' ') : '')
     const content = entry.cell.blocks === undefined
-      ? renderInlines(entry.cell.children ?? [], opts)
+      ? renderInlines(entry.cell.children?.[0]?.type === 'cell_wrap' ? entry.cell.children.slice(1) : entry.cell.children ?? [], opts)
       : renderBlocks(entry.cell.blocks, opts, 0)
     parts.push(`<${tag}${attrStr}>${content}</${tag}>`)
   }
