@@ -12795,7 +12795,7 @@ class ParseSession {
       }
       if (
         isBlankLine(ln) ||
-        RE_CAPTION.test(ln) ||
+        (RE_CAPTION.test(ln) && !lexer.markerOpensSublist) ||
         colonFenceShapeEndsLazyContinuation(ln) ||
         startsInterruptingBlock(lexer, undefined, false)
       ) {
@@ -13145,7 +13145,8 @@ class ParseSession {
         // A first-block marker can attach a flush-left block even when its
         // list marker is indented. Dedent ends the block only after it starts.
         const firstFlushLeft = take === 0 && contentColumn > 0 &&
-          indentColumns(candidate) === 0 && !isBlankLine(candidate) && !isContinuationMarker(candidate)
+          indentColumns(candidate) === 0 && !isBlankLine(candidate) && !isContinuationMarker(candidate) &&
+          !lineOpensBlock(candidate)
         if (isBoundary(candidate) && !firstFlushLeft) break
         take++
       }
