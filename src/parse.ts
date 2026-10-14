@@ -10057,10 +10057,20 @@ class ParseSession {
       // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
       // interrupting a list item would not pop the stack.
       const rawTrimmed = raw.trim()
+      const codeOpener = RE_FENCE.exec(rawTrimmed)
+      const rawCodeOpener = codeOpener ? null : RE_RAW_FENCE.exec(rawTrimmed)
+      const codeRun = codeOpener?.[2] ?? rawCodeOpener?.[1]
+      const inlineFence = codeRun !== undefined && listCols.length > 0 &&
+        paraState !== 'no' && (paragraphFoldedAbove || !prepassOpensBlock(paraLine, paraLinePlusOpens)) &&
+        !codeCloserPossibleIn(
+          (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
+          codeRun,
+          idx,
+        )
       const startsBlock =
         /^#{1,6}([ \t]|$)/.test(rawTrimmed) ||
         RE_BLOCKQUOTE.test(rawTrimmed) ||
-        /^(`{3,}|~{3,})/.test(rawTrimmed) ||
+        (codeRun !== undefined && !inlineFence) ||
         // A COLON FENCE ENDS THE ITEM TOO, and was the one block opener missing
         // from this list. A flush `:::` under an unblanked item opens a SIBLING
         // container - the parser renders the div next to the list, not inside it
