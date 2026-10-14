@@ -92,6 +92,8 @@ export function djotImportLosses(
   const rawFormatMessage = 'A Djot raw-format identifier containing U+0085 cannot be spelled in Carve; its raw-output behavior is lost.'
   const rawFormats: Array<[number, number]> = []
   const rawFormatIgnored: Array<[number, number]> = []
+  const imageLabels: Array<[number, number]> = []
+  const emptyDestinations: Array<[number, boolean]> = []
   const rawFenceLines = new Set<number>()
   const maskSource = source.includes('\u0085') ? lines.map((line, n) => line.replace(
     /(`{3,}|~{3,})([ \t]*=)([^\s{}%"'`~\\]+)([ \t]*)$/,
@@ -324,7 +326,7 @@ export function djotImportLosses(
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
       const key = explicit ? referenceKey(explicit) : definitionKey(
-        definitions.size === 0 ? '' : collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!),
+        definitions.size === 0 ? '' : collapsedReferenceText(label, quoteDepths[lineAt(open) - 1]!, source[open - 1] === '!' && !escaped[open - 1]),
       )
       destination = definitions.get(key)
       end++
@@ -332,9 +334,8 @@ export function djotImportLosses(
         report(image ? 'An unresolved Djot image reference has no src; Carve cannot spell that image.' : 'An unresolved Djot reference has no href; Carve cannot spell that link.', lineAt(open))
       }
     } else { carryNested(opener.nested); continue }
-    if (image) rawFormatIgnored.push([open, at + 1])
-    if (destination === '')
-      report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(open))
+    if (image) { rawFormatIgnored.push([open, at + 1]); imageLabels.push([open, at + 1]) }
+    if (destination === '') emptyDestinations.push([open, image])
     if (image && destination !== undefined && destination !== '') {
       const label = source.slice(open + 1, at)
       if (label.includes('\n')) {
@@ -351,6 +352,14 @@ export function djotImportLosses(
       if (parent) parent.nested = true
     }
     at = end - 1
+  }
+  imageLabels.sort((a, b) => a[0] - b[0])
+  emptyDestinations.sort((a, b) => a[0] - b[0])
+  let imageIndex = 0, imageEnd = -1
+  for (const [at, image] of emptyDestinations) {
+    while (imageIndex < imageLabels.length && imageLabels[imageIndex]![0] < at)
+      imageEnd = Math.max(imageEnd, imageLabels[imageIndex++]![1])
+    if (at >= imageEnd) report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(at))
   }
   rawFormatIgnored.sort((a, b) => a[0] - b[0])
   let ignoredIndex = 0, ignoredEnd = -1

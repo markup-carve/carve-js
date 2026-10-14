@@ -280,7 +280,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
     const wrapperText = new Map<number, string>()
     const aliasLabelText = (open: number, close: number): string => {
       if (!scanNestedAliases || rowAt[open] !== rowAt[close])
-        return collapsedReferenceText(referenceSource.slice(open + 1, close), quoteDepths[rowAt[open]!]!)
+        return collapsedReferenceText(referenceSource.slice(open + 1, close), quoteDepths[rowAt[open]!]!, referenceSource[open - 1] === '!' && !escaped[open - 1])
       const wrappers: number[] = []
       let current = open, end = close
       while (!wrapperText.has(current)) {
@@ -288,7 +288,7 @@ export function djotReferenceLayout(source: string, contentStart: (line: string)
         const child = referenceSource[current + 1] === '!' ? current + 2 : current + 1
         const childClose = closers.get(child)
         if (referenceSource[child] !== '[' || escaped[child] || childClose === undefined || referenceSource[childClose + 1] !== '[' || nextCloser[childClose + 2] !== end - 1 || referenceSource[child + 1] === '^') {
-          wrapperText.set(current, collapsedReferenceText(referenceSource.slice(current + 1, end), quoteDepths[rowAt[current]!]!))
+          wrapperText.set(current, collapsedReferenceText(referenceSource.slice(current + 1, end), quoteDepths[rowAt[current]!]!, referenceSource[current - 1] === '!' && !escaped[current - 1]))
           break
         }
         current = child

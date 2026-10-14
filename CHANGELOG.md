@@ -13,6 +13,8 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - `fileSystemResolver` (`./node`) reads only regular files: a FIFO, device or directory inside the root is denied instead of opened, so an include naming a FIFO no longer blocks the process.
 - An escaped include directive (`\{{ path }}`) stays literal: `expandIncludes` no longer expands it, `findDirectiveSites` no longer reports it, and `renderCarve` keeps the escape instead of writing a live directive (#3101).
 - A cross-reference `</#id>` is opaque to emphasis like an autolink: an earlier bare `/` no longer pairs with the slash inside it (#3100).
+- `renderCarve` refuses a list nested past the parser's nesting cap with `SourceUnspellableError` instead of writing source that reads back as a different document after a search that took seconds to minutes (CARVE-P9-078). A hand-built tree nested past the cap is refused the same way (#3107).
+- A `[` inside an autolink or cross-reference no longer opens a bracket run for emphasis pairing, and a braced closer inside a cross-reference no longer closes the braced span (#3105).
 
 ### Performance
 - `expandIncludes`, `findDirectiveSites` and `renderCarve` look up the run node behind each include directive candidate from an index built once per inline run, so a run with many `{{` candidates (escaped or live) scans in linear time instead of quadratic (#3104).
