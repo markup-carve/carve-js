@@ -15564,6 +15564,11 @@ class ParseSession {
             : this.parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, inlineSource({
                 ...(cellWraps ? { cellWraps } : {}),
               }))
+          // Empty earlier continuation lines have no fragment to join. The
+          // first text fragment still names its own continuation line.
+          if (c.span && c.joins?.[0]?.line && c.joins[0].line > 1 && children.length) {
+            children.unshift({ type: 'cell_wrap', line: c.joins[0].line })
+          }
           const cell: TableCell = {
             type: 'table_cell',
             header: c.header,

@@ -3823,8 +3823,7 @@ class CarveRenderSession {
         let rendered = this.renderTableCell(cell, ctx, asHeader, colonSpelled)
         if (cell.span && cell.children?.length) {
           if (!row.continuationLines) throw new SourceUnspellableError('table_cell', 'a span cell with text needs a continuation line', cell)
-          const textCell = { ...cell }
-          delete textCell.span
+          const textCell: TableCell = { type: 'table_cell', header: false, children: cell.children }
           const text = this.renderTableCell(textCell, ctx, false, false).trim()
           const firstContentLine = cell.children.find(child => child.pos?.startLine !== undefined)?.pos?.startLine
           const sourceLine = firstContentLine !== undefined && row.pos?.startLine !== undefined
