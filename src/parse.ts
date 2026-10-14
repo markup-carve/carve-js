@@ -10846,7 +10846,7 @@ class ParseSession {
         (lexer.inFootnoteBody && !/^[ \t]*\[\^/.test(hostedLinkDefLine)) ||
         (hostedLinkDef && !/^[ \t]*\[\^/.test(hostedLinkDefLine))) &&
       this.isLinkDefLine(hostedLinkDefLine) &&
-      (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef) &&
+      !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
       // NOTHING COLLECTED IT, SO NOTHING MAY REMOVE IT. Under-collecting is the
       // error PART 9R R1a licenses; deleting the author's line is the one it
       // rules out, and carve#1883 forbids returning a document missing text the
@@ -15740,12 +15740,12 @@ class ParseSession {
       if (
         !flattened &&
         lines.length > 0 &&
+        !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
         (((lexer.consumesHostedLinkDefs === 'all' ||
           (lexer.consumesHostedLinkDefs === 'lazy' &&
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))) &&
           this.isLinkDefLine(stripLazyFrame(ln))) ||
-          (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
-            startsInterruptingBlock(lexer))) &&
+          startsInterruptingBlock(lexer)) &&
         !(RE_ADMONITION_CLOSE.test(ln) && holdsLiteralColonFence)
       )
         break
