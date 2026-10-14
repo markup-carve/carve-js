@@ -983,8 +983,13 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const normalized = strippedDefinitions.source
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
   let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(sourceBody))
-  if ((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line)))))
-    body = djotReferenceLayout(body, djotContentStart, false, undefined, false, true)
+  const hasSourceNuls = body.includes('\0U\0')
+  if ((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line))) || hasSourceNuls && /^\[(?!\^)[^\]\n]*�[^\]\n]*\]:/.test(line.slice(djotContentStart(line)))))
+  {
+    const accepted = hasSourceNuls ? new Map<number, { label: string; target: string; end: number }>() : undefined
+    if (accepted) foldDjotReferences(body, accepted)
+    body = djotReferenceLayout(body, djotContentStart, false, accepted, false, true)
+  }
   if (body.includes('[^') && body.includes(']:') && body.split('\n').some(line => /^\[\^[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) {
     const accepted = new Map<number, { label: string; target: string; end: number }>()
     foldDjotReferences(body, accepted)
