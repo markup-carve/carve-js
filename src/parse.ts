@@ -6177,7 +6177,7 @@ function trackItemLazyState(
   // are read there exactly as they are here, rather than enumerated. An
   // enumeration of block kinds is how the three engines drifted apart.
   if (readDescendant && state.inDefList === false) {
-    const inner = (state.deepest ??= verbatimOnlyLazyState())
+    const inner = (state.deepest ??= { ...verbatimOnlyLazyState(), lazyFoldable: state.lazyFoldable })
     const dedented = content.slice(run!)
     trackItemLazyState(
       dedented,
