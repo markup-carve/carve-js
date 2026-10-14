@@ -37,6 +37,18 @@ it('keeps both parts when a blocked marker is widened', () => {
   expect(carveToCarve(source)).toBe(source)
 })
 
+it('names the later continuation line that supplies blocked marker text', () => {
+  const source = '| ^ | b |\n+   | u |\n+ t | v |\n'
+  const table = parse(source).children[0]
+  expect(table?.type).toBe('table')
+  if (table?.type !== 'table') return
+  expect(table.rows[0]?.cells[0]?.children).toMatchObject([
+    { type: 'cell_wrap', line: 2 },
+    { type: 'text', value: 't' },
+  ])
+  expect(carveToCarve(source)).toBe('| ^ | b |\n+ | u |\n+ t | v |\n')
+})
+
 it('locates a joined marker after a separator row', () => {
   const source = '| A |\n|---|\n| ^ |\n+ x |\n'
   expect(carveToCarve(source)).toBe(source)
