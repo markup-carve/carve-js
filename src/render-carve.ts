@@ -32,7 +32,7 @@ import {
 } from './parse.js'
 import { isAttrValueEscapable } from './attribute-parser.js'
 import { completeDestinationOpeners } from './link-destination.js'
-import { findDirectives } from './include-directive.js'
+import { findDirectives, RunOffsets } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -338,6 +338,39 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
  * reference link comes back with an empty href and reports a difference that
  * escaping never caused.
  */
+/**
+ * Whether some path through `ast` nests as deep as `MAX_NESTING_DEPTH`.
+ *
+ * Counts every node holding a `children` array, which over-counts the parser's
+ * container depth by the leaf block at most; a list's `items` wrapper is skipped
+ * because the parser charges a list level once, to the item body. Iterative for
+ * the same reason as `collectEscapeUnits`.
+ */
+function nestingReachesCap(ast: Document): boolean {
+  const stack: Array<[unknown, number]> = [[ast, 0]]
+  while (stack.length > 0) {
+    const [node, depth] = stack.pop()!
+    if (!node || typeof node !== 'object') continue
+    const root = node === ast
+    const record = node as Record<string, unknown>
+    const children = root ? record['children'] : record['children'] ?? record['items']
+    if (!Array.isArray(children)) continue
+    const below = root || Array.isArray(record['items']) ? depth : depth + 1
+    if (below >= MAX_NESTING_DEPTH) return true
+    for (const child of children) stack.push([child, below])
+  }
+  return false
+}
+
+/**
+ * CARVE-P9-078: past the nesting cap the writer refuses rather than emit source
+ * that reads back as a different document.
+ */
+function refuseUnlessItReadsBack(outputTree: string | null, astTree: string): void {
+  if (outputTree === astTree) return
+  throw new SourceUnspellableError('document', `content nested past the parser nesting limit of ${MAX_NESTING_DEPTH} has no spelling that reads back`)
+}
+
 function escapingIsRedundant(minimalTree: string | null, conservativeTree: string | null): boolean {
   // Both trees are the caller's single parse of each form; null means it did not
   // parse, which answers the question conservatively.
@@ -365,7 +398,10 @@ function canonical(value: unknown): unknown {
         key === 'srcByteLength'
       )
         continue
-      out[key] = canonical((value as Record<string, unknown>)[key])
+      const field = (value as Record<string, unknown>)[key]
+      // A hand-built tree may carry an empty map the parser omits.
+      if (key === 'footnoteDefs' && field && typeof field === 'object' && Object.keys(field).length === 0) continue
+      out[key] = canonical(field)
     }
     return out
   }
@@ -997,6 +1033,15 @@ function inlineContentOfCellBlocks(blocks: BlockNode[], depth = 0): InlineNode[]
     }
   }
   return chunks.flatMap((chunk, index) => index === 0 ? chunk : [{ type: 'text', value: ' ' } as InlineNode, ...chunk])
+}
+
+/** Whether a character of the run `texts` reassembles from `nodes[from..]` sits in an escape. */
+function escapedIn(nodes: InlineNode[], from: number, texts: string[]): (index: number) => boolean {
+  const offsets = new RunOffsets(texts)
+  return (index) => {
+    const piece = offsets.pieceAt(index)
+    return piece < texts.length && nodes[from + piece]!.type === 'escaped_text'
+  }
 }
 
 /**
@@ -2522,14 +2567,26 @@ class CarveRenderSession {
     // decided whether the document kept its definitions (carve-js#754).
     const minimal = this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'minimal'))
     const conservative = this.withFreshWriteBackState(() => this.renderWithEscapes(ast, 'conservative'))
-    if (minimal === conservative) return minimal
+    // A tree nested to the parser's cap may hold over-cap text that no spelling
+    // reads back, so its output is checked even when the two forms agree.
+    const atCap = nestingReachesCap(ast)
+    if (minimal === conservative) {
+      if (atCap) refuseUnlessItReadsBack(treeOf(minimal), stableJson(ast))
+      return minimal
+    }
+    const astTree = stableJson(ast)
     const minimalTree = treeOf(minimal)
-    if (minimalTree !== null && minimalTree === stableJson(ast)) return minimal
+    if (minimalTree !== null && minimalTree === astTree) return minimal
     // ONE parse of the conservative form as well, for the same reason as the
     // minimal one above: the redundancy check and the narrowing below both need
     // it, and parsing it in each made every narrowed document pay a second full
     // parse of its own output for an answer it already had.
     const conservativeTree = treeOf(conservative)
+    // Every state the narrowing visits is verified against `conservativeTree`, so
+    // when that is not the document's tree no state reads back either. Past the
+    // cap that is the refuse arm of CARVE-P9-078, taken before a search whose
+    // every probe re-parses the whole deep document.
+    if (atCap) refuseUnlessItReadsBack(conservativeTree, astTree)
     if (escapingIsRedundant(minimalTree, conservativeTree)) return minimal
     // The minimal form of the WHOLE document does not hold, which used to end the
     // decision here with the conservative form of the whole document. PART 11 §2b
@@ -4091,22 +4148,19 @@ class CarveRenderSession {
       // verbatim emit, so such a run keeps the (already degenerate) old path.
       // Fast path: a run with no "{{" cannot hold a directive, so the common
       // (directive-free) document never pays for the scan.
-      const escaped = (index: number): boolean => {
-        let cursor = 0
-        for (let k = 0; k < texts.length; k++) {
-          cursor += texts[k]!.length
-          if (index < cursor) return nodes[i + k]!.type === 'escaped_text'
-        }
-        return false
-      }
-      const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full, escaped)
+      const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full, escapedIn(nodes, i, texts))
       if (spans.length) {
         let offset = 0
+        // Spans are disjoint and in order, so the ones a node overlaps start at
+        // the first span not yet behind it.
+        let first = 0
         for (let k = 0; k < texts.length; k++) {
           const text = texts[k]!
           const start = offset
           offset += text.length
-          const covering = spans.filter((s) => s.start < offset && s.end > start)
+          while (first < spans.length && spans[first]!.end <= start) first++
+          const covering: typeof spans = []
+          for (let q = first; q < spans.length && spans[q]!.start < offset; q++) covering.push(spans[q]!)
           if (covering.length === 0) continue
           let out = ''
           const ranges: LiteralRange[] = []
