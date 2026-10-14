@@ -24,6 +24,7 @@ import {
   DIRECTIVE_SCAN_RE,
   DIRECTIVE_SHAPE_RE,
   parseDirective,
+  RunOffsets,
   type Directive,
 } from './include-directive.js'
 
@@ -428,18 +429,16 @@ function rebaseSlicedChild(child: Document, base: SliceBase): void {
   if (child.footnoteDefs) visit(Object.values(child.footnoteDefs))
 }
 
-function runAnchor(run: RunNode[], offset: number): Text {
-  let cursor = 0
-  for (const node of run) {
-    const end = cursor + runNodeText(node).length
-    if (offset < end && node.type === 'text') return node
-    cursor = end
+function runAnchor(run: RunText, offset: number): Text {
+  for (let k = run.offsets.pieceAt(offset); k < run.nodes.length; k++) {
+    const node = run.nodes[k]!
+    if (node.type === 'text') return node
   }
-  return run.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: '' } as Text)
+  return run.nodes.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: '' } as Text)
 }
 
 /** Locate a directive in the file currently being expanded. */
-function siteOf(run: RunNode[], from: number, to: number, state: State): IncludeSite {
+function siteOf(run: RunText, from: number, to: number, state: State): IncludeSite {
   const span = siteSpan(run, from, to)
   return state.file === undefined ? span : { ...span, file: state.file }
 }
@@ -1149,18 +1148,47 @@ function runNodeText(node: RunNode): string {
   return node.type === 'mention' ? `@${node.user}` : `#${node.name}`
 }
 
-/**
- * True when the run character at `index` is part of a backslash escape. An
- * escaped brace is literal text (CARVE-P7-004), so `\{{ x }}` holds no `{{`
- * and is not a directive.
- */
-function escapedAt(run: RunNode[], index: number): boolean {
-  let cursor = 0
-  for (const node of run) {
-    cursor += runNodeText(node).length
-    if (index < cursor) return node.type === 'escaped_text'
+/** A run with its reassembled text, indexed once for the per-match lookups. */
+class RunText {
+  readonly texts: string[]
+  readonly full: string
+  readonly offsets: RunOffsets
+  private readonly codepoints = new Map<number, Uint32Array>()
+
+  constructor(readonly nodes: RunNode[]) {
+    this.texts = nodes.map(runNodeText)
+    this.full = this.texts.join('')
+    this.offsets = new RunOffsets(this.texts)
   }
-  return false
+
+  /**
+   * True when the character at `index` is part of a backslash escape. An
+   * escaped brace is literal text (CARVE-P7-004), so `\{{ x }}` holds no `{{`
+   * and is not a directive.
+   */
+  escapedAt(index: number): boolean {
+    return this.nodes[this.offsets.pieceAt(index)]?.type === 'escaped_text'
+  }
+
+  /** `[...texts[piece].slice(0, at)].length`, from a prefix built once per piece. */
+  codepointsBefore(piece: number, at: number): number {
+    let prefix = this.codepoints.get(piece)
+    if (prefix === undefined) {
+      const text = this.texts[piece]!
+      prefix = new Uint32Array(text.length + 1)
+      for (let j = 0; j < text.length; j++) {
+        const c = text.charCodeAt(j)
+        const pairsWithPrevious = c >= 0xdc00 && c <= 0xdfff && j > 0 && isHighSurrogate(text.charCodeAt(j - 1))
+        prefix[j + 1] = prefix[j]! + (pairsWithPrevious ? 0 : 1)
+      }
+      this.codepoints.set(piece, prefix)
+    }
+    return prefix[at]!
+  }
+}
+
+function isHighSurrogate(c: number): boolean {
+  return c >= 0xd800 && c <= 0xdbff
 }
 
 /**
@@ -1169,15 +1197,15 @@ function escapedAt(run: RunNode[], index: number): boolean {
  * parses as text, so a boundary can only fall inside a text node; mention and
  * tag nodes are either fully kept or fully consumed by a directive span.
  */
-function sliceRun(run: RunNode[], from: number, to: number): InlineNode[] {
+function sliceRun(run: RunText, from: number, to: number): InlineNode[] {
   const out: InlineNode[] = []
-  let offset = 0
-  for (const node of run) {
-    const text = runNodeText(node)
-    const start = offset
-    const end = offset + text.length
-    offset = end
-    if (end <= from || start >= to) continue
+  for (let k = run.offsets.pieceAt(from); k < run.nodes.length; k++) {
+    const node = run.nodes[k]!
+    const text = run.texts[k]!
+    const start = run.offsets.startOf(k)
+    const end = start + text.length
+    if (start >= to) break
+    if (end <= from) continue
     if (node.type !== 'text') {
       out.push(node)
       continue
@@ -1198,13 +1226,14 @@ function sliceRun(run: RunNode[], from: number, to: number): InlineNode[] {
  * directives keep their original nodes, rendering exactly as the core does
  * with no resolver.
  */
-function expandRun(run: RunNode[], state: State): InlineNode[] {
-  const full = run.map(runNodeText).join('')
+function expandRun(nodes: RunNode[], state: State): InlineNode[] {
+  const run = new RunText(nodes)
+  const full = run.full
   const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
   const spans: { start: number; end: number; replacement: InlineNode[] }[] = []
   for (let m = re.exec(full); m; m = re.exec(full)) {
     const raw = m[0]
-    if (escapedAt(run, m.index) || escapedAt(run, m.index + raw.length - 1)) {
+    if (run.escapedAt(m.index) || run.escapedAt(m.index + raw.length - 1)) {
       re.lastIndex = m.index + 1
       continue
     }
@@ -1231,7 +1260,7 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
     if (replacement === null) continue
     spans.push({ start: m.index, end: m.index + raw.length, replacement })
   }
-  if (spans.length === 0) return run
+  if (spans.length === 0) return nodes
   const out: InlineNode[] = []
   let cursor = 0
   for (const span of spans) {
@@ -1242,7 +1271,7 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
   out.push(...sliceRun(run, cursor, full.length))
   // The splice leaves the child's text beside the host's halves, and §1a holds
   // for this tree too: `toAstJson` publishes it without `resolve()`.
-  const placed = run.filter((node) => node.pos)
+  const placed = nodes.filter((node) => node.pos)
   const first = placed[0]?.pos
   const last = placed[placed.length - 1]?.pos
   const span =
@@ -1381,7 +1410,7 @@ function expandParagraph(block: Paragraph, state: State, unwrapped: boolean): Bl
       (part) => warn(state, 'include-selection-conflict', `Include directive cannot name two sections: "${part}".`, text),
     )
     if (d) {
-      const site = siteOf(block.children as RunNode[], 0, source.length, state)
+      const site = siteOf(new RunText(block.children as RunNode[]), 0, source.length, state)
       const merged = includeChild(d, state, text, site, (child, file, reach) => {
         mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file, reach)
         return child.children
@@ -1605,23 +1634,17 @@ export interface DirectiveSite {
  * The count is in CODEPOINTS, because `pos` offsets are - so a host slices a
  * site out of its buffer the same way it slices any other node out.
  */
-function absoluteAt(run: RunNode[], index: number): number | undefined {
-  let cursor = 0
-  for (const node of run) {
-    const text = runNodeText(node)
-    const end = cursor + text.length
-    if (index < end) {
-      // A directive opens and closes with characters the core always parses as
-      // text, so a boundary can only fall in a text node (see sliceRun).
-      if (node.type !== 'text' || node.pos?.startOffset === undefined) return undefined
-      return node.pos.startOffset + [...text.slice(0, index - cursor)].length
-    }
-    cursor = end
-  }
-  return undefined
+function absoluteAt(run: RunText, index: number): number | undefined {
+  const k = run.offsets.pieceAt(index)
+  const node = run.nodes[k]
+  if (node === undefined) return undefined
+  // A directive opens and closes with characters the core always parses as
+  // text, so a boundary can only fall in a text node (see sliceRun).
+  if (node.type !== 'text' || node.pos?.startOffset === undefined) return undefined
+  return node.pos.startOffset + run.codepointsBefore(k, index - run.offsets.startOf(k))
 }
 
-function siteSpan(run: RunNode[], from: number, to: number): Pick<DirectiveSite, 'line' | 'column' | 'start' | 'end'> {
+function siteSpan(run: RunText, from: number, to: number): Pick<DirectiveSite, 'line' | 'column' | 'start' | 'end'> {
   const at = locate(runAnchor(run, from))
   const start = absoluteAt(run, from)
   // The last character of the token, not the position after it: there may be
@@ -1631,11 +1654,12 @@ function siteSpan(run: RunNode[], from: number, to: number): Pick<DirectiveSite,
   return { line: at.line, column: at.column, start, end: last + 1 }
 }
 
-function collectRun(run: RunNode[], sites: DirectiveSite[]): void {
-  const full = run.map(runNodeText).join('')
+function collectRun(nodes: RunNode[], sites: DirectiveSite[]): void {
+  const run = new RunText(nodes)
+  const full = run.full
   const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
   for (let m = re.exec(full); m; m = re.exec(full)) {
-    if (escapedAt(run, m.index) || escapedAt(run, m.index + m[0].length - 1)) {
+    if (run.escapedAt(m.index) || run.escapedAt(m.index + m[0].length - 1)) {
       re.lastIndex = m.index + 1
       continue
     }
@@ -1702,7 +1726,7 @@ function collectParagraph(block: Paragraph, sites: DirectiveSite[]): void {
   if (source !== null) {
     const directive = parseDirective(source)
     if (directive) {
-      const run = block.children as RunNode[]
+      const run = new RunText(block.children as RunNode[])
       sites.push({ raw: source, directive, block: true, ...siteSpan(run, 0, source.length) })
       return
     }
