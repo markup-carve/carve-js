@@ -19,6 +19,7 @@ export function renderDjotImageChildText(document: Document, preserveBreaks = fa
       for (let index = 0; index < children.length; index++) {
         const child = children[index]!
         delete child.attrs
+        if (child.type === 'delete') children[index] = { type: 'span', children: child.children }
         if (child.type === 'non_breaking_space' || child.type === 'footnote_ref') {
           children[index] = { type: 'text', value: '' }
           continue
