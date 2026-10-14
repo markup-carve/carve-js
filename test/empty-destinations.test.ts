@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToAstJson, carveToCarve, carveToHtml, carveToMarkdown, fromAstJson, htmlToCarve, lintCarve, renderCarveWithConversionReport, renderHtml } from '../src/index.js'
+import { carveToAstJson, carveToCarve, carveToHtml, carveToMarkdown, fromAstJson, htmlToCarve, lintCarve, renderAnsi, renderCarveWithConversionReport, renderHtml, renderPlainText } from '../src/index.js'
 import { markdownToCarveWithLosses } from '../src/markdown-migrate.js'
 import { djotToCarveWithLosses } from '../src/djot-import.js'
 
@@ -31,6 +31,20 @@ describe('explicit empty destinations', () => {
     expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(defined))))).toBe('<p><a href="">t</a></p>')
     expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(undefinedRef))))).toBe('<p>[t][r]</p>')
     expect(canonical('[t][r]\n\n[r]:')).toBe('[t][r]\n\n[r]:')
+  })
+
+  it('renders resolved empty references without their definition line', () => {
+    const source = 'x [t][r] y\n\n[r]:'
+    const ast = fromAstJson(carveToAstJson(source))
+    expect(renderPlainText(ast)).toContain('x t y')
+    expect(renderPlainText(ast)).not.toContain('[r]:')
+    expect(renderAnsi(ast)).not.toContain('[r]:')
+    expect(carveToMarkdown(source)).not.toContain('[r]:')
+
+    const image = fromAstJson(carveToAstJson('![t][r]\n\n[r]:'))
+    expect(renderPlainText(image)).toContain('t')
+    expect(renderPlainText(image)).not.toContain('![t][r]')
+    expect(renderAnsi(image)).not.toContain('![t][r]')
   })
 
   it('collapses a resolved empty reference image after AST JSON decoding', () => {

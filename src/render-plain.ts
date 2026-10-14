@@ -6,13 +6,13 @@ import { renderCellContent } from './render-cell-content.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
-import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
+import type { BlockNode, DefinitionItem, Document, Figure, Image, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { hydrateResolvedEmptyReferences } from './reference-state.js'
+import { hydrateResolvedEmptyReferences, isResolvedEmptyReference } from './reference-state.js'
 import { destinationDenied, rawFormatDropped, rubyFlattened, editorialCommentFlattened, type RenderLossSinkOptions } from './render-loss.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { footnoteDefsInSourceOrder } from './footnote-numbering.js'
@@ -323,14 +323,14 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
 // An image contributes its alt text, EXCEPT when it is an unresolved reference
 // (PART 12 §3a): there the document has no image, only the source the author
 // wrote, and `alt` is the label out of its brackets.
-function renderImageText(node: { alt: string; src?: string; ref?: string; rawRef?: string }): string {
+function renderImageText(node: Image): string {
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
   // no longer answers this question (carve#596).
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src) return stripControls(referenceSourceText(node.rawRef))
+  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceSourceText(node.rawRef))
 
   return stripControls(node.alt)
 }
