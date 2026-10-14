@@ -49,7 +49,7 @@ test.each([
 })
 
 test('inline code in a definition term remains in the term', () => {
-  expect(carveToHtml(djotToCarve(': ```a```')).trim()).toBe('<dl>\n  <dt><code>a</code></dt>\n</dl>')
+  expect(carveToHtml(djotToCarve(': ```a```')).trim()).toBe('<dl>\n  <dt><code>a</code></dt>\n  <dd></dd>\n</dl>')
 })
 
 test('deep same-kind spans migrate without using the call stack', () => {

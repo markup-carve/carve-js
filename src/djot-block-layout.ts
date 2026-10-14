@@ -1132,6 +1132,6 @@ function closedQuoteBoundary(prefix: string, retainedDepth: number): string {
 }
 
 export function hasDjotCodeLayoutCandidates(source: string): boolean {
-  return source.includes('\\|') || (source.includes('`') && /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*\[\^[^\]\n]+\]:/.test(source)) || (source.includes('`') && /(?:^|\n)[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]+)[.)]|\((?:[0-9]+|[A-Za-z]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?|\[\^[^\]\n]+\]:[ \t]*)*>/.test(source)) ||
+  return (source.includes('`') && /(?:^|\n)[ \t]*:(?:[ \t]|$)/.test(source)) || source.includes('\\|') || (source.includes('`') && /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]*\[\^[^\]\n]+\]:/.test(source)) || (source.includes('`') && /(?:^|\n)[ \t]*(?:(?:[-*+]|(?:[0-9]+|[A-Za-z]+)[.)]|\((?:[0-9]+|[A-Za-z]+)\))[ \t]+(?:\[[ xX]\][ \t]+)?|\[\^[^\]\n]+\]:[ \t]*)*>/.test(source)) ||
     (source.includes('```') && /(?:^|\n)(?:[ \t]*>(?:[ \t]|$))*[ \t]+`{3,}/.test(source))
 }

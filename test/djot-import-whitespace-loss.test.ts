@@ -7,12 +7,13 @@ test('a trailing ASCII space in a block attribute still applies', () => {
   expect(djotToCarveWithLosses('> {#x }\n> a').losses).toEqual([])
 })
 
-test('an empty definition item has an exact loss', () => {
-  for (const source of [': ', ':']) expect(djotToCarveWithLosses(source).losses).toContainEqual({
-    code: 'structure-unspellable',
-    message: 'A definition item with an empty term cannot be spelled in Carve.',
-    line: 1,
-  })
+test('empty definition items preserve both the term and description', () => {
+  for (const source of [': ', ':']) {
+    const result = djotToCarveWithLosses(source)
+    expect(result.losses).toEqual([])
+    expect(carveToHtml(result.value)).toContain('<dt></dt>')
+    expect(carveToHtml(result.value)).toContain('<dd></dd>')
+  }
 })
 
 test('trailing spaces in an image alternative have an exact loss', () => {
