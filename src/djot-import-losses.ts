@@ -74,8 +74,27 @@ export function djotImportLosses(
     (text) => text,
     (at) => report('Emphasis exceeding the native nesting budget is flattened; its text is preserved.', lineAt(at)),
   )
+  const rawFormatMessage = 'A Djot raw-format identifier containing U+0085 cannot be spelled in Carve; its raw-output behavior is lost.'
+  const rawFormats: Array<[number, number]> = []
+  const rawFormatIgnored: Array<[number, number]> = []
+  const rawFenceLines = new Set<number>()
+  const maskSource = source.includes('\u0085') ? lines.map((line, n) => line.replace(
+    /(`{3,}|~{3,})([ \t]*=)([^\s{}%"'`~\\]+)([ \t]*)$/,
+    (all, ticks: string, prefix: string, format: string, tail: string) => {
+      if (!format.includes('\u0085')) return all
+      rawFenceLines.add(n)
+      return ticks + prefix + format.replace(/[^A-Za-z0-9_+#.-]/g, 'x') + tail
+    },
+  )).join('\n') : source
   const destinations = new Map<number, number>()
-  const masked = maskDjotCodeAndDestinations(source, false, true, false, undefined, [], { destinations: true, autolinks: true, comments: true, onDestination: (start, end) => destinations.set(start, end) }).split('')
+  const masked = maskDjotCodeAndDestinations(maskSource, false, true, false, undefined, [], {
+    destinations: true, autolinks: true, comments: true,
+    onDestination: (start, end) => destinations.set(start, end),
+    onFenceOpen: n => { if (rawFenceLines.has(n)) report(rawFormatMessage, n + 1) },
+    onRawFormat: (start, end, format) => {
+      if (format.includes('\u0085') && !(source[start - 1] === '$' && !isDjotEscaped(source, start - 1))) rawFormats.push([start, end])
+    },
+  }).split('')
   for (let at = 0; at < source.length; at++) {
     if (masked[at] !== '{' || isDjotEscaped(source, at)) continue
     const attrs = readAttributes(source, at)
@@ -133,6 +152,7 @@ export function djotImportLosses(
         /(?:>|[-*+] |[0-9A-Za-z]+[.)] |\([0-9A-Za-z]+\) )/.test(djotItemPrefix(previous, contentStart(previous))))
     const decision = accepted.get(n)
     if (decision) {
+      rawFormatIgnored.push([offsets[n]!, offsets[decision.end]! + lines[decision.end]!.length])
       for (let next = n + 1; next <= decision.end; next++) definitionLines.add(next)
       definitions.set(definitionKey(decision.label), decision.target)
       definitionLines.add(n)
@@ -269,7 +289,7 @@ export function djotImportLosses(
     if (source[at] !== ']') continue
     const opener = stack.pop()
     if (opener === undefined) continue
-    if (source[opener.at + 1] === '^' && at > opener.at + 2) { carryNested(opener.nested); continue }
+    if (source[opener.at + 1] === '^' && at > opener.at + 2) { rawFormatIgnored.push([opener.at, at + 1]); carryNested(opener.nested); continue }
     const open = opener.at
     const image = source[open - 1] === '!' && !escaped[open - 1]
     let end = at + 1,
@@ -283,6 +303,7 @@ export function djotImportLosses(
       const start = end + 1
       end = referenceEnds[start]!
       if (end < 0) { carryNested(opener.nested); continue }
+      rawFormatIgnored.push([start, end])
       const explicit = source.slice(start, end)
       const label = source.slice(open + 1, at)
       const key = explicit ? referenceKey(explicit) : definitionKey(
@@ -294,6 +315,7 @@ export function djotImportLosses(
         report(image ? 'An unresolved Djot image reference has no src; Carve cannot spell that image.' : 'An unresolved Djot reference has no href; Carve cannot spell that link.', lineAt(open))
       }
     } else { carryNested(opener.nested); continue }
+    if (image) rawFormatIgnored.push([open, at + 1])
     if (destination === '')
       report(image ? 'An image with an empty destination cannot be spelled in Carve.' : 'A link with an empty destination cannot be spelled in Carve.', lineAt(open))
     if (image && destination !== undefined && destination !== '') {
@@ -309,6 +331,13 @@ export function djotImportLosses(
       if (parent) parent.nested = true
     }
     at = end - 1
+  }
+  rawFormatIgnored.sort((a, b) => a[0] - b[0])
+  let ignoredIndex = 0, ignoredEnd = -1
+  for (const [start, end] of rawFormats) {
+    while (ignoredIndex < rawFormatIgnored.length && rawFormatIgnored[ignoredIndex]![0] <= start)
+      ignoredEnd = Math.max(ignoredEnd, rawFormatIgnored[ignoredIndex++]![1])
+    if (ignoredEnd < end) report(rawFormatMessage, lineAt(start))
   }
   return losses.sort((a, b) => a.line - b.line)
 }
