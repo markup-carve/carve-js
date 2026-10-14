@@ -1,5 +1,5 @@
 import { plainCommentEnd } from './djot-attributes.js'
-import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries, djotContentStart } from './djot-inline-boundaries.js'
+import { djotSimpleDestinationRanges, djotDestinationRanges, djotInlineBoundaries, djotContentStart, isDjotEscaped } from './djot-inline-boundaries.js'
 import { backtickRunEnds } from './backtick-run-index.js'
 import { readAttributes } from './djot-word-attributes.js'
 
@@ -14,6 +14,7 @@ export interface DjotOpaqueOptions {
   attributeValues?: boolean
   onComment?: (start: number, end: number) => void
   onDestination?: (start: number, end: number) => void
+  onCode?: (start: number, end: number, closed: boolean) => void
 }
 
 /** Mask opaque inline payloads while preserving source offsets and newlines. */
@@ -124,15 +125,18 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
     ends ??= backtickRunEnds(source)
     const end = ends?.[at] ?? -1
     const paragraphEnd = breaks[boundary] ?? source.length
-    if (end < 0 || end - width >= paragraphEnd) {
+    const closed = end >= 0 && end - width < paragraphEnd
+    const rawEnd = closed ? rawFormats.get(end) : undefined
+    const math = source[at - 1] === '$'
+    if (options.onCode && (closed || unclosedCode) && rawEnd === undefined && (!math || isDjotEscaped(source, at - 1)))
+      options.onCode(at, closed ? end : paragraphEnd, closed)
+    if (!closed) {
       if (unclosedCode && options.code !== false) {
         hide(at, paragraphEnd)
         at = paragraphEnd - 1
       } else at += width - 1
       continue
     }
-    const rawEnd = rawFormats.get(end)
-    const math = source[at - 1] === '$'
     if (options.code !== false || rawEnd !== undefined && options.rawCode !== false || math) hide(at - (math ? 1 : 0), end)
     at = (rawEnd ?? end) - 1
   }

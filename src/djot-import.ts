@@ -1129,7 +1129,10 @@ export function djotToCarveWithLosses(djot: string): { value: string; losses: Dj
   if (hasDjotCodeLayoutCandidates(source)) closeDjotTableCode(source, at => rawCode.push(at))
   const accepted = new Map<number, { label: string; target: string; end: number }>()
   foldDjotReferences(source, accepted, mask, rows)
-  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode, accepted) }
+  const codeSource = source.includes('`') && source.includes(':::')
+    ? replaceDjotImageLabels(source, maskDjotCodeAndDestinations(source), image => image.replace(/[^\n]/g, ' '))
+    : source
+  return { value: djotToCarve(djot), losses: djotImportLosses(source, rows, djotContentStart, rawCode, accepted, undefined, codeSource) }
 }
 
 function dropLeadingDjotSeparators(source: string): string {
