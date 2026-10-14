@@ -6778,7 +6778,6 @@ interface RawCell {
   lastMarker?: number
   wraps?: Array<{ offset: number; line: number; row?: number; col?: number; pos?: Position }>
   /** A later row joins into this cell, so its row cannot contain every child span. */
-  crossRowJoin?: boolean
 }
 
 interface FragmentPlace {
@@ -15535,10 +15534,6 @@ class ParseSession {
         (e) => (e.cell.span === 'rowspan' ? '^' : e.cell.span === 'colspan' ? '<' : null),
         (origin, marker) => {
           if (!marker.cell.joins?.length) return
-          if (origin.rowIndex !== marker.rowIndex) {
-            origin.cell.crossRowJoin = true
-            marker.cell.crossRowJoin = true
-          }
           keepBlocked(origin.cell)
           for (const { frag, at, marker: point, sep, line } of marker.cell.joins) joinFragment(origin.cell, frag, at, line, marker.rowIndex - origin.rowIndex, point, sep, grid[marker.rowIndex]!.indexOf(marker) - grid[origin.rowIndex]!.indexOf(origin))
         },
@@ -15638,10 +15633,6 @@ class ParseSession {
       }
       const ra = rowAttrsList[idx]
       if (ra) row.attrs = ra
-      // A join through a span marker places content from one row in another.
-      // Neither row has a span that owns all of its source without also
-      // claiming a sibling's content.
-      if (rc.some(c => c.crossRowJoin)) delete row.pos
       if (row.pos?.startOffset !== undefined && row.pos.endOffset !== undefined) {
         for (const cell of row.cells) stripPositionsOutsideRow(cell.children ?? [], row.pos.startOffset, row.pos.endOffset)
       }

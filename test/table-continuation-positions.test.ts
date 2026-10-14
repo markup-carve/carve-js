@@ -23,6 +23,13 @@ const slice = (pos: { startOffset: number; endOffset: number }): string =>
 const table = (): any => parse(source).children[0] as any
 
 describe('positions across a table continuation', () => {
+  it('places both rows when a continuation joins through a rowspan', () => {
+    const rows = (parse('| a | b |\n| ^ | c |\n+ more | d |').children[0] as any).rows
+    expect(rows.map((row: any) => [row.pos?.startLine, row.pos?.endLine])).toEqual([[1, 1], [2, 3]])
+    expect(rows[0].cells[0].children.at(-1).value).toBe('more')
+    expect(rows[0].cells[0].children.at(-1).pos).toBeUndefined()
+  })
+
   it('does NOT place the continued cell, because it is not one range', () => {
     // The cell's content sits in two column ranges on non-adjacent lines. One
     // range covering both would swallow the neighbouring column's content on
@@ -84,7 +91,8 @@ describe('positions across a table continuation', () => {
     const wraps = cell.children.filter((child: { type: string }) => child.type === 'cell_wrap')
     expect(wraps.map((w: { pos: { startOffset: number; endOffset: number } }) =>
       [...src].slice(w.pos.startOffset, w.pos.endOffset).join(''))).toEqual(marks)
-    const starts = cell.children.map((child: { pos: { startOffset: number } }) => child.pos.startOffset)
+    const starts = cell.children.flatMap((child: { pos?: { startOffset: number } }) =>
+      child.pos ? [child.pos.startOffset] : [])
     expect(starts).toEqual([...starts].sort((a: number, b: number) => a - b))
   })
 })
