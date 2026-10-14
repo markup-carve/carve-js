@@ -907,8 +907,8 @@ export function djotToCarve(djot: string): string {
   try { return convertDjotInput(djot) } finally { resetParagraphContext() }
 }
 
-function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false): string {
-  if (!djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters)
+function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false): string {
+  if (nulShielded || !djot.includes('\0')) return convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters)
   const token = '\0U\0'
   return convertDjotDocument(djot.replaceAll('\0', token), preserveReferenceBreaks, omitQuoteDelimiters).replaceAll(token, '\0')
 }
@@ -945,7 +945,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
     const key = `${omitQuotes ? 1 : 0}:${label}`
     const cached = childTextCache.get(key)
     if (cached !== undefined) return cached
-    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes)))
+    const text = djotImageLabelText(djotImageLabelAttributes(label), source => invalidAttributes.restore(convertDjotInput(source, true, omitQuotes, true)))
     childTextCache.set(key, text)
     return text
   }
@@ -1383,7 +1383,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
       let destination = djotDestinationLines(rawDestination, owner.depth)
       if (owner.image && !authoredLabel.includes('\n') && label.includes('[')) {
         const definitions = Array.from(label.matchAll(/\[(carve-djot-pipe-target-\d+)\]/g), match => pipeDefinitions.get(match[1]!) ?? '').filter(Boolean).join('\n')
-        label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true, true)), label.includes('\n'))
+        label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true, true, true).replaceAll('\0U\0', '\0')), label.includes('\n'))
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
           .replace(/[\[\]\\"']/g, (value) => '\\' + value)
