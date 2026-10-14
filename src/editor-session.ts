@@ -1,6 +1,6 @@
 import type { AstJsonBlock, AstJsonDocument } from './ast-json.js'
 import type { ParseOptions } from './parse.js'
-import { astNodePaths, toNodeIdentity, type NodeIdentitySidecar } from './ast-sidecars.js'
+import { astNodePaths, nodeIdentityForPaths, type NodeIdentitySidecar } from './ast-sidecars.js'
 
 export interface EditorRange { start: number; end: number }
 export interface EditorToken extends EditorRange {
@@ -138,8 +138,8 @@ function validateChanges(source: string, changes: readonly EditorChange[]): void
   })
 }
 
-function nodeSignatures(ast: AstJsonDocument): Map<string, string> {
-  const paths = new Set(astNodePaths(ast))
+function nodeSignatures(ast: AstJsonDocument, nodePaths: readonly string[]): Map<string, string> {
+  const paths = new Set(nodePaths)
   const signatures = new Map<string, string>()
   const visit = (value: unknown, path: string): unknown => {
     if (!value || typeof value !== 'object') return value
@@ -240,6 +240,7 @@ export function createEditorSession(
 ): EditorSession {
   const session = globalThis.crypto?.randomUUID?.() ?? `s${Date.now().toString(36)}-${(++sessionCounter).toString(36)}`
   let nextId = 0
+  const pathsByAst = new WeakMap<AstJsonDocument, readonly string[]>()
   const build = (source: string, revision: number, previous?: EditorSnapshot, changes: readonly EditorChange[] = []): EditorSnapshot => {
     let parsedSourceBytes = 0
     const parse = (text: string): AstJsonDocument => {
@@ -277,17 +278,19 @@ export function createEditorSession(
         const delta = deltas[low]!
         const start = old.start + delta, end = old.end + delta
         const matches = candidates.get(`${old.type ?? ''}:${start}:${end}`) ?? []
-        if (matches.length !== 1 || previous.source.slice(old.start, old.end) !== source.slice(start, end)) continue
+        if (matches.length !== 1) continue
         const id = oldIds.get(old.path)
         if (id && !ids.has(matches[0]!.path)) ids.set(matches[0]!.path, id)
       }
     }
-    for (const path of astNodePaths(ast)) if (!ids.has(path)) ids.set(path, `n${nextId++}`)
-    const identity = toNodeIdentity(ast, session, ids)
+    const paths = astNodePaths(ast)
+    pathsByAst.set(ast, paths)
+    for (const path of paths) if (!ids.has(path)) ids.set(path, `n${nextId++}`)
+    const identity = nodeIdentityForPaths(paths, session, ids)
     return Object.freeze({ revision, source, ast, nodes, identity, parsedSourceBytes, reusedPreviousTree })
   }
   let current = build(initialSource, 0)
-  let signatures = nodeSignatures(current.ast)
+  let signatures = nodeSignatures(current.ast, pathsByAst.get(current.ast)!)
   return {
     snapshot: () => current,
     update(changes) {
@@ -301,7 +304,7 @@ export function createEditorSession(
       parts.push(current.source.slice(cursor))
       const source = parts.join('')
       const next = build(source, current.revision + 1, current, changes)
-      const nextSignatures = nodeSignatures(next.ast)
+      const nextSignatures = nodeSignatures(next.ast, pathsByAst.get(next.ast)!)
       const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(signatures, nextSignatures)) })
       signatures = nextSignatures
       current = next
