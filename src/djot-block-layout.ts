@@ -246,6 +246,7 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
   let quoteBoundary = ''
   let headingMarker = ''
   let definitionIndent = -1
+  const definitionStack: number[] = []
   for (let n = 0; n < lines.length; n++) {
     const original = lines[n]!,
       masked = mask[n]!
@@ -481,8 +482,18 @@ export function djotBlockLayout(source: string, rows: readonly boolean[], isBoun
       blank = true
       continue
     }
-    if (/^:[ \t]+\S/.test(visible) && (blank || definitionIndent >= 0)) definitionIndent = indent
-    else if (definitionIndent >= 0 && blank && indent <= definitionIndent) definitionIndent = -1
+    if ((definitionStack.at(-1) ?? -1) !== definitionIndent) {
+      definitionStack.length = 0
+      if (definitionIndent >= 0) definitionStack.push(definitionIndent)
+    }
+    if (/^:(?:[ \t]|$)/.test(visible) && (blank || definitionIndent >= 0) && (blank || indent <= definitionIndent)) {
+      while (definitionStack.length && definitionStack.at(-1)! >= indent) definitionStack.pop()
+      definitionStack.push(indent)
+      definitionIndent = indent
+    } else if (definitionIndent >= 0 && blank && indent <= definitionIndent) {
+      while (definitionStack.length && definitionStack.at(-1)! >= indent) definitionStack.pop()
+      definitionIndent = definitionStack.at(-1) ?? -1
+    }
     if (definitionIndent >= 0 && indent <= definitionIndent && rejectedCommentStartsBlock(visible)) {
       out.push(quoteForCarve() + ' '.repeat(indent))
       definitionIndent = -1
