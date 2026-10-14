@@ -7,9 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# PRs cancel their own superseded runs; every other event gets a unique group,
+# because GitHub keeps only one pending run per group and would drop main pushes.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Every job declares timeout-minutes so a hung step fails in minutes
 # rather than inheriting the 360-minute GitHub default.
