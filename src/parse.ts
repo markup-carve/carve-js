@@ -8960,6 +8960,7 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
   const ends = new Map<number, number>()
   const labels: number[] = []
   let lastLabelClose = -1
+  let crossrefs: CrossrefMemo | undefined
   const lastComment = text.lastIndexOf('%}')
   const lastEditorial = text.lastIndexOf('#}')
   const nextComments = new Map<string, number>()
@@ -9008,6 +9009,15 @@ function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destin
       continue
     }
     if (text[at] === '<') {
+      if (text.startsWith('</#', at) && text[at + 3] !== '>') {
+        crossrefs ??= { lastCloser: text.lastIndexOf('>') }
+        if (crossrefBodyCanEnd(text, at + 3, crossrefs)) {
+          const end = text.indexOf('>', at + 3) + 1
+          ends.set(at, end)
+          at = end - 1
+          continue
+        }
+      }
       RE_AUTOLINK_STICKY.lastIndex = at
       const autolink = RE_AUTOLINK_STICKY.exec(text)
       if (autolink) { ends.set(at, at + autolink[0].length); at += autolink[0].length - 1; continue }
@@ -9424,6 +9434,39 @@ const RE_AUTOLINK_STICKY = new RegExp(RE_AUTOLINK.source.replace(/^\^/, ''), 'yu
 const RE_RAW_INLINE_STICKY = new RegExp(RE_RAW_INLINE.source.replace(/^\^/, ''), 'y')
 const RE_LINK_REST_STICKY = new RegExp(RE_LINK_REST.source.replace(/^\^/, ''), 'y')
 
+// Autolinks and cross-references outside code spans, as [start, end) pairs.
+// PART 8 resolves them before links, so a `[` inside one opens no run.
+function atomicLinkRegions(text: string): Array<[number, number]> {
+  const regions: Array<[number, number]> = []
+  if (!text.includes('<')) return regions
+  const codeEnds = text.includes('`') ? backtickRunEnds(text) : undefined
+  const crossrefs: CrossrefMemo = { lastCloser: text.lastIndexOf('>') }
+  for (let at = 0; at < text.length; at++) {
+    const ch = text[at]
+    if (ch === '\\') { at++; continue }
+    if (ch === '`') {
+      const end = codeEnds?.[at] ?? -1
+      if (end === -1) break
+      at = end - 1
+      continue
+    }
+    if (ch !== '<') continue
+    if (text.startsWith('</#', at) && text[at + 3] !== '>' && crossrefBodyCanEnd(text, at + 3, crossrefs)) {
+      const end = text.indexOf('>', at + 3) + 1
+      regions.push([at, end])
+      at = end - 1
+      continue
+    }
+    RE_AUTOLINK_STICKY.lastIndex = at
+    const autolink = RE_AUTOLINK_STICKY.exec(text)
+    if (autolink) {
+      regions.push([at, at + autolink[0].length])
+      at += autolink[0].length - 1
+    }
+  }
+  return regions
+}
+
 // Only a bracket pair the parser can build a link or image from has a
 // destination: not a footnote reference `[^n]` nor an inline note `^[...]`. The
 // attribute block after the `)` is not part of what E2a hides.
@@ -9438,7 +9481,11 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
   // in ascending order, so the outermost of a nest is reached first.
   let covered = -1
   const destinationOpeners = completeDestinationOpeners(text)
+  const atoms = atomicLinkRegions(text)
+  let atom = 0
   for (let open = text.indexOf('['); open !== -1; open = text.indexOf('[', open + 1)) {
+    while (atom < atoms.length && atoms[atom]![1] <= open) atom++
+    if (atom < atoms.length && atoms[atom]![0] < open) continue
     const close = brackets(open)
     if (close === undefined) continue
     if (close + 1 <= covered) continue
