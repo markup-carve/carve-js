@@ -985,7 +985,7 @@ function convertDjotDocument(djot: string, preserveReferenceBreaks = false, omit
   const [frontmatter, separator, sourceBody] = splitSiteFrontmatter(normalized)
   let body = escapeDjotTableAttributeBoundaries(normalizeDjotDivOpeners(sourceBody))
   const hasSourceNuls = body.includes('\0U\0')
-  const headingCandidate = !skipHeadingTargets && hasSourceNuls && body.includes('][') && /(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?#{1,6}[ \t]/.test(body)
+  const headingCandidate = !skipHeadingTargets && hasSourceNuls && !/(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?\[\^[^\]\n]+\]:/.test(body) && body.includes('][') && /(?:^|\n)[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+)?#{1,6}[ \t]/.test(body)
   const actualHeadingTargets = headingCandidate ? importedDjotHeadingTargets(convertDjotDocument(djot, preserveReferenceBreaks, omitQuoteDelimiters, true)) : undefined
   if (((body.includes('`') || body.includes('\0')) && body.split('\n').some(line => /^\[(?!\^)[^\]\n]*[`\0][^\]\n]*\]:/.test(line.slice(djotContentStart(line))) || hasSourceNuls && /^\[(?!\^)[^\]\n]*�[^\]\n]*\]:/.test(line.slice(djotContentStart(line))))) || headingCandidate)
   {
