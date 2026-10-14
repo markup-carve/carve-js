@@ -9,6 +9,9 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+- The `wikilinks()` extension no longer closes `[[` at a `]]` whose first bracket is escaped (`\]`), so `a [[x\]](u)` renders the core link instead of a wikilink.
+
 ## [0.1.11] - 2026-10-14
 
 ### Breaking
