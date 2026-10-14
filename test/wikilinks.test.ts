@@ -68,6 +68,22 @@ describe('wikilinks extension', () => {
     expect(carveToHtml('[[   ]]', { extensions: [wikilinks()] })).toBe('<p>[[   ]]</p>')
   })
 
+  it('does not close on an escaped bracket', () => {
+    expect(carveToHtml('a [[http\\:\\/\\/u\\/\\]](http://u/])', { extensions: [wikilinks()] })).toBe(
+      '<p>a [<a href="http://u/]">http://u/]</a></p>',
+    )
+  })
+
+  it('does not close on an escaped first bracket followed by a real close', () => {
+    expect(carveToHtml('[[a\\]]]', { extensions: [wikilinks()] })).toBe('<p>[[a]]]</p>')
+  })
+
+  it('closes after an escaped backslash', () => {
+    expect(carveToHtml('[[a\\\\]]', { extensions: [wikilinks()] })).toBe(
+      '<p><a href="a" class="wikilink" data-wikilink="a\\\\">a\\\\</a></p>',
+    )
+  })
+
   it('links an anchor-only target', () => {
     expect(carveToHtml('[[#section]]', { extensions: [wikilinks()] })).toBe(
       '<p><a href="#section" class="wikilink" data-wikilink="">#section</a></p>',

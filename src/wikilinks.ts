@@ -25,6 +25,19 @@ function defaultSlug(page: string): string {
     .replace(/-+/g, '-')
 }
 
+// First unescaped `]]` at or after `from`; a backslash escapes the next char,
+// so `\]` never opens the closer.
+function findClose(text: string, from: number): number {
+  for (let i = from; i < text.length - 1; i++) {
+    if (text[i] === '\\') {
+      i++
+      continue
+    }
+    if (text[i] === ']' && text[i + 1] === ']') return i
+  }
+  return -1
+}
+
 /**
  * Parse `[[wikilinks]]` into navigational links, like Obsidian / MediaWiki.
  *
@@ -44,7 +57,7 @@ export function wikilinks(opts: WikilinksOptions = {}): CarveExtension {
     name: 'wikilinks',
     matchInline(text, pos) {
       if (text[pos] !== '[' || text[pos + 1] !== '[') return null
-      const close = text.indexOf(']]', pos + 2)
+      const close = findClose(text, pos + 2)
       if (close < 0) return null
       const body = text.slice(pos + 2, close)
       // Page part forbids `|` and `]` (matches the carve-php pattern); the
