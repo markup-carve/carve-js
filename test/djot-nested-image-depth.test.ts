@@ -9,3 +9,15 @@ test.each([100, 400, 1600, 6400])('nested literal image labels at depth %i', dep
 test('nested image destinations retain the outer destination', () => {
   expect(carveToHtml(djotToCarve('![![x](inner)](outer)'))).toBe('<p><img src="outer" alt="x"></p>')
 })
+
+test.each([
+  '`![![x](a)](b)`',
+  '```\n![![x](a)](b)\n```',
+  '$`![![x](a)](b)`',
+])('keeps nested image syntax inside opaque Djot text: %s', source => {
+  expect(djotToCarve(source)).toContain('![![x](a)](b)')
+})
+
+test('keeps nested image syntax inside an attribute value', () => {
+  expect(djotToCarve('{title="![![x](a)](b)"}\na')).toContain('\\!\\[\\!\\[x\\]\\(a\\)\\]\\(b\\)')
+})

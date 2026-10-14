@@ -920,12 +920,13 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
 
 function collapseLiteralNestedImages(source: string): string {
   if (!source.includes('![![')) return source
+  const mask = maskDjotCodeAndDestinations(source)
   const chunks: string[] = []
   let copied = 0
   for (let at = 0; at < source.length;) {
-    if (source.slice(at, at + 2) !== '![' || at > 0 && isDjotEscaped(source, at)) { at++; continue }
+    if (source.slice(at, at + 2) !== '![' || mask[at] !== '!' || at > 0 && isDjotEscaped(source, at)) { at++; continue }
     const start = at
-    while (source.slice(at, at + 2) === '![') at += 2
+    while (source.slice(at, at + 2) === '![' && mask[at] === '!') at += 2
     const depth = (at - start) / 2
     if (depth < 2) continue
     const labelStart = at
