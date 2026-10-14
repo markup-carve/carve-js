@@ -1452,7 +1452,7 @@ function normalizeDjotLinks(source: string, inherited: ReadonlySet<string> = new
         label = renderDjotImageChildText(parse(convertDjotInput((definitions ? definitions + '\n\n' : '') + 'DJOTALT ' + removeInheritedAttributeMarkers(label, inherited) + ' DJOTEND', true, true, true).replaceAll('\0U\0', '\0')), label.includes('\n'))
           .replace(/ DJOTEND\n?$/, '')
           .slice(8)
-          .replace(/[\[\]\\"']/g, (value) => '\\' + value)
+          .replace(/[!-\/:-@\[-`{-~]/g, (value) => '\\' + value)
       }
       const target = destination.replace(
         rows[line] && destination.includes('|') ? /\\([ \t!-\/:-@\[-`{-~])|[\\\s"<>`]/g : /\\([ \t!-\/:-@\[-`{-~])|[\\\s"<>`()]/g,
