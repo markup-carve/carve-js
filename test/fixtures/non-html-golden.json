@@ -43,7 +43,7 @@
     },
     "autolink": {
         "carve": "<https://example.com>\n",
-        "markdown": "[https://example.com](https://example.com)\n",
+        "markdown": "<https://example.com>\n",
         "plain": "https://example.com\n",
         "ansi": "\u001b[4m\u001b[34mhttps://example.com\u001b[0m\n"
     },

@@ -1150,6 +1150,20 @@ function runNodeText(node: RunNode): string {
 }
 
 /**
+ * True when the run character at `index` is part of a backslash escape. An
+ * escaped brace is literal text (CARVE-P7-004), so `\{{ x }}` holds no `{{`
+ * and is not a directive.
+ */
+function escapedAt(run: RunNode[], index: number): boolean {
+  let cursor = 0
+  for (const node of run) {
+    cursor += runNodeText(node).length
+    if (index < cursor) return node.type === 'escaped_text'
+  }
+  return false
+}
+
+/**
  * Return the run nodes covering [from, to) of the run's reassembled text.
  * Directive matches start with "{{" and end with "}}", which the core always
  * parses as text, so a boundary can only fall inside a text node; mention and
@@ -1190,6 +1204,10 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
   const spans: { start: number; end: number; replacement: InlineNode[] }[] = []
   for (let m = re.exec(full); m; m = re.exec(full)) {
     const raw = m[0]
+    if (escapedAt(run, m.index) || escapedAt(run, m.index + raw.length - 1)) {
+      re.lastIndex = m.index + 1
+      continue
+    }
     const anchor = runAnchor(run, m.index)
     const d = parseDirective(raw, (part) =>
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
@@ -1617,6 +1635,10 @@ function collectRun(run: RunNode[], sites: DirectiveSite[]): void {
   const full = run.map(runNodeText).join('')
   const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
   for (let m = re.exec(full); m; m = re.exec(full)) {
+    if (escapedAt(run, m.index) || escapedAt(run, m.index + m[0].length - 1)) {
+      re.lastIndex = m.index + 1
+      continue
+    }
     const directive = parseDirective(m[0])
     if (!directive) continue
     sites.push({ raw: m[0], directive, block: false, ...siteSpan(run, m.index, m.index + m[0].length) })

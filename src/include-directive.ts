@@ -158,11 +158,20 @@ export function isDirectiveShape(raw: string): boolean {
  * run that is not shape-well-formed ("{{ oops", "{{ }}") is not reported and
  * keeps being treated as ordinary text.
  */
-export function findDirectives(text: string): { start: number; end: number; raw: string }[] {
+export function findDirectives(
+  text: string,
+  escapedAt: (index: number) => boolean = () => false,
+): { start: number; end: number; raw: string }[] {
   const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
   const spans: { start: number; end: number; raw: string }[] = []
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const raw = m[0]
+    // An escaped brace is literal, so a match opening or closing on one is
+    // no directive; rescan from the next character for one that follows.
+    if (escapedAt(m.index) || escapedAt(m.index + raw.length - 1)) {
+      re.lastIndex = m.index + 1
+      continue
+    }
     if (!isDirectiveShape(raw)) continue
     spans.push({ start: m.index, end: m.index + raw.length, raw })
   }

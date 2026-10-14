@@ -10,7 +10,17 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ## [Unreleased]
 
 ### Fixes
-- The `wikilinks()` extension no longer closes `[[` at a `]]` whose first bracket is escaped (`\]`), so `a [[x\]](u)` renders the core link instead of a wikilink.
+- An escaped include directive (`\{{ path }}`) stays literal: `expandIncludes` no longer expands it, `findDirectiveSites` no longer reports it, and `renderCarve` keeps the escape instead of writing a live directive (#3101).
+
+## [0.1.12] - 2026-10-14
+
+### Fixes
+- Markdown import no longer slows down exponentially with deeply nested block quotes (#3096).
+- Djot import preserves empty nested task items and generic DIV classes (#3083, #3090).
+- Djot image alternative text reports blank lines and trailing spaces only when they survive import (#3095).
+- Unresolved references containing NUL no longer select sanitized headings (#3088).
+- The `wikilinks()` extension ignores an escaped bracket when finding a closing `]]` (#3092).
+- Markdown output preserves representable autolinks (#3093).
 
 ## [0.1.11] - 2026-10-14
 
@@ -509,7 +519,9 @@ references and external fragment links need manual review. See the
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.10...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.12...HEAD
+[0.1.12]: https://github.com/markup-carve/carve-js/compare/0.1.11...0.1.12
+[0.1.11]: https://github.com/markup-carve/carve-js/compare/0.1.10...0.1.11
 [0.1.10]: https://github.com/markup-carve/carve-js/compare/0.1.9...0.1.10
 [0.1.9]: https://github.com/markup-carve/carve-js/compare/0.1.8...0.1.9
 [0.1.8]: https://github.com/markup-carve/carve-js/compare/0.1.7...0.1.8

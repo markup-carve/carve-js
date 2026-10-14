@@ -1332,6 +1332,16 @@ function renderInlineBody(node: InlineNode, ctx: MarkdownContext): string {
       const destination = markdownDestination(node.href)
       destinationDenied(ctx.options, 'autolink', 'markdown', deniedProbeInput(node.href), destination, node.pos)
       const title = node.attrs?.keyValues?.title
+      // Keep the node's spelling when CommonMark can read it back unchanged.
+      // The explicit link below remains necessary for titles and destinations
+      // whose escaping would change an angle autolink's visible text.
+      if (title === undefined && /^[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s\\]+$/.test(label) && destination === label) {
+        return `<${label}>`
+      }
+      if (title === undefined && node.href === `mailto:${label}` && destination === node.href &&
+          /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/.test(label)) {
+        return `<${label}>`
+      }
       return title === undefined ? `[${renderedLabel}](${destination})` : `[${renderedLabel}](${destination} "${escapeMdTitle(title)}")`
     }
     case 'mention':

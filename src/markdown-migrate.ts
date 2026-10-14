@@ -2587,11 +2587,33 @@ function convertInline(
 
 /** Escape list markers accepted by Carve but read as text by Markdown. */
 function escapeCarveOnlyMarker(input: string): string {
-  return input.replace(
-    /^((?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)*)(?:(\d{10,}|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)([.)])|(\.))(?=[ \t]|$|\{)/gm,
-    (_match, prefix: string, label: string | undefined, delimiter: string | undefined, bareDot: string | undefined) =>
-      `${prefix}${label ?? ''}\\${delimiter ?? bareDot}`,
-  )
+  return input.replace(/^.*$/gm, line => {
+    const prefixEnd = carveOnlyMarkerPrefixEnd(line)
+    const prefix = line.slice(0, prefixEnd)
+    const rest = line.slice(prefixEnd)
+    const marker = /^(?:(\d{10,}|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)([.)])|(\.))(?=[ \t]|$|\{)/.exec(rest)
+    if (marker === null) return line
+    return `${prefix}${marker[1] ?? ''}\\${marker[2] ?? marker[3]}${rest.slice(marker[0].length)}`
+  })
+}
+
+/** Read the quote and list prefix once, without regex backtracking across levels. */
+function carveOnlyMarkerPrefixEnd(line: string): number {
+  let at = 0
+  const quote = /[ \t]*>[ \t]?/y
+  const item = /[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/y
+  for (;;) {
+    quote.lastIndex = at
+    if (!quote.exec(line)) break
+    at = quote.lastIndex
+  }
+  while (line[at] === ' ' || line[at] === '\t') at++
+  for (;;) {
+    item.lastIndex = at
+    if (!item.exec(line)) break
+    at = item.lastIndex
+  }
+  return at
 }
 
 /**
@@ -2608,9 +2630,6 @@ function containerMarkersOnLine(prefix: string): string[] {
   }
 }
 
-/** A task pair at a line's item content, as Carve's `RE_TASK` reads one. */
-const RE_TASK_PAIR_LINE = /^((?:[ \t]*(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+))*)\[([ xX\-_>?])\](?= +[ \t]*\S)/
-
 /**
  * Keep a task pair cmark-gfm read as text as text, by escaping its bracket.
  *
@@ -2625,12 +2644,20 @@ const RE_TASK_PAIR_LINE = /^((?:[ \t]*(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+))*)
  * guard nothing: `1. [x] done` is already the text it renders.
  */
 function escapeUnreadTaskMarker(line: string): string {
-  const m = RE_TASK_PAIR_LINE.exec(line)
+  let at = 0
+  const marker = /[ \t]*(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+)/y
+  for (;;) {
+    marker.lastIndex = at
+    if (!marker.exec(line)) break
+    at = marker.lastIndex
+  }
+  const m = /^\[([ xX\-_>?])\](?= +[ \t]*\S)/.exec(line.slice(at))
   if (m === null) return line
-  const markers = containerMarkersOnLine(m[1]!)
+  const prefix = line.slice(0, at)
+  const markers = containerMarkersOnLine(prefix)
   if (!/^[-*]$/.test(markers.at(-1) ?? '')) return line
-  if (markers.length === 1 && /^[ xX]$/.test(m[2]!)) return line
-  return `${m[1]!}\\[${m[2]!}]${line.slice(m[0].length)}`
+  if (markers.length === 1 && /^[ xX]$/.test(m[1]!)) return line
+  return `${prefix}\\[${m[1]!}]${line.slice(at + m[0].length)}`
 }
 
 /** Catch text lines carried through a block collector without inline conversion. */
