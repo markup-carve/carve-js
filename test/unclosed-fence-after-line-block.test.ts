@@ -33,6 +33,16 @@ it('stops an unclosed code fence at its nested container closer', () => {
 })
 
 it.each([
+  [':::: outer\n::: inner\n```\ncode\n::::\n:::\n::::\nafter *b*\n', '<pre><code>code\n::::\n</code></pre>'],
+  ['::: outer\n:::: inner\n```\ncode\n:::\n::::\n:::\nafter *b*\n', '<pre><code>code\n:::\n</code></pre>'],
+  ['::: a\n:::: b\n::::: c\n```\ncode\n:::\n::::\n:::::\n::::\n:::\nafter *b*\n', '<pre><code>code\n:::\n::::\n</code></pre>'],
+])('ends an unclosed fence only at its own container closer, not an ancestor width', (source, code) => {
+  const html = carveToHtml(source)
+  expect(html).toContain(code)
+  expect(html).toContain('</div>\n<p>after <strong>b</strong></p>')
+})
+
+it.each([
   '- a\n    - ```\n      x\n    ```\nafter\n',
   '- a\n    - child\n      - # h\n    ```\nafter\n',
   '- a\n    - child\n\n        - g\n\n          ```\n          x\n          ```\n    ```\nafter\n',
