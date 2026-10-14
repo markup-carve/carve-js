@@ -14,6 +14,8 @@ export interface DjotOpaqueOptions {
   attributeValues?: boolean
   onComment?: (start: number, end: number) => void
   onDestination?: (start: number, end: number) => void
+  onRawFormat?: (start: number, end: number, format: string) => void
+  onFenceOpen?: (line: number) => void
 }
 
 /** Mask opaque inline payloads while preserving source offsets and newlines. */
@@ -132,6 +134,7 @@ export function maskDjotOpaque(source: string, unclosedCode: boolean, options: D
       continue
     }
     const rawEnd = rawFormats.get(end)
+    if (rawEnd !== undefined) options.onRawFormat?.(at, rawEnd, source.slice(end + 2, rawEnd - 1))
     const math = source[at - 1] === '$'
     if (options.code !== false || rawEnd !== undefined && options.rawCode !== false || math) hide(at - (math ? 1 : 0), end)
     at = (rawEnd ?? end) - 1

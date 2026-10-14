@@ -368,6 +368,7 @@ export function maskDjotFences(
   onFenceLine?: (line: number, replacement: string) => void,
   rowBoundaries: readonly boolean[] = [],
   strict = true,
+  onFenceOpen?: (line: number) => void,
 ): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
@@ -505,6 +506,7 @@ export function maskDjotFences(
           : nested
             ? ownerColumn
             : 0
+      onFenceOpen?.(index)
       fence = {
         ch: open[3]![0]!,
         len: open[3]!.length,
@@ -553,7 +555,7 @@ export function maskDjotCodeAndDestinations(
     sourceOffset += line.length + 1
     previousLine = line
   }
-  const s = maskDjotFences(src, onFenceLine, rowBoundaries, strictFences)
+  const s = maskDjotFences(src, onFenceLine, rowBoundaries, strictFences, opaqueOptions.onFenceOpen)
 
   // Every rewrite and loss scan shares the same opaque payload mask.
   let masked = maskDjotOpaque(s, unclosedCode, { ...(!inlineForms ? { inlineDestinations: opaqueOptions.destinations === true, autolinks: false, attributeValues: false, comments: false } : {}), ...opaqueOptions })
